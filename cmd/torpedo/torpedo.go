@@ -478,7 +478,85 @@ func testPluginDown(
 	d scheduler.Driver,
 	v volume.Driver,
 ) error {
-	return nil
+	
+	taskName := "testPluginDown"
+
+	// Pick the first node to start the task
+	nodes, err := d.GetNodes()
+	if err != nil {
+		return err
+	}
+
+	host := nodes[0]
+
+	// Remove any container and volume for this test - previous run may have failed.
+	d.DestroyByName(host, taskName)
+	v.RemoveVolume(volName)
+
+	t := scheduler.Task{
+		Name: taskName,
+		Img:  "gourao/fio",
+		IP:   host,
+		Tag:  "latest",
+		Cmd: []string{
+			"fio",
+			"--blocksize=64k",
+			"--directory=/mnt/",
+			"--ioengine=libaio",
+			"--readwrite=write",
+			"--size=1G",
+			"--name=test",
+			"--verify=meta",
+			"--do_verify=1",
+			"--verify_pattern=0xDeadBeef",
+			"--direct=1",
+			"--gtod_reduce=1",
+			"--iodepth=1",
+			"--randrepeat=1",
+		},
+		Vol: scheduler.Volume{
+			Driver: v.String(),
+			Name:   dynName,
+			Path:   "/mnt/",
+			Size:   10240,
+		},
+	}
+
+	ctx, err := d.Create(t)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		log.Printf("Start the %v volume driver\n", v.String())
+        if err = v.Start(ctx.Task.IP); err != nil {
+	       log.Printf("Could'nt start pxd")
+	     }  
+
+		if ctx != nil {
+			d.Destroy(ctx)
+		}
+		v.RemoveVolume(volName)
+	}()
+
+	
+	// Stop the volume driver.
+	log.Printf("Stopping the %v volume driver\n", v.String())
+	if err = v.Stop(ctx.Task.IP); err != nil {
+		return err
+	}
+
+	// Sleep for fio to keep going...
+	time.Sleep(20 * time.Second)
+	
+        // Scheduler should fail while starting, since volume plugin is down
+	if err = d.Start(ctx); err != nil {
+		return nil
+	}
+	
+	log.Printf("Container failed to start, %v \n", err)
+	
+	return err
 }
 
 // A container is running on node X.  Node X loses network access and is
