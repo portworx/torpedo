@@ -1,8 +1,9 @@
 package task
 
 import (
-	"time"
 	"errors"
+	"github.com/Sirupsen/logrus"
+	"time"
 )
 
 // ErrTimedOut is returned when an operation times out
@@ -18,16 +19,18 @@ func DoRetryWithTimeout(t func() error, timeout, timeBeforeRetry time.Duration) 
 			select {
 			case q := <-quit:
 				if q {
+					logrus.Infof("Timed out, quitting")
 					return
 				}
 
 			default:
 				err := t()
 				if err == nil {
+					logrus.Infof("Task done: %v", t)
 					done <- true
 					return
 				}
-
+				logrus.Infof("Will retry task")
 				time.Sleep(timeBeforeRetry)
 			}
 		}

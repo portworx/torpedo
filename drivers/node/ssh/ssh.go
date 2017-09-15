@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/task"
@@ -230,11 +231,12 @@ func (s *ssh) getAddrToConnect(n node.Node, options node.ConnectionOpts) (string
 }
 
 func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string, error) {
+	logrus.Infof("Here are the address: %v", n.Addresses)
 	for _, addr := range n.Addresses {
 		t := func() error {
 			return s.doCmd(addr, "hostname", false)
 		}
-
+		logrus.Infof("Will try task with addr: %s", addr)
 		if err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
 			n.UsableAddr = addr
 			return addr, nil
