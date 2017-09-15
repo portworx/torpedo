@@ -58,7 +58,7 @@ func (s *ssh) Init(sched string) error {
 	nodes := s.schedDriver.GetNodes()
 	for _, n := range nodes {
 		if n.Type == node.TypeWorker {
-			if err := s.TestConnection(n, node.TestConectionOpts{
+			if err := s.TestConnection(n, node.ConnectionOpts{
 				Timeout:         1 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
 			}); err != nil {
@@ -73,8 +73,8 @@ func (s *ssh) Init(sched string) error {
 	return nil
 }
 
-func (s *ssh) TestConnection(n node.Node, options node.TestConectionOpts) error {
-	addr, err := s.getAddrToConnect(n)
+func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
+	_, err := s.getAddrToConnect(n, options)
 	if err != nil {
 		return &ErrFailedToTestConnection{
 			Node:  n,
@@ -82,22 +82,24 @@ func (s *ssh) TestConnection(n node.Node, options node.TestConectionOpts) error 
 		}
 	}
 
-	t := func() error {
-		return s.doCmd(addr, "hostname", false)
-	}
-
-	if err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
-		return &ErrFailedToTestConnection{
-			Node:  n,
-			Cause: err.Error(),
+	/*
+		t := func() error {
+			return s.doCmd(addr, "hostname", false)
 		}
-	}
+
+		if err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
+			return &ErrFailedToTestConnection{
+				Node:  n,
+				Cause: err.Error(),
+			}
+		}
+	*/
 
 	return nil
 }
 
 func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
-	addr, err := s.getAddrToConnect(n)
+	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
 	if err != nil {
 		return &ErrFailedToRebootNode{
 			Node:  n,
@@ -125,7 +127,7 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 }
 
 func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
-	addr, err := s.getAddrToConnect(n)
+	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
 	if err != nil {
 		return &ErrFailedToShutdownNode{
 			Node:  n,
@@ -224,13 +226,27 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 	return nil
 }
 
-func (s *ssh) getAddrToConnect(n node.Node) (string, error) {
+func (s *ssh) getAddrToConnect(n node.Node, options node.ConnectionOpts) (string, error) {
 	if n.Addresses == nil || len(n.Addresses) == 0 {
 		return "", fmt.Errorf("no address available to connect")
 	}
 
-	addr := n.Addresses[0] // TODO don't stick to first address
-	return addr, nil
+	addr, err := s.getOneUsableAddr(n, options)
+	return addr, err
+}
+
+func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string, error) {
+	for _, addr := range n.Addresses {
+		t := func() error {
+			return s.doCmd(addr, "hostname", false)
+		}
+
+		if err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
+			n.UsableAddr = addr
+			return addr, nil
+		}
+	}
+	return "", fmt.Errorf("No usable address found")
 }
 
 func init() {
