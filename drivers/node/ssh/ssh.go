@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"time"
 
@@ -29,6 +30,7 @@ type ssh struct {
 	node.Driver
 	username    string
 	password    string
+	key         string
 	schedDriver scheduler.Driver
 	sshConfig   *ssh_pkg.ClientConfig
 	// TODO key-based ssh
@@ -38,17 +40,46 @@ func (s *ssh) String() string {
 	return DriverName
 }
 
+// returns ssh.Signer from user you running app home path + cutted key path.
+// (ex. pubkey,err := getKeyFile("/.ssh/id_rsa") )
+func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
+	file := keypath
+	buf, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	pubkey, err := ssh_pkg.ParsePrivateKey(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	return pubkey, nil
+}
+
 func (s *ssh) Init(sched string) error {
 	var err error
 
-	s.sshConfig = &ssh_pkg.ClientConfig{
-		User: s.username,
-		Auth: []ssh_pkg.AuthMethod{
-			ssh_pkg.Password(s.password),
-		},
-		HostKeyCallback: func(addr string, remote net.Addr, key ssh_pkg.PublicKey) error {
-			return nil
-		},
+	if s.key != "" {
+		pubkey, err := getKeyFile(s.key)
+		if err != nil {
+			return fmt.Errorf("Error getting public key from keyfile")
+		}
+		s.sshConfig = &ssh_pkg.ClientConfig{
+			User: s.username,
+			Auth: []ssh_pkg.AuthMethod{
+				ssh_pkg.PublicKeys(pubkey),
+			},
+		}
+	} else if s.password != "" {
+		s.sshConfig = &ssh_pkg.ClientConfig{
+			User: s.username,
+			Auth: []ssh_pkg.AuthMethod{
+				ssh_pkg.Password(s.password),
+			},
+		}
+	} else {
+		return fmt.Errorf("Unknown auth type")
 	}
 
 	s.schedDriver, err = scheduler.Get(sched)
