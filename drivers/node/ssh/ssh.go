@@ -23,6 +23,8 @@ const (
 	DefaultPassword = "t0rped0"
 	// DefaultSSHPort is the default port used for ssh operations
 	DefaultSSHPort = 22
+	// DefaultSSHKey is the default public key path used for ssh operations
+	DefaultSSHKey = "/home/torpedo/key4torpedo.pem"
 )
 
 type ssh struct {
@@ -59,7 +61,7 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 func (s *ssh) Init(sched string) error {
 	var err error
 
-	if s.key != "" {
+	if s.password == "" {
 		pubkey, err := getKeyFile(s.key)
 		if err != nil {
 			return fmt.Errorf("Error getting public key from keyfile")
@@ -70,7 +72,7 @@ func (s *ssh) Init(sched string) error {
 				ssh_pkg.PublicKeys(pubkey),
 			},
 		}
-	} else if s.password != "" {
+	} else if s.key == "" {
 		s.sshConfig = &ssh_pkg.ClientConfig{
 			User: s.username,
 			Auth: []ssh_pkg.AuthMethod{
@@ -284,6 +286,7 @@ func init() {
 		Driver:   node.NotSupportedDriver,
 		username: DefaultUsername,
 		password: DefaultPassword,
+		key:      DefaultSSHKey,
 	}
 
 	node.Register(DriverName, s)
