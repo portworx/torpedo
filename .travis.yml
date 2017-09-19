@@ -14,9 +14,10 @@ script:
 notifications:
   email:
     recipients:
-      - aditya@portworx.com
-      - gou@portworx.com
-      - jv@portworx.com
-      - harsh@portworx.com
+#- aditya@portworx.com
+#      - gou@portworx.com
+#      - jv@portworx.com
+#      - harsh@portworx.com
+      - varun@portworx.com
     on_success: always
     on_failure: always
