@@ -299,11 +299,8 @@ func (t *torpedo) validateContext(ctx *scheduler.Context) error {
 		return err
 	}
 
-	if err := t.s.WaitForRunning(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	err := t.s.WaitForRunning(ctx)
+	return err
 }
 
 // validateVolumes validates the volume with the scheduler and volume driver
@@ -345,10 +342,8 @@ func (t *torpedo) tearDownContext(ctx *scheduler.Context) error {
 		return err
 	}
 
-	if err := t.s.DeleteVolumes(ctx); err != nil {
-		return err
-	}
-	return nil
+	err := t.s.DeleteVolumes(ctx)
+	return err
 }
 
 /*
