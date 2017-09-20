@@ -74,7 +74,6 @@ func (d *portworx) Init(sched string) error {
 		return err
 	}
 
-
 	d.schedOps, err = schedops.Get(sched)
 	if err != nil {
 		return fmt.Errorf("Failed to get scheduler operator for portworx. Err: %v", err)
@@ -286,34 +285,34 @@ func (d *portworx) StopDriver(n node.Node) error {
 
 func (d *portworx) WaitStart(n node.Node) error {
 	// Wait for Portworx to become usable.
-	t := func() error {
+	t := func() (string, error) {
 		if status, _ := d.clusterManager.NodeStatus(); status != api.Status_STATUS_OK {
-			return &ErrFailedToWaitForPx{
-				Node: n,
+			return "", &ErrFailedToWaitForPx{
+				Node:  n,
 				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", status),
 			}
 		}
 
 		pxNode, err := d.clusterManager.Inspect(n.Name)
 		if err != nil {
-			return &ErrFailedToWaitForPx{
+			return "", &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: err.Error(),
 			}
 		}
 
 		if pxNode.Status != api.Status_STATUS_OK {
-			return &ErrFailedToWaitForPx{
+			return "", &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable but not status is not ok. Expected: %v Actual: %v",
 					api.Status_STATUS_OK, pxNode.Status),
 			}
 		}
 
-		return nil
+		return "", nil
 	}
 
-	if err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 

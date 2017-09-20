@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/task"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -13,7 +14,6 @@ import (
 	ext_v1beta1 "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	storage_v1beta1 "k8s.io/client-go/pkg/apis/storage/v1beta1"
 	"k8s.io/client-go/rest"
-	"github.com/Sirupsen/logrus"
 )
 
 const (
@@ -83,10 +83,10 @@ func IsNodeReady(name string) error {
 					name, condition.Type, condition.Message, condition.Status, condition.Reason)
 			}
 		case v1.NodeConditionType(v1.NodeOutOfDisk),
-			 v1.NodeConditionType(v1.NodeMemoryPressure),
-			 v1.NodeConditionType(v1.NodeDiskPressure),
-			 v1.NodeConditionType(v1.NodeNetworkUnavailable),
-			 v1.NodeConditionType(v1.NodeInodePressure):
+			v1.NodeConditionType(v1.NodeMemoryPressure),
+			v1.NodeConditionType(v1.NodeDiskPressure),
+			v1.NodeConditionType(v1.NodeNetworkUnavailable),
+			v1.NodeConditionType(v1.NodeInodePressure):
 			if condition.Status != v1.ConditionStatus(v1.ConditionFalse) {
 				return fmt.Errorf("node: %v is not ready as condition: %v (%v) is %v. Reason: %v",
 					name, condition.Type, condition.Message, condition.Status, condition.Reason)
@@ -122,26 +122,26 @@ func DeleteDeployment(deployment *v1beta1.Deployment) error {
 
 // ValidateDeployement validates the given deployment if it's running and healthy
 func ValidateDeployement(deployment *v1beta1.Deployment) error {
-	t := func() error {
+	t := func() (string, error) {
 		client, err := GetK8sClient()
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		dep, err := client.AppsV1beta1().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		if *dep.Spec.Replicas != dep.Status.AvailableReplicas {
-			return &ErrAppNotReady{
+			return "", &ErrAppNotReady{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("Expected replicas: %v Available replicas: %v", *dep.Spec.Replicas, dep.Status.AvailableReplicas),
 			}
 		}
 
 		if *dep.Spec.Replicas != dep.Status.ReadyReplicas {
-			return &ErrAppNotReady{
+			return "", &ErrAppNotReady{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v", *dep.Spec.Replicas, dep.Status.ReadyReplicas),
 			}
@@ -149,7 +149,7 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 
 		pods, err := GetDeploymentPods(deployment)
 		if err != nil || pods == nil {
-			return &ErrAppNotReady{
+			return "", &ErrAppNotReady{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("Failed to get pods for deployment. Err: %v", err),
 			}
@@ -157,17 +157,17 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 
 		for _, pod := range pods {
 			if !IsPodRunning(pod) {
-				return &ErrAppNotReady{
+				return "", &ErrAppNotReady{
 					ID:    dep.Name,
 					Cause: fmt.Sprintf("pod: %v is not yet ready", pod.Name),
 				}
 			}
 		}
 
-		return nil
+		return "", nil
 	}
 
-	if err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 
@@ -176,39 +176,39 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 
 // ValidateTerminatedDeployment validates if given deployment is terminated
 func ValidateTerminatedDeployment(deployment *v1beta1.Deployment) error {
-	t := func() error {
+	t := func() (string, error) {
 		client, err := GetK8sClient()
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		dep, err := client.AppsV1beta1().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
 		if err != nil {
 			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
-				return nil
+				return "", nil
 			}
-			return err
+			return "", err
 		}
 
 		pods, err := GetDeploymentPods(deployment)
 		if err != nil {
-			return &ErrAppNotTerminated{
+			return "", &ErrAppNotTerminated{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("Failed to get pods for deployment. Err: %v", err),
 			}
 		}
 
 		if pods != nil && len(pods) > 0 {
-			return &ErrAppNotTerminated{
+			return "", &ErrAppNotTerminated{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("pods: %#v is still present", pods),
 			}
 		}
 
-		return nil
+		return "", nil
 	}
 
-	if err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 
@@ -341,28 +341,28 @@ func DeletePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 
 // ValidatePersistentVolumeClaim validates the given pvc
 func ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
-	t := func() error {
+	t := func() (string, error) {
 		client, err := GetK8sClient()
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		result, err := client.PersistentVolumeClaims(pvc.Namespace).Get(pvc.Name, meta_v1.GetOptions{})
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		if result.Status.Phase == v1.ClaimBound {
-			return nil
+			return "", nil
 		}
 
-		return &ErrPVCNotReady{
+		return "", &ErrPVCNotReady{
 			ID:    result.Name,
 			Cause: fmt.Sprintf("PVC expected status: %v PVC actual status: %v", v1.ClaimBound, result.Status.Phase),
 		}
 	}
 
-	if err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 

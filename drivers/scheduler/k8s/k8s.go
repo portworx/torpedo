@@ -36,18 +36,18 @@ func (k *k8s) GetNodes() []node.Node {
 }
 
 func (k *k8s) IsNodeReady(n node.Node) error {
-	t := func() error {
+	t := func() (string, error) {
 		if err := k8sutils.IsNodeReady(n.Name); err != nil {
-			return &ErrNodeNotReady{
+			return "", &ErrNodeNotReady{
 				Node:  n,
 				Cause: err.Error(),
 			}
 		}
 
-		return nil
+		return "", nil
 	}
 
-	if err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 		logrus.Infof("[debug] node timed out. %#v", n)
 		return err
 	}
@@ -240,14 +240,14 @@ func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
 		if obj, ok := core.(*v1beta1.Deployment); ok {
 			pods, err := k8sutils.GetDeploymentPods(obj)
 			if err != nil {
-				return &ErrFailedToDeleteTasks {
+				return &ErrFailedToDeleteTasks{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 				}
 			}
 
 			if err := k8sutils.DeletePods(pods); err != nil {
-				return &ErrFailedToDeleteTasks {
+				return &ErrFailedToDeleteTasks{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
 				}
