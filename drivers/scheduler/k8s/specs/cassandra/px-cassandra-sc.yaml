@@ -2,7 +2,7 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-    name: px-nginx-sc
+    name: portworx-repl3
 provisioner: kubernetes.io/portworx-volume
 parameters:
-   repl: "2"
+   repl: "3"

@@ -241,6 +241,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 
 		for _, core := range app.Core {
 			if obj, ok := core.(*apps_api.Deployment); ok {
+				prevName := obj.Name
 				obj.Name = fmt.Sprintf("%s-%s", obj.Name, instanceID)
 
 				// Update PVC name to use dynamically genereated name
@@ -252,7 +253,11 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 					}
 				}
 
-				// TODO update metadata labels
+				for k, v := range obj.ObjectMeta.Labels {
+					if v == prevName {
+						obj.ObjectMeta.Labels[k] = fmt.Sprintf("%s-%s", prevName, instanceID)
+					}
+				}
 
 				dep, err := k8sutils.CreateDeployment(obj)
 				if err != nil {
@@ -265,9 +270,14 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 
 				logrus.Infof("Created deployment: %v", dep.Name)
 			} else if obj, ok := core.(*apps_api.StatefulSet); ok {
+				prevName := obj.Name
 				obj.Name = fmt.Sprintf("%s-%s", obj.Name, instanceID)
 
-				// TODO update metadata labels
+				for k, v := range obj.ObjectMeta.Labels {
+					if v == prevName {
+						obj.ObjectMeta.Labels[k] = fmt.Sprintf("%s-%s", prevName, instanceID)
+					}
+				}
 
 				ss, err := k8sutils.CreateStatefulSet(obj)
 				if err != nil {
@@ -280,9 +290,14 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 
 				logrus.Infof("Created StatefulSet: %v", ss.Name)
 			} else if obj, ok := core.(*v1.Service); ok {
+				prevName := obj.Name
 				obj.Name = fmt.Sprintf("%s-%s", obj.Name, instanceID)
 
-				// TODO update service selector
+				for k, v := range obj.Spec.Selector {
+					if v == prevName {
+						obj.Spec.Selector[k] = fmt.Sprintf("%s-%s", prevName, instanceID)
+					}
+				}
 
 				svc, err := k8sutils.CreateService(obj)
 				if err != nil {
