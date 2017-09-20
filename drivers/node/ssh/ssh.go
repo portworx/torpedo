@@ -67,6 +67,7 @@ func (s *ssh) Init(sched string) error {
 			Auth: []ssh_pkg.AuthMethod{
 				ssh_pkg.Password(s.password),
 			},
+			HostKeyCallback: ssh_pkg.InsecureIgnoreHostKey(),
 		}
 	} else if s.key != "" {
 		pubkey, err := getKeyFile(s.key)
@@ -146,11 +147,11 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 		rebootCmd = rebootCmd + " -f"
 	}
 
-	t := func() error {
+	t := func() (string, error) {
 		return s.doCmd(addr, rebootCmd, true)
 	}
 
-	if err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
 		return &ErrFailedToRebootNode{
 			Node:  n,
 			Cause: err.Error(),
@@ -174,11 +175,11 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 		shutdownCmd = "halt"
 	}
 
-	t := func() error {
+	t := func() (string, error) {
 		return s.doCmd(addr, shutdownCmd, true)
 	}
 
-	if err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
 		return &ErrFailedToShutdownNode{
 			Node:  n,
 			Cause: err.Error(),
@@ -188,11 +189,11 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	return nil
 }
 
-func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
+func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
+	var out string
 	connection, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%s:%d", addr, DefaultSSHPort), s.sshConfig)
-	logrus.Infof("SSH obj is %#v\nSSH Config is %#v\n", s, s.sshConfig)
 	if err != nil {
-		return &ErrFailedToRunCommand{
+		return "", &ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to dial: %v", err),
 		}
@@ -201,7 +202,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 
 	session, err := connection.NewSession()
 	if err != nil {
-		return &ErrFailedToRunCommand{
+		return "", &ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to create session: %s", err),
 		}
@@ -216,7 +217,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 	}
 
 	if err := session.RequestPty("xterm", 80, 40, modes); err != nil {
-		return &ErrFailedToRunCommand{
+		return "", &ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("request for pseudo terminal failed: %s", err),
 		}
@@ -225,7 +226,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		return &ErrFailedToRunCommand{
+		return "", &ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("Unable to setup stdout for session: %v", err),
 		}
@@ -241,7 +242,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 	logrus.Infof("go func loop here")
 	stderr, err := session.StderrPipe()
 	if err != nil {
-		return &ErrFailedToRunCommand{
+		return "", &ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("Unable to setup stderr for session: %v", err),
 		}
@@ -254,14 +255,16 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 		chErr <- buferr.String()
 	}()
 	logrus.Infof("go func2 loop here")
-	if err = session.Run(cmd); !ignoreErr && err != nil {
-		return &ErrFailedToRunCommand{
+	byteout, err := session.CombinedOutput(cmd)
+	out = fmt.Sprintf("%v", byteout)
+	if ignoreErr == false && err != nil {
+		return out, &ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to run command due to: %v", err),
 		}
 	}
-	logrus.Infof(fmt.Sprintf("Command %s run here", cmd))
-	return nil
+	logrus.Infof(fmt.Sprintf("Command %s has output %s", cmd, out))
+	return out, nil
 }
 
 func (s *ssh) getAddrToConnect(n node.Node, options node.ConnectionOpts) (string, error) {
@@ -276,12 +279,14 @@ func (s *ssh) getAddrToConnect(n node.Node, options node.ConnectionOpts) (string
 func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string, error) {
 	logrus.Infof("Here are the addresses: %v", n.Addresses)
 	for _, addr := range n.Addresses {
-		t := func() error {
+		t := func() (string, error) {
 			return s.doCmd(addr, "hostname", false)
 		}
 		logrus.Infof("Will try task with addr: %s", addr)
-		if err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
+		if out, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
 			n.UsableAddr = addr
+			logrus.Infof("Updated field UsableAddr. Now node is %#v", n)
+			logrus.Infof("Output received from task %#v is %s", t, out)
 			return addr, nil
 		}
 	}

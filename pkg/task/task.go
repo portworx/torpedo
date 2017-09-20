@@ -6,13 +6,16 @@ import (
 	"time"
 )
 
+//TODO: export the type: type Task func() (string, error)
+
 // ErrTimedOut is returned when an operation times out
 var ErrTimedOut = errors.New("timed out performing task")
 
 // DoRetryWithTimeout performs given task with given timeout and timeBeforeRetry
-func DoRetryWithTimeout(t func() error, timeout, timeBeforeRetry time.Duration) error {
+func DoRetryWithTimeout(t func() (string, error), timeout, timeBeforeRetry time.Duration) (string, error) {
 	done := make(chan bool, 1)
 	quit := make(chan bool, 1)
+	var out string
 
 	go func() {
 		for {
@@ -24,9 +27,9 @@ func DoRetryWithTimeout(t func() error, timeout, timeBeforeRetry time.Duration) 
 				}
 
 			default:
-				err := t()
+				out, err := t()
 				if err == nil {
-					logrus.Infof("Task done: %v", t)
+					logrus.Infof("Task done: %v\nOutput is: %s", t, out)
 					done <- true
 					return
 				}
@@ -38,9 +41,9 @@ func DoRetryWithTimeout(t func() error, timeout, timeBeforeRetry time.Duration) 
 
 	select {
 	case <-done:
-		return nil
+		return out, nil
 	case <-time.After(timeout):
 		quit <- true
-		return ErrTimedOut
+		return out, ErrTimedOut
 	}
 }
