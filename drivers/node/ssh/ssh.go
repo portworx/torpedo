@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -79,7 +80,6 @@ func (s *ssh) Init(sched string) error {
 				ssh_pkg.PublicKeys(pubkey),
 			},
 		}
-
 	} else {
 		return fmt.Errorf("Unknown auth type")
 	}
@@ -91,13 +91,15 @@ func (s *ssh) Init(sched string) error {
 
 	nodes := s.schedDriver.GetNodes()
 	for _, n := range nodes {
-		if err := s.TestConnection(n, node.ConnectionOpts{
-			Timeout:         1 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		}); err != nil {
-			return &ErrFailedToTestConnection{
-				Node:  n,
-				Cause: fmt.Sprintf("failed to test connection due to: %v", err),
+		if n.Type == node.TypeWorker {
+			if err := s.TestConnection(n, node.ConectionOpts{
+				Timeout:         1 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			}); err != nil {
+				return &ErrFailedToTestConnection{
+					Node:  n,
+					Cause: err.Error(),
+				}
 			}
 		}
 	}

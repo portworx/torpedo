@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/apps/v1beta1"
 	ext_v1beta1 "k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	storage_v1beta1 "k8s.io/client-go/pkg/apis/storage/v1beta1"
+	storage_api "k8s.io/client-go/pkg/apis/storage/v1"
 	"k8s.io/client-go/rest"
 )
 
@@ -97,14 +97,94 @@ func IsNodeReady(name string) error {
 	return nil
 }
 
+// Service APIs - BEGIN
+
+// CreateService creates the given service
+func CreateService(service *v1.Service) (*v1.Service, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	ns := service.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return client.CoreV1().Services(ns).Create(service)
+}
+
+// DeleteService deletes the given service
+func DeleteService(service *v1.Service) error {
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	policy := meta_v1.DeletePropagationForeground
+	return client.CoreV1().Services(service.Namespace).Delete(service.Name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &policy,
+	})
+}
+
+// GetService gets the service by the name
+func GetService(svcName string, svcNS string) (*v1.Service, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	if svcName == "" {
+		return nil, fmt.Errorf("Cannot return service obj without service name")
+	}
+	svc, err := client.CoreV1().Services(svcNS).Get(svcName, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return svc, nil
+
+}
+
+// ValidateDeletedService validates if given service is deleted
+func ValidateDeletedService(svcName string, svcNS string) error {
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	if svcName == "" {
+		return fmt.Errorf("cannot validate service without service name")
+	}
+
+	_, err = client.CoreV1().Services(svcNS).Get(svcName, meta_v1.GetOptions{})
+	if err != nil {
+		if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
+			return nil
+		}
+		return err
+	}
+
+	return nil
+}
+
+// Service APIs - END
+
+// Deployment APIs - BEGIN
+
 // CreateDeployment creates the given deployment
+// TODO change references to v1** to aliases in the import above
 func CreateDeployment(deployment *v1beta1.Deployment) (*v1beta1.Deployment, error) {
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return client.AppsV1beta1().Deployments(deployment.Namespace).Create(deployment)
+	ns := deployment.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return client.AppsV1beta1().Deployments(ns).Create(deployment)
 }
 
 // DeleteDeployment deletes the given deployment
@@ -122,12 +202,14 @@ func DeleteDeployment(deployment *v1beta1.Deployment) error {
 
 // ValidateDeployement validates the given deployment if it's running and healthy
 func ValidateDeployement(deployment *v1beta1.Deployment) error {
-	t := func() (string, error) {
+	var err error
+  t := func() (string, error) {
 		client, err := GetK8sClient()
 		if err != nil {
 			return "", err
 		}
 
+		// TODO: alias below apps v1beta1
 		dep, err := client.AppsV1beta1().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
 		if err != nil {
 			return "", err
@@ -155,6 +237,13 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 			}
 		}
 
+		if len(pods) == 0 {
+			return &ErrAppNotReady{
+				ID:    dep.Name,
+				Cause: "Application has 0 pods",
+			}
+		}
+
 		for _, pod := range pods {
 			if !IsPodRunning(pod) {
 				return "", &ErrAppNotReady{
@@ -170,13 +259,13 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-
-	return nil
+	return err
 }
 
 // ValidateTerminatedDeployment validates if given deployment is terminated
 func ValidateTerminatedDeployment(deployment *v1beta1.Deployment) error {
 	t := func() (string, error) {
+	var err error
 		client, err := GetK8sClient()
 		if err != nil {
 			return "", err
@@ -211,8 +300,7 @@ func ValidateTerminatedDeployment(deployment *v1beta1.Deployment) error {
 	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-
-	return nil
+	return err
 }
 
 // GetDeploymentPods returns pods for the given deployment
@@ -238,6 +326,158 @@ func GetDeploymentPods(deployment *v1beta1.Deployment) ([]v1.Pod, error) {
 	return nil, nil
 }
 
+// Deployment APIs - END
+
+// StatefulSet APIs - BEGIN
+
+// CreateStatefulSet creates the given statefulset
+func CreateStatefulSet(statefulset *v1beta1.StatefulSet) (*v1beta1.StatefulSet, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	ns := statefulset.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return client.AppsV1beta1().StatefulSets(ns).Create(statefulset)
+}
+
+// DeleteStatefulSet deletes the given statefulset
+func DeleteStatefulSet(statefulset *v1beta1.StatefulSet) error {
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	policy := meta_v1.DeletePropagationForeground
+	return client.AppsV1beta1().StatefulSets(statefulset.Namespace).Delete(statefulset.Name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &policy,
+	})
+}
+
+// ValidateStatefulSet validates the given statefulset if it's running and healthy
+func ValidateStatefulSet(statefulset *v1beta1.StatefulSet) error {
+	var err error
+	t := func() error {
+		client, err := GetK8sClient()
+		if err != nil {
+			return err
+		}
+		sset, err := client.AppsV1beta1().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		if *sset.Spec.Replicas != sset.Status.Replicas { // Not sure if this is even needed but for now let's have one check before
+			//readiness check
+			return &ErrAppNotReady{
+				ID:    sset.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Observed replicas: %v", *sset.Spec.Replicas, sset.Status.Replicas),
+			}
+		}
+
+		if *sset.Spec.Replicas != sset.Status.ReadyReplicas {
+			return &ErrAppNotReady{
+				ID:    sset.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v", *sset.Spec.Replicas, sset.Status.ReadyReplicas),
+			}
+		}
+
+		pods, err := GetStatefulSetPods(statefulset)
+		if err != nil || pods == nil {
+			return &ErrAppNotReady{
+				ID:    sset.Name,
+				Cause: fmt.Sprintf("Failed to get pods for statefulset. Err: %v", err),
+			}
+		}
+
+		for _, pod := range pods {
+			if !IsPodRunning(pod) {
+				return &ErrAppNotReady{
+					ID:    sset.Name,
+					Cause: fmt.Sprintf("pod: %v is not yet ready", pod.Name),
+				}
+			}
+		}
+
+		return nil
+	}
+
+	if err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+	return err
+}
+
+// GetStatefulSetPods returns pods for the given statefulset
+func GetStatefulSetPods(statefulset *v1beta1.StatefulSet) ([]v1.Pod, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	rSets, err := client.ReplicaSets(statefulset.Namespace).List(meta_v1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, rSet := range rSets.Items {
+		for _, owner := range rSet.OwnerReferences {
+			if owner.Name == statefulset.Name {
+				return GetReplicaSetPods(rSet)
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+// ValidateTerminatedStatefulSet validates if given deployment is terminated
+func ValidateTerminatedStatefulSet(statefulset *v1beta1.StatefulSet) error {
+	var err error
+	t := func() error {
+		client, err := GetK8sClient()
+		if err != nil {
+			return err
+		}
+
+		sset, err := client.AppsV1beta1().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
+		if err != nil {
+			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
+				return nil
+			}
+			return err
+		}
+
+		pods, err := GetStatefulSetPods(statefulset)
+		if err != nil {
+			return &ErrAppNotTerminated{
+				ID:    sset.Name,
+				Cause: fmt.Sprintf("Failed to get pods for statefulset. Err: %v", err),
+			}
+		}
+
+		if pods != nil && len(pods) > 0 {
+			return &ErrAppNotTerminated{
+				ID:    sset.Name,
+				Cause: fmt.Sprintf("pods: %#v is still present", pods),
+			}
+		}
+
+		return nil
+	}
+
+	if err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+	return err
+}
+
+// StatefulSet APIs - END
+
 // DeletePods deletes the given pods
 func DeletePods(pods []v1.Pod) error {
 	client, err := GetK8sClient()
@@ -249,7 +489,6 @@ func DeletePods(pods []v1.Pod) error {
 	gracePeriod = 0
 
 	for _, pod := range pods {
-		logrus.Infof("[debug] Deleting pod : %v", pod.Name)
 		if err = client.CoreV1().Pods(pod.Namespace).Delete(pod.Name, &meta_v1.DeleteOptions{
 			GracePeriodSeconds: &gracePeriod,
 		}); err != nil {
@@ -284,18 +523,20 @@ func GetReplicaSetPods(rSet ext_v1beta1.ReplicaSet) ([]v1.Pod, error) {
 	return result, nil
 }
 
+// StorageClass APIs - BEGIN
+
 // CreateStorageClass creates the given storage class
-func CreateStorageClass(sc *storage_v1beta1.StorageClass) (*storage_v1beta1.StorageClass, error) {
+func CreateStorageClass(sc *storage_api.StorageClass) (*storage_api.StorageClass, error) {
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return client.StorageV1beta1().StorageClasses().Create(sc)
+	return client.StorageV1().StorageClasses().Create(sc)
 }
 
 // DeleteStorageClass deletes the given storage class
-func DeleteStorageClass(sc *storage_v1beta1.StorageClass) error {
+func DeleteStorageClass(sc *storage_api.StorageClass) error {
 	client, err := GetK8sClient()
 	if err != nil {
 		return err
@@ -305,7 +546,7 @@ func DeleteStorageClass(sc *storage_v1beta1.StorageClass) error {
 }
 
 // ValidateStorageClass validates the given storage class
-func ValidateStorageClass(sc *storage_v1beta1.StorageClass) error {
+func ValidateStorageClass(sc *storage_api.StorageClass) error {
 	client, err := GetK8sClient()
 	if err != nil {
 		return err
@@ -319,6 +560,10 @@ func ValidateStorageClass(sc *storage_v1beta1.StorageClass) error {
 	return nil
 }
 
+// StorageClass APIs - END
+
+// PVC APIs - BEGIN
+
 // CreatePersistentVolumeClaim creates the given persistent volume claim
 func CreatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error) {
 	client, err := GetK8sClient()
@@ -326,7 +571,12 @@ func CreatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (*v1.PersistentV
 		return nil, err
 	}
 
-	return client.PersistentVolumeClaims(pvc.Namespace).Create(pvc)
+	ns := pvc.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return client.PersistentVolumeClaims(ns).Create(pvc)
 }
 
 // DeletePersistentVolumeClaim deletes the given persistent volume claim
@@ -342,6 +592,7 @@ func DeletePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 // ValidatePersistentVolumeClaim validates the given pvc
 func ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 	t := func() (string, error) {
+	var err error
 		client, err := GetK8sClient()
 		if err != nil {
 			return "", err
@@ -365,8 +616,7 @@ func ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-
-	return nil
+	return err
 }
 
 // GetVolumeForPersistentVolumeClaim returns the back volume for the given PVC
@@ -423,6 +673,8 @@ func GetPersistentVolumeClaimParams(pvc *v1.PersistentVolumeClaim) (map[string]s
 
 	return params, nil
 }
+
+// PVCs APIs - END
 
 // IsNodeMaster returns true if given node is a kubernetes master node
 func IsNodeMaster(node v1.Node) bool {

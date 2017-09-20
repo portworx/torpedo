@@ -273,6 +273,12 @@
 			"revisionTime": "2017-07-04T05:34:23Z"
 		},
 		{
+			"checksumSHA1": "ce/QMYEvg0VQ3BW6C4EEBp2O45k=",
+			"path": "github.com/fatih/color",
+			"revision": "1535ebc2637cc042c938f07fa26c6356ab8f8504",
+			"revisionTime": "2017-09-05T12:23:28Z"
+		},
+		{
 			"checksumSHA1": "voEIdf+d5ag0fW9g284bgYubYcA=",
 			"path": "github.com/fsouza/go-dockerclient",
 			"revision": "c933ed18bef34ec2955de03de8ef9a3bb996e3df",
@@ -531,6 +537,18 @@
 			"revisionTime": "2017-09-02T15:12:37Z"
 		},
 		{
+			"checksumSHA1": "cTDA66oZUy18cIzJsU1diKq+9CE=",
+			"path": "github.com/mattn/go-colorable",
+			"revision": "ad5389df28cdac544c99bd7b9161a0b5b6ca9d1b",
+			"revisionTime": "2017-08-16T03:18:13Z"
+		},
+		{
+			"checksumSHA1": "U6lX43KDDlNOn+Z0Yyww+ZzHfFo=",
+			"path": "github.com/mattn/go-isatty",
+			"revision": "fc9e8d8ef48496124e79ae0df75490096eccf6fe",
+			"revisionTime": "2017-03-22T23:44:13Z"
+		},
+		{
 			"checksumSHA1": "92iF6u5pEEUm+6iCC09UMOgRcX0=",
 			"origin": "github.com/libopenstorage/openstorage/vendor/github.com/miekg/dns",
 			"path": "github.com/miekg/dns",
@@ -544,11 +562,10 @@
 			"revisionTime": "2017-05-23T03:00:23Z"
 		},
 		{
-			"checksumSHA1": "KGEgppxoeEqnD0vY1MCnabBXMaU=",
-			"origin": "github.com/libopenstorage/openstorage/vendor/github.com/mohae/deepcopy",
+			"checksumSHA1": "SshnwGo3w3gUaXIswP3/vOQp57k=",
 			"path": "github.com/mohae/deepcopy",
-			"revision": "093a0c3888753c2056e7373183693d670c6bba01",
-			"revisionTime": "2017-09-06T21:42:54Z"
+			"revision": "491d3605edfb866af34a48075bd4355ac1bf46ca",
+			"revisionTime": "2017-06-03T00:54:31Z"
 		},
 		{
 			"checksumSHA1": "OUupkCHnh8e3RHRNcMFqQJqhaQI=",

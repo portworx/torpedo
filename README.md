@@ -6,6 +6,8 @@
 
 Torpedo is a test suite to qualify storage providers for stateful containers running in a distributed environment.  It tests various scenarios that applications encounter when running in Linux containers and deployed via schedulers such as Kubernetes, Marathon or Swarm.
 
+<div style="text-align:center"><img src="images/torpedo.png" alt="Drawing" style="width: 50px;"/></div>
+
 ## CSI
 CSI is a specification for Linux Container Storage Interfaces.  It defines the control plane interraction between a cloud native scheduler such as Kubernetes, and a cloud native storage provider.  The specification is available [here](https://github.com/container-storage-interface/spec/blob/master/spec.md).
 
@@ -87,7 +89,23 @@ Make sure you change the environment variables above to match your docker reposi
 * Portworx installed on the Kubernetes cluster
 * A root user on each node created as follows. The password should be `t0rped0`. If not already available a group called sudo should be created too.
 ```
-# useradd torpedo
+# adduser torpedo
+Adding user `torpedo' ...
+Adding new group `torpedo' (1001) ...
+Adding new user `torpedo' (1001) with group `torpedo' ...
+Creating home directory `/home/torpedo' ...
+Copying files from `/etc/skel' ...
+Enter new UNIX password:
+Retype new UNIX password:
+passwd: password updated successfully
+Changing the user information for torpedo
+Enter the new value, or press ENTER for the default
+	Full Name []: torpedo
+	Room Number []:
+	Work Phone []:
+	Home Phone []:
+	Other []:
+
 # groupadd sudo
 # usermod -aG sudo torpedo
 # sudo sh -c "echo 'torpedo ALL=NOPASSWD: ALL' >> /etc/sudoers"
@@ -100,9 +118,9 @@ To run on kubernetes:
 
 Make sure you change `image: harshpx/torpedo:latest` to your torpedo docker image.
 
-The above command starts Torpedo by deploying a k8s `Job` in your kubernetes cluster.  It also specified Portworx (`pxd`) as the volume driver and `ssh` as the node driver to.
+The above command starts Torpedo by deploying a k8s `Pod` in your kubernetes cluster.  It also specified Portworx (`pxd`) as the volume driver and `ssh` as the node driver to.
 
-You can look at status of torpedo by viewing logs of the torpedo pod.
+You can look at status of torpedo by viewing logs using: `kubectl logs -f torpedo`
 
 ## Contributing
 
