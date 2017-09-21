@@ -29,11 +29,9 @@ func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry 
 			default:
 				out, err := t()
 				if err == nil {
-					logrus.Infof("Task done: %v\nOutput is: %s", t, out)
 					done <- true
 					return
 				}
-				logrus.Infof("Will retry task")
 				time.Sleep(timeBeforeRetry)
 			}
 		}
