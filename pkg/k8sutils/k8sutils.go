@@ -360,7 +360,7 @@ func DeleteStatefulSet(statefulset *v1beta1.StatefulSet) error {
 // ValidateStatefulSet validates the given statefulset if it's running and healthy
 func ValidateStatefulSet(statefulset *v1beta1.StatefulSet) error {
 	var err error
-	t := func() (string, error) {
+	t := func() (interface{}, error) {
 		client, err := GetK8sClient()
 		if err != nil {
 			return "", err

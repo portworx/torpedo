@@ -34,20 +34,19 @@ type ConnectionOpts struct {
 
 // RebootNodeOpts provide additional options for reboot operation
 type RebootNodeOpts struct {
-	Force          bool
-	ConnectionOpts ConnectionOpts
+	Force bool
+	ConnectionOpts
 }
 
 // ShutdownNodeOpts provide additional options for shutdown operation
 type ShutdownNodeOpts struct {
-	Force          bool
-	ConnectionOpts ConnectionOpts
+	Force bool
+	ConnectionOpts
 }
 
 // TestConnectionOpts provide additional options for test connection operation
 type TestConnectionOpts struct {
-	Timeout         time.Duration
-	TimeBeforeRetry time.Duration
+	ConnectionOpts
 }
 
 var (
