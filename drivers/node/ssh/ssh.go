@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -92,7 +91,7 @@ func (s *ssh) Init(sched string) error {
 	nodes := s.schedDriver.GetNodes()
 	for _, n := range nodes {
 		if n.Type == node.TypeWorker {
-			if err := s.TestConnection(n, node.ConectionOpts{
+			if err := s.TestConnection(n, node.ConnectionOpts{
 				Timeout:         1 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
 			}); err != nil {
@@ -115,19 +114,6 @@ func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
 			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
 		}
 	}
-
-	/*
-		t := func() error {
-			return s.doCmd(addr, "hostname", false)
-		}
-
-		if err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
-			return &ErrFailedToTestConnection{
-				Node:  n,
-				Cause: err.Error(),
-			}
-		}
-	*/
 
 	return nil
 }
@@ -197,7 +183,6 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 			Cause: fmt.Sprintf("failed to dial: %v", err),
 		}
 	}
-	logrus.Infof("Dialed here")
 
 	session, err := connection.NewSession()
 	if err != nil {
@@ -206,7 +191,6 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 			Cause: fmt.Sprintf("failed to create session: %s", err),
 		}
 	}
-	logrus.Infof("Session here")
 	defer session.Close()
 
 	modes := ssh_pkg.TerminalModes{
@@ -221,7 +205,6 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 			Cause: fmt.Sprintf("request for pseudo terminal failed: %s", err),
 		}
 	}
-	logrus.Infof("Terminal modes set here")
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
@@ -230,7 +213,6 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 			Cause: fmt.Sprintf("Unable to setup stdout for session: %v", err),
 		}
 	}
-	logrus.Infof("STDOUT set here")
 
 	chOut := make(chan string)
 	go func() {
@@ -238,7 +220,6 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 		io.Copy(&bufout, stdout)
 		chOut <- bufout.String()
 	}()
-	logrus.Infof("go func loop here")
 	stderr, err := session.StderrPipe()
 	if err != nil {
 		return "", &ErrFailedToRunCommand{
@@ -246,14 +227,12 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 			Cause: fmt.Sprintf("Unable to setup stderr for session: %v", err),
 		}
 	}
-	logrus.Infof("STDERR set here")
 	chErr := make(chan string)
 	go func() {
 		var buferr bytes.Buffer
 		io.Copy(&buferr, stderr)
 		chErr <- buferr.String()
 	}()
-	logrus.Infof("go func2 loop here")
 	byteout, err := session.CombinedOutput(cmd)
 	out = fmt.Sprintf("%v", byteout)
 	if ignoreErr == false && err != nil {
@@ -262,7 +241,6 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 			Cause: fmt.Sprintf("failed to run command due to: %v", err),
 		}
 	}
-	logrus.Infof(fmt.Sprintf("Command %s has output %s", cmd, out))
 	return out, nil
 }
 
@@ -276,16 +254,13 @@ func (s *ssh) getAddrToConnect(n node.Node, options node.ConnectionOpts) (string
 }
 
 func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string, error) {
-	logrus.Infof("Here are the addresses: %v", n.Addresses)
 	for _, addr := range n.Addresses {
 		t := func() (string, error) {
 			return s.doCmd(addr, "hostname", false)
 		}
-		logrus.Infof("Will try task with addr: %s", addr)
 		if out, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
 			n.UsableAddr = addr
 			logrus.Infof("Updated field UsableAddr. Now node is %#v", n)
-			logrus.Infof("Output received from task %#v is %s", t, out)
 			return addr, nil
 		}
 	}

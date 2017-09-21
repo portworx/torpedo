@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/task"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -200,10 +199,10 @@ func DeleteDeployment(deployment *v1beta1.Deployment) error {
 	})
 }
 
-// ValidateDeployement validates the given deployment if it's running and healthy
-func ValidateDeployement(deployment *v1beta1.Deployment) error {
+// ValidateDeployment validates the given deployment if it's running and healthy
+func ValidateDeployment(deployment *v1beta1.Deployment) error {
 	var err error
-  t := func() (string, error) {
+	t := func() (string, error) {
 		client, err := GetK8sClient()
 		if err != nil {
 			return "", err
@@ -238,7 +237,7 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 		}
 
 		if len(pods) == 0 {
-			return &ErrAppNotReady{
+			return "", &ErrAppNotReady{
 				ID:    dep.Name,
 				Cause: "Application has 0 pods",
 			}
@@ -264,8 +263,8 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 
 // ValidateTerminatedDeployment validates if given deployment is terminated
 func ValidateTerminatedDeployment(deployment *v1beta1.Deployment) error {
-	t := func() (string, error) {
 	var err error
+	t := func() (string, error) {
 		client, err := GetK8sClient()
 		if err != nil {
 			return "", err
@@ -297,7 +296,7 @@ func ValidateTerminatedDeployment(deployment *v1beta1.Deployment) error {
 		return "", nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if _, err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 	return err
@@ -361,26 +360,26 @@ func DeleteStatefulSet(statefulset *v1beta1.StatefulSet) error {
 // ValidateStatefulSet validates the given statefulset if it's running and healthy
 func ValidateStatefulSet(statefulset *v1beta1.StatefulSet) error {
 	var err error
-	t := func() error {
+	t := func() (string, error) {
 		client, err := GetK8sClient()
 		if err != nil {
-			return err
+			return "", err
 		}
 		sset, err := client.AppsV1beta1().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		if *sset.Spec.Replicas != sset.Status.Replicas { // Not sure if this is even needed but for now let's have one check before
 			//readiness check
-			return &ErrAppNotReady{
+			return "", &ErrAppNotReady{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("Expected replicas: %v Observed replicas: %v", *sset.Spec.Replicas, sset.Status.Replicas),
 			}
 		}
 
 		if *sset.Spec.Replicas != sset.Status.ReadyReplicas {
-			return &ErrAppNotReady{
+			return "", &ErrAppNotReady{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v", *sset.Spec.Replicas, sset.Status.ReadyReplicas),
 			}
@@ -388,7 +387,7 @@ func ValidateStatefulSet(statefulset *v1beta1.StatefulSet) error {
 
 		pods, err := GetStatefulSetPods(statefulset)
 		if err != nil || pods == nil {
-			return &ErrAppNotReady{
+			return "", &ErrAppNotReady{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("Failed to get pods for statefulset. Err: %v", err),
 			}
@@ -396,17 +395,17 @@ func ValidateStatefulSet(statefulset *v1beta1.StatefulSet) error {
 
 		for _, pod := range pods {
 			if !IsPodRunning(pod) {
-				return &ErrAppNotReady{
+				return "", &ErrAppNotReady{
 					ID:    sset.Name,
 					Cause: fmt.Sprintf("pod: %v is not yet ready", pod.Name),
 				}
 			}
 		}
 
-		return nil
+		return "", nil
 	}
 
-	if err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if _, err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 	return err
@@ -438,39 +437,39 @@ func GetStatefulSetPods(statefulset *v1beta1.StatefulSet) ([]v1.Pod, error) {
 // ValidateTerminatedStatefulSet validates if given deployment is terminated
 func ValidateTerminatedStatefulSet(statefulset *v1beta1.StatefulSet) error {
 	var err error
-	t := func() error {
+	t := func() (string, error) {
 		client, err := GetK8sClient()
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		sset, err := client.AppsV1beta1().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
 		if err != nil {
 			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
-				return nil
+				return "", nil
 			}
-			return err
+			return "", err
 		}
 
 		pods, err := GetStatefulSetPods(statefulset)
 		if err != nil {
-			return &ErrAppNotTerminated{
+			return "", &ErrAppNotTerminated{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("Failed to get pods for statefulset. Err: %v", err),
 			}
 		}
 
 		if pods != nil && len(pods) > 0 {
-			return &ErrAppNotTerminated{
+			return "", &ErrAppNotTerminated{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("pods: %#v is still present", pods),
 			}
 		}
 
-		return nil
+		return "", nil
 	}
 
-	if err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if _, err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 	return err
@@ -591,8 +590,8 @@ func DeletePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 
 // ValidatePersistentVolumeClaim validates the given pvc
 func ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
-	t := func() (string, error) {
 	var err error
+	t := func() (string, error) {
 		client, err := GetK8sClient()
 		if err != nil {
 			return "", err
@@ -613,7 +612,7 @@ func ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 		}
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+	if _, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 	return err
