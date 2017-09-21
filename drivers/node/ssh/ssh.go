@@ -132,7 +132,7 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 		rebootCmd = rebootCmd + " -f"
 	}
 
-	t := func() (string, error) {
+	t := func() (interface{}, error) {
 		return s.doCmd(addr, rebootCmd, true)
 	}
 
@@ -160,7 +160,7 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 		shutdownCmd = "halt"
 	}
 
-	t := func() (string, error) {
+	t := func() (interface{}, error) {
 		return s.doCmd(addr, shutdownCmd, true)
 	}
 
@@ -255,7 +255,7 @@ func (s *ssh) getAddrToConnect(n node.Node, options node.ConnectionOpts) (string
 
 func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string, error) {
 	for _, addr := range n.Addresses {
-		t := func() (string, error) {
+		t := func() (interface{}, error) {
 			return s.doCmd(addr, "hostname", false)
 		}
 		if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {

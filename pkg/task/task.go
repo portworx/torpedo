@@ -12,7 +12,7 @@ import (
 var ErrTimedOut = errors.New("timed out performing task")
 
 // DoRetryWithTimeout performs given task with given timeout and timeBeforeRetry
-func DoRetryWithTimeout(t func() (string, error), timeout, timeBeforeRetry time.Duration) (string, error) {
+func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
 	done := make(chan bool, 1)
 	quit := make(chan bool, 1)
 	var out string

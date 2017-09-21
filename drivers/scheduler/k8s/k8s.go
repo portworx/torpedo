@@ -36,7 +36,7 @@ func (k *k8s) GetNodes() []node.Node {
 }
 
 func (k *k8s) IsNodeReady(n node.Node) error {
-	t := func() (string, error) {
+	t := func() (interface{}, error) {
 		if err := k8sutils.IsNodeReady(n.Name); err != nil {
 			return "", &ErrNodeNotReady{
 				Node:  n,

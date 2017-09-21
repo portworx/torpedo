@@ -298,7 +298,7 @@ func (d *portworx) StopDriver(n node.Node) error {
 func (d *portworx) WaitStart(n node.Node) error {
 	var err error
 	// Wait for Portworx to become usable.
-	t := func() (string, error) {
+	t := func() (interface{}, error) {
 		if status, _ := d.clusterManager.NodeStatus(); status != api.Status_STATUS_OK {
 			return "", &ErrFailedToWaitForPx{
 				Node:  n,
