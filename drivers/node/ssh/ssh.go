@@ -259,7 +259,7 @@ func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string
 		t := func() (string, error) {
 			return s.doCmd(addr, "hostname", false)
 		}
-		if out, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
+		if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
 			n.UsableAddr = addr
 			logrus.Infof("Updated field UsableAddr. Now node is %#v", n)
 			return addr, nil
