@@ -15,7 +15,8 @@ var ErrTimedOut = errors.New("timed out performing task")
 func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
 	done := make(chan bool, 1)
 	quit := make(chan bool, 1)
-	var out string
+	var out interface{}
+	var err error
 
 	go func() {
 		for {
@@ -27,7 +28,7 @@ func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry 
 				}
 
 			default:
-				out, err := t()
+				out, err = t()
 				if err == nil {
 					done <- true
 					return
