@@ -79,7 +79,6 @@ func (s *ssh) Init(sched string) error {
 				ssh_pkg.PublicKeys(pubkey),
 			},
 		}
-
 	} else {
 		return fmt.Errorf("Unknown auth type")
 	}
