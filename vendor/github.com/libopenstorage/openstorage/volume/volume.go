@@ -59,12 +59,12 @@ const (
 	LocalNode = "LocalNode"
 )
 
-// AttachOptionsKey specifies a key type from a key-value pair
-// that will be passed in to the Attach api
-type AttachOptionsKey string
-
+// Options specifies keys from a key-value pair
+// that can be passed in to the APIS
 const (
-	AttachOptionsSecret = AttachOptionsKey("SECRET_KEY")
+	OptionsSecret              = "SECRET_KEY"
+	OptionsUnmountBeforeDetach = "UNMOUNT_BEFORE_DETACH"
+	OptionsDeleteAfterUnmount  = "DELETE_AFTER_UNMOUNT"
 )
 
 // Store defines the interface for basic volume store operations
@@ -145,12 +145,12 @@ type ProtoDriver interface {
 	Delete(volumeID string) error
 	// Mount volume at specified path
 	// Errors ErrEnoEnt, ErrVolDetached may be returned.
-	Mount(volumeID string, mountPath string) error
+	Mount(volumeID string, mountPath string, options map[string]string) error
 	// MountedAt return volume mounted at specified mountpath.
 	MountedAt(mountPath string) string
 	// Unmount volume at specified path
 	// Errors ErrEnoEnt, ErrVolDetached may be returned.
-	Unmount(volumeID string, mountPath string) error
+	Unmount(volumeID string, mountPath string, options map[string]string) error
 	// Update not all fields of the spec are supported, ErrNotSupported will be thrown for unsupported
 	// updates.
 	Set(volumeID string, locator *api.VolumeLocator, spec *api.VolumeSpec) error
@@ -188,7 +188,7 @@ type BlockDriver interface {
 	Attach(volumeID string, attachOptions map[string]string) (string, error)
 	// Detach device from the host.
 	// Errors ErrEnoEnt, ErrVolDetached may be returned.
-	Detach(volumeID string, unmountBeforeDetach bool) error
+	Detach(volumeID string, options map[string]string) error
 }
 
 // VolumeDriverProvider provides VolumeDrivers.
