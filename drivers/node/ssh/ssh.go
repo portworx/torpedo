@@ -137,7 +137,7 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
-		return &ErrFailedToRebootNode{
+		return &node.ErrFailedToRebootNode{
 			Node:  n,
 			Cause: err.Error(),
 		}
@@ -165,7 +165,7 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
-		return &ErrFailedToShutdownNode{
+		return &node.ErrFailedToShutdownNode{
 			Node:  n,
 			Cause: err.Error(),
 		}
@@ -178,7 +178,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	var out string
 	connection, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%s:%d", addr, DefaultSSHPort), s.sshConfig)
 	if err != nil {
-		return "", &ErrFailedToRunCommand{
+		return "", &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to dial: %v", err),
 		}
@@ -186,7 +186,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 
 	session, err := connection.NewSession()
 	if err != nil {
-		return "", &ErrFailedToRunCommand{
+		return "", &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to create session: %s", err),
 		}
@@ -200,7 +200,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	}
 
 	if err := session.RequestPty("xterm", 80, 40, modes); err != nil {
-		return "", &ErrFailedToRunCommand{
+		return "", &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("request for pseudo terminal failed: %s", err),
 		}
@@ -208,7 +208,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		return "", &ErrFailedToRunCommand{
+		return "", &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("Unable to setup stdout for session: %v", err),
 		}
@@ -222,7 +222,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	}()
 	stderr, err := session.StderrPipe()
 	if err != nil {
-		return "", &ErrFailedToRunCommand{
+		return "", &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("Unable to setup stderr for session: %v", err),
 		}
@@ -236,7 +236,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	byteout, err := session.CombinedOutput(cmd)
 	out = fmt.Sprintf("%v", byteout)
 	if ignoreErr == false && err != nil {
-		return out, &ErrFailedToRunCommand{
+		return out, &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to run command due to: %v", err),
 		}
