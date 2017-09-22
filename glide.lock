@@ -53,7 +53,7 @@ imports:
   - digest
   - reference
 - name: github.com/docker/docker
-  version: 48cce229330561c104f777dac4f3f39ef2e2de6e
+  version: 777d4a1bf45c85db6931205d4adbe38a17c583d7
   subpackages:
   - api/types
   - api/types/blkiodev
@@ -97,7 +97,7 @@ imports:
 - name: github.com/fatih/color
   version: 570b54cabe6b8eb0bc2dfce68d964677d63b5260
 - name: github.com/fsouza/go-dockerclient
-  version: 98edf3edfae6a6500fecc69d2bcccf1302544004
+  version: d6c9513c3abe61f13e41c22bc013346eb96e1fe5
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
@@ -230,7 +230,7 @@ imports:
   subpackages:
   - logrus
 - name: golang.org/x/crypto
-  version: d172538b2cfce0c13cee31e647d0367aa8cd2486
+  version: faadfbdc035307d901e69eea569f5dda451a3ee3
   subpackages:
   - curve25519
   - ed25519
