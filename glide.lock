@@ -1,5 +1,5 @@
-hash: ac58cd77b739d672fe42c7dafd748b555ba8b04792d62e282c6600f809a580e0
-updated: 2017-09-21T19:22:51.209461364-07:00
+hash: b942298f0cbad576874087148a276b6bfcda102543bb4e41271b56e485cac448
+updated: 2017-09-22T14:16:24.75687073-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 0a12dc6f6b9da6da644031a1b9b5a85478c5ee27
@@ -53,7 +53,7 @@ imports:
   - digest
   - reference
 - name: github.com/docker/docker
-  version: 777d4a1bf45c85db6931205d4adbe38a17c583d7
+  version: 48cce229330561c104f777dac4f3f39ef2e2de6e
   subpackages:
   - api/types
   - api/types/blkiodev
@@ -97,7 +97,7 @@ imports:
 - name: github.com/fatih/color
   version: 570b54cabe6b8eb0bc2dfce68d964677d63b5260
 - name: github.com/fsouza/go-dockerclient
-  version: d6c9513c3abe61f13e41c22bc013346eb96e1fe5
+  version: 98edf3edfae6a6500fecc69d2bcccf1302544004
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
@@ -201,7 +201,7 @@ imports:
   - specs-go
   - specs-go/v1
 - name: github.com/opencontainers/runc
-  version: 593914b8bd5448a93f7c3e4902a03408b6d5c0ce
+  version: e385f67a0e45fa1d8ef8154e2aea5128ea1d331b
   subpackages:
   - libcontainer/system
   - libcontainer/user

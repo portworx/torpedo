@@ -2,8 +2,9 @@ package task
 
 import (
 	"errors"
-	"github.com/Sirupsen/logrus"
 	"time"
+
+	"github.com/Sirupsen/logrus"
 )
 
 //TODO: export the type: type Task func() (string, error)

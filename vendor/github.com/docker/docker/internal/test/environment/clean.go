@@ -28,7 +28,7 @@ type logT interface {
 func (e *Execution) Clean(t testingT) {
 	client := e.APIClient()
 
-	platform := e.OSType
+	platform := e.DaemonInfo.OSType
 	if (platform != "windows") || (platform == "windows" && e.DaemonInfo.Isolation == "hyperv") {
 		unpauseAllContainers(t, client)
 	}
