@@ -543,7 +543,7 @@ func DeletePods(pods []v1.Pod) error {
 func GetPods(namespace string) (*v1.PodList, error) {
 	client, err := GetK8sClient()
 	if err != nil {
-		return nil, err
+		return pods, err
 	}
 
 	return client.Pods(namespace).List(meta_v1.ListOptions{})
