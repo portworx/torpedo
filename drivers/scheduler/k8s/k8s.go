@@ -1,8 +1,10 @@
 package k8s
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/k8sutils"
 	"github.com/portworx/torpedo/pkg/task"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/pkg/api/v1"
 	apps_api "k8s.io/client-go/pkg/apis/apps/v1beta1"
@@ -108,27 +111,34 @@ func (k *k8s) parseSpecs(specDir string, parser func(in interface{}) (interface{
 	}
 
 	var coreSpecs []interface{}
-	for _, file := range fileList {
-		specContents, err := ioutil.ReadFile(file)
+	for _, fileName := range fileList {
+		file, err := os.Open(fileName)
 		if err != nil {
 			return nil, err
 		}
+		defer file.Close()
 
-		obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
-		if err != nil {
-			return nil, err
+		reader := bufio.NewReader(file)
+		specReader := yaml.NewYAMLReader(reader)
+
+		for {
+			specContents, err := specReader.Read()
+			if err == io.EOF {
+				break
+			}
+
+			if len(bytes.TrimSpace(specContents)) > 0 {
+				obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
+				if err != nil {
+					return nil, err
+				}
+
+				specObj, err := parser(obj)
+				if specObj != nil {
+					coreSpecs = append(coreSpecs, specObj)
+				}
+			}
 		}
-
-		specObj, err := parser(obj)
-		if err != nil {
-			return nil, err
-		}
-
-		if specObj == nil {
-			continue
-		}
-
-		coreSpecs = append(coreSpecs, specObj)
 	}
 
 	return coreSpecs, nil
