@@ -151,12 +151,9 @@ func (t *torpedo) testDriverDownAppDown() error {
 
 	for _, ctx := range contexts {
 		logrus.Infof("[Test: %v] Validating %v", taskName, ctx.App.Key)
-		return fmt.Errorf("VARUN GENERATED THIS ERROR")
-		/*
-			if err := t.validateContext(ctx); err != nil {
-				return err
-			}
-		*/
+		if err := t.validateContext(ctx); err != nil {
+			return err
+		}
 	}
 
 	for _, ctx := range contexts {
