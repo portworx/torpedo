@@ -1,27 +1,3 @@
-##### Portworx storage class
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-    name: px-nginx-sc
-provisioner: kubernetes.io/portworx-volume
-parameters:
-   repl: "3"
-   shared: "true"
----
-##### Portworx persistent volume claim
-kind: PersistentVolumeClaim
-apiVersion: v1
-metadata:
-   name: px-nginx-pvc
-   annotations:
-     volume.beta.kubernetes.io/storage-class: px-nginx-sc
-spec:
-   accessModes:
-     - ReadWriteMany
-   resources:
-     requests:
-       storage: 1Gi
----
 kind: Service
 apiVersion: v1
 metadata:
@@ -35,7 +11,7 @@ spec:
       port: 80
       targetPort: 80
 ---
-apiVersion: apps/v1beta1
+apiVersion: batch/v1
 kind: Deployment
 metadata:
   name: nginx

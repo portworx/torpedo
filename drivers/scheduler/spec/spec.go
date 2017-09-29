@@ -2,8 +2,7 @@ package spec
 
 // Parser provides operations for parsing application specs
 type Parser interface {
-	ParseCoreSpecs(specDir string) ([]interface{}, error)
-	ParseStorageSpecs(specDir string) ([]interface{}, error)
+	ParseSpecs(specDir string) ([]interface{}, []interface{}, error)
 }
 
 // AppSpec defines a k8s application specification

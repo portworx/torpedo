@@ -24,7 +24,11 @@ import (
 )
 
 // SchedName is the name of the kubernetes scheduler driver implementation
-const SchedName = "k8s"
+const (
+	SchedName = "k8s"
+	core      = "core"
+	storage   = "storage"
+)
 
 type k8s struct {
 	nodes       map[string]node.Node
@@ -82,23 +86,7 @@ func (k *k8s) Init(specDir string) error {
 	return nil
 }
 
-func (k *k8s) ParseCoreSpecs(specDir string) ([]interface{}, error) {
-	parser := func(in interface{}) (interface{}, error) {
-		return coreParser(in)
-	}
-
-	return k.parseSpecs(specDir, parser)
-}
-
-func (k *k8s) ParseStorageSpecs(specDir string) ([]interface{}, error) {
-	parser := func(in interface{}) (interface{}, error) {
-		return storageParser(in)
-	}
-
-	return k.parseSpecs(specDir, parser)
-}
-
-func (k *k8s) parseSpecs(specDir string, parser func(in interface{}) (interface{}, error)) ([]interface{}, error) {
+func (k *k8s) ParseSpecs(specDir string) ([]interface{}, []interface{}, error) {
 	fileList := []string{}
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
 		if !f.IsDir() {
@@ -107,14 +95,16 @@ func (k *k8s) parseSpecs(specDir string, parser func(in interface{}) (interface{
 
 		return nil
 	}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var coreSpecs []interface{}
+	var storageSpecs []interface{}
+
 	for _, fileName := range fileList {
 		file, err := os.Open(fileName)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		defer file.Close()
 
@@ -130,40 +120,39 @@ func (k *k8s) parseSpecs(specDir string, parser func(in interface{}) (interface{
 			if len(bytes.TrimSpace(specContents)) > 0 {
 				obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 
-				specObj, err := parser(obj)
-				if specObj != nil {
+				specObj, objType, err := checkSpecType(obj)
+				if err != nil {
+					logrus.Warnf("%s. Parser skipping the spec", err)
+					return nil, nil, nil
+				}
+				if objType == core {
 					coreSpecs = append(coreSpecs, specObj)
+				} else if objType == storage {
+					storageSpecs = append(storageSpecs, specObj)
 				}
 			}
 		}
 	}
 
-	return coreSpecs, nil
+	return coreSpecs, storageSpecs, nil
 }
 
-func coreParser(in interface{}) (interface{}, error) {
+func checkSpecType(in interface{}) (interface{}, string, error) {
 	if specObj, ok := in.(*apps_api.Deployment); ok {
-		return specObj, nil
+		return specObj, core, nil
 	} else if specObj, ok := in.(*apps_api.StatefulSet); ok {
-		return specObj, nil
+		return specObj, core, nil
 	} else if specObj, ok := in.(*v1.Service); ok {
-		return specObj, nil
-	}
-
-	return nil, nil
-}
-
-func storageParser(in interface{}) (interface{}, error) {
-	if specObj, ok := in.(*v1.PersistentVolumeClaim); ok {
-		return specObj, nil
+		return specObj, core, nil
+	} else if specObj, ok := in.(*v1.PersistentVolumeClaim); ok {
+		return specObj, storage, nil
 	} else if specObj, ok := in.(*storage_api.StorageClass); ok {
-		return specObj, nil
+		return specObj, storage, nil
 	}
-
-	return nil, nil
+	return nil, "", fmt.Errorf("Unsupported object")
 }
 
 func (k *k8s) getAddressesForNode(n v1.Node) []string {
@@ -226,92 +215,20 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 		var coreObjects []interface{}
 		var storageObjects []interface{}
 
-		for _, storage := range app.Storage {
-			if obj, ok := storage.(*storage_api.StorageClass); ok {
-				obj.Namespace = ns.Name
-				sc, err := k8sutils.CreateStorageClass(obj)
-				if err != nil {
-					if matched, _ := regexp.MatchString(".+ already exists", err.Error()); !matched {
-						return nil, &ErrFailedToScheduleApp{
-							App:   app,
-							Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
-						}
-					}
-
-					sc, err = k8sutils.ValidateStorageClass(obj.Name)
-					if err != nil {
-						return nil, &ErrFailedToScheduleApp{
-							App:   app,
-							Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
-						}
-					}
-				}
-				storageObjects = append(storageObjects, sc)
-
-				logrus.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
-			} else if obj, ok := storage.(*v1.PersistentVolumeClaim); ok {
-				obj.Namespace = ns.Name
-				pvc, err := k8sutils.CreatePersistentVolumeClaim(obj)
-				if err != nil {
-					return nil, &ErrFailedToScheduleApp{
-						App:   app,
-						Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", pvc.Name, err),
-					}
-				}
-				storageObjects = append(storageObjects, pvc)
-
-				logrus.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
-			} else {
-				return nil, &ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create unsupported storage component: %#v.", storage),
-				}
+		for _, spec := range app.Storage {
+			obj, err := k.createStorageObject(spec, ns, app)
+			if err != nil {
+				return nil, err
 			}
+			storageObjects = append(storageObjects, obj)
 		}
 
-		for _, core := range app.Core {
-			if obj, ok := core.(*apps_api.Deployment); ok {
-				obj.Namespace = ns.Name
-				dep, err := k8sutils.CreateDeployment(obj)
-				if err != nil {
-					return nil, &ErrFailedToScheduleApp{
-						App:   app,
-						Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", dep.Name, err),
-					}
-				}
-				coreObjects = append(coreObjects, dep)
-
-				logrus.Infof("[%v] Created deployment: %v", app.Key, dep.Name)
-			} else if obj, ok := core.(*apps_api.StatefulSet); ok {
-				obj.Namespace = ns.Name
-				ss, err := k8sutils.CreateStatefulSet(obj)
-				if err != nil {
-					return nil, &ErrFailedToScheduleApp{
-						App:   app,
-						Cause: fmt.Sprintf("Failed to create StatefulSet: %v. Err: %v", ss.Name, err),
-					}
-				}
-				coreObjects = append(coreObjects, ss)
-
-				logrus.Infof("[%v] Created StatefulSet: %v", app.Key, ss.Name)
-			} else if obj, ok := core.(*v1.Service); ok {
-				obj.Namespace = ns.Name
-				svc, err := k8sutils.CreateService(obj)
-				if err != nil {
-					return nil, &ErrFailedToScheduleApp{
-						App:   app,
-						Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", svc.Name, err),
-					}
-				}
-				coreObjects = append(coreObjects, svc)
-
-				logrus.Infof("[%v] Created Service: %v", app.Key, svc.Name)
-			} else {
-				return nil, &ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create unsupported core component: %#v.", core),
-				}
+		for _, spec := range app.Core {
+			obj, err := k.createCoreObject(spec, ns, app)
+			if err != nil {
+				return nil, err
 			}
+			coreObjects = append(coreObjects, obj)
 		}
 
 		ctx := &scheduler.Context{
@@ -331,6 +248,93 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	}
 
 	return contexts, nil
+}
+
+func (k *k8s) createStorageObject(storage interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
+	if obj, ok := storage.(*storage_api.StorageClass); ok {
+		obj.Namespace = ns.Name
+		sc, err := k8sutils.CreateStorageClass(obj)
+		if err != nil {
+			if matched, _ := regexp.MatchString(".+ already exists", err.Error()); !matched {
+				return nil, &ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
+				}
+			}
+
+			sc, err = k8sutils.ValidateStorageClass(obj.Name)
+			if err != nil {
+				return nil, &ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
+				}
+			}
+		}
+
+		logrus.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
+		return sc, nil
+	} else if obj, ok := storage.(*v1.PersistentVolumeClaim); ok {
+		obj.Namespace = ns.Name
+		pvc, err := k8sutils.CreatePersistentVolumeClaim(obj)
+		if err != nil {
+			return nil, &ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", pvc.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
+		return pvc, nil
+	}
+
+	return nil, &ErrFailedToScheduleApp{
+		App:   app,
+		Cause: fmt.Sprintf("Failed to create unsupported storage component: %#v.", storage),
+	}
+}
+
+func (k *k8s) createCoreObject(core interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
+	if obj, ok := core.(*apps_api.Deployment); ok {
+		obj.Namespace = ns.Name
+		dep, err := k8sutils.CreateDeployment(obj)
+		if err != nil {
+			return nil, &ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", dep.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created deployment: %v", app.Key, dep.Name)
+		return dep, nil
+
+	} else if obj, ok := core.(*apps_api.StatefulSet); ok {
+		obj.Namespace = ns.Name
+		ss, err := k8sutils.CreateStatefulSet(obj)
+		if err != nil {
+			return nil, &ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create StatefulSet: %v. Err: %v", ss.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created StatefulSet: %v", app.Key, ss.Name)
+		return ss, nil
+
+	} else if obj, ok := core.(*v1.Service); ok {
+		obj.Namespace = ns.Name
+		svc, err := k8sutils.CreateService(obj)
+		if err != nil {
+			return nil, &ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", svc.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created Service: %v", app.Key, svc.Name)
+		return svc, nil
+	}
+
+	return nil, &ErrFailedToScheduleApp{
+		App:   app,
+		Cause: fmt.Sprintf("Failed to create unsupported core component: %#v.", core),
+	}
 }
 
 func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
