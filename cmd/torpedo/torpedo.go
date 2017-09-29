@@ -126,7 +126,6 @@ func (t *torpedo) testDriverDown() error {
 		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
-		GenerateSupportBundle(t, ctx)
 
 		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
 		if err := t.tearDownContext(ctx); err != nil {
