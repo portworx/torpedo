@@ -126,6 +126,7 @@ func (t *torpedo) testDriverDown() error {
 		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
+		GenerateSupportBundle(t, ctx)
 
 		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
 		if err := t.tearDownContext(ctx); err != nil {
@@ -150,9 +151,12 @@ func (t *torpedo) testDriverDownAppDown() error {
 
 	for _, ctx := range contexts {
 		logrus.Infof("[Test: %v] Validating %v", taskName, ctx.App.Key)
-		if err := t.validateContext(ctx); err != nil {
-			return err
-		}
+		return fmt.Errorf("VARUN GENERATED THIS ERROR")
+		/*
+			if err := t.validateContext(ctx); err != nil {
+				return err
+			}
+		*/
 	}
 
 	for _, ctx := range contexts {
