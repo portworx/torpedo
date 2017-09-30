@@ -57,7 +57,7 @@ spec:
     - mountPath: /mnt/torpedo_support_bundle
 =======
     #command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh" ]
-    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh", "--tests", "testSetupTearDown", "--logLocation", "/mnt/tsb" ]
+    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh", "--tests", "testSetupTearDown", "--log-location", "/mnt/tsb" ]
     tty: true
     volumeMounts:
     - mountPath: /mnt/tsb
