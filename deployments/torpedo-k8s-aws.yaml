@@ -52,12 +52,5 @@ spec:
     image: harshpx/torpedo:latest
     command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "aws" ]
     tty: true
-    env:
-    - name: AWS_ACCESS_KEY_ID
-      value: AKIAJ6WFNGUHDEX6V4LQ
-    - name: AWS_SECRET_ACCESS_KEY
-      value: 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
-    - name: AWS_REGION
-      value: us-east-1
   restartPolicy: Never
   serviceAccountName: torpedo-account
