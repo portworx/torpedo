@@ -712,10 +712,6 @@ func dumpPodStatusRecursively(pod v1.Pod) string {
 	return buf.String()
 }
 
-func insertLineBreak(note string) string {
-	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
-}
-
 func contains(nodes []node.Node, n node.Node) bool {
 	for _, value := range nodes {
 		if value.Name == n.Name {
