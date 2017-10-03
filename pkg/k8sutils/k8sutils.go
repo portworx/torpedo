@@ -169,8 +169,21 @@ func GetService(svcName string, svcNS string) (*v1.Service, error) {
 }
 
 // DescribeService updates the service status and returns the status part
+<<<<<<< HEAD
 func DescribeService(svcName string, svcNamespace string) (*v1.ServiceStatus, error) {
 	svc, err := GetService(svcName, svcNamespace)
+=======
+func DescribeService(svc *v1.Service) (*v1.ServiceStatus, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+	svc, err = GetService(svc.Name, svc.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	svc, err = client.CoreV1().Services(svc.Namespace).UpdateStatus(svc)
+>>>>>>> a43c9cc... Adding methods to get status/params of pvc, stg cls, service and edits
 	if err != nil {
 		return nil, err
 	}
@@ -359,10 +372,21 @@ func GetDeploymentPods(deployment *v1beta1.Deployment) ([]v1.Pod, error) {
 }
 
 // DescribeDeployment updates the deployment status and returns the status part
+<<<<<<< HEAD
 func DescribeDeployment(depName string, depNamespace string) (*v1beta1.DeploymentStatus, error) {
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
+=======
+func DescribeDeployment(deployment *v1beta1.Deployment) (*v1beta1.DeploymentStatus, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+	dep, err := client.AppsV1beta1().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+>>>>>>> a43c9cc... Adding methods to get status/params of pvc, stg cls, service and edits
 	}
 	dep, err := client.AppsV1beta1().Deployments(depNamespace).Get(depName, meta_v1.GetOptions{})
 	if err != nil {
@@ -504,10 +528,21 @@ func ValidateTerminatedStatefulSet(statefulset *v1beta1.StatefulSet) error {
 }
 
 // DescribeStatefulSet updates the status of the statefulset and returns the status part
+<<<<<<< HEAD
 func DescribeStatefulSet(ssetName string, ssetNamespace string) (*v1beta1.StatefulSetStatus, error) {
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
+=======
+func DescribeStatefulSet(statefulset *v1beta1.StatefulSet) (*v1beta1.StatefulSetStatus, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+	sset, err := client.AppsV1beta1().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+>>>>>>> a43c9cc... Adding methods to get status/params of pvc, stg cls, service and edits
 	}
 	sset, err := client.AppsV1beta1().StatefulSets(ssetNamespace).Get(ssetName, meta_v1.GetOptions{})
 	if err != nil {
@@ -592,6 +627,10 @@ func DeleteStorageClass(name string) error {
 
 // GetStorageClassParams returns the parameters of the given sc in the native map format
 func GetStorageClassParams(sc *storage_api.StorageClass) (map[string]string, error) {
+<<<<<<< HEAD
+=======
+	var err error
+>>>>>>> a43c9cc... Adding methods to get status/params of pvc, stg cls, service and edits
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
@@ -601,8 +640,13 @@ func GetStorageClassParams(sc *storage_api.StorageClass) (map[string]string, err
 	if err != nil {
 		return nil, err
 	}
+<<<<<<< HEAD
 
 	return sc.Parameters, nil
+=======
+	return sc.Parameters, nil
+
+>>>>>>> a43c9cc... Adding methods to get status/params of pvc, stg cls, service and edits
 }
 
 // ValidateStorageClass validates the given storage class
@@ -651,6 +695,10 @@ func DeletePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 
 // GetPersistentVolumeClaimStatus returns the status of the given pvc
 func GetPersistentVolumeClaimStatus(pvc *v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaimStatus, error) {
+<<<<<<< HEAD
+=======
+	var err error
+>>>>>>> a43c9cc... Adding methods to get status/params of pvc, stg cls, service and edits
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
@@ -660,8 +708,13 @@ func GetPersistentVolumeClaimStatus(pvc *v1.PersistentVolumeClaim) (*v1.Persiste
 	if err != nil {
 		return nil, err
 	}
+<<<<<<< HEAD
 
 	return &result.Status, nil
+=======
+	return &result.Status, nil
+
+>>>>>>> a43c9cc... Adding methods to get status/params of pvc, stg cls, service and edits
 }
 
 // ValidatePersistentVolumeClaim validates the given pvc
