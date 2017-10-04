@@ -50,26 +50,14 @@ spec:
   containers:
   - name: torpedo
     image: harshpx/torpedo:latest
-<<<<<<< HEAD
     command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh", "--tests", "testSetupTearDown", "--log-location", "/mnt/torpedo_support_bundle" ]
     tty: true
     volumeMounts:
     - mountPath: /mnt/torpedo_support_bundle
-=======
-    #command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh" ]
-    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh", "--tests", "testSetupTearDown", "--log-location", "/mnt/tsb" ]
-    tty: true
-    volumeMounts:
-    - mountPath: /mnt/tsb
->>>>>>> 9b4d1b2... Adding a log location attribute to torpedo obj, specifying defaults
       name: support-bundle-path
   restartPolicy: Never
   serviceAccountName: torpedo-account
   volumes:
     - name: support-bundle-path
       hostPath:
-<<<<<<< HEAD
         path: /mnt/torpedo_support_bundle
-=======
-        path: /mnt/tsb
->>>>>>> 9b4d1b2... Adding a log location attribute to torpedo obj, specifying defaults
