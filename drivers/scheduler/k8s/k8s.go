@@ -712,23 +712,6 @@ func dumpPodStatusRecursively(pod v1.Pod) string {
 	return buf.String()
 }
 
-func insertLineBreak(note string) string {
-	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
-}
-
-func dumpPodStatusRecursively(pod v1.Pod) string {
-	var buf bytes.Buffer
-	buf.WriteString(insertLineBreak(pod.Name))
-	buf.WriteString(fmt.Sprintf("%v\n", pod.Status))
-	for _, conStat := range pod.Status.ContainerStatuses {
-		buf.WriteString(insertLineBreak(conStat.Name))
-		buf.WriteString(fmt.Sprintf("%v\n", conStat))
-		buf.WriteString(insertLineBreak("END Container"))
-	}
-	buf.WriteString(insertLineBreak("END Pod"))
-	return buf.String()
-}
-
 func contains(nodes []node.Node, n node.Node) bool {
 	for _, value := range nodes {
 		if value.Name == n.Name {
