@@ -14,7 +14,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/pkg/k8sops"
+	k8s_ops "github.com/portworx/torpedo/pkg/k8sops"
 	"github.com/portworx/torpedo/pkg/task"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -41,7 +41,7 @@ func (k *k8s) GetNodes() []node.Node {
 
 func (k *k8s) IsNodeReady(n node.Node) error {
 	t := func() (interface{}, error) {
-		if err := k8sops.Instance().IsNodeReady(n.Name); err != nil {
+		if err := k8s_ops.Instance().IsNodeReady(n.Name); err != nil {
 			return "", &ErrNodeNotReady{
 				Node:  n,
 				Cause: err.Error(),
@@ -65,7 +65,7 @@ func (k *k8s) String() string {
 }
 
 func (k *k8s) Init(specDir string) error {
-	nodes, err := k8sops.Instance().GetNodes()
+	nodes, err := k8s_ops.Instance().GetNodes()
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func (k *k8s) getAddressesForNode(n v1.Node) []string {
 
 func (k *k8s) parseK8SNode(n v1.Node) node.Node {
 	var nodeType node.Type
-	if k8sops.Instance().IsNodeMaster(n) {
+	if k8s_ops.Instance().IsNodeMaster(n) {
 		nodeType = node.TypeMaster
 	} else {
 		nodeType = node.TypeWorker
@@ -193,7 +193,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	var contexts []*scheduler.Context
 	for _, app := range apps {
 		appNamespace := getAppNamespaceName(app, instanceID)
-		ns, err := k8sops.Instance().CreateNamespace(appNamespace, map[string]string{
+		ns, err := k8s_ops.Instance().CreateNamespace(appNamespace, map[string]string{
 			"creater": "torpedo",
 			"app":     app.Key,
 		})
@@ -245,7 +245,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 }
 
 func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	if obj, ok := spec.(*storage_api.StorageClass); ok {
 		obj.Namespace = ns.Name
 		sc, err := k8sOps.CreateStorageClass(obj)
@@ -286,7 +286,7 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 }
 
 func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	if obj, ok := spec.(*apps_api.Deployment); ok {
 		obj.Namespace = ns.Name
 		dep, err := k8sOps.CreateDeployment(obj)
@@ -328,7 +328,7 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 }
 
 func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
 			if err := k8sOps.ValidateDeployment(obj); err != nil {
@@ -365,7 +365,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) Destroy(ctx *scheduler.Context) error {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
 			if err := k8sOps.DeleteDeployment(obj); err != nil {
@@ -411,7 +411,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
 			if err := k8sOps.ValidateTerminatedDeployment(obj); err != nil {
@@ -446,7 +446,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	var pods []v1.Pod
 	var err error
 	for _, spec := range ctx.App.SpecList {
@@ -482,7 +482,7 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]string, error) {
 	var volumes []string
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			vol, err := k8sops.Instance().GetVolumeForPersistentVolumeClaim(obj)
+			vol, err := k8s_ops.Instance().GetVolumeForPersistentVolumeClaim(obj)
 			if err != nil {
 				return nil, &ErrFailedToGetVolumesForApp{
 					App:   ctx.App,
@@ -498,7 +498,7 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]string, error) {
 }
 
 func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string]string, error) {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	result := make(map[string]map[string]string)
 
 	for _, spec := range ctx.App.SpecList {
@@ -526,7 +526,7 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 }
 
 func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*storage_api.StorageClass); ok {
 			if _, err := k8sOps.ValidateStorageClass(obj.Name); err != nil {
@@ -553,7 +553,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*storage_api.StorageClass); ok {
 			if err := k8sOps.DeleteStorageClass(obj.Name); err != nil {
@@ -580,7 +580,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	var result []node.Node
 	var pods []v1.Pod
 	var err error
@@ -627,7 +627,7 @@ func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 }
 
 func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8s_ops.Instance()
 	var buf bytes.Buffer
 	var err error
 	for _, spec := range ctx.App.SpecList {
