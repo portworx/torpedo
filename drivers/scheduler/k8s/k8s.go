@@ -375,10 +375,12 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []v1.Pod
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
-			if pods, err := k8sOps.GetDeploymentPods(obj); err != nil {
-				logrus.Warnf("[%v] Error getting deployment pods. Err: %v", ctx.App.Key, err)
-			} else {
-				podList = append(podList, pods...)
+			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+				if pods, err := k8sOps.GetDeploymentPods(obj); err != nil {
+					logrus.Warnf("[%v] Error getting deployment pods. Err: %v", ctx.App.Key, err)
+				} else {
+					podList = append(podList, pods...)
+				}
 			}
 			if err := k8sOps.DeleteDeployment(obj); err != nil {
 				return &ErrFailedToDestroyApp{
@@ -389,10 +391,12 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 
 			logrus.Infof("[%v] Destroyed deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			if pods, err := k8sOps.GetStatefulSetPods(obj); err != nil {
-				logrus.Warnf("[%v] Error getting statefulset pods. Err: %v", ctx.App.Key, err)
-			} else {
-				podList = append(podList, pods...)
+			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+				if pods, err := k8sOps.GetStatefulSetPods(obj); err != nil {
+					logrus.Warnf("[%v] Error getting statefulset pods. Err: %v", ctx.App.Key, err)
+				} else {
+					podList = append(podList, pods...)
+				}
 			}
 			if err := k8sOps.DeleteStatefulSet(obj); err != nil {
 				return &ErrFailedToDestroyApp{
@@ -477,7 +481,7 @@ func (k *k8s) validateVolumeDirCleanup(podUID types.UID, app *spec.AppSpec) erro
 	return nil
 }
 
-func (k *k8s) getVolumeDirPath(podUID types.UID) {
+func (k *k8s) getVolumeDirPath(podUID types.UID) string {
 	return filepath.Join(k8sPodsRootDir, string(podUID), "volumes")
 }
 

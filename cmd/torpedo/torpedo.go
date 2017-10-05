@@ -59,9 +59,11 @@ func (t *torpedo) testSetupTearDown() error {
 		}
 	}
 
+	opts := make(map[string]bool)
+	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 	for _, ctx := range contexts {
 		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
-		if err := t.tearDownContext(ctx); err != nil {
+		if err := t.tearDownContext(ctx, opts); err != nil {
 			return err
 		}
 	}
@@ -80,6 +82,8 @@ func (t *torpedo) testDriverDown() error {
 		return err
 	}
 
+	opts := make(map[string]bool)
+	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 	for _, ctx := range contexts {
 		logrus.Infof("[Test: %v] Validating %v", taskName, ctx.App.Key)
 		if err := t.validateContext(ctx); err != nil {
@@ -128,7 +132,7 @@ func (t *torpedo) testDriverDown() error {
 		}
 
 		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
-		if err := t.tearDownContext(ctx); err != nil {
+		if err := t.tearDownContext(ctx, opts); err != nil {
 			return err
 		}
 
@@ -239,7 +243,7 @@ func (t *torpedo) testAppTasksDown() error {
 		}
 
 		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
-		if err := t.tearDownContext(ctx); err != nil {
+		if err := t.tearDownContext(ctx, nil); err != nil {
 			return err
 		}
 	}
@@ -320,45 +324,12 @@ func (t *torpedo) testNodeReboot(allNodes bool) error {
 		}
 
 		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
-		if err := t.tearDownContext(ctx); err != nil {
+		if err := t.tearDownContext(ctx, nil); err != nil {
 			return err
 		}
 	}
 
 	return err
-}
-
-// testResourceCleanupOnTearDown checks if all the resources used by the application
-// have been cleaned up
-func (t *torpedo) testResourceCleanupOnTearDown() error {
-	taskName := fmt.Sprintf("resourcecleanup-%v", t.instanceID)
-
-	logrus.Infof("[Test: %v] Scheduling new applications", taskName)
-	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
-	if err != nil {
-		return err
-	}
-
-	for _, ctx := range contexts {
-		logrus.Infof("[Test: %v] Validating %v", taskName, ctx.App.Key)
-		if err := t.validateContext(ctx); err != nil {
-			return err
-		}
-	}
-
-	for _, ctx := range contexts {
-		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		if err := t.s.Destroy(ctx, opts); err != nil {
-			return err
-		}
-		if err := t.s.DeleteVolumes(ctx); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (t *torpedo) validateContext(ctx *scheduler.Context) error {
@@ -434,10 +405,8 @@ func (t *torpedo) validateVolumes(ctx *scheduler.Context) error {
 	return nil
 }
 
-func (t *torpedo) tearDownContext(ctx *scheduler.Context) error {
+func (t *torpedo) tearDownContext(ctx *scheduler.Context, opts map[string]bool) error {
 	var err error
-	opts := make(map[string]bool)
-	opts[scheduler.OptionsWaitForDestroy] = true
 	if err = t.s.Destroy(ctx, opts); err != nil {
 		return err
 	}
@@ -637,7 +606,6 @@ func (t *torpedo) run(tests string) error {
 		"testDriverDown":        func() error { return t.testDriverDown() },
 		"testDriverDownAppDown": func() error { return t.testDriverDownAppDown() },
 		"testAppTasksDown":      func() error { return t.testAppTasksDown() },
-		"testResourceCleanup":   func() error { return t.testResourceCleanupOnTearDown() },
 	}
 
 	if tests != "" {
