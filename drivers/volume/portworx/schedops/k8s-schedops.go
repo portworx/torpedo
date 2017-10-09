@@ -1,7 +1,11 @@
 package schedops
 
 import (
+	"strings"
+	"time"
+
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/k8sops"
 )
@@ -11,6 +15,8 @@ const (
 	k8sPxRunningLabelKey = "px/enabled"
 	// k8sPxNotRunningLabelValue is label value for a not running px state
 	k8sPxNotRunningLabelValue = "false"
+	// k8sPodsRootDir is the directory under which k8s keeps all pods data
+	k8sPodsRootDir = "/var/lib/kubelet/pods"
 )
 
 type k8sSchedOps struct{}
@@ -28,6 +34,96 @@ func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 
 func (k *k8sSchedOps) EnableOnNode(n node.Node) error {
 	return k8sops.Instance().RemoveLabelOnNode(n.Name, k8sPxRunningLabelKey)
+}
+
+func (k *k8sSchedOps) ValidateVolumeCleanup(sched scheduler.Driver, d node.Driver) error {
+	nodeToPodsMap := make(map[string][]string)
+	nodeMap := make(map[string]node.Node)
+
+	connOpts := node.ConnectionOpts{
+		Timeout:         1 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	}
+	listVolOpts := node.FindOpts{
+		ConnectionOpts: connOpts,
+		Name:           "*portworx-volume",
+	}
+
+	for _, n := range sched.GetNodes() {
+		if n.Type == node.TypeWorker {
+			volDirList, _ := d.FindFiles(k8sPodsRootDir, n, listVolOpts)
+			nodeToPodsMap[n.Name] = separateFilePaths(volDirList)
+			nodeMap[n.Name] = n
+		}
+	}
+
+	existingPods, _ := k8sops.Instance().GetPods("")
+
+	orphanPodsMap := make(map[string][]string)
+	dirtyVolPodsMap := make(map[string][]string)
+
+	for nodeName, volDirPaths := range nodeToPodsMap {
+		var orphanPods []string
+		var dirtyVolPods []string
+
+		for _, path := range volDirPaths {
+			podUID := extractPodUID(path)
+			found := false
+			for _, existingPod := range existingPods.Items {
+				if podUID == string(existingPod.UID) {
+					found = true
+					break
+				}
+			}
+			if found {
+				continue
+			}
+			orphanPods = append(orphanPods, podUID)
+
+			// check if there are files under portworx volume
+			n := nodeMap[nodeName]
+			findFileOpts := node.FindOpts{
+				ConnectionOpts: connOpts,
+				MinDepth:       2,
+				MaxDepth:       2,
+			}
+			files, _ := d.FindFiles(path, n, findFileOpts)
+			if len(strings.TrimSpace(files)) > 0 {
+				dirtyVolPods = append(dirtyVolPods, podUID)
+			}
+		}
+
+		if len(orphanPods) > 0 {
+			orphanPodsMap[nodeName] = orphanPods
+			if len(dirtyVolPods) > 0 {
+				dirtyVolPodsMap[nodeName] = dirtyVolPods
+			}
+		}
+	}
+
+	if len(orphanPodsMap) == 0 {
+		return nil
+	}
+	return &ErrFailedToCleanupVolume{
+		OrphanPods:   orphanPodsMap,
+		DirtyVolPods: dirtyVolPodsMap,
+	}
+}
+
+func separateFilePaths(volDirList string) []string {
+	trimmedList := strings.TrimSpace(volDirList)
+	if trimmedList == "" {
+		return []string{}
+	}
+	return strings.Split(trimmedList, "\n")
+}
+
+func extractPodUID(volDirPath string) string {
+	strs := strings.Split(volDirPath, "/")
+	if len(strs) > 5 {
+		return strs[5]
+	}
+	return ""
 }
 
 func init() {
