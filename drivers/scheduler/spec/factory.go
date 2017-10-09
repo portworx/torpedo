@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"path"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/util"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -32,7 +31,7 @@ func (f *Factory) Get(id string) (*AppSpec, error) {
 	if d, ok := appSpecFactory[id]; ok && d.Enabled {
 		dCopy, err := scheme.Scheme.DeepCopy(d)
 		if err != nil {
-			logrus.Errorf("Failed to create a copy of spec object: %#v Err: %v", d, err)
+			util.Errorf("Failed to create a copy of spec object: %#v Err: %v", d, err)
 			return nil, err
 		}
 
@@ -52,7 +51,7 @@ func (f *Factory) GetAll() []*AppSpec {
 		if val.Enabled {
 			valCopy, err := scheme.Scheme.DeepCopy(val)
 			if err != nil {
-				logrus.Errorf("Failed to create a copy of spec object: %#v Err: %v", val, err)
+				util.Errorf("Failed to create a copy of spec object: %#v Err: %v", val, err)
 				return nil
 			}
 

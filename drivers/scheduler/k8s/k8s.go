@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -126,7 +125,7 @@ func (k *k8s) ParseSpecs(specDir string) ([]interface{}, error) {
 
 				specObj, err := validateSpec(obj)
 				if err != nil {
-					logrus.Warnf("%s. Parser skipping the spec", err)
+					util.Warnf("%s. Parser skipping the spec", err)
 					return nil, nil
 				}
 
@@ -377,7 +376,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
 			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 				if pods, err := k8sOps.GetDeploymentPods(obj); err != nil {
-					logrus.Warnf("[%v] Error getting deployment pods. Err: %v", ctx.App.Key, err)
+					util.Warnf("[%v] Error getting deployment pods. Err: %v", ctx.App.Key, err)
 				} else {
 					podList = append(podList, pods...)
 				}
@@ -393,7 +392,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 				if pods, err := k8sOps.GetStatefulSetPods(obj); err != nil {
-					logrus.Warnf("[%v] Error getting statefulset pods. Err: %v", ctx.App.Key, err)
+					util.Warnf("[%v] Error getting statefulset pods. Err: %v", ctx.App.Key, err)
 				} else {
 					podList = append(podList, pods...)
 				}
@@ -775,7 +774,7 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 			buf.WriteString(fmt.Sprintf("%v\n", scParams))
 			buf.WriteString(insertLineBreak("END Storage Class"))
 		} else {
-			logrus.Warnf("Object type unknown/not supported: %v", obj)
+			util.Warnf("Object type unknown/not supported: %v", obj)
 		}
 	}
 	return buf.String(), nil
