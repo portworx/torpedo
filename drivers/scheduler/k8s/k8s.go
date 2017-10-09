@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	k8s_ops "github.com/portworx/torpedo/pkg/k8sops"
 	"github.com/portworx/torpedo/pkg/task"
+	"github.com/portworx/torpedo/util"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -271,7 +272,7 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 			}
 		}
 
-		logrus.Debugf("[%v] Created storage class: %v", app.Key, sc.Name)
+		util.Logf("[%v] Created storage class: %v", app.Key, sc.Name)
 		return sc, nil
 	} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		obj.Namespace = ns.Name
@@ -283,7 +284,7 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 			}
 		}
 
-		logrus.Debugf("[%v] Created PVC: %v", app.Key, pvc.Name)
+		util.Logf("[%v] Created PVC: %v", app.Key, pvc.Name)
 		return pvc, nil
 	}
 
@@ -301,7 +302,7 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 				Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", dep.Name, err),
 			}
 		}
-		logrus.Debugf("[%v] Created deployment: %v", app.Key, dep.Name)
+		util.Logf("[%v] Created deployment: %v", app.Key, dep.Name)
 		return dep, nil
 
 	} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
@@ -313,7 +314,7 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 				Cause: fmt.Sprintf("Failed to create StatefulSet: %v. Err: %v", ss.Name, err),
 			}
 		}
-		logrus.Debugf("[%v] Created StatefulSet: %v", app.Key, ss.Name)
+		util.Logf("[%v] Created StatefulSet: %v", app.Key, ss.Name)
 		return ss, nil
 
 	} else if obj, ok := spec.(*v1.Service); ok {
@@ -325,7 +326,7 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 				Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", svc.Name, err),
 			}
 		}
-		logrus.Debugf("[%v] Created Service: %v", app.Key, svc.Name)
+		util.Logf("[%v] Created Service: %v", app.Key, svc.Name)
 		return svc, nil
 	}
 
@@ -343,7 +344,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Debugf("[%v] Validated deployment: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Validated deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			if err := k8sOps.ValidateStatefulSet(obj); err != nil {
 				return &ErrFailedToValidateApp{
@@ -352,7 +353,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Debugf("[%v] Validated statefulset: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Validated statefulset: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.Service); ok {
 			svc, err := k8sOps.GetService(obj.Name, obj.Namespace)
 			if err != nil {
@@ -362,7 +363,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Debugf("[%v] Validated Service: %v", ctx.App.Key, svc.Name)
+			util.Logf("[%v] Validated Service: %v", ctx.App.Key, svc.Name)
 		}
 	}
 
@@ -388,7 +389,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 				}
 			}
 
-			logrus.Debugf("[%v] Destroyed deployment: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Destroyed deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 				if pods, err := k8sOps.GetStatefulSetPods(obj); err != nil {
@@ -404,7 +405,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 				}
 			}
 
-			logrus.Debugf("[%v]Destroyed StatefulSet: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v]Destroyed StatefulSet: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.Service); ok {
 			if err := k8sOps.DeleteService(obj); err != nil {
 				return &ErrFailedToDestroyApp{
@@ -413,7 +414,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 				}
 			}
 
-			logrus.Debugf("[%v] Destroyed Service: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Destroyed Service: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -425,7 +426,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		}
 	}
 
-	logrus.Debugf("[%v] Destroyed Namespace: %v", ctx.App.Key, appNamespace)
+	util.Logf("[%v] Destroyed Namespace: %v", ctx.App.Key, appNamespace)
 
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 		if err := k.WaitForDestroy(ctx); err != nil {
@@ -451,7 +452,7 @@ func (k *k8s) waitForCleanup(ctx *scheduler.Context, podList []v1.Pod) error {
 		if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 			return err
 		}
-		logrus.Debugf("Validated resource cleanup for pod: %v", pod.UID)
+		util.Logf("Validated resource cleanup for pod: %v", pod.UID)
 	}
 	return nil
 }
@@ -495,7 +496,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Debugf("[%v] Validated destroy of Deployment: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Validated destroy of Deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			if err := k8sOps.ValidateTerminatedStatefulSet(obj); err != nil {
 				return &ErrFailedToValidateAppDestroy{
@@ -504,7 +505,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Debugf("[%v] Validated destroy of StatefulSet: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Validated destroy of StatefulSet: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.Service); ok {
 			if err := k8sOps.ValidateDeletedService(obj.Name, obj.Namespace); err != nil {
 				return &ErrFailedToValidateAppDestroy{
@@ -513,7 +514,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Debugf("[%v] Validated destroy of Service: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Validated destroy of Service: %v", ctx.App.Key, obj.Name)
 		}
 	}
 	return nil
@@ -610,7 +611,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Debugf("[%v] Validated storage class: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Validated storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 			if err := k8sOps.ValidatePersistentVolumeClaim(obj); err != nil {
 				return &ErrFailedToValidateStorage{
@@ -619,7 +620,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Debugf("[%v] Validated PVC: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Validated PVC: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -636,7 +637,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
 					Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
 				}
 			}
-			logrus.Debugf("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 			if err := k8sOps.DeletePersistentVolumeClaim(obj); err != nil {
 				if matched, _ := regexp.MatchString(".+ not found", err.Error()); !matched {
@@ -646,7 +647,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
 					}
 				}
 			}
-			logrus.Debugf("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
+			util.Logf("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		}
 	}
 

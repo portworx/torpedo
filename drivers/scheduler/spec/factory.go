@@ -7,6 +7,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/util"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
@@ -21,7 +22,7 @@ var appSpecFactory = make(map[string]*AppSpec)
 // register registers a new spec with the factory
 func (f *Factory) register(id string, app *AppSpec) {
 	if _, ok := appSpecFactory[id]; !ok {
-		logrus.Infof("Registering app: %v", id)
+		util.Logf("Registering app: %v", id)
 		appSpecFactory[id] = app
 	}
 }
@@ -78,7 +79,7 @@ func NewFactory(specDir string, parser Parser) (*Factory, error) {
 		if file.IsDir() {
 			specID := file.Name()
 
-			logrus.Debugf("Parsing: %v...", path.Join(f.specDir, specID))
+			util.Logf("Parsing: %v...", path.Join(f.specDir, specID))
 
 			specs, err := f.specParser.ParseSpecs(path.Join(f.specDir, file.Name()))
 			if err != nil {

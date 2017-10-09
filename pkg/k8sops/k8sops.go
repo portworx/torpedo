@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/task"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -640,11 +641,15 @@ func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet
 			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
 				return "", nil
 			}
+
+			logrus.Errorf("[debug] error while getting stateful set: %v", err)
+
 			return "", err
 		}
 
 		pods, err := k.GetStatefulSetPods(statefulset)
 		if err != nil {
+			logrus.Errorf("[debug] error while getting stateful pods: %v", err)
 			return "", &ErrAppNotTerminated{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("Failed to get pods for statefulset. Err: %v", err),
@@ -652,6 +657,7 @@ func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet
 		}
 
 		if pods != nil && len(pods) > 0 {
+			logrus.Errorf("[debug] statefulset pods still present")
 			return "", &ErrAppNotTerminated{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("pods: %#v is still present", pods),
