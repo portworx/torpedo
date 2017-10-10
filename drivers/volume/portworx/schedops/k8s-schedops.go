@@ -1,6 +1,7 @@
 package schedops
 
 import (
+	"regexp"
 	"strings"
 	"time"
 
@@ -80,7 +81,10 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(sched scheduler.Driver, d node.Drive
 			}
 			orphanPods = append(orphanPods, podUID)
 
-			// check if there are files under portworx volume
+			// Check if there are files under portworx volume
+			// We use a depth of 2 because the files stored in the volume are in the pvc
+			// directory under the portworx-volume folder for that pod. For instance,
+			// ../kubernetes-io~portworx-volume/pvc-<id>/<all_user_files>
 			n := nodeMap[nodeName]
 			findFileOpts := node.FindOpts{
 				ConnectionOpts: connOpts,
@@ -119,9 +123,11 @@ func separateFilePaths(volDirList string) []string {
 }
 
 func extractPodUID(volDirPath string) string {
-	strs := strings.Split(volDirPath, "/")
-	if len(strs) > 5 {
-		return strs[5]
+	re := regexp.MustCompile(k8sPodsRootDir +
+		"/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.*")
+	match := re.FindStringSubmatch(volDirPath)
+	if len(match) > 1 {
+		return match[1]
 	}
 	return ""
 }
