@@ -19,7 +19,7 @@ GOFMT := gofmt
 
 .DEFAULT_GOAL=all
 
-all: clean vet lint build fmt
+all: vet lint build fmt
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)

@@ -21,7 +21,7 @@ var appSpecFactory = make(map[string]*AppSpec)
 // register registers a new spec with the factory
 func (f *Factory) register(id string, app *AppSpec) {
 	if _, ok := appSpecFactory[id]; !ok {
-		util.Logf("Registering app: %v", id)
+		util.Infof("Registering app: %v", id)
 		appSpecFactory[id] = app
 	}
 }
@@ -78,7 +78,7 @@ func NewFactory(specDir string, parser Parser) (*Factory, error) {
 		if file.IsDir() {
 			specID := file.Name()
 
-			util.Logf("Parsing: %v...", path.Join(f.specDir, specID))
+			util.Infof("Parsing: %v...", path.Join(f.specDir, specID))
 
 			specs, err := f.specParser.ParseSpecs(path.Join(f.specDir, file.Name()))
 			if err != nil {
