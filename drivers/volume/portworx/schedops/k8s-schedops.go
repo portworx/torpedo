@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -35,6 +36,37 @@ func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 
 func (k *k8sSchedOps) EnableOnNode(n node.Node) error {
 	return k8sops.Instance().RemoveLabelOnNode(n.Name, k8sPxRunningLabelKey)
+}
+
+func (k *k8sSchedOps) ValidateLabels(vol *api.Volume) error {
+	pvc, ok := vol.Locator.VolumeLabels["pvc"]
+	if !ok {
+		return nil
+	}
+
+	nodes := make(map[string]bool)
+	for _, rs := range vol.ReplicaSets {
+		for _, n := range rs.Nodes {
+			if !nodes[n] {
+				nodes[n] = true
+			}
+		}
+	}
+
+	var missingLabelNodes []string
+	for n := range nodes {
+		nodeLabels, _ := k8sops.Instance().GetLabelsOnNode(n)
+		if _, ok := nodeLabels[pvc]; !ok {
+			missingLabelNodes = append(missingLabelNodes, n)
+		}
+	}
+
+	if len(missingLabelNodes) > 0 {
+		return &ErrLabelsMissingOnNode{
+			Nodes: missingLabelNodes,
+		}
+	}
+	return nil
 }
 
 func (k *k8sSchedOps) ValidateVolumeCleanup(sched scheduler.Driver, d node.Driver) error {

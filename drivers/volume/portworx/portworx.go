@@ -193,6 +193,14 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 		}
 	}
 
+	// Labels
+	if err := d.schedOps.ValidateLabels(vol); err != nil {
+		return &ErrFailedToInspectVolume{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+
 	// Spec
 	requestedSpec, requestedLocator, _, err := spec.NewSpecHandler().SpecFromOpts(params)
 	if err != nil {

@@ -26,3 +26,13 @@ func (e *ErrFailedToCleanupVolume) Error() string {
 	}
 	return strings.Join(cause, ", ")
 }
+
+// ErrLabelsMissingOnNode error type for missing volume labels on node
+type ErrLabelsMissingOnNode struct {
+	// Nodes is a list of node names which have missing labels for certain PVCs
+	Nodes []string
+}
+
+func (e *ErrLabelsMissingOnNode) Error() string {
+	return fmt.Sprintf("Labels missing on nodes %v", e.Nodes)
+}

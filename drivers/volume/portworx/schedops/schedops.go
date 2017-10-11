@@ -3,6 +3,7 @@ package schedops
 import (
 	"fmt"
 
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -16,6 +17,8 @@ type Driver interface {
 	ValidateOnNode(n node.Node) error
 	// EnableOnNode enable portworx on given node
 	EnableOnNode(n node.Node) error
+	// ValidateLabels validates whether the labels for the volume are applied appropriately
+	ValidateLabels(v *api.Volume) error
 	// ValidateVolumeCleanup validates that volume dir does not exist and no data present inside it
 	ValidateVolumeCleanup(sched scheduler.Driver, d node.Driver) error
 }
