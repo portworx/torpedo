@@ -77,7 +77,7 @@ type Driver interface {
 	// InspectVolumes inspects a storage volume.
 	InspectVolumes(*Context) error
 
-	// DeleteVolumes will delete a storage volume.
+	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context) ([]*volume.Volume, error)
 
 	// Describe generates a bundle that can be used by support - logs, cores, states, etc

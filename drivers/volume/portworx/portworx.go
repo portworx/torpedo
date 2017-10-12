@@ -15,7 +15,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	vol "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/k8sops"
 	"github.com/portworx/torpedo/pkg/task"
@@ -285,11 +284,13 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 	return nil
 }
 
-func (d *portworx) ValidateDeleteVolume(vol *vol.Volume) error {
+func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 	name := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, error) {
 		vols, err := d.volDriver.Inspect([]string{name})
-		if err != nil {
+		if err != nil && err == volume.ErrEnoEnt {
+			return nil, nil
+		} else if err != nil {
 			return nil, err
 		}
 		if len(vols) > 0 {
