@@ -930,7 +930,7 @@ func (k *k8sOps) GetPersistentVolumeClaimParams(pvc *v1.PersistentVolumeClaim) (
 	return params, nil
 }
 
-// IsPVCShared returns true if the PersistentVolumeClaim has been configured for use by multiple clients
+// isPVCShared returns true if the PersistentVolumeClaim has been configured for use by multiple clients
 func (k *k8sOps) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
 	for _, mode := range pvc.Spec.AccessModes {
 		if mode == v1.PersistentVolumeAccessMode(v1.ReadOnlyMany) ||
