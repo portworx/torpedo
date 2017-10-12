@@ -35,7 +35,7 @@ func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry 
 					return
 				}
 
-				util.Infof("%v. Retry count: %v Next retry in: %v", err, count, timeBeforeRetry)
+				util.Warnf("%v. Retry count: %v Next retry in: %v", err, count, timeBeforeRetry)
 				time.Sleep(timeBeforeRetry)
 			}
 

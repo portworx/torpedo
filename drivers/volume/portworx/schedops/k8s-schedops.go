@@ -1,6 +1,7 @@
 package schedops
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -8,8 +9,10 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/k8sops"
+	"github.com/portworx/torpedo/pkg/task"
 )
 
 const (
@@ -38,7 +41,7 @@ func (k *k8sSchedOps) EnableOnNode(n node.Node) error {
 	return k8sops.Instance().RemoveLabelOnNode(n.Name, k8sPxRunningLabelKey)
 }
 
-func (k *k8sSchedOps) ValidateLabels(vol *api.Volume) error {
+func (k *k8sSchedOps) ValidateAddLabels(vol *api.Volume) error {
 	pvc, ok := vol.Locator.VolumeLabels["pvc"]
 	if !ok {
 		return nil
@@ -55,18 +58,62 @@ func (k *k8sSchedOps) ValidateLabels(vol *api.Volume) error {
 
 	var missingLabelNodes []string
 	for n := range nodes {
-		nodeLabels, _ := k8sops.Instance().GetLabelsOnNode(n)
+		t := func() (interface{}, error) {
+			return k8sops.Instance().GetLabelsOnNode(n)
+		}
+		ret, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+		if err != nil {
+			return err
+		}
+		nodeLabels := ret.(map[string]string)
 		if _, ok := nodeLabels[pvc]; !ok {
 			missingLabelNodes = append(missingLabelNodes, n)
 		}
 	}
 
 	if len(missingLabelNodes) > 0 {
-		return &ErrLabelsMissingOnNode{
+		return &ErrLabelMissingOnNode{
+			Label: pvc,
 			Nodes: missingLabelNodes,
 		}
 	}
 	return nil
+}
+
+func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume, sched scheduler.Driver) error {
+	pvcLabel := vol.Name
+	var staleLabelNodes []string
+	for _, n := range sched.GetNodes() {
+		if n.Type == node.TypeWorker {
+			t := func() (interface{}, error) {
+				return k8sops.Instance().GetLabelsOnNode(n.Name)
+			}
+			ret, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+			if err != nil {
+				return err
+			}
+			nodeLabels := ret.(map[string]string)
+			if _, ok := nodeLabels[pvcLabel]; ok {
+				staleLabelNodes = append(staleLabelNodes, n.Name)
+			}
+		}
+	}
+
+	if len(staleLabelNodes) > 0 {
+		return &ErrLabelNotRemovedFromNode{
+			Label: pvcLabel,
+			Nodes: staleLabelNodes,
+		}
+	}
+
+	return nil
+}
+
+func (k *k8sSchedOps) GetVolumeName(vol *volume.Volume) string {
+	if vol != nil && vol.ID != "" {
+		return fmt.Sprintf("pvc-%s", vol.ID)
+	}
+	return ""
 }
 
 func (k *k8sSchedOps) ValidateVolumeCleanup(sched scheduler.Driver, d node.Driver) error {
