@@ -14,10 +14,10 @@ import (
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
 	// import ssh driver to invoke it's init
+	"github.com/Sirupsen/logrus"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	// import k8s driver to invoke it's init
-	"github.com/Sirupsen/logrus"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	// import portworx driver to invoke it's init
