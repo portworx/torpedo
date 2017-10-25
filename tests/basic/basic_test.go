@@ -124,14 +124,18 @@ var _ = Describe("Volume driver and app down", func() {
 			}
 		})
 
-		Step("destroy apps", func() {
+		Step("wait for destroy of apps and volumes", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForDestroy] = true
 			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
+				Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
+					err = Inst().S.WaitForDestroy(ctx)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				DeleteVolumesAndWait(ctx)
 			}
 		})
-
 	})
 })
 
