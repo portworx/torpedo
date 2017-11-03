@@ -30,7 +30,7 @@ To run on kubernetes with ssh node driver: `kubectl create -f deployments/torped
 
 To run on kubernetes with aws node driver: `kubectl create -f deployments/torpedo-k8s-aws.yaml`
 
-Make sure you change `image: harshpx/torpedo:latest` to your torpedo docker image.
+Make sure you change `image: portworx/torpedo:latest` to your torpedo docker image.
 
 The above command starts Torpedo by deploying a k8s `Pod` in your kubernetes cluster.  It also specified Portworx (`pxd`) as the volume driver and `ssh` as the node driver to.
 

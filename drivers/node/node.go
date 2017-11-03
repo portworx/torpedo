@@ -19,10 +19,12 @@ const (
 
 // Node encapsulates a node in the cluster
 type Node struct {
-	Name       string
-	Addresses  []string
-	UsableAddr string
-	Type       Type
+	uuid            string
+	VolDriverNodeID string
+	Name            string
+	Addresses       []string
+	UsableAddr      string
+	Type            Type
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options
@@ -63,7 +65,7 @@ var (
 // Driver provides the node driver interface
 type Driver interface {
 	// Init initializes the node driver under the given scheduler
-	Init(sched string) error
+	Init() error
 
 	// String returns the string name of this driver.
 	String() string
@@ -108,7 +110,7 @@ type notSupportedDriver struct{}
 // NotSupportedDriver provides the default driver with none of the operations supported
 var NotSupportedDriver = &notSupportedDriver{}
 
-func (d *notSupportedDriver) Init(sched string) error {
+func (d *notSupportedDriver) Init() error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "Init()",
