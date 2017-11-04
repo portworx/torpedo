@@ -18,8 +18,6 @@ const (
 	DriverName = "ssh"
 	// DefaultUsername is the default username used for ssh operations
 	DefaultUsername = "root"
-	// DefaultPassword is the default password used for ssh operations
-	DefaultPassword = ""
 	// DefaultSSHPort is the default port used for ssh operations
 	DefaultSSHPort = 22
 	// DefaultSSHKey is the default public keyPath path used for ssh operations
@@ -75,9 +73,7 @@ func (s *ssh) Init(sched string) error {
 	}
 
 	password := os.Getenv("TORPEDO_SSH_PASSWORD")
-	if len(password) == 0 {
-		s.password = DefaultPassword
-	} else {
+	if len(password) != 0 {
 		s.password = password
 	}
 	if s.password != "" {
@@ -290,7 +286,6 @@ func init() {
 	s := &ssh{
 		Driver:   node.NotSupportedDriver,
 		username: DefaultUsername,
-		password: DefaultPassword,
 		keyPath:  DefaultSSHKey,
 	}
 
