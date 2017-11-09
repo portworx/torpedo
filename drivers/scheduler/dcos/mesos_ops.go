@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultMesosHostname = "master.mesos"
+	defaultMesosHostname = "leader.mesos"
 	defaultMesosPort     = "5050"
 	getSlavesURL         = "master/slaves"
 )
