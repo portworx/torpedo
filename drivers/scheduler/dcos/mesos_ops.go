@@ -99,6 +99,8 @@ func (m *mesosOps) GetPrivateAgentNodes() ([]AgentNode, error) {
 
 	var nodes []AgentNode
 	for _, n := range agentsResp.Agents {
+		// Filtering out public agent nodes. Public agent nodes will have the
+		// public_ip attribute set to true to differentiate from other agents
 		if n.Attributes.PublicIP == "" || n.Attributes.PublicIP != "true" {
 			nodes = append(nodes, n)
 		}
