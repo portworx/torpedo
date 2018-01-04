@@ -35,7 +35,7 @@ WORKDIR /go/src/github.com/portworx/torpedo
 
 # Copy just ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
-COPY --from=build bin bin
+COPY --from=build /go/src/github.com/portworx/torpedo/bin bin
 COPY drivers drivers
 
 ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
