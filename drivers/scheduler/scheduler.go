@@ -44,9 +44,6 @@ type Driver interface {
 	// IsNodeReady checks if node is in ready state. Returns nil if ready.
 	IsNodeReady(n node.Node) error
 
-	// GetNodes returns all nodes known the scheduler
-	GetNodes() ([]node.Node, error)
-
 	// GetNodesForApp returns nodes on which given app context is running
 	GetNodesForApp(*Context) ([]node.Node, error)
 

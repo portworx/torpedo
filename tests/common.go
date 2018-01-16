@@ -205,8 +205,7 @@ func ValidateAndDestroy(ctx *scheduler.Context, opts map[string]bool) {
 func CollectSupport() {
 	context(fmt.Sprintf("generating support bundle..."), func() {
 		Step(fmt.Sprintf("save journal output on each node"), func() {
-			nodes, err := Inst().S.GetNodes()
-			expect(err).NotTo(haveOccurred())
+			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
 
 			journalCmd := fmt.Sprintf(
