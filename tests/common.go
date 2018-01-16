@@ -3,7 +3,6 @@ package tests
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 	"time"
@@ -88,8 +87,6 @@ func ValidateCleanup() {
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context) {
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
-		generateSupportBundle(ctx)
-
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			ValidateVolumes(ctx)
 		})
@@ -205,7 +202,7 @@ func ValidateAndDestroy(ctx *scheduler.Context, opts map[string]bool) {
 }
 
 // generateSupportBundle gathers logs and any artifacts pertinent to the scheduler and dumps them in the defined location
-func generateSupportBundle(ctx *scheduler.Context) {
+/*func generateSupportBundle(ctx *scheduler.Context) {
 	context(fmt.Sprintf("generate support bundle for app: %s", ctx.App.Key), func() {
 		var out string
 		var err error
@@ -217,6 +214,28 @@ func generateSupportBundle(ctx *scheduler.Context) {
 			err = ioutil.WriteFile(fmt.Sprintf("%s/supportbundle_%s_%v.log",
 				Inst().LogLoc, ctx.UID, time.Now().Format(time.RFC3339)), []byte(out), 0644)
 			expect(err).NotTo(haveOccurred())
+		})
+	})
+}*/
+
+// CollectSupport creates a support bundle
+func CollectSupport() {
+	context(fmt.Sprintf("generating support bundle..."), func() {
+		Step(fmt.Sprintf("save journal output on each node"), func() {
+			nodes, err := Inst().S.GetNodes()
+			expect(err).NotTo(haveOccurred())
+			expect(nodes).NotTo(beEmpty())
+
+			journalCmd := fmt.Sprintf(
+				"echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v",
+				time.Now().Format(time.RFC3339))
+			for _, n := range nodes {
+				_, err := Inst().N.RunCommand(n, journalCmd, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				expect(err).NotTo(haveOccurred())
+			}
 		})
 	})
 }

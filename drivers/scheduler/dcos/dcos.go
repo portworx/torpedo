@@ -106,6 +106,20 @@ func (d *dcos) IsNodeReady(n node.Node) error {
 	return nil
 }
 
+func (d *dcos) GetNodes() ([]node.Node, error) {
+	privateAgents, err := MesosClient().GetPrivateAgentNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	var result []node.Node
+	for _, n := range privateAgents {
+		result = append(result, d.parseMesosNode(n))
+	}
+
+	return result, nil
+}
+
 func (d *dcos) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	var tasks []marathon.Task
 	for _, spec := range ctx.App.SpecList {

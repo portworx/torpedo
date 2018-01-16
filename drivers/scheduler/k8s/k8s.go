@@ -676,6 +676,20 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	return vols, nil
 }
 
+func (k *k8s) GetNodes() ([]node.Node, error) {
+	nodes, err := k8s_ops.Instance().GetNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	var result []node.Node
+	for _, n := range nodes.Items {
+		result = append(result, k.parseK8SNode(n))
+	}
+
+	return result, nil
+}
+
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	pods, err := k.getPodsForApp(ctx)
 	if err != nil {
