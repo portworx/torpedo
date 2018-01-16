@@ -201,23 +201,6 @@ func ValidateAndDestroy(ctx *scheduler.Context, opts map[string]bool) {
 	TearDownContext(ctx, opts)
 }
 
-// generateSupportBundle gathers logs and any artifacts pertinent to the scheduler and dumps them in the defined location
-/*func generateSupportBundle(ctx *scheduler.Context) {
-	context(fmt.Sprintf("generate support bundle for app: %s", ctx.App.Key), func() {
-		var out string
-		var err error
-
-		Step(fmt.Sprintf("describe scheduler context for app: %s", ctx.App.Key), func() {
-			out, err = Inst().S.Describe(ctx)
-			expect(err).NotTo(haveOccurred())
-
-			err = ioutil.WriteFile(fmt.Sprintf("%s/supportbundle_%s_%v.log",
-				Inst().LogLoc, ctx.UID, time.Now().Format(time.RFC3339)), []byte(out), 0644)
-			expect(err).NotTo(haveOccurred())
-		})
-	})
-}*/
-
 // CollectSupport creates a support bundle
 func CollectSupport() {
 	context(fmt.Sprintf("generating support bundle..."), func() {
@@ -234,7 +217,9 @@ func CollectSupport() {
 					Timeout:         2 * time.Minute,
 					TimeBeforeRetry: 10 * time.Second,
 				})
-				expect(err).NotTo(haveOccurred())
+				if err != nil {
+					logrus.Warnf("failed to run cmd: %s. err: %v", journalCmd, err)
+				}
 			}
 		})
 	})
