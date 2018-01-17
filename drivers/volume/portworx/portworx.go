@@ -493,28 +493,38 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 
 func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	t := func() (interface{}, bool, error) {
-		pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
-		if err != nil {
-			if regexp.MustCompile(`.+timeout|connection refused.*`).MatchString(err.Error()) {
-				logrus.Infof("px on node %s is down as inspect returned: %v", n.Name, err.Error())
-				return "", false, nil
+		// Check if px is down on all node addresses. We don't want to keep track
+		// which was the actual interface px was listening on before it went down
+		for _, addr := range n.Addresses {
+			cManager, err := d.getClusterManagerByAddress(addr)
+			if err != nil {
+				return "", true, err
 			}
 
-			return "", true, &ErrFailedToWaitForPx{
-				Node:  n,
-				Cause: err.Error(),
+			pxNode, err := cManager.Inspect(n.VolDriverNodeID)
+			if err != nil {
+				if regexp.MustCompile(`.+timeout|connection refused.*`).MatchString(err.Error()) {
+					logrus.Infof("px on node %s addr %s is down as inspect returned: %v",
+						n.Name, addr, err.Error())
+					continue
+				}
+
+				return "", true, &ErrFailedToWaitForPx{
+					Node:  n,
+					Cause: err.Error(),
+				}
+			}
+
+			if pxNode.Status != api.Status_STATUS_OFFLINE {
+				return "", true, &ErrFailedToWaitForPx{
+					Node: n,
+					Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
+						api.Status_STATUS_OFFLINE, pxNode.Status),
+				}
 			}
 		}
 
-		if pxNode.Status != api.Status_STATUS_OFFLINE {
-			return "", true, &ErrFailedToWaitForPx{
-				Node: n,
-				Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
-					api.Status_STATUS_OFFLINE, pxNode.Status),
-			}
-		}
-
-		logrus.Infof("px on node %s is now down. status: %v", pxNode.Id, pxNode.Status)
+		logrus.Infof("px on node %s is now down.", n.Name)
 		return "", false, nil
 	}
 
@@ -651,6 +661,16 @@ func (d *portworx) getClusterManager() cluster.Cluster {
 	}
 	return d.clusterManager
 
+}
+
+func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, error) {
+	pxEndpoint := d.constructURL(addr)
+	cClient, err := clusterclient.NewClusterClient(pxEndpoint, "v1")
+	if err != nil {
+		return nil, err
+	}
+
+	return clusterclient.ClusterManager(cClient), nil
 }
 
 func (d *portworx) maintenanceOp(n node.Node, op string) error {
