@@ -438,13 +438,27 @@ func (d *portworx) ValidateVolumeCleanup() error {
 	return d.schedOps.ValidateVolumeCleanup(d.nodeDriver)
 }
 
-func (d *portworx) StopDriver(n node.Node) error {
-	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
-		Action: "stop",
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         stopDriverTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
-		}})
+func (d *portworx) StopDriver(n node.Node, force bool) error {
+	var err error
+	if force {
+		pxCrashCmd := "sudo killall -9 px-storage"
+		_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil {
+			logrus.Warnf("failed to run cmd: %s. err: %v", pxCrashCmd, err)
+		}
+	} else {
+		err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+			Action: "stop",
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         stopDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			}})
+	}
+
+	return err
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
