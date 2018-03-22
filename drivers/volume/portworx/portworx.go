@@ -441,7 +441,7 @@ func (d *portworx) ValidateVolumeCleanup() error {
 func (d *portworx) StopDriver(n node.Node, force bool) error {
 	var err error
 	if force {
-		pxCrashCmd := "sudo killall -9 px-storage"
+		pxCrashCmd := "sudo kill -9 px-storage"
 		_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
 			Timeout:         2 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,

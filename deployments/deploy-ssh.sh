@@ -10,7 +10,7 @@ fi
 
 SKIP_ARG=""
 if [ -n "${SKIP_TESTS}" ]; then
-    SKIP_ARG="--skip='$SKIP_TESTS'"
+    SKIP_ARG="--skip=$SKIP_TESTS"
 fi
 
 FOCUS_ARG=""
