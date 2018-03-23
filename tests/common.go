@@ -47,7 +47,7 @@ const (
 	defaultNodeDriver     = "ssh"
 	defaultStorageDriver  = "pxd"
 	defaultLogLocation    = "/mnt/torpedo_support_dir"
-	defaultAppScaleFactor = 10
+	defaultAppScaleFactor = 1
 	// TODO: These are Portworx specific versions and will not work with other storage drivers.
 	// Eventually we should remove the defaults and make it mandatory with documentation.
 	defaultStorageDriverUpgradeVersion = "1.2.11.6"

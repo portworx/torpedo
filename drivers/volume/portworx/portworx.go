@@ -450,7 +450,9 @@ func (d *portworx) StopDriver(n node.Node, force bool) error {
 		})
 		if err != nil {
 			logrus.Warnf("failed to run cmd: %s. err: %v", pxCrashCmd, err)
+			return err
 		}
+
 		logrus.Infof("Sleeping for %v for crash to take effect", waitVolDriverToCrash)
 		time.Sleep(waitVolDriverToCrash)
 	} else {
