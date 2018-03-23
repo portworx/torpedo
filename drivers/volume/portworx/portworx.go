@@ -49,7 +49,7 @@ const (
 	startDriverTimeout                = 2 * time.Minute
 	upgradeTimeout                    = 10 * time.Minute
 	upgradeRetryInterval              = 30 * time.Second
-	waitVolDriverToCrash              = 3 * time.Minute
+	waitVolDriverToCrash              = 1 * time.Minute
 )
 
 type portworx struct {
