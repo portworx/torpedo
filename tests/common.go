@@ -55,8 +55,7 @@ const (
 )
 
 const (
-	waitVolDriverToCrash = 3 * time.Minute
-	waitResourceCleanup  = 2 * time.Minute
+	waitResourceCleanup = 2 * time.Minute
 )
 
 var (
@@ -240,10 +239,6 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 			}
 		})
 
-		Step(fmt.Sprintf("Sleeping for %v for crash to take effect", waitVolDriverToCrash), func() {
-			time.Sleep(waitVolDriverToCrash)
-		})
-
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n)
@@ -255,9 +250,18 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 }
 
 // ValidateAndDestroy validates application and then destroys them
-func ValidateAndDestroy(ctx *scheduler.Context, opts map[string]bool) {
-	ValidateContext(ctx)
-	TearDownContext(ctx, opts)
+func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
+	Step("validate apps", func() {
+		for _, ctx := range contexts {
+			ValidateContext(ctx)
+		}
+	})
+
+	Step("destroy apps", func() {
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
 }
 
 // CollectSupport creates a support bundle
@@ -330,12 +334,9 @@ func ParseFlags() {
 
 	flag.Parse()
 
-	appList := make([]string, 0)
-	if len(appListCSV) > 0 {
-		appList, err = splitCsv(appListCSV)
-		if err != nil {
-			logrus.Fatalf("failed to parse app lists: %v. err: %v", appListCSV, err)
-		}
+	appList, err := splitCsv(appListCSV)
+	if err != nil {
+		logrus.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
 	}
 
 	if schedulerDriver, err = scheduler.Get(s); err != nil {

@@ -45,9 +45,11 @@ const (
 	validateNodeStartTimeout          = 2 * time.Minute
 	validateNodeStopTimeout           = 2 * time.Minute
 	stopDriverTimeout                 = 5 * time.Minute
+	crashDriverTimeout                = 2 * time.Minute
 	startDriverTimeout                = 2 * time.Minute
 	upgradeTimeout                    = 10 * time.Minute
 	upgradeRetryInterval              = 30 * time.Second
+	waitVolDriverToCrash              = 3 * time.Minute
 )
 
 type portworx struct {
@@ -443,12 +445,14 @@ func (d *portworx) StopDriver(n node.Node, force bool) error {
 	if force {
 		pxCrashCmd := "sudo kill -9 px-storage"
 		_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
 		})
 		if err != nil {
 			logrus.Warnf("failed to run cmd: %s. err: %v", pxCrashCmd, err)
 		}
+		logrus.Infof("Sleeping for %v for crash to take effect", waitVolDriverToCrash)
+		time.Sleep(waitVolDriverToCrash)
 	} else {
 		err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 			Action: "stop",

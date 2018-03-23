@@ -111,20 +111,9 @@ var _ = Describe("VolumeDriverCrash", func() {
 			}
 		})
 
-		Step("validate applications", func() {
-			for _, ctx := range contexts {
-				ValidateContext(ctx)
-			}
-		})
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
-
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
 	})
 })
 
@@ -193,7 +182,13 @@ var _ = Describe("AppTasksDown", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				ValidateAndDestroy(ctx, nil)
+				ValidateContext(ctx)
+			}
+		})
+
+		Step("teardown all apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
 			}
 		})
 	})

@@ -70,19 +70,9 @@ var _ = PDescribe("UpgradeDowngradeVolumeDriver", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		Step("validate all apps after downgrade", func() {
-			for _, ctx := range contexts {
-				ValidateContext(ctx)
-			}
-		})
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
 	})
 })
 

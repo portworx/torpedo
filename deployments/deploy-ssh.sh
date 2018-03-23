@@ -130,7 +130,7 @@ for i in $(seq 1 600) ; do
   printf .
   state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
   if [ "$state" == "Error" ]; then
-    echo "Error: Torpedo finished with $endState state"
+    echo "Error: Torpedo finished with $state state"
     debug_log_then_exit
   elif [ "$state" == "Running" ] || [ "$state" == "Completed" ]; then
     echo ""

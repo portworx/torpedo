@@ -94,12 +94,7 @@ var _ = Describe("DriveFailure", func() {
 			}
 		})
 
-		Step("validate and destroy apps", func() {
-			for _, ctx := range contexts {
-				ValidateAndDestroy(ctx, nil)
-			}
-		})
-
+		ValidateAndDestroy(contexts, nil)
 	})
 })
 

@@ -85,12 +85,7 @@ func rebootNodesTest(testName string, allNodes bool) {
 			}
 		})
 
-		Step("validate and destroy apps", func() {
-			for _, ctx := range contexts {
-				ValidateAndDestroy(ctx, nil)
-			}
-		})
-
+		ValidateAndDestroy(contexts, nil)
 	})
 }
 
