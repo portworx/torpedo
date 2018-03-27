@@ -314,20 +314,18 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	if obj, ok := spec.(*storage_api.StorageClass); ok {
 		obj.Namespace = ns.Name
 		sc, err := k8sOps.CreateStorageClass(obj)
-		if err != nil {
-			if !strings.Contains(err.Error(), "already exists") {
-				return nil, &scheduler.ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
-				}
+		if err != nil && !strings.Contains(err.Error(), "already exists") {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
 			}
+		}
 
-			sc, err = k8sOps.ValidateStorageClass(obj.Name)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
-				}
+		sc, err = k8sOps.ValidateStorageClass(obj.Name)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
 			}
 		}
 
@@ -336,12 +334,10 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		obj.Namespace = ns.Name
 		pvc, err := k8sOps.CreatePersistentVolumeClaim(obj)
-		if err != nil {
-			if !strings.Contains(err.Error(), "already exists") {
-				return nil, &scheduler.ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", pvc.Name, err),
-				}
+		if err != nil && !strings.Contains(err.Error(), "already exists") {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", pvc.Name, err),
 			}
 		}
 
@@ -350,12 +346,10 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
 		obj.Metadata.Namespace = ns.Name
 		snap, err := k8sOps.CreateSnapshot(obj)
-		if err != nil {
-			if !strings.Contains(err.Error(), "already exists") {
-				return nil, &scheduler.ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", snap.Metadata.Name, err),
-				}
+		if err != nil && !strings.Contains(err.Error(), "already exists") {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", snap.Metadata.Name, err),
 			}
 		}
 
@@ -385,39 +379,35 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 	} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 		obj.Namespace = ns.Name
 		ss, err := k8sOps.CreateStatefulSet(obj)
-		if err != nil {
-			if !strings.Contains(err.Error(), "already exists") {
-				return nil, &scheduler.ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create StatefulSet: %v. Err: %v", ss.Name, err),
-				}
+		if err != nil && !strings.Contains(err.Error(), "already exists") {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create StatefulSet: %v. Err: %v", ss.Name, err),
 			}
 		}
+
 		logrus.Infof("[%v] Created StatefulSet: %v", app.Key, ss.Name)
 		return ss, nil
 
 	} else if obj, ok := spec.(*v1.Service); ok {
 		obj.Namespace = ns.Name
 		svc, err := k8sOps.CreateService(obj)
-		if err != nil {
-			if !strings.Contains(err.Error(), "already exists") {
-				return nil, &scheduler.ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", svc.Name, err),
-				}
+		if err != nil && !strings.Contains(err.Error(), "already exists") {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", svc.Name, err),
 			}
 		}
+
 		logrus.Infof("[%v] Created Service: %v", app.Key, svc.Name)
 		return svc, nil
 	} else if obj, ok := spec.(*v1.Secret); ok {
 		obj.Namespace = ns.Name
 		secret, err := k8sOps.CreateSecret(obj)
-		if err != nil {
-			if !strings.Contains(err.Error(), "already exists") {
-				return nil, &scheduler.ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create Secret: %v. Err: %v", secret.Name, err),
-				}
+		if err != nil && !strings.Contains(err.Error(), "already exists") {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Secret: %v. Err: %v", secret.Name, err),
 			}
 		}
 
