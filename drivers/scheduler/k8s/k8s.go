@@ -38,6 +38,11 @@ const (
 
 const (
 	statefulSetValidateTimeout = 15 * time.Minute
+	k8sNodeReadyTimeout        = 5 * time.Minute
+	volDirCleanupTimeout       = 5 * time.Minute
+	k8sObjectCreateTimeout     = 2 * time.Minute
+	findFilesOnWorkerTimeout   = 1 * time.Minute
+	defaultRetryInterval       = 10 * time.Second
 )
 
 type k8s struct {
@@ -57,7 +62,7 @@ func (k *k8s) IsNodeReady(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, k8sNodeReadyTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -229,34 +234,61 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	var contexts []*scheduler.Context
 	for _, app := range apps {
 		appNamespace := getAppNamespaceName(app, instanceID)
-		ns, err := k8s_ops.Instance().CreateNamespace(appNamespace, map[string]string{
-			"creater": "torpedo",
-			"app":     app.Key,
-		})
-		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create namespace: %v. Err: %v", appNamespace, err),
+		t := func() (interface{}, bool, error) {
+			ns, err := k8s_ops.Instance().CreateNamespace(appNamespace, map[string]string{
+				"creater": "torpedo",
+				"app":     app.Key,
+			})
+			if err != nil {
+				return nil, true, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create namespace: %v. Err: %v", appNamespace, err),
+				}
 			}
+
+			return ns, false, nil
 		}
 
-		var specObjects []interface{}
+		nsObj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
 
+		ns := nsObj.(*v1.Namespace)
+		var specObjects []interface{}
 		for _, spec := range app.SpecList {
-			obj, err := k.createStorageObject(spec, ns, app)
+			t = func() (interface{}, bool, error) {
+				obj, err := k.createStorageObject(spec, ns, app)
+				if err != nil {
+					return nil, true, err
+				}
+				return obj, false, nil
+			}
+
+			obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
 			if err != nil {
 				return nil, err
 			}
+
 			if obj != nil {
 				specObjects = append(specObjects, obj)
 			}
 		}
 
 		for _, spec := range app.SpecList {
-			obj, err := k.createCoreObject(spec, ns, app)
+			t = func() (interface{}, bool, error) {
+				obj, err := k.createCoreObject(spec, ns, app)
+				if err != nil {
+					return nil, true, err
+				}
+				return obj, false, nil
+			}
+
+			obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
 			if err != nil {
 				return nil, err
 			}
+
 			if obj != nil {
 				specObjects = append(specObjects, obj)
 			}
@@ -305,9 +337,11 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		obj.Namespace = ns.Name
 		pvc, err := k8sOps.CreatePersistentVolumeClaim(obj)
 		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", pvc.Name, err),
+			if !strings.Contains(err.Error(), "already exists") {
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", pvc.Name, err),
+				}
 			}
 		}
 
@@ -317,9 +351,11 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		obj.Metadata.Namespace = ns.Name
 		snap, err := k8sOps.CreateSnapshot(obj)
 		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", snap.Metadata.Name, err),
+			if !strings.Contains(err.Error(), "already exists") {
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", snap.Metadata.Name, err),
+				}
 			}
 		}
 
@@ -336,9 +372,11 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		obj.Namespace = ns.Name
 		dep, err := k8sOps.CreateDeployment(obj)
 		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", dep.Name, err),
+			if !strings.Contains(err.Error(), "already exists") {
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", dep.Name, err),
+				}
 			}
 		}
 		logrus.Infof("[%v] Created deployment: %v", app.Key, dep.Name)
@@ -348,9 +386,11 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		obj.Namespace = ns.Name
 		ss, err := k8sOps.CreateStatefulSet(obj)
 		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create StatefulSet: %v. Err: %v", ss.Name, err),
+			if !strings.Contains(err.Error(), "already exists") {
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create StatefulSet: %v. Err: %v", ss.Name, err),
+				}
 			}
 		}
 		logrus.Infof("[%v] Created StatefulSet: %v", app.Key, ss.Name)
@@ -360,9 +400,11 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		obj.Namespace = ns.Name
 		svc, err := k8sOps.CreateService(obj)
 		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", svc.Name, err),
+			if !strings.Contains(err.Error(), "already exists") {
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", svc.Name, err),
+				}
 			}
 		}
 		logrus.Infof("[%v] Created Service: %v", app.Key, svc.Name)
@@ -371,9 +413,11 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		obj.Namespace = ns.Name
 		secret, err := k8sOps.CreateSecret(obj)
 		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create Secret: %v. Err: %v", secret.Name, err),
+			if !strings.Contains(err.Error(), "already exists") {
+				return nil, &scheduler.ErrFailedToScheduleApp{
+					App:   app,
+					Cause: fmt.Sprintf("Failed to create Secret: %v. Err: %v", secret.Name, err),
+				}
 			}
 		}
 
@@ -490,7 +534,7 @@ func (k *k8s) waitForCleanup(ctx *scheduler.Context, podList []v1.Pod) error {
 		t := func() (interface{}, bool, error) {
 			return nil, true, k.validateVolumeDirCleanup(pod.UID, ctx.App)
 		}
-		if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+		if _, err := task.DoRetryWithTimeout(t, volDirCleanupTimeout, defaultRetryInterval); err != nil {
 			return err
 		}
 		logrus.Infof("Validated resource cleanup for pod: %v", pod.UID)
@@ -503,8 +547,8 @@ func (k *k8s) validateVolumeDirCleanup(podUID types.UID, app *spec.AppSpec) erro
 	driver, _ := node.Get(k.nodeDriverName)
 	options := node.FindOpts{
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         1 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
+			Timeout:         findFilesOnWorkerTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
 		},
 		MinDepth: 1,
 		MaxDepth: 1,
