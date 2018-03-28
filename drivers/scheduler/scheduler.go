@@ -76,6 +76,9 @@ type Driver interface {
 
 	// Describe generates a bundle that can be used by support - logs, cores, states, etc
 	Describe(*Context) (string, error)
+
+	//Scale the deployment up or down. Returns error if scaling failed.
+	ScaleApp(*Context, *int32) error
 }
 
 var (

@@ -944,6 +944,23 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 	return buf.String(), nil
 }
 
+func (k *k8s) ScaleApp(ctx *scheduler.Context, newRepl *int32) error {
+	k8sOps := k8s_ops.Instance()
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			if err := k8sOps.UpdateDeployment(obj, newRepl); err != nil {
+				return &scheduler.ErrFailedToValidateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to update Deployment: %v. Err: %v", obj.Name, err),
+				}
+			}
+			logrus.Infof("App %s scaled successfully to %d.", obj.Name, *newRepl)
+		}
+	}
+
+	return nil
+}
+
 func insertLineBreak(note string) string {
 	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
 }

@@ -162,6 +162,8 @@ type DeploymentOps interface {
 	DescribeDeployment(name, namespace string) (*apps_api.DeploymentStatus, error)
 	// GetDeploymentsUsingStorageClass returns all deployments using the given storage class
 	GetDeploymentsUsingStorageClass(scName string) ([]apps_api.Deployment, error)
+	// UpdateDeployment updates the deployment (scale for now, can be extended to other things)
+	UpdateDeployment(*apps_api.Deployment, *int32) error
 }
 
 // DaemonSetOps is an interface to perform k8s daemon set operations
@@ -928,6 +930,20 @@ func (k *k8sOps) DescribeDeployment(depName, depNamespace string) (*apps_api.Dep
 		return nil, err
 	}
 	return &dep.Status, err
+}
+
+func (k *k8sOps) UpdateDeployment(deployment *apps_api.Deployment, newRepl *int32) error {
+	logrus.Info("Attempt to update the deployment.")
+	dep, err := k.appsClient().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	*dep.Spec.Replicas = *newRepl
+	_, err = k.appsClient().Deployments(dep.Namespace).Update(dep)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {

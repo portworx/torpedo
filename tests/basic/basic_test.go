@@ -194,6 +194,46 @@ var _ = Describe("AppTasksDown", func() {
 	})
 })
 
+// This test scales up and down an application and checks if app has actually scaled accordingly
+var _ = Describe("AppScaleUpAndDown", func() {
+	It("has to scale up and scale down the app", func() {
+		var err error
+		scaleUpFactor := int32(3)
+		scaleDownFactor := int32(2)
+		var contexts []*scheduler.Context
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("appscaleupdown-%d", i))...)
+		}
+
+		Step("update scale factor of all apps to 3", func() {
+			for _, ctx := range contexts {
+				Step(fmt.Sprintf("updating scale for app: %s to %d", ctx.App.Key, scaleUpFactor), func() {
+					err = Inst().S.ScaleApp(ctx, &scaleUpFactor)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				ValidateContext(ctx)
+			}
+		})
+		Step("update scale factor of all apps to 2", func() {
+			for _, ctx := range contexts {
+				Step(fmt.Sprintf("updating scale for app: %s to %d", ctx.App.Key, scaleDownFactor), func() {
+					err = Inst().S.ScaleApp(ctx, &scaleDownFactor)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				ValidateContext(ctx)
+			}
+		})
+		Step("teardown all apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+
+	})
+})
+
 var _ = AfterSuite(func() {
 	CollectSupport()
 	ValidateCleanup()

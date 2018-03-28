@@ -394,6 +394,11 @@ func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {
 	return "", nil
 }
 
+func (d *dcos) ScaleApp(ctx *scheduler.Context, newRepl *int32) error {
+	//TODO implement this method
+	return nil
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)
