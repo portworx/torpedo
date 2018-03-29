@@ -197,28 +197,33 @@ var _ = Describe("AppTasksDown", func() {
 // This test scales up and down an application and checks if app has actually scaled accordingly
 var _ = Describe("AppScaleUpAndDown", func() {
 	It("has to scale up and scale down the app", func() {
-		var err error
-		scaleUpFactor := int32(3)
-		scaleDownFactor := int32(2)
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("appscaleupdown-%d", i))...)
 		}
 
-		Step("update scale factor of all apps to 3", func() {
+		Step("scale up all deployments/stateful sets ", func() {
 			for _, ctx := range contexts {
-				Step(fmt.Sprintf("updating scale for app: %s to %d", ctx.App.Key, scaleUpFactor), func() {
-					err = Inst().S.ScaleApp(ctx, &scaleUpFactor)
+				Step(fmt.Sprintf("updating scale for app: %s", ctx.App.Key), func() {
+					deploymentScaleUpMap, err := Inst().S.GetNewScaleFactorMap(ctx, 1)
+					Expect(err).NotTo(HaveOccurred())
+					err = Inst().S.ScaleApplication(ctx, deploymentScaleUpMap)
+					Expect(err).NotTo(HaveOccurred())
+					err = Inst().S.ScaleStatefulSet(ctx, deploymentScaleUpMap)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
 				ValidateContext(ctx)
 			}
 		})
-		Step("update scale factor of all apps to 2", func() {
+		Step("scale down all apps", func() {
 			for _, ctx := range contexts {
-				Step(fmt.Sprintf("updating scale for app: %s to %d", ctx.App.Key, scaleDownFactor), func() {
-					err = Inst().S.ScaleApp(ctx, &scaleDownFactor)
+				Step("scale down all deployments/stateful sets ", func() {
+					deploymentScaleDownMap, err := Inst().S.GetNewScaleFactorMap(ctx, -1)
+					Expect(err).NotTo(HaveOccurred())
+					err = Inst().S.ScaleApplication(ctx, deploymentScaleDownMap)
+					Expect(err).NotTo(HaveOccurred())
+					err = Inst().S.ScaleStatefulSet(ctx, deploymentScaleDownMap)
 					Expect(err).NotTo(HaveOccurred())
 				})
 

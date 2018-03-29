@@ -394,9 +394,19 @@ func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {
 	return "", nil
 }
 
-func (d *dcos) ScaleApp(ctx *scheduler.Context, newRepl *int32) error {
+func (d *dcos) ScaleApplication(ctx *scheduler.Context, deploymentScaleFactorMap map[string]int32) error {
 	//TODO implement this method
 	return nil
+}
+
+func (d *dcos) ScaleStatefulSet(ctx *scheduler.Context, deploymentScaleFactorMap map[string]int32) error {
+	//TODO implement this method
+	return nil
+}
+
+func (d *dcos) GetNewScaleFactorMap(ctx *scheduler.Context, factor int32) (map[string]int32, error) {
+	//TODO implement this method
+	return nil, nil
 }
 
 func init() {

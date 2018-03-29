@@ -164,6 +164,8 @@ type DeploymentOps interface {
 	GetDeploymentsUsingStorageClass(scName string) ([]apps_api.Deployment, error)
 	// UpdateDeployment updates the deployment (scale for now, can be extended to other things)
 	UpdateDeployment(*apps_api.Deployment, *int32) error
+	// GetScaleFactor returns current scale factor for a deployment
+	GetScaleFactor(*apps_api.Deployment) (int32, error)
 }
 
 // DaemonSetOps is an interface to perform k8s daemon set operations
@@ -944,6 +946,14 @@ func (k *k8sOps) UpdateDeployment(deployment *apps_api.Deployment, newRepl *int3
 		return err
 	}
 	return nil
+}
+
+func (k *k8sOps) GetScaleFactor(deployment *apps_api.Deployment) (int32, error) {
+	dep, err := k.appsClient().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
+	if err != nil {
+		return int32(0), err
+	}
+	return *dep.Spec.Replicas, nil
 }
 
 func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
