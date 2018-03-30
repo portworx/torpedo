@@ -75,14 +75,6 @@ type ErrFailedToValidateApp struct {
 	Cause string
 }
 
-// ErrFailedToUpdateApp error type for failing to update an app
-type ErrFailedToUpdateApp struct {
-	// App is the app whose validation failed
-	App *spec.AppSpec
-	// Cause is the underlying cause of the error
-	Cause string
-}
-
 func (e *ErrFailedToValidateApp) Error() string {
 	return fmt.Sprintf("Failed to validate app: %v due to err: %v", e.App.Key, e.Cause)
 }
@@ -169,4 +161,16 @@ type ErrFailedToDeleteVolumeDirForPod struct {
 
 func (e *ErrFailedToDeleteVolumeDirForPod) Error() string {
 	return fmt.Sprintf("Failed to delete volume directory for app: %v due to err: %v", e.App.Key, e.Cause)
+}
+
+// ErrFailedToUpdateApp error type for failing to update an app
+type ErrFailedToUpdateApp struct {
+	// App is the app whose validation failed
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToUpdateApp) Error() string {
+	return fmt.Sprintf("Failed to update app: %v due to err: %v", e.App.Key, e.Cause)
 }

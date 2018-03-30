@@ -77,11 +77,8 @@ type Driver interface {
 	// Describe generates a bundle that can be used by support - logs, cores, states, etc
 	Describe(*Context) (string, error)
 
-	// Scale the deployments using the new scales from the GetNewScaleFactorMap.
+	// Scale the applications using the new scales from the GetNewScaleFactorMap.
 	ScaleApplication(*Context, map[string]int32) error
-
-	// Scale the stateful sets using the new scales from the GetNewScaleFactorMap.
-	ScaleStatefulSet(*Context, map[string]int32) error
 
 	// Get a map of current deployments to their new scales, based on "factor"
 	GetNewScaleFactorMap(*Context, int32) (map[string]int32, error)

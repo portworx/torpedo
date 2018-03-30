@@ -399,11 +399,6 @@ func (d *dcos) ScaleApplication(ctx *scheduler.Context, deploymentScaleFactorMap
 	return nil
 }
 
-func (d *dcos) ScaleStatefulSet(ctx *scheduler.Context, deploymentScaleFactorMap map[string]int32) error {
-	//TODO implement this method
-	return nil
-}
-
 func (d *dcos) GetNewScaleFactorMap(ctx *scheduler.Context, factor int32) (map[string]int32, error) {
 	//TODO implement this method
 	return nil, nil

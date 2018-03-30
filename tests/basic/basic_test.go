@@ -199,7 +199,7 @@ var _ = Describe("AppScaleUpAndDown", func() {
 	It("has to scale up and scale down the app", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("appscaleupdown-%d", i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("applicationscaleupdown-%d", i))...)
 		}
 
 		Step("scale up all deployments/stateful sets ", func() {
@@ -208,8 +208,6 @@ var _ = Describe("AppScaleUpAndDown", func() {
 					deploymentScaleUpMap, err := Inst().S.GetNewScaleFactorMap(ctx, 1)
 					Expect(err).NotTo(HaveOccurred())
 					err = Inst().S.ScaleApplication(ctx, deploymentScaleUpMap)
-					Expect(err).NotTo(HaveOccurred())
-					err = Inst().S.ScaleStatefulSet(ctx, deploymentScaleUpMap)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -222,8 +220,6 @@ var _ = Describe("AppScaleUpAndDown", func() {
 					deploymentScaleDownMap, err := Inst().S.GetNewScaleFactorMap(ctx, -1)
 					Expect(err).NotTo(HaveOccurred())
 					err = Inst().S.ScaleApplication(ctx, deploymentScaleDownMap)
-					Expect(err).NotTo(HaveOccurred())
-					err = Inst().S.ScaleStatefulSet(ctx, deploymentScaleDownMap)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
