@@ -394,7 +394,7 @@ func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {
 	return "", nil
 }
 
-func (d *dcos) ScaleApplication(ctx *scheduler.Context, deploymentScaleFactorMap map[string]int32) error {
+func (d *dcos) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
 	//TODO implement this method
 	return nil
 }

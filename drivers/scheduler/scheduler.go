@@ -80,7 +80,7 @@ type Driver interface {
 	// Scale the current applications using the new scales from the GetScaleFactorMap.
 	ScaleApplication(*Context, map[string]int32) error
 
-	// Get a map of current deployments to their new scales, based on "factor"
+	// Get a map of current applications to their new scales, based on "factor"
 	GetScaleFactorMap(*Context) (map[string]int32, error)
 }
 
