@@ -202,24 +202,30 @@ var _ = Describe("AppScaleUpAndDown", func() {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("applicationscaleupdown-%d", i))...)
 		}
 
-		Step("scale up all deployments/stateful sets ", func() {
+		Step("scale up all applications", func() {
 			for _, ctx := range contexts {
 				Step(fmt.Sprintf("updating scale for app: %s", ctx.App.Key), func() {
-					deploymentScaleUpMap, err := Inst().S.GetNewScaleFactorMap(ctx, 1)
+					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
-					err = Inst().S.ScaleApplication(ctx, deploymentScaleUpMap)
+					for name, scale := range applicationScaleUpMap {
+						applicationScaleUpMap[name] = scale + 1
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
 				ValidateContext(ctx)
 			}
 		})
-		Step("scale down all apps", func() {
+		Step("scale down all applications", func() {
 			for _, ctx := range contexts {
 				Step("scale down all deployments/stateful sets ", func() {
-					deploymentScaleDownMap, err := Inst().S.GetNewScaleFactorMap(ctx, -1)
+					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
-					err = Inst().S.ScaleApplication(ctx, deploymentScaleDownMap)
+					for name, scale := range applicationScaleDownMap {
+						applicationScaleDownMap[name] = scale - 1
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
