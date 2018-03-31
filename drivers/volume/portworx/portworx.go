@@ -444,31 +444,34 @@ func (d *portworx) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
 	return d.schedOps.ValidateVolumeSetup(vol)
 }
 
-func (d *portworx) StopDriver(n node.Node, force bool) error {
+func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 	var err error
-	if force {
-		pxCrashCmd := "sudo kill -9 px-storage"
-		_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
-			Timeout:         crashDriverTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
-		})
-		if err != nil {
-			logrus.Warnf("failed to run cmd: %s. err: %v", pxCrashCmd, err)
-			return err
+	for _, n := range nodes {
+		if force {
+			pxCrashCmd := "sudo kill -9 px-storage"
+			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+			if err != nil {
+				logrus.Warnf("failed to run cmd : %s. on node %s err: %v", pxCrashCmd, n.Name, err)
+				return err
+			}
+
+		} else {
+			err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+				Action: "stop",
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         stopDriverTimeout,
+					TimeBeforeRetry: defaultRetryInterval,
+				}})
 		}
 
-		logrus.Infof("Sleeping for %v for crash to take effect", waitVolDriverToCrash)
-		time.Sleep(waitVolDriverToCrash)
-	} else {
-		err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
-			Action: "stop",
-			ConnectionOpts: node.ConnectionOpts{
-				Timeout:         stopDriverTimeout,
-				TimeBeforeRetry: defaultRetryInterval,
-			}})
+		return err
 	}
-
-	return err
+	logrus.Infof("Sleeping for %v for crash to take effect", waitVolDriverToCrash)
+	time.Sleep(waitVolDriverToCrash)
+	return nil
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
