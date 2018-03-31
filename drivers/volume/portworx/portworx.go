@@ -297,8 +297,20 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		}
 	}
 
-	if vol.IsSnapshot() {
-		logrus.Infof("Warning: Param/Option testing of snapshots is currently not supported. Skipping")
+	if vol.Source != nil && vol.Source.Parent != "" {
+		parent, err := d.getVolDriver().Inspect([]string{vol.Source.Parent})
+		if err != nil || len(parent) == 0 {
+			return &ErrFailedToInspectVolume{
+				ID:    name,
+				Cause: fmt.Sprintf("Could not get parent for volume %s", name),
+			}
+		}
+		if err := d.schedOps.ValidateSnapshot(params, parent[0]); err != nil {
+			return &ErrFailedToInspectVolume{
+				ID:    name,
+				Cause: fmt.Sprintf("Snapshot/Clone validation failed. %v", err),
+			}
+		}
 		return nil
 	}
 
