@@ -34,7 +34,7 @@ spec:
         tier: frontend
     spec:
       initContainers:
-      - image: samuelmyers/mysql-dump:v09
+      - image: samuelmyers/mysql-dump:001
         name: mysql-dump
         env:
         - name: MYSQL_ROOT_PASSWORD
@@ -42,7 +42,7 @@ spec:
             secretKeyRef:
               name: mysql-pass
               key: password
-      - image: samuelmyers/wordpress-extract:v03
+      - image: samuelmyers/wordpress-extract:001
         name: wordpress-extract
         volumeMounts:
         - name: wordpress-persistent-storage
