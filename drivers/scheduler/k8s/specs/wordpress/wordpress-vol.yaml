@@ -8,6 +8,7 @@ parameters:
   io_profile: "cms"
   priority_io: "high"
   shared: "true"
+  io_profile: "cms"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

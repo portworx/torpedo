@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"go.pedge.io/dlog"
+	"github.com/sirupsen/logrus"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/volume"
@@ -33,6 +33,8 @@ type driver struct {
 	volume.SnapshotDriver
 	volume.StoreEnumerator
 	volume.StatsDriver
+	volume.CredsDriver
+	volume.CloudBackupDriver
 }
 
 // Init Driver intialization.
@@ -43,6 +45,8 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 		volume.SnapshotNotSupported,
 		common.NewDefaultStoreEnumerator(Name, kvdb.Instance()),
 		volume.StatsNotSupported,
+		volume.CredsNotSupported,
+		volume.CloudBackupNotSupported,
 	}, nil
 }
 
@@ -95,7 +99,7 @@ func (d *driver) MountedAt(mountpath string) string {
 func (d *driver) Mount(volumeID string, mountpath string, options map[string]string) error {
 	v, err := d.GetVol(volumeID)
 	if err != nil {
-		dlog.Println(err)
+		logrus.Println(err)
 		return err
 	}
 	if len(v.AttachPath) > 0 && len(v.AttachPath) > 0 {
@@ -108,7 +112,7 @@ func (d *driver) Mount(volumeID string, mountpath string, options map[string]str
 		string(v.Spec.Format),
 		syscall.MS_BIND, "",
 	); err != nil {
-		dlog.Printf("Cannot mount %s at %s because %+v",
+		logrus.Printf("Cannot mount %s at %s because %+v",
 			filepath.Join(volume.VolumeBase, string(volumeID)),
 			mountpath,
 			err,
@@ -162,7 +166,7 @@ func (d *driver) Shutdown() {}
 func (d *driver) fsFreeze(volumeID string, freeze bool) error {
 	v, err := d.GetVol(volumeID)
 	if err != nil {
-		dlog.Println(err)
+		logrus.Println(err)
 		return err
 	}
 	if len(v.AttachPath) == 0 {

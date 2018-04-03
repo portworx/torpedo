@@ -1,3 +1,26 @@
+//go:generate swagger generate spec -m -o ../../api/swagger/swagger.json
+
+// Package classification OSD API.
+//
+// OpenStorage is a clustered implementation of the Open Storage specification and relies on the OCI runtime.
+// It allows you to run stateful services in containers in a multi-host clustered environment.
+// This document represents the API documentaton of Openstorage, for the GO client please visit:
+// https://github.com/libopenstorage/openstorage
+//
+//     Schemes: http, https
+//     Host: localhost
+//     BasePath: /v1
+//     Version: 2.0.0
+//     License: APACHE2 https://opensource.org/licenses/Apache-2.0
+//     Contact: https://github.com/libopenstorage/openstorage
+//
+//     Consumes:
+//     - application/json
+//
+//     Produces:
+//     - application/json
+//
+// swagger:meta
 package main
 
 import (
@@ -7,7 +30,7 @@ import (
 	"runtime"
 	"strconv"
 
-	"go.pedge.io/dlog"
+	"github.com/sirupsen/logrus"
 
 	"github.com/codegangsta/cli"
 	"github.com/docker/docker/pkg/reexec"
@@ -17,6 +40,7 @@ import (
 	osdcli "github.com/libopenstorage/openstorage/cli"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/config"
+	"github.com/libopenstorage/openstorage/csi"
 	"github.com/libopenstorage/openstorage/graph/drivers"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers"
@@ -149,7 +173,7 @@ func start(c *cli.Context) error {
 	scheme := u.Scheme
 	u.Scheme = "http"
 
-	kv, err := kvdb.New(scheme, "openstorage", []string{u.String()}, nil, dlog.Panicf)
+	kv, err := kvdb.New(scheme, "openstorage", []string{u.String()}, nil, logrus.Panicf)
 	if err != nil {
 		return fmt.Errorf("Failed to initialize KVDB: %v (%v)\nSupported datastores: %v", scheme, err, datastores)
 	}
@@ -160,7 +184,7 @@ func start(c *cli.Context) error {
 	// Start the cluster state machine, if enabled.
 	clusterInit := false
 	if cfg.Osd.ClusterConfig.NodeId != "" && cfg.Osd.ClusterConfig.ClusterId != "" {
-		dlog.Infof("OSD enabling cluster mode.")
+		logrus.Infof("OSD enabling cluster mode.")
 		if err := cluster.Init(cfg.Osd.ClusterConfig); err != nil {
 			return fmt.Errorf("Unable to init cluster server: %v", err)
 		}
@@ -173,7 +197,7 @@ func start(c *cli.Context) error {
 	isDefaultSet := false
 	// Start the volume drivers.
 	for d, v := range cfg.Osd.Drivers {
-		dlog.Infof("Starting volume driver: %v", d)
+		logrus.Infof("Starting volume driver: %v", d)
 		if err := volumedrivers.Register(d, v); err != nil {
 			return fmt.Errorf("Unable to start volume driver: %v, %v", d, err)
 		}
@@ -209,6 +233,22 @@ func start(c *cli.Context) error {
 		if d != "" && cfg.Osd.ClusterConfig.DefaultDriver == d {
 			isDefaultSet = true
 		}
+
+		// Start CSI Server for this driver
+		cm, err := cluster.Inst()
+		if err != nil {
+			return fmt.Errorf("Unable to find cluster instance: %v", err)
+		}
+		csiServer, err := csi.NewOsdCsiServer(&csi.OsdCsiServerConfig{
+			Net:        "unix",
+			Address:    fmt.Sprintf("/var/lib/osd/driver/%s-csi.sock", d),
+			DriverName: d,
+			Cluster:    cm,
+		})
+		if err != nil {
+			return fmt.Errorf("Failed to start CSI server for driver %s: %v", d, err)
+		}
+		csiServer.Start()
 	}
 
 	if cfg.Osd.ClusterConfig.DefaultDriver != "" && !isDefaultSet {
@@ -221,7 +261,7 @@ func start(c *cli.Context) error {
 
 	// Start the graph drivers.
 	for d := range cfg.Osd.GraphDrivers {
-		dlog.Infof("Starting graph driver: %v", d)
+		logrus.Infof("Starting graph driver: %v", d)
 		if err := server.StartGraphAPI(d, volume.PluginAPIBase); err != nil {
 			return fmt.Errorf("Unable to start graph plugin: %v", err)
 		}
@@ -232,7 +272,7 @@ func start(c *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("Unable to find cluster instance: %v", err)
 		}
-		if err := cm.Start(0, false); err != nil {
+		if err := cm.Start(0, false, "9002"); err != nil {
 			return fmt.Errorf("Unable to start cluster manager: %v", err)
 		}
 	}
@@ -252,7 +292,7 @@ func showVersion(c *cli.Context) error {
 func wrapAction(f func(*cli.Context) error) func(*cli.Context) {
 	return func(c *cli.Context) {
 		if err := f(c); err != nil {
-			dlog.Warnln(err.Error())
+			logrus.Warnln(err.Error())
 			os.Exit(1)
 		}
 	}

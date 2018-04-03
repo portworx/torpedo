@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/errors"
+	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers"
 )
@@ -67,6 +67,73 @@ func (vd *volAPI) parseID(r *http.Request) (string, error) {
 	return "", fmt.Errorf("could not parse snap ID")
 }
 
+func (vd *volAPI) nodeIPtoIds(nodes []string) ([]string, error) {
+	nodeIds := make([]string, 0)
+
+	// Get cluster instance
+	c, err := cluster.Inst()
+	if err != nil {
+		return nodeIds, err
+	}
+
+	if c == nil {
+		return nodeIds, fmt.Errorf("failed to get cluster instance.")
+	}
+
+	for _, idIp := range nodes {
+		if idIp != "" {
+			id, err := c.GetNodeIdFromIp(idIp)
+			if err != nil {
+				return nodeIds, err
+			}
+			nodeIds = append(nodeIds, id)
+		}
+	}
+
+	return nodeIds, err
+}
+
+// Convert any replica set node values which are IPs to the corresponding Node ID.
+// Update the replica set node list.
+func (vd *volAPI) updateReplicaSpecNodeIPstoIds(rspecRef *api.ReplicaSet) error {
+	if rspecRef != nil && len(rspecRef.Nodes) > 0 {
+		nodeIds, err := vd.nodeIPtoIds(rspecRef.Nodes)
+		if err != nil {
+			return err
+		}
+
+		if len(nodeIds) > 0 {
+			rspecRef.Nodes = nodeIds
+		}
+	}
+
+	return nil
+}
+
+// swagger:operation POST /osd-volumes volume createVolume
+//
+// Creates a single volume with given spec.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: spec
+//   in: body
+//   description: spec to create volume with
+//   required: true
+//   schema:
+//         "$ref": "#/definitions/VolumeCreateRequest"
+// responses:
+//   '200':
+//     description: volume create response
+//     schema:
+//         "$ref": "#/definitions/VolumeCreateResponse"
+//   default:
+//     description: unexpected error
+//     schema:
+//       "$ref": "#/definitions/VolumeCreateResponse"
+
 func (vd *volAPI) create(w http.ResponseWriter, r *http.Request) {
 	var dcRes api.VolumeCreateResponse
 	var dcReq api.VolumeCreateRequest
@@ -82,6 +149,14 @@ func (vd *volAPI) create(w http.ResponseWriter, r *http.Request) {
 		notFound(w, r)
 		return
 	}
+
+	if dcReq.Spec != nil {
+		if err = vd.updateReplicaSpecNodeIPstoIds(dcReq.Spec.ReplicaSet); err != nil {
+			vd.sendError(vd.name, method, w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
 	id, err := d.Create(dcReq.Locator, dcReq.Source, dcReq.Spec)
 	dcRes.VolumeResponse = &api.VolumeResponse{Error: responseStatus(err)}
 	dcRes.Id = id
@@ -114,6 +189,34 @@ func processErrorForVolSetResponse(action *api.VolumeStateAction, err error, res
 	}
 }
 
+// swagger:operation PUT /osd-volumes/{id} volume setVolume
+//
+// Updates a single volume with given spec.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+//   description: id to get volume with
+//   required: true
+//   type: integer
+// - name: spec
+//   in: body
+//   description: spec to set volume with
+//   required: true
+//   schema:
+//         "$ref": "#/definitions/VolumeSetRequest"
+// responses:
+//   '200':
+//     description: volume set response
+//     schema:
+//         "$ref": "#/definitions/VolumeSetResponse"
+//   default:
+//     description: unexpected error
+//     schema:
+//       "$ref": "#/definitions/VolumeSetResponse"
 func (vd *volAPI) volumeSet(w http.ResponseWriter, r *http.Request) {
 	var (
 		volumeID string
@@ -148,6 +251,12 @@ func (vd *volAPI) volumeSet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Locator != nil || req.Spec != nil {
+		if req.Spec != nil {
+			if err = vd.updateReplicaSpecNodeIPstoIds(req.Spec.ReplicaSet); err != nil {
+				vd.sendError(vd.name, method, w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
 		err = d.Set(volumeID, req.Locator, req.Spec)
 	}
 
@@ -198,6 +307,24 @@ func (vd *volAPI) volumeSet(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// swagger:operation GET /osd-volumes/{id} volume inspectVolume
+//
+// Inspect volume with specified id.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+//   description: id to get volume with
+//   required: true
+//   type: integer
+// responses:
+//   '200':
+//     description: volume get response
+//     schema:
+//         "$ref": "#/definitions/Volume"
 func (vd *volAPI) inspect(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var volumeID string
@@ -224,6 +351,28 @@ func (vd *volAPI) inspect(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(dk)
 }
 
+// swagger:operation DELETE /osd-volumes/{id} volume deleteVolume
+//
+// Delete volume with specified id.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+//   description: id to get volume with
+//   required: true
+//   type: integer
+// responses:
+//   '200':
+//     description: volume set response
+//     schema:
+//         "$ref": "#/definitions/VolumeResponse"
+//   default:
+//     description: unexpected error
+//     schema:
+//       "$ref": "#/definitions/VolumeResponse"
 func (vd *volAPI) delete(w http.ResponseWriter, r *http.Request) {
 	var volumeID string
 	var err error
@@ -251,6 +400,48 @@ func (vd *volAPI) delete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(volumeResponse)
 }
 
+// swagger:operation GET /osd-volumes volume enumerateVolumes
+//
+// Enumerate all volumes
+//
+// ---
+// consumes:
+// - multipart/form-data
+// produces:
+// - application/json
+// parameters:
+// - name: Name
+//   in: query
+//   description: User specified volume name (Case Sensitive)
+//   required: false
+//   type: string
+// - name: Label
+//   in: formData
+//   description: |
+//    Comma separated name value pairs
+//    example: {"label1","label2"}
+//   required: false
+//   type: string
+// - name: ConfigLabel
+//   in: formData
+//   description: |
+//    Comma separated name value pairs
+//    example: {"label1","label2"}
+//   required: false
+//   type: string
+// - name: VolumeID
+//   in: query
+//   description: Volume UUID
+//   required: false
+//   type: string
+//   format: uuid
+// responses:
+//   '200':
+//      description: an array of volumes
+//      schema:
+//         type: array
+//         items:
+//            $ref: '#/definitions/Volume'
 func (vd *volAPI) enumerate(w http.ResponseWriter, r *http.Request) {
 	var locator api.VolumeLocator
 	var configLabels map[string]string
@@ -305,6 +496,34 @@ func (vd *volAPI) enumerate(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(vols)
 }
 
+// swagger:operation POST /osd-snapshots snapshot createSnap
+//
+// Take a snapshot of volume in SnapCreateRequest
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: query
+//   description: id to get volume with
+//   required: true
+//   type: integer
+// - name: spec
+//   in: body
+//   description: spec to create snap with
+//   required: true
+//   schema:
+//    "$ref": "#/definitions/SnapCreateRequest"
+// responses:
+//    '200':
+//      description: an array of volumes
+//      schema:
+//       "$ref": '#/definitions/SnapCreateResponse'
+//    default:
+//     description: unexpected error
+//     schema:
+//      "$ref": "#/definitions/SnapCreateResponse"
 func (vd *volAPI) snap(w http.ResponseWriter, r *http.Request) {
 	var snapReq api.SnapCreateRequest
 	var snapRes api.SnapCreateResponse
@@ -332,6 +551,28 @@ func (vd *volAPI) snap(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(&snapRes)
 }
 
+// swagger:operation POST /osd-snapshots/restore/{id} snapshot restoreSnap
+//
+// Restore snapshot with specified id.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+//   description: id of snapshot to restore
+//   required: true
+//   type: integer
+// responses:
+//  '200':
+//    description: Restored volume
+//    schema:
+//     "$ref": '#/definitions/VolumeResponse'
+//  default:
+//   description: unexpected error
+//   schema:
+//    "$ref": "#/definitions/VolumeResponse"
 func (vd *volAPI) restore(w http.ResponseWriter, r *http.Request) {
 	var volumeID, snapID string
 	var err error
@@ -366,6 +607,48 @@ func (vd *volAPI) restore(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(volumeResponse)
 }
 
+// swagger:operation GET /osd-snapshots snapshot enumerateSnaps
+//
+// Enumerate snapshots.
+//
+// ---
+// consumes:
+// - multipart/form-data
+// produces:
+// - application/json
+// parameters:
+// - name: name
+//   in: query
+//   description: Volume name that maps to this snap
+//   required: false
+//   type: string
+// - name: VolumeLabels
+//   in: formData
+//   description: |
+//    Comma separated volume labels
+//    example: {"label1","label2"}
+//   required: false
+//   type: string
+// - name: SnapLabels
+//   in: formData
+//   description: |
+//    Comma separated snap labels
+//    example: {"label1","label2"}
+//   required: false
+//   type: string
+// - name: uuid
+//   in: query
+//   description: Snap UUID
+//   required: false
+//   type: string
+//   format: uuid
+// responses:
+//  '200':
+//   description: an array of snapshots
+//   schema:
+//    type: array
+//    items:
+//     $ref: '#/definitions/Volume'
 func (vd *volAPI) snapEnumerate(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var labels map[string]string
@@ -404,6 +687,24 @@ func (vd *volAPI) snapEnumerate(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(snaps)
 }
 
+// swagger:operation GET /osd-volumes/stats/{id} volume statsVolume
+//
+// Get stats for volume with specified id.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+//   description: id to get volume with
+//   required: true
+//   type: integer
+// responses:
+//  '200':
+//   description: volume set response
+//   schema:
+//    "$ref": "#/definitions/Stats"
 func (vd *volAPI) stats(w http.ResponseWriter, r *http.Request) {
 	var volumeID string
 	var err error
@@ -443,6 +744,24 @@ func (vd *volAPI) stats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
+// swagger:operation GET /osd-volumes/usedsize/{id} volume usedSizeVolume
+//
+// Get Used size of volume with specified id.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+//   description: id to get volume with
+//   required: true
+//   type: integer
+// responses:
+//  '200':
+//   description: volume set response
+//   type: integer
+//   format: int64
 func (vd *volAPI) usedsize(w http.ResponseWriter, r *http.Request) {
 	var volumeID string
 	var err error
@@ -468,6 +787,24 @@ func (vd *volAPI) usedsize(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(used)
 }
 
+// swagger:operation POST /osd-volumes/requests/{id} volume requestsVolume
+//
+// Get Requests for volume with specified id.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+//   description: id to get volume with
+//   required: true
+//   type: integer
+// responses:
+//   '200':
+//     description: volume set response
+//     schema:
+//         "$ref": "#/definitions/ActiveRequests"
 func (vd *volAPI) requests(w http.ResponseWriter, r *http.Request) {
 	var err error
 
@@ -488,6 +825,28 @@ func (vd *volAPI) requests(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(requests)
 }
 
+// swagger:operation GET /osd-volumes/quiesce/{id} volume quiesceVolume
+//
+// Quiesce volume with specified id.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+//   description: id to get volume with
+//   required: true
+//   type: integer
+// responses:
+//   '200':
+//     description: volume set response
+//     schema:
+//         "$ref": "#/definitions/VolumeResponse"
+//   default:
+//     description: unexpected error
+//     schema:
+//       "$ref": "#/definitions/VolumeResponse"
 func (vd *volAPI) quiesce(w http.ResponseWriter, r *http.Request) {
 	var volumeID string
 	var err error
@@ -531,6 +890,28 @@ func (vd *volAPI) quiesce(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(volumeResponse)
 }
 
+// swagger:operation POST /osd-volumes/unquiesce/{id} volume unquiesceVolume
+//
+// Unquiesce volume with specified id.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+//   description: id to get volume with
+//   required: true
+//   type: integer
+// responses:
+//   '200':
+//     description: volume set response
+//     schema:
+//         "$ref": "#/definitions/VolumeResponse"
+//   default:
+//     description: unexpected error
+//     schema:
+//       "$ref": "#/definitions/VolumeResponse"
 func (vd *volAPI) unquiesce(w http.ResponseWriter, r *http.Request) {
 	var volumeID string
 	var err error
@@ -555,6 +936,20 @@ func (vd *volAPI) unquiesce(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(volumeResponse)
 }
 
+// swagger:operation GET /osd-volumes/versions volume listVersions
+//
+// Lists API versions supported by this volumeDriver.
+//
+// ---
+// produces:
+// - application/json
+// responses:
+//   '200':
+//      description: Supported versions
+//      schema:
+//         type: array
+//         items:
+//            type: string
 func (vd *volAPI) versions(w http.ResponseWriter, r *http.Request) {
 	versions := []string{
 		volume.APIVersion,
@@ -579,6 +974,14 @@ func snapPath(route, version string) string {
 	return volVersion(api.OsdSnapshotPath+route, version)
 }
 
+func credsPath(route, version string) string {
+	return volVersion(api.OsdCredsPath+route, version)
+}
+
+func backupPath(route, version string) string {
+	return volVersion(api.OsdBackupPath+route, version)
+}
+
 func (vd *volAPI) Routes() []*Route {
 	return []*Route{
 		{verb: "GET", path: "/" + api.OsdVolumePath + "/versions", fn: vd.versions},
@@ -598,5 +1001,21 @@ func (vd *volAPI) Routes() []*Route {
 		{verb: "POST", path: snapPath("", volume.APIVersion), fn: vd.snap},
 		{verb: "GET", path: snapPath("", volume.APIVersion), fn: vd.snapEnumerate},
 		{verb: "POST", path: snapPath("/restore/{id}", volume.APIVersion), fn: vd.restore},
+		{verb: "GET", path: credsPath("", volume.APIVersion), fn: vd.credsEnumerate},
+		{verb: "POST", path: credsPath("", volume.APIVersion), fn: vd.credsCreate},
+		{verb: "DELETE", path: credsPath("/{uuid}", volume.APIVersion), fn: vd.credsDelete},
+		{verb: "PUT", path: credsPath("/validate/{uuid}", volume.APIVersion), fn: vd.credsValidate},
+		{verb: "POST", path: backupPath("", volume.APIVersion), fn: vd.cloudBackupCreate},
+		{verb: "POST", path: backupPath("/restore", volume.APIVersion), fn: vd.cloudBackupRestore},
+		{verb: "GET", path: backupPath("", volume.APIVersion), fn: vd.cloudBackupEnumerate},
+		{verb: "DELETE", path: backupPath("", volume.APIVersion), fn: vd.cloudBackupDelete},
+		{verb: "DELETE", path: backupPath("/all", volume.APIVersion), fn: vd.cloudBackupDeleteAll},
+		{verb: "GET", path: backupPath("/status", volume.APIVersion), fn: vd.cloudBackupStatus},
+		{verb: "GET", path: backupPath("/catalog", volume.APIVersion), fn: vd.cloudBackupCatalog},
+		{verb: "GET", path: backupPath("/history", volume.APIVersion), fn: vd.cloudBackupHistory},
+		{verb: "PUT", path: backupPath("/statechange", volume.APIVersion), fn: vd.cloudBackupStateChange},
+		{verb: "POST", path: backupPath("/sched", volume.APIVersion), fn: vd.cloudBackupSchedCreate},
+		{verb: "DELETE", path: backupPath("/sched", volume.APIVersion), fn: vd.cloudBackupSchedDelete},
+		{verb: "GET", path: backupPath("/sched", volume.APIVersion), fn: vd.cloudBackupSchedEnumerate},
 	}
 }

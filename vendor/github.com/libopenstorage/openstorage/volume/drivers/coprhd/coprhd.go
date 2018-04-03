@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/jmcvetta/napping.v3"
 
-	"go.pedge.io/dlog"
+	"github.com/sirupsen/logrus"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/volume"
@@ -62,6 +62,8 @@ type driver struct {
 	volume.StoreEnumerator
 	volume.StatsDriver
 	volume.QuiesceDriver
+	volume.CredsDriver
+	volume.CloudBackupDriver
 	consistencyGroup string
 	project          string
 	varray           string
@@ -109,16 +111,18 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 	}
 
 	d := &driver{
-		IODriver:         volume.IONotSupported,
-		StoreEnumerator:  common.NewDefaultStoreEnumerator(Name, kvdb.Instance()),
-		StatsDriver:      volume.StatsNotSupported,
-		QuiesceDriver:    volume.QuiesceNotSupported,
-		consistencyGroup: consistencyGroup,
-		project:          project,
-		varray:           varray,
-		vpool:            vpool,
-		url:              restUrl,
-		creds:            url.UserPassword(user, pass),
+		IODriver:          volume.IONotSupported,
+		StoreEnumerator:   common.NewDefaultStoreEnumerator(Name, kvdb.Instance()),
+		StatsDriver:       volume.StatsNotSupported,
+		QuiesceDriver:     volume.QuiesceNotSupported,
+		CredsDriver:       volume.CredsNotSupported,
+		CloudBackupDriver: volume.CloudBackupNotSupported,
+		consistencyGroup:  consistencyGroup,
+		project:           project,
+		varray:            varray,
+		vpool:             vpool,
+		url:               restUrl,
+		creds:             url.UserPassword(user, pass),
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -146,7 +150,7 @@ func (d *driver) Create(
 	s, err := d.getAuthSession()
 
 	if err != nil {
-		dlog.Errorf("Failed to create session: %s", err.Error())
+		logrus.Errorf("Failed to create session: %s", err.Error())
 		return "", err
 	}
 
@@ -211,7 +215,7 @@ func (d *driver) Set(
 }
 
 func (d *driver) Shutdown() {
-	dlog.Infof("%s Shutting down", Name)
+	logrus.Infof("%s Shutting down", Name)
 }
 
 func (d *driver) Snapshot(

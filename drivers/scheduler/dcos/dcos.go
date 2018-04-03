@@ -350,6 +350,11 @@ func (d *dcos) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	return vols, nil
 }
 
+func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
+	// TODO: Add implementation
+	return nil, nil
+}
+
 func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string]string) error) error {
 	// DC/OS does not have volume objects like Kubernetes. We get the volume information from
 	// the app spec and get the options parsed from the respective volume driver
@@ -387,6 +392,16 @@ func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string
 func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {
 	// TODO: Implement this method
 	return "", nil
+}
+
+func (d *dcos) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
+	//TODO implement this method
+	return nil
+}
+
+func (d *dcos) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error) {
+	//TODO implement this method
+	return nil, nil
 }
 
 func init() {

@@ -21,11 +21,13 @@ import (
 	"net"
 	"sync"
 
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"go.pedge.io/dlog"
+	csi "github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/libopenstorage/openstorage/api/spec"
+	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
 	volumedrivers "github.com/libopenstorage/openstorage/volume/drivers"
 )
@@ -33,22 +35,24 @@ import (
 // OsdCsiServerConfig provides the configuration to the
 // the gRPC CSI server created by NewOsdCsiServer()
 type OsdCsiServerConfig struct {
-	Net          string
-	Address      string
-	DriverName   string
-	DriverParams map[string]string
+	Net        string
+	Address    string
+	DriverName string
+	Cluster    cluster.Cluster
 }
 
 // OsdCsiServer is a OSD CSI compliant server which
 // proxies CSI requests for a single specific driver
 type OsdCsiServer struct {
 	Server
-	listener net.Listener
-	server   *grpc.Server
-	driver   volume.VolumeDriver
-	wg       sync.WaitGroup
-	running  bool
-	lock     sync.Mutex
+	listener    net.Listener
+	server      *grpc.Server
+	driver      volume.VolumeDriver
+	cluster     cluster.Cluster
+	wg          sync.WaitGroup
+	running     bool
+	lock        sync.Mutex
+	specHandler spec.SpecHandler
 }
 
 // NewOsdCsiServer creates a gRPC CSI complient server on the
@@ -67,12 +71,6 @@ func NewOsdCsiServer(config *OsdCsiServerConfig) (Server, error) {
 		return nil, fmt.Errorf("OSD Driver name must be provided")
 	}
 
-	// Register driver name and initialize it using the parameters provided
-	err := volumedrivers.Register(config.DriverName, config.DriverParams)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to setup driver %s: %s", config.DriverName, err.Error())
-	}
-
 	// Save the driver for future calls
 	d, err := volumedrivers.Get(config.DriverName)
 	if err != nil {
@@ -85,8 +83,10 @@ func NewOsdCsiServer(config *OsdCsiServerConfig) (Server, error) {
 	}
 
 	return &OsdCsiServer{
-		listener: l,
-		driver:   d,
+		listener:    l,
+		driver:      d,
+		cluster:     config.Cluster,
+		specHandler: spec.NewSpecHandler(),
 	}, nil
 }
 
@@ -104,10 +104,11 @@ func (s *OsdCsiServer) Start() error {
 
 	csi.RegisterIdentityServer(s.server, s)
 	csi.RegisterControllerServer(s.server, s)
+	csi.RegisterNodeServer(s.server, s)
 	reflection.Register(s.server)
 
 	// Start listening for requests
-	dlog.Infof("CSI Server ready on %s", s.Address())
+	logrus.Infof("CSI Server ready on %s", s.Address())
 	waitForServer := make(chan bool)
 	s.goServe(waitForServer)
 	<-waitForServer
@@ -153,7 +154,7 @@ func (s *OsdCsiServer) goServe(started chan<- bool) {
 		started <- true
 		err := s.server.Serve(s.listener)
 		if err != nil {
-			dlog.Fatalf("ERROR: Unable to start gRPC server: %s\n", err.Error())
+			logrus.Fatalf("ERROR: Unable to start gRPC server: %s\n", err.Error())
 		}
 	}()
 }

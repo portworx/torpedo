@@ -17,10 +17,9 @@ limitations under the License.
 package csi
 
 import (
-	"reflect"
 	"testing"
 
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	csi "github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )
@@ -32,36 +31,22 @@ func TestNewCSIServerGetPluginInfo(t *testing.T) {
 	defer s.Stop()
 
 	// Setup mock
-	s.MockDriver().EXPECT().Name().Return("mock").Times(1)
+	s.MockDriver().EXPECT().Name().Return("mock").Times(2)
 
-	// Make a call
+	// Setup client
 	c := csi.NewIdentityClient(s.Conn())
+
+	// Get info
 	r, err := c.GetPluginInfo(context.Background(), &csi.GetPluginInfoRequest{})
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Verify
-	name := r.GetResult().GetName()
-	version := r.GetResult().GetVendorVersion()
-	assert.Equal(t, name, csiDriverName)
+	name := r.GetName()
+	version := r.GetVendorVersion()
+	assert.Equal(t, name, csiDriverNamePrefix+"mock")
 	assert.Equal(t, version, csiDriverVersion)
-	manifest := r.GetResult().GetManifest()
+
+	manifest := r.GetManifest()
 	assert.Len(t, manifest, 1)
 	assert.Equal(t, manifest["driver"], "mock")
-}
-
-func TestNewCSIServerGetSupportedVersions(t *testing.T) {
-
-	// Create server and client connection
-	s := newTestServer(t)
-	defer s.Stop()
-
-	// Make a call
-	c := csi.NewIdentityClient(s.Conn())
-	r, err := c.GetSupportedVersions(context.Background(), &csi.GetSupportedVersionsRequest{})
-	assert.Nil(t, err)
-
-	// Verify
-	versions := r.GetResult().GetSupportedVersions()
-	assert.Equal(t, len(versions), 1)
-	assert.True(t, reflect.DeepEqual(versions[0], csiVersion))
 }

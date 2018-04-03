@@ -9,9 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/libopenstorage/openstorage/pkg/proto/time"
-	"go.pedge.io/dlog"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -19,9 +16,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/opsworks"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/chaos"
+	"github.com/libopenstorage/openstorage/pkg/proto/time"
+	"github.com/libopenstorage/openstorage/pkg/storageops"
+	aws_ops "github.com/libopenstorage/openstorage/pkg/storageops/aws"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers/common"
 	"github.com/portworx/kvdb"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -54,7 +55,9 @@ type Driver struct {
 	volume.StoreEnumerator
 	volume.IODriver
 	volume.QuiesceDriver
-	ops StorageOps
+	volume.CredsDriver
+	volume.CloudBackupDriver
+	ops storageops.Ops
 	md  *Metadata
 }
 
@@ -68,7 +71,7 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 	if err != nil {
 		return nil, err
 	}
-	dlog.Infof("AWS instance %v zone %v", instance, zone)
+	logrus.Infof("AWS instance %v zone %v", instance, zone)
 
 	accessKey, secretKey, err := authKeys(params)
 	if err != nil {
@@ -86,14 +89,16 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 	)
 	d := &Driver{
 		StatsDriver: volume.StatsNotSupported,
-		ops:         NewEc2Storage(instance, ec2),
+		ops:         aws_ops.NewEc2Storage(instance, ec2),
 		md: &Metadata{
 			zone:     zone,
 			instance: instance,
 		},
-		IODriver:        volume.IONotSupported,
-		QuiesceDriver:   volume.QuiesceNotSupported,
-		StoreEnumerator: common.NewDefaultStoreEnumerator(Name, kvdb.Instance()),
+		IODriver:          volume.IONotSupported,
+		QuiesceDriver:     volume.QuiesceNotSupported,
+		CredsDriver:       volume.CredsNotSupported,
+		CloudBackupDriver: volume.CloudBackupNotSupported,
+		StoreEnumerator:   common.NewDefaultStoreEnumerator(Name, kvdb.Instance()),
 	}
 	return d, nil
 }
@@ -201,11 +206,19 @@ func (d *Driver) Create(
 	if *volType != opsworks.VolumeTypeGp2 {
 		ec2Vol.Iops = iops
 	}
-	vol, err := d.ops.Create(ec2Vol, locator.VolumeLabels)
+	resp, err := d.ops.Create(ec2Vol, locator.VolumeLabels)
 	if err != nil {
-		dlog.Warnf("Failed in CreateVolumeRequest :%v", err)
+		logrus.Warnf("Failed in CreateVolumeRequest :%v", err)
 		return "", err
 	}
+
+	vol, ok := resp.(*ec2.Volume)
+	if !ok {
+		return "", storageops.NewStorageError(storageops.ErrVolInval,
+			"Invalid volume returned by create API",
+			fmt.Sprintf("template snapshot: %s", *snapID))
+	}
+
 	volume := common.NewVolume(
 		*vol.VolumeId,
 		api.FSType_FS_TYPE_EXT4,
@@ -221,7 +234,7 @@ func (d *Driver) Create(
 		return "", err
 	}
 
-	dlog.Infof("aws preparing volume %s...", *vol.VolumeId)
+	logrus.Infof("aws preparing volume %s...", *vol.VolumeId)
 	if err := d.Format(volume.Id); err != nil {
 		return "", err
 	}
@@ -289,8 +302,14 @@ func (d *Driver) Inspect(volumeIDs []string) ([]*api.Volume, error) {
 			return nil, fmt.Errorf("Inspect volume count mismatch")
 		}
 		for i, v := range awsVols {
-			if string(vols[i].Id) != *v.VolumeId {
-				d.merge(vols[i], v)
+			vol, ok := v.(*ec2.Volume)
+			if !ok {
+				return nil, storageops.NewStorageError(storageops.ErrVolInval,
+					"Invalid volume returned by inspect API", "")
+			}
+
+			if string(vols[i].Id) != *vol.VolumeId {
+				d.merge(vols[i], vol)
 			}
 		}
 	}
@@ -316,10 +335,12 @@ func (d *Driver) Snapshot(
 	if len(vols) != 1 {
 		return "", fmt.Errorf("Failed to inspect %v len %v", volumeID, len(vols))
 	}
-	snap, err := d.ops.Snapshot(volumeID, readonly)
+	resp, err := d.ops.Snapshot(volumeID, readonly)
 	if err != nil {
 		return "", err
 	}
+
+	snap := resp.(*ec2.Snapshot)
 	chaos.Now(koStrayCreate)
 	vols[0].Id = *snap.SnapshotId
 	vols[0].Source = &api.Source{Parent: volumeID}
@@ -371,7 +392,7 @@ func (d *Driver) volumeState(ec2VolState *string) api.VolumeState {
 	case ec2.VolumeAttachmentStateAttaching, ec2.VolumeAttachmentStateDetaching:
 		return api.VolumeState_VOLUME_STATE_PENDING
 	default:
-		dlog.Warnf("Failed to translate EC2 volume status %v", ec2VolState)
+		logrus.Warnf("Failed to translate EC2 volume status %v", ec2VolState)
 	}
 	return api.VolumeState_VOLUME_STATE_ERROR
 }
@@ -383,21 +404,29 @@ func (d *Driver) Format(volumeID string) error {
 	}
 
 	// XXX: determine mount state
-	awsVol, err := d.ops.Inspect([]*string{&volumeID})
+	awsVols, err := d.ops.Inspect([]*string{&volumeID})
 	if err != nil {
 		return err
 	}
-	if len(awsVol) != 1 {
+	if len(awsVols) != 1 {
 		return fmt.Errorf("Failed to inspect volume %v", volumeID)
 	}
-	devicePath, err := d.ops.DevicePath(awsVol[0])
+
+	awsVol, ok := awsVols[0].(*ec2.Volume)
+	if !ok {
+		return storageops.NewStorageError(storageops.ErrVolInval,
+			"Invalid volume returned by inspect API",
+			fmt.Sprintf("volume to inspect: %s", volumeID))
+	}
+
+	devicePath, err := d.ops.DevicePath(*awsVol.VolumeId)
 	if err != nil {
 		return err
 	}
 	cmd := "/sbin/mkfs." + volume.Spec.Format.SimpleString()
 	o, err := exec.Command(cmd, devicePath).Output()
 	if err != nil {
-		dlog.Warnf("Failed to run command %v %v: %v", cmd, devicePath, o)
+		logrus.Warnf("Failed to run command %v %v: %v", cmd, devicePath, o)
 		return err
 	}
 	volume.Format = volume.Spec.Format
@@ -410,11 +439,11 @@ func (d *Driver) Detach(volumeID string, options map[string]string) error {
 	}
 	volume, err := d.GetVol(volumeID)
 	if err != nil {
-		dlog.Warnf("Volume %s could not be located, attempting to detach anyway", volumeID)
+		logrus.Warnf("Volume %s could not be located, attempting to detach anyway", volumeID)
 	} else {
 		volume.DevicePath = ""
 		if err := d.UpdateVol(volume); err != nil {
-			dlog.Warnf("Failed to update volume", volumeID)
+			logrus.Warnf("Failed to update volume", volumeID)
 		}
 	}
 	return nil
@@ -429,14 +458,22 @@ func (d *Driver) Mount(volumeID string, mountpath string, options map[string]str
 	if err != nil {
 		return fmt.Errorf("Failed to locate volume %q", volumeID)
 	}
-	awsVol, err := d.ops.Inspect([]*string{&volumeID})
+	awsVols, err := d.ops.Inspect([]*string{&volumeID})
 	if err != nil {
 		return err
 	}
-	if len(awsVol) != 1 {
+	if len(awsVols) != 1 {
 		return fmt.Errorf("Failed to inspect volume %v", volumeID)
 	}
-	devicePath, err := d.ops.DevicePath(awsVol[0])
+
+	awsVol, ok := awsVols[0].(*ec2.Volume)
+	if !ok {
+		return storageops.NewStorageError(storageops.ErrVolInval,
+			"Invalid volume returned by inspect API",
+			fmt.Sprintf("volume to inspect: %s", volumeID))
+	}
+
+	devicePath, err := d.ops.DevicePath(*awsVol.VolumeId)
 	if err != nil {
 		return err
 	}
@@ -454,7 +491,7 @@ func (d *Driver) Unmount(volumeID string, mountpath string, options map[string]s
 }
 
 func (d *Driver) Shutdown() {
-	dlog.Printf("%s Shutting down", Name)
+	logrus.Printf("%s Shutting down", Name)
 }
 
 func (d *Driver) Set(volumeID string, locator *api.VolumeLocator, spec *api.VolumeSpec) error {
