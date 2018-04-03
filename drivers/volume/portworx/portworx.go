@@ -446,7 +446,9 @@ func (d *portworx) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
 
 func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 	var err error
+	logrus.Infof("Force flag: %t.", force)
 	for _, n := range nodes {
+		logrus.Infof("Stopping volume driver on %s.", n.Name)
 		if force {
 			pxCrashCmd := "sudo kill -9 px-storage"
 			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
@@ -459,15 +461,19 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 			}
 
 		} else {
+			logrus.Infof("Using systmectl stop.")
 			err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 				Action: "stop",
 				ConnectionOpts: node.ConnectionOpts{
 					Timeout:         stopDriverTimeout,
 					TimeBeforeRetry: defaultRetryInterval,
 				}})
+			if err != nil {
+				logrus.Warnf("failed to run systemctl stopcmd  on node %s err: %v", n.Name, err)
+				return err
+			}
 		}
 
-		return err
 	}
 	logrus.Infof("Sleeping for %v for crash to take effect", waitVolDriverToCrash)
 	time.Sleep(waitVolDriverToCrash)
