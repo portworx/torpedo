@@ -20,7 +20,7 @@ spec:
         tier: load-driver
     spec:
       initContainers:
-      - image: samuelmyers/ping-test:001
+      - image: samuelmyers/ping-test:1.0
         name: wait-until-wordpress-up
         env:
         - name: HOST
