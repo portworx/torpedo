@@ -302,7 +302,12 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		if err != nil || len(parent) == 0 {
 			return &ErrFailedToInspectVolume{
 				ID:    name,
-				Cause: fmt.Sprintf("Could not get parent for volume %s", name),
+				Cause: fmt.Sprintf("Could not get parent with ID [%s]", vol.Source.Parent),
+			}
+		} else if len(parent) > 1 {
+			return &ErrFailedToInspectVolume{
+				ID:    name,
+				Cause: fmt.Sprintf("Expected:1 Got:%v parents for ID [%s]", len(parent), vol.Source.Parent),
 			}
 		}
 		if err := d.schedOps.ValidateSnapshot(params, parent[0]); err != nil {
