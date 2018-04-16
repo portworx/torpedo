@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -13,30 +12,13 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-func TestRepl(t *testing.T) {
+func TestVolOps(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Torpedo : Repl")
+	RunSpecs(t, "Torpedo : VolOps")
 }
 
 var _ = BeforeSuite(func() {
 	InitInstance()
-})
-
-// This test performs basic test of starting an application and destroying it (along with storage)
-var _ = Describe("SetupTeardown", func() {
-	It("has to setup, validate and teardown apps", func() {
-		var contexts []*scheduler.Context
-		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("setupteardown-%d", i))...)
-		}
-
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
-	})
 })
 
 // Volume Replication Decrease
@@ -58,6 +40,7 @@ var _ = Describe("VolumeReplicationDecrease", func() {
 					Expect(appVolumes).NotTo(BeEmpty())
 				})
 
+				MinRF := Inst().V.GetMinReplicationFactor()
 				Step(
 					fmt.Sprintf("repl decrease volume driver %s on app %s's volumes: %v",
 						Inst().V.String(), ctx.App.Key, appVolumes),
@@ -66,13 +49,15 @@ var _ = Describe("VolumeReplicationDecrease", func() {
 							errExpected := false
 							currRep, err := Inst().V.GetReplicationFactor(v)
 							Expect(err).NotTo(HaveOccurred())
-							if currRep == 1 {
+							if currRep == MinRF {
 								errExpected = true
 							}
-							expReplMap[v] = int64(math.Min(3, float64(currRep)-1))
+							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
 							err = Inst().V.SetReplicationFactor(v, currRep-1)
 							if !errExpected {
 								Expect(err).NotTo(HaveOccurred())
+							} else {
+								Expect(err).To(HaveOccurred())
 							}
 
 						}
@@ -80,16 +65,13 @@ var _ = Describe("VolumeReplicationDecrease", func() {
 				Step(
 					fmt.Sprintf("validate successful repl decrease"),
 					func() {
-						time.Sleep(1 * time.Minute)
 						for _, v := range appVolumes {
 							newRepl, err := Inst().V.GetReplicationFactor(v)
 							Expect(err).NotTo(HaveOccurred())
 							Expect(newRepl).To(Equal(expReplMap[v]))
+							Inst().V.ValidateVolumeSetup(v)
 						}
 					})
-
-				ValidateContext(ctx)
-
 			}
 		})
 
@@ -104,7 +86,7 @@ var _ = Describe("VolumeReplicationDecrease", func() {
 	})
 })
 
-// Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
+// Volume replication increase
 var _ = Describe("VolumeReplicationIncrease", func() {
 	It("has to schedule apps and increase replication factor on all volumes of the apps", func() {
 		var err error
@@ -123,22 +105,24 @@ var _ = Describe("VolumeReplicationIncrease", func() {
 					Expect(appVolumes).NotTo(BeEmpty())
 				})
 
+				MaxRF := Inst().V.GetMaxReplicationFactor()
 				Step(
 					fmt.Sprintf("repl increase volume driver %s on app %s's volumes: %v",
 						Inst().V.String(), ctx.App.Key, appVolumes),
 					func() {
-						//IncreaseVolumeReplication(appVolumes)
 						for _, v := range appVolumes {
 							errExpected := false
 							currRep, err := Inst().V.GetReplicationFactor(v)
 							Expect(err).NotTo(HaveOccurred())
-							if currRep == 3 {
+							if currRep == MaxRF {
 								errExpected = true
 							}
-							expReplMap[v] = int64(math.Min(3, float64(currRep)+1))
+							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
 							err = Inst().V.SetReplicationFactor(v, currRep+1)
 							if !errExpected {
 								Expect(err).NotTo(HaveOccurred())
+							} else {
+								Expect(err).To(HaveOccurred())
 							}
 
 						}
@@ -146,15 +130,12 @@ var _ = Describe("VolumeReplicationIncrease", func() {
 				Step(
 					fmt.Sprintf("validate successful repl increase"),
 					func() {
-						time.Sleep(1 * time.Minute)
 						for _, v := range appVolumes {
 							newRepl, err := Inst().V.GetReplicationFactor(v)
 							Expect(err).NotTo(HaveOccurred())
 							Expect(newRepl).To(Equal(expReplMap[v]))
 						}
 					})
-
-				ValidateContext(ctx)
 
 			}
 		})

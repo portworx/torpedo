@@ -83,7 +83,7 @@ type ErrFailedToSetReplicationFactor struct {
 }
 
 func (e *ErrFailedToSetReplicationFactor) Error() string {
-	return fmt.Sprintf("Failed to get replication factor of the volume: %v due to err: %v", e.ID, e.Cause)
+	return fmt.Sprintf("Failed to set replication factor of the volume: %v due to err: %v", e.ID, e.Cause)
 }
 
 // ErrFailedToGetReplicationFactor error type for failing to get/query the current replication factor

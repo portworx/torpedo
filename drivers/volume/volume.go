@@ -74,12 +74,17 @@ type Driver interface {
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 
-	//GetVolumeReplicationFactor returns the current replication factor of the volume.
-	//TODO - Can we define the return type to be of the type *api.VolumeSpec.HaLevel?
+	// GetVolumeReplicationFactor returns the current replication factor of the volume.
 	GetReplicationFactor(vol *Volume) (int64, error)
 
-	//SetReplicationFactorTo sets the volume's replication factor to the passed param rf.
+	// SetReplicationFactor sets the volume's replication factor to the passed param rf.
 	SetReplicationFactor(vol *Volume, rf int64) error
+
+	// GetMaxReplicationFactor returns the max supported repl factor of a volume
+	GetMaxReplicationFactor() int64
+
+	// GetMinReplicationFactor returns the min supported repl factor of a volume
+	GetMinReplicationFactor() int64
 }
 
 var (

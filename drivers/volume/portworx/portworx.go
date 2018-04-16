@@ -691,7 +691,7 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 		if err != nil && err == volume.ErrEnoEnt {
 			return 0, false, volume.ErrEnoEnt
 		} else if err != nil {
-			return 0, false, err
+			return 0, true, err
 		}
 		if len(vols) == 1 {
 			return vols[0].Spec.HaLevel, false, nil
@@ -699,14 +699,14 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 		return 0, false, fmt.Errorf("Extra volumes with the same volume name/ID seen") //Shouldn't reach this line
 	}
 
-	tmp, err := task.DoRetryWithTimeout(t, defaultRetryInterval, defaultRetryInterval)
+	iReplFactor, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval)
 	if err != nil {
 		return 0, &ErrFailedToGetReplicationFactor{
 			ID:    name,
 			Cause: err.Error(),
 		}
 	}
-	repFactor, ok := tmp.(int64)
+	replFactor, ok := iReplFactor.(int64)
 	if !ok {
 		return 0, &ErrFailedToGetReplicationFactor{
 			ID:    name,
@@ -714,7 +714,7 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 		}
 	}
 
-	return repFactor, nil
+	return replFactor, nil
 }
 
 func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64) error {
@@ -724,32 +724,48 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 		if err != nil && err == volume.ErrEnoEnt {
 			return nil, false, volume.ErrEnoEnt
 		} else if err != nil {
-			return nil, false, err
-		}
-		spec := &api.VolumeSpec{
-			HaLevel:          int64(replFactor),
-			SnapshotInterval: math.MaxUint32,
-			ReplicaSet:       &api.ReplicaSet{},
+			return nil, true, err
 		}
 
-		logrus.Infof("Replication passed here is: %d", replFactor)
 		if len(vols) == 1 {
+			spec := &api.VolumeSpec{
+				HaLevel:          int64(replFactor),
+				SnapshotInterval: math.MaxUint32,
+				ReplicaSet:       &api.ReplicaSet{},
+			}
 			locator := &api.VolumeLocator{
 				Name:         vols[0].Locator.Name,
 				VolumeLabels: vols[0].Locator.VolumeLabels,
 			}
 			err = d.volDriver.Set(vols[0].Id, locator, spec)
-			logrus.Infof("Err after Set is %v", err)
 			if err != nil {
 				return nil, false, err
 			}
-			return nil, false, nil
+			quitFlag := false
+			wdt := time.After(validateReplicationUpdateTimeout)
+			for !quitFlag && !(areRepSetsFinal(vols[0], replFactor) && isClean(vols[0])) {
+				select {
+				case <-wdt:
+					quitFlag = true
+				default:
+					vols, err = d.volDriver.Inspect([]string{name})
+					if err != nil && err == volume.ErrEnoEnt {
+						return nil, false, volume.ErrEnoEnt
+					} else if err != nil {
+						return nil, true, err
+					}
+					time.Sleep(defaultRetryInterval)
+				}
+			}
+			if !(areRepSetsFinal(vols[0], replFactor) && isClean(vols[0])) {
+				return 0, false, fmt.Errorf("Volume didn't successfully change to replication factor of %d", replFactor)
+			}
+			return 0, false, nil
 		}
 		return 0, false, fmt.Errorf("Extra volumes with the same volume name/ID seen") //Shouldn't reach this line
 	}
 
-	_, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval)
-	if err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval); err != nil {
 		return &ErrFailedToSetReplicationFactor{
 			ID:    name,
 			Cause: err.Error(),
@@ -757,6 +773,32 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 	}
 
 	return nil
+}
+
+func (d *portworx) GetMaxReplicationFactor() int64 {
+	return 3
+}
+
+func (d *portworx) GetMinReplicationFactor() int64 {
+	return 1
+}
+
+func isClean(vol *api.Volume) bool {
+	for _, v := range vol.RuntimeState {
+		if v.GetRuntimeState()["RuntimeState"] != "clean" {
+			return false
+		}
+	}
+	return true
+}
+
+func areRepSetsFinal(vol *api.Volume, replFactor int64) bool {
+	for _, rs := range vol.ReplicaSets {
+		if int64(len(rs.GetNodes())) != replFactor {
+			return false
+		}
+	}
+	return true
 }
 
 func (d *portworx) setDriver() error {
