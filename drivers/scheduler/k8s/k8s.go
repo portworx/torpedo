@@ -495,67 +495,45 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 	return nil, nil
 }
 
-func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spec.AppSpec) ([]v1.Pod, error) {
+func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spec.AppSpec) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
-	var podList []v1.Pod
+	var pods interface{}
+	var err error
 	if obj, ok := spec.(*apps_api.Deployment); ok {
 		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-			if pods, err := k8sOps.GetDeploymentPods(obj); err != nil {
+			if pods, err = k8sOps.GetDeploymentPods(obj); err != nil {
 				logrus.Warnf("[%s] Error getting deployment pods. Err: %v", app.Key, err)
-			} else {
-				podList = append(podList, pods...)
 			}
 		}
-		t := func() (interface{}, bool, error) {
-			err := k8sOps.DeleteDeployment(obj.Name, obj.Namespace)
-			if err != nil {
-				return nil, true, err
-			}
-			return nil, false, nil
-		}
-
-		_, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+		err := k8sOps.DeleteDeployment(obj.Name, obj.Namespace)
 		if err != nil {
-			return podList, &scheduler.ErrFailedToDestroyApp{
+			return pods, &scheduler.ErrFailedToDestroyApp{
 				App:   app,
 				Cause: fmt.Sprintf("Failed to destroy Deployment: %v. Err: %v", obj.Name, err),
 			}
 		}
 	} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-			if pods, err := k8sOps.GetStatefulSetPods(obj); err != nil {
+			if pods, err = k8sOps.GetStatefulSetPods(obj); err != nil {
 				logrus.Warnf("[%v] Error getting statefulset pods. Err: %v", app.Key, err)
-			} else {
-				podList = append(podList, pods...)
 			}
 		}
-		t := func() (interface{}, bool, error) {
-			err := k8sOps.DeleteStatefulSet(obj.Name, obj.Namespace)
-			if err != nil {
-				return nil, true, err
-			}
-			return nil, false, nil
-		}
-
-		_, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+		err := k8sOps.DeleteStatefulSet(obj.Name, obj.Namespace)
 		if err != nil {
-			return podList, &scheduler.ErrFailedToDestroyApp{
+			return pods, &scheduler.ErrFailedToDestroyApp{
 				App:   app,
 				Cause: fmt.Sprintf("Failed to destroy stateful set: %v. Err: %v", obj.Name, err),
 			}
 		}
 	} else if obj, ok := spec.(*v1.Service); ok {
-		t := func() (interface{}, bool, error) {
-			err := k8sOps.DeleteService(obj.Name, obj.Namespace)
-			if err != nil {
-				return nil, true, err
+		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+			if pods, err = k8sOps.GetService(obj.Name, obj.Namespace); err != nil {
+				logrus.Warnf("[%v] Error getting service pods. Err: %v", app.Key, err)
 			}
-			return nil, false, nil
 		}
-
-		_, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+		err := k8sOps.DeleteService(obj.Name, obj.Namespace)
 		if err != nil {
-			return podList, &scheduler.ErrFailedToDestroyApp{
+			return pods, &scheduler.ErrFailedToDestroyApp{
 				App:   app,
 				Cause: fmt.Sprintf("Failed to destroy Service: %v. Err: %v", obj.Name, err),
 			}
@@ -563,7 +541,7 @@ func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 
 		logrus.Infof("[%v] Destroyed Service: %v", app.Key, obj.Name)
 	}
-	return podList, nil
+	return pods, nil
 
 }
 
@@ -618,22 +596,30 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 
 func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []v1.Pod
+	var pods interface{}
+	var err error
 	for _, spec := range ctx.App.SpecList {
-		pods, err := k.destroyCoreObject(spec, opts, ctx.App)
-		if err != nil {
-			return err
+		t := func() (interface{}, bool, error) {
+			currPods, err := k.destroyCoreObject(spec, opts, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return currPods, false, nil
 		}
-		podList = append(podList, pods...)
+		pods, err = task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
+		}
 	}
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-		if err := k.WaitForDestroy(ctx); err != nil {
+		if err = k.WaitForDestroy(ctx); err != nil {
 			return err
 		}
-		if err := k.waitForCleanup(ctx, podList); err != nil {
+		if err = k.waitForCleanup(ctx, podList); err != nil {
 			return err
 		}
 	} else if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-		if err := k.WaitForDestroy(ctx); err != nil {
+		if err = k.WaitForDestroy(ctx); err != nil {
 			return err
 		}
 	}
