@@ -74,18 +74,3 @@ spec:
     app: wordpress
     tier: frontend
   type: NodePort
----
-apiVersion: extensions/v1beta1
-kind: Ingress
-metadata:
-  name: wordpress-ingress
-  annotations:
-    kubernetes.io/ingress.class: traefik
-spec:
-  rules:
-  - host: wordpress.portworx.internal
-    http:
-      paths:
-      - backend:
-          serviceName: wordpress
-          servicePort: web
