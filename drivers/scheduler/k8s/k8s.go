@@ -606,7 +606,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return currPods, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
 		if err != nil {
 			podList = append(podList, pods.(v1.Pod))
 		}
