@@ -8,4 +8,4 @@ USER www-data
 
 COPY scripts/wp-install.sh .
 
-CMD bash ./wp-install.sh
+CMD ./wp-install.sh

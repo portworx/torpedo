@@ -8,10 +8,6 @@ function wait_for_mysql() {
     done
 }
 
-function wordpress_install() {
-    wp core install --url="${WORDPRESS_URL}" --title="TestWordPress" --admin_user="admin" --admin_password="correcthorsebatterystaple" --admin_email="noreply@portworx.com" --skip-email
-}
-
 cd /wordpress
 wait_for_mysql
 
@@ -24,8 +20,14 @@ wp config create --dbname=pwx --dbhost="${WORDPRESS_DB_HOST}" --dbuser="root" --
 echo ":: Generating wordpress database..."
 wp db create --dbuser=root --dbpass="${WORDPRESS_DB_PASSWORD}"
 
+echo ":: Allowing wordpress pods to come online"
+touch /wordpress/installed
+
+echo ":: Waiting for wordpress to come online..."
+while ! curl --connect-timeout 2 'wordpress:80' ; do sleep 1 ; done
+
 echo ":: Installing wordpress..."
-wordpress_install
+wp core install --url="${WORDPRESS_URL}" --title="TestWordPress" --admin_user="admin" --admin_password="correcthorsebatterystaple" --admin_email="noreply@portworx.com" --skip-email
 
 echo ":: Generating junk posts..."
 wp post generate --count=100
@@ -38,9 +40,6 @@ done
 
 echo ":: Installing theme..."
 wp theme install "${WORDPRESS_THEME}" --activate
-
-echo ":: Allowing wordpress pods to come online"
-touch /wordpress/installed
 
 echo ":: Sleeping forever. Exec into me for debugging"
 while true; do sleep 30; done;
