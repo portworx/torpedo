@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: installer
+  labels:
+    app: wordpress
+    tier: installer
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - image: samuelmyers/wp-cli:1.2.21
+    name: installer
+    env:
+    - name: WORDPRESS_URL
+      value: "https://wordpress.portworx.internal"
+    - name: WORDPRESS_THEME
+      value: "twentysixteen"
+    - name: WORDPRESS_PLUGINS
+      value: "bj-lazy-load,contact-form-7,woocommerce,wordpress-seo"
+    - name: WORDPRESS_DB_HOST
+      value: wordpress-mysql
+    - name: WORDPRESS_DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: mysql-pass
+          key: password
+    volumeMounts:
+    - name: wordpress-persistent-storage
+      mountPath: /wordpress
+  volumes:
+  - name: wordpress-persistent-storage
+    persistentVolumeClaim:
+      claimName: wp-pv-claim

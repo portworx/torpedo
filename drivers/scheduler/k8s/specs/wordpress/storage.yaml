@@ -9,6 +9,16 @@ parameters:
   shared: "true"
   io_profile: "cms"
 ---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: portworx-sc-db-repl3
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  io_profile: "db"
+  priority_io: "high"
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -20,6 +30,19 @@ metadata:
 spec:
   accessModes:
     - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc-1
+  annotations:
+    volume.beta.kubernetes.io/storage-class: portworx-sc-db-repl3
+spec:
+  accessModes:
+    - ReadWriteOnce
   resources:
     requests:
       storage: 1Gi
