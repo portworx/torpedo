@@ -899,7 +899,7 @@ func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 		if node.Contains(result, n) {
 			continue
 		}
-		if k8s_ops.Instance().IsPodReady(p) {
+		if k8s_ops.Instance().IsPodRunning(p) {
 			result = append(result, n)
 		}
 	}
