@@ -69,7 +69,6 @@ var _ = Describe("VolumeReplicationDecrease", func() {
 							newRepl, err := Inst().V.GetReplicationFactor(v)
 							Expect(err).NotTo(HaveOccurred())
 							Expect(newRepl).To(Equal(expReplMap[v]))
-							Inst().V.ValidateVolumeSetup(v)
 						}
 					})
 			}
