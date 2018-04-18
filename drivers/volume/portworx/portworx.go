@@ -2,6 +2,7 @@ package portworx
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"regexp"
 	"strings"
@@ -35,21 +36,22 @@ const (
 )
 
 const (
-	defaultRetryInterval        = 10 * time.Second
-	maintenanceOpTimeout        = 1 * time.Minute
-	maintenanceWaitTimeout      = 2 * time.Minute
-	inspectVolumeTimeout        = 10 * time.Second
-	inspectVolumeRetryInterval  = 2 * time.Second
-	validateDeleteVolumeTimeout = 3 * time.Minute
-	validateClusterStartTimeout = 2 * time.Minute
-	validateNodeStartTimeout    = 2 * time.Minute
-	validateNodeStopTimeout     = 2 * time.Minute
-	stopDriverTimeout           = 5 * time.Minute
-	crashDriverTimeout          = 2 * time.Minute
-	startDriverTimeout          = 2 * time.Minute
-	upgradeTimeout              = 10 * time.Minute
-	upgradeRetryInterval        = 30 * time.Second
-	waitVolDriverToCrash        = 1 * time.Minute
+	defaultRetryInterval             = 10 * time.Second
+	maintenanceOpTimeout             = 1 * time.Minute
+	maintenanceWaitTimeout           = 2 * time.Minute
+	inspectVolumeTimeout             = 10 * time.Second
+	inspectVolumeRetryInterval       = 2 * time.Second
+	validateDeleteVolumeTimeout      = 3 * time.Minute
+	validateReplicationUpdateTimeout = 10 * time.Minute
+	validateClusterStartTimeout      = 2 * time.Minute
+	validateNodeStartTimeout         = 2 * time.Minute
+	validateNodeStopTimeout          = 2 * time.Minute
+	stopDriverTimeout                = 5 * time.Minute
+	crashDriverTimeout               = 2 * time.Minute
+	startDriverTimeout               = 2 * time.Minute
+	upgradeTimeout                   = 10 * time.Minute
+	upgradeRetryInterval             = 30 * time.Second
+	waitVolDriverToCrash             = 1 * time.Minute
 )
 
 type portworx struct {
@@ -679,6 +681,81 @@ func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
 	if _, err := task.DoRetryWithTimeout(t, upgradeTimeout, upgradeRetryInterval); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error) {
+	name := d.schedOps.GetVolumeName(vol)
+	t := func() (interface{}, bool, error) {
+		vols, err := d.volDriver.Inspect([]string{name})
+		if err != nil && err == volume.ErrEnoEnt {
+			return 0, false, volume.ErrEnoEnt
+		} else if err != nil {
+			return 0, false, err
+		}
+		if len(vols) == 1 {
+			return vols[0].Spec.HaLevel, false, nil
+		}
+		return 0, false, fmt.Errorf("Extra volumes with the same volume name/ID seen") //Shouldn't reach this line
+	}
+
+	tmp, err := task.DoRetryWithTimeout(t, defaultRetryInterval, defaultRetryInterval)
+	if err != nil {
+		return 0, &ErrFailedToGetReplicationFactor{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+	repFactor, ok := tmp.(int64)
+	if !ok {
+		return 0, &ErrFailedToGetReplicationFactor{
+			ID:    name,
+			Cause: fmt.Sprintf("Replication factor is not of type int64"),
+		}
+	}
+
+	return repFactor, nil
+}
+
+func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64) error {
+	name := d.schedOps.GetVolumeName(vol)
+	t := func() (interface{}, bool, error) {
+		vols, err := d.volDriver.Inspect([]string{name})
+		if err != nil && err == volume.ErrEnoEnt {
+			return nil, false, volume.ErrEnoEnt
+		} else if err != nil {
+			return nil, false, err
+		}
+		spec := &api.VolumeSpec{
+			HaLevel:          int64(replFactor),
+			SnapshotInterval: math.MaxUint32,
+			ReplicaSet:       &api.ReplicaSet{},
+		}
+
+		logrus.Infof("Replication passed here is: %d", replFactor)
+		if len(vols) == 1 {
+			locator := &api.VolumeLocator{
+				Name:         vols[0].Locator.Name,
+				VolumeLabels: vols[0].Locator.VolumeLabels,
+			}
+			err = d.volDriver.Set(vols[0].Id, locator, spec)
+			logrus.Infof("Err after Set is %v", err)
+			if err != nil {
+				return nil, false, err
+			}
+			return nil, false, nil
+		}
+		return 0, false, fmt.Errorf("Extra volumes with the same volume name/ID seen") //Shouldn't reach this line
+	}
+
+	_, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval)
+	if err != nil {
+		return &ErrFailedToSetReplicationFactor{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+
 	return nil
 }
 
