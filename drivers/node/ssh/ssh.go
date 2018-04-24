@@ -208,11 +208,16 @@ func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.Connec
 	driveID = strings.TrimRight(driveID, "\n")
 	driveNameToFail = strings.Trim(driveNameToFail, "/")
 	devices := strings.Split(driveNameToFail, "/")
+	fmt.Printf("\nRK => Drive ID: %s", driveID)
+	fmt.Printf("\nRK => Drive to fail: %s", driveNameToFail)
+	fmt.Printf("\nRK => Devices: %s", devices)
 
 	// Disable the block device, so that it returns IO errors
 	yankCommand := "echo 1 > /sys/block/" + devices[len(devices)-1] + "/device/delete"
+	fmt.Printf("\nRK => Yank Command: %s", yankCommand)
 
-	_, err = s.doCmd(addr, yankCommand, false)
+	rkop, err := s.doCmd(addr, yankCommand, false)
+	fmt.Printf("\nRK => Output of Yank: %s", rkop)
 	if err != nil {
 		return "", &node.ErrFailedToYankDrive{
 			Node:  n,
@@ -233,6 +238,7 @@ func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRe
 
 	// Enable the drive by rescaning
 	recoverCmd := "echo \" - - -\" > /sys/class/scsi_host/host" + driveUUIDToRecover + "/scan"
+	fmt.Printf("\nRK => Recover Command: %s", recoverCmd)
 	_, err = s.doCmd(addr, recoverCmd, false)
 	if err != nil {
 		return &node.ErrFailedToRecoverDrive{
