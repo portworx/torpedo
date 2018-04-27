@@ -96,7 +96,7 @@ type Driver interface {
 
 	// YankDrive simulates a failure on the provided drive on the given node.
 	// It returns the UUID of the drive which can be used to recover it back
-	YankDrive(node Node, driveNameToFail string, options ConnectionOpts) (string, error)
+	YankDrive(node Node, driveNameToFail string, options ConnectionOpts) (string, string, error)
 
 	// RecoverDrive recovers the given drive from failure on the given node.
 	RecoverDrive(node Node, driveNameToRecover string, driveUUID string, options ConnectionOpts) error
@@ -175,8 +175,8 @@ func (d *notSupportedDriver) Systemctl(node Node, service string, options System
 	}
 }
 
-func (d *notSupportedDriver) YankDrive(node Node, driveToFail string, options ConnectionOpts) (string, error) {
-	return "", &errors.ErrNotSupported{
+func (d *notSupportedDriver) YankDrive(node Node, driveToFail string, options ConnectionOpts) (string, string, error) {
+	return "", "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "YankDrive()",
 	}

@@ -184,22 +184,40 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	return nil
 }
 
-func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.ConnectionOpts) (string, error) {
+func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.ConnectionOpts) (string, string, error) {
 	// Currently only works for iSCSI drives
 	// TODO: Make it generic (Add support dev mapper devices)
 	addr, err := s.getAddrToConnect(n, options)
 	if err != nil {
-		return "", &node.ErrFailedToYankDrive{
+		return "", "", &node.ErrFailedToYankDrive{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
 		}
 	}
 
 	// Get the HBA number for the drive which would be then used to recover the drive
-	hbaCmd := "lsscsi | grep -n " + driveNameToFail + "| awk -F\":\" '{print $2}'" + "| awk -F\"[\" '{print $2}'"
+	// Check the OS to get the appropriate HBA ID from the lsscsi command
+	osCmd := "cat /etc/redhat-release"
+	var hbaCmd string
+	osOp, _ := s.doCmd(addr, osCmd, false)
+	if osOp != "" { //Centos
+		hbaCmd = "lsscsi | grep -n " + driveNameToFail + "| awk -F\":\" '{print $5}'" + "| awk -F\"]\" '{print $1}'"
+	} else { //Ubuntu
+		hbaCmd = "lsscsi | grep -n " + driveNameToFail + "| awk -F\":\" '{print $4}'"
+	}
+	//Get the scsi bus ID
+	busIDCmd := "lsscsi | grep " + driveNameToFail + " | awk -F\":\" '{print $1}'" + "| awk -F\"[\" '{print $2}'"
+	busID, err := s.doCmd(addr, busIDCmd, false)
+	if err != nil {
+		return "", "", &node.ErrFailedToYankDrive{
+			Node:  n,
+			Cause: fmt.Sprintf("unable to find host bus attribute of the drive %v due to: %v", driveNameToFail, err),
+		}
+	}
+
 	driveID, err := s.doCmd(addr, hbaCmd, false)
 	if err != nil {
-		return "", &node.ErrFailedToYankDrive{
+		return "", "", &node.ErrFailedToYankDrive{
 			Node:  n,
 			Cause: fmt.Sprintf("unable to find HBA attribute of the drive %v due to: %v", driveNameToFail, err),
 		}
@@ -208,23 +226,19 @@ func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.Connec
 	driveID = strings.TrimRight(driveID, "\n")
 	driveNameToFail = strings.Trim(driveNameToFail, "/")
 	devices := strings.Split(driveNameToFail, "/")
-	fmt.Printf("\nRK => Drive ID: %s", driveID)
-	fmt.Printf("\nRK => Drive to fail: %s", driveNameToFail)
-	fmt.Printf("\nRK => Devices: %s", devices)
+	bus := strings.TrimRight(busID, "\n")
 
 	// Disable the block device, so that it returns IO errors
 	yankCommand := "echo 1 > /sys/block/" + devices[len(devices)-1] + "/device/delete"
-	fmt.Printf("\nRK => Yank Command: %s", yankCommand)
 
-	rkop, err := s.doCmd(addr, yankCommand, false)
-	fmt.Printf("\nRK => Output of Yank: %s", rkop)
+	_, err = s.doCmd(addr, yankCommand, false)
 	if err != nil {
-		return "", &node.ErrFailedToYankDrive{
+		return "", "", &node.ErrFailedToYankDrive{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to yank drive %v due to: %v", driveNameToFail, err),
 		}
 	}
-	return driveID, nil
+	return driveID, bus, nil
 }
 
 func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRecover string, options node.ConnectionOpts) error {
@@ -237,8 +251,7 @@ func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRe
 	}
 
 	// Enable the drive by rescaning
-	recoverCmd := "echo \" - - -\" > /sys/class/scsi_host/host" + driveUUIDToRecover + "/scan"
-	fmt.Printf("\nRK => Recover Command: %s", recoverCmd)
+	recoverCmd := "echo \" - - -\" > /sys/class/scsi_host/host" + driveUUIDToRecover + "\"/\"scan"
 	_, err = s.doCmd(addr, recoverCmd, false)
 	if err != nil {
 		return &node.ErrFailedToRecoverDrive{

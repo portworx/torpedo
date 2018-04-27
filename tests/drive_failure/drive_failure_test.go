@@ -52,13 +52,15 @@ var _ = Describe("{DriveFailure}", func() {
 				})
 
 				driveInfoMap := make(map[string]string)
+				busInfoMap := make(map[string]string)
 				Step(fmt.Sprintf("induce a failure on all drives on the node %v", nodeWithDrive), func() {
 					for _, driveToFail := range drives {
-						driveID, err := Inst().N.YankDrive(nodeWithDrive, driveToFail, node.ConnectionOpts{
+						driveID, busID, err := Inst().N.YankDrive(nodeWithDrive, driveToFail, node.ConnectionOpts{
 							Timeout:         1 * time.Minute,
 							TimeBeforeRetry: 5 * time.Second,
 						})
 						driveInfoMap[driveToFail] = driveID
+						busInfoMap[driveToFail] = busID
 						Expect(err).NotTo(HaveOccurred())
 					}
 					Step("wait for the drives to fail", func() {
@@ -73,7 +75,7 @@ var _ = Describe("{DriveFailure}", func() {
 
 				Step(fmt.Sprintf("recover all drives and the storage driver"), func() {
 					for _, driveToFail := range drives {
-						err = Inst().N.RecoverDrive(nodeWithDrive, driveToFail, driveInfoMap[driveToFail], node.ConnectionOpts{
+						err = Inst().N.RecoverDrive(nodeWithDrive, driveToFail, busInfoMap[driveToFail], node.ConnectionOpts{
 							Timeout:         2 * time.Minute,
 							TimeBeforeRetry: 5 * time.Second,
 						})
