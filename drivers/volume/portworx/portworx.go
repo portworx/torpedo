@@ -216,7 +216,6 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 
 	t := func() (interface{}, bool, error) {
 		if err := d.maintenanceOp(n, enterMaintenancePath); err != nil {
-			fmt.Printf("RK => Maint mode: Err %v", err)
 			return nil, true, err
 		}
 		return nil, false, nil
@@ -244,7 +243,6 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 	}
 	t = func() (interface{}, bool, error) {
 		if err := d.maintenanceOp(n, exitMaintenancePath); err != nil {
-			fmt.Printf("RK => Maint mode exit: Err %v", err)
 			return nil, true, err
 		}
 		return nil, false, nil
@@ -259,9 +257,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		if err != nil {
 			return nil, true, err
 		}
-		fmt.Printf("\nRK => Post exit Maintenance API Status: %v", apiNode.Status)
 		if apiNode.Status == api.Status_STATUS_OK {
-			fmt.Printf("RK => Maint mode exit success")
 			return nil, false, nil
 		}
 		return nil, true, fmt.Errorf("Node %v is not up after exiting  Maintenance mode", n.Name)
