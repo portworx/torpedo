@@ -15,9 +15,15 @@ function log() {
 wait_for_mysql
 
 log ":: Downloading wordpress to temp directory..."
+mkdir -p /tmp/wordpress
+cd /tmp/wordpress
 wp core download
 
-echo ":: Generating wordpress config..."
+log ":: Moving wordpress to PX shared volume..."
+mv /tmp/wordpress/* /wordpress/
+cd /wordpress
+
+log ":: Generating wordpress config..."
 wp config create --dbname=pwx --dbhost="${WORDPRESS_DB_HOST}" --dbuser="root" --dbpass="${WORDPRESS_DB_PASSWORD}" --force
 
 log ":: Generating wordpress database..."
