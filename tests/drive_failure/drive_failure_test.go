@@ -14,6 +14,7 @@ import (
 
 const (
 	defaultTimeout       = 1 * time.Minute
+	driveFailTimeout     = 2 * time.Minute
 	defaultRetryInterval = 5 * time.Second
 )
 
@@ -79,7 +80,7 @@ var _ = Describe("{DriveFailure}", func() {
 				Step(fmt.Sprintf("recover all drives and the storage driver"), func() {
 					for _, driveToFail := range drives {
 						err = Inst().N.RecoverDrive(nodeWithDrive, driveToFail, busInfoMap[driveToFail], node.ConnectionOpts{
-							Timeout:         2 * time.Minute,
+							Timeout:         driveFailTimeout,
 							TimeBeforeRetry: 5 * time.Second,
 						})
 						Expect(err).NotTo(HaveOccurred())
