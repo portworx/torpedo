@@ -12,6 +12,11 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
+const (
+	defaultTimeout       = 1 * time.Minute
+	defaultRetryInterval = 5 * time.Second
+)
+
 func TestDriveFailure(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Torpedo: DriveFailure")
@@ -51,15 +56,13 @@ var _ = Describe("{DriveFailure}", func() {
 					Expect(drives).NotTo(BeEmpty())
 				})
 
-				driveInfoMap := make(map[string]string)
 				busInfoMap := make(map[string]string)
 				Step(fmt.Sprintf("induce a failure on all drives on the node %v", nodeWithDrive), func() {
 					for _, driveToFail := range drives {
-						driveID, busID, err := Inst().N.YankDrive(nodeWithDrive, driveToFail, node.ConnectionOpts{
-							Timeout:         1 * time.Minute,
-							TimeBeforeRetry: 5 * time.Second,
+						busID, err := Inst().N.YankDrive(nodeWithDrive, driveToFail, node.ConnectionOpts{
+							Timeout:         defaultTimeout,
+							TimeBeforeRetry: defaultRetryInterval,
 						})
-						driveInfoMap[driveToFail] = driveID
 						busInfoMap[driveToFail] = busID
 						Expect(err).NotTo(HaveOccurred())
 					}

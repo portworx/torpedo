@@ -184,46 +184,27 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	return nil
 }
 
-func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.ConnectionOpts) (string, string, error) {
+func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.ConnectionOpts) (string, error) {
 	// Currently only works for iSCSI drives
 	// TODO: Make it generic (Add support dev mapper devices)
 	addr, err := s.getAddrToConnect(n, options)
 	if err != nil {
-		return "", "", &node.ErrFailedToYankDrive{
+		return "", &node.ErrFailedToYankDrive{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
 		}
 	}
 
-	// Get the HBA number for the drive which would be then used to recover the drive
-	// Check the OS to get the appropriate HBA ID from the lsscsi command
-	osCmd := "cat /etc/redhat-release"
-	var hbaCmd string
-	osOp, _ := s.doCmd(addr, osCmd, false)
-	if osOp != "" { //Centos
-		hbaCmd = "lsscsi | grep -n " + driveNameToFail + "| awk -F\":\" '{print $5}'" + "| awk -F\"]\" '{print $1}'"
-	} else { //Ubuntu
-		hbaCmd = "lsscsi | grep -n " + driveNameToFail + "| awk -F\":\" '{print $4}'"
-	}
 	//Get the scsi bus ID
 	busIDCmd := "lsscsi | grep " + driveNameToFail + " | awk -F\":\" '{print $1}'" + "| awk -F\"[\" '{print $2}'"
 	busID, err := s.doCmd(addr, busIDCmd, false)
 	if err != nil {
-		return "", "", &node.ErrFailedToYankDrive{
+		return "", &node.ErrFailedToYankDrive{
 			Node:  n,
 			Cause: fmt.Sprintf("unable to find host bus attribute of the drive %v due to: %v", driveNameToFail, err),
 		}
 	}
 
-	driveID, err := s.doCmd(addr, hbaCmd, false)
-	if err != nil {
-		return "", "", &node.ErrFailedToYankDrive{
-			Node:  n,
-			Cause: fmt.Sprintf("unable to find HBA attribute of the drive %v due to: %v", driveNameToFail, err),
-		}
-	}
-
-	driveID = strings.TrimRight(driveID, "\n")
 	driveNameToFail = strings.Trim(driveNameToFail, "/")
 	devices := strings.Split(driveNameToFail, "/")
 	bus := strings.TrimRight(busID, "\n")
@@ -233,12 +214,12 @@ func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.Connec
 
 	_, err = s.doCmd(addr, yankCommand, false)
 	if err != nil {
-		return "", "", &node.ErrFailedToYankDrive{
+		return "", &node.ErrFailedToYankDrive{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to yank drive %v due to: %v", driveNameToFail, err),
 		}
 	}
-	return driveID, bus, nil
+	return bus, nil
 }
 
 func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRecover string, options node.ConnectionOpts) error {
