@@ -81,7 +81,7 @@ var _ = Describe("{DriveFailure}", func() {
 					for _, driveToFail := range drives {
 						err = Inst().N.RecoverDrive(nodeWithDrive, driveToFail, busInfoMap[driveToFail], node.ConnectionOpts{
 							Timeout:         driveFailTimeout,
-							TimeBeforeRetry: 5 * time.Second,
+							TimeBeforeRetry: defaultRetryInterval,
 						})
 						Expect(err).NotTo(HaveOccurred())
 					}
