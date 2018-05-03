@@ -769,7 +769,8 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				}
 			}
 
-			result[snap.Metadata.Name] = map[string]string{
+			// XXX: Get this from label once stork sets it
+			result["snapshot-"+string(snap.Metadata.UID)] = map[string]string{
 				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
 			}
 
