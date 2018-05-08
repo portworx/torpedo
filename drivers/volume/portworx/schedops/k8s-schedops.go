@@ -451,6 +451,18 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 	return nil
 }
 
+//Method to validate if Portworx pod is up and running
+func (k *k8sSchedOps) IsPXPodRunningOnNode(n node.Node) bool {
+	pxPods, _ := k8s.Instance().GetPodsByNode(n.Name, "kube-system")
+	for _, pod := range pxPods.Items {
+		if strings.Contains(pod.Name, "portworx") && pod.Status.Phase != "Running" {
+			fmt.Printf("\nError on %s Pod: %v is not up yet. Pod Status: %v\n", pod.Status.PodIP, pod.Name, pod.Status.Phase)
+			return false
+		}
+	}
+	return true
+}
+
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that
 // have a PVC. The values in the map are the mount paths of the PVC
 func getContainerPVCMountMap(pod corev1.Pod) map[string]string {

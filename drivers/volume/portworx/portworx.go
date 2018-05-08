@@ -624,6 +624,12 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 		return err
 	}
 
+	//Check if PX pod is up
+	if d.schedOps.IsPXPodRunningOnNode(n) != true {
+		return fmt.Errorf("PX pod is not up on node: %s", n.Name)
+	}
+	fmt.Printf("\nPX pod is up on node: %s", n.Name)
+
 	return nil
 }
 
