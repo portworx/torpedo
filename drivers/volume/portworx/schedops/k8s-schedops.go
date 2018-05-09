@@ -459,7 +459,7 @@ func (k *k8sSchedOps) IsPXAppRunningOnNode(n node.Node) bool {
 		return false
 	}
 	for _, pod := range pxPods.Items {
-		if strings.HasPrefix(pod.Name, "portworx") && pod.Status.Phase != "Running" {
+		if pod.Labels["name"] == PXDaemonSet && !k8s.Instance().IsPodReady(pod) {
 			logrus.Errorf("Error on %s Pod: %v is not up yet. Pod Status: %v", pod.Status.PodIP, pod.Name, pod.Status.Phase)
 			return false
 		}
