@@ -451,7 +451,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 	return nil
 }
 
-//Method to validate if Portworx pod is up and running
+// Method to validate if Portworx pod is up and running
 func (k *k8sSchedOps) IsPXAppRunningOnNode(n node.Node) bool {
 	pxPods, err := k8s.Instance().GetPodsByNode(n.Name, PXNamespace)
 	if err != nil {
@@ -460,7 +460,7 @@ func (k *k8sSchedOps) IsPXAppRunningOnNode(n node.Node) bool {
 	}
 	for _, pod := range pxPods.Items {
 		if strings.HasPrefix(pod.Name, "portworx") && pod.Status.Phase != "Running" {
-			logrus.Errorf("\nError on %s Pod: %v is not up yet. Pod Status: %v\n", pod.Status.PodIP, pod.Name, pod.Status.Phase)
+			logrus.Errorf("Error on %s Pod: %v is not up yet. Pod Status: %v", pod.Status.PodIP, pod.Name, pod.Status.Phase)
 			return false
 		}
 	}

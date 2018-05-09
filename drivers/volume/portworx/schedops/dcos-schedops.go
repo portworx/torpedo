@@ -57,7 +57,7 @@ func (d *dcosSchedOps) UpgradePortworx(image, tag string) error {
 }
 
 func (d *dcosSchedOps) IsPXAppRunningOnNode(n node.Node) bool {
-	// TOOD: Implement this method
+	// TODO: Implement this method
 	return true
 }
 
