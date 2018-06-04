@@ -18,19 +18,19 @@ import:
   subpackages:
   - ssh
 - package: k8s.io/kubernetes
-  version: v1.8.2
+  version: v1.7.5
   subpackages:
   - pkg/api/v1/helper
 - package: k8s.io/apimachinery
-  version: kubernetes-1.8.2
+  version: kubernetes-1.7.5
   subpackages:
   - pkg/runtime
 - package: k8s.io/api
-  version: kubernetes-1.8.2
+  version: kubernetes-1.7.5
 - package: k8s.io/client-go
   version: v5.0.1
 - package: github.com/portworx/sched-ops
-  version: master
+  version: 1.7 
   repo: git@github.com:portworx/sched-ops.git
 - package: github.com/aws/aws-sdk-go
   version: f9a6880d84e16e2a37055793e17164a228d637f4
