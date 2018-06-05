@@ -30,7 +30,7 @@ type Driver interface {
 	// UpgradePortworx upgrades portworx to the given docker image and tag
 	UpgradePortworx(image, tag string) error
 	//IsPXPodRunningOnNode returns true if PX pod is up on that node, else returns false
-	IsPXAppRunningOnNode(n node.Node) bool
+	IsPXReadyOnNode(n node.Node) bool
 }
 
 var (

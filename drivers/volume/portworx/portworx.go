@@ -626,10 +626,10 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 
 	// Check if PX pod is up
 	t = func() (interface{}, bool, error) {
-		if !d.schedOps.IsPXAppRunningOnNode(n) {
+		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: fmt.Sprintf("PX is not running on %s after %v", n.Name, validatePXStartTimeout),
+				Cause: fmt.Sprintf("PX is not ready on %s after %v", n.Name, validatePXStartTimeout),
 			}
 		}
 		return "", false, nil
