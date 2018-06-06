@@ -15,7 +15,7 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1 "k8s.io/client-go/pkg/api"
+	corev1 "k8s.io/client-go/pkg/api/v1"
 	batch_v1 "k8s.io/client-go/pkg/apis/batch/v1"
 	rbacv1 "k8s.io/client-go/pkg/apis/rbac/v1beta1"
 )
@@ -389,14 +389,12 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 	}
 
 	// create a talisman job
-	var valOne int32 = 1
 	job := &batch_v1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "talisman",
 			Namespace: PXNamespace,
 		},
 		Spec: batch_v1.JobSpec{
-			BackoffLimit: &valOne,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					ServiceAccountName: talismanServiceAccount,

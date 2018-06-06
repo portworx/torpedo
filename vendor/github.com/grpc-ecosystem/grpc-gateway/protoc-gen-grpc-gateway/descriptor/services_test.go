@@ -1097,7 +1097,7 @@ func TestResolveFieldPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("reg.LookupFile(%q) failed with %v; want success; on file=%s", file.GetName(), err, spec.src)
 		}
-		_, err = reg.resolveFiledPath(f.Messages[0], spec.path)
+		_, err = reg.resolveFieldPath(f.Messages[0], spec.path)
 		if got, want := err != nil, spec.wantErr; got != want {
 			if want {
 				t.Errorf("reg.resolveFiledPath(%q, %q) succeeded; want an error", f.Messages[0].GetName(), spec.path)
@@ -1105,5 +1105,106 @@ func TestResolveFieldPath(t *testing.T) {
 			}
 			t.Errorf("reg.resolveFiledPath(%q, %q) failed with %v; want success", f.Messages[0].GetName(), spec.path, err)
 		}
+	}
+}
+
+func TestExtractServicesWithDeleteBody(t *testing.T) {
+	for _, spec := range []struct {
+		allowDeleteBody bool
+		expectErr       bool
+		target          string
+		srcs            []string
+	}{
+		// body for DELETE, but registry configured to allow it
+		{
+			allowDeleteBody: true,
+			expectErr:       false,
+			target:          "path/to/example.proto",
+			srcs: []string{
+				`
+					name: "path/to/example.proto",
+					package: "example"
+					message_type <
+						name: "StringMessage"
+						field <
+							name: "string"
+							number: 1
+							label: LABEL_OPTIONAL
+							type: TYPE_STRING
+						>
+					>
+					service <
+						name: "ExampleService"
+						method <
+							name: "RemoveResource"
+							input_type: "StringMessage"
+							output_type: "StringMessage"
+							options <
+								[google.api.http] <
+									delete: "/v1/example/resource"
+									body: "string"
+								>
+							>
+						>
+					>
+				`,
+			},
+		},
+		// body for DELETE, registry configured not to allow it
+		{
+			allowDeleteBody: false,
+			expectErr:       true,
+			target:          "path/to/example.proto",
+			srcs: []string{
+				`
+					name: "path/to/example.proto",
+					package: "example"
+					message_type <
+						name: "StringMessage"
+						field <
+							name: "string"
+							number: 1
+							label: LABEL_OPTIONAL
+							type: TYPE_STRING
+						>
+					>
+					service <
+						name: "ExampleService"
+						method <
+							name: "RemoveResource"
+							input_type: "StringMessage"
+							output_type: "StringMessage"
+							options <
+								[google.api.http] <
+									delete: "/v1/example/resource"
+									body: "string"
+								>
+							>
+						>
+					>
+				`,
+			},
+		},
+	} {
+		reg := NewRegistry()
+		reg.SetAllowDeleteBody(spec.allowDeleteBody)
+
+		var fds []*descriptor.FileDescriptorProto
+		for _, src := range spec.srcs {
+			var fd descriptor.FileDescriptorProto
+			if err := proto.UnmarshalText(src, &fd); err != nil {
+				t.Fatalf("proto.UnmarshalText(%s, &fd) failed with %v; want success", src, err)
+			}
+			reg.loadFile(&fd)
+			fds = append(fds, &fd)
+		}
+		err := reg.loadServices(reg.files[spec.target])
+		if spec.expectErr && err == nil {
+			t.Errorf("loadServices(%q) succeeded; want an error; allowDeleteBody=%v, files=%v", spec.target, spec.allowDeleteBody, spec.srcs)
+		}
+		if !spec.expectErr && err != nil {
+			t.Errorf("loadServices(%q) failed; do not want an error; allowDeleteBody=%v, files=%v", spec.target, spec.allowDeleteBody, spec.srcs)
+		}
+		t.Log(err)
 	}
 }

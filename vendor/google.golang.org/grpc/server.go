@@ -116,15 +116,35 @@ type options struct {
 	keepalivePolicy       keepalive.EnforcementPolicy
 	initialWindowSize     int32
 	initialConnWindowSize int32
+	writeBufferSize       int
+	readBufferSize        int
+	connectionTimeout     time.Duration
 }
 
 var defaultServerOptions = options{
 	maxReceiveMessageSize: defaultServerMaxReceiveMessageSize,
 	maxSendMessageSize:    defaultServerMaxSendMessageSize,
+	connectionTimeout:     120 * time.Second,
 }
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption func(*options)
+
+// WriteBufferSize lets you set the size of write buffer, this determines how much data can be batched
+// before doing a write on the wire.
+func WriteBufferSize(s int) ServerOption {
+	return func(o *options) {
+		o.writeBufferSize = s
+	}
+}
+
+// ReadBufferSize lets you set the size of read buffer, this determines how much data can be read at most
+// for one read syscall.
+func ReadBufferSize(s int) ServerOption {
+	return func(o *options) {
+		o.readBufferSize = s
+	}
+}
 
 // InitialWindowSize returns a ServerOption that sets window size for stream.
 // The lower bound for window size is 64K and any value smaller than that will be ignored.
@@ -260,7 +280,7 @@ func StatsHandler(h stats.Handler) ServerOption {
 // handler that will be invoked instead of returning the "unimplemented" gRPC
 // error whenever a request is received for an unregistered service or method.
 // The handling function has full access to the Context of the request and the
-// stream, and the invocation passes through interceptors.
+// stream, and the invocation bypasses interceptors.
 func UnknownServiceHandler(streamHandler StreamHandler) ServerOption {
 	return func(o *options) {
 		o.unknownStreamDesc = &StreamDesc{
@@ -270,6 +290,16 @@ func UnknownServiceHandler(streamHandler StreamHandler) ServerOption {
 			ClientStreams: true,
 			ServerStreams: true,
 		}
+	}
+}
+
+// ConnectionTimeout returns a ServerOption that sets the timeout for
+// connection establishment (up to and including HTTP/2 handshaking) for all
+// new connections.  If this is not set, the default is 120 seconds.  A zero or
+// negative value will result in an immediate timeout.
+func ConnectionTimeout(d time.Duration) ServerOption {
+	return func(o *options) {
+		o.connectionTimeout = d
 	}
 }
 
@@ -481,16 +511,18 @@ func (s *Server) Serve(lis net.Listener) error {
 // handleRawConn is run in its own goroutine and handles a just-accepted
 // connection that has not had any I/O performed on it yet.
 func (s *Server) handleRawConn(rawConn net.Conn) {
+	rawConn.SetDeadline(time.Now().Add(s.opts.connectionTimeout))
 	conn, authInfo, err := s.useTransportAuthenticator(rawConn)
 	if err != nil {
 		s.mu.Lock()
 		s.errorf("ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
 		s.mu.Unlock()
 		grpclog.Warningf("grpc: Server.Serve failed to complete security handshake from %q: %v", rawConn.RemoteAddr(), err)
-		// If serverHandShake returns ErrConnDispatched, keep rawConn open.
+		// If serverHandshake returns ErrConnDispatched, keep rawConn open.
 		if err != credentials.ErrConnDispatched {
 			rawConn.Close()
 		}
+		rawConn.SetDeadline(time.Time{})
 		return
 	}
 
@@ -503,18 +535,21 @@ func (s *Server) handleRawConn(rawConn net.Conn) {
 	s.mu.Unlock()
 
 	if s.opts.useHandlerImpl {
+		rawConn.SetDeadline(time.Time{})
 		s.serveUsingHandler(conn)
 	} else {
-		s.serveHTTP2Transport(conn, authInfo)
+		st := s.newHTTP2Transport(conn, authInfo)
+		if st == nil {
+			return
+		}
+		rawConn.SetDeadline(time.Time{})
+		s.serveStreams(st)
 	}
 }
 
-// serveHTTP2Transport sets up a http/2 transport (using the
-// gRPC http2 server transport in transport/http2_server.go) and
-// serves streams on it.
-// This is run in its own goroutine (it does network I/O in
-// transport.NewServerTransport).
-func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) {
+// newHTTP2Transport sets up a http/2 transport (using the
+// gRPC http2 server transport in transport/http2_server.go).
+func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) transport.ServerTransport {
 	config := &transport.ServerConfig{
 		MaxStreams:            s.opts.maxConcurrentStreams,
 		AuthInfo:              authInfo,
@@ -524,6 +559,8 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 		KeepalivePolicy:       s.opts.keepalivePolicy,
 		InitialWindowSize:     s.opts.initialWindowSize,
 		InitialConnWindowSize: s.opts.initialConnWindowSize,
+		WriteBufferSize:       s.opts.writeBufferSize,
+		ReadBufferSize:        s.opts.readBufferSize,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {
@@ -532,13 +569,13 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 		s.mu.Unlock()
 		c.Close()
 		grpclog.Warningln("grpc: Server.Serve failed to create ServerTransport: ", err)
-		return
+		return nil
 	}
 	if !s.addConn(st) {
 		st.Close()
-		return
+		return nil
 	}
-	s.serveStreams(st)
+	return st
 }
 
 func (s *Server) serveStreams(st transport.ServerTransport) {
@@ -890,9 +927,6 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,
 		statsHandler:          sh,
-	}
-	if ss.cp != nil {
-		ss.cbuf = new(bytes.Buffer)
 	}
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)

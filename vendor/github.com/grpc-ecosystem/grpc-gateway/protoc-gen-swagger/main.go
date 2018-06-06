@@ -2,38 +2,26 @@ package main
 
 import (
 	"flag"
-	"io"
-	"io/ioutil"
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
+	"github.com/grpc-ecosystem/grpc-gateway/codegenerator"
 	"github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/descriptor"
 	"github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger/genswagger"
 )
 
 var (
-	importPrefix = flag.String("import_prefix", "", "prefix to be added to go package paths for imported proto files")
-	file         = flag.String("file", "stdin", "where to load data from")
+	importPrefix         = flag.String("import_prefix", "", "prefix to be added to go package paths for imported proto files")
+	file                 = flag.String("file", "-", "where to load data from")
+	allowDeleteBody      = flag.Bool("allow_delete_body", false, "unless set, HTTP DELETE methods may not have a body")
+	grpcAPIConfiguration = flag.String("grpc_api_configuration", "", "path to gRPC API Configuration in YAML format")
+	allowMerge           = flag.Bool("allow_merge", false, "if set, generation one swagger file out of multiple protos")
+	mergeFileName        = flag.String("merge_file_name", "apidocs", "target swagger file name prefix after merge")
 )
-
-func parseReq(r io.Reader) (*plugin.CodeGeneratorRequest, error) {
-	glog.V(1).Info("Parsing code generator request")
-	input, err := ioutil.ReadAll(r)
-	if err != nil {
-		glog.Errorf("Failed to read code generator request: %v", err)
-		return nil, err
-	}
-	req := new(plugin.CodeGeneratorRequest)
-	if err = proto.Unmarshal(input, req); err != nil {
-		glog.Errorf("Failed to unmarshal code generator request: %v", err)
-		return nil, err
-	}
-	glog.V(1).Info("Parsed code generator request")
-	return req, nil
-}
 
 func main() {
 	flag.Parse()
@@ -43,36 +31,44 @@ func main() {
 
 	glog.V(1).Info("Processing code generator request")
 	f := os.Stdin
-	if *file != "stdin" {
-		f, _ = os.Open("input.txt")
+	if *file != "-" {
+		var err error
+		f, err = os.Open(*file)
+		if err != nil {
+			glog.Fatal(err)
+		}
 	}
-	req, err := parseReq(f)
+	glog.V(1).Info("Parsing code generator request")
+	req, err := codegenerator.ParseRequest(f)
 	if err != nil {
 		glog.Fatal(err)
 	}
+	glog.V(1).Info("Parsed code generator request")
+	pkgMap := make(map[string]string)
 	if req.Parameter != nil {
-		for _, p := range strings.Split(req.GetParameter(), ",") {
-			spec := strings.SplitN(p, "=", 2)
-			if len(spec) == 1 {
-				if err := flag.CommandLine.Set(spec[0], ""); err != nil {
-					glog.Fatalf("Cannot set flag %s", p)
-				}
-				continue
-			}
-			name, value := spec[0], spec[1]
-			if strings.HasPrefix(name, "M") {
-				reg.AddPkgMap(name[1:], value)
-				continue
-			}
-			if err := flag.CommandLine.Set(name, value); err != nil {
-				glog.Fatalf("Cannot set flag %s", p)
-			}
+		err := parseReqParam(req.GetParameter(), flag.CommandLine, pkgMap)
+		if err != nil {
+			glog.Fatalf("Error parsing flags: %v", err)
+		}
+	}
+
+	reg.SetPrefix(*importPrefix)
+	reg.SetAllowDeleteBody(*allowDeleteBody)
+	reg.SetAllowMerge(*allowMerge)
+	reg.SetMergeFileName(*mergeFileName)
+	for k, v := range pkgMap {
+		reg.AddPkgMap(k, v)
+	}
+
+	if *grpcAPIConfiguration != "" {
+		if err := reg.LoadGrpcAPIServiceFromYAML(*grpcAPIConfiguration); err != nil {
+			emitError(err)
+			return
 		}
 	}
 
 	g := genswagger.New(reg)
 
-	reg.SetPrefix(*importPrefix)
 	if err := reg.Load(req); err != nil {
 		emitError(err)
 		return
@@ -112,4 +108,46 @@ func emitResp(resp *plugin.CodeGeneratorResponse) {
 	if _, err := os.Stdout.Write(buf); err != nil {
 		glog.Fatal(err)
 	}
+}
+
+// parseReqParam parses a CodeGeneratorRequest parameter and adds the
+// extracted values to the given FlagSet and pkgMap. Returns a non-nil
+// error if setting a flag failed.
+func parseReqParam(param string, f *flag.FlagSet, pkgMap map[string]string) error {
+	if param == "" {
+		return nil
+	}
+	for _, p := range strings.Split(param, ",") {
+		spec := strings.SplitN(p, "=", 2)
+		if len(spec) == 1 {
+			if spec[0] == "allow_delete_body" {
+				err := f.Set(spec[0], "true")
+				if err != nil {
+					return fmt.Errorf("Cannot set flag %s: %v", p, err)
+				}
+				continue
+			}
+			if spec[0] == "allow_merge" {
+				err := f.Set(spec[0], "true")
+				if err != nil {
+					return fmt.Errorf("Cannot set flag %s: %v", p, err)
+				}
+				continue
+			}
+			err := f.Set(spec[0], "")
+			if err != nil {
+				return fmt.Errorf("Cannot set flag %s: %v", p, err)
+			}
+			continue
+		}
+		name, value := spec[0], spec[1]
+		if strings.HasPrefix(name, "M") {
+			pkgMap[name[1:]] = value
+			continue
+		}
+		if err := f.Set(name, value); err != nil {
+			return fmt.Errorf("Cannot set flag %s: %v", p, err)
+		}
+	}
+	return nil
 }

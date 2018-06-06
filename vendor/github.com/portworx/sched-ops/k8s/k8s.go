@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/pkg/api/v1"
 	apps_api "k8s.io/client-go/pkg/apis/apps/v1beta1"
 	batch_v1 "k8s.io/client-go/pkg/apis/batch/v1"
@@ -27,6 +28,7 @@ import (
 	storage_api "k8s.io/client-go/pkg/apis/storage/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 const (
@@ -226,6 +228,15 @@ type PodOps interface {
 	GetPods(string) (*v1.PodList, error)
 	// GetPodsByOwner returns pods for the given owner and namespace
 	GetPodsByOwner(types.UID, string) ([]v1.Pod, error)
+	// GetPodsUsingPV returns all pods in cluster using given pv
+	GetPodsUsingPV(pvName string) ([]v1.Pod, error)
+	// GetPodsUsingPVByNodeName returns all pods running on the node using the given pv
+	GetPodsUsingPVByNodeName(pvName, nodeName string) ([]v1.Pod, error)
+	// GetPodsUsingPVC returns all pods in cluster using given pvc
+	GetPodsUsingPVC(pvcName, pvcNamespace string) ([]v1.Pod, error)
+	// GetPodsUsingPVCByNodeName returns all pods running on the node using given pvc
+	GetPodsUsingPVCByNodeName(pvcName, pvcNamespace, nodeName string) ([]v1.Pod, error)
+	// GetPodsUsingVolumePlugin returns all pods who use PVCs provided by the given volume plugin
 	// GetPodsUsingVolumePlugin returns all pods who use PVCs provided by the given volume plugin
 	GetPodsUsingVolumePlugin(plugin string) ([]v1.Pod, error)
 	// GetPodsUsingVolumePluginByNodeName returns all pods who use PVCs provided by the given volume plugin on the given node
@@ -242,6 +253,8 @@ type PodOps interface {
 	IsPodBeingManaged(v1.Pod) bool
 	// WaitForPodDeletion waits for given timeout for given pod to be deleted
 	WaitForPodDeletion(uid types.UID, namespace string, timeout time.Duration) error
+	// RunCommandInPod runs given command in the given pod
+	RunCommandInPod(cmds []string, podName, containerName, namespace string) (string, error)
 }
 
 // StorageClassOps is an interface to perform k8s storage class operations
@@ -309,6 +322,7 @@ var (
 type k8sOps struct {
 	client     *kubernetes.Clientset
 	snapClient *rest.RESTClient
+	config     *rest.Config
 }
 
 // Instance returns a singleton instance of k8sOps type
@@ -732,6 +746,65 @@ func (k *k8sOps) WaitForPodDeletion(uid types.UID, namespace string, timeout tim
 	}
 
 	return nil
+}
+
+func (k *k8sOps) RunCommandInPod(cmds []string, podName, containerName, namespace string) (string, error) {
+	err := k.initK8sClient()
+	if err != nil {
+		return "", err
+	}
+
+	var (
+		execOut bytes.Buffer
+		execErr bytes.Buffer
+	)
+
+	pod, err := k.client.Core().Pods(namespace).Get(podName, meta_v1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	if len(containerName) == 0 {
+		if len(pod.Spec.Containers) != 1 {
+			return "", fmt.Errorf("could not determine which container to use")
+		}
+
+		containerName = pod.Spec.Containers[0].Name
+	}
+
+	req := k.client.Core().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec")
+
+	req.VersionedParams(&v1.PodExecOptions{
+		Container: containerName,
+		Command:   cmds,
+		Stdout:    true,
+		Stderr:    true,
+	}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewExecutor(k.config, "POST", req.URL())
+	if err != nil {
+		return "", fmt.Errorf("failed to init executor: %v", err)
+	}
+
+	err = exec.Stream(remotecommand.StreamOptions{
+		Stdout: &execOut,
+		Stderr: &execErr,
+		Tty:    false,
+	})
+
+	if err != nil {
+		return execErr.String(), fmt.Errorf("could not execute: %v", err)
+	}
+
+	if execErr.Len() > 0 {
+		return execErr.String(), nil
+	}
+
+	return execOut.String(), nil
 }
 
 // Service APIs - BEGIN
@@ -1612,6 +1685,75 @@ func (k *k8sOps) GetPodsByOwner(ownerUID types.UID, namespace string) ([]v1.Pod,
 	return result, nil
 }
 
+func (k *k8sOps) GetPodsUsingPV(pvName string) ([]v1.Pod, error) {
+	return k.getPodsUsingPVWithListOptions(pvName, meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) GetPodsUsingPVByNodeName(pvName, nodeName string) ([]v1.Pod, error) {
+	if len(nodeName) == 0 {
+		return nil, fmt.Errorf("node name is required for this API")
+	}
+
+	listOptions := meta_v1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
+	}
+	return k.getPodsUsingPVWithListOptions(pvName, listOptions)
+}
+
+func (k *k8sOps) GetPodsUsingPVC(pvcName, pvcNamespace string) ([]v1.Pod, error) {
+	return k.getPodsUsingPVCWithListOptions(pvcName, pvcNamespace, meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) GetPodsUsingPVCByNodeName(pvcName, pvcNamespace, nodeName string) ([]v1.Pod, error) {
+	if len(nodeName) == 0 {
+		return nil, fmt.Errorf("node name is required for this API")
+	}
+
+	listOptions := meta_v1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
+	}
+	return k.getPodsUsingPVCWithListOptions(pvcName, pvcNamespace, listOptions)
+}
+
+func (k *k8sOps) getPodsWithListOptions(namespace string, opts meta_v1.ListOptions) (*v1.PodList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().Pods(namespace).List(opts)
+}
+
+func (k *k8sOps) getPodsUsingPVWithListOptions(pvName string, opts meta_v1.ListOptions) ([]v1.Pod, error) {
+	pv, err := k.GetPersistentVolume(pvName)
+	if err != nil {
+		return nil, err
+	}
+
+	if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
+		return k.getPodsUsingPVCWithListOptions(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, opts)
+	}
+
+	return nil, nil
+}
+
+func (k *k8sOps) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, opts meta_v1.ListOptions) ([]v1.Pod, error) {
+	pods, err := k.getPodsWithListOptions(pvcNamespace, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	retList := make([]v1.Pod, 0)
+	for _, p := range pods.Items {
+		for _, v := range p.Spec.Volumes {
+			if v.PersistentVolumeClaim != nil && v.PersistentVolumeClaim.ClaimName == pvcName {
+				retList = append(retList, p)
+				break
+			}
+		}
+	}
+	return retList, nil
+}
+
 func (k *k8sOps) GetPodsUsingVolumePlugin(plugin string) ([]v1.Pod, error) {
 	return k.listPluginPodsWithOptions(meta_v1.ListOptions{}, plugin)
 }
@@ -1849,6 +1991,22 @@ func (k *k8sOps) getPVCsWithListOptions(namespace string, listOpts meta_v1.ListO
 	}
 
 	return k.client.Core().PersistentVolumeClaims(namespace).List(listOpts)
+}
+
+func (k *k8sOps) GetPersistentVolume(pvName string) (*v1.PersistentVolume, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.Core().PersistentVolumes().Get(pvName, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) GetPersistentVolumes() (*v1.PersistentVolumeList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.Core().PersistentVolumes().List(meta_v1.ListOptions{})
 }
 
 func (k *k8sOps) GetVolumeForPersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (string, error) {
