@@ -1,20 +1,24 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sync"
 
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/golang/protobuf/ptypes/empty"
-	examples "github.com/grpc-ecosystem/grpc-gateway/examples/examplepb"
-	sub "github.com/grpc-ecosystem/grpc-gateway/examples/sub"
-	sub2 "github.com/grpc-ecosystem/grpc-gateway/examples/sub2"
+	examples "github.com/grpc-ecosystem/grpc-gateway/examples/proto/examplepb"
+	sub "github.com/grpc-ecosystem/grpc-gateway/examples/proto/sub"
+	sub2 "github.com/grpc-ecosystem/grpc-gateway/examples/proto/sub2"
 	"github.com/rogpeppe/fastuuid"
-	"golang.org/x/net/context"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // Implements of ABitOfEverythingServiceServer
@@ -111,7 +115,7 @@ func (s *_ABitOfEverythingServer) Lookup(ctx context.Context, msg *sub2.IdMessag
 		"foo": "foo2",
 		"bar": "bar2",
 	}))
-	return nil, grpc.Errorf(codes.NotFound, "not found")
+	return nil, status.Errorf(codes.NotFound, "not found")
 }
 
 func (s *_ABitOfEverythingServer) List(_ *empty.Empty, stream examples.StreamService_ListServer) error {
@@ -132,13 +136,13 @@ func (s *_ABitOfEverythingServer) List(_ *empty.Empty, stream examples.StreamSer
 	}
 
 	// return error when metadata includes error header
-	if header, ok := metadata.FromContext(stream.Context()); ok {
+	if header, ok := metadata.FromIncomingContext(stream.Context()); ok {
 		if v, ok := header["error"]; ok {
 			stream.SetTrailer(metadata.New(map[string]string{
 				"foo": "foo2",
 				"bar": "bar2",
 			}))
-			return grpc.Errorf(codes.InvalidArgument, "error metadata: %v", v)
+			return status.Errorf(codes.InvalidArgument, "error metadata: %v", v)
 		}
 	}
 	return nil
@@ -152,7 +156,7 @@ func (s *_ABitOfEverythingServer) Update(ctx context.Context, msg *examples.ABit
 	if _, ok := s.v[msg.Uuid]; ok {
 		s.v[msg.Uuid] = msg
 	} else {
-		return nil, grpc.Errorf(codes.NotFound, "not found")
+		return nil, status.Errorf(codes.NotFound, "not found")
 	}
 	return new(empty.Empty), nil
 }
@@ -165,7 +169,20 @@ func (s *_ABitOfEverythingServer) Delete(ctx context.Context, msg *sub2.IdMessag
 	if _, ok := s.v[msg.Uuid]; ok {
 		delete(s.v, msg.Uuid)
 	} else {
-		return nil, grpc.Errorf(codes.NotFound, "not found")
+		return nil, status.Errorf(codes.NotFound, "not found")
+	}
+	return new(empty.Empty), nil
+}
+
+func (s *_ABitOfEverythingServer) GetQuery(ctx context.Context, msg *examples.ABitOfEverything) (*empty.Empty, error) {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	glog.Info(msg)
+	if _, ok := s.v[msg.Uuid]; ok {
+		s.v[msg.Uuid] = msg
+	} else {
+		return nil, status.Errorf(codes.NotFound, "not found")
 	}
 	return new(empty.Empty), nil
 }
@@ -221,9 +238,35 @@ func (s *_ABitOfEverythingServer) DeepPathEcho(ctx context.Context, msg *example
 	return msg, nil
 }
 
+func (s *_ABitOfEverythingServer) NoBindings(ctx context.Context, msg *duration.Duration) (*empty.Empty, error) {
+	return nil, nil
+}
+
 func (s *_ABitOfEverythingServer) Timeout(ctx context.Context, msg *empty.Empty) (*empty.Empty, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+func (s *_ABitOfEverythingServer) ErrorWithDetails(ctx context.Context, msg *empty.Empty) (*empty.Empty, error) {
+	stat, err := status.New(codes.Unknown, "with details").
+		WithDetails(proto.Message(
+			&errdetails.DebugInfo{
+				StackEntries: []string{"foo:1"},
+				Detail:       "error debug details",
+			},
+		))
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "unexpected error adding details: %s", err)
+	}
+	return nil, stat.Err()
+}
+
+func (s *_ABitOfEverythingServer) GetMessageWithBody(ctx context.Context, msg *examples.MessageWithBody) (*empty.Empty, error) {
+	return &empty.Empty{}, nil
+}
+
+func (s *_ABitOfEverythingServer) PostWithEmptyBody(ctx context.Context, msg *examples.Body) (*empty.Empty, error) {
+	return &empty.Empty{}, nil
 }

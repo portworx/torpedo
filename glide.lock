@@ -1,5 +1,5 @@
-hash: 224e1e617d0ac00d607c06bbb27dbcb1abdb89cab3e227da189cafb203cfd0b4
-updated: 2018-06-05T18:08:13.896121441-07:00
+hash: 13b93ebe1aa9afeb35f5634086ff7d32f530cbd67aac1787a325fab5e3c6f004
+updated: 2018-06-06T13:33:01.468146208-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 783273d703149aaeb9897cf58613d5af48861c25
@@ -77,6 +77,8 @@ imports:
   - tlsconfig
 - name: github.com/docker/go-units
   version: e30f1e79f3cd72542f2026ceec18d3bd67ab859c
+- name: github.com/docker/spdystream
+  version: bc6354cbbc295e925e4c611ffe90c1f287ee54db
 - name: github.com/donovanhide/eventsource
   version: 3ed64d21fb0b6bd8b49bcfec08f3004daee8723d
 - name: github.com/emicklei/go-restful
@@ -130,7 +132,7 @@ imports:
 - name: github.com/google/gofuzz
   version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
 - name: github.com/grpc-ecosystem/grpc-gateway
-  version: 84398b94e188ee336f307779b57b3aa91af7063c
+  version: 92583770e3f01b09a0d3e9bdf64321d8bebd48f2
   subpackages:
   - runtime
   - runtime/internal
@@ -174,7 +176,7 @@ imports:
   - proto/state
   - types
 - name: github.com/libopenstorage/openstorage
-  version: 97a343196084cf5663073bb12113876ca4053727
+  version: 055b88ca745e1bf046f0cb8d8ba96899f3bf66e8
   subpackages:
   - api
   - api/client
@@ -268,12 +270,12 @@ imports:
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
-- name: github.com/sirupsen/logrus
-  version: 33a34430d1c3dc71777fdd677864928e5b5812bc
 - name: github.com/Sirupsen/logrus
   version: 55eb11d21d2a31a3cc93838241d04800f52e823d
   subpackages:
   - formatters/logstash
+- name: github.com/sirupsen/logrus
+  version: 33a34430d1c3dc71777fdd677864928e5b5812bc
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/ugorji/go
@@ -293,7 +295,7 @@ imports:
   - ssh
   - ssh/terminal
 - name: golang.org/x/net
-  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
+  version: bb807669a61aca6092d8137da1fab2150bb96ad7
   subpackages:
   - context
   - context/ctxhttp
@@ -328,8 +330,9 @@ imports:
   - googleapis/api/annotations
   - googleapis/rpc/status
 - name: google.golang.org/grpc
-  version: f92cdcd7dcdc69e81b2d7b338479a19a8723cfa3
+  version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
   subpackages:
+  - balancer
   - codes
   - connectivity
   - credentials
@@ -340,6 +343,7 @@ imports:
   - metadata
   - naming
   - peer
+  - resolver
   - stats
   - status
   - tap

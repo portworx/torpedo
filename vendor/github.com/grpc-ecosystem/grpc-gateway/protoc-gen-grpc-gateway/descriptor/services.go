@@ -8,7 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	descriptor "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway/httprule"
-	options "github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis/google/api"
+	options "google.golang.org/genproto/googleapis/api/annotations"
 )
 
 // loadServices registers services and their methods from "targetFile" to "r".
@@ -27,14 +27,17 @@ func (r *Registry) loadServices(file *File) error {
 			glog.V(2).Infof("Processing %s.%s", sd.GetName(), md.GetName())
 			opts, err := extractAPIOptions(md)
 			if err != nil {
-				glog.Errorf("Failed to extract ApiMethodOptions from %s.%s: %v", svc.GetName(), md.GetName(), err)
+				glog.Errorf("Failed to extract HttpRule from %s.%s: %v", svc.GetName(), md.GetName(), err)
 				return err
 			}
-			if opts == nil {
-				glog.V(1).Infof("Skip non-target method: %s.%s", svc.GetName(), md.GetName())
-				continue
+			optsList := r.LookupExternalHTTPRules((&Method{Service: svc, MethodDescriptorProto: md}).FQMN())
+			if opts != nil {
+				optsList = append(optsList, opts)
 			}
-			meth, err := r.newMethod(svc, md, opts)
+			if len(optsList) == 0 {
+				glog.V(1).Infof("Found non-target method: %s.%s", svc.GetName(), md.GetName())
+			}
+			meth, err := r.newMethod(svc, md, optsList)
 			if err != nil {
 				return err
 			}
@@ -50,7 +53,7 @@ func (r *Registry) loadServices(file *File) error {
 	return nil
 }
 
-func (r *Registry) newMethod(svc *Service, md *descriptor.MethodDescriptorProto, opts *options.HttpRule) (*Method, error) {
+func (r *Registry) newMethod(svc *Service, md *descriptor.MethodDescriptorProto, optsList []*options.HttpRule) (*Method, error) {
 	requestType, err := r.LookupMsg(svc.File.GetPackage(), md.GetInputType())
 	if err != nil {
 		return nil, err
@@ -76,7 +79,7 @@ func (r *Registry) newMethod(svc *Service, md *descriptor.MethodDescriptorProto,
 			httpMethod = "GET"
 			pathTemplate = opts.GetGet()
 			if opts.Body != "" {
-				return nil, fmt.Errorf("needs request body even though http method is GET: %s", md.GetName())
+				return nil, fmt.Errorf("must not set request body when http method is GET: %s", md.GetName())
 			}
 
 		case opts.GetPut() != "":
@@ -90,8 +93,8 @@ func (r *Registry) newMethod(svc *Service, md *descriptor.MethodDescriptorProto,
 		case opts.GetDelete() != "":
 			httpMethod = "DELETE"
 			pathTemplate = opts.GetDelete()
-			if opts.Body != "" {
-				return nil, fmt.Errorf("needs request body even though http method is DELETE: %s", md.GetName())
+			if opts.Body != "" && !r.allowDeleteBody {
+				return nil, fmt.Errorf("must not set request body when http method is DELETE except allow_delete_body option is true: %s", md.GetName())
 			}
 
 		case opts.GetPatch() != "":
@@ -104,8 +107,8 @@ func (r *Registry) newMethod(svc *Service, md *descriptor.MethodDescriptorProto,
 			pathTemplate = custom.Path
 
 		default:
-			glog.Errorf("No pattern specified in google.api.HttpRule: %s", md.GetName())
-			return nil, fmt.Errorf("none of pattern specified")
+			glog.V(1).Infof("No pattern specified in google.api.HttpRule: %s", md.GetName())
+			return nil, nil
 		}
 
 		parsed, err := httprule.Parse(pathTemplate)
@@ -142,21 +145,34 @@ func (r *Registry) newMethod(svc *Service, md *descriptor.MethodDescriptorProto,
 
 		return b, nil
 	}
-	b, err := newBinding(opts, 0)
-	if err != nil {
-		return nil, err
+
+	applyOpts := func(opts *options.HttpRule) error {
+		b, err := newBinding(opts, len(meth.Bindings))
+		if err != nil {
+			return err
+		}
+
+		if b != nil {
+			meth.Bindings = append(meth.Bindings, b)
+		}
+		for _, additional := range opts.GetAdditionalBindings() {
+			if len(additional.AdditionalBindings) > 0 {
+				return fmt.Errorf("additional_binding in additional_binding not allowed: %s.%s", svc.GetName(), meth.GetName())
+			}
+			b, err := newBinding(additional, len(meth.Bindings))
+			if err != nil {
+				return err
+			}
+			meth.Bindings = append(meth.Bindings, b)
+		}
+
+		return nil
 	}
 
-	meth.Bindings = append(meth.Bindings, b)
-	for i, additional := range opts.GetAdditionalBindings() {
-		if len(additional.AdditionalBindings) > 0 {
-			return nil, fmt.Errorf("additional_binding in additional_binding not allowed: %s.%s", svc.GetName(), meth.GetName())
-		}
-		b, err := newBinding(additional, i+1)
-		if err != nil {
+	for _, opts := range optsList {
+		if err := applyOpts(opts); err != nil {
 			return nil, err
 		}
-		meth.Bindings = append(meth.Bindings, b)
 	}
 
 	return meth, nil
@@ -182,7 +198,7 @@ func extractAPIOptions(meth *descriptor.MethodDescriptorProto) (*options.HttpRul
 
 func (r *Registry) newParam(meth *Method, path string) (Parameter, error) {
 	msg := meth.RequestType
-	fields, err := r.resolveFiledPath(msg, path)
+	fields, err := r.resolveFieldPath(msg, path)
 	if err != nil {
 		return Parameter{}, err
 	}
@@ -193,7 +209,12 @@ func (r *Registry) newParam(meth *Method, path string) (Parameter, error) {
 	target := fields[l-1].Target
 	switch target.GetType() {
 	case descriptor.FieldDescriptorProto_TYPE_MESSAGE, descriptor.FieldDescriptorProto_TYPE_GROUP:
-		return Parameter{}, fmt.Errorf("aggregate type %s in parameter of %s.%s: %s", target.Type, meth.Service.GetName(), meth.GetName(), path)
+		glog.V(2).Infoln("found aggregate type:", target, target.TypeName)
+		if IsWellKnownType(*target.TypeName) {
+			glog.V(2).Infoln("found well known aggregate type:", target)
+		} else {
+			return Parameter{}, fmt.Errorf("aggregate type %s in parameter of %s.%s: %s", target.Type, meth.Service.GetName(), meth.GetName(), path)
+		}
 	}
 	return Parameter{
 		FieldPath: FieldPath(fields),
@@ -210,7 +231,7 @@ func (r *Registry) newBody(meth *Method, path string) (*Body, error) {
 	case "*":
 		return &Body{FieldPath: nil}, nil
 	}
-	fields, err := r.resolveFiledPath(msg, path)
+	fields, err := r.resolveFieldPath(msg, path)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +250,7 @@ func lookupField(msg *Message, name string) *Field {
 }
 
 // resolveFieldPath resolves "path" into a list of fieldDescriptor, starting from "msg".
-func (r *Registry) resolveFiledPath(msg *Message, path string) ([]FieldPathComponent, error) {
+func (r *Registry) resolveFieldPath(msg *Message, path string) ([]FieldPathComponent, error) {
 	if path == "" {
 		return nil, nil
 	}
