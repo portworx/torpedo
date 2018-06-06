@@ -14,10 +14,10 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
-	batch_v1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/client-go/pkg/api"
+	batch_v1 "k8s.io/client-go/pkg/apis/batch/v1"
+	rbacv1 "k8s.io/client-go/pkg/apis/rbac/v1beta1"
 )
 
 const (
