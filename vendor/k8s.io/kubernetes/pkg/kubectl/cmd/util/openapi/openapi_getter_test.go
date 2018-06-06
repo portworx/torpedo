@@ -23,55 +23,54 @@ import (
 	. "github.com/onsi/gomega"
 
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi"
-	tst "k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi/testing"
 )
 
 var _ = Describe("Getting the Resources", func() {
-	var client *tst.FakeClient
-	var expectedData openapi.Resources
+	var client *fakeOpenAPIClient
+	var expectedData *openapi.Resources
 	var instance openapi.Getter
 
 	BeforeEach(func() {
-		client = tst.NewFakeClient(&fakeSchema)
-		d, err := fakeSchema.OpenAPISchema()
+		client = &fakeOpenAPIClient{}
+		d, err := data.OpenAPISchema()
 		Expect(err).To(BeNil())
 
 		expectedData, err = openapi.NewOpenAPIData(d)
 		Expect(err).To(BeNil())
 
-		instance = openapi.NewOpenAPIGetter(client)
+		instance = openapi.NewOpenAPIGetter("", "", client)
 	})
 
 	Context("when the server returns a successful result", func() {
 		It("should return the same data for multiple calls", func() {
-			Expect(client.Calls).To(Equal(0))
+			Expect(client.calls).To(Equal(0))
 
 			result, err := instance.Get()
 			Expect(err).To(BeNil())
-			Expect(result).To(Equal(expectedData))
-			Expect(client.Calls).To(Equal(1))
+			expectEqual(result, expectedData)
+			Expect(client.calls).To(Equal(1))
 
 			result, err = instance.Get()
 			Expect(err).To(BeNil())
-			Expect(result).To(Equal(expectedData))
+			expectEqual(result, expectedData)
 			// No additional client calls expected
-			Expect(client.Calls).To(Equal(1))
+			Expect(client.calls).To(Equal(1))
 		})
 	})
 
 	Context("when the server returns an unsuccessful result", func() {
 		It("should return the same instance for multiple calls.", func() {
-			Expect(client.Calls).To(Equal(0))
+			Expect(client.calls).To(Equal(0))
 
-			client.Err = fmt.Errorf("expected error")
+			client.err = fmt.Errorf("expected error")
 			_, err := instance.Get()
-			Expect(err).To(Equal(client.Err))
-			Expect(client.Calls).To(Equal(1))
+			Expect(err).To(Equal(client.err))
+			Expect(client.calls).To(Equal(1))
 
 			_, err = instance.Get()
-			Expect(err).To(Equal(client.Err))
+			Expect(err).To(Equal(client.err))
 			// No additional client calls expected
-			Expect(client.Calls).To(Equal(1))
+			Expect(client.calls).To(Equal(1))
 		})
 	})
 })

@@ -16,6 +16,7 @@ go_test(
         "undirected_test.go",
     ],
     library = ":go_default_library",
+    tags = ["automanaged"],
     deps = ["//third_party/forked/gonum/graph:go_default_library"],
 )
 
@@ -27,6 +28,7 @@ go_library(
         "simple.go",
         "undirected.go",
     ],
+    tags = ["automanaged"],
     deps = [
         "//third_party/forked/gonum/graph:go_default_library",
         "//vendor/golang.org/x/tools/container/intsets:go_default_library",

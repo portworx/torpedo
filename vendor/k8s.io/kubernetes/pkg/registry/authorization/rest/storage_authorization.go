@@ -17,8 +17,6 @@ limitations under the License.
 package rest
 
 import (
-	authorizationv1 "k8s.io/api/authorization/v1"
-	authorizationv1beta1 "k8s.io/api/authorization/v1beta1"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -26,15 +24,15 @@ import (
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/authorization"
+	authorizationv1 "k8s.io/kubernetes/pkg/apis/authorization/v1"
+	authorizationv1beta1 "k8s.io/kubernetes/pkg/apis/authorization/v1beta1"
 	"k8s.io/kubernetes/pkg/registry/authorization/localsubjectaccessreview"
 	"k8s.io/kubernetes/pkg/registry/authorization/selfsubjectaccessreview"
-	"k8s.io/kubernetes/pkg/registry/authorization/selfsubjectrulesreview"
 	"k8s.io/kubernetes/pkg/registry/authorization/subjectaccessreview"
 )
 
 type RESTStorageProvider struct {
-	Authorizer   authorizer.Authorizer
-	RuleResolver authorizer.RuleResolver
+	Authorizer authorizer.Authorizer
 }
 
 func (p RESTStorageProvider) NewRESTStorage(apiResourceConfigSource serverstorage.APIResourceConfigSource, restOptionsGetter generic.RESTOptionsGetter) (genericapiserver.APIGroupInfo, bool) {
@@ -72,9 +70,6 @@ func (p RESTStorageProvider) v1beta1Storage(apiResourceConfigSource serverstorag
 	if apiResourceConfigSource.ResourceEnabled(version.WithResource("localsubjectaccessreviews")) {
 		storage["localsubjectaccessreviews"] = localsubjectaccessreview.NewREST(p.Authorizer)
 	}
-	if apiResourceConfigSource.ResourceEnabled(version.WithResource("selfsubjectrulesreviews")) {
-		storage["selfsubjectrulesreviews"] = selfsubjectrulesreview.NewREST(p.RuleResolver)
-	}
 
 	return storage
 }
@@ -91,9 +86,6 @@ func (p RESTStorageProvider) v1Storage(apiResourceConfigSource serverstorage.API
 	}
 	if apiResourceConfigSource.ResourceEnabled(version.WithResource("localsubjectaccessreviews")) {
 		storage["localsubjectaccessreviews"] = localsubjectaccessreview.NewREST(p.Authorizer)
-	}
-	if apiResourceConfigSource.ResourceEnabled(version.WithResource("selfsubjectrulesreviews")) {
-		storage["selfsubjectrulesreviews"] = selfsubjectrulesreview.NewREST(p.RuleResolver)
 	}
 
 	return storage

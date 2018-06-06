@@ -19,10 +19,9 @@ package upgrades
 import (
 	"fmt"
 
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-	imageutils "k8s.io/kubernetes/test/utils/image"
 
 	. "github.com/onsi/ginkgo"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -34,9 +33,7 @@ type ConfigMapUpgradeTest struct {
 	configMap *v1.ConfigMap
 }
 
-func (ConfigMapUpgradeTest) Name() string {
-	return "configmap-upgrade [sig-storage] [sig-api-machinery]"
-}
+func (ConfigMapUpgradeTest) Name() string { return "configmap-upgrade" }
 
 // Setup creates a ConfigMap and then verifies that a pod can consume it.
 func (t *ConfigMapUpgradeTest) Setup(f *framework.Framework) {
@@ -104,7 +101,7 @@ func (t *ConfigMapUpgradeTest) testPod(f *framework.Framework) {
 			Containers: []v1.Container{
 				{
 					Name:  "configmap-volume-test",
-					Image: imageutils.GetE2EImage(imageutils.Mounttest),
+					Image: "gcr.io/google_containers/mounttest:0.7",
 					Args: []string{
 						fmt.Sprintf("--file_content=%s/data", volumeMountPath),
 						fmt.Sprintf("--file_mode=%s/data", volumeMountPath),
@@ -118,7 +115,7 @@ func (t *ConfigMapUpgradeTest) testPod(f *framework.Framework) {
 				},
 				{
 					Name:    "configmap-env-test",
-					Image:   imageutils.GetBusyBoxImage(),
+					Image:   "gcr.io/google_containers/busybox:1.24",
 					Command: []string{"sh", "-c", "env"},
 					Env: []v1.EnvVar{
 						{

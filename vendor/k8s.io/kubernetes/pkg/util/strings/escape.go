@@ -27,7 +27,7 @@ func EscapePluginName(in string) string {
 	return strings.Replace(in, "/", "~", -1)
 }
 
-// UnescapePluginName converts a plugin directory name in the format
+// EscapeQualifiedPluginName converts a plugin directory name in the format
 // vendor~pluginname into a proper vendor/pluginname.
 func UnescapePluginName(in string) string {
 	return strings.Replace(in, "~", "/", -1)

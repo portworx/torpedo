@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/types"
 	kubetypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubernetes/pkg/api/v1"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 )
 
@@ -178,19 +179,17 @@ func (f *fakeRktCli) Reset() {
 	f.err = nil
 }
 
-type fakePodDeletionProvider struct {
-	pods map[types.UID]struct{}
+type fakePodGetter struct {
+	pods map[types.UID]*v1.Pod
 }
 
-func newFakePodDeletionProvider() *fakePodDeletionProvider {
-	return &fakePodDeletionProvider{
-		pods: make(map[types.UID]struct{}),
-	}
+func newFakePodGetter() *fakePodGetter {
+	return &fakePodGetter{pods: make(map[types.UID]*v1.Pod)}
 }
 
-func (f *fakePodDeletionProvider) IsPodDeleted(uid types.UID) bool {
-	_, found := f.pods[uid]
-	return !found
+func (f fakePodGetter) GetPodByUID(uid types.UID) (*v1.Pod, bool) {
+	p, found := f.pods[uid]
+	return p, found
 }
 
 type fakeUnitGetter struct {

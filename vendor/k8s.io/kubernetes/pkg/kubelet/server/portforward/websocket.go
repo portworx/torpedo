@@ -158,6 +158,7 @@ type websocketStreamPair struct {
 // request over a websocket connection
 type websocketStreamHandler struct {
 	conn        *wsstream.Conn
+	ports       []int32
 	streamPairs []*websocketStreamPair
 	pod         string
 	uid         types.UID

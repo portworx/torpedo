@@ -19,24 +19,25 @@ package fc
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/golang/glog"
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/util/exec"
 	"k8s.io/kubernetes/pkg/util/mount"
-	utilstrings "k8s.io/kubernetes/pkg/util/strings"
+	"k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
 )
 
 // This is the primary entrypoint for volume plugins.
 func ProbeVolumePlugins() []volume.VolumePlugin {
-	return []volume.VolumePlugin{&fcPlugin{nil}}
+	return []volume.VolumePlugin{&fcPlugin{nil, exec.New()}}
 }
 
 type fcPlugin struct {
 	host volume.VolumeHost
+	exe  exec.Interface
 }
 
 var _ volume.VolumePlugin = &fcPlugin{}
@@ -61,18 +62,8 @@ func (plugin *fcPlugin) GetVolumeName(spec *volume.Spec) (string, error) {
 		return "", err
 	}
 
-	// API server validates these parameters beforehand but attach/detach
-	// controller creates volumespec without validation. They may be nil
-	// or zero length. We should check again to avoid unexpected conditions.
-	if len(volumeSource.TargetWWNs) != 0 && volumeSource.Lun != nil {
-		// TargetWWNs are the FibreChannel target worldwide names
-		return fmt.Sprintf("%v:%v", volumeSource.TargetWWNs, *volumeSource.Lun), nil
-	} else if len(volumeSource.WWIDs) != 0 {
-		// WWIDs are the FibreChannel World Wide Identifiers
-		return fmt.Sprintf("%v", volumeSource.WWIDs), nil
-	}
-
-	return "", err
+	//  TargetWWNs are the FibreChannel target worldwide names
+	return fmt.Sprintf("%v", volumeSource.TargetWWNs), nil
 }
 
 func (plugin *fcPlugin) CanSupport(spec *volume.Spec) bool {
@@ -104,10 +95,10 @@ func (plugin *fcPlugin) GetAccessModes() []v1.PersistentVolumeAccessMode {
 
 func (plugin *fcPlugin) NewMounter(spec *volume.Spec, pod *v1.Pod, _ volume.VolumeOptions) (volume.Mounter, error) {
 	// Inject real implementations here, test through the internal function.
-	return plugin.newMounterInternal(spec, pod.UID, &FCUtil{}, plugin.host.GetMounter(plugin.GetPluginName()), plugin.host.GetExec(plugin.GetPluginName()))
+	return plugin.newMounterInternal(spec, pod.UID, &FCUtil{}, plugin.host.GetMounter())
 }
 
-func (plugin *fcPlugin) newMounterInternal(spec *volume.Spec, podUID types.UID, manager diskManager, mounter mount.Interface, exec mount.Exec) (volume.Mounter, error) {
+func (plugin *fcPlugin) newMounterInternal(spec *volume.Spec, podUID types.UID, manager diskManager, mounter mount.Interface) (volume.Mounter, error) {
 	// fc volumes used directly in a pod have a ReadOnly flag set by the pod author.
 	// fc volumes used as a PersistentVolume gets the ReadOnly flag indirectly through the persistent-claim volume used to mount the PV
 	fc, readOnly, err := getVolumeSource(spec)
@@ -115,17 +106,11 @@ func (plugin *fcPlugin) newMounterInternal(spec *volume.Spec, podUID types.UID, 
 		return nil, err
 	}
 
-	var lun string
-	var wwids []string
-	if fc.Lun != nil && len(fc.TargetWWNs) != 0 {
-		lun = strconv.Itoa(int(*fc.Lun))
-	} else if len(fc.WWIDs) != 0 {
-		for _, wwid := range fc.WWIDs {
-			wwids = append(wwids, strings.Replace(wwid, " ", "_", -1))
-		}
-	} else {
-		return nil, fmt.Errorf("fc: no fc disk information found. failed to make a new mounter")
+	if fc.Lun == nil {
+		return nil, fmt.Errorf("empty lun")
 	}
+
+	lun := strconv.Itoa(int(*fc.Lun))
 
 	return &fcDiskMounter{
 		fcDisk: &fcDisk{
@@ -133,19 +118,18 @@ func (plugin *fcPlugin) newMounterInternal(spec *volume.Spec, podUID types.UID, 
 			volName: spec.Name(),
 			wwns:    fc.TargetWWNs,
 			lun:     lun,
-			wwids:   wwids,
 			manager: manager,
 			io:      &osIOHandler{},
 			plugin:  plugin},
 		fsType:   fc.FSType,
 		readOnly: readOnly,
-		mounter:  &mount.SafeFormatAndMount{Interface: mounter, Exec: exec},
+		mounter:  &mount.SafeFormatAndMount{Interface: mounter, Runner: exec.New()},
 	}, nil
 }
 
 func (plugin *fcPlugin) NewUnmounter(volName string, podUID types.UID) (volume.Unmounter, error) {
 	// Inject real implementations here, test through the internal function.
-	return plugin.newUnmounterInternal(volName, podUID, &FCUtil{}, plugin.host.GetMounter(plugin.GetPluginName()))
+	return plugin.newUnmounterInternal(volName, podUID, &FCUtil{}, plugin.host.GetMounter())
 }
 
 func (plugin *fcPlugin) newUnmounterInternal(volName string, podUID types.UID, manager diskManager, mounter mount.Interface) (volume.Unmounter, error) {
@@ -159,6 +143,11 @@ func (plugin *fcPlugin) newUnmounterInternal(volName string, podUID types.UID, m
 		},
 		mounter: mounter,
 	}, nil
+}
+
+func (plugin *fcPlugin) execCommand(command string, args []string) ([]byte, error) {
+	cmd := plugin.exe.Command(command, args...)
+	return cmd.CombinedOutput()
 }
 
 func (plugin *fcPlugin) ConstructVolumeSpec(volumeName, mountPath string) (*volume.Spec, error) {
@@ -177,7 +166,6 @@ type fcDisk struct {
 	portal  string
 	wwns    []string
 	lun     string
-	wwids   []string
 	plugin  *fcPlugin
 	// Utility interface that provides API calls to the provider to attach/detach disks.
 	manager diskManager
@@ -189,7 +177,7 @@ type fcDisk struct {
 func (fc *fcDisk) GetPath() string {
 	name := fcPluginName
 	// safe to use PodVolumeDir now: volume teardown occurs before pod is cleaned up
-	return fc.plugin.host.GetPodVolumeDir(fc.podUID, utilstrings.EscapeQualifiedNameForDisk(name), fc.volName)
+	return fc.plugin.host.GetPodVolumeDir(fc.podUID, strings.EscapeQualifiedNameForDisk(name), fc.volName)
 }
 
 type fcDiskMounter struct {

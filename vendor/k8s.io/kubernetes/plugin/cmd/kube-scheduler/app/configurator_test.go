@@ -24,8 +24,8 @@ func TestSchedulerConfiguratorFailure(t *testing.T) {
 	sc := &schedulerConfigurator{
 	// policyfile and algorithm are intentionally undefined.
 	}
-	_, err := sc.Create()
-	if err == nil {
+	_, error := sc.Create()
+	if error == nil {
 		t.Fatalf("Expected error message when creating with incomplete configurator.")
 	}
 }

@@ -27,6 +27,8 @@ import (
 	"github.com/golang/glog"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	iptablesproxy "k8s.io/kubernetes/pkg/proxy/iptables"
+	utildbus "k8s.io/kubernetes/pkg/util/dbus"
+	utilexec "k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 )
 
@@ -49,10 +51,11 @@ type hostportManager struct {
 	mu          sync.Mutex
 }
 
-func NewHostportManager(iptables utiliptables.Interface) HostPortManager {
+func NewHostportManager() HostPortManager {
+	iptInterface := utiliptables.New(utilexec.New(), utildbus.New(), utiliptables.ProtocolIpv4)
 	return &hostportManager{
 		hostPortMap: make(map[hostport]closeable),
-		iptables:    iptables,
+		iptables:    iptInterface,
 		portOpener:  openLocalPort,
 	}
 }

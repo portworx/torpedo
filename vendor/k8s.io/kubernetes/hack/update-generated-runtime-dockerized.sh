@@ -25,7 +25,7 @@ source "${KUBE_ROOT}/hack/lib/init.sh"
 kube::golang::setup_env
 
 BINS=(
-	vendor/k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo
+	cmd/libs/go2idl/go-to-protobuf/protoc-gen-gogo
 )
 make -C "${KUBE_ROOT}" WHAT="${BINS[*]}"
 

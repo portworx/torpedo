@@ -113,9 +113,6 @@ func NewServerRunOptions() *ServerRunOptions {
 	}
 	// Overwrite the default for storage data format.
 	s.Etcd.DefaultStorageMediaType = "application/vnd.kubernetes.protobuf"
-
-	// register all admission plugins
-	RegisterAllAdmissionPlugins(s.Admission.Plugins)
 	// Set the default for admission plugins names
 	s.Admission.PluginNames = []string{"AlwaysAdmit"}
 	return &s
@@ -146,7 +143,7 @@ func (s *ServerRunOptions) AddFlags(fs *pflag.FlagSet) {
 		"Amount of time to retain events.")
 
 	fs.BoolVar(&s.AllowPrivileged, "allow-privileged", s.AllowPrivileged,
-		"If true, allow privileged containers. [default=false]")
+		"If true, allow privileged containers.")
 
 	fs.BoolVar(&s.EnableLogsHandler, "enable-logs-handler", s.EnableLogsHandler,
 		"If true, install a /logs handler for the apiserver logs.")

@@ -19,12 +19,11 @@ package fuzzer
 import (
 	"github.com/google/gofuzz"
 
-	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	apitesting "k8s.io/apimachinery/pkg/api/testing"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 )
 
-// Funcs returns the fuzzer functions for the kubeadm apis.
-func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
+func KubeadmFuzzerFuncs(t apitesting.TestingCommon) []interface{} {
 	return []interface{}{
 		func(obj *kubeadm.MasterConfiguration, c fuzz.Continue) {
 			c.FuzzNoCustom(obj)
@@ -37,12 +36,7 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			obj.CertificatesDir = "foo"
 			obj.APIServerCertSANs = []string{}
 			obj.Token = "foo"
-			obj.Etcd.Image = "foo"
 			obj.Etcd.DataDir = "foo"
-			obj.ImageRepository = "foo"
-			obj.CIImageRepository = ""
-			obj.UnifiedControlPlaneImage = "foo"
-			obj.FeatureGates = map[string]bool{}
 		},
 		func(obj *kubeadm.NodeConfiguration, c fuzz.Continue) {
 			c.FuzzNoCustom(obj)

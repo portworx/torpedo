@@ -69,7 +69,7 @@ func (d *flexVolumeDetacher) UnmountDevice(deviceMountPath string) error {
 		return nil
 	}
 
-	notmnt, err := isNotMounted(d.plugin.host.GetMounter(d.plugin.GetPluginName()), deviceMountPath)
+	notmnt, err := isNotMounted(d.plugin.host.GetMounter(), deviceMountPath)
 	if err != nil {
 		return err
 	}

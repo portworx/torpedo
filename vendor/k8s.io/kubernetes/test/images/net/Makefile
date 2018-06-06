@@ -12,14 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SRCS=net
-ARCH ?= amd64
-TARGET ?= $(CURDIR)
-GOLANG_VERSION ?= latest
-SRC_DIR = $(notdir $(shell pwd))
-export
+ARCH   := amd64
+PREFIX ?= gcr.io/google_containers
+TAG    ?= 1.0
+IMAGE  ?= e2e-net-$(ARCH)
 
-bin:
-	../image-util.sh bin $(SRCS)
+SRCS := $(shell find . -name \*.go)
 
-.PHONY: bin
+all: image
+
+net: $(SRCS)
+	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w'
+
+image: test net
+	docker build --pull -t $(PREFIX)/$(IMAGE):$(TAG) .
+
+push: image
+	gcloud docker -- push $(PREFIX)/$(IMAGE):$(TAG)
+
+clean:
+	rm -f net
+
+test:
+	go test ./...
+
+.PHONY: all clean image push test

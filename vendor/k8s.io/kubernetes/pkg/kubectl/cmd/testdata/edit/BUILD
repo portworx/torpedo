@@ -1,3 +1,5 @@
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_binary",
@@ -7,13 +9,13 @@ load(
 go_binary(
     name = "edit",
     library = ":go_default_library",
-    visibility = ["//visibility:public"],
+    tags = ["automanaged"],
 )
 
 go_library(
     name = "go_default_library",
     srcs = ["record.go"],
-    visibility = ["//visibility:private"],
+    tags = ["automanaged"],
     deps = ["//vendor/gopkg.in/yaml.v2:go_default_library"],
 )
 

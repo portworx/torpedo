@@ -18,22 +18,22 @@ REGISTRY ?= gcr.io/google-containers
 IMAGE ?= debian-base
 BUILD_IMAGE ?= debian-build
 
-TAG ?= 0.2
+TAG ?= 0.1
 
 TAR_FILE ?= rootfs.tar
 ARCH?=amd64
 TEMP_DIR:=$(shell mktemp -d)
-QEMUVERSION=v2.9.1
+QEMUVERSION=v2.7.0
 
 ifeq ($(ARCH),amd64)
 	BASEIMAGE?=debian:jessie
 endif
 ifeq ($(ARCH),arm)
-	BASEIMAGE?=arm32v7/debian:jessie
+	BASEIMAGE?=armhf/debian:jessie
 	QEMUARCH=arm
 endif
 ifeq ($(ARCH),arm64)
-	BASEIMAGE?=arm64v8/debian:jessie
+	BASEIMAGE?=aarch64/debian:jessie
 	QEMUARCH=aarch64
 endif
 ifeq ($(ARCH),ppc64le)

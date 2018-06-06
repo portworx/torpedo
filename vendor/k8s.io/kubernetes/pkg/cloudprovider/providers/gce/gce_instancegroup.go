@@ -16,22 +16,35 @@ limitations under the License.
 
 package gce
 
-import compute "google.golang.org/api/compute/v1"
+import (
+	"time"
+
+	compute "google.golang.org/api/compute/v1"
+)
 
 func newInstanceGroupMetricContext(request string, zone string) *metricContext {
-	return newGenericMetricContext("instancegroup", request, unusedMetricLabel, zone, computeV1Version)
+	return &metricContext{
+		start:      time.Now(),
+		attributes: []string{"instancegroup_" + request, unusedMetricLabel, zone},
+	}
 }
 
 // CreateInstanceGroup creates an instance group with the given
 // instances. It is the callers responsibility to add named ports.
-func (gce *GCECloud) CreateInstanceGroup(ig *compute.InstanceGroup, zone string) error {
+func (gce *GCECloud) CreateInstanceGroup(name string, zone string) (*compute.InstanceGroup, error) {
 	mc := newInstanceGroupMetricContext("create", zone)
-	op, err := gce.service.InstanceGroups.Insert(gce.projectID, zone, ig).Do()
+	op, err := gce.service.InstanceGroups.Insert(
+		gce.projectID, zone, &compute.InstanceGroup{Name: name}).Do()
 	if err != nil {
-		return mc.Observe(err)
+		mc.Observe(err)
+		return nil, err
 	}
 
-	return gce.waitForZoneOp(op, zone, mc)
+	if err = gce.waitForZoneOp(op, zone, mc); err != nil {
+		return nil, err
+	}
+
+	return gce.GetInstanceGroup(name, zone)
 }
 
 // DeleteInstanceGroup deletes an instance group.

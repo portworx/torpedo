@@ -121,7 +121,7 @@ func updateAllowedAddressPairs(network *gophercloud.ServiceClient, port *neutron
 	origPairs := port.AllowedAddressPairs // shallow copy
 
 	_, err := neutronports.Update(network, port.ID, neutronports.UpdateOpts{
-		AllowedAddressPairs: &newPairs,
+		AllowedAddressPairs: newPairs,
 	}).Extract()
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func updateAllowedAddressPairs(network *gophercloud.ServiceClient, port *neutron
 	unwinder := func() {
 		glog.V(4).Info("Reverting allowed-address-pairs change to port ", port.ID)
 		_, err := neutronports.Update(network, port.ID, neutronports.UpdateOpts{
-			AllowedAddressPairs: &origPairs,
+			AllowedAddressPairs: origPairs,
 		}).Extract()
 		if err != nil {
 			glog.Warning("Unable to reset allowed-address-pairs during error unwind: ", err)
@@ -177,12 +177,7 @@ func (r *Routes) CreateRoute(clusterName string, nameHint string, route *cloudpr
 	}
 	defer onFailure.Call(unwind)
 
-	// get the port of addr on target node.
-	portID, err := getPortIDByIP(r.compute, route.TargetNode, addr)
-	if err != nil {
-		return err
-	}
-	port, err := getPortByID(r.network, portID)
+	port, err := getPortByIP(r.network, addr)
 	if err != nil {
 		return err
 	}
@@ -200,7 +195,7 @@ func (r *Routes) CreateRoute(clusterName string, nameHint string, route *cloudpr
 		newPairs := append(port.AllowedAddressPairs, neutronports.AddressPair{
 			IPAddress: route.DestinationCIDR,
 		})
-		unwind, err := updateAllowedAddressPairs(r.network, port, newPairs)
+		unwind, err := updateAllowedAddressPairs(r.network, &port, newPairs)
 		if err != nil {
 			return err
 		}
@@ -251,12 +246,7 @@ func (r *Routes) DeleteRoute(clusterName string, route *cloudprovider.Route) err
 	}
 	defer onFailure.Call(unwind)
 
-	// get the port of addr on target node.
-	portID, err := getPortIDByIP(r.compute, route.TargetNode, addr)
-	if err != nil {
-		return err
-	}
-	port, err := getPortByID(r.network, portID)
+	port, err := getPortByIP(r.network, addr)
 	if err != nil {
 		return err
 	}
@@ -272,10 +262,10 @@ func (r *Routes) DeleteRoute(clusterName string, route *cloudprovider.Route) err
 
 	if index != -1 {
 		// Delete element `index`
-		addr_pairs[index] = addr_pairs[len(addr_pairs)-1]
-		addr_pairs = addr_pairs[:len(addr_pairs)-1]
+		addr_pairs[index] = addr_pairs[len(routes)-1]
+		addr_pairs = addr_pairs[:len(routes)-1]
 
-		unwind, err := updateAllowedAddressPairs(r.network, port, addr_pairs)
+		unwind, err := updateAllowedAddressPairs(r.network, &port, addr_pairs)
 		if err != nil {
 			return err
 		}
@@ -285,39 +275,4 @@ func (r *Routes) DeleteRoute(clusterName string, route *cloudprovider.Route) err
 	glog.V(4).Infof("Route deleted: %v", route)
 	onFailure.Disarm()
 	return nil
-}
-
-func getPortIDByIP(compute *gophercloud.ServiceClient, targetNode types.NodeName, ipAddress string) (string, error) {
-	srv, err := getServerByName(compute, targetNode)
-	if err != nil {
-		return "", err
-	}
-
-	interfaces, err := getAttachedInterfacesByID(compute, srv.ID)
-	if err != nil {
-		return "", err
-	}
-
-	for _, intf := range interfaces {
-		for _, fixedIP := range intf.FixedIPs {
-			if fixedIP.IPAddress == ipAddress {
-				return intf.PortID, nil
-			}
-		}
-	}
-
-	return "", ErrNotFound
-}
-
-func getPortByID(client *gophercloud.ServiceClient, portID string) (*neutronports.Port, error) {
-	targetPort, err := neutronports.Get(client, portID).Extract()
-	if err != nil {
-		return nil, err
-	}
-
-	if targetPort == nil {
-		return nil, ErrNotFound
-	}
-
-	return targetPort, nil
 }

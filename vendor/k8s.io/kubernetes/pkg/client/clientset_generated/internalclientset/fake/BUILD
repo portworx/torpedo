@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -12,6 +14,7 @@ go_library(
         "doc.go",
         "register.go",
     ],
+    tags = ["automanaged"],
     deps = [
         "//pkg/api:go_default_library",
         "//pkg/apis/admissionregistration:go_default_library",
@@ -25,7 +28,6 @@ go_library(
         "//pkg/apis/networking:go_default_library",
         "//pkg/apis/policy:go_default_library",
         "//pkg/apis/rbac:go_default_library",
-        "//pkg/apis/scheduling:go_default_library",
         "//pkg/apis/settings:go_default_library",
         "//pkg/apis/storage:go_default_library",
         "//pkg/client/clientset_generated/internalclientset:go_default_library",
@@ -53,8 +55,6 @@ go_library(
         "//pkg/client/clientset_generated/internalclientset/typed/policy/internalversion/fake:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/rbac/internalversion:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/rbac/internalversion/fake:go_default_library",
-        "//pkg/client/clientset_generated/internalclientset/typed/scheduling/internalversion:go_default_library",
-        "//pkg/client/clientset_generated/internalclientset/typed/scheduling/internalversion/fake:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/settings/internalversion:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/settings/internalversion/fake:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/storage/internalversion:go_default_library",

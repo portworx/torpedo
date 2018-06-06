@@ -28,7 +28,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/exec"
+	"k8s.io/kubernetes/pkg/util/exec"
 
 	"github.com/golang/glog"
 )

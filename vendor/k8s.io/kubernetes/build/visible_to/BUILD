@@ -30,6 +30,7 @@ package_group(
     packages = [
         "//cmd/gendocs",
         "//cmd/genman",
+        "//cmd/genslateyaml",
         "//cmd/genyaml",
     ],
 )
@@ -46,13 +47,8 @@ package_group(
 package_group(
     name = "COMMON_testing",
     packages = [
-        "//hack",
-        "//hack/lib",
-        "//hack/make-rules",
         "//test/e2e",
         "//test/e2e/framework",
-        "//test/e2e/kubectl",
-        "//test/e2e/workload",
         "//test/integration/etcd",
         "//test/integration/framework",
         "//test/integration/kubectl",
@@ -62,7 +58,6 @@ package_group(
 package_group(
     name = "FEDERATION_BAD",
     packages = [
-        "//federation/cmd/genfeddocs",
         "//federation/cmd/kubefed/app",
         "//federation/pkg/kubefed",
         "//federation/pkg/kubefed/init",
@@ -72,16 +67,11 @@ package_group(
 )
 
 package_group(
-    name = "cluster",
-    packages = [
-        "//cluster/...",
-    ],
-)
-
-package_group(
     name = "KUBEADM_BAD",
     packages = [
+        "//cmd/kubeadm/app",
         "//cmd/kubeadm/app/cmd",
+        "//cmd/kubeadm/app/master",
     ],
 )
 
@@ -367,17 +357,6 @@ package_group(
     packages = [
         "//pkg/kubectl",
         "//pkg/kubectl/cmd",
-        "//pkg/kubectl/proxy",
-    ],
-)
-
-package_group(
-    name = "pkg_kubectl_validation_CONSUMERS",
-    packages = [
-        "//pkg/kubectl",
-        "//pkg/kubectl/cmd/testing",
-        "//pkg/kubectl/cmd/util",
-        "//pkg/kubectl/resource",
     ],
 )
 

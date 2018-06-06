@@ -75,13 +75,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func write(w io.Writer) error {
-	var b []byte
-	var err error
-	func() {
-		configsGuard.RLock()
-		defer configsGuard.RUnlock()
-		b, err = json.Marshal(configs)
-	}()
+	configsGuard.Lock()
+	defer configsGuard.Unlock()
+	b, err := json.Marshal(configs)
 	if err != nil {
 		return fmt.Errorf("error marshaling json: %v", err)
 	}

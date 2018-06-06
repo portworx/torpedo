@@ -27,12 +27,12 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/api/admission/v1alpha1"
-	registrationv1alpha1 "k8s.io/api/admissionregistration/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/apis/admission/v1alpha1"
+	registrationv1alpha1 "k8s.io/kubernetes/pkg/apis/admissionregistration/v1alpha1"
 
 	_ "k8s.io/kubernetes/pkg/apis/admission/install"
 )
@@ -53,7 +53,6 @@ func (f *fakeHookSource) Run(stopCh <-chan struct{}) {}
 
 type fakeServiceResolver struct {
 	base url.URL
-	path string
 }
 
 func (f fakeServiceResolver) ResolveEndpoint(namespace, name string) (*url.URL, error) {
@@ -61,7 +60,7 @@ func (f fakeServiceResolver) ResolveEndpoint(namespace, name string) (*url.URL, 
 		return nil, fmt.Errorf("couldn't resolve service location")
 	}
 	u := f.base
-	u.Path = f.path
+	u.Path = name
 	return &u, nil
 }
 
@@ -90,6 +89,7 @@ func TestAdmit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	wh.serviceResolver = fakeServiceResolver{*serverURL}
 	wh.clientCert = clientCert
 	wh.clientKey = clientKey
 
@@ -123,16 +123,16 @@ func TestAdmit(t *testing.T) {
 
 	type test struct {
 		hookSource    fakeHookSource
-		path          string
 		expectAllow   bool
 		errorContains string
 	}
-	ccfg := registrationv1alpha1.AdmissionHookClientConfig{
-		Service: registrationv1alpha1.ServiceReference{
-			Name:      "webhook-test",
-			Namespace: "default",
-		},
-		CABundle: caCert,
+	ccfg := func(result string) registrationv1alpha1.AdmissionHookClientConfig {
+		return registrationv1alpha1.AdmissionHookClientConfig{
+			Service: registrationv1alpha1.ServiceReference{
+				Name: result,
+			},
+			CABundle: caCert,
+		}
 	}
 	matchEverythingRules := []registrationv1alpha1.RuleWithOperations{{
 		Operations: []registrationv1alpha1.OperationType{registrationv1alpha1.OperationAll},
@@ -148,72 +148,66 @@ func TestAdmit(t *testing.T) {
 			hookSource: fakeHookSource{
 				hooks: []registrationv1alpha1.ExternalAdmissionHook{{
 					Name:         "nomatch",
-					ClientConfig: ccfg,
+					ClientConfig: ccfg("disallow"),
 					Rules: []registrationv1alpha1.RuleWithOperations{{
 						Operations: []registrationv1alpha1.OperationType{registrationv1alpha1.Create},
 					}},
 				}},
 			},
-			path:        "disallow",
 			expectAllow: true,
 		},
 		"match & allow": {
 			hookSource: fakeHookSource{
 				hooks: []registrationv1alpha1.ExternalAdmissionHook{{
 					Name:         "allow",
-					ClientConfig: ccfg,
+					ClientConfig: ccfg("allow"),
 					Rules:        matchEverythingRules,
 				}},
 			},
-			path:        "allow",
 			expectAllow: true,
 		},
 		"match & disallow": {
 			hookSource: fakeHookSource{
 				hooks: []registrationv1alpha1.ExternalAdmissionHook{{
 					Name:         "disallow",
-					ClientConfig: ccfg,
+					ClientConfig: ccfg("disallow"),
 					Rules:        matchEverythingRules,
 				}},
 			},
-			path:          "disallow",
 			errorContains: "without explanation",
 		},
 		"match & disallow ii": {
 			hookSource: fakeHookSource{
 				hooks: []registrationv1alpha1.ExternalAdmissionHook{{
 					Name:         "disallowReason",
-					ClientConfig: ccfg,
+					ClientConfig: ccfg("disallowReason"),
 					Rules:        matchEverythingRules,
 				}},
 			},
-			path:          "disallowReason",
 			errorContains: "you shall not pass",
 		},
 		"match & fail (but allow because fail open)": {
 			hookSource: fakeHookSource{
 				hooks: []registrationv1alpha1.ExternalAdmissionHook{{
 					Name:         "internalErr A",
-					ClientConfig: ccfg,
+					ClientConfig: ccfg("internalErr"),
 					Rules:        matchEverythingRules,
 				}, {
-					Name:         "internalErr B",
-					ClientConfig: ccfg,
+					Name:         "invalidReq B",
+					ClientConfig: ccfg("invalidReq"),
 					Rules:        matchEverythingRules,
 				}, {
-					Name:         "internalErr C",
-					ClientConfig: ccfg,
+					Name:         "invalidResp C",
+					ClientConfig: ccfg("invalidResp"),
 					Rules:        matchEverythingRules,
 				}},
 			},
-			path:        "internalErr",
 			expectAllow: true,
 		},
 	}
 
 	for name, tt := range table {
 		wh.hookSource = &tt.hookSource
-		wh.serviceResolver = fakeServiceResolver{base: *serverURL, path: tt.path}
 
 		err = wh.Admit(admission.NewAttributesRecord(&object, &oldObject, kind, namespace, name, resource, subResource, operation, &userInfo))
 		if tt.expectAllow != (err == nil) {

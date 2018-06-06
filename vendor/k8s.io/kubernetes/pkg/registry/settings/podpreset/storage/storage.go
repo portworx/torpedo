@@ -22,6 +22,7 @@ import (
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/kubernetes/pkg/api"
 	settingsapi "k8s.io/kubernetes/pkg/apis/settings"
+	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/registry/settings/podpreset"
 )
 
@@ -33,16 +34,18 @@ type REST struct {
 // NewREST returns a RESTStorage object that will work against replication controllers.
 func NewREST(optsGetter generic.RESTOptionsGetter) *REST {
 	store := &genericregistry.Store{
-		Copier:                   api.Scheme,
-		NewFunc:                  func() runtime.Object { return &settingsapi.PodPreset{} },
-		NewListFunc:              func() runtime.Object { return &settingsapi.PodPresetList{} },
-		DefaultQualifiedResource: settingsapi.Resource("podpresets"),
+		Copier:            api.Scheme,
+		NewFunc:           func() runtime.Object { return &settingsapi.PodPreset{} },
+		NewListFunc:       func() runtime.Object { return &settingsapi.PodPresetList{} },
+		PredicateFunc:     podpreset.Matcher,
+		QualifiedResource: settingsapi.Resource("podpresets"),
+		WatchCacheSize:    cachesize.GetWatchCacheSizeByResource("podpresets"),
 
 		CreateStrategy: podpreset.Strategy,
 		UpdateStrategy: podpreset.Strategy,
 		DeleteStrategy: podpreset.Strategy,
 	}
-	options := &generic.StoreOptions{RESTOptions: optsGetter}
+	options := &generic.StoreOptions{RESTOptions: optsGetter, AttrFunc: podpreset.GetAttrs}
 	if err := store.CompleteWithOptions(options); err != nil {
 		panic(err) // TODO: Propagate error up
 	}

@@ -22,8 +22,8 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/api/core/v1"
-	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/apis/componentconfig"
 )
 
 func Test(t *testing.T) {
@@ -66,7 +66,7 @@ func Test(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		m := kubeletconfig.ConfigurationMap{}
+		m := componentconfig.ConfigurationMap{}
 		m.Set(test.input)
 		actual, err := ParseQOSReserved(m)
 		if actual != nil && test.expected == nil {

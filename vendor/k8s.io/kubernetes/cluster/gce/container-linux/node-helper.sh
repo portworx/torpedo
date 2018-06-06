@@ -17,19 +17,14 @@
 # A library of helper functions and constant for the Container Linux distro.
 source "${KUBE_ROOT}/cluster/gce/container-linux/helper.sh"
 
-function get-node-instance-metadata {
-  local metadata=""
-  metadata+="kube-env=${KUBE_TEMP}/node-kube-env.yaml,"
-  metadata+="user-data=${KUBE_ROOT}/cluster/gce/container-linux/node.yaml,"
-  metadata+="configure-sh=${KUBE_ROOT}/cluster/gce/container-linux/configure.sh,"
-  metadata+="cluster-name=${KUBE_TEMP}/cluster-name.txt"
-  echo "${metadata}"
-}
-
 # $1: template name (required).
 function create-node-instance-template {
   local template_name="$1"
 
-  create-node-template "$template_name" "${scope_flags[*]}" "$(get-node-instance-metadata)"
+  create-node-template "$template_name" "${scope_flags[*]}" \
+    "kube-env=${KUBE_TEMP}/node-kube-env.yaml" \
+    "user-data=${KUBE_ROOT}/cluster/gce/container-linux/node.yaml" \
+    "configure-sh=${KUBE_ROOT}/cluster/gce/container-linux/configure.sh" \
+    "cluster-name=${KUBE_TEMP}/cluster-name.txt"
   # TODO(euank): We should include update-strategy here. We should also switch to ignition
 }

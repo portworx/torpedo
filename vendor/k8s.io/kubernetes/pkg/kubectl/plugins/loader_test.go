@@ -232,10 +232,7 @@ func setupValidPlugins(nPlugins, nChildren int) (string, error) {
 		descriptor := fmt.Sprintf(`
 name: %[1]s
 shortDesc: The %[1]s test plugin
-command: echo %[1]s
-flags:
-  - name: %[1]s-flag
-    desc: A flag for %[1]s`, name)
+command: echo %[1]s`, name)
 
 		if nChildren > 0 {
 			descriptor += `

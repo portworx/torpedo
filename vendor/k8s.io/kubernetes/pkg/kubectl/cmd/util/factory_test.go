@@ -30,14 +30,12 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/util/flag"
 	manualfake "k8s.io/client-go/rest/fake"
@@ -46,12 +44,13 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/api/validation"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
-	"k8s.io/kubernetes/pkg/kubectl/validation"
 )
 
 func TestNewFactoryDefaultFlagBindings(t *testing.T) {
@@ -89,16 +88,22 @@ func TestPortsForObject(t *testing.T) {
 		},
 	}
 
-	expected := sets.NewString("101")
-	ports, err := f.PortsForObject(pod)
+	expected := []string{"101"}
+	got, err := f.PortsForObject(pod)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
+	if len(expected) != len(got) {
+		t.Fatalf("Ports size mismatch! Expected %d, got %d", len(expected), len(got))
+	}
 
-	got := sets.NewString(ports...)
+	sort.Strings(expected)
+	sort.Strings(got)
 
-	if !expected.Equal(got) {
-		t.Fatalf("Ports mismatch! Expected %v, got %v", expected, got)
+	for i, port := range got {
+		if port != expected[i] {
+			t.Fatalf("Port mismatch! Expected %s, got %s", expected[i], port)
+		}
 	}
 }
 
@@ -125,18 +130,22 @@ func TestProtocolsForObject(t *testing.T) {
 		},
 	}
 
-	expected := sets.NewString("101/TCP", "102/UDP")
+	expected := "101/TCP,102/UDP"
 	protocolsMap, err := f.ProtocolsForObject(pod)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
+	got := kubectl.MakeProtocols(protocolsMap)
+	expectedSlice := strings.Split(expected, ",")
+	gotSlice := strings.Split(got, ",")
 
-	protocolsString := kubectl.MakeProtocols(protocolsMap)
-	protocolsStrings := strings.Split(protocolsString, ",")
-	got := sets.NewString(protocolsStrings...)
+	sort.Strings(expectedSlice)
+	sort.Strings(gotSlice)
 
-	if !expected.Equal(got) {
-		t.Fatalf("Protocols mismatch! Expected %v, got %v", expected, got)
+	for i, protocol := range gotSlice {
+		if protocol != expectedSlice[i] {
+			t.Fatalf("Protocols mismatch! Expected %s, got %s", expectedSlice[i], protocol)
+		}
 	}
 }
 
@@ -737,12 +746,12 @@ func TestDiscoveryReplaceAliases(t *testing.T) {
 		{
 			name:     "all-replacement",
 			arg:      "all",
-			expected: "pods,replicationcontrollers,services,statefulsets.apps,horizontalpodautoscalers.autoscaling,jobs.batch,cronjobs.batch,daemonsets.extensions,deployments.extensions,replicasets.extensions",
+			expected: "pods,replicationcontrollers,services,statefulsets.apps,horizontalpodautoscalers.autoscaling,jobs.batch,deployments.extensions,replicasets.extensions",
 		},
 		{
 			name:     "alias-in-comma-separated-arg",
 			arg:      "all,secrets",
-			expected: "pods,replicationcontrollers,services,statefulsets.apps,horizontalpodautoscalers.autoscaling,jobs.batch,cronjobs.batch,daemonsets.extensions,deployments.extensions,replicasets.extensions,secrets",
+			expected: "pods,replicationcontrollers,services,statefulsets.apps,horizontalpodautoscalers.autoscaling,jobs.batch,deployments.extensions,replicasets.extensions,secrets",
 		},
 	}
 

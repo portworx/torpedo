@@ -21,15 +21,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
-	"net/http"
 	"sync"
 	"time"
 
 	"github.com/golang/glog"
 
-	admissionv1alpha1 "k8s.io/api/admission/v1alpha1"
-	"k8s.io/api/admissionregistration/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,10 +34,11 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/admission"
-	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/api"
-	admissionv1alpha1helper "k8s.io/kubernetes/pkg/apis/admission/v1alpha1"
+	admissionv1alpha1 "k8s.io/kubernetes/pkg/apis/admission/v1alpha1"
+	"k8s.io/kubernetes/pkg/apis/admissionregistration/v1alpha1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	admissioninit "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 	"k8s.io/kubernetes/pkg/kubeapiserver/admission/configuration"
 
@@ -108,7 +105,6 @@ type GenericAdmissionWebhook struct {
 	negotiatedSerializer runtime.NegotiatedSerializer
 	clientCert           []byte
 	clientKey            []byte
-	proxyTransport       *http.Transport
 }
 
 var (
@@ -116,10 +112,6 @@ var (
 	_ = admissioninit.WantsClientCert(&GenericAdmissionWebhook{})
 	_ = admissioninit.WantsExternalKubeClientSet(&GenericAdmissionWebhook{})
 )
-
-func (a *GenericAdmissionWebhook) SetProxyTransport(pt *http.Transport) {
-	a.proxyTransport = pt
-}
 
 func (a *GenericAdmissionWebhook) SetServiceResolver(sr admissioninit.ServiceResolver) {
 	a.serviceResolver = sr
@@ -221,7 +213,7 @@ func (a *GenericAdmissionWebhook) callHook(ctx context.Context, h *v1alpha1.Exte
 	}
 
 	// Make the webhook request
-	request := admissionv1alpha1helper.NewAdmissionReview(attr)
+	request := admissionv1alpha1.NewAdmissionReview(attr)
 	client, err := a.hookClient(h)
 	if err != nil {
 		return &ErrCallingWebhook{WebhookName: h.Name, Reason: err}
@@ -249,27 +241,20 @@ func (a *GenericAdmissionWebhook) hookClient(h *v1alpha1.ExternalAdmissionHook) 
 		return nil, err
 	}
 
-	var dial func(network, addr string) (net.Conn, error)
-	if a.proxyTransport != nil && a.proxyTransport.Dial != nil {
-		dial = a.proxyTransport.Dial
-	}
-
 	// TODO: cache these instead of constructing one each time
 	cfg := &rest.Config{
 		Host:    u.Host,
 		APIPath: u.Path,
 		TLSClientConfig: rest.TLSClientConfig{
-			ServerName: h.ClientConfig.Service.Name + "." + h.ClientConfig.Service.Namespace + ".svc",
-			CAData:     h.ClientConfig.CABundle,
-			CertData:   a.clientCert,
-			KeyData:    a.clientKey,
+			CAData:   h.ClientConfig.CABundle,
+			CertData: a.clientCert,
+			KeyData:  a.clientKey,
 		},
 		UserAgent: "kube-apiserver-admission",
 		Timeout:   30 * time.Second,
 		ContentConfig: rest.ContentConfig{
 			NegotiatedSerializer: a.negotiatedSerializer,
 		},
-		Dial: dial,
 	}
 	return rest.UnversionedRESTClientFor(cfg)
 }

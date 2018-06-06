@@ -98,18 +98,23 @@ function kube::release::package_tarballs() {
 
 # Package the source code we built, for compliance/licensing/audit/yadda.
 function kube::release::package_src_tarball() {
+  local -r src_tarball="${RELEASE_TARS}/kubernetes-src.tar.gz"
   kube::log::status "Building tarball: src"
-  local source_files=(
-    $(cd "${KUBE_ROOT}" && find . -mindepth 1 -maxdepth 1 \
-      -not \( \
-        \( -path ./_\*        -o \
-           -path ./.git\*     -o \
-           -path ./.config\* -o \
-           -path ./.gsutil\*    \
-        \) -prune \
-      \))
-  )
-  "${TAR}" czf "${RELEASE_TARS}/kubernetes-src.tar.gz" -C "${KUBE_ROOT}" "${source_files[@]}"
+  if [[ "${KUBE_GIT_TREE_STATE-}" == "clean" ]]; then
+    git archive -o "${src_tarball}" HEAD
+  else
+    local source_files=(
+      $(cd "${KUBE_ROOT}" && find . -mindepth 1 -maxdepth 1 \
+        -not \( \
+          \( -path ./_\*        -o \
+             -path ./.git\*     -o \
+             -path ./.config\* -o \
+             -path ./.gsutil\*    \
+          \) -prune \
+        \))
+    )
+    "${TAR}" czf "${src_tarball}" -C "${KUBE_ROOT}" "${source_files[@]}"
+  fi
 }
 
 # Package up all of the cross compiled clients. Over time this should grow into
@@ -318,6 +323,13 @@ function kube::release::create_docker_images_for_server() {
 
       kube::log::status "Starting docker build for image: ${binary_name}-${arch}"
       (
+        # Docker tags cannot contain '+'
+        local docker_tag="${KUBE_GIT_VERSION/+/_}"
+        if [[ -z "${docker_tag}" ]]; then
+          kube::log::error "git version information missing; cannot create Docker tag"
+          return 1
+        fi
+
         rm -rf ${docker_build_path}
         mkdir -p ${docker_build_path}
         ln ${binary_dir}/${binary_name} ${docker_build_path}/${binary_name}

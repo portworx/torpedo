@@ -22,23 +22,22 @@ import (
 	"strconv"
 	"time"
 
-	"k8s.io/api/core/v1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	coreinformers "k8s.io/client-go/informers/core/v1"
-	clientset "k8s.io/client-go/kubernetes"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api/v1/endpoints"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	coreinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated/externalversions/core/v1"
+	"k8s.io/kubernetes/pkg/client/leaderelection/resourcelock"
+	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/metrics"
 
@@ -46,12 +45,10 @@ import (
 )
 
 const (
-	// maxRetries is the number of times a service will be retried before it is dropped out of the queue.
-	// With the current rate-limiter in use (5ms*2^(maxRetries-1)) the following numbers represent the
-	// sequence of delays between successive queuings of a service.
-	//
-	// 5ms, 10ms, 20ms, 40ms, 80ms, 160ms, 320ms, 640ms, 1.3s, 2.6s, 5.1s, 10.2s, 20.4s, 41s, 82s
-	maxRetries = 15
+	// We'll attempt to recompute EVERY service's endpoints at least this
+	// often. Higher numbers = lower CPU/network load; lower numbers =
+	// shorter amount of time before a mistaken endpoint is corrected.
+	FullServiceResyncPeriod = 30 * time.Second
 
 	// An annotation on the Service denoting if the endpoints controller should
 	// go ahead and create endpoints for unready pods. This annotation is
@@ -63,8 +60,6 @@ const (
 	// receiving traffic for the Service from the moment the kubelet starts all
 	// containers in the pod and marks it "Running", till the kubelet stops all
 	// containers and deletes the pod from the apiserver.
-	// This field is deprecated. v1.Service.PublishNotReadyAddresses will replace it
-	// subsequent releases.
 	TolerateUnreadyEndpointsAnnotation = "service.alpha.kubernetes.io/tolerate-unready-endpoints"
 )
 
@@ -84,13 +79,17 @@ func NewEndpointController(podInformer coreinformers.PodInformer, serviceInforme
 		workerLoopPeriod: time.Second,
 	}
 
-	serviceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: e.enqueueService,
-		UpdateFunc: func(old, cur interface{}) {
-			e.enqueueService(cur)
+	serviceInformer.Informer().AddEventHandlerWithResyncPeriod(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: e.enqueueService,
+			UpdateFunc: func(old, cur interface{}) {
+				e.enqueueService(cur)
+			},
+			DeleteFunc: e.enqueueService,
 		},
-		DeleteFunc: e.enqueueService,
-	})
+		// TODO: Can we have much longer period here?
+		FullServiceResyncPeriod,
+	)
 	e.serviceLister = serviceInformer.Lister()
 	e.servicesSynced = serviceInformer.Informer().HasSynced
 
@@ -201,56 +200,6 @@ func (e *EndpointController) addPod(obj interface{}) {
 	}
 }
 
-func podToEndpointAddress(pod *v1.Pod) *v1.EndpointAddress {
-	return &v1.EndpointAddress{
-		IP:       pod.Status.PodIP,
-		NodeName: &pod.Spec.NodeName,
-		TargetRef: &v1.ObjectReference{
-			Kind:            "Pod",
-			Namespace:       pod.ObjectMeta.Namespace,
-			Name:            pod.ObjectMeta.Name,
-			UID:             pod.ObjectMeta.UID,
-			ResourceVersion: pod.ObjectMeta.ResourceVersion,
-		}}
-}
-
-func podChanged(oldPod, newPod *v1.Pod) bool {
-	// If the pod's readiness has changed, the associated endpoint address
-	// will move from the unready endpoints set to the ready endpoints.
-	// So for the purposes of an endpoint, a readiness change on a pod
-	// means we have a changed pod.
-	if podutil.IsPodReady(oldPod) != podutil.IsPodReady(newPod) {
-		return true
-	}
-	// Convert the pod to an EndpointAddress, clear inert fields,
-	// and see if they are the same.
-	newEndpointAddress := podToEndpointAddress(newPod)
-	oldEndpointAddress := podToEndpointAddress(oldPod)
-	// Ignore the ResourceVersion because it changes
-	// with every pod update. This allows the comparison to
-	// show equality if all other relevant fields match.
-	newEndpointAddress.TargetRef.ResourceVersion = ""
-	oldEndpointAddress.TargetRef.ResourceVersion = ""
-	if reflect.DeepEqual(newEndpointAddress, oldEndpointAddress) {
-		// The pod has not changed in any way that impacts the endpoints
-		return false
-	}
-	return true
-}
-
-func determineNeededServiceUpdates(oldServices, services sets.String, podChanged bool) sets.String {
-	if podChanged {
-		// if the labels and pod changed, all services need to be updated
-		services = services.Union(oldServices)
-	} else {
-		// if only the labels changed, services not common to
-		// both the new and old service set (i.e the disjunctive union)
-		// need to be updated
-		services = services.Difference(oldServices).Union(oldServices.Difference(services))
-	}
-	return services
-}
-
 // When a pod is updated, figure out what services it used to be a member of
 // and what services it will be a member of, and enqueue the union of these.
 // old and cur must be *v1.Pod types.
@@ -262,37 +211,22 @@ func (e *EndpointController) updatePod(old, cur interface{}) {
 		// Two different versions of the same pod will always have different RVs.
 		return
 	}
-
-	podChangedFlag := podChanged(oldPod, newPod)
-
-	// Check if the pod labels have changed, indicating a possibe
-	// change in the service membership
-	labelsChanged := false
-	if !reflect.DeepEqual(newPod.Labels, oldPod.Labels) ||
-		!hostNameAndDomainAreEqual(newPod, oldPod) {
-		labelsChanged = true
-	}
-
-	// If both the pod and labels are unchanged, no update is needed
-	if !podChangedFlag && !labelsChanged {
-		return
-	}
-
 	services, err := e.getPodServiceMemberships(newPod)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Unable to get pod %v/%v's service memberships: %v", newPod.Namespace, newPod.Name, err))
 		return
 	}
 
-	if labelsChanged {
+	// Only need to get the old services if the labels changed.
+	if !reflect.DeepEqual(newPod.Labels, oldPod.Labels) ||
+		!hostNameAndDomainAreEqual(newPod, oldPod) {
 		oldServices, err := e.getPodServiceMemberships(oldPod)
 		if err != nil {
 			utilruntime.HandleError(fmt.Errorf("Unable to get pod %v/%v's service memberships: %v", oldPod.Namespace, oldPod.Name, err))
 			return
 		}
-		services = determineNeededServiceUpdates(oldServices, services, podChangedFlag)
+		services = services.Union(oldServices)
 	}
-
 	for key := range services {
 		e.queue.Add(key)
 	}
@@ -313,19 +247,14 @@ func (e *EndpointController) deletePod(obj interface{}) {
 		e.addPod(obj)
 		return
 	}
-	// If we reached here it means the pod was deleted but its final state is unrecorded.
-	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-	if !ok {
-		utilruntime.HandleError(fmt.Errorf("Couldn't get object from tombstone %#v", obj))
+	podKey, err := keyFunc(obj)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("Couldn't get key for object %#v: %v", obj, err))
 		return
 	}
-	pod, ok := tombstone.Obj.(*v1.Pod)
-	if !ok {
-		utilruntime.HandleError(fmt.Errorf("Tombstone contained object that is not a Pod: %#v", obj))
-		return
-	}
-	glog.V(4).Infof("Enqueuing services of deleted pod %s having final state unrecorded", pod.Name)
-	e.addPod(pod)
+	glog.V(4).Infof("Pod %q was deleted but we don't have a record of its final state, so it will take up to %v before it will be removed from all endpoint records.", podKey, FullServiceResyncPeriod)
+
+	// TODO: keep a map of pods to services to handle this condition.
 }
 
 // obj could be an *v1.Service, or a DeletionFinalStateUnknown marker item.
@@ -356,26 +285,15 @@ func (e *EndpointController) processNextWorkItem() bool {
 	defer e.queue.Done(eKey)
 
 	err := e.syncService(eKey.(string))
-	e.handleErr(err, eKey)
+	if err == nil {
+		e.queue.Forget(eKey)
+		return true
+	}
+
+	utilruntime.HandleError(fmt.Errorf("Sync %v failed with %v", eKey, err))
+	e.queue.AddRateLimited(eKey)
 
 	return true
-}
-
-func (e *EndpointController) handleErr(err error, key interface{}) {
-	if err == nil {
-		e.queue.Forget(key)
-		return
-	}
-
-	if e.queue.NumRequeues(key) < maxRetries {
-		glog.V(2).Infof("Error syncing endpoints for service %q: %v", key, err)
-		e.queue.AddRateLimited(key)
-		return
-	}
-
-	glog.Warningf("Dropping service %q out of the queue: %v", key, err)
-	e.queue.Forget(key)
-	utilruntime.HandleError(err)
 }
 
 func (e *EndpointController) syncService(key string) error {
@@ -395,6 +313,12 @@ func (e *EndpointController) syncService(key string) error {
 		// service is deleted. However, if we're down at the time when
 		// the service is deleted, we will miss that deletion, so this
 		// doesn't completely solve the problem. See #6877.
+		namespace, name, err := cache.SplitMetaNamespaceKey(key)
+		if err != nil {
+			utilruntime.HandleError(fmt.Errorf("Need to delete endpoint with key %q, but couldn't understand the key: %v", key, err))
+			// Don't retry, as the key isn't going to magically become understandable.
+			return nil
+		}
 		err = e.client.Core().Endpoints(namespace).Delete(name, nil)
 		if err != nil && !errors.IsNotFound(err) {
 			return err
@@ -416,6 +340,8 @@ func (e *EndpointController) syncService(key string) error {
 		return err
 	}
 
+	subsets := []v1.EndpointSubset{}
+
 	var tolerateUnreadyEndpoints bool
 	if v, ok := service.Annotations[TolerateUnreadyEndpointsAnnotation]; ok {
 		b, err := strconv.ParseBool(v)
@@ -426,50 +352,63 @@ func (e *EndpointController) syncService(key string) error {
 		}
 	}
 
-	subsets := []v1.EndpointSubset{}
-	var totalReadyEps int = 0
-	var totalNotReadyEps int = 0
+	readyEps := 0
+	notReadyEps := 0
+	for i := range pods {
+		// TODO: Do we need to copy here?
+		pod := &(*pods[i])
 
-	for _, pod := range pods {
-		if len(pod.Status.PodIP) == 0 {
-			glog.V(5).Infof("Failed to find an IP for pod %s/%s", pod.Namespace, pod.Name)
-			continue
-		}
-		if !tolerateUnreadyEndpoints && pod.DeletionTimestamp != nil {
-			glog.V(5).Infof("Pod is being deleted %s/%s", pod.Namespace, pod.Name)
-			continue
-		}
+		for i := range service.Spec.Ports {
+			servicePort := &service.Spec.Ports[i]
 
-		epa := *podToEndpointAddress(pod)
-
-		hostname := pod.Spec.Hostname
-		if len(hostname) > 0 && pod.Spec.Subdomain == service.Name && service.Namespace == pod.Namespace {
-			epa.Hostname = hostname
-		}
-
-		// Allow headless service not to have ports.
-		if len(service.Spec.Ports) == 0 {
-			if service.Spec.ClusterIP == api.ClusterIPNone {
-				epp := v1.EndpointPort{Port: 0, Protocol: v1.ProtocolTCP}
-				subsets, totalReadyEps, totalNotReadyEps = addEndpointSubset(subsets, pod, epa, epp, tolerateUnreadyEndpoints)
+			portName := servicePort.Name
+			portProto := servicePort.Protocol
+			portNum, err := podutil.FindPort(pod, servicePort)
+			if err != nil {
+				glog.V(4).Infof("Failed to find port for service %s/%s: %v", service.Namespace, service.Name, err)
+				continue
 			}
-		} else {
-			for i := range service.Spec.Ports {
-				servicePort := &service.Spec.Ports[i]
+			if len(pod.Status.PodIP) == 0 {
+				glog.V(5).Infof("Failed to find an IP for pod %s/%s", pod.Namespace, pod.Name)
+				continue
+			}
+			if !tolerateUnreadyEndpoints && pod.DeletionTimestamp != nil {
+				glog.V(5).Infof("Pod is being deleted %s/%s", pod.Namespace, pod.Name)
+				continue
+			}
 
-				portName := servicePort.Name
-				portProto := servicePort.Protocol
-				portNum, err := podutil.FindPort(pod, servicePort)
-				if err != nil {
-					glog.V(4).Infof("Failed to find port for service %s/%s: %v", service.Namespace, service.Name, err)
-					continue
-				}
+			epp := v1.EndpointPort{Name: portName, Port: int32(portNum), Protocol: portProto}
+			epa := v1.EndpointAddress{
+				IP:       pod.Status.PodIP,
+				NodeName: &pod.Spec.NodeName,
+				TargetRef: &v1.ObjectReference{
+					Kind:            "Pod",
+					Namespace:       pod.ObjectMeta.Namespace,
+					Name:            pod.ObjectMeta.Name,
+					UID:             pod.ObjectMeta.UID,
+					ResourceVersion: pod.ObjectMeta.ResourceVersion,
+				}}
 
-				var readyEps, notReadyEps int
-				epp := v1.EndpointPort{Name: portName, Port: int32(portNum), Protocol: portProto}
-				subsets, readyEps, notReadyEps = addEndpointSubset(subsets, pod, epa, epp, tolerateUnreadyEndpoints)
-				totalReadyEps = totalReadyEps + readyEps
-				totalNotReadyEps = totalNotReadyEps + notReadyEps
+			hostname := pod.Spec.Hostname
+			if len(hostname) > 0 &&
+				pod.Spec.Subdomain == service.Name &&
+				service.Namespace == pod.Namespace {
+				epa.Hostname = hostname
+			}
+
+			if tolerateUnreadyEndpoints || podutil.IsPodReady(pod) {
+				subsets = append(subsets, v1.EndpointSubset{
+					Addresses: []v1.EndpointAddress{epa},
+					Ports:     []v1.EndpointPort{epp},
+				})
+				readyEps++
+			} else {
+				glog.V(5).Infof("Pod is out of service: %v/%v", pod.Namespace, pod.Name)
+				subsets = append(subsets, v1.EndpointSubset{
+					NotReadyAddresses: []v1.EndpointAddress{epa},
+					Ports:             []v1.EndpointPort{epp},
+				})
+				notReadyEps++
 			}
 		}
 	}
@@ -490,22 +429,24 @@ func (e *EndpointController) syncService(key string) error {
 		}
 	}
 
-	createEndpoints := len(currentEndpoints.ResourceVersion) == 0
-
-	if !createEndpoints &&
-		apiequality.Semantic.DeepEqual(currentEndpoints.Subsets, subsets) &&
-		apiequality.Semantic.DeepEqual(currentEndpoints.Labels, service.Labels) {
+	if reflect.DeepEqual(currentEndpoints.Subsets, subsets) &&
+		reflect.DeepEqual(currentEndpoints.Labels, service.Labels) {
 		glog.V(5).Infof("endpoints are equal for %s/%s, skipping update", service.Namespace, service.Name)
 		return nil
 	}
-	newEndpoints := currentEndpoints.DeepCopy()
+	copy, err := api.Scheme.DeepCopy(currentEndpoints)
+	if err != nil {
+		return err
+	}
+	newEndpoints := copy.(*v1.Endpoints)
 	newEndpoints.Subsets = subsets
 	newEndpoints.Labels = service.Labels
 	if newEndpoints.Annotations == nil {
 		newEndpoints.Annotations = make(map[string]string)
 	}
 
-	glog.V(4).Infof("Update endpoints for %v/%v, ready: %d not ready: %d", service.Namespace, service.Name, totalReadyEps, totalNotReadyEps)
+	glog.V(4).Infof("Update endpoints for %v/%v, ready: %d not ready: %d", service.Namespace, service.Name, readyEps, notReadyEps)
+	createEndpoints := len(currentEndpoints.ResourceVersion) == 0
 	if createEndpoints {
 		// No previous endpoints, create them
 		_, err = e.client.Core().Endpoints(service.Namespace).Create(newEndpoints)
@@ -553,37 +494,5 @@ func (e *EndpointController) checkLeftoverEndpoints() {
 			continue
 		}
 		e.queue.Add(key)
-	}
-}
-
-func addEndpointSubset(subsets []v1.EndpointSubset, pod *v1.Pod, epa v1.EndpointAddress,
-	epp v1.EndpointPort, tolerateUnreadyEndpoints bool) ([]v1.EndpointSubset, int, int) {
-	var readyEps int = 0
-	var notReadyEps int = 0
-	if tolerateUnreadyEndpoints || podutil.IsPodReady(pod) {
-		subsets = append(subsets, v1.EndpointSubset{
-			Addresses: []v1.EndpointAddress{epa},
-			Ports:     []v1.EndpointPort{epp},
-		})
-		readyEps++
-	} else if shouldPodBeInEndpoints(pod) {
-		glog.V(5).Infof("Pod is out of service: %v/%v", pod.Namespace, pod.Name)
-		subsets = append(subsets, v1.EndpointSubset{
-			NotReadyAddresses: []v1.EndpointAddress{epa},
-			Ports:             []v1.EndpointPort{epp},
-		})
-		notReadyEps++
-	}
-	return subsets, readyEps, notReadyEps
-}
-
-func shouldPodBeInEndpoints(pod *v1.Pod) bool {
-	switch pod.Spec.RestartPolicy {
-	case v1.RestartPolicyNever:
-		return pod.Status.Phase != v1.PodFailed && pod.Status.Phase != v1.PodSucceeded
-	case v1.RestartPolicyOnFailure:
-		return pod.Status.Phase != v1.PodSucceeded
-	default:
-		return true
 	}
 }

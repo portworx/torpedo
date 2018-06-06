@@ -29,22 +29,13 @@ import (
 type FakeAPIObject struct{}
 
 func (obj *FakeAPIObject) GetObjectKind() schema.ObjectKind { return schema.EmptyObjectKind }
-func (obj *FakeAPIObject) DeepCopyObject() runtime.Object {
-	if obj == nil {
-		return nil
-	}
-	clone := *obj
-	return &clone
-}
 
 type ExtensionAPIObject struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
 }
 
-func (obj *ExtensionAPIObject) DeepCopyObject() runtime.Object {
-	panic("ExtensionAPIObject does not support DeepCopy")
-}
+func (obj *ExtensionAPIObject) GetObjectKind() schema.ObjectKind { return &obj.TypeMeta }
 
 func TestGetReference(t *testing.T) {
 

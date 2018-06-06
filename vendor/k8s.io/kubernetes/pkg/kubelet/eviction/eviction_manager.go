@@ -24,14 +24,14 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	clientv1 "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/kubernetes/pkg/api/v1"
 	v1qos "k8s.io/kubernetes/pkg/api/v1/helper/qos"
-	apiv1resource "k8s.io/kubernetes/pkg/api/v1/resource"
 	"k8s.io/kubernetes/pkg/features"
 	statsapi "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
@@ -68,7 +68,7 @@ type managerImpl struct {
 	// captures when a node condition was last observed based on a threshold being met
 	nodeConditionsLastObservedAt nodeConditionsObservedAt
 	// nodeRef is a reference to the node
-	nodeRef *v1.ObjectReference
+	nodeRef *clientv1.ObjectReference
 	// used to record events about the node
 	recorder record.EventRecorder
 	// used to measure usage stats on system
@@ -100,7 +100,7 @@ func NewManager(
 	imageGC ImageGC,
 	containerGC ContainerGC,
 	recorder record.EventRecorder,
-	nodeRef *v1.ObjectReference,
+	nodeRef *clientv1.ObjectReference,
 	clock clock.Clock) (Manager, lifecycle.PodAdmitHandler) {
 	manager := &managerImpl{
 		clock:           clock,
@@ -311,8 +311,8 @@ func (m *managerImpl) synchronize(diskInfoProvider DiskInfoProvider, podFunc Act
 	m.lastObservations = observations
 	m.Unlock()
 
-	// evict pods if there is a resource usage violation from local volume temporary storage
-	// If eviction happens in localVolumeEviction function, skip the rest of eviction action
+	// evict pods if there is a resource uage violation from local volume temporary storage
+	// If eviction happenes in localVolumeEviction function, skip the rest of eviction action
 	if utilfeature.DefaultFeatureGate.Enabled(features.LocalStorageCapacityIsolation) {
 		if evictedPods := m.localStorageEviction(activePods); len(evictedPods) > 0 {
 			return evictedPods
@@ -436,14 +436,14 @@ func (m *managerImpl) reclaimNodeLevelResources(resourceToReclaim v1.ResourceNam
 		}
 		// update our local observations based on the amount reported to have been reclaimed.
 		// note: this is optimistic, other things could have been still consuming the pressured resource in the interim.
-		for _, signal := range resourceClaimToSignal[resourceToReclaim] {
-			value, ok := observations[signal]
-			if !ok {
-				glog.Errorf("eviction manager: unable to find value associated with signal %v", signal)
-				continue
-			}
-			value.available.Add(*reclaimed)
+		signal := resourceToSignal[resourceToReclaim]
+		value, ok := observations[signal]
+		if !ok {
+			glog.Errorf("eviction manager: unable to find value associated with signal %v", signal)
+			continue
 		}
+		value.available.Add(*reclaimed)
+
 		// evaluate all current thresholds to see if with adjusted observations, we think we have met min reclaim goals
 		if len(thresholdsMet(m.thresholdsMet, observations, true)) == 0 {
 			return true
@@ -474,12 +474,7 @@ func (m *managerImpl) localStorageEviction(pods []*v1.Pod) []*v1.Pod {
 			continue
 		}
 
-		if m.podEphemeralStorageLimitEviction(podStats, pod) {
-			evicted = append(evicted, pod)
-			continue
-		}
-
-		if m.containerEphemeralStorageLimitEviction(podStats, pod) {
+		if m.containerOverlayLimitEviction(podStats, pod) {
 			evicted = append(evicted, pod)
 		}
 	}
@@ -503,56 +498,23 @@ func (m *managerImpl) emptyDirLimitEviction(podStats statsapi.PodStats, pod *v1.
 			}
 		}
 	}
-
 	return false
 }
 
-func (m *managerImpl) podEphemeralStorageLimitEviction(podStats statsapi.PodStats, pod *v1.Pod) bool {
-	_, podLimits := apiv1resource.PodRequestsAndLimits(pod)
-	_, found := podLimits[v1.ResourceEphemeralStorage]
-	if !found {
-		return false
-	}
-
-	podEphemeralStorageTotalUsage := &resource.Quantity{}
-	fsStatsSet := []fsStatsType{}
-	if *m.dedicatedImageFs {
-		fsStatsSet = []fsStatsType{fsStatsLogs, fsStatsLocalVolumeSource}
-	} else {
-		fsStatsSet = []fsStatsType{fsStatsRoot, fsStatsLogs, fsStatsLocalVolumeSource}
-	}
-	podEphemeralUsage, err := podLocalEphemeralStorageUsage(podStats, pod, fsStatsSet)
-	if err != nil {
-		glog.Errorf("eviction manager: error getting pod disk usage %v", err)
-		return false
-	}
-
-	podEphemeralStorageTotalUsage.Add(podEphemeralUsage[resourceDisk])
-	if podEphemeralStorageTotalUsage.Cmp(podLimits[v1.ResourceEphemeralStorage]) > 0 {
-		// the total usage of pod exceeds the total size limit of containers, evict the pod
-		return m.evictPod(pod, v1.ResourceEphemeralStorage, fmt.Sprintf("pod ephemeral local storage usage exceeds the total limit of containers %v", podLimits[v1.ResourceEphemeralStorage]))
-	}
-	return false
-}
-
-func (m *managerImpl) containerEphemeralStorageLimitEviction(podStats statsapi.PodStats, pod *v1.Pod) bool {
+func (m *managerImpl) containerOverlayLimitEviction(podStats statsapi.PodStats, pod *v1.Pod) bool {
 	thresholdsMap := make(map[string]*resource.Quantity)
 	for _, container := range pod.Spec.Containers {
-		ephemeralLimit := container.Resources.Limits.StorageEphemeral()
-		if ephemeralLimit != nil && ephemeralLimit.Value() != 0 {
-			thresholdsMap[container.Name] = ephemeralLimit
+		overlayLimit := container.Resources.Limits.StorageOverlay()
+		if overlayLimit != nil && overlayLimit.Value() != 0 {
+			thresholdsMap[container.Name] = overlayLimit
 		}
 	}
 
 	for _, containerStat := range podStats.Containers {
-		containerUsed := diskUsage(containerStat.Logs)
-		if !*m.dedicatedImageFs {
-			containerUsed.Add(*diskUsage(containerStat.Rootfs))
-		}
-
-		if ephemeralStorageThreshold, ok := thresholdsMap[containerStat.Name]; ok {
-			if ephemeralStorageThreshold.Cmp(*containerUsed) < 0 {
-				return m.evictPod(pod, v1.ResourceEphemeralStorage, fmt.Sprintf("container's ephemeral local storage usage exceeds the limit %q", ephemeralStorageThreshold.String()))
+		rootfs := diskUsage(containerStat.Rootfs)
+		if overlayThreshold, ok := thresholdsMap[containerStat.Name]; ok {
+			if overlayThreshold.Cmp(*rootfs) < 0 {
+				return m.evictPod(pod, v1.ResourceName("containerOverlay"), fmt.Sprintf("container's overlay usage exceeds the limit %q", overlayThreshold.String()))
 
 			}
 		}

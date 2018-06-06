@@ -12,14 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SRCS=goproxy
-ARCH ?= amd64
-TARGET ?= $(CURDIR)
-GOLANG_VERSION ?= latest
-SRC_DIR = $(notdir $(shell pwd))
-export
+TAG = 0.1
+PREFIX = gcr.io/google_containers
 
-bin:
-	../image-util.sh bin $(SRCS)
+all: push
 
-.PHONY: bin
+goproxy: goproxy.go
+	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w' ./goproxy.go
+
+image: goproxy
+	docker build --pull -t $(PREFIX)/goproxy:$(TAG) .
+
+push: image
+	gcloud docker -- push $(PREFIX)/goproxy:$(TAG)
+
+clean:
+	rm -f goproxy

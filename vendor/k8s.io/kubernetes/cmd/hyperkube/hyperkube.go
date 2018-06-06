@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,14 +25,12 @@ import (
 	"os"
 	"path"
 
-	"github.com/spf13/pflag"
-
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apiserver/pkg/server"
 	utilflag "k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/apiserver/pkg/util/logs"
-	utiltemplate "k8s.io/kubernetes/pkg/util/template"
+	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/version/verflag"
+
+	"github.com/spf13/pflag"
 )
 
 // HyperKube represents a single binary that can morph/manage into multiple
@@ -117,7 +115,7 @@ func (hk *HyperKube) Printf(format string, i ...interface{}) {
 }
 
 // Run the server.  This will pick the appropriate server and run it.
-func (hk *HyperKube) Run(args []string, stopCh <-chan struct{}) error {
+func (hk *HyperKube) Run(args []string) error {
 	// If we are called directly, parse all flags up to the first real
 	// argument.  That should be the server to run.
 	command := args[0]
@@ -176,22 +174,7 @@ func (hk *HyperKube) Run(args []string, stopCh <-chan struct{}) error {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	if !s.RespectsStopCh {
-		// For commands that do not respect the stopCh, we run them in a go
-		// routine and leave them running when stopCh is closed.
-		errCh := make(chan error)
-		go func() {
-			errCh <- s.Run(s, s.Flags().Args(), wait.NeverStop)
-		}()
-		select {
-		case <-stopCh:
-			return errors.New("interrupted") // This error text is ignored.
-		case err = <-errCh:
-			// fall-through
-		}
-	} else {
-		err = s.Run(s, s.Flags().Args(), stopCh)
-	}
+	err = s.Run(s, s.Flags().Args())
 	if err != nil {
 		hk.Println("Error:", err)
 	}
@@ -201,10 +184,12 @@ func (hk *HyperKube) Run(args []string, stopCh <-chan struct{}) error {
 
 // RunToExit will run the hyperkube and then call os.Exit with an appropriate exit code.
 func (hk *HyperKube) RunToExit(args []string) {
-	stopCh := server.SetupSignalHandler()
-	if err := hk.Run(args, stopCh); err != nil {
+	err := hk.Run(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err.Error())
 		os.Exit(1)
 	}
+	os.Exit(0)
 }
 
 // Usage will write out a summary for all servers that this binary supports.
@@ -221,7 +206,7 @@ Servers
 Call '{{.Name}} --make-symlinks' to create symlinks for each server in the local directory.
 Call '{{.Name}} <server> --help' for help on a specific server.
 `
-	utiltemplate.ExecuteTemplate(hk.Out(), tt, hk)
+	util.ExecuteTemplate(hk.Out(), tt, hk)
 }
 
 // MakeSymlinks will create a symlink for each registered hyperkube server in the local directory.

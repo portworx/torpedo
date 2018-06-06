@@ -21,7 +21,8 @@ set -o pipefail
 KUBE_ROOT=$(readlink -m $(dirname "${BASH_SOURCE}")/../../)
 
 # For $FEDERATION_NAME, $FEDERATION_NAMESPACE, $FEDERATION_KUBE_CONTEXT,
-# and $HOST_CLUSTER_CONTEXT.
+# $HOST_CLUSTER_CONTEXT, $KUBEDNS_CONFIGMAP_NAME and
+# $KUBEDNS_CONFIGMAP_NAMESPACE.
 source "${KUBE_ROOT}/federation/cluster/common.sh"
 
 # federation_clusters returns a list of all the clusters in

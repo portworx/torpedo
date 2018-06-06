@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	dockertypes "github.com/docker/docker/api/types"
+	dockertypes "github.com/docker/engine-api/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -131,7 +131,7 @@ func TestContainerStatus(t *testing.T) {
 		Annotations: config.Annotations,
 	}
 
-	fDocker.InjectImages([]dockertypes.ImageSummary{{ID: imageName}})
+	fDocker.InjectImages([]dockertypes.Image{{ID: imageName}})
 
 	// Create the container.
 	fClock.SetTime(time.Now().Add(-1 * time.Hour))
@@ -218,10 +218,9 @@ func TestContainerLogPath(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify container log symlink deletion
-	// symlink is also tentatively deleted at startup
 	err = ds.RemoveContainer(id)
 	assert.NoError(t, err)
-	assert.Equal(t, []string{kubeletContainerLogPath, kubeletContainerLogPath}, fakeOS.Removes)
+	assert.Equal(t, fakeOS.Removes, []string{kubeletContainerLogPath})
 }
 
 // TestContainerCreationConflict tests the logic to work around docker container

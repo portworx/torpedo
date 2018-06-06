@@ -7,7 +7,6 @@
     - makedirs: true
 
 # kube-proxy in a static pod
-{% if pillar.get('kube_proxy_daemonset', '').lower() != 'true' %}
 /etc/kubernetes/manifests/kube-proxy.manifest:
   file.managed:
     - source: salt://kube-proxy/kube-proxy.manifest
@@ -25,7 +24,6 @@
     - require:
       - service: docker
       - service: kubelet
-{% endif %}
 
 /var/log/kube-proxy.log:
   file.managed:

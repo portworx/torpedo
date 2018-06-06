@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -35,18 +35,24 @@ type Interface interface {
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	apiregistrationV1beta1 *apiregistrationv1beta1.ApiregistrationV1beta1Client
+	*apiregistrationv1beta1.ApiregistrationV1beta1Client
 }
 
 // ApiregistrationV1beta1 retrieves the ApiregistrationV1beta1Client
 func (c *Clientset) ApiregistrationV1beta1() apiregistrationv1beta1.ApiregistrationV1beta1Interface {
-	return c.apiregistrationV1beta1
+	if c == nil {
+		return nil
+	}
+	return c.ApiregistrationV1beta1Client
 }
 
 // Deprecated: Apiregistration retrieves the default version of ApiregistrationClient.
 // Please explicitly pick a version.
 func (c *Clientset) Apiregistration() apiregistrationv1beta1.ApiregistrationV1beta1Interface {
-	return c.apiregistrationV1beta1
+	if c == nil {
+		return nil
+	}
+	return c.ApiregistrationV1beta1Client
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -65,7 +71,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
-	cs.apiregistrationV1beta1, err = apiregistrationv1beta1.NewForConfig(&configShallowCopy)
+	cs.ApiregistrationV1beta1Client, err = apiregistrationv1beta1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +88,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
-	cs.apiregistrationV1beta1 = apiregistrationv1beta1.NewForConfigOrDie(c)
+	cs.ApiregistrationV1beta1Client = apiregistrationv1beta1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -91,7 +97,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.apiregistrationV1beta1 = apiregistrationv1beta1.New(c)
+	cs.ApiregistrationV1beta1Client = apiregistrationv1beta1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

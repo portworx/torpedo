@@ -22,7 +22,7 @@ import (
 	"strings"
 	"sync"
 
-	utilexec "k8s.io/utils/exec"
+	utilexec "k8s.io/kubernetes/pkg/util/exec"
 )
 
 const (

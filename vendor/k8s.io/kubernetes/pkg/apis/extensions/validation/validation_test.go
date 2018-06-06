@@ -1238,7 +1238,6 @@ func int64p(i int) *int64 {
 }
 
 func TestValidateDeploymentStatus(t *testing.T) {
-	collisionCount := int32(-3)
 	tests := []struct {
 		name string
 
@@ -1247,7 +1246,7 @@ func TestValidateDeploymentStatus(t *testing.T) {
 		readyReplicas      int32
 		availableReplicas  int32
 		observedGeneration int64
-		collisionCount     *int32
+		collisionCount     *int64
 
 		expectedErr bool
 	}{
@@ -1348,7 +1347,7 @@ func TestValidateDeploymentStatus(t *testing.T) {
 			name:               "invalid collisionCount",
 			replicas:           3,
 			observedGeneration: 1,
-			collisionCount:     &collisionCount,
+			collisionCount:     int64p(-3),
 			expectedErr:        true,
 		},
 	}
@@ -1372,8 +1371,6 @@ func TestValidateDeploymentStatus(t *testing.T) {
 }
 
 func TestValidateDeploymentStatusUpdate(t *testing.T) {
-	collisionCount := int32(1)
-	otherCollisionCount := int32(2)
 	tests := []struct {
 		name string
 
@@ -1387,24 +1384,24 @@ func TestValidateDeploymentStatusUpdate(t *testing.T) {
 				CollisionCount: nil,
 			},
 			to: extensions.DeploymentStatus{
-				CollisionCount: &collisionCount,
+				CollisionCount: int64p(1),
 			},
 			expectedErr: false,
 		},
 		{
 			name: "stable: valid update",
 			from: extensions.DeploymentStatus{
-				CollisionCount: &collisionCount,
+				CollisionCount: int64p(1),
 			},
 			to: extensions.DeploymentStatus{
-				CollisionCount: &collisionCount,
+				CollisionCount: int64p(1),
 			},
 			expectedErr: false,
 		},
 		{
 			name: "unset: invalid update",
 			from: extensions.DeploymentStatus{
-				CollisionCount: &collisionCount,
+				CollisionCount: int64p(1),
 			},
 			to: extensions.DeploymentStatus{
 				CollisionCount: nil,
@@ -1414,10 +1411,10 @@ func TestValidateDeploymentStatusUpdate(t *testing.T) {
 		{
 			name: "decrease: invalid update",
 			from: extensions.DeploymentStatus{
-				CollisionCount: &otherCollisionCount,
+				CollisionCount: int64p(2),
 			},
 			to: extensions.DeploymentStatus{
-				CollisionCount: &collisionCount,
+				CollisionCount: int64p(1),
 			},
 			expectedErr: true,
 		},
@@ -2418,10 +2415,6 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 				SupplementalGroups: extensions.SupplementalGroupsStrategyOptions{
 					Rule: extensions.SupplementalGroupsStrategyRunAsAny,
 				},
-				AllowedHostPaths: []extensions.AllowedHostPath{
-					{PathPrefix: "/foo/bar"},
-					{PathPrefix: "/baz/"},
-				},
 			},
 		}
 	}
@@ -2472,10 +2465,6 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 		{Min: 1, Max: -10},
 	}
 
-	wildcardAllowedCapAndRequiredDrop := validPSP()
-	wildcardAllowedCapAndRequiredDrop.Spec.RequiredDropCapabilities = []api.Capability{"foo"}
-	wildcardAllowedCapAndRequiredDrop.Spec.AllowedCapabilities = []api.Capability{extensions.AllowAllCapabilities}
-
 	requiredCapAddAndDrop := validPSP()
 	requiredCapAddAndDrop.Spec.DefaultAddCapabilities = []api.Capability{"foo"}
 	requiredCapAddAndDrop.Spec.RequiredDropCapabilities = []api.Capability{"foo"}
@@ -2500,28 +2489,10 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 	invalidSeccompDefault.Annotations = map[string]string{
 		seccomp.DefaultProfileAnnotationKey: "not-good",
 	}
-	invalidSeccompAllowAnyDefault := validPSP()
-	invalidSeccompAllowAnyDefault.Annotations = map[string]string{
-		seccomp.DefaultProfileAnnotationKey: "*",
-	}
 	invalidSeccompAllowed := validPSP()
 	invalidSeccompAllowed.Annotations = map[string]string{
 		seccomp.AllowedProfilesAnnotationKey: "docker/default,not-good",
 	}
-
-	invalidAllowedHostPathMissingPath := validPSP()
-	invalidAllowedHostPathMissingPath.Spec.AllowedHostPaths = []extensions.AllowedHostPath{
-		{PathPrefix: ""},
-	}
-
-	invalidAllowedHostPathBacksteps := validPSP()
-	invalidAllowedHostPathBacksteps.Spec.AllowedHostPaths = []extensions.AllowedHostPath{
-		{PathPrefix: "/dont/allow/backsteps/.."},
-	}
-
-	invalidDefaultAllowPrivilegeEscalation := validPSP()
-	pe := true
-	invalidDefaultAllowPrivilegeEscalation.Spec.DefaultAllowPrivilegeEscalation = &pe
 
 	type testCase struct {
 		psp         *extensions.PodSecurityPolicy
@@ -2594,11 +2565,6 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 			errorType:   field.ErrorTypeInvalid,
 			errorDetail: "max cannot be negative",
 		},
-		"non-empty required drops and all caps are allowed by a wildcard": {
-			psp:         wildcardAllowedCapAndRequiredDrop,
-			errorType:   field.ErrorTypeInvalid,
-			errorDetail: "must be empty when all capabilities are allowed by a wildcard",
-		},
 		"invalid required caps": {
 			psp:         requiredCapAddAndDrop,
 			errorType:   field.ErrorTypeInvalid,
@@ -2629,30 +2595,10 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 			errorType:   field.ErrorTypeInvalid,
 			errorDetail: "must be a valid seccomp profile",
 		},
-		"invalid seccomp allow any default profile": {
-			psp:         invalidSeccompAllowAnyDefault,
-			errorType:   field.ErrorTypeInvalid,
-			errorDetail: "must be a valid seccomp profile",
-		},
 		"invalid seccomp allowed profile": {
 			psp:         invalidSeccompAllowed,
 			errorType:   field.ErrorTypeInvalid,
 			errorDetail: "must be a valid seccomp profile",
-		},
-		"invalid defaultAllowPrivilegeEscalation": {
-			psp:         invalidDefaultAllowPrivilegeEscalation,
-			errorType:   field.ErrorTypeInvalid,
-			errorDetail: "Cannot set DefaultAllowPrivilegeEscalation to true without also setting AllowPrivilegeEscalation to true",
-		},
-		"invalid allowed host path empty path": {
-			psp:         invalidAllowedHostPathMissingPath,
-			errorType:   field.ErrorTypeRequired,
-			errorDetail: "is required",
-		},
-		"invalid allowed host path with backsteps": {
-			psp:         invalidAllowedHostPathBacksteps,
-			errorType:   field.ErrorTypeInvalid,
-			errorDetail: "must not contain '..'",
 		},
 	}
 
@@ -2725,13 +2671,8 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 	validSeccomp := validPSP()
 	validSeccomp.Annotations = map[string]string{
 		seccomp.DefaultProfileAnnotationKey:  "docker/default",
-		seccomp.AllowedProfilesAnnotationKey: "docker/default,unconfined,localhost/foo,*",
+		seccomp.AllowedProfilesAnnotationKey: "docker/default,unconfined,localhost/foo",
 	}
-
-	validDefaultAllowPrivilegeEscalation := validPSP()
-	pe = true
-	validDefaultAllowPrivilegeEscalation.Spec.DefaultAllowPrivilegeEscalation = &pe
-	validDefaultAllowPrivilegeEscalation.Spec.AllowPrivilegeEscalation = true
 
 	successCases := map[string]struct {
 		psp *extensions.PodSecurityPolicy
@@ -2759,9 +2700,6 @@ func TestValidatePodSecurityPolicy(t *testing.T) {
 		},
 		"valid seccomp annotations": {
 			psp: validSeccomp,
-		},
-		"valid defaultAllowPrivilegeEscalation as true": {
-			psp: validDefaultAllowPrivilegeEscalation,
 		},
 	}
 
@@ -2809,6 +2747,326 @@ func TestValidatePSPVolumes(t *testing.T) {
 		errs := ValidatePodSecurityPolicy(psp)
 		if len(errs) != 0 {
 			t.Errorf("%s validation expected no errors but received %v", strVolume, errs)
+		}
+	}
+}
+
+func TestValidateNetworkPolicy(t *testing.T) {
+	protocolTCP := api.ProtocolTCP
+	protocolUDP := api.ProtocolUDP
+	protocolICMP := api.Protocol("ICMP")
+
+	successCases := []extensions.NetworkPolicy{
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"a": "b"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"a": "b"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						From:  []extensions.NetworkPolicyPeer{},
+						Ports: []extensions.NetworkPolicyPort{},
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"a": "b"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						Ports: []extensions.NetworkPolicyPort{
+							{
+								Protocol: nil,
+								Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 80},
+							},
+							{
+								Protocol: &protocolTCP,
+								Port:     nil,
+							},
+							{
+								Protocol: &protocolTCP,
+								Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 443},
+							},
+							{
+								Protocol: &protocolUDP,
+								Port:     &intstr.IntOrString{Type: intstr.String, StrVal: "dns"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"a": "b"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						From: []extensions.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"c": "d"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"a": "b"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						From: []extensions.NetworkPolicyPeer{
+							{
+								NamespaceSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"c": "d"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Success cases are expected to pass validation.
+	for k, v := range successCases {
+		if errs := ValidateNetworkPolicy(&v); len(errs) != 0 {
+			t.Errorf("Expected success for %d, got %v", k, errs)
+		}
+	}
+
+	invalidSelector := map[string]string{"NoUppercaseOrSpecialCharsLike=Equals": "b"}
+	errorCases := map[string]extensions.NetworkPolicy{
+		"namespaceSelector and podSelector": {
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"a": "b"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						From: []extensions.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"c": "d"},
+								},
+								NamespaceSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"c": "d"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"invalid spec.podSelector": {
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: invalidSelector,
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						From: []extensions.NetworkPolicyPeer{
+							{
+								NamespaceSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"c": "d"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"invalid ingress.ports.protocol": {
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						Ports: []extensions.NetworkPolicyPort{
+							{
+								Protocol: &protocolICMP,
+								Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 80},
+							},
+						},
+					},
+				},
+			},
+		},
+		"invalid ingress.ports.port (int)": {
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						Ports: []extensions.NetworkPolicyPort{
+							{
+								Protocol: &protocolTCP,
+								Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 123456789},
+							},
+						},
+					},
+				},
+			},
+		},
+		"invalid ingress.ports.port (str)": {
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						Ports: []extensions.NetworkPolicyPort{
+							{
+								Protocol: &protocolTCP,
+								Port:     &intstr.IntOrString{Type: intstr.String, StrVal: "!@#$"},
+							},
+						},
+					},
+				},
+			},
+		},
+		"invalid ingress.from.podSelector": {
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						From: []extensions.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: invalidSelector,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"invalid ingress.from.namespaceSelector": {
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						From: []extensions.NetworkPolicyPeer{
+							{
+								NamespaceSelector: &metav1.LabelSelector{
+									MatchLabels: invalidSelector,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Error cases are not expected to pass validation.
+	for testName, networkPolicy := range errorCases {
+		if errs := ValidateNetworkPolicy(&networkPolicy); len(errs) == 0 {
+			t.Errorf("Expected failure for test: %s", testName)
+		}
+	}
+}
+
+func TestValidateNetworkPolicyUpdate(t *testing.T) {
+	type npUpdateTest struct {
+		old    extensions.NetworkPolicy
+		update extensions.NetworkPolicy
+	}
+	successCases := []npUpdateTest{
+		{
+			old: extensions.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+				Spec: extensions.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{"a": "b"},
+					},
+					Ingress: []extensions.NetworkPolicyIngressRule{},
+				},
+			},
+			update: extensions.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+				Spec: extensions.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{"a": "b"},
+					},
+					Ingress: []extensions.NetworkPolicyIngressRule{},
+				},
+			},
+		},
+	}
+
+	for _, successCase := range successCases {
+		successCase.old.ObjectMeta.ResourceVersion = "1"
+		successCase.update.ObjectMeta.ResourceVersion = "1"
+		if errs := ValidateNetworkPolicyUpdate(&successCase.update, &successCase.old); len(errs) != 0 {
+			t.Errorf("expected success: %v", errs)
+		}
+	}
+	errorCases := map[string]npUpdateTest{
+		"change name": {
+			old: extensions.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+				Spec: extensions.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					Ingress:     []extensions.NetworkPolicyIngressRule{},
+				},
+			},
+			update: extensions.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "baz", Namespace: "bar"},
+				Spec: extensions.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					Ingress:     []extensions.NetworkPolicyIngressRule{},
+				},
+			},
+		},
+		"change spec": {
+			old: extensions.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+				Spec: extensions.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					Ingress:     []extensions.NetworkPolicyIngressRule{},
+				},
+			},
+			update: extensions.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"},
+				Spec: extensions.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{"a": "b"},
+					},
+					Ingress: []extensions.NetworkPolicyIngressRule{},
+				},
+			},
+		},
+	}
+
+	for testName, errorCase := range errorCases {
+		if errs := ValidateNetworkPolicyUpdate(&errorCase.update, &errorCase.old); len(errs) == 0 {
+			t.Errorf("expected failure: %s", testName)
 		}
 	}
 }

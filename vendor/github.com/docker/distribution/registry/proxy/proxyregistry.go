@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,11 +8,10 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/configuration"
-	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/context"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/client"
 	"github.com/docker/distribution/registry/client/auth"
-	"github.com/docker/distribution/registry/client/auth/challenge"
 	"github.com/docker/distribution/registry/client/transport"
 	"github.com/docker/distribution/registry/proxy/scheduler"
 	"github.com/docker/distribution/registry/storage"
@@ -93,7 +91,7 @@ func NewRegistryPullThroughCache(ctx context.Context, registry distribution.Name
 		return nil, err
 	}
 
-	cs, err := configureAuth(config.Username, config.Password, config.RemoteURL)
+	cs, err := configureAuth(config.Username, config.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +102,7 @@ func NewRegistryPullThroughCache(ctx context.Context, registry distribution.Name
 		remoteURL: *remoteURL,
 		authChallenger: &remoteAuthChallenger{
 			remoteURL: *remoteURL,
-			cm:        challenge.NewSimpleManager(),
+			cm:        auth.NewSimpleChallengeManager(),
 			cs:        cs,
 		},
 	}, nil
@@ -121,21 +119,8 @@ func (pr *proxyingRegistry) Repositories(ctx context.Context, repos []string, la
 func (pr *proxyingRegistry) Repository(ctx context.Context, name reference.Named) (distribution.Repository, error) {
 	c := pr.authChallenger
 
-	tkopts := auth.TokenHandlerOptions{
-		Transport:   http.DefaultTransport,
-		Credentials: c.credentialStore(),
-		Scopes: []auth.Scope{
-			auth.RepositoryScope{
-				Repository: name.Name(),
-				Actions:    []string{"pull"},
-			},
-		},
-		Logger: dcontext.GetLogger(ctx),
-	}
-
 	tr := transport.NewTransport(http.DefaultTransport,
-		auth.NewAuthorizer(c.challengeManager(),
-			auth.NewTokenHandlerWithOptions(tkopts)))
+		auth.NewAuthorizer(c.challengeManager(), auth.NewTokenHandler(http.DefaultTransport, c.credentialStore(), name.Name(), "pull")))
 
 	localRepo, err := pr.embedded.Repository(ctx, name)
 	if err != nil {
@@ -146,7 +131,7 @@ func (pr *proxyingRegistry) Repository(ctx context.Context, name reference.Named
 		return nil, err
 	}
 
-	remoteRepo, err := client.NewRepository(name, pr.remoteURL.String(), tr)
+	remoteRepo, err := client.NewRepository(ctx, name, pr.remoteURL.String(), tr)
 	if err != nil {
 		return nil, err
 	}
@@ -192,14 +177,14 @@ func (pr *proxyingRegistry) BlobStatter() distribution.BlobStatter {
 // authChallenger encapsulates a request to the upstream to establish credential challenges
 type authChallenger interface {
 	tryEstablishChallenges(context.Context) error
-	challengeManager() challenge.Manager
+	challengeManager() auth.ChallengeManager
 	credentialStore() auth.CredentialStore
 }
 
 type remoteAuthChallenger struct {
 	remoteURL url.URL
 	sync.Mutex
-	cm challenge.Manager
+	cm auth.ChallengeManager
 	cs auth.CredentialStore
 }
 
@@ -207,7 +192,7 @@ func (r *remoteAuthChallenger) credentialStore() auth.CredentialStore {
 	return r.cs
 }
 
-func (r *remoteAuthChallenger) challengeManager() challenge.Manager {
+func (r *remoteAuthChallenger) challengeManager() auth.ChallengeManager {
 	return r.cm
 }
 
@@ -218,7 +203,7 @@ func (r *remoteAuthChallenger) tryEstablishChallenges(ctx context.Context) error
 
 	remoteURL := r.remoteURL
 	remoteURL.Path = "/v2/"
-	challenges, err := r.cm.GetChallenges(remoteURL)
+	challenges, err := r.cm.GetChallenges(r.remoteURL)
 	if err != nil {
 		return err
 	}
@@ -232,7 +217,7 @@ func (r *remoteAuthChallenger) tryEstablishChallenges(ctx context.Context) error
 		return err
 	}
 
-	dcontext.GetLogger(ctx).Infof("Challenge established with upstream : %s %s", remoteURL, r.cm)
+	context.GetLogger(ctx).Infof("Challenge established with upstream : %s %s", remoteURL, r.cm)
 	return nil
 }
 

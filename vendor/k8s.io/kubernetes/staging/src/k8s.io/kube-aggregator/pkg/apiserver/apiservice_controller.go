@@ -22,13 +22,13 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	v1informers "k8s.io/client-go/informers/core/v1"
 	v1listers "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
@@ -39,7 +39,7 @@ import (
 )
 
 type APIHandlerManager interface {
-	AddAPIService(apiService *apiregistration.APIService) error
+	AddAPIService(apiService *apiregistration.APIService)
 	RemoveAPIService(apiServiceName string)
 }
 
@@ -102,7 +102,8 @@ func (c *APIServiceRegistrationController) sync(key string) error {
 		return nil
 	}
 
-	return c.apiHandlerManager.AddAPIService(apiService)
+	c.apiHandlerManager.AddAPIService(apiService)
+	return nil
 }
 
 func (c *APIServiceRegistrationController) Run(stopCh <-chan struct{}) {

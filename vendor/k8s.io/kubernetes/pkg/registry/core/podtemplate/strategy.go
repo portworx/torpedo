@@ -17,12 +17,16 @@ limitations under the License.
 package podtemplate
 
 import (
+	"fmt"
+
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/pod"
 	"k8s.io/kubernetes/pkg/api/validation"
 )
 
@@ -43,9 +47,7 @@ func (podTemplateStrategy) NamespaceScoped() bool {
 
 // PrepareForCreate clears fields that are not allowed to be set by end users on creation.
 func (podTemplateStrategy) PrepareForCreate(ctx genericapirequest.Context, obj runtime.Object) {
-	template := obj.(*api.PodTemplate)
-
-	pod.DropDisabledAlphaFields(&template.Template.Spec)
+	_ = obj.(*api.PodTemplate)
 }
 
 // Validate validates a new pod template.
@@ -65,11 +67,7 @@ func (podTemplateStrategy) AllowCreateOnUpdate() bool {
 
 // PrepareForUpdate clears fields that are not allowed to be set by end users on update.
 func (podTemplateStrategy) PrepareForUpdate(ctx genericapirequest.Context, obj, old runtime.Object) {
-	newTemplate := obj.(*api.PodTemplate)
-	oldTemplate := old.(*api.PodTemplate)
-
-	pod.DropDisabledAlphaFields(&newTemplate.Template.Spec)
-	pod.DropDisabledAlphaFields(&oldTemplate.Template.Spec)
+	_ = obj.(*api.PodTemplate)
 }
 
 // ValidateUpdate is the default update validation for an end user.
@@ -84,4 +82,25 @@ func (podTemplateStrategy) AllowUnconditionalUpdate() bool {
 func (podTemplateStrategy) Export(ctx genericapirequest.Context, obj runtime.Object, exact bool) error {
 	// Do nothing
 	return nil
+}
+
+func PodTemplateToSelectableFields(podTemplate *api.PodTemplate) fields.Set {
+	return nil
+}
+
+// GetAttrs returns labels and fields of a given object for filtering purposes.
+func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, bool, error) {
+	pt, ok := obj.(*api.PodTemplate)
+	if !ok {
+		return nil, nil, false, fmt.Errorf("given object is not a pod template.")
+	}
+	return labels.Set(pt.ObjectMeta.Labels), PodTemplateToSelectableFields(pt), pt.Initializers != nil, nil
+}
+
+func MatchPodTemplate(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
+	return storage.SelectionPredicate{
+		Label:    label,
+		Field:    field,
+		GetAttrs: GetAttrs,
+	}
 }

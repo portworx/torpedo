@@ -27,7 +27,6 @@ import (
 
 	"github.com/golang/glog"
 
-	certificates "k8s.io/api/certificates/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -35,9 +34,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	certificatesclient "k8s.io/client-go/kubernetes/typed/certificates/v1beta1"
+	certificates "k8s.io/client-go/pkg/apis/certificates/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	certutil "k8s.io/client-go/util/cert"
-	certhelper "k8s.io/kubernetes/pkg/apis/certificates/v1beta1"
 )
 
 // RequestNodeCertificate will create a certificate signing request for a node
@@ -184,11 +183,11 @@ func digestedName(privateKeyData []byte, subject *pkix.Name, usages []certificat
 
 // ensureCompatible ensures that a CSR object is compatible with an original CSR
 func ensureCompatible(new, orig *certificates.CertificateSigningRequest, privateKey interface{}) error {
-	newCsr, err := certhelper.ParseCSR(new)
+	newCsr, err := certificates.ParseCSR(new)
 	if err != nil {
 		return fmt.Errorf("unable to parse new csr: %v", err)
 	}
-	origCsr, err := certhelper.ParseCSR(orig)
+	origCsr, err := certificates.ParseCSR(orig)
 	if err != nil {
 		return fmt.Errorf("unable to parse original csr: %v", err)
 	}

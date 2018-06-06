@@ -24,17 +24,18 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/runtime"
-	coreinformers "k8s.io/client-go/informers/core/v1"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
-	corelisters "k8s.io/client-go/listers/core/v1"
+	clientv1 "k8s.io/client-go/pkg/api/v1"
 	kcache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	coreinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated/externalversions/core/v1"
+	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach/cache"
@@ -49,38 +50,26 @@ import (
 	"k8s.io/kubernetes/pkg/volume/util/volumehelper"
 )
 
-// TimerConfig contains configuration of internal attach/detach timers and
-// should be used only to speed up tests. DefaultTimerConfig is the suggested
-// timer configuration for production.
-type TimerConfig struct {
-	// ReconcilerLoopPeriod is the amount of time the reconciler loop waits
-	// between successive executions
-	ReconcilerLoopPeriod time.Duration
+const (
+	// loopPeriod is the amount of time the reconciler loop waits between
+	// successive executions
+	reconcilerLoopPeriod time.Duration = 100 * time.Millisecond
 
-	// ReconcilerMaxWaitForUnmountDuration is the maximum amount of time the
+	// reconcilerMaxWaitForUnmountDuration is the maximum amount of time the
 	// attach detach controller will wait for a volume to be safely unmounted
 	// from its node. Once this time has expired, the controller will assume the
 	// node or kubelet are unresponsive and will detach the volume anyway.
-	ReconcilerMaxWaitForUnmountDuration time.Duration
+	reconcilerMaxWaitForUnmountDuration time.Duration = 6 * time.Minute
 
-	// DesiredStateOfWorldPopulatorLoopSleepPeriod is the amount of time the
+	// desiredStateOfWorldPopulatorLoopSleepPeriod is the amount of time the
 	// DesiredStateOfWorldPopulator loop waits between successive executions
-	DesiredStateOfWorldPopulatorLoopSleepPeriod time.Duration
+	desiredStateOfWorldPopulatorLoopSleepPeriod time.Duration = 1 * time.Minute
 
-	// DesiredStateOfWorldPopulatorListPodsRetryDuration is the amount of
+	// desiredStateOfWorldPopulatorListPodsRetryDuration is the amount of
 	// time the DesiredStateOfWorldPopulator loop waits between list pods
 	// calls.
-	DesiredStateOfWorldPopulatorListPodsRetryDuration time.Duration
-}
-
-// DefaultTimerConfig is the default configuration of Attach/Detach controller
-// timers.
-var DefaultTimerConfig TimerConfig = TimerConfig{
-	ReconcilerLoopPeriod:                              100 * time.Millisecond,
-	ReconcilerMaxWaitForUnmountDuration:               6 * time.Minute,
-	DesiredStateOfWorldPopulatorLoopSleepPeriod:       1 * time.Minute,
-	DesiredStateOfWorldPopulatorListPodsRetryDuration: 3 * time.Minute,
-}
+	desiredStateOfWorldPopulatorListPodsRetryDuration time.Duration = 3 * time.Minute
+)
 
 // AttachDetachController defines the operations supported by this controller.
 type AttachDetachController interface {
@@ -97,10 +86,8 @@ func NewAttachDetachController(
 	pvInformer coreinformers.PersistentVolumeInformer,
 	cloud cloudprovider.Interface,
 	plugins []volume.VolumePlugin,
-	prober volume.DynamicPluginProber,
 	disableReconciliationSync bool,
-	reconcilerSyncDuration time.Duration,
-	timerConfig TimerConfig) (AttachDetachController, error) {
+	reconcilerSyncDuration time.Duration) (AttachDetachController, error) {
 	// TODO: The default resyncPeriod for shared informers is 12 hours, this is
 	// unacceptable for the attach/detach controller. For example, if a pod is
 	// skipped because the node it is scheduled to didn't set its annotation in
@@ -128,14 +115,14 @@ func NewAttachDetachController(
 		cloud:       cloud,
 	}
 
-	if err := adc.volumePluginMgr.InitPlugins(plugins, prober, adc); err != nil {
+	if err := adc.volumePluginMgr.InitPlugins(plugins, adc); err != nil {
 		return nil, fmt.Errorf("Could not initialize volume plugins for Attach/Detach Controller: %+v", err)
 	}
 
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(kubeClient.Core().RESTClient()).Events("")})
-	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "attachdetach"})
+	recorder := eventBroadcaster.NewRecorder(api.Scheme, clientv1.EventSource{Component: "attachdetach"})
 
 	adc.desiredStateOfWorld = cache.NewDesiredStateOfWorld(&adc.volumePluginMgr)
 	adc.actualStateOfWorld = cache.NewActualStateOfWorld(&adc.volumePluginMgr)
@@ -150,8 +137,8 @@ func NewAttachDetachController(
 
 	// Default these to values in options
 	adc.reconciler = reconciler.NewReconciler(
-		timerConfig.ReconcilerLoopPeriod,
-		timerConfig.ReconcilerMaxWaitForUnmountDuration,
+		reconcilerLoopPeriod,
+		reconcilerMaxWaitForUnmountDuration,
 		reconcilerSyncDuration,
 		disableReconciliationSync,
 		adc.desiredStateOfWorld,
@@ -161,8 +148,8 @@ func NewAttachDetachController(
 		recorder)
 
 	adc.desiredStateOfWorldPopulator = populator.NewDesiredStateOfWorldPopulator(
-		timerConfig.DesiredStateOfWorldPopulatorLoopSleepPeriod,
-		timerConfig.DesiredStateOfWorldPopulatorListPodsRetryDuration,
+		desiredStateOfWorldPopulatorLoopSleepPeriod,
+		desiredStateOfWorldPopulatorListPodsRetryDuration,
 		podInformer.Lister(),
 		adc.desiredStateOfWorld,
 		&adc.volumePluginMgr,
@@ -540,7 +527,7 @@ func (adc *attachDetachController) GetCloudProvider() cloudprovider.Interface {
 	return adc.cloud
 }
 
-func (adc *attachDetachController) GetMounter(pluginName string) mount.Interface {
+func (adc *attachDetachController) GetMounter() mount.Interface {
 	return nil
 }
 
@@ -570,10 +557,6 @@ func (adc *attachDetachController) GetConfigMapFunc() func(namespace, name strin
 	return func(_, _ string) (*v1.ConfigMap, error) {
 		return nil, fmt.Errorf("GetConfigMap unsupported in attachDetachController")
 	}
-}
-
-func (adc *attachDetachController) GetExec(pluginName string) mount.Exec {
-	return mount.NewOsExec()
 }
 
 func (adc *attachDetachController) addNodeToDswp(node *v1.Node, nodeName types.NodeName) {

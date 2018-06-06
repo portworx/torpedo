@@ -5,8 +5,7 @@ metadata:
 spec:
   insecureSkipTLSVerify: true
   group: wardle.k8s.io
-  groupPriorityMinimum: 1000
-  versionPriority: 15
+  priority: 200
   service:
     name: api
     namespace: wardle

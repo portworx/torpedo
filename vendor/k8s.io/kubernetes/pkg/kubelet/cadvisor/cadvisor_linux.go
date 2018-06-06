@@ -21,17 +21,14 @@ package cadvisor
 import (
 	"flag"
 	"fmt"
-	"net"
 	"net/http"
-	"os"
-	"path"
-	"strconv"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/google/cadvisor/cache/memory"
 	cadvisormetrics "github.com/google/cadvisor/container"
 	"github.com/google/cadvisor/events"
+	cadvisorfs "github.com/google/cadvisor/fs"
 	cadvisorhttp "github.com/google/cadvisor/http"
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	cadvisorapiv2 "github.com/google/cadvisor/info/v2"
@@ -43,8 +40,8 @@ import (
 )
 
 type cadvisorClient struct {
-	imageFsInfoProvider ImageFsInfoProvider
-	rootPath            string
+	runtime  string
+	rootPath string
 	manager.Manager
 }
 
@@ -105,7 +102,7 @@ func containerLabels(c *cadvisorapi.ContainerInfo) map[string]string {
 }
 
 // New creates a cAdvisor and exports its API on the specified port if port > 0.
-func New(address string, port uint, imageFsInfoProvider ImageFsInfoProvider, rootPath string) (Interface, error) {
+func New(port uint, runtime string, rootPath string) (Interface, error) {
 	sysFs := sysfs.NewRealSysFs()
 
 	// Create and start the cAdvisor container manager.
@@ -114,23 +111,13 @@ func New(address string, port uint, imageFsInfoProvider ImageFsInfoProvider, roo
 		return nil, err
 	}
 
-	if _, err := os.Stat(rootPath); err != nil {
-		if os.IsNotExist(err) {
-			if err := os.MkdirAll(path.Clean(rootPath), 0750); err != nil {
-				return nil, fmt.Errorf("error creating root directory %q: %v", rootPath, err)
-			}
-		} else {
-			return nil, fmt.Errorf("failed to Stat %q: %v", rootPath, err)
-		}
-	}
-
 	cadvisorClient := &cadvisorClient{
-		imageFsInfoProvider: imageFsInfoProvider,
-		rootPath:            rootPath,
-		Manager:             m,
+		runtime:  runtime,
+		rootPath: rootPath,
+		Manager:  m,
 	}
 
-	err = cadvisorClient.exportHTTP(address, port)
+	err = cadvisorClient.exportHTTP(port)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +128,7 @@ func (cc *cadvisorClient) Start() error {
 	return cc.Manager.Start()
 }
 
-func (cc *cadvisorClient) exportHTTP(address string, port uint) error {
+func (cc *cadvisorClient) exportHTTP(port uint) error {
 	// Register the handlers regardless as this registers the prometheus
 	// collector properly.
 	mux := http.NewServeMux()
@@ -155,7 +142,7 @@ func (cc *cadvisorClient) exportHTTP(address string, port uint) error {
 	// Only start the http server if port > 0
 	if port > 0 {
 		serv := &http.Server{
-			Addr:    net.JoinHostPort(address, strconv.Itoa(int(port))),
+			Addr:    fmt.Sprintf(":%d", port),
 			Handler: mux,
 		}
 
@@ -207,10 +194,17 @@ func (cc *cadvisorClient) MachineInfo() (*cadvisorapi.MachineInfo, error) {
 }
 
 func (cc *cadvisorClient) ImagesFsInfo() (cadvisorapiv2.FsInfo, error) {
-	label, err := cc.imageFsInfoProvider.ImageFsInfoLabel()
-	if err != nil {
-		return cadvisorapiv2.FsInfo{}, err
+	var label string
+
+	switch cc.runtime {
+	case "docker":
+		label = cadvisorfs.LabelDockerImages
+	case "rkt":
+		label = cadvisorfs.LabelRktImages
+	default:
+		return cadvisorapiv2.FsInfo{}, fmt.Errorf("ImagesFsInfo: unknown runtime: %v", cc.runtime)
 	}
+
 	return cc.getFsInfo(label)
 }
 

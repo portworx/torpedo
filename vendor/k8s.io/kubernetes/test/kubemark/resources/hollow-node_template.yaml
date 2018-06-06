@@ -60,7 +60,7 @@ spec:
           mountPath: /var/log
         resources:
           requests:
-            cpu: 40m
+            cpu: 50m
             memory: 100M
         securityContext:
           privileged: true

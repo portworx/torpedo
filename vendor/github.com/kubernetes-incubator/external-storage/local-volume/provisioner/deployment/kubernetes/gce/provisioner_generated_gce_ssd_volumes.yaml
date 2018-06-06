@@ -82,16 +82,6 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: local-storage-provisioner-node-clusterrole
-  namespace: default
-rules:
-- apiGroups: [""]
-  resources: ["nodes"]
-  verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: local-storage-provisioner-node-binding
@@ -102,6 +92,6 @@ subjects:
   namespace: default
 roleRef:
   kind: ClusterRole
-  name: local-storage-provisioner-node-clusterrole
+  name: system:node
   apiGroup: rbac.authorization.k8s.io
 

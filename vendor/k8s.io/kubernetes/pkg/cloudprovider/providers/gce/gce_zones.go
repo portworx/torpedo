@@ -18,16 +18,18 @@ package gce
 
 import (
 	"fmt"
-	"strings"
+	"time"
 
 	compute "google.golang.org/api/compute/v1"
 
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 )
 
 func newZonesMetricContext(request, region string) *metricContext {
-	return newGenericMetricContext("zones", request, region, unusedMetricLabel, computeV1Version)
+	return &metricContext{
+		start:      time.Now(),
+		attributes: []string{"zones_" + request, region, unusedMetricLabel},
+	}
 }
 
 // GetZone creates a cloudprovider.Zone of the current zone and region
@@ -36,37 +38,6 @@ func (gce *GCECloud) GetZone() (cloudprovider.Zone, error) {
 		FailureDomain: gce.localZone,
 		Region:        gce.region,
 	}, nil
-}
-
-// GetZoneByProviderID implements Zones.GetZoneByProviderID
-// This is particularly useful in external cloud providers where the kubelet
-// does not initialize node data.
-func (gce *GCECloud) GetZoneByProviderID(providerID string) (cloudprovider.Zone, error) {
-	_, zone, _, err := splitProviderID(providerID)
-	if err != nil {
-		return cloudprovider.Zone{}, err
-	}
-	region, err := GetGCERegion(zone)
-	if err != nil {
-		return cloudprovider.Zone{}, err
-	}
-	return cloudprovider.Zone{FailureDomain: zone, Region: region}, nil
-}
-
-// GetZoneByNodeName implements Zones.GetZoneByNodeName
-// This is particularly useful in external cloud providers where the kubelet
-// does not initialize node data.
-func (gce *GCECloud) GetZoneByNodeName(nodeName types.NodeName) (cloudprovider.Zone, error) {
-	instanceName := mapNodeNameToInstanceName(nodeName)
-	instance, err := gce.getInstanceByName(instanceName)
-	if err != nil {
-		return cloudprovider.Zone{}, err
-	}
-	region, err := GetGCERegion(instance.Zone)
-	if err != nil {
-		return cloudprovider.Zone{}, err
-	}
-	return cloudprovider.Zone{FailureDomain: instance.Zone, Region: region}, nil
 }
 
 // ListZonesInRegion returns all zones in a GCP region
@@ -81,5 +52,5 @@ func (gce *GCECloud) ListZonesInRegion(region string) ([]*compute.Zone, error) {
 }
 
 func (gce *GCECloud) getRegionLink(region string) string {
-	return gce.service.BasePath + strings.Join([]string{gce.projectID, "regions", region}, "/")
+	return fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%v/regions/%v", gce.projectID, region)
 }

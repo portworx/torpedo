@@ -96,6 +96,7 @@ func WriteToDisk(filename string, kubeconfig *clientcmdapi.Config) error {
 		return err
 	}
 
+	fmt.Printf("[kubeconfig] Wrote KubeConfig file to disk: %q\n", filename)
 	return nil
 }
 

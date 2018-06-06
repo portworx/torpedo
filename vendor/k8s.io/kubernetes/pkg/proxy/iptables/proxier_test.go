@@ -35,12 +35,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/proxy"
-	utilproxy "k8s.io/kubernetes/pkg/proxy/util"
 	"k8s.io/kubernetes/pkg/util/async"
+	"k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	iptablestest "k8s.io/kubernetes/pkg/util/iptables/testing"
-	"k8s.io/utils/exec"
-	fakeexec "k8s.io/utils/exec/testing"
 )
 
 func checkAllLines(t *testing.T, table utiliptables.Table, save []byte, expectedLines map[utiliptables.Chain]string) {
@@ -179,8 +177,8 @@ func TestGetChainLinesMultipleTables(t *testing.T) {
 
 func newFakeServiceInfo(service proxy.ServicePortName, ip net.IP, port int, protocol api.Protocol, onlyNodeLocalEndpoints bool) *serviceInfo {
 	return &serviceInfo{
-		sessionAffinityType:    api.ServiceAffinityNone,                        // default
-		stickyMaxAgeSeconds:    int(api.DefaultClientIPServiceAffinitySeconds), // default
+		sessionAffinityType:    api.ServiceAffinityNone, // default
+		stickyMaxAgeMinutes:    180,                     // TODO: paramaterize this in the API.
 		clusterIP:              ip,
 		port:                   port,
 		protocol:               protocol,
@@ -189,18 +187,18 @@ func newFakeServiceInfo(service proxy.ServicePortName, ip net.IP, port int, prot
 }
 
 func TestDeleteEndpointConnections(t *testing.T) {
-	fcmd := fakeexec.FakeCmd{
-		CombinedOutputScript: []fakeexec.FakeCombinedOutputAction{
+	fcmd := exec.FakeCmd{
+		CombinedOutputScript: []exec.FakeCombinedOutputAction{
 			func() ([]byte, error) { return []byte("1 flow entries have been deleted"), nil },
 			func() ([]byte, error) {
 				return []byte(""), fmt.Errorf("conntrack v1.4.2 (conntrack-tools): 0 flow entries have been deleted.")
 			},
 		},
 	}
-	fexec := fakeexec.FakeExec{
-		CommandScript: []fakeexec.FakeCommandAction{
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
+	fexec := exec.FakeExec{
+		CommandScript: []exec.FakeCommandAction{
+			func(cmd string, args ...string) exec.Cmd { return exec.InitFakeCmd(&fcmd, cmd, args...) },
+			func(cmd string, args ...string) exec.Cmd { return exec.InitFakeCmd(&fcmd, cmd, args...) },
 		},
 		LookPathFunc: func(cmd string) (string, error) { return cmd, nil },
 	}
@@ -259,14 +257,103 @@ func (c *fakeClosable) Close() error {
 	return nil
 }
 
+func TestRevertPorts(t *testing.T) {
+	testCases := []struct {
+		replacementPorts []localPort
+		existingPorts    []localPort
+		expectToBeClose  []bool
+	}{
+		{
+			replacementPorts: []localPort{
+				{port: 5001},
+				{port: 5002},
+				{port: 5003},
+			},
+			existingPorts:   []localPort{},
+			expectToBeClose: []bool{true, true, true},
+		},
+		{
+			replacementPorts: []localPort{},
+			existingPorts: []localPort{
+				{port: 5001},
+				{port: 5002},
+				{port: 5003},
+			},
+			expectToBeClose: []bool{},
+		},
+		{
+			replacementPorts: []localPort{
+				{port: 5001},
+				{port: 5002},
+				{port: 5003},
+			},
+			existingPorts: []localPort{
+				{port: 5001},
+				{port: 5002},
+				{port: 5003},
+			},
+			expectToBeClose: []bool{false, false, false},
+		},
+		{
+			replacementPorts: []localPort{
+				{port: 5001},
+				{port: 5002},
+				{port: 5003},
+			},
+			existingPorts: []localPort{
+				{port: 5001},
+				{port: 5003},
+			},
+			expectToBeClose: []bool{false, true, false},
+		},
+		{
+			replacementPorts: []localPort{
+				{port: 5001},
+				{port: 5002},
+				{port: 5003},
+			},
+			existingPorts: []localPort{
+				{port: 5001},
+				{port: 5002},
+				{port: 5003},
+				{port: 5004},
+			},
+			expectToBeClose: []bool{false, false, false},
+		},
+	}
+
+	for i, tc := range testCases {
+		replacementPortsMap := make(map[localPort]closeable)
+		for _, lp := range tc.replacementPorts {
+			replacementPortsMap[lp] = &fakeClosable{}
+		}
+		existingPortsMap := make(map[localPort]closeable)
+		for _, lp := range tc.existingPorts {
+			existingPortsMap[lp] = &fakeClosable{}
+		}
+		revertPorts(replacementPortsMap, existingPortsMap)
+		for j, expectation := range tc.expectToBeClose {
+			if replacementPortsMap[tc.replacementPorts[j]].(*fakeClosable).closed != expectation {
+				t.Errorf("Expect replacement localport %v to be %v in test case %v", tc.replacementPorts[j], expectation, i)
+			}
+		}
+		for _, lp := range tc.existingPorts {
+			if existingPortsMap[lp].(*fakeClosable).closed == true {
+				t.Errorf("Expect existing localport %v to be false in test case %v", lp, i)
+			}
+		}
+	}
+
+}
+
 // fakePortOpener implements portOpener.
 type fakePortOpener struct {
-	openPorts []*utilproxy.LocalPort
+	openPorts []*localPort
 }
 
 // OpenLocalPort fakes out the listen() and bind() used by syncProxyRules
 // to lock a local port.
-func (f *fakePortOpener) OpenLocalPort(lp *utilproxy.LocalPort) (utilproxy.Closeable, error) {
+func (f *fakePortOpener) OpenLocalPort(lp *localPort) (closeable, error) {
 	f.openPorts = append(f.openPorts, lp)
 	return nil, nil
 }
@@ -299,7 +386,7 @@ func NewFakeProxier(ipt utiliptables.Interface) *Proxier {
 	// TODO: Call NewProxier after refactoring out the goroutine
 	// invocation into a Run() method.
 	p := &Proxier{
-		exec:                     &fakeexec.FakeExec{},
+		exec:                     &exec.FakeExec{},
 		serviceMap:               make(proxyServiceMap),
 		serviceChanges:           newServiceChangeMap(),
 		endpointsMap:             make(proxyEndpointsMap),
@@ -307,8 +394,8 @@ func NewFakeProxier(ipt utiliptables.Interface) *Proxier {
 		iptables:                 ipt,
 		clusterCIDR:              "10.0.0.0/24",
 		hostname:                 testHostname,
-		portsMap:                 make(map[utilproxy.LocalPort]utilproxy.Closeable),
-		portMapper:               &fakePortOpener{[]*utilproxy.LocalPort{}},
+		portsMap:                 make(map[localPort]closeable),
+		portMapper:               &fakePortOpener{[]*localPort{}},
 		healthChecker:            newFakeHealthChecker(),
 		precomputedProbabilities: make([]string, 0, 1001),
 		iptablesData:             bytes.NewBuffer(nil),
@@ -319,6 +406,15 @@ func NewFakeProxier(ipt utiliptables.Interface) *Proxier {
 	}
 	p.syncRunner = async.NewBoundedFrequencyRunner("test-sync-runner", p.syncProxyRules, 0, time.Minute, 1)
 	return p
+}
+
+func hasSessionAffinityRule(rules []iptablestest.Rule) bool {
+	for _, r := range rules {
+		if _, ok := r[iptablestest.Recent]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func hasJump(rules []iptablestest.Rule, destChain, destIP string, destPort int) bool {
@@ -779,7 +875,8 @@ func TestOnlyLocalLoadBalancing(t *testing.T) {
 			svc.Status.LoadBalancer.Ingress = []api.LoadBalancerIngress{{
 				IP: svcLBIP,
 			}}
-			svc.Spec.ExternalTrafficPolicy = api.ServiceExternalTrafficPolicyTypeLocal
+			svc.Annotations[api.BetaAnnotationExternalTraffic] = api.AnnotationValueExternalTrafficLocal
+			svc.Spec.SessionAffinity = api.ServiceAffinityClientIP
 		}),
 	)
 
@@ -834,6 +931,9 @@ func TestOnlyLocalLoadBalancing(t *testing.T) {
 	if !hasJump(lbRules, localEpChain, "", 0) {
 		errorf(fmt.Sprintf("Didn't find jump from lb chain %v to local ep %v", lbChain, epStrNonLocal), lbRules, t)
 	}
+	if !hasSessionAffinityRule(lbRules) {
+		errorf(fmt.Sprintf("Didn't find session affinity rule from lb chain %v", lbChain), lbRules, t)
+	}
 }
 
 func TestOnlyLocalNodePortsNoClusterCIDR(t *testing.T) {
@@ -870,7 +970,7 @@ func onlyLocalNodePorts(t *testing.T, fp *Proxier, ipt *iptablestest.FakeIPTable
 				Protocol: api.ProtocolTCP,
 				NodePort: int32(svcNodePort),
 			}}
-			svc.Spec.ExternalTrafficPolicy = api.ServiceExternalTrafficPolicyTypeLocal
+			svc.Annotations[api.BetaAnnotationExternalTraffic] = api.AnnotationValueExternalTrafficLocal
 		}),
 	)
 
@@ -981,6 +1081,10 @@ func TestBuildServiceMapAddRemove(t *testing.T) {
 			}
 		}),
 		makeTestService("somewhere", "only-local-load-balancer", func(svc *api.Service) {
+			svc.ObjectMeta.Annotations = map[string]string{
+				api.BetaAnnotationExternalTraffic:     api.AnnotationValueExternalTrafficLocal,
+				api.BetaAnnotationHealthCheckNodePort: "345",
+			}
 			svc.Spec.Type = api.ServiceTypeLoadBalancer
 			svc.Spec.ClusterIP = "172.16.55.12"
 			svc.Spec.LoadBalancerIP = "5.6.7.8"
@@ -991,8 +1095,6 @@ func TestBuildServiceMapAddRemove(t *testing.T) {
 					{IP: "10.1.2.3"},
 				},
 			}
-			svc.Spec.ExternalTrafficPolicy = api.ServiceExternalTrafficPolicyTypeLocal
-			svc.Spec.HealthCheckNodePort = 345
 		}),
 	}
 
@@ -1065,10 +1167,6 @@ func TestBuildServiceMapServiceHeadless(t *testing.T) {
 			svc.Spec.ClusterIP = api.ClusterIPNone
 			svc.Spec.Ports = addTestPort(svc.Spec.Ports, "rpc", "UDP", 1234, 0, 0)
 		}),
-		makeTestService("somewhere-else", "headless-without-port", func(svc *api.Service) {
-			svc.Spec.Type = api.ServiceTypeClusterIP
-			svc.Spec.ClusterIP = api.ClusterIPNone
-		}),
 	)
 
 	// Headless service should be ignored
@@ -1124,6 +1222,10 @@ func TestBuildServiceMapServiceUpdate(t *testing.T) {
 		svc.Spec.Ports = addTestPort(svc.Spec.Ports, "somethingelse", "TCP", 1235, 5321, 0)
 	})
 	servicev2 := makeTestService("somewhere", "some-service", func(svc *api.Service) {
+		svc.ObjectMeta.Annotations = map[string]string{
+			api.BetaAnnotationExternalTraffic:     api.AnnotationValueExternalTrafficLocal,
+			api.BetaAnnotationHealthCheckNodePort: "345",
+		}
 		svc.Spec.Type = api.ServiceTypeLoadBalancer
 		svc.Spec.ClusterIP = "172.16.55.4"
 		svc.Spec.LoadBalancerIP = "5.6.7.8"
@@ -1134,8 +1236,6 @@ func TestBuildServiceMapServiceUpdate(t *testing.T) {
 				{IP: "10.1.2.3"},
 			},
 		}
-		svc.Spec.ExternalTrafficPolicy = api.ServiceExternalTrafficPolicyTypeLocal
-		svc.Spec.HealthCheckNodePort = 345
 	})
 
 	fp.OnServiceAdd(servicev1)

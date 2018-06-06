@@ -32,6 +32,7 @@ import (
 
 type BuiltInAuthenticationOptions struct {
 	Anonymous       *AnonymousAuthenticationOptions
+	AnyToken        *AnyTokenAuthenticationOptions
 	BootstrapToken  *BootstrapTokenAuthenticationOptions
 	ClientCert      *genericoptions.ClientCertAuthenticationOptions
 	Keystone        *KeystoneAuthenticationOptions
@@ -41,9 +42,10 @@ type BuiltInAuthenticationOptions struct {
 	ServiceAccounts *ServiceAccountAuthenticationOptions
 	TokenFile       *TokenFileAuthenticationOptions
 	WebHook         *WebHookAuthenticationOptions
+}
 
-	TokenSuccessCacheTTL time.Duration
-	TokenFailureCacheTTL time.Duration
+type AnyTokenAuthenticationOptions struct {
+	Allow bool
 }
 
 type AnonymousAuthenticationOptions struct {
@@ -51,7 +53,7 @@ type AnonymousAuthenticationOptions struct {
 }
 
 type BootstrapTokenAuthenticationOptions struct {
-	Enable bool
+	Allow bool
 }
 
 type KeystoneAuthenticationOptions struct {
@@ -60,13 +62,11 @@ type KeystoneAuthenticationOptions struct {
 }
 
 type OIDCAuthenticationOptions struct {
-	CAFile         string
-	ClientID       string
-	IssuerURL      string
-	UsernameClaim  string
-	UsernamePrefix string
-	GroupsClaim    string
-	GroupsPrefix   string
+	CAFile        string
+	ClientID      string
+	IssuerURL     string
+	UsernameClaim string
+	GroupsClaim   string
 }
 
 type PasswordFileAuthenticationOptions struct {
@@ -88,15 +88,13 @@ type WebHookAuthenticationOptions struct {
 }
 
 func NewBuiltInAuthenticationOptions() *BuiltInAuthenticationOptions {
-	return &BuiltInAuthenticationOptions{
-		TokenSuccessCacheTTL: 10 * time.Second,
-		TokenFailureCacheTTL: 0 * time.Second,
-	}
+	return &BuiltInAuthenticationOptions{}
 }
 
 func (s *BuiltInAuthenticationOptions) WithAll() *BuiltInAuthenticationOptions {
 	return s.
-		WithAnonymous().
+		WithAnyonymous().
+		WithAnyToken().
 		WithBootstrapToken().
 		WithClientCert().
 		WithKeystone().
@@ -108,8 +106,13 @@ func (s *BuiltInAuthenticationOptions) WithAll() *BuiltInAuthenticationOptions {
 		WithWebHook()
 }
 
-func (s *BuiltInAuthenticationOptions) WithAnonymous() *BuiltInAuthenticationOptions {
+func (s *BuiltInAuthenticationOptions) WithAnyonymous() *BuiltInAuthenticationOptions {
 	s.Anonymous = &AnonymousAuthenticationOptions{Allow: true}
+	return s
+}
+
+func (s *BuiltInAuthenticationOptions) WithAnyToken() *BuiltInAuthenticationOptions {
+	s.AnyToken = &AnyTokenAuthenticationOptions{}
 	return s
 }
 
@@ -179,12 +182,15 @@ func (s *BuiltInAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 			"Anonymous requests have a username of system:anonymous, and a group name of system:unauthenticated.")
 	}
 
-	if s.BootstrapToken != nil {
-		fs.BoolVar(&s.BootstrapToken.Enable, "experimental-bootstrap-token-auth", s.BootstrapToken.Enable, ""+
-			"Deprecated (use --enable-bootstrap-token-auth).")
-		fs.MarkDeprecated("experimental-bootstrap-token-auth", "use --enable-bootstrap-token-auth instead.")
+	if s.AnyToken != nil {
+		fs.BoolVar(&s.AnyToken.Allow, "insecure-allow-any-token", s.AnyToken.Allow, ""+
+			"If set, your server will be INSECURE.  Any token will be allowed and user information will be parsed "+
+			"from the token as `username/group1,group2`")
 
-		fs.BoolVar(&s.BootstrapToken.Enable, "enable-bootstrap-token-auth", s.BootstrapToken.Enable, ""+
+	}
+
+	if s.BootstrapToken != nil {
+		fs.BoolVar(&s.BootstrapToken.Allow, "experimental-bootstrap-token-auth", s.BootstrapToken.Allow, ""+
 			"Enable to allow secrets of type 'bootstrap.kubernetes.io/token' in the 'kube-system' "+
 			"namespace to be used for TLS bootstrapping authentication.")
 	}
@@ -219,20 +225,10 @@ func (s *BuiltInAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 			"is not guaranteed to be unique and immutable. This flag is experimental, please see "+
 			"the authentication documentation for further details.")
 
-		fs.StringVar(&s.OIDC.UsernamePrefix, "oidc-username-prefix", "", ""+
-			"If provided, all usernames will be prefixed with this value. If not provided, "+
-			"username claims other than 'email' are prefixed by the issuer URL to avoid "+
-			"clashes. To skip any prefixing, provide the value '-'.")
-
 		fs.StringVar(&s.OIDC.GroupsClaim, "oidc-groups-claim", "", ""+
 			"If provided, the name of a custom OpenID Connect claim for specifying user groups. "+
 			"The claim value is expected to be a string or array of strings. This flag is experimental, "+
 			"please see the authentication documentation for further details.")
-
-		fs.StringVar(&s.OIDC.GroupsPrefix, "oidc-groups-prefix", "", ""+
-			"If provided, all groups will be prefixed with this value to prevent conflicts with "+
-			"other authentication strategies.")
-
 	}
 
 	if s.PasswordFile != nil {
@@ -272,17 +268,18 @@ func (s *BuiltInAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 }
 
 func (s *BuiltInAuthenticationOptions) ToAuthenticationConfig() authenticator.AuthenticatorConfig {
-	ret := authenticator.AuthenticatorConfig{
-		TokenSuccessCacheTTL: s.TokenSuccessCacheTTL,
-		TokenFailureCacheTTL: s.TokenFailureCacheTTL,
-	}
+	ret := authenticator.AuthenticatorConfig{}
 
 	if s.Anonymous != nil {
 		ret.Anonymous = s.Anonymous.Allow
 	}
 
+	if s.AnyToken != nil {
+		ret.AnyToken = s.AnyToken.Allow
+	}
+
 	if s.BootstrapToken != nil {
-		ret.BootstrapToken = s.BootstrapToken.Enable
+		ret.BootstrapToken = s.BootstrapToken.Allow
 	}
 
 	if s.ClientCert != nil {
@@ -322,15 +319,6 @@ func (s *BuiltInAuthenticationOptions) ToAuthenticationConfig() authenticator.Au
 	if s.WebHook != nil {
 		ret.WebhookTokenAuthnConfigFile = s.WebHook.ConfigFile
 		ret.WebhookTokenAuthnCacheTTL = s.WebHook.CacheTTL
-
-		if len(s.WebHook.ConfigFile) > 0 && s.WebHook.CacheTTL > 0 {
-			if s.TokenSuccessCacheTTL > 0 && s.WebHook.CacheTTL < s.TokenSuccessCacheTTL {
-				glog.Warningf("the webhook cache ttl of %s is shorter than the overall cache ttl of %s for successful token authentication attempts.", s.WebHook.CacheTTL, s.TokenSuccessCacheTTL)
-			}
-			if s.TokenFailureCacheTTL > 0 && s.WebHook.CacheTTL < s.TokenFailureCacheTTL {
-				glog.Warningf("the webhook cache ttl of %s is shorter than the overall cache ttl of %s for failed token authentication attempts.", s.WebHook.CacheTTL, s.TokenFailureCacheTTL)
-			}
-		}
 	}
 
 	return ret

@@ -22,21 +22,20 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/google/gofuzz"
-
-	"k8s.io/apimachinery/pkg/api/testing/fuzzer"
-	"k8s.io/apimachinery/pkg/api/testing/roundtrip"
+	apitesting "k8s.io/apimachinery/pkg/api/testing"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	kapitesting "k8s.io/kubernetes/pkg/api/testing"
+
+	"github.com/google/gofuzz"
 )
 
 func TestDeepCopyApiObjects(t *testing.T) {
-	for i := 0; i < *roundtrip.FuzzIters; i++ {
+	for i := 0; i < *apitesting.FuzzIters; i++ {
 		for _, version := range []schema.GroupVersion{testapi.Default.InternalGroupVersion(), api.Registry.GroupOrDie(api.GroupName).GroupVersion} {
-			f := fuzzer.FuzzerFor(kapitesting.FuzzerFuncs, rand.NewSource(rand.Int63()), api.Codecs)
+			f := apitesting.FuzzerFor(kapitesting.FuzzerFuncs(t, api.Codecs), rand.NewSource(rand.Int63()))
 			for kind := range api.Scheme.KnownTypes(version) {
 				doDeepCopyTest(t, version.WithKind(kind), f)
 			}
@@ -50,7 +49,12 @@ func doDeepCopyTest(t *testing.T, kind schema.GroupVersionKind, f *fuzz.Fuzzer) 
 		t.Fatalf("Could not create a %v: %s", kind, err)
 	}
 	f.Fuzz(item)
-	itemCopy := item.DeepCopyObject()
+	itemCopy, err := api.Scheme.DeepCopy(item)
+	if err != nil {
+		t.Errorf("Could not deep copy a %v: %s", kind, err)
+		return
+	}
+
 	if !reflect.DeepEqual(item, itemCopy) {
 		t.Errorf("\nexpected: %#v\n\ngot:      %#v\n\ndiff:      %v", item, itemCopy, diff.ObjectReflectDiff(item, itemCopy))
 	}
@@ -78,9 +82,9 @@ func doDeepCopyTest(t *testing.T, kind schema.GroupVersionKind, f *fuzz.Fuzzer) 
 }
 
 func TestDeepCopySingleType(t *testing.T) {
-	for i := 0; i < *roundtrip.FuzzIters; i++ {
+	for i := 0; i < *apitesting.FuzzIters; i++ {
 		for _, version := range []schema.GroupVersion{testapi.Default.InternalGroupVersion(), api.Registry.GroupOrDie(api.GroupName).GroupVersion} {
-			f := fuzzer.FuzzerFor(kapitesting.FuzzerFuncs, rand.NewSource(rand.Int63()), api.Codecs)
+			f := apitesting.FuzzerFor(kapitesting.FuzzerFuncs(t, api.Codecs), rand.NewSource(rand.Int63()))
 			doDeepCopyTest(t, version.WithKind("Pod"), f)
 		}
 	}

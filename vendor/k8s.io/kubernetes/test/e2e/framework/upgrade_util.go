@@ -18,14 +18,10 @@ package framework
 
 import (
 	"fmt"
-	"os/exec"
 	"path"
 	"strings"
-	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/version"
-	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 )
 
 // RealVersion turns a version constants into a version string deployable on
@@ -40,36 +36,10 @@ func RealVersion(s string) (string, error) {
 	return strings.TrimPrefix(strings.TrimSpace(v), "v"), nil
 }
 
-func traceRouteToMaster() {
-	path, err := exec.LookPath("traceroute")
-	if err != nil {
-		Logf("Could not find traceroute program")
-		return
-	}
-
-	cmd := exec.Command(path, "-I", GetMasterHost())
-	out, err := cmd.Output()
-	if len(out) != 0 {
-		Logf(string(out))
-	}
-	if exiterr, ok := err.(*exec.ExitError); err != nil && ok {
-		Logf("error while running traceroute: %s", exiterr.Stderr)
-	}
-}
-
 func CheckMasterVersion(c clientset.Interface, want string) error {
 	Logf("Checking master version")
-	var err error
-	var v *version.Info
-	waitErr := wait.PollImmediate(5*time.Second, 2*time.Minute, func() (bool, error) {
-		v, err = c.Discovery().ServerVersion()
-		if err != nil {
-			traceRouteToMaster()
-			return false, nil
-		}
-		return true, nil
-	})
-	if waitErr != nil {
+	v, err := c.Discovery().ServerVersion()
+	if err != nil {
 		return fmt.Errorf("CheckMasterVersion() couldn't get the master version: %v", err)
 	}
 	// We do prefix trimming and then matching because:

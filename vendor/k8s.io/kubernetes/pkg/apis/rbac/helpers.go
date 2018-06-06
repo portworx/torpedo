@@ -215,8 +215,9 @@ func (r *PolicyRuleBuilder) Rule() (PolicyRule, error) {
 			return PolicyRule{}, fmt.Errorf("non-resource rule may not have apiGroups, resources, or resourceNames: %#v", r.PolicyRule)
 		}
 	case len(r.PolicyRule.Resources) > 0:
-		// resource rule may not have nonResourceURLs
-
+		if len(r.PolicyRule.NonResourceURLs) != 0 {
+			return PolicyRule{}, fmt.Errorf("resource rule may not have nonResourceURLs: %#v", r.PolicyRule)
+		}
 		if len(r.PolicyRule.APIGroups) == 0 {
 			// this a common bug
 			return PolicyRule{}, fmt.Errorf("resource rule must have apiGroups: %#v", r.PolicyRule)

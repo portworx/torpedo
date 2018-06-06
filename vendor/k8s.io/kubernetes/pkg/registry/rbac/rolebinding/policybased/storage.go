@@ -23,7 +23,6 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
-	kapihelper "k8s.io/kubernetes/pkg/api/helper"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	rbacregistry "k8s.io/kubernetes/pkg/registry/rbac"
 	rbacregistryvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
@@ -84,11 +83,6 @@ func (s *Storage) Update(ctx genericapirequest.Context, name string, obj rest.Up
 		}
 
 		roleBinding := obj.(*rbac.RoleBinding)
-
-		// if we're only mutating fields needed for the GC to eventually delete this obj, return
-		if rbacregistry.IsOnlyMutatingGCFields(obj, oldObj, kapihelper.Semantic) {
-			return obj, nil
-		}
 
 		// if we're explicitly authorized to bind this role, return
 		if rbacregistry.BindingAuthorized(ctx, roleBinding.RoleRef, namespace, s.authorizer) {

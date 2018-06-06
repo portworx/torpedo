@@ -23,11 +23,12 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/kubernetes/pkg/api/v1"
+	apiservice "k8s.io/kubernetes/pkg/api/v1/service"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	gcecloud "k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
 
@@ -50,13 +51,13 @@ func MakeFirewallNameForLBService(name string) string {
 }
 
 // ConstructFirewallForLBService returns the expected GCE firewall rule for a loadbalancer type service
-func ConstructFirewallForLBService(svc *v1.Service, nodeTag string) *compute.Firewall {
+func ConstructFirewallForLBService(svc *v1.Service, nodesTags []string) *compute.Firewall {
 	if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
 		Failf("can not construct firewall rule for non-loadbalancer type service")
 	}
 	fw := compute.Firewall{}
 	fw.Name = MakeFirewallNameForLBService(cloudprovider.GetLoadBalancerName(svc))
-	fw.TargetTags = []string{nodeTag}
+	fw.TargetTags = nodesTags
 	if svc.Spec.LoadBalancerSourceRanges == nil {
 		fw.SourceRanges = []string{"0.0.0.0/0"}
 	} else {
@@ -76,17 +77,17 @@ func MakeHealthCheckFirewallNameForLBService(clusterID, name string, isNodesHeal
 }
 
 // ConstructHealthCheckFirewallForLBService returns the expected GCE firewall rule for a loadbalancer type service
-func ConstructHealthCheckFirewallForLBService(clusterID string, svc *v1.Service, nodeTag string, isNodesHealthCheck bool) *compute.Firewall {
+func ConstructHealthCheckFirewallForLBService(clusterID string, svc *v1.Service, nodesTags []string, isNodesHealthCheck bool) *compute.Firewall {
 	if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
 		Failf("can not construct firewall rule for non-loadbalancer type service")
 	}
 	fw := compute.Firewall{}
 	fw.Name = MakeHealthCheckFirewallNameForLBService(clusterID, cloudprovider.GetLoadBalancerName(svc), isNodesHealthCheck)
-	fw.TargetTags = []string{nodeTag}
+	fw.TargetTags = nodesTags
 	fw.SourceRanges = gcecloud.LoadBalancerSrcRanges()
 	healthCheckPort := gcecloud.GetNodesHealthCheckPort()
 	if !isNodesHealthCheck {
-		healthCheckPort = svc.Spec.HealthCheckNodePort
+		healthCheckPort = apiservice.GetServiceHealthCheckNodePort(svc)
 	}
 	fw.Allowed = []*compute.FirewallAllowed{
 		{
@@ -95,6 +96,14 @@ func ConstructHealthCheckFirewallForLBService(clusterID string, svc *v1.Service,
 		},
 	}
 	return &fw
+}
+
+// GetNodeTags gets tags from one of the Kubernetes nodes
+func GetNodeTags(c clientset.Interface, cloudConfig CloudConfig) *compute.Tags {
+	nodes := GetReadySchedulableNodesOrDie(c)
+	Expect(len(nodes.Items) > 0).Should(BeTrue())
+	nodeTags := GetInstanceTags(cloudConfig, nodes.Items[0].Name)
+	return nodeTags
 }
 
 // GetInstanceTags gets tags from GCE instance with given name.
@@ -109,28 +118,18 @@ func GetInstanceTags(cloudConfig CloudConfig, instanceName string) *compute.Tags
 }
 
 // SetInstanceTags sets tags on GCE instance with given name.
-func SetInstanceTags(cloudConfig CloudConfig, instanceName, zone string, tags []string) []string {
+func SetInstanceTags(cloudConfig CloudConfig, instanceName string, tags []string) []string {
 	gceCloud := cloudConfig.Provider.(*gcecloud.GCECloud)
 	// Re-get instance everytime because we need the latest fingerprint for updating metadata
 	resTags := GetInstanceTags(cloudConfig, instanceName)
 	_, err := gceCloud.GetComputeService().Instances.SetTags(
-		cloudConfig.ProjectID, zone, instanceName,
+		cloudConfig.ProjectID, cloudConfig.Zone, instanceName,
 		&compute.Tags{Fingerprint: resTags.Fingerprint, Items: tags}).Do()
 	if err != nil {
 		Failf("failed to set instance tags: %v", err)
 	}
 	Logf("Sent request to set tags %v on instance: %v", tags, instanceName)
 	return resTags.Items
-}
-
-// GetNodeTags gets k8s node tag from one of the nodes
-func GetNodeTags(c clientset.Interface, cloudConfig CloudConfig) []string {
-	nodes := GetReadySchedulableNodesOrDie(c)
-	if len(nodes.Items) == 0 {
-		Logf("GetNodeTags: Found 0 node.")
-		return []string{}
-	}
-	return GetInstanceTags(cloudConfig, nodes.Items[0].Name).Items
 }
 
 // GetInstancePrefix returns the INSTANCE_PREFIX env we set for e2e cluster.

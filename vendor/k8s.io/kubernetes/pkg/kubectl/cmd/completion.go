@@ -24,7 +24,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
+	"k8s.io/kubernetes/pkg/util/i18n"
 )
 
 const defaultBoilerPlate = `
@@ -50,41 +50,44 @@ var (
 		completion of kubectl commands.  This can be done by sourcing it from
 		the .bash_profile.
 
-		Detailed instructions on how to do this are available here:
-		https://kubernetes.io/docs/tasks/tools/install-kubectl/#enabling-shell-autocompletion
+		Note: this requires the bash-completion framework, which is not installed
+		by default on Mac.  This can be installed by using homebrew:
+
+		    $ brew install bash-completion
+
+		Once installed, bash_completion must be evaluated.  This can be done by adding the
+		following line to the .bash_profile
+
+		    $ source $(brew --prefix)/etc/bash_completion
 
 		Note for zsh users: [1] zsh completions are only supported in versions of zsh >= 5.2`))
 
 	completion_example = templates.Examples(i18n.T(`
-		# Installing bash completion on macOS using homebrew
-		## If running Bash 3.2 included with macOS
-		    brew install bash-completion
-		## or, if running Bash 4.1+
-		    brew install bash-completion@2
-		## If kubectl is installed via homebrew, this should start working immediately.
-		## If you've installed via other means, you may need add the completion to your completion directory
-		    kubectl completion bash > $(brew --prefix)/etc/bash_completion.d/kubectl
+		# Install bash completion on a Mac using homebrew
+		brew install bash-completion
+		printf "
+# Bash completion support
+source $(brew --prefix)/etc/bash_completion
+" >> $HOME/.bash_profile
+		source $HOME/.bash_profile
 
+		# Load the kubectl completion code for bash into the current shell
+		source <(kubectl completion bash)
 
-		# Installing bash completion on Linux
-		## Load the kubectl completion code for bash into the current shell
-		    source <(kubectl completion bash)
-		## Write bash completion code to a file and source if from .bash_profile
-		    kubectl completion bash > ~/.kube/completion.bash.inc
-		    printf "
-		      # Kubectl shell completion
-		      source '$HOME/.kube/completion.bash.inc'
-		      " >> $HOME/.bash_profile
-		    source $HOME/.bash_profile
+		# Write bash completion code to a file and source if from .bash_profile
+		kubectl completion bash > ~/.kube/completion.bash.inc
+		printf "
+# Kubectl shell completion
+source '$HOME/.kube/completion.bash.inc'
+" >> $HOME/.bash_profile
+		source $HOME/.bash_profile
 
 		# Load the kubectl completion code for zsh[1] into the current shell
-		    source <(kubectl completion zsh)
-		# Set the kubectl completion code for zsh[1] to autoload on startup
-		    kubectl completion zsh > "${fpath[1]}/_kubectl"`))
+		source <(kubectl completion zsh)`))
 )
 
 var (
-	completion_shells = map[string]func(out io.Writer, boilerPlate string, cmd *cobra.Command) error{
+	completion_shells = map[string]func(out io.Writer, cmd *cobra.Command) error{
 		"bash": runCompletionBash,
 		"zsh":  runCompletionZsh,
 	}
@@ -113,42 +116,30 @@ func NewCmdCompletion(out io.Writer, boilerPlate string) *cobra.Command {
 
 func RunCompletion(out io.Writer, boilerPlate string, cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		return cmdutil.UsageErrorf(cmd, "Shell not specified.")
+		return cmdutil.UsageError(cmd, "Shell not specified.")
 	}
 	if len(args) > 1 {
-		return cmdutil.UsageErrorf(cmd, "Too many arguments. Expected only the shell type.")
+		return cmdutil.UsageError(cmd, "Too many arguments. Expected only the shell type.")
 	}
 	run, found := completion_shells[args[0]]
 	if !found {
-		return cmdutil.UsageErrorf(cmd, "Unsupported shell type %q.", args[0])
+		return cmdutil.UsageError(cmd, "Unsupported shell type %q.", args[0])
 	}
 
-	return run(out, boilerPlate, cmd.Parent())
-}
-
-func runCompletionBash(out io.Writer, boilerPlate string, kubectl *cobra.Command) error {
 	if len(boilerPlate) == 0 {
 		boilerPlate = defaultBoilerPlate
 	}
 	if _, err := out.Write([]byte(boilerPlate)); err != nil {
 		return err
 	}
+	return run(out, cmd.Parent())
+}
 
+func runCompletionBash(out io.Writer, kubectl *cobra.Command) error {
 	return kubectl.GenBashCompletion(out)
 }
 
-func runCompletionZsh(out io.Writer, boilerPlate string, kubectl *cobra.Command) error {
-	zsh_head := "#compdef kubectl\n"
-
-	out.Write([]byte(zsh_head))
-
-	if len(boilerPlate) == 0 {
-		boilerPlate = defaultBoilerPlate
-	}
-	if _, err := out.Write([]byte(boilerPlate)); err != nil {
-		return err
-	}
-
+func runCompletionZsh(out io.Writer, kubectl *cobra.Command) error {
 	zsh_initialization := `
 __kubectl_bash_source() {
 	alias shopt=':'
@@ -198,6 +189,14 @@ __kubectl_compgen() {
 
 __kubectl_compopt() {
 	true # don't do anything. Not supported by bashcompinit in zsh
+}
+
+__kubectl_declare() {
+	if [ "$1" == "-F" ]; then
+		whence -w "$@"
+	else
+		builtin declare "$@"
+	fi
 }
 
 __kubectl_ltrim_colon_completions()
@@ -287,7 +286,7 @@ __kubectl_convert_bash_to_zsh() {
 	-e "s/${LWORD}__ltrim_colon_completions${RWORD}/__kubectl_ltrim_colon_completions/g" \
 	-e "s/${LWORD}compgen${RWORD}/__kubectl_compgen/g" \
 	-e "s/${LWORD}compopt${RWORD}/__kubectl_compopt/g" \
-	-e "s/${LWORD}declare${RWORD}/builtin declare/g" \
+	-e "s/${LWORD}declare${RWORD}/__kubectl_declare/g" \
 	-e "s/\\\$(type${RWORD}/\$(__kubectl_type/g" \
 	<<'BASH_COMPLETION_EOF'
 `
@@ -302,7 +301,6 @@ BASH_COMPLETION_EOF
 }
 
 __kubectl_bash_source <(__kubectl_convert_bash_to_zsh)
-_complete kubectl 2>/dev/null
 `
 	out.Write([]byte(zsh_tail))
 	return nil

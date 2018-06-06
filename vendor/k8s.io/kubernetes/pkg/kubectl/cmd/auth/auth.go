@@ -34,7 +34,6 @@ func NewCmdAuth(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 	}
 
 	cmds.AddCommand(NewCmdCanI(f, out, errOut))
-	cmds.AddCommand(NewCmdReconcile(f, out, errOut))
 
 	return cmds
 }

@@ -12,14 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SRCS=no-snat-test-proxy
-ARCH ?= amd64
-TARGET ?= $(CURDIR)
-GOLANG_VERSION ?= latest
-SRC_DIR = $(notdir $(shell pwd))
-export
+REGISTRY?=gcr.io/google_containers
+REGISTRY_TAG?=1.0.1
+ARCH?=amd64
+NAME?=no-snat-test-proxy
 
-bin:
-	../image-util.sh bin $(SRCS)
+build:
+	go build --ldflags '-linkmode external -extldflags "-static"' -o $(NAME) main.go
+	docker build -t $(REGISTRY)/$(NAME)-$(ARCH):$(REGISTRY_TAG) .
+	rm $(NAME)
 
-.PHONY: bin
+push: build
+	gcloud docker -- push $(REGISTRY)/$(NAME)-$(ARCH):$(REGISTRY_TAG)
+
+all: build
+.PHONY: build push

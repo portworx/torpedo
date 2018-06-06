@@ -28,10 +28,9 @@ import (
 
 	"k8s.io/apiserver/pkg/server/healthz"
 
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/tools/leaderelection"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/externalversions"
+	"k8s.io/kubernetes/pkg/client/leaderelection"
+	"k8s.io/kubernetes/pkg/client/leaderelection/resourcelock"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/configz"
 	"k8s.io/kubernetes/plugin/cmd/kube-scheduler/app/options"
@@ -94,9 +93,7 @@ func Run(s *options.SchedulerServer) error {
 		return fmt.Errorf("error creating scheduler: %v", err)
 	}
 
-	if s.Port != -1 {
-		go startHTTP(s)
-	}
+	go startHTTP(s)
 
 	stop := make(chan struct{})
 	defer close(stop)
@@ -106,14 +103,14 @@ func Run(s *options.SchedulerServer) error {
 	informerFactory.WaitForCacheSync(stop)
 	controller.WaitForCacheSync("scheduler", stop, podInformer.Informer().HasSynced)
 
-	run := func(stopCh <-chan struct{}) {
+	run := func(_ <-chan struct{}) {
 		sched.Run()
-		<-stopCh
+		select {}
 	}
 
 	if !s.LeaderElection.LeaderElect {
-		run(stop)
-		return fmt.Errorf("finished without leader elect")
+		run(nil)
+		panic("unreachable")
 	}
 
 	id, err := os.Hostname()
@@ -124,35 +121,29 @@ func Run(s *options.SchedulerServer) error {
 	rl, err := resourcelock.New(s.LeaderElection.ResourceLock,
 		s.LockObjectNamespace,
 		s.LockObjectName,
-		leaderElectionClient.CoreV1(),
+		leaderElectionClient,
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
 			EventRecorder: recorder,
 		})
 	if err != nil {
-		return fmt.Errorf("error creating lock: %v", err)
+		glog.Fatalf("error creating lock: %v", err)
 	}
 
-	leaderElector, err := leaderelection.NewLeaderElector(
-		leaderelection.LeaderElectionConfig{
-			Lock:          rl,
-			LeaseDuration: s.LeaderElection.LeaseDuration.Duration,
-			RenewDeadline: s.LeaderElection.RenewDeadline.Duration,
-			RetryPeriod:   s.LeaderElection.RetryPeriod.Duration,
-			Callbacks: leaderelection.LeaderCallbacks{
-				OnStartedLeading: run,
-				OnStoppedLeading: func() {
-					utilruntime.HandleError(fmt.Errorf("lost master"))
-				},
+	leaderelection.RunOrDie(leaderelection.LeaderElectionConfig{
+		Lock:          rl,
+		LeaseDuration: s.LeaderElection.LeaseDuration.Duration,
+		RenewDeadline: s.LeaderElection.RenewDeadline.Duration,
+		RetryPeriod:   s.LeaderElection.RetryPeriod.Duration,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: run,
+			OnStoppedLeading: func() {
+				glog.Fatalf("lost master")
 			},
-		})
-	if err != nil {
-		return err
-	}
+		},
+	})
 
-	leaderElector.Run()
-
-	return fmt.Errorf("lost lease")
+	panic("unreachable")
 }
 
 func startHTTP(s *options.SchedulerServer) {

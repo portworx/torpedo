@@ -25,6 +25,7 @@ import (
 	"k8s.io/kubernetes/federation/apis/federation"
 	"k8s.io/kubernetes/federation/registry/cluster"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/registry/cachesize"
 )
 
 type REST struct {
@@ -47,11 +48,12 @@ func (r *StatusREST) Update(ctx genericapirequest.Context, name string, objInfo 
 // NewREST returns a RESTStorage object that will work against clusters.
 func NewREST(optsGetter generic.RESTOptionsGetter) (*REST, *StatusREST) {
 	store := &genericregistry.Store{
-		Copier:                   api.Scheme,
-		NewFunc:                  func() runtime.Object { return &federation.Cluster{} },
-		NewListFunc:              func() runtime.Object { return &federation.ClusterList{} },
-		PredicateFunc:            cluster.MatchCluster,
-		DefaultQualifiedResource: federation.Resource("clusters"),
+		Copier:            api.Scheme,
+		NewFunc:           func() runtime.Object { return &federation.Cluster{} },
+		NewListFunc:       func() runtime.Object { return &federation.ClusterList{} },
+		PredicateFunc:     cluster.MatchCluster,
+		QualifiedResource: federation.Resource("clusters"),
+		WatchCacheSize:    cachesize.GetWatchCacheSizeByResource("clusters"),
 
 		CreateStrategy:      cluster.Strategy,
 		UpdateStrategy:      cluster.Strategy,
