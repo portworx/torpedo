@@ -17,18 +17,20 @@ import:
   version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh
+- package: google.golang.org/grpc
+  version: v1.6.0 
+- package: github.com/golang/protobuf
+  version: v1.1.0 
 - package: k8s.io/kubernetes
-  version: v1.7.5
+  version: v1.7.16
   subpackages:
   - pkg/api/v1/helper
 - package: k8s.io/apimachinery
-  version: kubernetes-1.7.5
+  version: kubernetes-1.7.16
   subpackages:
   - pkg/runtime
-- package: k8s.io/api
-  version: kubernetes-1.7.5
 - package: k8s.io/client-go
-  version: v5.0.1
+  version: kubernetes-1.7.16
 - package: github.com/portworx/sched-ops
   version: 1.7 
   repo: git@github.com:portworx/sched-ops.git
