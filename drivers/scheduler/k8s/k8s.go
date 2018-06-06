@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	v1 "k8s.io/client-go/pkg/api/v1"
 	apps_api "k8s.io/client-go/pkg/apis/apps/v1beta1"
-	storage_api "k8s.io/client-go/pkg/apis/storage"
+	storage_api "k8s.io/client-go/pkg/apis/storage/v1"
 )
 
 const (
