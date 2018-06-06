@@ -18,9 +18,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-SCRIPT_ROOT=$(dirname "${BASH_SOURCE}")/..
-SCRIPT_BASE=${SCRIPT_ROOT}/../..
-CODEGEN_PKG=${CODEGEN_PKG:-$(cd ${SCRIPT_ROOT}; ls -d -1 ./vendor/k8s.io/code-generator 2>/dev/null || echo k8s.io/code-generator)}
+KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../../../../..
+APIFEDERATOR_ROOT=$(dirname "${BASH_SOURCE}")/..
+source "${KUBE_ROOT}/hack/lib/init.sh"
 
 if LANG=C sed --help 2>&1 | grep -q GNU; then
   SED="sed"
@@ -41,8 +41,7 @@ trap cleanup EXIT
 
 echo "Building client-gen"
 CLIENTGEN="${PWD}/client-gen-binary"
-
-go build -o "${CLIENTGEN}" ${CODEGEN_PKG}/cmd/client-gen
+go build -o "${CLIENTGEN}" ./cmd/libs/go2idl/client-gen
 
 PREFIX=k8s.io/kube-aggregator/pkg/apis
 INPUT_BASE="--input-base ${PREFIX}"
@@ -53,25 +52,25 @@ apiregistration/v1beta1
 INPUT="--input ${INPUT_APIS[@]}"
 CLIENTSET_PATH="--clientset-path k8s.io/kube-aggregator/pkg/client/clientset_generated"
 
-${CLIENTGEN} ${INPUT_BASE} ${INPUT} ${CLIENTSET_PATH} --output-base ${SCRIPT_BASE}
-${CLIENTGEN} --clientset-name="clientset" ${INPUT_BASE} --input apiregistration/v1beta1 ${CLIENTSET_PATH}  --output-base ${SCRIPT_BASE}
+${CLIENTGEN} ${INPUT_BASE} ${INPUT} ${CLIENTSET_PATH} --output-base ${KUBE_ROOT}/vendor
+${CLIENTGEN} --clientset-name="clientset" ${INPUT_BASE} --input apiregistration/v1beta1 ${CLIENTSET_PATH}  --output-base ${KUBE_ROOT}/vendor
 
 
 echo "Building lister-gen"
 listergen="${PWD}/lister-gen"
-go build -o "${listergen}" ${CODEGEN_PKG}/cmd/lister-gen
+go build -o "${listergen}" ./cmd/libs/go2idl/lister-gen
 
 LISTER_INPUT="--input-dirs k8s.io/kube-aggregator/pkg/apis/apiregistration --input-dirs k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1"
 LISTER_PATH="--output-package k8s.io/kube-aggregator/pkg/client/listers"
-${listergen} ${LISTER_INPUT} ${LISTER_PATH} --output-base ${SCRIPT_BASE}
+${listergen} ${LISTER_INPUT} ${LISTER_PATH} --output-base ${KUBE_ROOT}/vendor
 
 
 echo "Building informer-gen"
 informergen="${PWD}/informer-gen"
-go build -o "${informergen}" ${CODEGEN_PKG}/cmd/informer-gen
+go build -o "${informergen}" ./cmd/libs/go2idl/informer-gen
 
 ${informergen} \
-  --output-base ${SCRIPT_BASE} \
+  --output-base ${KUBE_ROOT}/vendor \
   --input-dirs k8s.io/kube-aggregator/pkg/apis/apiregistration --input-dirs k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1 \
   --versioned-clientset-package k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset \
   --internal-clientset-package k8s.io/kube-aggregator/pkg/client/clientset_generated/internalclientset \

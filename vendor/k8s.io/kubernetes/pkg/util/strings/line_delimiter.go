@@ -22,8 +22,7 @@ import (
 	"strings"
 )
 
-// LineDelimiter is a filter that will split input on lines
-// and bracket each line with the delimiter string.
+// A Line Delimiter is a filter that will
 type LineDelimiter struct {
 	output    io.Writer
 	delimiter []byte

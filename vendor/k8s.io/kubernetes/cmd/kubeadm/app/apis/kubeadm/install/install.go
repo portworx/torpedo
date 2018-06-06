@@ -35,6 +35,7 @@ func Install(groupFactoryRegistry announced.APIGroupFactoryRegistry, registry *r
 		&announced.GroupMetaFactoryArgs{
 			GroupName:                  kubeadm.GroupName,
 			VersionPreferenceOrder:     []string{v1alpha1.SchemeGroupVersion.Version},
+			ImportPrefix:               "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm",
 			AddInternalObjectsToScheme: kubeadm.AddToScheme,
 		},
 		announced.VersionToSchemeFunc{

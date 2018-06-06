@@ -22,7 +22,7 @@ import (
 	"net/url"
 	"time"
 
-	"k8s.io/client-go/tools/metrics"
+	"k8s.io/kubernetes/pkg/client/metrics"
 
 	"github.com/prometheus/client_golang/prometheus"
 )

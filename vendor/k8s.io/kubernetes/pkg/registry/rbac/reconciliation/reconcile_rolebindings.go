@@ -21,8 +21,8 @@ import (
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 )
 
@@ -34,7 +34,6 @@ type RoleBindingModifier interface {
 }
 
 type RoleBinding interface {
-	GetObject() runtime.Object
 	GetNamespace() string
 	GetName() string
 	GetUID() types.UID
@@ -45,7 +44,6 @@ type RoleBinding interface {
 	GetRoleRef() rbac.RoleRef
 	GetSubjects() []rbac.Subject
 	SetSubjects([]rbac.Subject)
-	DeepCopyRoleBinding() RoleBinding
 }
 
 // ReconcileRoleBindingOptions holds options for running a role binding reconciliation
@@ -186,7 +184,11 @@ func computeReconciledRoleBinding(existing, expected RoleBinding, removeExtraSub
 	}
 
 	// Start with a copy of the existing object
-	result.RoleBinding = existing.DeepCopyRoleBinding()
+	changedObj, err := api.Scheme.DeepCopy(existing)
+	if err != nil {
+		return nil, err
+	}
+	result.RoleBinding = changedObj.(RoleBinding)
 
 	// Merge expected annotations and labels
 	result.RoleBinding.SetAnnotations(merge(expected.GetAnnotations(), result.RoleBinding.GetAnnotations()))

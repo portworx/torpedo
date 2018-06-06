@@ -24,6 +24,7 @@ import (
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/registry/core/persistentvolume"
 )
 
@@ -34,11 +35,12 @@ type REST struct {
 // NewREST returns a RESTStorage object that will work against persistent volumes.
 func NewREST(optsGetter generic.RESTOptionsGetter) (*REST, *StatusREST) {
 	store := &genericregistry.Store{
-		Copier:                   api.Scheme,
-		NewFunc:                  func() runtime.Object { return &api.PersistentVolume{} },
-		NewListFunc:              func() runtime.Object { return &api.PersistentVolumeList{} },
-		PredicateFunc:            persistentvolume.MatchPersistentVolumes,
-		DefaultQualifiedResource: api.Resource("persistentvolumes"),
+		Copier:            api.Scheme,
+		NewFunc:           func() runtime.Object { return &api.PersistentVolume{} },
+		NewListFunc:       func() runtime.Object { return &api.PersistentVolumeList{} },
+		PredicateFunc:     persistentvolume.MatchPersistentVolumes,
+		QualifiedResource: api.Resource("persistentvolumes"),
+		WatchCacheSize:    cachesize.GetWatchCacheSizeByResource("persistentvolumes"),
 
 		CreateStrategy:      persistentvolume.Strategy,
 		UpdateStrategy:      persistentvolume.Strategy,

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,11 +41,8 @@ type clusterRoleBindingInformer struct {
 	factory internalinterfaces.SharedInformerFactory
 }
 
-// NewClusterRoleBindingInformer constructs a new informer for ClusterRoleBinding type.
-// Always prefer using an informer factory to get a shared informer instead of getting an independent
-// one. This reduces memory footprint and number of connections to the server.
-func NewClusterRoleBindingInformer(client internalclientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+func newClusterRoleBindingInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	sharedIndexInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				return client.Rbac().ClusterRoleBindings().List(options)
@@ -56,16 +53,14 @@ func NewClusterRoleBindingInformer(client internalclientset.Interface, resyncPer
 		},
 		&rbac.ClusterRoleBinding{},
 		resyncPeriod,
-		indexers,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 	)
-}
 
-func defaultClusterRoleBindingInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewClusterRoleBindingInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	return sharedIndexInformer
 }
 
 func (f *clusterRoleBindingInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&rbac.ClusterRoleBinding{}, defaultClusterRoleBindingInformer)
+	return f.factory.InformerFor(&rbac.ClusterRoleBinding{}, newClusterRoleBindingInformer)
 }
 
 func (f *clusterRoleBindingInformer) Lister() internalversion.ClusterRoleBindingLister {

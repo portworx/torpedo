@@ -23,6 +23,7 @@ import (
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/kubernetes/pkg/api"
+	apitesting "k8s.io/kubernetes/pkg/api/testing"
 	"k8s.io/kubernetes/pkg/apis/batch"
 )
 
@@ -168,4 +169,14 @@ func TestCronJobStatusStrategy(t *testing.T) {
 	if newCronJob.ResourceVersion != "9" {
 		t.Errorf("Incoming resource version on update should not be mutated")
 	}
+}
+
+// FIXME: this is failing conversion.go
+func TestSelectableFieldLabelConversions(t *testing.T) {
+	apitesting.TestSelectableFieldLabelConversionsOfKind(t,
+		"batch/v2alpha1",
+		"CronJob",
+		CronJobToSelectableFields(&batch.CronJob{}),
+		nil,
+	)
 }

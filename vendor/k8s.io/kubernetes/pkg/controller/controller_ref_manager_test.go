@@ -20,12 +20,12 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 var (
@@ -35,6 +35,20 @@ var (
 	testLabelSelector       = labels.Set{"type": "testing"}.AsSelector()
 	controllerUID           = "123"
 )
+
+func newControllerRef(controller metav1.Object) *metav1.OwnerReference {
+	var controllerKind = v1beta1.SchemeGroupVersion.WithKind("Fake")
+	blockOwnerDeletion := true
+	isController := true
+	return &metav1.OwnerReference{
+		APIVersion:         controllerKind.GroupVersion().String(),
+		Kind:               controllerKind.Kind,
+		Name:               "Fake",
+		UID:                controller.GetUID(),
+		BlockOwnerDeletion: &blockOwnerDeletion,
+		Controller:         &isController,
+	}
+}
 
 func newPod(podName string, label map[string]string, owner metav1.Object) *v1.Pod {
 	pod := &v1.Pod{
@@ -52,7 +66,7 @@ func newPod(podName string, label map[string]string, owner metav1.Object) *v1.Po
 		},
 	}
 	if owner != nil {
-		pod.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(owner, v1beta1.SchemeGroupVersion.WithKind("Fake"))}
+		pod.OwnerReferences = []metav1.OwnerReference{*newControllerRef(owner)}
 	}
 	return pod
 }
@@ -60,12 +74,13 @@ func newPod(podName string, label map[string]string, owner metav1.Object) *v1.Po
 func TestClaimPods(t *testing.T) {
 	controllerKind := schema.GroupVersionKind{}
 	type test struct {
-		name     string
-		manager  *PodControllerRefManager
-		pods     []*v1.Pod
-		filters  []func(*v1.Pod) bool
-		claimed  []*v1.Pod
-		released []*v1.Pod
+		name        string
+		manager     *PodControllerRefManager
+		pods        []*v1.Pod
+		filters     []func(*v1.Pod) bool
+		claimed     []*v1.Pod
+		released    []*v1.Pod
+		expectError bool
 	}
 	var tests = []test{
 		{
@@ -163,8 +178,8 @@ func TestClaimPods(t *testing.T) {
 	}
 	for _, test := range tests {
 		claimed, err := test.manager.ClaimPods(test.pods)
-		if err != nil {
-			t.Errorf("Test case `%s`, unexpected error: %v", test.name, err)
+		if test.expectError && err == nil {
+			t.Errorf("Test case `%s`, expected error but got nil", test.name)
 		} else if !reflect.DeepEqual(test.claimed, claimed) {
 			t.Errorf("Test case `%s`, claimed wrong pods. Expected %v, got %v", test.name, podToStringSlice(test.claimed), podToStringSlice(claimed))
 		}

@@ -8,12 +8,14 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
 	"github.com/libopenstorage/openstorage/cluster"
+	sched "github.com/libopenstorage/openstorage/schedpolicy"
 	"github.com/libopenstorage/openstorage/secrets"
 )
 
 const (
 	clusterPath     = "/cluster"
 	secretPath      = "/secrets"
+	SchedPath       = "/schedpolicy"
 	loggingurl      = "/loggingurl"
 	managementurl   = "/managementurl"
 	fluentdhost     = "/fluentdconfig"
@@ -273,4 +275,76 @@ func (c *clusterClient) SecretLogin(secretType string, secretConfig map[string]s
 		return resp.FormatError()
 	}
 	return nil
+}
+
+// SchedPolicyEnumerate enumerates all configured policies
+func (c *clusterClient) SchedPolicyEnumerate() ([]*sched.SchedPolicy, error) {
+	var schedPolicies []*sched.SchedPolicy
+	req := c.c.Get().Resource(clusterPath + SchedPath)
+
+	if err := req.Do().Unmarshal(&schedPolicies); err != nil {
+		return nil, err
+	}
+
+	return schedPolicies, nil
+}
+
+// SchedPolicyCreate creates a policy with given name and schedule
+func (c *clusterClient) SchedPolicyCreate(name, schedule string) error {
+	request := &sched.SchedPolicy{
+		Name:     name,
+		Schedule: schedule,
+	}
+
+	req := c.c.Post().Resource(clusterPath + SchedPath).Body(request)
+	res := req.Do()
+	if res.Error() != nil {
+		return res.FormatError()
+	}
+
+	return nil
+}
+
+// SchedPolicyUpdate updates a policy with given name and schedule
+func (c *clusterClient) SchedPolicyUpdate(name, schedule string) error {
+	request := &sched.SchedPolicy{
+		Name:     name,
+		Schedule: schedule,
+	}
+
+	req := c.c.Put().Resource(clusterPath + SchedPath).Body(request)
+	res := req.Do()
+	if res.Error() != nil {
+		return res.FormatError()
+	}
+
+	return nil
+}
+
+// SchedPolicyDelete deletes a policy with given name
+func (c *clusterClient) SchedPolicyDelete(name string) error {
+	req := c.c.Delete().Resource(clusterPath + SchedPath + "/" + name)
+	res := req.Do()
+
+	if res.Error() != nil {
+		return res.FormatError()
+	}
+
+	return nil
+}
+
+// SchedPolicyGet returns schedule policy matching given name.
+func (c *clusterClient) SchedPolicyGet(name string) (*sched.SchedPolicy, error) {
+	policy := new(sched.SchedPolicy)
+	if name == "" {
+		return nil, errors.New("Missing policy name")
+	}
+
+	req := c.c.Get().Resource(clusterPath + SchedPath + "/" + name)
+
+	if err := req.Do().Unmarshal(policy); err != nil {
+		return nil, err
+	}
+
+	return policy, nil
 }

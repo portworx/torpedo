@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -11,49 +13,32 @@ go_library(
     srcs = [
         "doc.go",
         "iptables.go",
-        "iptables_unsupported.go",
+        "iptables_linux.go",
         "save_restore.go",
-    ] + select({
-        "@io_bazel_rules_go//go/platform:linux_amd64": [
-            "iptables_linux.go",
-        ],
-        "//conditions:default": [],
-    }),
+    ],
+    tags = ["automanaged"],
     deps = [
         "//pkg/util/dbus:go_default_library",
+        "//pkg/util/exec:go_default_library",
         "//pkg/util/version:go_default_library",
         "//vendor/github.com/godbus/dbus:go_default_library",
         "//vendor/github.com/golang/glog:go_default_library",
+        "//vendor/golang.org/x/sys/unix:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/sets:go_default_library",
-        "//vendor/k8s.io/utils/exec:go_default_library",
-    ] + select({
-        "@io_bazel_rules_go//go/platform:linux_amd64": [
-            "//vendor/golang.org/x/sys/unix:go_default_library",
-            "//vendor/k8s.io/apimachinery/pkg/util/errors:go_default_library",
-            "//vendor/k8s.io/apimachinery/pkg/util/wait:go_default_library",
-        ],
-        "//conditions:default": [],
-    }),
+        "//vendor/k8s.io/apimachinery/pkg/util/wait:go_default_library",
+    ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = select({
-        "@io_bazel_rules_go//go/platform:linux_amd64": [
-            "iptables_test.go",
-        ],
-        "//conditions:default": [],
-    }),
+    srcs = ["iptables_test.go"],
     library = ":go_default_library",
-    deps = select({
-        "@io_bazel_rules_go//go/platform:linux_amd64": [
-            "//pkg/util/dbus:go_default_library",
-            "//vendor/k8s.io/apimachinery/pkg/util/sets:go_default_library",
-            "//vendor/k8s.io/utils/exec:go_default_library",
-            "//vendor/k8s.io/utils/exec/testing:go_default_library",
-        ],
-        "//conditions:default": [],
-    }),
+    tags = ["automanaged"],
+    deps = [
+        "//pkg/util/dbus:go_default_library",
+        "//pkg/util/exec:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/util/sets:go_default_library",
+    ],
 )
 
 filegroup(

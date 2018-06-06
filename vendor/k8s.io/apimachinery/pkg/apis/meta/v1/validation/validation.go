@@ -88,5 +88,3 @@ func ValidateDeleteOptions(options *metav1.DeleteOptions) field.ErrorList {
 	}
 	return allErrs
 }
-
-const UninitializedStatusUpdateErrorMsg string = `must not update status when the object is uninitialized`

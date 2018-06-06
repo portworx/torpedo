@@ -69,10 +69,6 @@ func (mi *fakeMountInterface) GetDeviceNameFromMount(mountPath, pluginDir string
 	return "", nil
 }
 
-func (mi *fakeMountInterface) MakeRShared(path string) error {
-	return nil
-}
-
 func fakeContainerMgrMountInt() mount.Interface {
 	return &fakeMountInterface{
 		[]mount.MountPoint{

@@ -19,10 +19,9 @@ package admission
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/apis/authentication"
 )
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // AdmissionReview describes an admission request.
 type AdmissionReview struct {
@@ -50,7 +49,7 @@ type AdmissionReviewSpec struct {
 	// OldObject is the existing object. Only populated for UPDATE requests.
 	OldObject runtime.Object
 	// Operation is the operation being performed
-	Operation Operation
+	Operation admission.Operation
 	// Resource is the name of the resource being requested.  This is not the kind.  For example: pods
 	Resource metav1.GroupVersionResource
 	// SubResource is the name of the subresource being requested.  This is a different resource, scoped to the parent
@@ -72,14 +71,3 @@ type AdmissionReviewStatus struct {
 	// +optional
 	Result *metav1.Status
 }
-
-// Operation is the type of resource operation being checked for admission control
-type Operation string
-
-// Operation constants
-const (
-	Create  Operation = "CREATE"
-	Update  Operation = "UPDATE"
-	Delete  Operation = "DELETE"
-	Connect Operation = "CONNECT"
-)

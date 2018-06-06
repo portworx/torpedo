@@ -36,10 +36,6 @@ func (f *fakeBackend) Run(stopCh <-chan struct{}) error {
 	return nil
 }
 
-func (f *fakeBackend) Shutdown() {
-	// Nothing to do here.
-}
-
 func TestUnion(t *testing.T) {
 	backends := []Backend{
 		new(fakeBackend),

@@ -4,7 +4,6 @@ load("@bazel_tools//tools/build_defs/pkg:rpm.bzl", "pkg_rpm")
 
 pkg_rpm(
     name = "kubectl",
-    architecture = "x86_64",
     changelog = "//:CHANGELOG.md",
     data = [
         "//cmd/kubectl",
@@ -15,7 +14,6 @@ pkg_rpm(
 
 pkg_rpm(
     name = "kubelet",
-    architecture = "x86_64",
     changelog = "//:CHANGELOG.md",
     data = [
         "kubelet.service",
@@ -27,7 +25,6 @@ pkg_rpm(
 
 pkg_rpm(
     name = "kubeadm",
-    architecture = "x86_64",
     changelog = "//:CHANGELOG.md",
     data = [
         "10-kubeadm.conf",
@@ -39,7 +36,6 @@ pkg_rpm(
 
 pkg_rpm(
     name = "kubernetes-cni",
-    architecture = "x86_64",
     changelog = "//:CHANGELOG.md",
     data = [
         "@kubernetes_cni//file",

@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -11,6 +13,7 @@ go_library(
         "expansion_generated.go",
         "networkpolicy.go",
     ],
+    tags = ["automanaged"],
     deps = [
         "//pkg/apis/networking:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/api/errors:go_default_library",

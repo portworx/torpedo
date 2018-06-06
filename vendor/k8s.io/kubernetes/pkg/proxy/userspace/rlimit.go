@@ -18,8 +18,8 @@ limitations under the License.
 
 package userspace
 
-import "golang.org/x/sys/unix"
+import "syscall"
 
 func setRLimit(limit uint64) error {
-	return unix.Setrlimit(unix.RLIMIT_NOFILE, &unix.Rlimit{Max: limit, Cur: limit})
+	return syscall.Setrlimit(syscall.RLIMIT_NOFILE, &syscall.Rlimit{Max: limit, Cur: limit})
 }

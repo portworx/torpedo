@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
-	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	restclient "k8s.io/client-go/rest"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
 	schedulerapi "k8s.io/kubernetes/plugin/pkg/scheduler/api"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/schedulercache"
@@ -229,7 +229,7 @@ func (h *HTTPExtender) send(action string, args interface{}, result interface{})
 		return err
 	}
 
-	url := strings.TrimRight(h.extenderURL, "/") + "/" + action
+	url := h.extenderURL + "/" + action
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(out))
 	if err != nil {
@@ -242,11 +242,19 @@ func (h *HTTPExtender) send(action string, args interface{}, result interface{})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("Failed %v with extender at URL %v, code %v", action, h.extenderURL, resp.StatusCode)
 	}
 
-	return json.NewDecoder(resp.Body).Decode(result)
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal(body, result); err != nil {
+		return err
+	}
+	return nil
 }

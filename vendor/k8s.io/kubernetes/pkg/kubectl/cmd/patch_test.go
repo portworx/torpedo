@@ -130,7 +130,8 @@ func TestPatchNoop(t *testing.T) {
 
 	// Patched
 	{
-		patchObject = patchObject.DeepCopy()
+		copied, _ := api.Scheme.DeepCopy(patchObject)
+		patchObject = copied.(*api.Service)
 		if patchObject.Annotations == nil {
 			patchObject.Annotations = map[string]string{}
 		}
@@ -149,7 +150,11 @@ func TestPatchNoop(t *testing.T) {
 func TestPatchObjectFromFileOutput(t *testing.T) {
 	_, svc, _ := testData()
 
-	svcCopy := svc.Items[0].DeepCopy()
+	svcCopyObj, err := api.Scheme.DeepCopy(&svc.Items[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	svcCopy := svcCopyObj.(*api.Service)
 	if svcCopy.Labels == nil {
 		svcCopy.Labels = map[string]string{}
 	}

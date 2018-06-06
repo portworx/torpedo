@@ -17,21 +17,25 @@ limitations under the License.
 package statefulset
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
 
-	apps "k8s.io/api/apps/v1beta1"
-	"k8s.io/api/core/v1"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
+	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	apps "k8s.io/kubernetes/pkg/apis/apps/v1beta1"
+	"k8s.io/kubernetes/pkg/controller"
+	"k8s.io/kubernetes/pkg/controller/history"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+
 	"k8s.io/client-go/kubernetes/scheme"
-	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
-	"k8s.io/kubernetes/pkg/controller"
-	"k8s.io/kubernetes/pkg/controller/history"
+
+	"github.com/golang/glog"
 )
 
 // maxUpdateRetries is the maximum number of retries used for update conflict resolution prior to failure
@@ -40,7 +44,7 @@ const maxUpdateRetries = 10
 // updateConflictError is the error used to indicate that the maximum number of retries against the API server have
 // been attempted and we need to back off
 var updateConflictError = fmt.Errorf("aborting update after %d attempts", maxUpdateRetries)
-var patchCodec = scheme.Codecs.LegacyCodec(apps.SchemeGroupVersion)
+var patchCodec = api.Codecs.LegacyCodec(apps.SchemeGroupVersion)
 
 // overlappingStatefulSets sorts a list of StatefulSets by creation timestamp, using their names as a tie breaker.
 // Generally used to tie break between StatefulSets that have overlapping selectors.
@@ -51,10 +55,10 @@ func (o overlappingStatefulSets) Len() int { return len(o) }
 func (o overlappingStatefulSets) Swap(i, j int) { o[i], o[j] = o[j], o[i] }
 
 func (o overlappingStatefulSets) Less(i, j int) bool {
-	if o[i].CreationTimestamp.Equal(&o[j].CreationTimestamp) {
+	if o[i].CreationTimestamp.Equal(o[j].CreationTimestamp) {
 		return o[i].Name < o[j].Name
 	}
-	return o[i].CreationTimestamp.Before(&o[j].CreationTimestamp)
+	return o[i].CreationTimestamp.Before(o[j].CreationTimestamp)
 }
 
 // statefulPodRegex is a regular expression that extracts the parent StatefulSet and ordinal from the Name of a Pod
@@ -112,7 +116,9 @@ func identityMatches(set *apps.StatefulSet, pod *v1.Pod) bool {
 	return ordinal >= 0 &&
 		set.Name == parent &&
 		pod.Name == getPodName(set, ordinal) &&
-		pod.Namespace == set.Namespace
+		pod.Namespace == set.Namespace &&
+		pod.Spec.Hostname != "" &&
+		(pod.Spec.Subdomain != "" || set.Spec.ServiceName == "")
 }
 
 // storageMatches returns true if pod's Volumes cover the set of PersistentVolumeClaims
@@ -191,12 +197,34 @@ func initIdentity(set *apps.StatefulSet, pod *v1.Pod) {
 func updateIdentity(set *apps.StatefulSet, pod *v1.Pod) {
 	pod.Name = getPodName(set, getOrdinal(pod))
 	pod.Namespace = set.Namespace
-
+	if pod.Spec.Hostname == "" {
+		pod.Spec.Hostname = pod.Name
+	}
+	if pod.Spec.Subdomain == "" {
+		pod.Spec.Subdomain = set.Spec.ServiceName
+	}
 }
 
-// isRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
+// isRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady, and if the init
+// annotation has not explicitly disabled the Pod from being ready.
 func isRunningAndReady(pod *v1.Pod) bool {
-	return pod.Status.Phase == v1.PodRunning && podutil.IsPodReady(pod)
+	if pod.Status.Phase != v1.PodRunning {
+		return false
+	}
+	podReady := podutil.IsPodReady(pod)
+	// User may have specified a pod readiness override through a debug annotation.
+	initialized, ok := pod.Annotations[apps.StatefulSetInitAnnotation]
+	if ok {
+		if initAnnotation, err := strconv.ParseBool(initialized); err != nil {
+			glog.V(4).Infof("Failed to parse %v annotation on pod %v: %v",
+				apps.StatefulSetInitAnnotation, pod.Name, err)
+		} else if !initAnnotation {
+			glog.V(4).Infof("StatefulSet pod %v waiting on annotation %v", pod.Name,
+				apps.StatefulSetInitAnnotation)
+			podReady = initAnnotation
+		}
+	}
+	return podReady
 }
 
 // isCreated returns true if pod has been created and is maintained by the API server
@@ -224,6 +252,20 @@ func allowsBurst(set *apps.StatefulSet) bool {
 	return set.Spec.PodManagementPolicy == apps.ParallelPodManagement
 }
 
+// newControllerRef returns an ControllerRef pointing to a given StatefulSet.
+func newControllerRef(set *apps.StatefulSet) *metav1.OwnerReference {
+	blockOwnerDeletion := true
+	isController := true
+	return &metav1.OwnerReference{
+		APIVersion:         controllerKind.GroupVersion().String(),
+		Kind:               controllerKind.Kind,
+		Name:               set.Name,
+		UID:                set.UID,
+		BlockOwnerDeletion: &blockOwnerDeletion,
+		Controller:         &isController,
+	}
+}
+
 // setPodRevision sets the revision of Pod to revision by adding the StatefulSetRevisionLabel
 func setPodRevision(pod *v1.Pod, revision string) {
 	if pod.Labels == nil {
@@ -243,7 +285,7 @@ func getPodRevision(pod *v1.Pod) string {
 
 // newStatefulSetPod returns a new Pod conforming to the set's Spec with an identity generated from ordinal.
 func newStatefulSetPod(set *apps.StatefulSet, ordinal int) *v1.Pod {
-	pod, _ := controller.GetPodFromTemplate(&set.Spec.Template, set, metav1.NewControllerRef(set, controllerKind))
+	pod, _ := controller.GetPodFromTemplate(&set.Spec.Template, set, newControllerRef(set))
 	pod.Name = getPodName(set, ordinal)
 	initIdentity(set, pod)
 	updateStorage(set, pod)
@@ -265,15 +307,6 @@ func newVersionedStatefulSetPod(currentSet, updateSet *apps.StatefulSet, current
 	pod := newStatefulSetPod(updateSet, ordinal)
 	setPodRevision(pod, updateRevision)
 	return pod
-}
-
-// Match check if the given StatefulSet's template matches the template stored in the given history.
-func Match(ss *apps.StatefulSet, history *apps.ControllerRevision) (bool, error) {
-	patch, err := getPatch(ss)
-	if err != nil {
-		return false, err
-	}
-	return bytes.Equal(patch, history.Data.Raw), nil
 }
 
 // getPatch returns a strategic merge patch that can be applied to restore a StatefulSet to a
@@ -302,7 +335,7 @@ func getPatch(set *apps.StatefulSet) ([]byte, error) {
 // The Revision of the returned ControllerRevision is set to revision. If the returned error is nil, the returned
 // ControllerRevision is valid. StatefulSet revisions are stored as patches that re-apply the current state of set
 // to a new StatefulSet using a strategic merge patch to replace the saved state of the new StatefulSet.
-func newRevision(set *apps.StatefulSet, revision int64, collisionCount *int32) (*apps.ControllerRevision, error) {
+func newRevision(set *apps.StatefulSet, revision int64) (*apps.ControllerRevision, error) {
 	patch, err := getPatch(set)
 	if err != nil {
 		return nil, err
@@ -311,28 +344,21 @@ func newRevision(set *apps.StatefulSet, revision int64, collisionCount *int32) (
 	if err != nil {
 		return nil, err
 	}
-	cr, err := history.NewControllerRevision(set,
+	return history.NewControllerRevision(set,
 		controllerKind,
 		selector,
 		runtime.RawExtension{Raw: patch},
-		revision,
-		collisionCount)
+		revision)
+}
+
+// applyRevision returns a new StatefulSet constructed by restoring the state in revision to set. If the returned error
+// is nil, the returned StatefulSet is valid.
+func applyRevision(set *apps.StatefulSet, revision *apps.ControllerRevision) (*apps.StatefulSet, error) {
+	obj, err := scheme.Scheme.DeepCopy(set)
 	if err != nil {
 		return nil, err
 	}
-	if cr.ObjectMeta.Annotations == nil {
-		cr.ObjectMeta.Annotations = make(map[string]string)
-	}
-	for key, value := range set.Annotations {
-		cr.ObjectMeta.Annotations[key] = value
-	}
-	return cr, nil
-}
-
-// ApplyRevision returns a new StatefulSet constructed by restoring the state in revision to set. If the returned error
-// is nil, the returned StatefulSet is valid.
-func ApplyRevision(set *apps.StatefulSet, revision *apps.ControllerRevision) (*apps.StatefulSet, error) {
-	clone := set.DeepCopy()
+	clone := obj.(*apps.StatefulSet)
 	patched, err := strategicpatch.StrategicMergePatch([]byte(runtime.EncodeOrDie(patchCodec, clone)), revision.Data.Raw, clone)
 	if err != nil {
 		return nil, err

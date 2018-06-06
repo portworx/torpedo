@@ -55,7 +55,6 @@ spec:
     name: srvkube
   - hostPath:
       path: /var/log/kube-controller-manager.log
-      type: FileOrCreate
     name: logfile
   - hostPath:
       path: /etc/ssl

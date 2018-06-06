@@ -78,19 +78,16 @@ func TestAllocate(t *testing.T) {
 	if err := r.Release(released); err != nil {
 		t.Fatal(err)
 	}
-	err = r.Allocate(net.ParseIP("192.168.0.1"))
-	if _, ok := err.(*ErrNotInRange); !ok {
+	if err := r.Allocate(net.ParseIP("192.168.0.1")); err != ErrNotInRange {
 		t.Fatal(err)
 	}
 	if err := r.Allocate(net.ParseIP("192.168.1.1")); err != ErrAllocated {
 		t.Fatal(err)
 	}
-	err = r.Allocate(net.ParseIP("192.168.1.0"))
-	if _, ok := err.(*ErrNotInRange); !ok {
+	if err := r.Allocate(net.ParseIP("192.168.1.0")); err != ErrNotInRange {
 		t.Fatal(err)
 	}
-	err = r.Allocate(net.ParseIP("192.168.1.255"))
-	if _, ok := err.(*ErrNotInRange); !ok {
+	if err := r.Allocate(net.ParseIP("192.168.1.255")); err != ErrNotInRange {
 		t.Fatal(err)
 	}
 	if f := r.Free(); f != 1 {

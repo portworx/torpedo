@@ -9,6 +9,7 @@ import (
 	api "github.com/libopenstorage/openstorage/api"
 	cluster "github.com/libopenstorage/openstorage/cluster"
 	osdconfig "github.com/libopenstorage/openstorage/osdconfig"
+	schedpolicy "github.com/libopenstorage/openstorage/schedpolicy"
 	reflect "reflect"
 	time "time"
 )
@@ -247,6 +248,56 @@ func (mr *MockClusterMockRecorder) NodeStatus() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NodeStatus", reflect.TypeOf((*MockCluster)(nil).NodeStatus))
 }
 
+// ObjectStoreCreate mocks base method
+func (m *MockCluster) ObjectStoreCreate(arg0 string) (*api.ObjectstoreInfo, error) {
+	ret := m.ctrl.Call(m, "ObjectStoreCreate", arg0)
+	ret0, _ := ret[0].(*api.ObjectstoreInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ObjectStoreCreate indicates an expected call of ObjectStoreCreate
+func (mr *MockClusterMockRecorder) ObjectStoreCreate(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObjectStoreCreate", reflect.TypeOf((*MockCluster)(nil).ObjectStoreCreate), arg0)
+}
+
+// ObjectStoreDelete mocks base method
+func (m *MockCluster) ObjectStoreDelete(arg0 string) error {
+	ret := m.ctrl.Call(m, "ObjectStoreDelete", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ObjectStoreDelete indicates an expected call of ObjectStoreDelete
+func (mr *MockClusterMockRecorder) ObjectStoreDelete(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObjectStoreDelete", reflect.TypeOf((*MockCluster)(nil).ObjectStoreDelete), arg0)
+}
+
+// ObjectStoreInspect mocks base method
+func (m *MockCluster) ObjectStoreInspect(arg0 string) (*api.ObjectstoreInfo, error) {
+	ret := m.ctrl.Call(m, "ObjectStoreInspect", arg0)
+	ret0, _ := ret[0].(*api.ObjectstoreInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ObjectStoreInspect indicates an expected call of ObjectStoreInspect
+func (mr *MockClusterMockRecorder) ObjectStoreInspect(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObjectStoreInspect", reflect.TypeOf((*MockCluster)(nil).ObjectStoreInspect), arg0)
+}
+
+// ObjectStoreUpdate mocks base method
+func (m *MockCluster) ObjectStoreUpdate(arg0 string, arg1 bool) error {
+	ret := m.ctrl.Call(m, "ObjectStoreUpdate", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ObjectStoreUpdate indicates an expected call of ObjectStoreUpdate
+func (mr *MockClusterMockRecorder) ObjectStoreUpdate(arg0, arg1 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ObjectStoreUpdate", reflect.TypeOf((*MockCluster)(nil).ObjectStoreUpdate), arg0, arg1)
+}
+
 // PeerStatus mocks base method
 func (m *MockCluster) PeerStatus(arg0 string) (map[string]api.Status, error) {
 	ret := m.ctrl.Call(m, "PeerStatus", arg0)
@@ -270,6 +321,68 @@ func (m *MockCluster) Remove(arg0 []api.Node, arg1 bool) error {
 // Remove indicates an expected call of Remove
 func (mr *MockClusterMockRecorder) Remove(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockCluster)(nil).Remove), arg0, arg1)
+}
+
+// SchedPolicyCreate mocks base method
+func (m *MockCluster) SchedPolicyCreate(arg0, arg1 string) error {
+	ret := m.ctrl.Call(m, "SchedPolicyCreate", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SchedPolicyCreate indicates an expected call of SchedPolicyCreate
+func (mr *MockClusterMockRecorder) SchedPolicyCreate(arg0, arg1 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SchedPolicyCreate", reflect.TypeOf((*MockCluster)(nil).SchedPolicyCreate), arg0, arg1)
+}
+
+// SchedPolicyDelete mocks base method
+func (m *MockCluster) SchedPolicyDelete(arg0 string) error {
+	ret := m.ctrl.Call(m, "SchedPolicyDelete", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SchedPolicyDelete indicates an expected call of SchedPolicyDelete
+func (mr *MockClusterMockRecorder) SchedPolicyDelete(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SchedPolicyDelete", reflect.TypeOf((*MockCluster)(nil).SchedPolicyDelete), arg0)
+}
+
+// SchedPolicyEnumerate mocks base method
+func (m *MockCluster) SchedPolicyEnumerate() ([]*schedpolicy.SchedPolicy, error) {
+	ret := m.ctrl.Call(m, "SchedPolicyEnumerate")
+	ret0, _ := ret[0].([]*schedpolicy.SchedPolicy)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SchedPolicyEnumerate indicates an expected call of SchedPolicyEnumerate
+func (mr *MockClusterMockRecorder) SchedPolicyEnumerate() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SchedPolicyEnumerate", reflect.TypeOf((*MockCluster)(nil).SchedPolicyEnumerate))
+}
+
+// SchedPolicyGet mocks base method
+func (m *MockCluster) SchedPolicyGet(arg0 string) (*schedpolicy.SchedPolicy, error) {
+	ret := m.ctrl.Call(m, "SchedPolicyGet", arg0)
+	ret0, _ := ret[0].(*schedpolicy.SchedPolicy)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SchedPolicyGet indicates an expected call of SchedPolicyGet
+func (mr *MockClusterMockRecorder) SchedPolicyGet(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SchedPolicyGet", reflect.TypeOf((*MockCluster)(nil).SchedPolicyGet), arg0)
+}
+
+// SchedPolicyUpdate mocks base method
+func (m *MockCluster) SchedPolicyUpdate(arg0, arg1 string) error {
+	ret := m.ctrl.Call(m, "SchedPolicyUpdate", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SchedPolicyUpdate indicates an expected call of SchedPolicyUpdate
+func (mr *MockClusterMockRecorder) SchedPolicyUpdate(arg0, arg1 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SchedPolicyUpdate", reflect.TypeOf((*MockCluster)(nil).SchedPolicyUpdate), arg0, arg1)
 }
 
 // SecretCheckLogin mocks base method

@@ -17,24 +17,20 @@ limitations under the License.
 package validation
 
 import (
+	"fmt"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 )
-
-type simpleResource struct {
-	Group             string
-	Resource          string
-	ResourceNameExist bool
-	ResourceName      string
-}
 
 // CompactRules combines rules that contain a single APIGroup/Resource, differ only by verb, and contain no other attributes.
 // this is a fast check, and works well with the decomposed "missing rules" list from a Covers check.
 func CompactRules(rules []rbac.PolicyRule) ([]rbac.PolicyRule, error) {
 	compacted := make([]rbac.PolicyRule, 0, len(rules))
 
-	simpleRules := map[simpleResource]*rbac.PolicyRule{}
+	simpleRules := map[schema.GroupResource]*rbac.PolicyRule{}
 	for _, rule := range rules {
 		if resource, isSimple := isSimpleResourceRule(&rule); isSimple {
 			if existingRule, ok := simpleRules[resource]; ok {
@@ -45,7 +41,17 @@ func CompactRules(rules []rbac.PolicyRule) ([]rbac.PolicyRule, error) {
 				existingRule.Verbs = append(existingRule.Verbs, rule.Verbs...)
 			} else {
 				// Copy the rule to accumulate matching simple resource rules into
-				simpleRules[resource] = rule.DeepCopy()
+				objCopy, err := api.Scheme.DeepCopy(rule)
+				if err != nil {
+					// Unit tests ensure this should not ever happen
+					return nil, err
+				}
+				ruleCopy, ok := objCopy.(rbac.PolicyRule)
+				if !ok {
+					// Unit tests ensure this should not ever happen
+					return nil, fmt.Errorf("expected rbac.PolicyRule, got %#v", objCopy)
+				}
+				simpleRules[resource] = &ruleCopy
 			}
 		} else {
 			compacted = append(compacted, rule)
@@ -60,12 +66,12 @@ func CompactRules(rules []rbac.PolicyRule) ([]rbac.PolicyRule, error) {
 	return compacted, nil
 }
 
-// isSimpleResourceRule returns true if the given rule contains verbs, a single resource, a single API group, at most one Resource Name, and no other values
-func isSimpleResourceRule(rule *rbac.PolicyRule) (simpleResource, bool) {
-	resource := simpleResource{}
+// isSimpleResourceRule returns true if the given rule contains verbs, a single resource, a single API group, and no other values
+func isSimpleResourceRule(rule *rbac.PolicyRule) (schema.GroupResource, bool) {
+	resource := schema.GroupResource{}
 
 	// If we have "complex" rule attributes, return early without allocations or expensive comparisons
-	if len(rule.ResourceNames) > 1 || len(rule.NonResourceURLs) > 0 {
+	if len(rule.ResourceNames) > 0 || len(rule.NonResourceURLs) > 0 {
 		return resource, false
 	}
 	// If we have multiple api groups or resources, return early
@@ -73,17 +79,11 @@ func isSimpleResourceRule(rule *rbac.PolicyRule) (simpleResource, bool) {
 		return resource, false
 	}
 
-	// Test if this rule only contains APIGroups/Resources/Verbs/ResourceNames
-	simpleRule := &rbac.PolicyRule{APIGroups: rule.APIGroups, Resources: rule.Resources, Verbs: rule.Verbs, ResourceNames: rule.ResourceNames}
+	// Test if this rule only contains APIGroups/Resources/Verbs
+	simpleRule := &rbac.PolicyRule{APIGroups: rule.APIGroups, Resources: rule.Resources, Verbs: rule.Verbs}
 	if !reflect.DeepEqual(simpleRule, rule) {
 		return resource, false
 	}
-
-	if len(rule.ResourceNames) == 0 {
-		resource = simpleResource{Group: rule.APIGroups[0], Resource: rule.Resources[0], ResourceNameExist: false}
-	} else {
-		resource = simpleResource{Group: rule.APIGroups[0], Resource: rule.Resources[0], ResourceNameExist: true, ResourceName: rule.ResourceNames[0]}
-	}
-
+	resource = schema.GroupResource{Group: rule.APIGroups[0], Resource: rule.Resources[0]}
 	return resource, true
 }

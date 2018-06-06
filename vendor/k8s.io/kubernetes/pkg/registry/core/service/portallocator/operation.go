@@ -28,7 +28,7 @@ package portallocator
 //   ...
 //   write(updatedOwner)
 ///  op.Commit()
-type PortAllocationOperation struct {
+type portAllocationOperation struct {
 	pa              Interface
 	allocated       []int
 	releaseDeferred []int
@@ -36,8 +36,8 @@ type PortAllocationOperation struct {
 }
 
 // Creates a portAllocationOperation, tracking a set of allocations & releases
-func StartOperation(pa Interface) *PortAllocationOperation {
-	op := &PortAllocationOperation{}
+func StartOperation(pa Interface) *portAllocationOperation {
+	op := &portAllocationOperation{}
 	op.pa = pa
 	op.allocated = []int{}
 	op.releaseDeferred = []int{}
@@ -46,14 +46,14 @@ func StartOperation(pa Interface) *PortAllocationOperation {
 }
 
 // Will rollback unless marked as shouldRollback = false by a Commit().  Call from a defer block
-func (op *PortAllocationOperation) Finish() {
+func (op *portAllocationOperation) Finish() {
 	if op.shouldRollback {
 		op.Rollback()
 	}
 }
 
 // (Try to) undo any operations we did
-func (op *PortAllocationOperation) Rollback() []error {
+func (op *portAllocationOperation) Rollback() []error {
 	errors := []error{}
 
 	for _, allocated := range op.allocated {
@@ -72,7 +72,7 @@ func (op *PortAllocationOperation) Rollback() []error {
 // (Try to) perform any deferred operations.
 // Note that even if this fails, we don't rollback; we always want to err on the side of over-allocation,
 // and Commit should be called _after_ the owner is written
-func (op *PortAllocationOperation) Commit() []error {
+func (op *portAllocationOperation) Commit() []error {
 	errors := []error{}
 
 	for _, release := range op.releaseDeferred {
@@ -94,7 +94,7 @@ func (op *PortAllocationOperation) Commit() []error {
 }
 
 // Allocates a port, and record it for future rollback
-func (op *PortAllocationOperation) Allocate(port int) error {
+func (op *portAllocationOperation) Allocate(port int) error {
 	err := op.pa.Allocate(port)
 	if err == nil {
 		op.allocated = append(op.allocated, port)
@@ -103,7 +103,7 @@ func (op *PortAllocationOperation) Allocate(port int) error {
 }
 
 // Allocates a port, and record it for future rollback
-func (op *PortAllocationOperation) AllocateNext() (int, error) {
+func (op *portAllocationOperation) AllocateNext() (int, error) {
 	port, err := op.pa.AllocateNext()
 	if err == nil {
 		op.allocated = append(op.allocated, port)
@@ -112,6 +112,6 @@ func (op *PortAllocationOperation) AllocateNext() (int, error) {
 }
 
 // Marks a port so that it will be released if this operation Commits
-func (op *PortAllocationOperation) ReleaseDeferred(port int) {
+func (op *portAllocationOperation) ReleaseDeferred(port int) {
 	op.releaseDeferred = append(op.releaseDeferred, port)
 }

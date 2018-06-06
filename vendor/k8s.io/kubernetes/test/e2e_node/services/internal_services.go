@@ -20,8 +20,6 @@ import (
 	"io/ioutil"
 	"os"
 
-	"k8s.io/kubernetes/test/e2e/framework"
-
 	"github.com/golang/glog"
 )
 
@@ -96,7 +94,7 @@ func (es *e2eServices) stop() {
 	}
 
 	for _, d := range es.rmDirs {
-		glog.Infof("Deleting directory %v", d)
+		glog.Info("Deleting directory %v", d)
 		err := os.RemoveAll(d)
 		if err != nil {
 			glog.Errorf("Failed to delete directory %s.\n%v", d, err)
@@ -130,7 +128,7 @@ func (es *e2eServices) startApiServer() error {
 // startNamespaceController starts the embedded namespace controller or returns an error.
 func (es *e2eServices) startNamespaceController() error {
 	glog.Info("Starting namespace controller")
-	es.nsController = NewNamespaceController(framework.TestContext.Host)
+	es.nsController = NewNamespaceController()
 	return es.nsController.Start()
 }
 

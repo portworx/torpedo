@@ -12,12 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM BASEIMAGE
-
-CROSS_BUILD_COPY qemu-QEMUARCH-static /usr/bin/
-
-RUN clean-install stress
-
+FROM jess/stress
 ADD consumer /consumer
 ADD consume-cpu /consume-cpu
 EXPOSE 8080

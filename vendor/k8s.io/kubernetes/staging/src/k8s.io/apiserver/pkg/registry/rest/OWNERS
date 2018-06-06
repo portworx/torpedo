@@ -9,7 +9,9 @@ reviewers:
 - mikedanese
 - liggitt
 - nikhiljindal
+- bprashanth
 - gmarek
+- kargakis
 - justinsb
 - roberthbailey
 - ncdc
@@ -31,4 +33,3 @@ reviewers:
 - feihujiang
 - sdminonne
 - goltermann
-- enj

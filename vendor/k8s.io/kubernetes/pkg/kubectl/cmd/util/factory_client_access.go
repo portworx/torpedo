@@ -37,11 +37,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilflag "k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset"
+	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_internalclientset"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/apps"
 	"k8s.io/kubernetes/pkg/apis/batch"
@@ -90,7 +89,6 @@ func NewClientAccessFactoryFromDiscovery(flags *pflag.FlagSet, clientConfig clie
 
 type discoveryFactory struct {
 	clientConfig clientcmd.ClientConfig
-	cacheDir     string
 }
 
 func (f *discoveryFactory) DiscoveryClient() (discovery.CachedDiscoveryInterface, error) {
@@ -98,20 +96,12 @@ func (f *discoveryFactory) DiscoveryClient() (discovery.CachedDiscoveryInterface
 	if err != nil {
 		return nil, err
 	}
-
-	cfg.CacheDir = f.cacheDir
-
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
 	cacheDir := computeDiscoverCacheDir(filepath.Join(homedir.HomeDir(), ".kube", "cache", "discovery"), cfg.Host)
 	return NewCachedDiscoveryClient(discoveryClient, cacheDir, time.Duration(10*time.Minute)), nil
-}
-
-func (f *discoveryFactory) BindFlags(flags *pflag.FlagSet) {
-	defaultCacheDir := filepath.Join(homedir.HomeDir(), ".kube", "http-cache")
-	flags.StringVar(&f.cacheDir, FlagHTTPCacheDir, defaultCacheDir, "Default HTTP cache directory")
 }
 
 // DefaultClientConfig creates a clientcmd.ClientConfig with the following hierarchy:
@@ -175,10 +165,6 @@ func DefaultClientConfig(flags *pflag.FlagSet) clientcmd.ClientConfig {
 
 func (f *ring0Factory) DiscoveryClient() (discovery.CachedDiscoveryInterface, error) {
 	return f.discoveryFactory.DiscoveryClient()
-}
-
-func (f *ring0Factory) KubernetesClientSet() (*kubernetes.Clientset, error) {
-	return f.clientCache.KubernetesClientSetForVersion(nil)
 }
 
 func (f *ring0Factory) ClientSet() (internalclientset.Interface, error) {
@@ -386,8 +372,6 @@ func (f *ring0Factory) BindFlags(flags *pflag.FlagSet) {
 	// to do that automatically for every subcommand.
 	flags.BoolVar(&f.clientCache.matchVersion, FlagMatchBinaryVersion, false, "Require server version to match client version")
 
-	f.discoveryFactory.BindFlags(flags)
-
 	// Normalize all flags that are coming from other packages or pre-configurations
 	// a.k.a. change all "_" to "-". e.g. glog package
 	flags.SetNormalizeFunc(utilflag.WordSepNormalizeFunc)
@@ -490,7 +474,7 @@ const (
 	DeploymentBasicAppsV1Beta1GeneratorName = "deployment-basic/apps.v1beta1"
 	JobV1GeneratorName                      = "job/v1"
 	CronJobV2Alpha1GeneratorName            = "cronjob/v2alpha1"
-	CronJobV1Beta1GeneratorName             = "cronjob/v1beta1"
+	ScheduledJobV2Alpha1GeneratorName       = "scheduledjob/v2alpha1"
 	NamespaceV1GeneratorName                = "namespace/v1"
 	ResourceQuotaV1GeneratorName            = "resourcequotas/v1"
 	SecretV1GeneratorName                   = "secret/v1"
@@ -526,12 +510,10 @@ func DefaultGenerators(cmdName string) map[string]kubectl.Generator {
 			ServiceLoadBalancerGeneratorV1Name: kubectl.ServiceLoadBalancerGeneratorV1{},
 		}
 	case "deployment":
-		// Create Deployment has only StructuredGenerators and no
-		// param-based Generators.
-		// The StructuredGenerators are as follows (as of 2017-07-17):
-		// DeploymentBasicV1Beta1GeneratorName -> kubectl.DeploymentBasicGeneratorV1
-		// DeploymentBasicAppsV1Beta1GeneratorName -> kubectl.DeploymentBasicAppsGeneratorV1
-		generator = map[string]kubectl.Generator{}
+		generator = map[string]kubectl.Generator{
+			DeploymentBasicV1Beta1GeneratorName:     kubectl.DeploymentBasicGeneratorV1{},
+			DeploymentBasicAppsV1Beta1GeneratorName: kubectl.DeploymentBasicAppsGeneratorV1{},
+		}
 	case "run":
 		generator = map[string]kubectl.Generator{
 			RunV1GeneratorName:                 kubectl.BasicReplicationController{},
@@ -539,8 +521,8 @@ func DefaultGenerators(cmdName string) map[string]kubectl.Generator {
 			DeploymentV1Beta1GeneratorName:     kubectl.DeploymentV1Beta1{},
 			DeploymentAppsV1Beta1GeneratorName: kubectl.DeploymentAppsV1Beta1{},
 			JobV1GeneratorName:                 kubectl.JobV1{},
+			ScheduledJobV2Alpha1GeneratorName:  kubectl.CronJobV2Alpha1{},
 			CronJobV2Alpha1GeneratorName:       kubectl.CronJobV2Alpha1{},
-			CronJobV1Beta1GeneratorName:        kubectl.CronJobV1Beta1{},
 		}
 	case "autoscale":
 		generator = map[string]kubectl.Generator{
@@ -578,7 +560,7 @@ func (f *ring0Factory) Generators(cmdName string) map[string]kubectl.Generator {
 func (f *ring0Factory) CanBeExposed(kind schema.GroupKind) error {
 	switch kind {
 	case api.Kind("ReplicationController"), api.Kind("Service"), api.Kind("Pod"),
-		extensions.Kind("Deployment"), apps.Kind("Deployment"), extensions.Kind("ReplicaSet"), apps.Kind("ReplicaSet"):
+		extensions.Kind("Deployment"), apps.Kind("Deployment"), extensions.Kind("ReplicaSet"):
 		// nothing to do here
 	default:
 		return fmt.Errorf("cannot expose a %s", kind)
@@ -589,7 +571,7 @@ func (f *ring0Factory) CanBeExposed(kind schema.GroupKind) error {
 func (f *ring0Factory) CanBeAutoscaled(kind schema.GroupKind) error {
 	switch kind {
 	case api.Kind("ReplicationController"), extensions.Kind("ReplicaSet"),
-		extensions.Kind("Deployment"), apps.Kind("Deployment"), apps.Kind("ReplicaSet"):
+		extensions.Kind("Deployment"), apps.Kind("Deployment"):
 		// nothing to do here
 	default:
 		return fmt.Errorf("cannot autoscale a %v", kind)

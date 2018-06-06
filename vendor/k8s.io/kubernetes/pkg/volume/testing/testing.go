@@ -27,13 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	clientset "k8s.io/client-go/kubernetes"
 	utiltesting "k8s.io/client-go/util/testing"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/util/io"
 	"k8s.io/kubernetes/pkg/util/mount"
@@ -49,9 +49,7 @@ type fakeVolumeHost struct {
 	pluginMgr  VolumePluginMgr
 	cloud      cloudprovider.Interface
 	mounter    mount.Interface
-	exec       mount.Exec
 	writer     io.Writer
-	nodeLabels map[string]string
 }
 
 func NewFakeVolumeHost(rootDir string, kubeClient clientset.Interface, plugins []VolumePlugin) *fakeVolumeHost {
@@ -62,18 +60,11 @@ func NewFakeVolumeHostWithCloudProvider(rootDir string, kubeClient clientset.Int
 	return newFakeVolumeHost(rootDir, kubeClient, plugins, cloud)
 }
 
-func NewFakeVolumeHostWithNodeLabels(rootDir string, kubeClient clientset.Interface, plugins []VolumePlugin, labels map[string]string) *fakeVolumeHost {
-	volHost := newFakeVolumeHost(rootDir, kubeClient, plugins, nil)
-	volHost.nodeLabels = labels
-	return volHost
-}
-
 func newFakeVolumeHost(rootDir string, kubeClient clientset.Interface, plugins []VolumePlugin, cloud cloudprovider.Interface) *fakeVolumeHost {
 	host := &fakeVolumeHost{rootDir: rootDir, kubeClient: kubeClient, cloud: cloud}
 	host.mounter = &mount.FakeMounter{}
 	host.writer = &io.StdWriter{}
-	host.exec = mount.NewFakeExec(nil)
-	host.pluginMgr.InitPlugins(plugins, nil /* prober */, host)
+	host.pluginMgr.InitPlugins(plugins, host)
 	return host
 }
 
@@ -97,7 +88,7 @@ func (f *fakeVolumeHost) GetCloudProvider() cloudprovider.Interface {
 	return f.cloud
 }
 
-func (f *fakeVolumeHost) GetMounter(pluginName string) mount.Interface {
+func (f *fakeVolumeHost) GetMounter() mount.Interface {
 	return f.mounter
 }
 
@@ -151,10 +142,6 @@ func (f *fakeVolumeHost) GetSecretFunc() func(namespace, name string) (*v1.Secre
 	}
 }
 
-func (f *fakeVolumeHost) GetExec(pluginName string) mount.Exec {
-	return f.exec
-}
-
 func (f *fakeVolumeHost) GetConfigMapFunc() func(namespace, name string) (*v1.ConfigMap, error) {
 	return func(namespace, name string) (*v1.ConfigMap, error) {
 		return f.kubeClient.Core().ConfigMaps(namespace).Get(name, metav1.GetOptions{})
@@ -162,10 +149,7 @@ func (f *fakeVolumeHost) GetConfigMapFunc() func(namespace, name string) (*v1.Co
 }
 
 func (f *fakeVolumeHost) GetNodeLabels() (map[string]string, error) {
-	if f.nodeLabels == nil {
-		f.nodeLabels = map[string]string{"test-label": "test-value"}
-	}
-	return f.nodeLabels, nil
+	return map[string]string{"test-label": "test-value"}, nil
 }
 
 func ProbeVolumePlugins(config VolumeConfig) []VolumePlugin {
@@ -435,7 +419,7 @@ func (fv *FakeVolume) GetAttachCallCount() int {
 	return fv.AttachCallCount
 }
 
-func (fv *FakeVolume) WaitForAttach(spec *Spec, devicePath string, pod *v1.Pod, spectimeout time.Duration) (string, error) {
+func (fv *FakeVolume) WaitForAttach(spec *Spec, devicePath string, spectimeout time.Duration) (string, error) {
 	fv.Lock()
 	defer fv.Unlock()
 	fv.WaitForAttachCallCount++
@@ -768,7 +752,7 @@ func GetTestVolumePluginMgr(
 		nil, /* plugins */
 	)
 	plugins := ProbeVolumePlugins(VolumeConfig{})
-	if err := v.pluginMgr.InitPlugins(plugins, nil /* prober */, v); err != nil {
+	if err := v.pluginMgr.InitPlugins(plugins, v); err != nil {
 		t.Fatal(err)
 	}
 

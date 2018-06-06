@@ -20,60 +20,65 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = framework.KubeDescribe("ConfigMap", func() {
 	f := framework.NewDefaultFramework("configmap")
 
-	It("should be consumable from pods in volume [Conformance] [sig-storage]", func() {
+	It("should be consumable from pods in volume [Conformance] [Volume]", func() {
 		doConfigMapE2EWithoutMappings(f, 0, 0, nil)
 	})
 
-	It("should be consumable from pods in volume with defaultMode set [Conformance] [sig-storage]", func() {
+	It("should be consumable from pods in volume with defaultMode set [Conformance] [Volume]", func() {
 		defaultMode := int32(0400)
 		doConfigMapE2EWithoutMappings(f, 0, 0, &defaultMode)
 	})
 
-	It("should be consumable from pods in volume as non-root with defaultMode and fsGroup set [Feature:FSGroup] [sig-storage]", func() {
+	It("should be consumable from pods in volume as non-root with defaultMode and fsGroup set [Feature:FSGroup] [Volume]", func() {
 		defaultMode := int32(0440) /* setting fsGroup sets mode to at least 440 */
 		doConfigMapE2EWithoutMappings(f, 1000, 1001, &defaultMode)
 	})
 
-	It("should be consumable from pods in volume as non-root [Conformance] [sig-storage]", func() {
+	It("should be consumable from pods in volume as non-root [Conformance] [Volume]", func() {
 		doConfigMapE2EWithoutMappings(f, 1000, 0, nil)
 	})
 
-	It("should be consumable from pods in volume as non-root with FSGroup [Feature:FSGroup] [sig-storage]", func() {
+	It("should be consumable from pods in volume as non-root with FSGroup [Feature:FSGroup] [Volume]", func() {
 		doConfigMapE2EWithoutMappings(f, 1000, 1001, nil)
 	})
 
-	It("should be consumable from pods in volume with mappings [Conformance] [sig-storage]", func() {
+	It("should be consumable from pods in volume with mappings [Conformance] [Volume]", func() {
 		doConfigMapE2EWithMappings(f, 0, 0, nil)
 	})
 
-	It("should be consumable from pods in volume with mappings and Item mode set[Conformance] [sig-storage]", func() {
+	It("should be consumable from pods in volume with mappings and Item mode set[Conformance] [Volume]", func() {
 		mode := int32(0400)
 		doConfigMapE2EWithMappings(f, 0, 0, &mode)
 	})
 
-	It("should be consumable from pods in volume with mappings as non-root [Conformance] [sig-storage]", func() {
+	It("should be consumable from pods in volume with mappings as non-root [Conformance] [Volume]", func() {
 		doConfigMapE2EWithMappings(f, 1000, 0, nil)
 	})
 
-	It("should be consumable from pods in volume with mappings as non-root with FSGroup [Feature:FSGroup] [sig-storage]", func() {
+	It("should be consumable from pods in volume with mappings as non-root with FSGroup [Feature:FSGroup] [Volume]", func() {
 		doConfigMapE2EWithMappings(f, 1000, 1001, nil)
 	})
 
-	It("updates should be reflected in volume [Conformance] [sig-storage]", func() {
-		podLogTimeout := framework.GetPodSecretUpdateTimeout(f.ClientSet)
-		containerTimeoutArg := fmt.Sprintf("--retry_time=%v", int(podLogTimeout.Seconds()))
+	It("updates should be reflected in volume [Conformance] [Volume]", func() {
+
+		// We may have to wait or a full sync period to elapse before the
+		// Kubelet projects the update into the volume and the container picks
+		// it up. This timeout is based on the default Kubelet sync period (1
+		// minute) plus additional time for fudge factor.
+		const podLogTimeout = 300 * time.Second
 
 		name := "configmap-test-upd-" + string(uuid.NewUUID())
 		volumeName := "configmap-volume"
@@ -116,8 +121,8 @@ var _ = framework.KubeDescribe("ConfigMap", func() {
 				Containers: []v1.Container{
 					{
 						Name:    containerName,
-						Image:   mountImage,
-						Command: []string{"/mounttest", "--break_on_expected_content=false", containerTimeoutArg, "--file_content_in_loop=/etc/configmap-volume/data-1"},
+						Image:   "gcr.io/google_containers/mounttest:0.8",
+						Command: []string{"/mt", "--break_on_expected_content=false", "--retry_time=120", "--file_content_in_loop=/etc/configmap-volume/data-1"},
 						VolumeMounts: []v1.VolumeMount{
 							{
 								Name:      volumeName,
@@ -149,10 +154,15 @@ var _ = framework.KubeDescribe("ConfigMap", func() {
 		Eventually(pollLogs, podLogTimeout, framework.Poll).Should(ContainSubstring("value-2"))
 	})
 
-	It("optional updates should be reflected in volume [Conformance] [sig-storage]", func() {
-		podLogTimeout := framework.GetPodSecretUpdateTimeout(f.ClientSet)
-		containerTimeoutArg := fmt.Sprintf("--retry_time=%v", int(podLogTimeout.Seconds()))
+	It("optional updates should be reflected in volume [Conformance] [Volume]", func() {
+
+		// We may have to wait or a full sync period to elapse before the
+		// Kubelet projects the update into the volume and the container picks
+		// it up. This timeout is based on the default Kubelet sync period (1
+		// minute) plus additional time for fudge factor.
+		const podLogTimeout = 300 * time.Second
 		trueVal := true
+
 		volumeMountPath := "/etc/configmap-volumes"
 
 		deleteName := "cm-test-opt-del-" + string(uuid.NewUUID())
@@ -248,8 +258,8 @@ var _ = framework.KubeDescribe("ConfigMap", func() {
 				Containers: []v1.Container{
 					{
 						Name:    deleteContainerName,
-						Image:   mountImage,
-						Command: []string{"/mounttest", "--break_on_expected_content=false", containerTimeoutArg, "--file_content_in_loop=/etc/configmap-volumes/delete/data-1"},
+						Image:   "gcr.io/google_containers/mounttest:0.8",
+						Command: []string{"/mt", "--break_on_expected_content=false", "--retry_time=120", "--file_content_in_loop=/etc/configmap-volumes/delete/data-1"},
 						VolumeMounts: []v1.VolumeMount{
 							{
 								Name:      deleteVolumeName,
@@ -260,8 +270,8 @@ var _ = framework.KubeDescribe("ConfigMap", func() {
 					},
 					{
 						Name:    updateContainerName,
-						Image:   mountImage,
-						Command: []string{"/mounttest", "--break_on_expected_content=false", containerTimeoutArg, "--file_content_in_loop=/etc/configmap-volumes/update/data-3"},
+						Image:   "gcr.io/google_containers/mounttest:0.8",
+						Command: []string{"/mt", "--break_on_expected_content=false", "--retry_time=120", "--file_content_in_loop=/etc/configmap-volumes/update/data-3"},
 						VolumeMounts: []v1.VolumeMount{
 							{
 								Name:      updateVolumeName,
@@ -272,8 +282,8 @@ var _ = framework.KubeDescribe("ConfigMap", func() {
 					},
 					{
 						Name:    createContainerName,
-						Image:   mountImage,
-						Command: []string{"/mounttest", "--break_on_expected_content=false", containerTimeoutArg, "--file_content_in_loop=/etc/configmap-volumes/create/data-1"},
+						Image:   "gcr.io/google_containers/mounttest:0.8",
+						Command: []string{"/mt", "--break_on_expected_content=false", "--retry_time=120", "--file_content_in_loop=/etc/configmap-volumes/create/data-1"},
 						VolumeMounts: []v1.VolumeMount{
 							{
 								Name:      createVolumeName,
@@ -344,7 +354,7 @@ var _ = framework.KubeDescribe("ConfigMap", func() {
 				Containers: []v1.Container{
 					{
 						Name:    "env-test",
-						Image:   busyboxImage,
+						Image:   "gcr.io/google_containers/busybox:1.24",
 						Command: []string{"sh", "-c", "env"},
 						Env: []v1.EnvVar{
 							{
@@ -387,7 +397,7 @@ var _ = framework.KubeDescribe("ConfigMap", func() {
 				Containers: []v1.Container{
 					{
 						Name:    "env-test",
-						Image:   busyboxImage,
+						Image:   "gcr.io/google_containers/busybox:1.24",
 						Command: []string{"sh", "-c", "env"},
 						EnvFrom: []v1.EnvFromSource{
 							{
@@ -410,7 +420,7 @@ var _ = framework.KubeDescribe("ConfigMap", func() {
 		})
 	})
 
-	It("should be consumable in multiple volumes in the same pod [Conformance] [sig-storage]", func() {
+	It("should be consumable in multiple volumes in the same pod [Conformance] [Volume]", func() {
 		var (
 			name             = "configmap-test-volume-" + string(uuid.NewUUID())
 			volumeName       = "configmap-volume"
@@ -456,7 +466,7 @@ var _ = framework.KubeDescribe("ConfigMap", func() {
 				Containers: []v1.Container{
 					{
 						Name:  "configmap-volume-test",
-						Image: mountImage,
+						Image: "gcr.io/google_containers/mounttest:0.8",
 						Args:  []string{"--file_content=/etc/configmap-volume/data-1"},
 						VolumeMounts: []v1.VolumeMount{
 							{
@@ -550,7 +560,7 @@ func doConfigMapE2EWithoutMappings(f *framework.Framework, uid, fsGroup int64, d
 			Containers: []v1.Container{
 				{
 					Name:  "configmap-volume-test",
-					Image: mountImage,
+					Image: "gcr.io/google_containers/mounttest:0.8",
 					Args: []string{
 						"--file_content=/etc/configmap-volume/data-1",
 						"--file_mode=/etc/configmap-volume/data-1"},
@@ -636,7 +646,7 @@ func doConfigMapE2EWithMappings(f *framework.Framework, uid, fsGroup int64, item
 			Containers: []v1.Container{
 				{
 					Name:  "configmap-volume-test",
-					Image: mountImage,
+					Image: "gcr.io/google_containers/mounttest:0.8",
 					Args: []string{"--file_content=/etc/configmap-volume/path/to/data-2",
 						"--file_mode=/etc/configmap-volume/path/to/data-2"},
 					VolumeMounts: []v1.VolumeMount{

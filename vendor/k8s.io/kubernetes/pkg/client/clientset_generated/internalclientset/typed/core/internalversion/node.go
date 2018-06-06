@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -57,38 +57,6 @@ func newNodes(c *CoreClient) *nodes {
 	}
 }
 
-// Get takes name of the node, and returns the corresponding node object, and an error if there is any.
-func (c *nodes) Get(name string, options v1.GetOptions) (result *api.Node, err error) {
-	result = &api.Node{}
-	err = c.client.Get().
-		Resource("nodes").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of Nodes that match those selectors.
-func (c *nodes) List(opts v1.ListOptions) (result *api.NodeList, err error) {
-	result = &api.NodeList{}
-	err = c.client.Get().
-		Resource("nodes").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Do().
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested nodes.
-func (c *nodes) Watch(opts v1.ListOptions) (watch.Interface, error) {
-	opts.Watch = true
-	return c.client.Get().
-		Resource("nodes").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Watch()
-}
-
 // Create takes the representation of a node and creates it.  Returns the server's representation of the node, and an error, if there is any.
 func (c *nodes) Create(node *api.Node) (result *api.Node, err error) {
 	result = &api.Node{}
@@ -113,7 +81,7 @@ func (c *nodes) Update(node *api.Node) (result *api.Node, err error) {
 }
 
 // UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+// Add a +genclientstatus=false comment above the type to avoid generating UpdateStatus().
 
 func (c *nodes) UpdateStatus(node *api.Node) (result *api.Node, err error) {
 	result = &api.Node{}
@@ -145,6 +113,38 @@ func (c *nodes) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListO
 		Body(options).
 		Do().
 		Error()
+}
+
+// Get takes name of the node, and returns the corresponding node object, and an error if there is any.
+func (c *nodes) Get(name string, options v1.GetOptions) (result *api.Node, err error) {
+	result = &api.Node{}
+	err = c.client.Get().
+		Resource("nodes").
+		Name(name).
+		VersionedParams(&options, scheme.ParameterCodec).
+		Do().
+		Into(result)
+	return
+}
+
+// List takes label and field selectors, and returns the list of Nodes that match those selectors.
+func (c *nodes) List(opts v1.ListOptions) (result *api.NodeList, err error) {
+	result = &api.NodeList{}
+	err = c.client.Get().
+		Resource("nodes").
+		VersionedParams(&opts, scheme.ParameterCodec).
+		Do().
+		Into(result)
+	return
+}
+
+// Watch returns a watch.Interface that watches the requested nodes.
+func (c *nodes) Watch(opts v1.ListOptions) (watch.Interface, error) {
+	opts.Watch = true
+	return c.client.Get().
+		Resource("nodes").
+		VersionedParams(&opts, scheme.ParameterCodec).
+		Watch()
 }
 
 // Patch applies the patch and returns the patched node.

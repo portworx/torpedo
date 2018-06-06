@@ -21,9 +21,9 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/azure"
 	utilstrings "k8s.io/kubernetes/pkg/util/strings"
@@ -38,9 +38,9 @@ var _ volume.ProvisionableVolumePlugin = &azureFilePlugin{}
 // azure cloud provider should implement it
 type azureCloudProvider interface {
 	// create a file share
-	CreateFileShare(name, storageAccount, storageType, location string, requestGB int) (string, string, error)
+	CreateFileShare(shareName, accountName, accountType, location string, requestGiB int) (string, string, error)
 	// delete a file share
-	DeleteFileShare(accountName, key, name string) error
+	DeleteFileShare(accountName, accountKey, shareName string) error
 }
 
 type azureFileDeleter struct {
@@ -63,13 +63,15 @@ func (plugin *azureFilePlugin) newDeleterInternal(spec *volume.Spec, util azureU
 	if spec.PersistentVolume != nil && spec.PersistentVolume.Spec.AzureFile == nil {
 		return nil, fmt.Errorf("invalid PV spec")
 	}
-
-	secretName, secretNamespace, err := getSecretNameAndNamespace(spec, spec.PersistentVolume.Spec.ClaimRef.Namespace)
-	if err != nil {
-		return nil, err
+	pvSpec := spec.PersistentVolume
+	if pvSpec.Spec.ClaimRef.Namespace == "" {
+		glog.Errorf("namespace cannot be nil")
+		return nil, fmt.Errorf("invalid PV spec: nil namespace")
 	}
-	shareName := spec.PersistentVolume.Spec.AzureFile.ShareName
-	if accountName, accountKey, err := util.GetAzureCredentials(plugin.host, secretNamespace, secretName); err != nil {
+	nameSpace := pvSpec.Spec.ClaimRef.Namespace
+	secretName := pvSpec.Spec.AzureFile.SecretName
+	shareName := pvSpec.Spec.AzureFile.ShareName
+	if accountName, accountKey, err := util.GetAzureCredentials(plugin.host, nameSpace, secretName); err != nil {
 		return nil, err
 	} else {
 		return &azureFileDeleter{
@@ -142,7 +144,7 @@ func (a *azureFileProvisioner) Provision() (*v1.PersistentVolume, error) {
 	capacity := a.options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)]
 	requestBytes := capacity.Value()
 	requestGB := int(volume.RoundUpSize(requestBytes, 1024*1024*1024))
-	secretNamespace := a.options.PVC.Namespace
+
 	// Apply ProvisionerParameters (case-insensitive). We leave validation of
 	// the values to the cloud provider.
 	for k, v := range a.options.Parameters {
@@ -153,8 +155,6 @@ func (a *azureFileProvisioner) Provision() (*v1.PersistentVolume, error) {
 			location = v
 		case "storageaccount":
 			account = v
-		case "secretnamespace":
-			secretNamespace = v
 		default:
 			return nil, fmt.Errorf("invalid option %q for volume plugin %s", k, a.plugin.GetPluginName())
 		}
@@ -168,9 +168,8 @@ func (a *azureFileProvisioner) Provision() (*v1.PersistentVolume, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	// create a secret for storage account and key
-	secretName, err := a.util.SetAzureCredentials(a.plugin.host, secretNamespace, account, key)
+	secretName, err := a.util.SetAzureCredentials(a.plugin.host, a.options.PVC.Namespace, account, key)
 	if err != nil {
 		return nil, err
 	}
@@ -190,13 +189,11 @@ func (a *azureFileProvisioner) Provision() (*v1.PersistentVolume, error) {
 				v1.ResourceName(v1.ResourceStorage): resource.MustParse(fmt.Sprintf("%dGi", requestGB)),
 			},
 			PersistentVolumeSource: v1.PersistentVolumeSource{
-				AzureFile: &v1.AzureFilePersistentVolumeSource{
-					SecretName:      secretName,
-					ShareName:       name,
-					SecretNamespace: &secretNamespace,
+				AzureFile: &v1.AzureFileVolumeSource{
+					SecretName: secretName,
+					ShareName:  name,
 				},
 			},
-			MountOptions: a.options.MountOptions,
 		},
 	}
 	return pv, nil

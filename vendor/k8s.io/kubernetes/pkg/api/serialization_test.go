@@ -27,14 +27,11 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/ugorji/go/codec"
 
-	"k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/testing/fuzzer"
-	"k8s.io/apimachinery/pkg/api/testing/roundtrip"
+	apitesting "k8s.io/apimachinery/pkg/api/testing"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,15 +43,15 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	kapitesting "k8s.io/kubernetes/pkg/api/testing"
-	k8s_api_v1 "k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/apis/extensions"
-	k8s_v1beta1 "k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
+	"k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 )
 
 // fuzzInternalObject fuzzes an arbitrary runtime object using the appropriate
 // fuzzer registered with the apitesting package.
 func fuzzInternalObject(t *testing.T, forVersion schema.GroupVersion, item runtime.Object, seed int64) runtime.Object {
-	fuzzer.FuzzerFor(kapitesting.FuzzerFuncs, rand.NewSource(seed), api.Codecs).Fuzz(item)
+	apitesting.FuzzerFor(kapitesting.FuzzerFuncs(t, api.Codecs), rand.NewSource(seed)).Fuzz(item)
 
 	j, err := meta.TypeAccessor(item)
 	if err != nil {
@@ -79,16 +76,16 @@ func dataAsString(data []byte) string {
 
 func Convert_v1beta1_ReplicaSet_to_api_ReplicationController(in *v1beta1.ReplicaSet, out *api.ReplicationController, s conversion.Scope) error {
 	intermediate1 := &extensions.ReplicaSet{}
-	if err := k8s_v1beta1.Convert_v1beta1_ReplicaSet_To_extensions_ReplicaSet(in, intermediate1, s); err != nil {
+	if err := v1beta1.Convert_v1beta1_ReplicaSet_To_extensions_ReplicaSet(in, intermediate1, s); err != nil {
 		return err
 	}
 
 	intermediate2 := &v1.ReplicationController{}
-	if err := k8s_api_v1.Convert_extensions_ReplicaSet_to_v1_ReplicationController(intermediate1, intermediate2, s); err != nil {
+	if err := v1.Convert_extensions_ReplicaSet_to_v1_ReplicationController(intermediate1, intermediate2, s); err != nil {
 		return err
 	}
 
-	return k8s_api_v1.Convert_v1_ReplicationController_To_api_ReplicationController(intermediate2, out, s)
+	return v1.Convert_v1_ReplicationController_To_api_ReplicationController(intermediate2, out, s)
 }
 
 func TestSetControllerConversion(t *testing.T) {
@@ -140,13 +137,13 @@ func TestSetControllerConversion(t *testing.T) {
 // debug issues that arise while adding a new API type.
 func TestSpecificKind(t *testing.T) {
 	// Uncomment the following line to enable logging of which conversions
-	// api.Scheme.Log(t)
+	// api.scheme.Log(t)
 	internalGVK := schema.GroupVersionKind{Group: "extensions", Version: runtime.APIVersionInternal, Kind: "DaemonSet"}
 
 	seed := rand.Int63()
-	fuzzer := fuzzer.FuzzerFor(kapitesting.FuzzerFuncs, rand.NewSource(seed), api.Codecs)
+	fuzzer := apitesting.FuzzerFor(kapitesting.FuzzerFuncs(t, api.Codecs), rand.NewSource(seed))
 
-	roundtrip.RoundTripSpecificKind(t, internalGVK, api.Scheme, api.Codecs, fuzzer, nil)
+	apitesting.RoundTripSpecificKind(t, internalGVK, api.Scheme, api.Codecs, fuzzer, nil)
 }
 
 var nonRoundTrippableTypes = sets.NewString(
@@ -205,14 +202,15 @@ func TestCommonKindsRegistered(t *testing.T) {
 // in all of the API groups registered for test in the testapi package.
 func TestRoundTripTypes(t *testing.T) {
 	seed := rand.Int63()
-	fuzzer := fuzzer.FuzzerFor(kapitesting.FuzzerFuncs, rand.NewSource(seed), api.Codecs)
+	fuzzer := apitesting.FuzzerFor(kapitesting.FuzzerFuncs(t, api.Codecs), rand.NewSource(seed))
 
 	nonRoundTrippableTypes := map[schema.GroupVersionKind]bool{
+		{Group: "componentconfig", Version: runtime.APIVersionInternal, Kind: "KubeletConfiguration"}:       true,
 		{Group: "componentconfig", Version: runtime.APIVersionInternal, Kind: "KubeProxyConfiguration"}:     true,
 		{Group: "componentconfig", Version: runtime.APIVersionInternal, Kind: "KubeSchedulerConfiguration"}: true,
 	}
 
-	roundtrip.RoundTripTypes(t, api.Scheme, api.Codecs, fuzzer, nonRoundTrippableTypes)
+	apitesting.RoundTripTypes(t, api.Scheme, api.Codecs, fuzzer, nonRoundTrippableTypes)
 }
 
 // TestEncodePtr tests that a pointer to a golang type can be encoded and
@@ -300,7 +298,7 @@ func TestUnversionedTypes(t *testing.T) {
 // TestObjectWatchFraming establishes that a watch event can be encoded and
 // decoded correctly through each of the supported RFC2046 media types.
 func TestObjectWatchFraming(t *testing.T) {
-	f := fuzzer.FuzzerFor(kapitesting.FuzzerFuncs, rand.NewSource(benchmarkSeed), api.Codecs)
+	f := apitesting.FuzzerFor(kapitesting.FuzzerFuncs(t, api.Codecs), rand.NewSource(benchmarkSeed))
 	secret := &api.Secret{}
 	f.Fuzz(secret)
 	secret.Data["binary"] = []byte{0x00, 0x10, 0x30, 0x55, 0xff, 0x00}
@@ -382,7 +380,7 @@ func TestObjectWatchFraming(t *testing.T) {
 const benchmarkSeed = 100
 
 func benchmarkItems(b *testing.B) []v1.Pod {
-	apiObjectFuzzer := fuzzer.FuzzerFor(kapitesting.FuzzerFuncs, rand.NewSource(benchmarkSeed), api.Codecs)
+	apiObjectFuzzer := apitesting.FuzzerFor(kapitesting.FuzzerFuncs(b, api.Codecs), rand.NewSource(benchmarkSeed))
 	items := make([]v1.Pod, 10)
 	for i := range items {
 		var pod api.Pod
@@ -536,7 +534,7 @@ func BenchmarkDecodeIntoJSON(b *testing.B) {
 	b.StopTimer()
 }
 
-// BenchmarkDecodeJSON provides a baseline for JSON decode performance
+// BenchmarkDecodeJSON provides a baseline for codecgen JSON decode performance
 func BenchmarkDecodeIntoJSONCodecGen(b *testing.B) {
 	kcodec := testapi.Default.Codec()
 	items := benchmarkItems(b)
@@ -549,11 +547,12 @@ func BenchmarkDecodeIntoJSONCodecGen(b *testing.B) {
 		}
 		encoded[i] = data
 	}
+	handler := &codec.JsonHandle{}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		obj := v1.Pod{}
-		if err := jsoniter.ConfigFastest.Unmarshal(encoded[i%width], &obj); err != nil {
+		if err := codec.NewDecoderBytes(encoded[i%width], handler).Decode(&obj); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -24,12 +24,11 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
-	clientset "k8s.io/client-go/kubernetes"
-	imageutils "k8s.io/kubernetes/test/utils/image"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 )
 
 func EtcdUpgrade(target_storage, target_version string) error {
@@ -44,7 +43,7 @@ func EtcdUpgrade(target_storage, target_version string) error {
 func MasterUpgrade(v string) error {
 	switch TestContext.Provider {
 	case "gce":
-		return masterUpgradeGCE(v, false)
+		return masterUpgradeGCE(v)
 	case "gke":
 		return masterUpgradeGKE(v)
 	case "kubernetes-anywhere":
@@ -65,14 +64,8 @@ func etcdUpgradeGCE(target_storage, target_version string) error {
 	return err
 }
 
-// TODO(mrhohn): Remove this function when kube-proxy is run as a DaemonSet by default.
-func MasterUpgradeGCEWithKubeProxyDaemonSet(v string, enableKubeProxyDaemonSet bool) error {
-	return masterUpgradeGCE(v, enableKubeProxyDaemonSet)
-}
-
-// TODO(mrhohn): Remove 'enableKubeProxyDaemonSet' when kube-proxy is run as a DaemonSet by default.
-func masterUpgradeGCE(rawV string, enableKubeProxyDaemonSet bool) error {
-	env := append(os.Environ(), fmt.Sprintf("KUBE_PROXY_DAEMONSET=%v", enableKubeProxyDaemonSet))
+func masterUpgradeGCE(rawV string) error {
+	env := os.Environ()
 	// TODO: Remove these variables when they're no longer needed for downgrades.
 	if TestContext.EtcdUpgradeVersion != "" && TestContext.EtcdUpgradeStorage != "" {
 		env = append(env,
@@ -148,7 +141,7 @@ func NodeUpgrade(f *Framework, v string, img string) error {
 	var err error
 	switch TestContext.Provider {
 	case "gce":
-		err = nodeUpgradeGCE(v, img, false)
+		err = nodeUpgradeGCE(v, img)
 	case "gke":
 		err = nodeUpgradeGKE(v, img)
 	default:
@@ -169,30 +162,14 @@ func NodeUpgrade(f *Framework, v string, img string) error {
 	return nil
 }
 
-// TODO(mrhohn): Remove this function when kube-proxy is run as a DaemonSet by default.
-func NodeUpgradeGCEWithKubeProxyDaemonSet(f *Framework, v string, img string, enableKubeProxyDaemonSet bool) error {
-	// Perform the upgrade.
-	if err := nodeUpgradeGCE(v, img, enableKubeProxyDaemonSet); err != nil {
-		return err
-	}
-	// Wait for it to complete and validate nodes are healthy.
-	Logf("Waiting up to %v for all nodes to be ready after the upgrade", RestartNodeReadyAgainTimeout)
-	if _, err := CheckNodesReady(f.ClientSet, RestartNodeReadyAgainTimeout, TestContext.CloudConfig.NumNodes); err != nil {
-		return err
-	}
-	return nil
-}
-
-// TODO(mrhohn): Remove 'enableKubeProxyDaemonSet' when kube-proxy is run as a DaemonSet by default.
-func nodeUpgradeGCE(rawV, img string, enableKubeProxyDaemonSet bool) error {
+func nodeUpgradeGCE(rawV, img string) error {
 	v := "v" + rawV
-	env := append(os.Environ(), fmt.Sprintf("KUBE_PROXY_DAEMONSET=%v", enableKubeProxyDaemonSet))
 	if img != "" {
-		env = append(env, "KUBE_NODE_OS_DISTRIBUTION="+img)
+		env := append(os.Environ(), "KUBE_NODE_OS_DISTRIBUTION="+img)
 		_, _, err := RunCmdEnv(env, gceUpgradeScript(), "-N", "-o", v)
 		return err
 	}
-	_, _, err := RunCmdEnv(env, gceUpgradeScript(), "-N", v)
+	_, _, err := RunCmd(gceUpgradeScript(), "-N", v)
 	return err
 }
 
@@ -327,7 +304,7 @@ func gceUpgradeScript() string {
 func waitForSSHTunnels() {
 	Logf("Waiting for SSH tunnels to establish")
 	RunKubectl("run", "ssh-tunnel-test",
-		"--image="+imageutils.GetBusyBoxImage(),
+		"--image=gcr.io/google_containers/busybox:1.24",
 		"--restart=Never",
 		"--command", "--",
 		"echo", "Hello")

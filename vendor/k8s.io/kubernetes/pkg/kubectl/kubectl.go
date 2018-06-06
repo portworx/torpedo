@@ -212,10 +212,7 @@ func parseFileSource(source string) (keyName, filePath string, err error) {
 	}
 }
 
-// parseLiteralSource parses the source key=val pair into its component pieces.
-// This functionality is distinguished from strings.SplitN(source, "=", 2) since
-// it returns an error in the case of empty keys, values, or a missing equals
-// sign.
+// parseLiteralSource parses the source key=val pair
 func parseLiteralSource(source string) (keyName, value string, err error) {
 	// leading equal is invalid
 	if strings.Index(source, "=") == 0 {

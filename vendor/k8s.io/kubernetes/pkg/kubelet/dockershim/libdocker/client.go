@@ -20,10 +20,8 @@ import (
 	"strings"
 	"time"
 
-	dockertypes "github.com/docker/docker/api/types"
-	dockercontainer "github.com/docker/docker/api/types/container"
-	dockerimagetypes "github.com/docker/docker/api/types/image"
-	dockerapi "github.com/docker/docker/client"
+	dockerapi "github.com/docker/engine-api/client"
+	dockertypes "github.com/docker/engine-api/types"
 	"github.com/golang/glog"
 )
 
@@ -46,26 +44,25 @@ const (
 type Interface interface {
 	ListContainers(options dockertypes.ContainerListOptions) ([]dockertypes.Container, error)
 	InspectContainer(id string) (*dockertypes.ContainerJSON, error)
-	CreateContainer(dockertypes.ContainerCreateConfig) (*dockercontainer.ContainerCreateCreatedBody, error)
+	CreateContainer(dockertypes.ContainerCreateConfig) (*dockertypes.ContainerCreateResponse, error)
 	StartContainer(id string) error
-	StopContainer(id string, timeout time.Duration) error
-	UpdateContainerResources(id string, updateConfig dockercontainer.UpdateConfig) error
+	StopContainer(id string, timeout int) error
 	RemoveContainer(id string, opts dockertypes.ContainerRemoveOptions) error
 	InspectImageByRef(imageRef string) (*dockertypes.ImageInspect, error)
 	InspectImageByID(imageID string) (*dockertypes.ImageInspect, error)
-	ListImages(opts dockertypes.ImageListOptions) ([]dockertypes.ImageSummary, error)
+	ListImages(opts dockertypes.ImageListOptions) ([]dockertypes.Image, error)
 	PullImage(image string, auth dockertypes.AuthConfig, opts dockertypes.ImagePullOptions) error
-	RemoveImage(image string, opts dockertypes.ImageRemoveOptions) ([]dockertypes.ImageDeleteResponseItem, error)
-	ImageHistory(id string) ([]dockerimagetypes.HistoryResponseItem, error)
+	RemoveImage(image string, opts dockertypes.ImageRemoveOptions) ([]dockertypes.ImageDelete, error)
+	ImageHistory(id string) ([]dockertypes.ImageHistory, error)
 	Logs(string, dockertypes.ContainerLogsOptions, StreamOptions) error
 	Version() (*dockertypes.Version, error)
 	Info() (*dockertypes.Info, error)
-	CreateExec(string, dockertypes.ExecConfig) (*dockertypes.IDResponse, error)
+	CreateExec(string, dockertypes.ExecConfig) (*dockertypes.ContainerExecCreateResponse, error)
 	StartExec(string, dockertypes.ExecStartCheck, StreamOptions) error
 	InspectExec(id string) (*dockertypes.ContainerExecInspect, error)
 	AttachToContainer(string, dockertypes.ContainerAttachOptions, StreamOptions) error
-	ResizeContainerTTY(id string, height, width uint) error
-	ResizeExecTTY(id string, height, width uint) error
+	ResizeContainerTTY(id string, height, width int) error
+	ResizeExecTTY(id string, height, width int) error
 }
 
 // Get a *dockerapi.Client, either using the endpoint passed in, or using

@@ -19,9 +19,9 @@ package apiserver
 import (
 	"testing"
 
-	"k8s.io/apimachinery/pkg/api/testing/roundtrip"
+	apitesting "k8s.io/apimachinery/pkg/api/testing"
 )
 
 func TestRoundTripTypes(t *testing.T) {
-	roundtrip.RoundTripTestForScheme(t, Scheme, nil)
+	apitesting.RoundTripTestForScheme(t, Scheme, nil)
 }

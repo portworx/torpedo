@@ -191,7 +191,11 @@ func TestAdmission(t *testing.T) {
 		glog.V(4).Infof("starting test %q", test.name)
 
 		// clone the claim, it's going to be modified
-		claim := test.claim.DeepCopy()
+		clone, err := api.Scheme.DeepCopy(test.claim)
+		if err != nil {
+			t.Fatalf("Cannot clone claim: %v", err)
+		}
+		claim := clone.(*api.PersistentVolumeClaim)
 
 		ctrl := newPlugin()
 		informerFactory := informers.NewSharedInformerFactory(nil, controller.NoResyncPeriodFunc())
@@ -210,7 +214,7 @@ func TestAdmission(t *testing.T) {
 			admission.Create,
 			nil, // userInfo
 		)
-		err := ctrl.Admit(attrs)
+		err = ctrl.Admit(attrs)
 		glog.Infof("Got %v", err)
 		if err != nil && !test.expectError {
 			t.Errorf("Test %q: unexpected error received: %v", test.name, err)

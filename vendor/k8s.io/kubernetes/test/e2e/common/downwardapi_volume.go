@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	. "github.com/onsi/ginkgo"
@@ -39,40 +39,40 @@ var _ = framework.KubeDescribe("Downward API volume", func() {
 		podClient = f.PodClient()
 	})
 
-	It("should provide podname only [Conformance] [sig-storage]", func() {
+	It("should provide podname only [Conformance] [Volume]", func() {
 		podName := "downwardapi-volume-" + string(uuid.NewUUID())
-		pod := downwardAPIVolumePodForSimpleTest(podName, "/etc/podname")
+		pod := downwardAPIVolumePodForSimpleTest(podName, "/etc/podinfo/podname")
 
 		f.TestContainerOutput("downward API volume plugin", pod, 0, []string{
 			fmt.Sprintf("%s\n", podName),
 		})
 	})
 
-	It("should set DefaultMode on files [Conformance] [sig-storage]", func() {
+	It("should set DefaultMode on files [Conformance] [Volume]", func() {
 		podName := "downwardapi-volume-" + string(uuid.NewUUID())
 		defaultMode := int32(0400)
-		pod := downwardAPIVolumePodForModeTest(podName, "/etc/podname", nil, &defaultMode)
+		pod := downwardAPIVolumePodForModeTest(podName, "/etc/podinfo/podname", nil, &defaultMode)
 
 		f.TestContainerOutput("downward API volume plugin", pod, 0, []string{
-			"mode of file \"/etc/podname\": -r--------",
+			"mode of file \"/etc/podinfo/podname\": -r--------",
 		})
 	})
 
-	It("should set mode on item file [Conformance] [sig-storage]", func() {
+	It("should set mode on item file [Conformance] [Volume]", func() {
 		podName := "downwardapi-volume-" + string(uuid.NewUUID())
 		mode := int32(0400)
-		pod := downwardAPIVolumePodForModeTest(podName, "/etc/podname", &mode, nil)
+		pod := downwardAPIVolumePodForModeTest(podName, "/etc/podinfo/podname", &mode, nil)
 
 		f.TestContainerOutput("downward API volume plugin", pod, 0, []string{
-			"mode of file \"/etc/podname\": -r--------",
+			"mode of file \"/etc/podinfo/podname\": -r--------",
 		})
 	})
 
-	It("should provide podname as non-root with fsgroup [Feature:FSGroup] [sig-storage]", func() {
+	It("should provide podname as non-root with fsgroup [Feature:FSGroup] [Volume]", func() {
 		podName := "metadata-volume-" + string(uuid.NewUUID())
 		uid := int64(1001)
 		gid := int64(1234)
-		pod := downwardAPIVolumePodForSimpleTest(podName, "/etc/podname")
+		pod := downwardAPIVolumePodForSimpleTest(podName, "/etc/podinfo/podname")
 		pod.Spec.SecurityContext = &v1.PodSecurityContext{
 			RunAsUser: &uid,
 			FSGroup:   &gid,
@@ -82,28 +82,28 @@ var _ = framework.KubeDescribe("Downward API volume", func() {
 		})
 	})
 
-	It("should provide podname as non-root with fsgroup and defaultMode [Feature:FSGroup] [sig-storage]", func() {
+	It("should provide podname as non-root with fsgroup and defaultMode [Feature:FSGroup] [Volume]", func() {
 		podName := "metadata-volume-" + string(uuid.NewUUID())
 		uid := int64(1001)
 		gid := int64(1234)
 		mode := int32(0440) /* setting fsGroup sets mode to at least 440 */
-		pod := downwardAPIVolumePodForModeTest(podName, "/etc/podname", &mode, nil)
+		pod := downwardAPIVolumePodForModeTest(podName, "/etc/podinfo/podname", &mode, nil)
 		pod.Spec.SecurityContext = &v1.PodSecurityContext{
 			RunAsUser: &uid,
 			FSGroup:   &gid,
 		}
 		f.TestContainerOutput("downward API volume plugin", pod, 0, []string{
-			"mode of file \"/etc/podname\": -r--r-----",
+			"mode of file \"/etc/podinfo/podname\": -r--r-----",
 		})
 	})
 
-	It("should update labels on modification [Conformance] [sig-storage]", func() {
+	It("should update labels on modification [Conformance] [Volume]", func() {
 		labels := map[string]string{}
 		labels["key1"] = "value1"
 		labels["key2"] = "value2"
 
 		podName := "labelsupdate" + string(uuid.NewUUID())
-		pod := downwardAPIVolumePodForUpdateTest(podName, labels, map[string]string{}, "/etc/labels")
+		pod := downwardAPIVolumePodForUpdateTest(podName, labels, map[string]string{}, "/etc/podinfo/labels")
 		containerName := "client-container"
 		By("Creating the pod")
 		podClient.CreateSync(pod)
@@ -124,11 +124,11 @@ var _ = framework.KubeDescribe("Downward API volume", func() {
 			podLogTimeout, framework.Poll).Should(ContainSubstring("key3=\"value3\"\n"))
 	})
 
-	It("should update annotations on modification [Conformance] [sig-storage]", func() {
+	It("should update annotations on modification [Conformance] [Volume]", func() {
 		annotations := map[string]string{}
 		annotations["builder"] = "bar"
 		podName := "annotationupdate" + string(uuid.NewUUID())
-		pod := downwardAPIVolumePodForUpdateTest(podName, map[string]string{}, annotations, "/etc/annotations")
+		pod := downwardAPIVolumePodForUpdateTest(podName, map[string]string{}, annotations, "/etc/podinfo/annotations")
 
 		containerName := "client-container"
 		By("Creating the pod")
@@ -153,52 +153,52 @@ var _ = framework.KubeDescribe("Downward API volume", func() {
 			podLogTimeout, framework.Poll).Should(ContainSubstring("builder=\"foo\"\n"))
 	})
 
-	It("should provide container's cpu limit [Conformance] [sig-storage]", func() {
+	It("should provide container's cpu limit [Conformance] [Volume]", func() {
 		podName := "downwardapi-volume-" + string(uuid.NewUUID())
-		pod := downwardAPIVolumeForContainerResources(podName, "/etc/cpu_limit")
+		pod := downwardAPIVolumeForContainerResources(podName, "/etc/podinfo/cpu_limit")
 
 		f.TestContainerOutput("downward API volume plugin", pod, 0, []string{
 			fmt.Sprintf("2\n"),
 		})
 	})
 
-	It("should provide container's memory limit [Conformance] [sig-storage]", func() {
+	It("should provide container's memory limit [Conformance] [Volume]", func() {
 		podName := "downwardapi-volume-" + string(uuid.NewUUID())
-		pod := downwardAPIVolumeForContainerResources(podName, "/etc/memory_limit")
+		pod := downwardAPIVolumeForContainerResources(podName, "/etc/podinfo/memory_limit")
 
 		f.TestContainerOutput("downward API volume plugin", pod, 0, []string{
 			fmt.Sprintf("67108864\n"),
 		})
 	})
 
-	It("should provide container's cpu request [Conformance] [sig-storage]", func() {
+	It("should provide container's cpu request [Conformance] [Volume]", func() {
 		podName := "downwardapi-volume-" + string(uuid.NewUUID())
-		pod := downwardAPIVolumeForContainerResources(podName, "/etc/cpu_request")
+		pod := downwardAPIVolumeForContainerResources(podName, "/etc/podinfo/cpu_request")
 
 		f.TestContainerOutput("downward API volume plugin", pod, 0, []string{
 			fmt.Sprintf("1\n"),
 		})
 	})
 
-	It("should provide container's memory request [Conformance] [sig-storage]", func() {
+	It("should provide container's memory request [Conformance] [Volume]", func() {
 		podName := "downwardapi-volume-" + string(uuid.NewUUID())
-		pod := downwardAPIVolumeForContainerResources(podName, "/etc/memory_request")
+		pod := downwardAPIVolumeForContainerResources(podName, "/etc/podinfo/memory_request")
 
 		f.TestContainerOutput("downward API volume plugin", pod, 0, []string{
 			fmt.Sprintf("33554432\n"),
 		})
 	})
 
-	It("should provide node allocatable (cpu) as default cpu limit if the limit is not set [Conformance] [sig-storage]", func() {
+	It("should provide node allocatable (cpu) as default cpu limit if the limit is not set [Conformance] [Volume]", func() {
 		podName := "downwardapi-volume-" + string(uuid.NewUUID())
-		pod := downwardAPIVolumeForDefaultContainerResources(podName, "/etc/cpu_limit")
+		pod := downwardAPIVolumeForDefaultContainerResources(podName, "/etc/podinfo/cpu_limit")
 
 		f.TestContainerOutputRegexp("downward API volume plugin", pod, 0, []string{"[1-9]"})
 	})
 
-	It("should provide node allocatable (memory) as default memory limit if the limit is not set [Conformance] [sig-storage]", func() {
+	It("should provide node allocatable (memory) as default memory limit if the limit is not set [Conformance] [Volume]", func() {
 		podName := "downwardapi-volume-" + string(uuid.NewUUID())
-		pod := downwardAPIVolumeForDefaultContainerResources(podName, "/etc/memory_limit")
+		pod := downwardAPIVolumeForDefaultContainerResources(podName, "/etc/podinfo/memory_limit")
 
 		f.TestContainerOutputRegexp("downward API volume plugin", pod, 0, []string{"[1-9]"})
 	})
@@ -211,12 +211,12 @@ func downwardAPIVolumePodForModeTest(name, filePath string, itemMode, defaultMod
 	pod.Spec.Containers = []v1.Container{
 		{
 			Name:    "client-container",
-			Image:   mountImage,
-			Command: []string{"/mounttest", "--file_mode=" + filePath},
+			Image:   "gcr.io/google_containers/mounttest:0.8",
+			Command: []string{"/mt", "--file_mode=" + filePath},
 			VolumeMounts: []v1.VolumeMount{
 				{
 					Name:      "podinfo",
-					MountPath: "/etc",
+					MountPath: "/etc/podinfo",
 				},
 			},
 		},
@@ -237,12 +237,12 @@ func downwardAPIVolumePodForSimpleTest(name string, filePath string) *v1.Pod {
 	pod.Spec.Containers = []v1.Container{
 		{
 			Name:    "client-container",
-			Image:   mountImage,
-			Command: []string{"/mounttest", "--file_content=" + filePath},
+			Image:   "gcr.io/google_containers/mounttest:0.8",
+			Command: []string{"/mt", "--file_content=" + filePath},
 			VolumeMounts: []v1.VolumeMount{
 				{
 					Name:      "podinfo",
-					MountPath: "/etc",
+					MountPath: "/etc/podinfo",
 					ReadOnly:  false,
 				},
 			},
@@ -268,8 +268,8 @@ func downwardAPIVolumeBaseContainers(name, filePath string) []v1.Container {
 	return []v1.Container{
 		{
 			Name:    name,
-			Image:   mountImage,
-			Command: []string{"/mounttest", "--file_content=" + filePath},
+			Image:   "gcr.io/google_containers/mounttest:0.8",
+			Command: []string{"/mt", "--file_content=" + filePath},
 			Resources: v1.ResourceRequirements{
 				Requests: v1.ResourceList{
 					v1.ResourceCPU:    resource.MustParse("250m"),
@@ -283,7 +283,7 @@ func downwardAPIVolumeBaseContainers(name, filePath string) []v1.Container {
 			VolumeMounts: []v1.VolumeMount{
 				{
 					Name:      "podinfo",
-					MountPath: "/etc",
+					MountPath: "/etc/podinfo",
 					ReadOnly:  false,
 				},
 			},
@@ -296,12 +296,12 @@ func downwardAPIVolumeDefaultBaseContainer(name, filePath string) []v1.Container
 	return []v1.Container{
 		{
 			Name:    name,
-			Image:   mountImage,
-			Command: []string{"/mounttest", "--file_content=" + filePath},
+			Image:   "gcr.io/google_containers/mounttest:0.8",
+			Command: []string{"/mt", "--file_content=" + filePath},
 			VolumeMounts: []v1.VolumeMount{
 				{
 					Name:      "podinfo",
-					MountPath: "/etc",
+					MountPath: "/etc/podinfo",
 				},
 			},
 		},
@@ -315,12 +315,12 @@ func downwardAPIVolumePodForUpdateTest(name string, labels, annotations map[stri
 	pod.Spec.Containers = []v1.Container{
 		{
 			Name:    "client-container",
-			Image:   mountImage,
-			Command: []string{"/mounttest", "--break_on_expected_content=false", "--retry_time=120", "--file_content_in_loop=" + filePath},
+			Image:   "gcr.io/google_containers/mounttest:0.8",
+			Command: []string{"/mt", "--break_on_expected_content=false", "--retry_time=120", "--file_content_in_loop=" + filePath},
 			VolumeMounts: []v1.VolumeMount{
 				{
 					Name:      "podinfo",
-					MountPath: "/etc",
+					MountPath: "/etc/podinfo",
 					ReadOnly:  false,
 				},
 			},

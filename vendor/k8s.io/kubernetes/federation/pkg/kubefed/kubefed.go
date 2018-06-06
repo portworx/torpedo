@@ -26,18 +26,8 @@ import (
 	kubectl "k8s.io/kubernetes/pkg/kubectl/cmd"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
 
 	"github.com/spf13/cobra"
-)
-
-var (
-	kubefedVersionExample = templates.Examples(i18n.T(`
-		# Print the client and server versions for the current context
-		kubefed version`))
-	kubefedOptionsExample = templates.Examples(i18n.T(`
-		# Print flags inherited by all commands
-		kubefed options`))
 )
 
 // NewKubeFedCommand creates the `kubefed` command and its nested children.
@@ -76,12 +66,8 @@ func NewKubeFedCommand(f cmdutil.Factory, in io.Reader, out, err io.Writer, defa
 	}
 	templates.ActsAsRootCommand(cmds, filters, groups...)
 
-	cmdVersion := kubectl.NewCmdVersion(f, out)
-	cmdVersion.Example = kubefedVersionExample
-	cmds.AddCommand(cmdVersion)
-	cmdOptions := kubectl.NewCmdOptions(out)
-	cmdOptions.Example = kubefedOptionsExample
-	cmds.AddCommand(cmdOptions)
+	cmds.AddCommand(kubectl.NewCmdVersion(f, out))
+	cmds.AddCommand(kubectl.NewCmdOptions(out))
 
 	return cmds
 }

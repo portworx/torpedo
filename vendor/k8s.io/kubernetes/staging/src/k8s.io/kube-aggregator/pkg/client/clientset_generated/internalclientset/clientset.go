@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,12 +33,15 @@ type Interface interface {
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	apiregistration *apiregistrationinternalversion.ApiregistrationClient
+	*apiregistrationinternalversion.ApiregistrationClient
 }
 
 // Apiregistration retrieves the ApiregistrationClient
 func (c *Clientset) Apiregistration() apiregistrationinternalversion.ApiregistrationInterface {
-	return c.apiregistration
+	if c == nil {
+		return nil
+	}
+	return c.ApiregistrationClient
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -57,7 +60,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
-	cs.apiregistration, err = apiregistrationinternalversion.NewForConfig(&configShallowCopy)
+	cs.ApiregistrationClient, err = apiregistrationinternalversion.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +77,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
-	cs.apiregistration = apiregistrationinternalversion.NewForConfigOrDie(c)
+	cs.ApiregistrationClient = apiregistrationinternalversion.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -83,7 +86,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.apiregistration = apiregistrationinternalversion.New(c)
+	cs.ApiregistrationClient = apiregistrationinternalversion.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs

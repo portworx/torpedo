@@ -14,8 +14,6 @@ spec:
     rule: RunAsAny
   volumes:
   - '*'
-  allowedCapabilities:
-  - '*'
 ---
 apiVersion: extensions/v1beta1
 kind: PodSecurityPolicy

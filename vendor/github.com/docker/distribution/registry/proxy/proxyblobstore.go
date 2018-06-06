@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"strconv"
@@ -9,10 +8,10 @@ import (
 	"time"
 
 	"github.com/docker/distribution"
-	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/context"
+	"github.com/docker/distribution/digest"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/proxy/scheduler"
-	"github.com/opencontainers/go-digest"
 )
 
 // todo(richardscothern): from cache control header or config file
@@ -55,8 +54,6 @@ func (pbs *proxyBlobStore) copyContent(ctx context.Context, dgst digest.Digest, 
 	if err != nil {
 		return distribution.Descriptor{}, err
 	}
-
-	defer remoteReader.Close()
 
 	_, err = io.CopyN(writer, remoteReader, desc.Size)
 	if err != nil {
@@ -117,7 +114,7 @@ func (pbs *proxyBlobStore) storeLocal(ctx context.Context, dgst digest.Digest) e
 func (pbs *proxyBlobStore) ServeBlob(ctx context.Context, w http.ResponseWriter, r *http.Request, dgst digest.Digest) error {
 	served, err := pbs.serveLocal(ctx, w, r, dgst)
 	if err != nil {
-		dcontext.GetLogger(ctx).Errorf("Error serving blob from local storage: %s", err.Error())
+		context.GetLogger(ctx).Errorf("Error serving blob from local storage: %s", err.Error())
 		return err
 	}
 
@@ -141,12 +138,12 @@ func (pbs *proxyBlobStore) ServeBlob(ctx context.Context, w http.ResponseWriter,
 
 	go func(dgst digest.Digest) {
 		if err := pbs.storeLocal(ctx, dgst); err != nil {
-			dcontext.GetLogger(ctx).Errorf("Error committing to storage: %s", err.Error())
+			context.GetLogger(ctx).Errorf("Error committing to storage: %s", err.Error())
 		}
 
 		blobRef, err := reference.WithDigest(pbs.repositoryName, dgst)
 		if err != nil {
-			dcontext.GetLogger(ctx).Errorf("Error creating reference: %s", err)
+			context.GetLogger(ctx).Errorf("Error creating reference: %s", err)
 			return
 		}
 

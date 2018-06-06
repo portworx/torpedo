@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM BASEIMAGE
-
-CROSS_BUILD_COPY qemu-QEMUARCH-static /usr/bin/
+FROM alpine:3.2
 
 # install necessary packages:
 # - curl, nc: used by a lot of e2e tests
 # - iproute2: includes ss used in NodePort tests
-RUN apk --update add curl netcat-openbsd iproute2 && rm -rf /var/cache/apk/*
+run apk --update add curl netcat-openbsd iproute2 && rm -rf /var/cache/apk/*
 
 # wait forever
 CMD rm -f /fifo && mkfifo /fifo && exec cat </fifo

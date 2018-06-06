@@ -12,14 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SRCS=logs-generator
-ARCH ?= amd64
-TARGET ?= $(CURDIR)
-GOLANG_VERSION ?= latest
-SRC_DIR = $(notdir $(shell pwd))
-export
+TAG = v0.1.1
+PREFIX = gcr.io/google_containers
 
-bin:
-	../image-util.sh bin $(SRCS)
+all: build
 
-.PHONY: bin
+build: binary container
+
+binary:
+	go build -a --ldflags '-w' -o logs-generator .
+
+container:
+	docker build --pull -t $(PREFIX)/logs-generator:$(TAG) .
+
+push:
+	gcloud docker -- push $(PREFIX)/logs-generator:$(TAG)
+
+clean:
+	rm -f logs-generator

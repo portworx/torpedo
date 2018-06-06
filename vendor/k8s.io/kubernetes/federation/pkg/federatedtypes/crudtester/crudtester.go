@@ -17,15 +17,14 @@ limitations under the License.
 package crudtester
 
 import (
-	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pkgruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/federation/pkg/federatedtypes"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 )
 
 const (
@@ -77,20 +76,15 @@ func (c *FederatedTypeCRUDTester) CheckLifecycle(desiredObject pkgruntime.Object
 
 func (c *FederatedTypeCRUDTester) Create(desiredObject pkgruntime.Object) pkgruntime.Object {
 	namespace := c.adapter.ObjectMeta(desiredObject).Namespace
-	resourceMsg := fmt.Sprintf("federated %s", c.kind)
-	if len(namespace) > 0 {
-		resourceMsg = fmt.Sprintf("%s in namespace %q", resourceMsg, namespace)
-	}
-
-	c.tl.Logf("Creating new %s", resourceMsg)
+	c.tl.Logf("Creating new federated %s in namespace %q", c.kind, namespace)
 
 	obj, err := c.adapter.FedCreate(desiredObject)
 	if err != nil {
-		c.tl.Fatalf("Error creating %s: %v", resourceMsg, err)
+		c.tl.Fatalf("Error creating federated %s in namespace %q : %v", c.kind, namespace, err)
 	}
 
-	qualifiedName := c.adapter.QualifiedName(obj)
-	c.tl.Logf("Created new federated %s %q", c.kind, qualifiedName)
+	namespacedName := c.adapter.NamespacedName(obj)
+	c.tl.Logf("Created new federated %s %q", c.kind, namespacedName)
 
 	return obj
 }
@@ -104,7 +98,7 @@ func (c *FederatedTypeCRUDTester) CheckCreate(desiredObject pkgruntime.Object) p
 }
 
 func (c *FederatedTypeCRUDTester) CheckUpdate(obj pkgruntime.Object) {
-	qualifiedName := c.adapter.QualifiedName(obj)
+	namespacedName := c.adapter.NamespacedName(obj)
 
 	var initialAnnotation string
 	meta := c.adapter.ObjectMeta(obj)
@@ -112,29 +106,29 @@ func (c *FederatedTypeCRUDTester) CheckUpdate(obj pkgruntime.Object) {
 		initialAnnotation = meta.Annotations[AnnotationTestFederationCRUDUpdate]
 	}
 
-	c.tl.Logf("Updating federated %s %q", c.kind, qualifiedName)
+	c.tl.Logf("Updating federated %s %q", c.kind, namespacedName)
 	updatedObj, err := c.updateFedObject(obj)
 	if err != nil {
-		c.tl.Fatalf("Error updating federated %s %q: %v", c.kind, qualifiedName, err)
+		c.tl.Fatalf("Error updating federated %s %q: %v", c.kind, namespacedName, err)
 	}
 
 	// updateFedObject is expected to have changed the value of the annotation
 	meta = c.adapter.ObjectMeta(updatedObj)
 	updatedAnnotation := meta.Annotations[AnnotationTestFederationCRUDUpdate]
 	if updatedAnnotation == initialAnnotation {
-		c.tl.Fatalf("Federated %s %q not mutated", c.kind, qualifiedName)
+		c.tl.Fatalf("Federated %s %q not mutated", c.kind, namespacedName)
 	}
 
 	c.CheckPropagation(updatedObj)
 }
 
 func (c *FederatedTypeCRUDTester) CheckDelete(obj pkgruntime.Object, orphanDependents *bool) {
-	qualifiedName := c.adapter.QualifiedName(obj)
+	namespacedName := c.adapter.NamespacedName(obj)
 
-	c.tl.Logf("Deleting federated %s %q", c.kind, qualifiedName)
-	err := c.adapter.FedDelete(qualifiedName, &metav1.DeleteOptions{OrphanDependents: orphanDependents})
+	c.tl.Logf("Deleting federated %s %q", c.kind, namespacedName)
+	err := c.adapter.FedDelete(namespacedName, &metav1.DeleteOptions{OrphanDependents: orphanDependents})
 	if err != nil {
-		c.tl.Fatalf("Error deleting federated %s %q: %v", c.kind, qualifiedName, err)
+		c.tl.Fatalf("Error deleting federated %s %q: %v", c.kind, namespacedName, err)
 	}
 
 	deletingInCluster := (orphanDependents != nil && *orphanDependents == false)
@@ -148,14 +142,14 @@ func (c *FederatedTypeCRUDTester) CheckDelete(obj pkgruntime.Object, orphanDepen
 	// Wait for deletion.  The federation resource will only be removed once orphan deletion has been
 	// completed or deemed unnecessary.
 	err = wait.PollImmediate(c.waitInterval, waitTimeout, func() (bool, error) {
-		_, err := c.adapter.FedGet(qualifiedName)
+		_, err := c.adapter.FedGet(namespacedName)
 		if errors.IsNotFound(err) {
 			return true, nil
 		}
 		return false, err
 	})
 	if err != nil {
-		c.tl.Fatalf("Error deleting federated %s %q: %v", c.kind, qualifiedName, err)
+		c.tl.Fatalf("Error deleting federated %s %q: %v", c.kind, namespacedName, err)
 	}
 
 	var stateMsg string = "present"
@@ -163,14 +157,14 @@ func (c *FederatedTypeCRUDTester) CheckDelete(obj pkgruntime.Object, orphanDepen
 		stateMsg = "not present"
 	}
 	for _, client := range c.clusterClients {
-		_, err := c.adapter.ClusterGet(client, qualifiedName)
+		_, err := c.adapter.ClusterGet(client, namespacedName)
 		switch {
 		case !deletingInCluster && errors.IsNotFound(err):
-			c.tl.Fatalf("Federated %s %q was unexpectedly deleted from a member cluster", c.kind, qualifiedName)
+			c.tl.Fatalf("Federated %s %q was unexpectedly deleted from a member cluster", c.kind, namespacedName)
 		case deletingInCluster && err == nil:
-			c.tl.Fatalf("Federated %s %q was unexpectedly orphaned in a member cluster", c.kind, qualifiedName)
+			c.tl.Fatalf("Federated %s %q was unexpectedly orphaned in a member cluster", c.kind, namespacedName)
 		case err != nil && !errors.IsNotFound(err):
-			c.tl.Fatalf("Error while checking whether %s %q is %s in member clusters: %v", c.kind, qualifiedName, stateMsg, err)
+			c.tl.Fatalf("Error while checking whether %s %q is %s in member clusters: %v", c.kind, namespacedName, stateMsg, err)
 		}
 	}
 }
@@ -182,38 +176,29 @@ func (c *FederatedTypeCRUDTester) CheckPropagation(obj pkgruntime.Object) {
 
 // CheckPropagationForClients checks propagation for the provided clients
 func (c *FederatedTypeCRUDTester) CheckPropagationForClients(obj pkgruntime.Object, clusterClients []clientset.Interface, objExpected bool) {
-	qualifiedName := c.adapter.QualifiedName(obj)
+	namespacedName := c.adapter.NamespacedName(obj)
 
-	c.tl.Logf("Waiting for %s %q in %d clusters", c.kind, qualifiedName, len(clusterClients))
+	c.tl.Logf("Waiting for %s %q in %d clusters", c.kind, namespacedName, len(clusterClients))
 	for _, client := range clusterClients {
 		err := c.waitForResource(client, obj)
 		switch {
 		case err == wait.ErrWaitTimeout:
 			if objExpected {
-				c.tl.Fatalf("Timeout verifying %s %q in a member cluster: %v", c.kind, qualifiedName, err)
+				c.tl.Fatalf("Timeout verifying %s %q in a member cluster: %v", c.kind, namespacedName, err)
 			}
 		case err != nil:
-			c.tl.Fatalf("Failed to verify %s %q in a member cluster: %v", c.kind, qualifiedName, err)
+			c.tl.Fatalf("Failed to verify %s %q in a member cluster: %v", c.kind, namespacedName, err)
 		case err == nil && !objExpected:
-			c.tl.Fatalf("Found unexpected object %s %q in a member cluster: %v", c.kind, qualifiedName, err)
+			c.tl.Fatalf("Found unexpected object %s %q in a member cluster: %v", c.kind, namespacedName, err)
 		}
 	}
 }
 
 func (c *FederatedTypeCRUDTester) waitForResource(client clientset.Interface, obj pkgruntime.Object) error {
-	qualifiedName := c.adapter.QualifiedName(obj)
+	namespacedName := c.adapter.NamespacedName(obj)
 	err := wait.PollImmediate(c.waitInterval, c.clusterWaitTimeout, func() (bool, error) {
-		equivalenceFunc := c.adapter.Equivalent
-		if c.adapter.IsSchedulingAdapter() {
-			schedulingAdapter, ok := c.adapter.(federatedtypes.SchedulingAdapter)
-			if !ok {
-				c.tl.Fatalf("Adapter for kind %q does not properly implement SchedulingAdapter.", c.adapter.Kind())
-			}
-			equivalenceFunc = schedulingAdapter.EquivalentIgnoringSchedule
-		}
-
-		clusterObj, err := c.adapter.ClusterGet(client, qualifiedName)
-		if err == nil && equivalenceFunc(clusterObj, obj) {
+		clusterObj, err := c.adapter.ClusterGet(client, namespacedName)
+		if err == nil && c.adapter.Equivalent(clusterObj, obj) {
 			return true, nil
 		}
 		if errors.IsNotFound(err) {
@@ -233,8 +218,8 @@ func (c *FederatedTypeCRUDTester) updateFedObject(obj pkgruntime.Object) (pkgrun
 		if errors.IsConflict(err) {
 			// The resource was updated by the federation controller.
 			// Get the latest version and retry.
-			qualifiedName := c.adapter.QualifiedName(obj)
-			obj, err = c.adapter.FedGet(qualifiedName)
+			namespacedName := c.adapter.NamespacedName(obj)
+			obj, err = c.adapter.FedGet(namespacedName)
 			return false, err
 		}
 		// Be tolerant of a slow server

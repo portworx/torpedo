@@ -1,17 +1,18 @@
 package storage
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
+	"path"
 
+	"encoding/json"
 	"github.com/docker/distribution"
-	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/context"
+	"github.com/docker/distribution/digest"
 	"github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/manifest/schema1"
 	"github.com/docker/distribution/manifest/schema2"
-	"github.com/opencontainers/go-digest"
+	"github.com/docker/distribution/registry/storage/driver"
 )
 
 // A ManifestHandler gets and puts manifests of a particular type.
@@ -54,7 +55,7 @@ type manifestStore struct {
 var _ distribution.ManifestService = &manifestStore{}
 
 func (ms *manifestStore) Exists(ctx context.Context, dgst digest.Digest) (bool, error) {
-	dcontext.GetLogger(ms.ctx).Debug("(*manifestStore).Exists")
+	context.GetLogger(ms.ctx).Debug("(*manifestStore).Exists")
 
 	_, err := ms.blobStore.Stat(ms.ctx, dgst)
 	if err != nil {
@@ -69,7 +70,7 @@ func (ms *manifestStore) Exists(ctx context.Context, dgst digest.Digest) (bool, 
 }
 
 func (ms *manifestStore) Get(ctx context.Context, dgst digest.Digest, options ...distribution.ManifestServiceOption) (distribution.Manifest, error) {
-	dcontext.GetLogger(ms.ctx).Debug("(*manifestStore).Get")
+	context.GetLogger(ms.ctx).Debug("(*manifestStore).Get")
 
 	// TODO(stevvooe): Need to check descriptor from above to ensure that the
 	// mediatype is as we expect for the manifest store.
@@ -110,7 +111,7 @@ func (ms *manifestStore) Get(ctx context.Context, dgst digest.Digest, options ..
 }
 
 func (ms *manifestStore) Put(ctx context.Context, manifest distribution.Manifest, options ...distribution.ManifestServiceOption) (digest.Digest, error) {
-	dcontext.GetLogger(ms.ctx).Debug("(*manifestStore).Put")
+	context.GetLogger(ms.ctx).Debug("(*manifestStore).Put")
 
 	switch manifest.(type) {
 	case *schema1.SignedManifest:
@@ -124,9 +125,9 @@ func (ms *manifestStore) Put(ctx context.Context, manifest distribution.Manifest
 	return "", fmt.Errorf("unrecognized manifest type %T", manifest)
 }
 
-// Delete removes the revision of the specified manifest.
+// Delete removes the revision of the specified manfiest.
 func (ms *manifestStore) Delete(ctx context.Context, dgst digest.Digest) error {
-	dcontext.GetLogger(ms.ctx).Debug("(*manifestStore).Delete")
+	context.GetLogger(ms.ctx).Debug("(*manifestStore).Delete")
 	return ms.blobStore.Delete(ctx, dgst)
 }
 
@@ -139,4 +140,49 @@ func (ms *manifestStore) Enumerate(ctx context.Context, ingester func(digest.Dig
 		return nil
 	})
 	return err
+}
+
+// Only valid for schema1 signed manifests
+func (ms *manifestStore) GetSignatures(ctx context.Context, manifestDigest digest.Digest) ([]digest.Digest, error) {
+	// sanity check that digest refers to a schema1 digest
+	manifest, err := ms.Get(ctx, manifestDigest)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := manifest.(*schema1.SignedManifest); !ok {
+		return nil, fmt.Errorf("digest %v is not for schema1 manifest", manifestDigest)
+	}
+
+	signaturesPath, err := pathFor(manifestSignaturesPathSpec{
+		name:     ms.repository.Named().Name(),
+		revision: manifestDigest,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var digests []digest.Digest
+	alg := string(digest.SHA256)
+	signaturePaths, err := ms.blobStore.driver.List(ctx, path.Join(signaturesPath, alg))
+
+	switch err.(type) {
+	case nil:
+		break
+	case driver.PathNotFoundError:
+		// Manifest may have been pushed with signature store disabled
+		return digests, nil
+	default:
+		return nil, err
+	}
+
+	for _, sigPath := range signaturePaths {
+		sigdigest, err := digest.ParseDigest(alg + ":" + path.Base(sigPath))
+		if err != nil {
+			// merely found not a digest
+			continue
+		}
+		digests = append(digests, sigdigest)
+	}
+	return digests, nil
 }

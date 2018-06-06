@@ -46,17 +46,16 @@ type PrivilegedSources struct {
 	HostIPCSources []string
 }
 
-var capInstance struct {
-	once         sync.Once
-	lock         sync.Mutex
-	capabilities *Capabilities
-}
+// TODO: Clean these up into a singleton
+var once sync.Once
+var lock sync.Mutex
+var capabilities *Capabilities
 
 // Initialize the capability set.  This can only be done once per binary, subsequent calls are ignored.
 func Initialize(c Capabilities) {
 	// Only do this once
-	capInstance.once.Do(func() {
-		capInstance.capabilities = &c
+	once.Do(func() {
+		capabilities = &c
 	})
 }
 
@@ -71,17 +70,17 @@ func Setup(allowPrivileged bool, privilegedSources PrivilegedSources, perConnect
 
 // SetForTests sets capabilities for tests.  Convenience method for testing.  This should only be called from tests.
 func SetForTests(c Capabilities) {
-	capInstance.lock.Lock()
-	defer capInstance.lock.Unlock()
-	capInstance.capabilities = &c
+	lock.Lock()
+	defer lock.Unlock()
+	capabilities = &c
 }
 
 // Returns a read-only copy of the system capabilities.
 func Get() Capabilities {
-	capInstance.lock.Lock()
-	defer capInstance.lock.Unlock()
+	lock.Lock()
+	defer lock.Unlock()
 	// This check prevents clobbering of capabilities that might've been set via SetForTests
-	if capInstance.capabilities == nil {
+	if capabilities == nil {
 		Initialize(Capabilities{
 			AllowPrivileged: false,
 			PrivilegedSources: PrivilegedSources{
@@ -91,5 +90,5 @@ func Get() Capabilities {
 			},
 		})
 	}
-	return *capInstance.capabilities
+	return *capabilities
 }

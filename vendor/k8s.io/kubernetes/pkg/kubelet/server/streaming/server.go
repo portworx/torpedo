@@ -101,7 +101,7 @@ var DefaultConfig = Config{
 	SupportedPortForwardProtocols:   portforward.SupportedProtocols,
 }
 
-// TODO(tallclair): Add auth(n/z) interface & handling.
+// TODO(timstclair): Add auth(n/z) interface & handling.
 func NewServer(config Config, runtime Runtime) (Server, error) {
 	s := &server{
 		config:  config,
@@ -141,11 +141,6 @@ func NewServer(config Config, runtime Runtime) (Server, error) {
 	handler := restful.NewContainer()
 	handler.Add(ws)
 	s.handler = handler
-	s.server = &http.Server{
-		Addr:      s.config.Addr,
-		Handler:   s.handler,
-		TLSConfig: s.config.TLSConfig,
-	}
 
 	return s, nil
 }
@@ -155,7 +150,6 @@ type server struct {
 	runtime *criAdapter
 	handler http.Handler
 	cache   *requestCache
-	server  *http.Server
 }
 
 func (s *server) GetExec(req *runtimeapi.ExecRequest) (*runtimeapi.ExecResponse, error) {
@@ -199,19 +193,25 @@ func (s *server) GetPortForward(req *runtimeapi.PortForwardRequest) (*runtimeapi
 
 func (s *server) Start(stayUp bool) error {
 	if !stayUp {
-		// TODO(tallclair): Implement this.
+		// TODO(timstclair): Implement this.
 		return errors.New("stayUp=false is not yet implemented")
 	}
 
+	server := &http.Server{
+		Addr:      s.config.Addr,
+		Handler:   s.handler,
+		TLSConfig: s.config.TLSConfig,
+	}
 	if s.config.TLSConfig != nil {
-		return s.server.ListenAndServeTLS("", "") // Use certs from TLSConfig.
+		return server.ListenAndServeTLS("", "") // Use certs from TLSConfig.
 	} else {
-		return s.server.ListenAndServe()
+		return server.ListenAndServe()
 	}
 }
 
 func (s *server) Stop() error {
-	return s.server.Close()
+	// TODO(timstclair): Implement this.
+	return errors.New("not yet implemented")
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

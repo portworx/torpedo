@@ -25,6 +25,7 @@ import (
 	"github.com/golang/glog"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -45,6 +46,10 @@ const (
 	manageOnStart = "onstart"
 	// manageContinuously is a value for the AutoRegisterManagedLabel that indicates the APIService wants to be synced continuously.
 	manageContinuously = "true"
+)
+
+var (
+	cloner = conversion.NewCloner()
 )
 
 // AutoAPIServiceRegistration is an interface which callers can re-declare locally and properly cast to for
@@ -261,7 +266,10 @@ func (c *autoRegisterController) checkAPIService(name string) (err error) {
 	}
 
 	// we have an entry and we have a desired, now we deconflict.  Only a few fields matter. (5B,5C,6B,6C)
-	apiService := curr.DeepCopy()
+	apiService := &apiregistration.APIService{}
+	if err := apiregistration.DeepCopy_apiregistration_APIService(curr, apiService, cloner); err != nil {
+		return err
+	}
 	apiService.Spec = desired.Spec
 	_, err = c.apiServiceClient.APIServices().Update(apiService)
 	return err
@@ -286,7 +294,12 @@ func (c *autoRegisterController) addAPIServiceToSync(in *apiregistration.APIServ
 	c.apiServicesToSyncLock.Lock()
 	defer c.apiServicesToSyncLock.Unlock()
 
-	apiService := in.DeepCopy()
+	apiService := &apiregistration.APIService{}
+	if err := apiregistration.DeepCopy_apiregistration_APIService(in, apiService, cloner); err != nil {
+		// this shouldn't happen
+		utilruntime.HandleError(err)
+		return
+	}
 	if apiService.Labels == nil {
 		apiService.Labels = map[string]string{}
 	}

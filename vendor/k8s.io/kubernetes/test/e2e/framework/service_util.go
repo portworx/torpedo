@@ -24,8 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -35,14 +33,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/util/retry"
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
+	policyv1beta1 "k8s.io/kubernetes/pkg/apis/policy/v1beta1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	"k8s.io/kubernetes/pkg/client/retry"
 	azurecloud "k8s.io/kubernetes/pkg/cloudprovider/providers/azure"
 	gcecloud "k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
 	testutils "k8s.io/kubernetes/test/utils"
-	imageutils "k8s.io/kubernetes/test/utils/image"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -181,31 +179,6 @@ func (j *ServiceTestJig) CreateUDPServiceOrFail(namespace string, tweak func(svc
 	return result
 }
 
-// CreateExternalNameServiceOrFail creates a new ExternalName type Service based on the jig's defaults.
-// Callers can provide a function to tweak the Service object before it is created.
-func (j *ServiceTestJig) CreateExternalNameServiceOrFail(namespace string, tweak func(svc *v1.Service)) *v1.Service {
-	svc := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      j.Name,
-			Labels:    j.Labels,
-		},
-		Spec: v1.ServiceSpec{
-			Selector:     j.Labels,
-			ExternalName: "foo.example.com",
-			Type:         v1.ServiceTypeExternalName,
-		},
-	}
-	if tweak != nil {
-		tweak(svc)
-	}
-	result, err := j.Client.Core().Services(namespace).Create(svc)
-	if err != nil {
-		Failf("Failed to create ExternalName Service %q: %v", svc.Name, err)
-	}
-	return result
-}
-
 func (j *ServiceTestJig) ChangeServiceType(namespace, name string, newType v1.ServiceType, timeout time.Duration) {
 	ingressIP := ""
 	svc := j.UpdateServiceOrFail(namespace, name, func(s *v1.Service) {
@@ -310,10 +283,6 @@ func GetNodePublicIps(c clientset.Interface) ([]string, error) {
 	nodes := GetReadySchedulableNodesOrDie(c)
 
 	ips := CollectAddresses(nodes, v1.NodeExternalIP)
-	if len(ips) == 0 {
-		// If ExternalIP isn't set, assume the test programs can reach the InternalIP
-		ips = CollectAddresses(nodes, v1.NodeInternalIP)
-	}
 	return ips, nil
 }
 
@@ -406,22 +375,8 @@ func (j *ServiceTestJig) SanityCheckService(svc *v1.Service, svcType v1.ServiceT
 	if svc.Spec.Type != svcType {
 		Failf("unexpected Spec.Type (%s) for service, expected %s", svc.Spec.Type, svcType)
 	}
-
-	if svcType != v1.ServiceTypeExternalName {
-		if svc.Spec.ExternalName != "" {
-			Failf("unexpected Spec.ExternalName (%s) for service, expected empty", svc.Spec.ExternalName)
-		}
-		if svc.Spec.ClusterIP != api.ClusterIPNone && svc.Spec.ClusterIP == "" {
-			Failf("didn't get ClusterIP for non-ExternamName service")
-		}
-	} else {
-		if svc.Spec.ClusterIP != "" {
-			Failf("unexpected Spec.ClusterIP (%s) for ExternamName service, expected empty", svc.Spec.ClusterIP)
-		}
-	}
-
 	expectNodePorts := false
-	if svcType != v1.ServiceTypeClusterIP && svcType != v1.ServiceTypeExternalName {
+	if svcType != v1.ServiceTypeClusterIP {
 		expectNodePorts = true
 	}
 	for i, port := range svc.Spec.Ports {
@@ -482,31 +437,6 @@ func (j *ServiceTestJig) UpdateServiceOrFail(namespace, name string, update func
 		Failf(err.Error())
 	}
 	return svc
-}
-
-func (j *ServiceTestJig) WaitForNewIngressIPOrFail(namespace, name, existingIP string, timeout time.Duration) *v1.Service {
-	var service *v1.Service
-	Logf("Waiting up to %v for service %q to get a new ingress IP", timeout, name)
-	pollFunc := func() (bool, error) {
-		svc, err := j.Client.Core().Services(namespace).Get(name, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-		if len(svc.Status.LoadBalancer.Ingress) == 0 {
-			return false, nil
-		}
-		ip := svc.Status.LoadBalancer.Ingress[0].IP
-		if ip == "" || ip == existingIP {
-			return false, nil
-		}
-		// Got a new IP.
-		service = svc
-		return true, nil
-	}
-	if err := wait.PollImmediate(Poll, timeout, pollFunc); err != nil {
-		Failf("Timeout waiting for service %q to have a new ingress IP", name)
-	}
-	return service
 }
 
 func (j *ServiceTestJig) ChangeServiceNodePortOrFail(namespace, name string, initial int) *v1.Service {
@@ -602,7 +532,7 @@ func (j *ServiceTestJig) newRCTemplate(namespace string) *v1.ReplicationControll
 					Containers: []v1.Container{
 						{
 							Name:  "netexec",
-							Image: imageutils.GetE2EImage(imageutils.Netexec),
+							Image: "gcr.io/google_containers/netexec:1.7",
 							Args:  []string{"--http-port=80", "--udp-port=80"},
 							ReadinessProbe: &v1.Probe{
 								PeriodSeconds: 3,
@@ -832,13 +762,7 @@ func (j *ServiceTestJig) LaunchEchoserverPodOnNode(f *Framework, nodeName, podNa
 }
 
 func (j *ServiceTestJig) TestReachableHTTP(host string, port int, timeout time.Duration) {
-	j.TestReachableHTTPWithRetriableErrorCodes(host, port, []int{}, timeout)
-}
-
-func (j *ServiceTestJig) TestReachableHTTPWithRetriableErrorCodes(host string, port int, retriableErrCodes []int, timeout time.Duration) {
-	if err := wait.PollImmediate(Poll, timeout, func() (bool, error) {
-		return TestReachableHTTPWithRetriableErrorCodes(host, port, "/echo?msg=hello", "hello", retriableErrCodes)
-	}); err != nil {
+	if err := wait.PollImmediate(Poll, timeout, func() (bool, error) { return TestReachableHTTP(host, port, "/echo?msg=hello", "hello") }); err != nil {
 		Failf("Could not reach HTTP service through %v:%v after %v: %v", host, port, timeout, err)
 	}
 }
@@ -955,7 +879,7 @@ func NewServerTest(client clientset.Interface, namespace string, serviceName str
 	t.services = make(map[string]bool)
 
 	t.Name = "webserver"
-	t.Image = imageutils.GetE2EImage(imageutils.TestWebserver)
+	t.Image = "gcr.io/google_containers/test-webserver:e2e"
 
 	return t
 }
@@ -1378,17 +1302,17 @@ func VerifyServeHostnameServiceDown(c clientset.Interface, host string, serviceI
 	return fmt.Errorf("waiting for service to be down timed out")
 }
 
-func CleanupServiceResources(c clientset.Interface, loadBalancerName, zone string) {
+func CleanupServiceResources(loadBalancerName, zone string) {
 	if TestContext.Provider == "gce" || TestContext.Provider == "gke" {
-		CleanupServiceGCEResources(c, loadBalancerName, zone)
+		CleanupServiceGCEResources(loadBalancerName, zone)
 	}
 
 	// TODO: we need to add this function with other cloud providers, if there is a need.
 }
 
-func CleanupServiceGCEResources(c clientset.Interface, loadBalancerName, zone string) {
+func CleanupServiceGCEResources(loadBalancerName, zone string) {
 	if pollErr := wait.Poll(5*time.Second, LoadBalancerCleanupTimeout, func() (bool, error) {
-		if err := CleanupGCEResources(c, loadBalancerName, zone); err != nil {
+		if err := CleanupGCEResources(loadBalancerName, zone); err != nil {
 			Logf("Still waiting for glbc to cleanup: %v", err)
 			return false, nil
 		}
@@ -1403,29 +1327,6 @@ func DescribeSvc(ns string) {
 	desc, _ := RunKubectl(
 		"describe", "svc", fmt.Sprintf("--namespace=%v", ns))
 	Logf(desc)
-}
-
-func CreateServiceSpec(serviceName, externalName string, isHeadless bool, selector map[string]string) *v1.Service {
-	headlessService := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: serviceName,
-		},
-		Spec: v1.ServiceSpec{
-			Selector: selector,
-		},
-	}
-	if externalName != "" {
-		headlessService.Spec.Type = v1.ServiceTypeExternalName
-		headlessService.Spec.ExternalName = externalName
-	} else {
-		headlessService.Spec.Ports = []v1.ServicePort{
-			{Port: 80, Name: "http", Protocol: "TCP"},
-		}
-	}
-	if isHeadless {
-		headlessService.Spec.ClusterIP = "None"
-	}
-	return headlessService
 }
 
 // EnableAndDisableInternalLB returns two functions for enabling and disabling the internal load balancer
@@ -1452,11 +1353,4 @@ func EnableAndDisableInternalLB() (enable func(svc *v1.Service), disable func(sv
 	}
 
 	return
-}
-
-func GetServiceLoadBalancerCreationTimeout(cs clientset.Interface) time.Duration {
-	if nodes := GetReadySchedulableNodesOrDie(cs); len(nodes.Items) > LargeClusterMinNodesNumber {
-		return LoadBalancerCreateTimeoutLarge
-	}
-	return LoadBalancerCreateTimeoutDefault
 }

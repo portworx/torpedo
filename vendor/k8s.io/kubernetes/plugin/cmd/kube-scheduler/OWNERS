@@ -1,4 +1,11 @@
 approvers:
-- sig-scheduling-maintainers
+- davidopp
+- timothysc
+- k82cn
 reviewers:
-- sig-scheduling
+- davidopp
+- bsalamat
+- timothysc
+- wojtek-t
+- k82cn
+- jayunit100

@@ -21,23 +21,24 @@ import (
 	"strconv"
 	"time"
 
-	"k8s.io/api/core/v1"
-	storage "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	coreinformers "k8s.io/client-go/informers/core/v1"
-	storageinformers "k8s.io/client-go/informers/storage/v1"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
-	corelisters "k8s.io/client-go/listers/core/v1"
+	clientv1 "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
+	storage "k8s.io/kubernetes/pkg/apis/storage/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	coreinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated/externalversions/core/v1"
+	storageinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated/externalversions/storage/v1"
+	corelisters "k8s.io/kubernetes/pkg/client/listers/core/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/goroutinemap"
@@ -71,7 +72,7 @@ func NewController(p ControllerParameters) (*PersistentVolumeController, error) 
 	if eventRecorder == nil {
 		broadcaster := record.NewBroadcaster()
 		broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(p.KubeClient.Core().RESTClient()).Events("")})
-		eventRecorder = broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "persistentvolume-controller"})
+		eventRecorder = broadcaster.NewRecorder(api.Scheme, clientv1.EventSource{Component: "persistentvolume-controller"})
 	}
 
 	controller := &PersistentVolumeController{
@@ -87,30 +88,30 @@ func NewController(p ControllerParameters) (*PersistentVolumeController, error) 
 		createProvisionedPVInterval:   createProvisionedPVInterval,
 		claimQueue:                    workqueue.NewNamed("claims"),
 		volumeQueue:                   workqueue.NewNamed("volumes"),
-		resyncPeriod:                  p.SyncPeriod,
 	}
 
-	// Prober is nil because PV is not aware of Flexvolume.
-	if err := controller.volumePluginMgr.InitPlugins(p.VolumePlugins, nil /* prober */, controller); err != nil {
+	if err := controller.volumePluginMgr.InitPlugins(p.VolumePlugins, controller); err != nil {
 		return nil, fmt.Errorf("Could not initialize volume plugins for PersistentVolume Controller: %v", err)
 	}
 
-	p.VolumeInformer.Informer().AddEventHandler(
+	p.VolumeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    func(obj interface{}) { controller.enqueueWork(controller.volumeQueue, obj) },
 			UpdateFunc: func(oldObj, newObj interface{}) { controller.enqueueWork(controller.volumeQueue, newObj) },
 			DeleteFunc: func(obj interface{}) { controller.enqueueWork(controller.volumeQueue, obj) },
 		},
+		p.SyncPeriod,
 	)
 	controller.volumeLister = p.VolumeInformer.Lister()
 	controller.volumeListerSynced = p.VolumeInformer.Informer().HasSynced
 
-	p.ClaimInformer.Informer().AddEventHandler(
+	p.ClaimInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    func(obj interface{}) { controller.enqueueWork(controller.claimQueue, obj) },
 			UpdateFunc: func(oldObj, newObj interface{}) { controller.enqueueWork(controller.claimQueue, newObj) },
 			DeleteFunc: func(obj interface{}) { controller.enqueueWork(controller.claimQueue, obj) },
 		},
+		p.SyncPeriod,
 	)
 	controller.claimLister = p.ClaimInformer.Lister()
 	controller.claimListerSynced = p.ClaimInformer.Informer().HasSynced
@@ -130,7 +131,12 @@ func (ctrl *PersistentVolumeController) initializeCaches(volumeLister corelister
 		return
 	}
 	for _, volume := range volumeList {
-		volumeClone := volume.DeepCopy()
+		clone, err := api.Scheme.DeepCopy(volume)
+		if err != nil {
+			glog.Errorf("error cloning volume %q: %v", volume.Name, err)
+			continue
+		}
+		volumeClone := clone.(*v1.PersistentVolume)
 		if _, err = ctrl.storeVolumeUpdate(volumeClone); err != nil {
 			glog.Errorf("error updating volume cache: %v", err)
 		}
@@ -142,7 +148,13 @@ func (ctrl *PersistentVolumeController) initializeCaches(volumeLister corelister
 		return
 	}
 	for _, claim := range claimList {
-		if _, err = ctrl.storeClaimUpdate(claim.DeepCopy()); err != nil {
+		clone, err := api.Scheme.DeepCopy(claim)
+		if err != nil {
+			glog.Errorf("error cloning claim %q: %v", claimToClaimKey(claim), err)
+			continue
+		}
+		claimClone := clone.(*v1.PersistentVolumeClaim)
+		if _, err = ctrl.storeClaimUpdate(claimClone); err != nil {
 			glog.Errorf("error updating claim cache: %v", err)
 		}
 	}
@@ -265,7 +277,6 @@ func (ctrl *PersistentVolumeController) Run(stopCh <-chan struct{}) {
 
 	ctrl.initializeCaches(ctrl.volumeLister, ctrl.claimLister)
 
-	go wait.Until(ctrl.resync, ctrl.resyncPeriod, stopCh)
 	go wait.Until(ctrl.volumeWorker, time.Second, stopCh)
 	go wait.Until(ctrl.claimWorker, time.Second, stopCh)
 
@@ -387,31 +398,6 @@ func (ctrl *PersistentVolumeController) claimWorker() {
 	}
 }
 
-// resync supplements short resync period of shared informers - we don't want
-// all consumers of PV/PVC shared informer to have a short resync period,
-// therefore we do our own.
-func (ctrl *PersistentVolumeController) resync() {
-	glog.V(4).Infof("resyncing PV controller")
-
-	pvcs, err := ctrl.claimLister.List(labels.NewSelector())
-	if err != nil {
-		glog.Warningf("cannot list claims: %s", err)
-		return
-	}
-	for _, pvc := range pvcs {
-		ctrl.enqueueWork(ctrl.claimQueue, pvc)
-	}
-
-	pvs, err := ctrl.volumeLister.List(labels.NewSelector())
-	if err != nil {
-		glog.Warningf("cannot list persistent volumes: %s", err)
-		return
-	}
-	for _, pv := range pvs {
-		ctrl.enqueueWork(ctrl.volumeQueue, pv)
-	}
-}
-
 // setClaimProvisioner saves
 // claim.Annotations[annStorageProvisioner] = class.Provisioner
 func (ctrl *PersistentVolumeController) setClaimProvisioner(claim *v1.PersistentVolumeClaim, class *storage.StorageClass) (*v1.PersistentVolumeClaim, error) {
@@ -422,7 +408,14 @@ func (ctrl *PersistentVolumeController) setClaimProvisioner(claim *v1.Persistent
 
 	// The volume from method args can be pointing to watcher cache. We must not
 	// modify these, therefore create a copy.
-	claimClone := claim.DeepCopy()
+	clone, err := api.Scheme.DeepCopy(claim)
+	if err != nil {
+		return nil, fmt.Errorf("Error cloning pv: %v", err)
+	}
+	claimClone, ok := clone.(*v1.PersistentVolumeClaim)
+	if !ok {
+		return nil, fmt.Errorf("Unexpected claim cast error : %v", claimClone)
+	}
 	metav1.SetMetaDataAnnotation(&claimClone.ObjectMeta, annStorageProvisioner, class.Provisioner)
 	newClaim, err := ctrl.kubeClient.Core().PersistentVolumeClaims(claim.Namespace).Update(claimClone)
 	if err != nil {

@@ -20,11 +20,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
-	dockertypes "github.com/docker/docker/api/types"
-	dockercontainer "github.com/docker/docker/api/types/container"
-	dockerfilters "github.com/docker/docker/api/types/filters"
+	dockertypes "github.com/docker/engine-api/types"
+	dockercontainer "github.com/docker/engine-api/types/container"
+	dockerfilters "github.com/docker/engine-api/types/filters"
 	"github.com/golang/glog"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -42,13 +41,11 @@ const (
 	// Various default sandbox resources requests/limits.
 	defaultSandboxCPUshares int64 = 2
 
+	// Termination grace period
+	defaultSandboxGracePeriod int = 10
+
 	// Name of the underlying container runtime
 	runtimeName = "docker"
-)
-
-var (
-	// Termination grace period
-	defaultSandboxGracePeriod = time.Duration(10) * time.Second
 )
 
 // Returns whether the sandbox network is ready, and whether the sandbox is known
@@ -174,14 +171,14 @@ func (ds *dockerService) RunPodSandbox(config *runtimeapi.PodSandboxConfig) (id 
 // after us?
 func (ds *dockerService) StopPodSandbox(podSandboxID string) error {
 	var namespace, name string
-	var hostNetwork bool
 	var checkpointErr, statusErr error
+	needNetworkTearDown := false
 
 	// Try to retrieve sandbox information from docker daemon or sandbox checkpoint
 	status, statusErr := ds.PodSandboxStatus(podSandboxID)
 	if statusErr == nil {
 		nsOpts := status.GetLinux().GetNamespaces().GetOptions()
-		hostNetwork = nsOpts != nil && nsOpts.HostNetwork
+		needNetworkTearDown = nsOpts != nil && !nsOpts.HostNetwork
 		m := status.GetMetadata()
 		namespace = m.Namespace
 		name = m.Name
@@ -214,8 +211,10 @@ func (ds *dockerService) StopPodSandbox(podSandboxID string) error {
 		} else {
 			namespace = checkpoint.Namespace
 			name = checkpoint.Name
-			hostNetwork = checkpoint.Data != nil && checkpoint.Data.HostNetwork
 		}
+
+		// Always trigger network plugin to tear down
+		needNetworkTearDown = true
 	}
 
 	// WARNING: The following operations made the following assumption:
@@ -227,7 +226,7 @@ func (ds *dockerService) StopPodSandbox(podSandboxID string) error {
 	// since it is stopped. With empty network namespcae, CNI bridge plugin will conduct best
 	// effort clean up and will not return error.
 	errList := []error{}
-	if !hostNetwork {
+	if needNetworkTearDown {
 		cID := kubecontainer.BuildContainerID(runtimeName, podSandboxID)
 		err := ds.network.TearDownPod(namespace, name, cID)
 		if err == nil {
@@ -253,8 +252,8 @@ func (ds *dockerService) RemovePodSandbox(podSandboxID string) error {
 	var errs []error
 	opts := dockertypes.ContainerListOptions{All: true}
 
-	opts.Filters = dockerfilters.NewArgs()
-	f := newDockerFilter(&opts.Filters)
+	opts.Filter = dockerfilters.NewArgs()
+	f := newDockerFilter(&opts.Filter)
 	f.AddLabel(sandboxIDLabelKey, podSandboxID)
 
 	containers, err := ds.client.ListContainers(opts)
@@ -417,8 +416,8 @@ func (ds *dockerService) ListPodSandbox(filter *runtimeapi.PodSandboxFilter) ([]
 	opts := dockertypes.ContainerListOptions{All: true}
 	filterOutReadySandboxes := false
 
-	opts.Filters = dockerfilters.NewArgs()
-	f := newDockerFilter(&opts.Filters)
+	opts.Filter = dockerfilters.NewArgs()
+	f := newDockerFilter(&opts.Filter)
 	// Add filter to select only sandbox containers.
 	f.AddLabel(containerTypeLabelKey, containerTypeLabelSandbox)
 
@@ -588,7 +587,7 @@ func (ds *dockerService) makeSandboxDockerConfig(c *runtimeapi.PodSandboxConfig,
 	}
 
 	// Set security options.
-	securityOpts, err := ds.getSecurityOpts(c.GetLinux().GetSecurityContext().GetSeccompProfilePath(), securityOptSep)
+	securityOpts, err := ds.getSecurityOpts(sandboxContainerName, c, securityOptSep)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate sandbox security options for sandbox %q: %v", c.Metadata.Name, err)
 	}
@@ -642,9 +641,6 @@ func constructPodSandboxCheckpoint(config *runtimeapi.PodSandboxConfig) *PodSand
 			ContainerPort: &pm.ContainerPort,
 			Protocol:      &proto,
 		})
-	}
-	if nsOptions := config.GetLinux().GetSecurityContext().GetNamespaceOptions(); nsOptions != nil {
-		checkpoint.Data.HostNetwork = nsOptions.HostNetwork
 	}
 	return checkpoint
 }

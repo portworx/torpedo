@@ -20,15 +20,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golang/glog"
-
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/kubernetes/pkg/api/helper"
-	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 const isNegativeErrorMsg string = `must be greater than or equal to 0`
@@ -46,6 +43,16 @@ func ValidateResourceRequirements(requirements *v1.ResourceRequirements, fldPath
 		// Validate resource quantity.
 		allErrs = append(allErrs, ValidateResourceQuantityValue(string(resourceName), quantity, fldPath)...)
 
+		// Check that request <= limit.
+		requestQuantity, exists := requirements.Requests[resourceName]
+		if exists {
+			// For GPUs, not only requests can't exceed limits, they also can't be lower, i.e. must be equal.
+			if resourceName == v1.ResourceNvidiaGPU && quantity.Cmp(requestQuantity) != 0 {
+				allErrs = append(allErrs, field.Invalid(reqPath, requestQuantity.String(), fmt.Sprintf("must be equal to %s limit", v1.ResourceNvidiaGPU)))
+			} else if quantity.Cmp(requestQuantity) < 0 {
+				allErrs = append(allErrs, field.Invalid(limPath, quantity.String(), fmt.Sprintf("must be greater than or equal to %s request", resourceName)))
+			}
+		}
 	}
 	for resourceName, quantity := range requirements.Requests {
 		fldPath := reqPath.Key(string(resourceName))
@@ -53,19 +60,6 @@ func ValidateResourceRequirements(requirements *v1.ResourceRequirements, fldPath
 		allErrs = append(allErrs, validateContainerResourceName(string(resourceName), fldPath)...)
 		// Validate resource quantity.
 		allErrs = append(allErrs, ValidateResourceQuantityValue(string(resourceName), quantity, fldPath)...)
-
-		// Check that request <= limit.
-		limitQuantity, exists := requirements.Limits[resourceName]
-		if exists {
-			// For GPUs, not only requests can't exceed limits, they also can't be lower, i.e. must be equal.
-			if quantity.Cmp(limitQuantity) != 0 && !v1helper.IsOvercommitAllowed(resourceName) {
-				allErrs = append(allErrs, field.Invalid(reqPath, quantity.String(), fmt.Sprintf("must be equal to %s limit", resourceName)))
-			} else if quantity.Cmp(limitQuantity) > 0 {
-				allErrs = append(allErrs, field.Invalid(reqPath, quantity.String(), fmt.Sprintf("must be less than or equal to %s limit", resourceName)))
-			}
-		} else if resourceName == v1.ResourceNvidiaGPU {
-			allErrs = append(allErrs, field.Invalid(reqPath, quantity.String(), fmt.Sprintf("must be equal to %s request", v1.ResourceNvidiaGPU)))
-		}
 	}
 
 	return allErrs
@@ -78,7 +72,7 @@ func validateContainerResourceName(value string, fldPath *field.Path) field.Erro
 			return append(allErrs, field.Invalid(fldPath, value, "must be a standard resource for containers"))
 		}
 	}
-	return allErrs
+	return field.ErrorList{}
 }
 
 // ValidateResourceQuantityValue enforces that specified quantity is valid for specified resource
@@ -105,12 +99,6 @@ func ValidateNonnegativeQuantity(value resource.Quantity, fldPath *field.Path) f
 // Validate compute resource typename.
 // Refer to docs/design/resources.md for more details.
 func validateResourceName(value string, fldPath *field.Path) field.ErrorList {
-	// Opaque integer resources (OIR) deprecation began in v1.8
-	// TODO: Remove warning after OIR deprecation cycle.
-	if v1helper.IsOpaqueIntResourceName(v1.ResourceName(value)) {
-		glog.Errorf("DEPRECATION WARNING! Opaque integer resources are deprecated starting with v1.8: %s", value)
-	}
-
 	allErrs := field.ErrorList{}
 	for _, msg := range validation.IsQualifiedName(value) {
 		allErrs = append(allErrs, field.Invalid(fldPath, value, msg))
@@ -125,7 +113,7 @@ func validateResourceName(value string, fldPath *field.Path) field.ErrorList {
 		}
 	}
 
-	return allErrs
+	return field.ErrorList{}
 }
 
 func ValidatePodLogOptions(opts *v1.PodLogOptions) field.ErrorList {

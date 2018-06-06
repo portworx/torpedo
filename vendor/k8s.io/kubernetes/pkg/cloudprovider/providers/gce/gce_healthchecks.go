@@ -17,7 +17,9 @@ limitations under the License.
 package gce
 
 import (
-	"k8s.io/api/core/v1"
+	"time"
+
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/master/ports"
 	utilversion "k8s.io/kubernetes/pkg/util/version"
 
@@ -43,7 +45,10 @@ func init() {
 }
 
 func newHealthcheckMetricContext(request string) *metricContext {
-	return newGenericMetricContext("healthcheck", request, unusedMetricLabel, unusedMetricLabel, computeV1Version)
+	return &metricContext{
+		start:      time.Now(),
+		attributes: []string{"healthcheck_" + request, unusedMetricLabel, unusedMetricLabel},
+	}
 }
 
 // GetHttpHealthCheck returns the given HttpHealthCheck by name.

@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -12,6 +14,7 @@ go_library(
         "doc.go",
         "import_known_versions.go",
     ],
+    tags = ["automanaged"],
     deps = [
         "//federation/apis/federation/install:go_default_library",
         "//federation/client/clientset_generated/federation_clientset/typed/autoscaling/v1:go_default_library",

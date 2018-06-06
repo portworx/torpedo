@@ -24,13 +24,14 @@ import (
 	"strconv"
 	"strings"
 
-	"k8s.io/api/core/v1"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 
 	"github.com/Azure/azure-sdk-for-go/arm/compute"
 	"github.com/Azure/azure-sdk-for-go/arm/network"
 	"github.com/golang/glog"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/uuid"
 )
 
 const (
@@ -44,9 +45,11 @@ const (
 	loadBalancerRuleIDTemplate  = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/loadBalancingRules/%s"
 	loadBalancerProbeIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/probes/%s"
 	securityRuleIDTemplate      = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/networkSecurityGroups/%s/securityRules/%s"
+
+	storageAccountNameMaxLength = 24
 )
 
-var providerIDRE = regexp.MustCompile(`^` + CloudProviderName + `://(?:.*)/Microsoft.Compute/virtualMachines/(.+)$`)
+var providerIDRE = regexp.MustCompile(`^` + CloudProviderName + `://(.+)$`)
 
 // returns the full identifier of a machine
 func (az *Cloud) getMachineID(machineName string) string {
@@ -249,7 +252,6 @@ outer:
 }
 
 func (az *Cloud) getIPForMachine(nodeName types.NodeName) (string, error) {
-	az.operationPollRateLimiter.Accept()
 	machine, exists, err := az.getVirtualMachine(nodeName)
 	if !exists {
 		return "", cloudprovider.InstanceNotFound
@@ -272,9 +274,7 @@ func (az *Cloud) getIPForMachine(nodeName types.NodeName) (string, error) {
 	}
 
 	az.operationPollRateLimiter.Accept()
-	glog.V(10).Infof("InterfacesClient.Get(%q): start", nicName)
 	nic, err := az.InterfacesClient.Get(az.ResourceGroup, nicName, "")
-	glog.V(10).Infof("InterfacesClient.Get(%q): end", nicName)
 	if err != nil {
 		glog.Errorf("error: az.getIPForMachine(%s), az.InterfacesClient.Get(%s, %s, %s), err=%v", nodeName, az.ResourceGroup, nicName, "", err)
 		return "", err
@@ -352,4 +352,14 @@ func ExtractDiskData(diskData interface{}) (provisioningState string, diskState 
 		diskState = ref.(string)
 	}
 	return provisioningState, diskState, nil
+}
+
+// get a storage account by UUID
+func generateStorageAccountName(accountNamePrefix string) string {
+	uniqueID := strings.Replace(string(uuid.NewUUID()), "-", "", -1)
+	accountName := strings.ToLower(accountNamePrefix + uniqueID)
+	if len(accountName) > storageAccountNameMaxLength {
+		return accountName[:storageAccountNameMaxLength-1]
+	}
+	return accountName
 }

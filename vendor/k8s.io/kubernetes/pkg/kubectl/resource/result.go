@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/apis/extensions"
 )
 
 // ErrMatchFunc can be used to filter errors that may not be true failures.
@@ -262,6 +263,13 @@ func AsVersionedObjects(infos []*Info, version schema.GroupVersion, encoder runt
 	objects := []runtime.Object{}
 	for _, info := range infos {
 		if info.Object == nil {
+			continue
+		}
+
+		// TODO: use info.VersionedObject as the value?
+		switch obj := info.Object.(type) {
+		case *extensions.ThirdPartyResourceData:
+			objects = append(objects, &runtime.Unknown{Raw: obj.Data})
 			continue
 		}
 

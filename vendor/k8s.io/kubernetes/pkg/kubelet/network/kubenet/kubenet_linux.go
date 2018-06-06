@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/containernetworking/cni/libcni"
@@ -33,21 +34,20 @@ import (
 	cnitypes020 "github.com/containernetworking/cni/pkg/types/020"
 	"github.com/golang/glog"
 	"github.com/vishvananda/netlink"
-	"golang.org/x/sys/unix"
-	"k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	utilsets "k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/apis/componentconfig"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/network"
 	"k8s.io/kubernetes/pkg/kubelet/network/hostport"
 	"k8s.io/kubernetes/pkg/util/bandwidth"
 	utildbus "k8s.io/kubernetes/pkg/util/dbus"
 	utilebtables "k8s.io/kubernetes/pkg/util/ebtables"
+	utilexec "k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	utilsysctl "k8s.io/kubernetes/pkg/util/sysctl"
-	utilexec "k8s.io/utils/exec"
 )
 
 const (
@@ -89,7 +89,7 @@ type kubenetNetworkPlugin struct {
 	mtu             int
 	execer          utilexec.Interface
 	nsenterPath     string
-	hairpinMode     kubeletconfig.HairpinMode
+	hairpinMode     componentconfig.HairpinMode
 	// kubenet can use either hostportSyncer and hostportManager to implement hostports
 	// Currently, if network host supports legacy features, hostportSyncer will be used,
 	// otherwise, hostportManager will be used.
@@ -118,13 +118,13 @@ func NewPlugin(networkPluginDir string) network.NetworkPlugin {
 		iptables:          iptInterface,
 		sysctl:            sysctl,
 		vendorDir:         networkPluginDir,
-		hostportSyncer:    hostport.NewHostportSyncer(iptInterface),
-		hostportManager:   hostport.NewHostportManager(iptInterface),
+		hostportSyncer:    hostport.NewHostportSyncer(),
+		hostportManager:   hostport.NewHostportManager(),
 		nonMasqueradeCIDR: "10.0.0.0/8",
 	}
 }
 
-func (plugin *kubenetNetworkPlugin) Init(host network.Host, hairpinMode kubeletconfig.HairpinMode, nonMasqueradeCIDR string, mtu int) error {
+func (plugin *kubenetNetworkPlugin) Init(host network.Host, hairpinMode componentconfig.HairpinMode, nonMasqueradeCIDR string, mtu int) error {
 	plugin.host = host
 	plugin.hairpinMode = hairpinMode
 	plugin.nonMasqueradeCIDR = nonMasqueradeCIDR
@@ -257,9 +257,9 @@ func (plugin *kubenetNetworkPlugin) Event(name string, details map[string]interf
 	glog.V(5).Infof("PodCIDR is set to %q", podCIDR)
 	_, cidr, err := net.ParseCIDR(podCIDR)
 	if err == nil {
-		setHairpin := plugin.hairpinMode == kubeletconfig.HairpinVeth
+		setHairpin := plugin.hairpinMode == componentconfig.HairpinVeth
 		// Set bridge address to first address in IPNet
-		cidr.IP[len(cidr.IP)-1] += 1
+		cidr.IP.To4()[3] += 1
 
 		json := fmt.Sprintf(NET_CONFIG_TEMPLATE, BridgeName, plugin.mtu, network.DefaultInterfaceName, setHairpin, podCIDR, cidr.IP.String())
 		glog.V(2).Infof("CNI network config set to %v", json)
@@ -286,7 +286,7 @@ func (plugin *kubenetNetworkPlugin) clearBridgeAddressesExcept(keep *net.IPNet) 
 		return
 	}
 
-	addrs, err := netlink.AddrList(bridge, unix.AF_INET)
+	addrs, err := netlink.AddrList(bridge, syscall.AF_INET)
 	if err != nil {
 		return
 	}
@@ -304,7 +304,7 @@ func (plugin *kubenetNetworkPlugin) Name() string {
 }
 
 func (plugin *kubenetNetworkPlugin) Capabilities() utilsets.Int {
-	return utilsets.NewInt()
+	return utilsets.NewInt(network.NET_PLUGIN_CAPABILITY_SHAPING)
 }
 
 // setup sets up networking through CNI using the given ns/name and sandbox ID.
@@ -353,7 +353,7 @@ func (plugin *kubenetNetworkPlugin) setup(namespace string, name string, id kube
 	// Put the container bridge into promiscuous mode to force it to accept hairpin packets.
 	// TODO: Remove this once the kernel bug (#20096) is fixed.
 	// TODO: check and set promiscuous mode with netlink once vishvananda/netlink supports it
-	if plugin.hairpinMode == kubeletconfig.PromiscuousBridge {
+	if plugin.hairpinMode == componentconfig.PromiscuousBridge {
 		output, err := plugin.execer.Command("ip", "link", "show", "dev", BridgeName).CombinedOutput()
 		if err != nil || strings.Index(string(output), "PROMISC") < 0 {
 			_, err := plugin.execer.Command("ip", "link", "set", BridgeName, "promisc", "on").CombinedOutput()

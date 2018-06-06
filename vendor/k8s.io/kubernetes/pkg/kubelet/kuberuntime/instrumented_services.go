@@ -131,15 +131,6 @@ func (in instrumentedRuntimeService) ContainerStatus(containerID string) (*runti
 	return out, err
 }
 
-func (in instrumentedRuntimeService) UpdateContainerResources(containerID string, resources *runtimeapi.LinuxContainerResources) error {
-	const operation = "container_status"
-	defer recordOperation(operation, time.Now())
-
-	err := in.service.UpdateContainerResources(containerID, resources)
-	recordError(operation, err)
-	return err
-}
-
 func (in instrumentedRuntimeService) ExecSync(containerID string, cmd []string, timeout time.Duration) ([]byte, []byte, error) {
 	const operation = "exec_sync"
 	defer recordOperation(operation, time.Now())
@@ -212,20 +203,20 @@ func (in instrumentedRuntimeService) ListPodSandbox(filter *runtimeapi.PodSandbo
 	return out, err
 }
 
-func (in instrumentedRuntimeService) ContainerStats(containerID string) (*runtimeapi.ContainerStats, error) {
+func (in instrumentedRuntimeService) ContainerStats(req *runtimeapi.ContainerStatsRequest) (*runtimeapi.ContainerStatsResponse, error) {
 	const operation = "container_stats"
 	defer recordOperation(operation, time.Now())
 
-	out, err := in.service.ContainerStats(containerID)
+	out, err := in.service.ContainerStats(req)
 	recordError(operation, err)
 	return out, err
 }
 
-func (in instrumentedRuntimeService) ListContainerStats(filter *runtimeapi.ContainerStatsFilter) ([]*runtimeapi.ContainerStats, error) {
+func (in instrumentedRuntimeService) ListContainerStats(req *runtimeapi.ListContainerStatsRequest) (*runtimeapi.ListContainerStatsResponse, error) {
 	const operation = "list_container_stats"
 	defer recordOperation(operation, time.Now())
 
-	out, err := in.service.ListContainerStats(filter)
+	out, err := in.service.ListContainerStats(req)
 	recordError(operation, err)
 	return out, err
 }
@@ -284,11 +275,11 @@ func (in instrumentedImageManagerService) RemoveImage(image *runtimeapi.ImageSpe
 	return err
 }
 
-func (in instrumentedImageManagerService) ImageFsInfo() ([]*runtimeapi.FilesystemUsage, error) {
+func (in instrumentedImageManagerService) ImageFsInfo(req *runtimeapi.ImageFsInfoRequest) (*runtimeapi.ImageFsInfoResponse, error) {
 	const operation = "image_fs_info"
 	defer recordOperation(operation, time.Now())
 
-	fsInfo, err := in.service.ImageFsInfo()
+	fsInfo, err := in.service.ImageFsInfo(req)
 	recordError(operation, err)
 	return fsInfo, nil
 }

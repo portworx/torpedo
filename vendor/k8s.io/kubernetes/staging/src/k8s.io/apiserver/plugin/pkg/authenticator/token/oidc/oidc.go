@@ -71,18 +71,10 @@ type OIDCOptions struct {
 	// UsernameClaim is the JWT field to use as the user's username.
 	UsernameClaim string
 
-	// UsernamePrefix, if specified, causes claims mapping to username to be prefix with
-	// the provided value. A value "oidc:" would result in usernames like "oidc:john".
-	UsernamePrefix string
-
 	// GroupsClaim, if specified, causes the OIDCAuthenticator to try to populate the user's
 	// groups with an ID Token field. If the GrouppClaim field is present in an ID Token the value
 	// must be a string or list of strings.
 	GroupsClaim string
-
-	// GroupsPrefix, if specified, causes claims mapping to group names to be prefixed with the
-	// value. A value "oidc:" would result in groups like "oidc:engineering" and "oidc:marketing".
-	GroupsPrefix string
 }
 
 type OIDCAuthenticator struct {
@@ -90,10 +82,8 @@ type OIDCAuthenticator struct {
 
 	trustedClientID string
 
-	usernameClaim  string
-	usernamePrefix string
-	groupsClaim    string
-	groupsPrefix   string
+	usernameClaim string
+	groupsClaim   string
 
 	httpClient *http.Client
 
@@ -141,9 +131,7 @@ func New(opts OIDCOptions) (*OIDCAuthenticator, error) {
 		issuerURL:       opts.IssuerURL,
 		trustedClientID: opts.ClientID,
 		usernameClaim:   opts.UsernameClaim,
-		usernamePrefix:  opts.UsernamePrefix,
 		groupsClaim:     opts.GroupsClaim,
-		groupsPrefix:    opts.GroupsPrefix,
 		httpClient:      &http.Client{Transport: tr},
 	}
 
@@ -233,17 +221,13 @@ func (a *OIDCAuthenticator) AuthenticateToken(value string) (user.Info, bool, er
 	if err := client.VerifyJWT(jwt); err != nil {
 		return nil, false, err
 	}
+
 	claims, err := jwt.Claims()
 	if err != nil {
 		return nil, false, err
 	}
-	return a.parseTokenClaims(claims)
-}
 
-// parseTokenClaims maps a set of claims to a user. It performs basic validation such as
-// ensuring the email is verified.
-func (a *OIDCAuthenticator) parseTokenClaims(claims jose.Claims) (user.Info, bool, error) {
-	username, ok, err := claims.StringClaim(a.usernameClaim)
+	claim, ok, err := claims.StringClaim(a.usernameClaim)
 	if err != nil {
 		return nil, false, err
 	}
@@ -251,7 +235,9 @@ func (a *OIDCAuthenticator) parseTokenClaims(claims jose.Claims) (user.Info, boo
 		return nil, false, fmt.Errorf("cannot find %q in JWT claims", a.usernameClaim)
 	}
 
-	if a.usernameClaim == "email" {
+	var username string
+	switch a.usernameClaim {
+	case "email":
 		verified, ok := claims["email_verified"]
 		if !ok {
 			return nil, false, errors.New("'email_verified' claim not present")
@@ -269,10 +255,10 @@ func (a *OIDCAuthenticator) parseTokenClaims(claims jose.Claims) (user.Info, boo
 		if !emailVerified {
 			return nil, false, errors.New("email not verified")
 		}
-	}
-
-	if a.usernamePrefix != "" {
-		username = a.usernamePrefix + username
+		username = claim
+	default:
+		// For all other cases, use issuerURL + claim as the user name.
+		username = fmt.Sprintf("%s#%s", a.issuerURL, claim)
 	}
 
 	// TODO(yifan): Add UID, also populate the issuer to upper layer.
@@ -292,12 +278,5 @@ func (a *OIDCAuthenticator) parseTokenClaims(claims jose.Claims) (user.Info, boo
 			info.Groups = groups
 		}
 	}
-
-	if a.groupsPrefix != "" {
-		for i, group := range info.Groups {
-			info.Groups[i] = a.groupsPrefix + group
-		}
-	}
-
 	return info, true, nil
 }

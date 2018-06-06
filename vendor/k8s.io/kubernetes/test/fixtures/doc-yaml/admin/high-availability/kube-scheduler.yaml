@@ -27,5 +27,4 @@ spec:
   volumes:
   - hostPath:
       path: /var/log/kube-scheduler.log
-      type: FileOrCreate
     name: logfile

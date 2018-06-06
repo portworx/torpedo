@@ -49,7 +49,7 @@
   {% if grains.cloud in [ 'aws', 'gce' ] and grains.cloud_config is defined -%}
     {% set cloud_config = "--cloud-config=" + grains.cloud_config -%}
     {% set cloud_config_mount = "{\"name\": \"cloudconfigmount\",\"mountPath\": \"" + grains.cloud_config + "\", \"readOnly\": true}," -%}
-    {% set cloud_config_volume = "{\"name\": \"cloudconfigmount\",\"hostPath\": {\"path\": \"" + grains.cloud_config + "\", \"type\": \"FileOrCreate\"}}," -%}
+    {% set cloud_config_volume = "{\"name\": \"cloudconfigmount\",\"hostPath\": {\"path\": \"" + grains.cloud_config + "\"}}," -%}
   {% endif -%}
 
   {% if grains.cloud in ['openstack'] -%}
@@ -116,7 +116,7 @@
     "command": [
                  "/bin/sh",
                  "-c",
-                 "/usr/local/bin/kube-controller-manager {{params}} 1>>/var/log/kube-controller-manager.log 2>&1"
+                 "exec /usr/local/bin/kube-controller-manager {{params}} 1>>/var/log/kube-controller-manager.log 2>&1"
                ],
     {{container_env}}
     "livenessProbe": {
@@ -164,8 +164,7 @@
   },
   { "name": "logfile",
     "hostPath": {
-        "path": "/var/log/kube-controller-manager.log",
-        "type": "FileOrCreate"}
+        "path": "/var/log/kube-controller-manager.log"}
   },
   { "name": "etcssl",
     "hostPath": {

@@ -1,3 +1,5 @@
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -12,11 +14,12 @@ go_library(
         "templater.go",
         "templates.go",
     ],
+    tags = ["automanaged"],
     visibility = [
         "//build/visible_to:pkg_kubectl_cmd_templates_CONSUMERS",
     ],
     deps = [
-        "//pkg/kubectl/util/term:go_default_library",
+        "//pkg/util/term:go_default_library",
         "//vendor/github.com/MakeNowJust/heredoc:go_default_library",
         "//vendor/github.com/russross/blackfriday:go_default_library",
         "//vendor/github.com/spf13/cobra:go_default_library",

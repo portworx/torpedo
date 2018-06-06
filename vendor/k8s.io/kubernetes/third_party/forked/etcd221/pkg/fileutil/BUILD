@@ -17,6 +17,7 @@ go_test(
         "purge_test.go",
     ],
     library = ":go_default_library",
+    tags = ["automanaged"],
 )
 
 go_library(
@@ -24,17 +25,10 @@ go_library(
     srcs = [
         "fileutil.go",
         "lock_unix.go",
-        "perallocate_unsupported.go",
+        "preallocate.go",
         "purge.go",
-    ] + select({
-        "@io_bazel_rules_go//go/platform:linux_amd64": [
-            "preallocate.go",
-        ],
-        "@io_bazel_rules_go//go/platform:windows_amd64": [
-            "lock_windows.go",
-        ],
-        "//conditions:default": [],
-    }),
+    ],
+    tags = ["automanaged"],
     deps = ["//vendor/github.com/coreos/pkg/capnslog:go_default_library"],
 )
 

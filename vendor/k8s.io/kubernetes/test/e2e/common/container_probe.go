@@ -20,17 +20,16 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/kubernetes/pkg/api/v1"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/test/e2e/framework"
 	testutils "k8s.io/kubernetes/test/utils"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	imageutils "k8s.io/kubernetes/test/utils/image"
 )
 
 const (
@@ -106,7 +105,7 @@ var _ = framework.KubeDescribe("Probing container", func() {
 				Containers: []v1.Container{
 					{
 						Name:    "liveness",
-						Image:   busyboxImage,
+						Image:   "gcr.io/google_containers/busybox:1.24",
 						Command: []string{"/bin/sh", "-c", "echo ok >/tmp/health; sleep 10; rm -rf /tmp/health; sleep 600"},
 						LivenessProbe: &v1.Probe{
 							Handler: v1.Handler{
@@ -133,7 +132,7 @@ var _ = framework.KubeDescribe("Probing container", func() {
 				Containers: []v1.Container{
 					{
 						Name:    "liveness",
-						Image:   busyboxImage,
+						Image:   "gcr.io/google_containers/busybox:1.24",
 						Command: []string{"/bin/sh", "-c", "echo ok >/tmp/health; sleep 600"},
 						LivenessProbe: &v1.Probe{
 							Handler: v1.Handler{
@@ -160,7 +159,7 @@ var _ = framework.KubeDescribe("Probing container", func() {
 				Containers: []v1.Container{
 					{
 						Name:    "liveness",
-						Image:   imageutils.GetE2EImage(imageutils.Liveness),
+						Image:   "gcr.io/google_containers/liveness:e2e",
 						Command: []string{"/server"},
 						LivenessProbe: &v1.Probe{
 							Handler: v1.Handler{
@@ -189,7 +188,7 @@ var _ = framework.KubeDescribe("Probing container", func() {
 				Containers: []v1.Container{
 					{
 						Name:    "liveness",
-						Image:   imageutils.GetE2EImage(imageutils.Liveness),
+						Image:   "gcr.io/google_containers/liveness:e2e",
 						Command: []string{"/server"},
 						LivenessProbe: &v1.Probe{
 							Handler: v1.Handler{
@@ -217,7 +216,7 @@ var _ = framework.KubeDescribe("Probing container", func() {
 				Containers: []v1.Container{
 					{
 						Name:  "liveness",
-						Image: imageutils.GetE2EImage(imageutils.NginxSlim),
+						Image: "gcr.io/google_containers/nginx-slim:0.7",
 						Ports: []v1.ContainerPort{{ContainerPort: 80}},
 						LivenessProbe: &v1.Probe{
 							Handler: v1.Handler{
@@ -248,7 +247,7 @@ var _ = framework.KubeDescribe("Probing container", func() {
 				Containers: []v1.Container{
 					{
 						Name:    "liveness",
-						Image:   busyboxImage,
+						Image:   "gcr.io/google_containers/busybox:1.24",
 						Command: []string{"/bin/sh", "-c", "sleep 600"},
 						LivenessProbe: &v1.Probe{
 							Handler: v1.Handler{
@@ -304,7 +303,7 @@ func makePodSpec(readinessProbe, livenessProbe *v1.Probe) *v1.Pod {
 			Containers: []v1.Container{
 				{
 					Name:           probTestContainerName,
-					Image:          imageutils.GetE2EImage(imageutils.TestWebserver),
+					Image:          "gcr.io/google_containers/test-webserver:e2e",
 					LivenessProbe:  livenessProbe,
 					ReadinessProbe: readinessProbe,
 				},

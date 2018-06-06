@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/pkg/api/v1"
 	nodeutil "k8s.io/kubernetes/pkg/api/v1/node"
-	"k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig"
+	"k8s.io/kubernetes/pkg/apis/componentconfig"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	. "github.com/onsi/ginkgo"
@@ -62,7 +62,7 @@ var _ = framework.KubeDescribe("LocalStorageAllocatableEviction [Slow] [Serial] 
 							RestartPolicy: v1.RestartPolicyNever,
 							Containers: []v1.Container{
 								{
-									Image:   busyboxImage,
+									Image:   "gcr.io/google_containers/busybox:1.24",
 									Name:    "container-disk-hog-pod",
 									Command: []string{"sh", "-c", command},
 								},
@@ -79,7 +79,7 @@ var _ = framework.KubeDescribe("LocalStorageAllocatableEviction [Slow] [Serial] 
 							RestartPolicy: v1.RestartPolicyNever,
 							Containers: []v1.Container{
 								{
-									Image: busyboxImage,
+									Image: "gcr.io/google_containers/busybox:1.24",
 									Name:  "idle-pod",
 									Command: []string{"sh", "-c",
 										fmt.Sprintf("while true; do sleep 5; done")},
@@ -92,9 +92,9 @@ var _ = framework.KubeDescribe("LocalStorageAllocatableEviction [Slow] [Serial] 
 		})
 
 		// Set up --kube-reserved for scratch storage
-		tempSetCurrentKubeletConfig(f, func(initialConfig *kubeletconfig.KubeletConfiguration) {
+		tempSetCurrentKubeletConfig(f, func(initialConfig *componentconfig.KubeletConfiguration) {
 			framework.Logf("Set up --kube-reserved for local storage reserved %dMi", diskReserve)
-			initialConfig.KubeReserved = kubeletconfig.ConfigurationMap(map[string]string{"storage": fmt.Sprintf("%dMi", diskReserve)})
+			initialConfig.KubeReserved = componentconfig.ConfigurationMap(map[string]string{"storage": fmt.Sprintf("%dMi", diskReserve)})
 
 		})
 

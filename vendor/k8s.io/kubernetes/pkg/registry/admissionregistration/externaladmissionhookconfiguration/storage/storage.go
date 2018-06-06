@@ -23,6 +23,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/admissionregistration"
 	"k8s.io/kubernetes/pkg/registry/admissionregistration/externaladmissionhookconfiguration"
+	"k8s.io/kubernetes/pkg/registry/cachesize"
 )
 
 // rest implements a RESTStorage for pod disruption budgets against etcd
@@ -39,13 +40,15 @@ func NewREST(optsGetter generic.RESTOptionsGetter) *REST {
 		ObjectNameFunc: func(obj runtime.Object) (string, error) {
 			return obj.(*admissionregistration.ExternalAdmissionHookConfiguration).Name, nil
 		},
-		DefaultQualifiedResource: admissionregistration.Resource("externaladmissionhookconfigurations"),
+		PredicateFunc:     externaladmissionhookconfiguration.MatchExternalAdmissionHookConfiguration,
+		QualifiedResource: admissionregistration.Resource("externaladmissionhookconfigurations"),
+		WatchCacheSize:    cachesize.GetWatchCacheSizeByResource("externaladmissionhookconfigurations"),
 
 		CreateStrategy: externaladmissionhookconfiguration.Strategy,
 		UpdateStrategy: externaladmissionhookconfiguration.Strategy,
 		DeleteStrategy: externaladmissionhookconfiguration.Strategy,
 	}
-	options := &generic.StoreOptions{RESTOptions: optsGetter}
+	options := &generic.StoreOptions{RESTOptions: optsGetter, AttrFunc: externaladmissionhookconfiguration.GetAttrs}
 	if err := store.CompleteWithOptions(options); err != nil {
 		panic(err) // TODO: Propagate error up
 	}

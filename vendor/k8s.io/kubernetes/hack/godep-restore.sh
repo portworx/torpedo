@@ -24,6 +24,6 @@ source "${KUBE_ROOT}/hack/lib/util.sh"
 
 kube::util::ensure_godep_version v79
 
-kube::log::status "Starting to download all kubernetes godeps. This takes a while"
+echo "Starting to download all kubernetes godeps. This takes a while"
 GOPATH=${GOPATH}:${KUBE_ROOT}/staging godep restore "$@"
-kube::log::status "Download finished"
+echo "Download finished"

@@ -220,8 +220,8 @@ func UpdatePodCondition(status *api.PodStatus, condition *api.PodCondition) bool
 	isEqual := condition.Status == oldCondition.Status &&
 		condition.Reason == oldCondition.Reason &&
 		condition.Message == oldCondition.Message &&
-		condition.LastProbeTime.Equal(&oldCondition.LastProbeTime) &&
-		condition.LastTransitionTime.Equal(&oldCondition.LastTransitionTime)
+		condition.LastProbeTime.Equal(oldCondition.LastProbeTime) &&
+		condition.LastTransitionTime.Equal(oldCondition.LastTransitionTime)
 
 	status.Conditions[conditionIndex] = *condition
 	// Return true if one of the fields have changed.
@@ -229,34 +229,14 @@ func UpdatePodCondition(status *api.PodStatus, condition *api.PodCondition) bool
 }
 
 // DropDisabledAlphaFields removes disabled fields from the pod spec.
+// Back-ported from release-1.8
 // This should be called from PrepareForCreate/PrepareForUpdate for all resources containing a pod spec.
 func DropDisabledAlphaFields(podSpec *api.PodSpec) {
-	if !utilfeature.DefaultFeatureGate.Enabled(features.PodPriority) {
-		podSpec.Priority = nil
-		podSpec.PriorityClassName = ""
-	}
-
 	if !utilfeature.DefaultFeatureGate.Enabled(features.LocalStorageCapacityIsolation) {
 		for i := range podSpec.Volumes {
 			if podSpec.Volumes[i].EmptyDir != nil {
 				podSpec.Volumes[i].EmptyDir.SizeLimit = nil
 			}
-		}
-	}
-	for i := range podSpec.Containers {
-		DropDisabledVolumeMountsAlphaFields(podSpec.Containers[i].VolumeMounts)
-	}
-	for i := range podSpec.InitContainers {
-		DropDisabledVolumeMountsAlphaFields(podSpec.InitContainers[i].VolumeMounts)
-	}
-}
-
-// DropDisabledVolumeMountsAlphaFields removes disabled fields from []VolumeMount.
-// This should be called from PrepareForCreate/PrepareForUpdate for all resources containing a VolumeMount
-func DropDisabledVolumeMountsAlphaFields(volumeMounts []api.VolumeMount) {
-	if !utilfeature.DefaultFeatureGate.Enabled(features.MountPropagation) {
-		for i := range volumeMounts {
-			volumeMounts[i].MountPropagation = nil
 		}
 	}
 }

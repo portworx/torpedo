@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,11 +41,8 @@ type persistentVolumeInformer struct {
 	factory internalinterfaces.SharedInformerFactory
 }
 
-// NewPersistentVolumeInformer constructs a new informer for PersistentVolume type.
-// Always prefer using an informer factory to get a shared informer instead of getting an independent
-// one. This reduces memory footprint and number of connections to the server.
-func NewPersistentVolumeInformer(client internalclientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+func newPersistentVolumeInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	sharedIndexInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				return client.Core().PersistentVolumes().List(options)
@@ -56,16 +53,14 @@ func NewPersistentVolumeInformer(client internalclientset.Interface, resyncPerio
 		},
 		&api.PersistentVolume{},
 		resyncPeriod,
-		indexers,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 	)
-}
 
-func defaultPersistentVolumeInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewPersistentVolumeInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	return sharedIndexInformer
 }
 
 func (f *persistentVolumeInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&api.PersistentVolume{}, defaultPersistentVolumeInformer)
+	return f.factory.InformerFor(&api.PersistentVolume{}, newPersistentVolumeInformer)
 }
 
 func (f *persistentVolumeInformer) Lister() internalversion.PersistentVolumeLister {
