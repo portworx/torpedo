@@ -1,5 +1,5 @@
 hash: 13b93ebe1aa9afeb35f5634086ff7d32f530cbd67aac1787a325fab5e3c6f004
-updated: 2018-06-06T13:33:01.468146208-07:00
+updated: 2018-06-08T16:46:01.205457124-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 783273d703149aaeb9897cf58613d5af48861c25
@@ -79,6 +79,8 @@ imports:
   version: e30f1e79f3cd72542f2026ceec18d3bd67ab859c
 - name: github.com/docker/spdystream
   version: bc6354cbbc295e925e4c611ffe90c1f287ee54db
+  subpackages:
+  - spdy
 - name: github.com/donovanhide/eventsource
   version: 3ed64d21fb0b6bd8b49bcfec08f3004daee8723d
 - name: github.com/emicklei/go-restful
@@ -259,7 +261,7 @@ imports:
   - common
   - mem
 - name: github.com/portworx/sched-ops
-  version: b720a46d47d9f16f5be82640734033ced298021b
+  version: 36f51c5997812d4aceafaeaccad947e5420f8de8
   repo: git@github.com:portworx/sched-ops.git
   subpackages:
   - k8s
@@ -325,7 +327,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/genproto
-  version: 81158efcc9f219c511e4d3c0d61a0e6e49c01a24
+  version: 32ee49c4dd805befd833990acba36cb75042378c
   subpackages:
   - googleapis/api/annotations
   - googleapis/rpc/status
@@ -385,10 +387,13 @@ imports:
   - pkg/util/diff
   - pkg/util/errors
   - pkg/util/framer
+  - pkg/util/httpstream
+  - pkg/util/httpstream/spdy
   - pkg/util/intstr
   - pkg/util/json
   - pkg/util/net
   - pkg/util/rand
+  - pkg/util/remotecommand
   - pkg/util/runtime
   - pkg/util/sets
   - pkg/util/validation
@@ -397,6 +402,7 @@ imports:
   - pkg/util/yaml
   - pkg/version
   - pkg/watch
+  - third_party/forked/golang/netutil
   - third_party/forked/golang/reflect
 - name: k8s.io/client-go
   version: 80e246c39a5a0e42be42fddc04f146d2f4fb7221
@@ -470,8 +476,10 @@ imports:
   - tools/clientcmd/api/latest
   - tools/clientcmd/api/v1
   - tools/metrics
+  - tools/remotecommand
   - transport
   - util/cert
+  - util/exec
   - util/flowcontrol
   - util/homedir
   - util/integer

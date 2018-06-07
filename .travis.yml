@@ -14,6 +14,9 @@ after_success:
   - if [ "${TRAVIS_BRANCH}" == "master" ] && [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
       echo "${DOCKER_PASS}" | docker login -u="${DOCKER_USER}" --password-stdin;
       make deploy;
+    elif [ "${TRAVIS_BRANCH}" == "1.7" ]; then
+      echo "${DOCKER_PASS}" | docker login -u="${DOCKER_USER}" --password-stdin;
+      DOCKER_HUB_TAG="${DOCKER_HUB_1_7_TAG}" make deploy;
     fi
 notifications:
   email:
@@ -22,5 +25,6 @@ notifications:
       - piyush@portworx.com
       - jv@portworx.com
       - harsh@portworx.com
+      - rohit@portworx.com
     on_success: change
     on_failure: always
