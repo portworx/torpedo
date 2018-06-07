@@ -49,10 +49,10 @@ cat <<EOF | kubectl create -f -
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: torpedo-account
+  name: torpdo-account
 ---
 kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
+apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
    name: torpedo-role
 rules:
@@ -66,7 +66,7 @@ rules:
     verbs: ["*"]
 ---
 kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
+apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
   name: torpedo-role-binding
 subjects:
