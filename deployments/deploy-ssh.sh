@@ -49,7 +49,7 @@ cat <<EOF | kubectl create -f -
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: torpdo-account
+  name: torpedo-account
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
