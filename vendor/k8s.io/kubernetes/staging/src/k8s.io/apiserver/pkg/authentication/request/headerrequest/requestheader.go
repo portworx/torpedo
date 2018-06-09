@@ -145,8 +145,7 @@ func headerValue(h http.Header, headerNames []string) string {
 func allHeaderValues(h http.Header, headerNames []string) []string {
 	ret := []string{}
 	for _, headerName := range headerNames {
-		headerKey := http.CanonicalHeaderKey(headerName)
-		values, ok := h[headerKey]
+		values, ok := h[headerName]
 		if !ok {
 			continue
 		}

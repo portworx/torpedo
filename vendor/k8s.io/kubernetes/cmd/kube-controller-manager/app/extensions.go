@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/controller/daemon"
 	"k8s.io/kubernetes/pkg/controller/deployment"
-	"k8s.io/kubernetes/pkg/controller/replicaset"
+	replicaset "k8s.io/kubernetes/pkg/controller/replicaset"
 )
 
 func startDaemonSetController(ctx ControllerContext) (bool, error) {

@@ -24,13 +24,12 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/aws"
+	"k8s.io/kubernetes/pkg/util/exec"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
-	"k8s.io/kubernetes/pkg/volume/util/volumehelper"
 )
 
 type awsElasticBlockStoreAttacher struct {
@@ -55,7 +54,7 @@ func (plugin *awsElasticBlockStorePlugin) NewAttacher() (volume.Attacher, error)
 }
 
 func (plugin *awsElasticBlockStorePlugin) GetDeviceMountRefs(deviceMountPath string) ([]string, error) {
-	mounter := plugin.host.GetMounter(plugin.GetPluginName())
+	mounter := plugin.host.GetMounter()
 	return mount.GetMountRefs(mounter, deviceMountPath)
 }
 
@@ -143,7 +142,7 @@ func (attacher *awsElasticBlockStoreAttacher) BulkVerifyVolumes(volumesByNode ma
 	return volumesAttachedCheck, nil
 }
 
-func (attacher *awsElasticBlockStoreAttacher) WaitForAttach(spec *volume.Spec, devicePath string, _ *v1.Pod, timeout time.Duration) (string, error) {
+func (attacher *awsElasticBlockStoreAttacher) WaitForAttach(spec *volume.Spec, devicePath string, timeout time.Duration) (string, error) {
 	volumeSource, _, err := getVolumeSource(spec)
 	if err != nil {
 		return "", err
@@ -200,7 +199,7 @@ func (attacher *awsElasticBlockStoreAttacher) GetDeviceMountPath(
 
 // FIXME: this method can be further pruned.
 func (attacher *awsElasticBlockStoreAttacher) MountDevice(spec *volume.Spec, devicePath string, deviceMountPath string) error {
-	mounter := attacher.host.GetMounter(awsElasticBlockStorePluginName)
+	mounter := attacher.host.GetMounter()
 	notMnt, err := mounter.IsLikelyNotMountPoint(deviceMountPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -223,7 +222,7 @@ func (attacher *awsElasticBlockStoreAttacher) MountDevice(spec *volume.Spec, dev
 		options = append(options, "ro")
 	}
 	if notMnt {
-		diskMounter := volumehelper.NewSafeFormatAndMountFromHost(awsElasticBlockStorePluginName, attacher.host)
+		diskMounter := &mount.SafeFormatAndMount{Interface: mounter, Runner: exec.New()}
 		mountOptions := volume.MountOptionFromSpec(spec, options...)
 		err = diskMounter.FormatAndMount(devicePath, deviceMountPath, volumeSource.FSType, mountOptions)
 		if err != nil {
@@ -248,7 +247,7 @@ func (plugin *awsElasticBlockStorePlugin) NewDetacher() (volume.Detacher, error)
 	}
 
 	return &awsElasticBlockStoreDetacher{
-		mounter:    plugin.host.GetMounter(plugin.GetPluginName()),
+		mounter:    plugin.host.GetMounter(),
 		awsVolumes: awsCloud,
 	}, nil
 }

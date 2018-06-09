@@ -29,7 +29,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/metricsutil"
-	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
+	"k8s.io/kubernetes/pkg/util/i18n"
 )
 
 // TopNodeOptions contains all the options for running the top-node cli command.
@@ -50,23 +50,10 @@ type HeapsterTopOptions struct {
 }
 
 func (o *HeapsterTopOptions) Bind(flags *pflag.FlagSet) {
-	if len(o.Namespace) == 0 {
-		o.Namespace = metricsutil.DefaultHeapsterNamespace
-	}
-	if len(o.Service) == 0 {
-		o.Service = metricsutil.DefaultHeapsterService
-	}
-	if len(o.Scheme) == 0 {
-		o.Scheme = metricsutil.DefaultHeapsterScheme
-	}
-	if len(o.Port) == 0 {
-		o.Port = metricsutil.DefaultHeapsterPort
-	}
-
-	flags.StringVar(&o.Namespace, "heapster-namespace", o.Namespace, "Namespace Heapster service is located in")
-	flags.StringVar(&o.Service, "heapster-service", o.Service, "Name of Heapster service")
-	flags.StringVar(&o.Scheme, "heapster-scheme", o.Scheme, "Scheme (http or https) to connect to Heapster as")
-	flags.StringVar(&o.Port, "heapster-port", o.Port, "Port name in service to use")
+	flags.StringVar(&o.Namespace, "heapster-namespace", metricsutil.DefaultHeapsterNamespace, "Namespace Heapster service is located in")
+	flags.StringVar(&o.Service, "heapster-service", metricsutil.DefaultHeapsterService, "Name of Heapster service")
+	flags.StringVar(&o.Scheme, "heapster-scheme", metricsutil.DefaultHeapsterScheme, "Scheme (http or https) to connect to Heapster as")
+	flags.StringVar(&o.Port, "heapster-port", metricsutil.DefaultHeapsterPort, "Port name in service to use")
 }
 
 var (
@@ -83,10 +70,8 @@ var (
 		  kubectl top node NODE_NAME`))
 )
 
-func NewCmdTopNode(f cmdutil.Factory, options *TopNodeOptions, out io.Writer) *cobra.Command {
-	if options == nil {
-		options = &TopNodeOptions{}
-	}
+func NewCmdTopNode(f cmdutil.Factory, out io.Writer) *cobra.Command {
+	options := &TopNodeOptions{}
 
 	cmd := &cobra.Command{
 		Use:     "node [NAME | -l label]",
@@ -98,7 +83,7 @@ func NewCmdTopNode(f cmdutil.Factory, options *TopNodeOptions, out io.Writer) *c
 				cmdutil.CheckErr(err)
 			}
 			if err := options.Validate(); err != nil {
-				cmdutil.CheckErr(cmdutil.UsageErrorf(cmd, "%v", err))
+				cmdutil.CheckErr(cmdutil.UsageError(cmd, err.Error()))
 			}
 			if err := options.RunTopNode(); err != nil {
 				cmdutil.CheckErr(err)
@@ -106,16 +91,17 @@ func NewCmdTopNode(f cmdutil.Factory, options *TopNodeOptions, out io.Writer) *c
 		},
 		Aliases: []string{"nodes", "no"},
 	}
-	cmd.Flags().StringVarP(&options.Selector, "selector", "l", "", "Selector (label query) to filter on, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2)")
+	cmd.Flags().StringVarP(&options.Selector, "selector", "l", "", "Selector (label query) to filter on, supports '=', '==', and '!='.")
 	options.HeapsterOptions.Bind(cmd.Flags())
 	return cmd
 }
 
 func (o *TopNodeOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []string, out io.Writer) error {
+	var err error
 	if len(args) == 1 {
 		o.ResourceName = args[0]
 	} else if len(args) > 1 {
-		return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
+		return cmdutil.UsageError(cmd, cmd.Use)
 	}
 
 	clientset, err := f.ClientSet()

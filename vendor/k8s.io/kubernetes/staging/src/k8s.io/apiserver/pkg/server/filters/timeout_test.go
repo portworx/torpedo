@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -32,30 +31,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 )
 
-type recorder struct {
-	lock  sync.Mutex
-	count int
-}
-
-func (r *recorder) Record() {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	r.count++
-}
-
-func (r *recorder) Count() int {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	return r.count
-}
-
 func TestTimeout(t *testing.T) {
 	sendResponse := make(chan struct{}, 1)
 	writeErrors := make(chan error, 1)
 	timeout := make(chan time.Time, 1)
 	resp := "test response"
 	timeoutErr := apierrors.NewServerTimeout(schema.GroupResource{Group: "foo", Resource: "bar"}, "get", 0)
-	record := &recorder{}
 
 	ts := httptest.NewServer(WithTimeout(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
@@ -63,8 +44,8 @@ func TestTimeout(t *testing.T) {
 			_, err := w.Write([]byte(resp))
 			writeErrors <- err
 		}),
-		func(*http.Request) (<-chan time.Time, func(), *apierrors.StatusError) {
-			return timeout, record.Record, timeoutErr
+		func(*http.Request) (<-chan time.Time, *apierrors.StatusError) {
+			return timeout, timeoutErr
 		}))
 	defer ts.Close()
 
@@ -84,9 +65,6 @@ func TestTimeout(t *testing.T) {
 	if err := <-writeErrors; err != nil {
 		t.Errorf("got unexpected Write error on first request: %v", err)
 	}
-	if record.Count() != 0 {
-		t.Errorf("invoked record method: %#v", record)
-	}
 
 	// Times out
 	timeout <- time.Time{}
@@ -104,9 +82,6 @@ func TestTimeout(t *testing.T) {
 	}
 	if !reflect.DeepEqual(status, &timeoutErr.ErrStatus) {
 		t.Errorf("unexpected object: %s", diff.ObjectReflectDiff(&timeoutErr.ErrStatus, status))
-	}
-	if record.Count() != 1 {
-		t.Errorf("did not invoke record method: %#v", record)
 	}
 
 	// Now try to send a response

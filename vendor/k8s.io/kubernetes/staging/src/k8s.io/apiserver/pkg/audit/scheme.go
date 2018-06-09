@@ -23,7 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/apis/audit/v1alpha1"
-	"k8s.io/apiserver/pkg/apis/audit/v1beta1"
 )
 
 var Scheme = runtime.NewScheme()
@@ -32,5 +31,4 @@ var Codecs = serializer.NewCodecFactory(Scheme)
 func init() {
 	v1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
 	v1alpha1.AddToScheme(Scheme)
-	v1beta1.AddToScheme(Scheme)
 }

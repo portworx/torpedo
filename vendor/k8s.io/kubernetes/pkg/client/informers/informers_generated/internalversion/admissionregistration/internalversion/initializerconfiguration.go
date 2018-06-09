@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,11 +41,8 @@ type initializerConfigurationInformer struct {
 	factory internalinterfaces.SharedInformerFactory
 }
 
-// NewInitializerConfigurationInformer constructs a new informer for InitializerConfiguration type.
-// Always prefer using an informer factory to get a shared informer instead of getting an independent
-// one. This reduces memory footprint and number of connections to the server.
-func NewInitializerConfigurationInformer(client internalclientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+func newInitializerConfigurationInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	sharedIndexInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				return client.Admissionregistration().InitializerConfigurations().List(options)
@@ -56,16 +53,14 @@ func NewInitializerConfigurationInformer(client internalclientset.Interface, res
 		},
 		&admissionregistration.InitializerConfiguration{},
 		resyncPeriod,
-		indexers,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 	)
-}
 
-func defaultInitializerConfigurationInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewInitializerConfigurationInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	return sharedIndexInformer
 }
 
 func (f *initializerConfigurationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&admissionregistration.InitializerConfiguration{}, defaultInitializerConfigurationInformer)
+	return f.factory.InformerFor(&admissionregistration.InitializerConfiguration{}, newInitializerConfigurationInformer)
 }
 
 func (f *initializerConfigurationInformer) Lister() internalversion.InitializerConfigurationLister {

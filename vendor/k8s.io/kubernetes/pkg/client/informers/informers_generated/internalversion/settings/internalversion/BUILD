@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -11,6 +13,7 @@ go_library(
         "interface.go",
         "podpreset.go",
     ],
+    tags = ["automanaged"],
     deps = [
         "//pkg/apis/settings:go_default_library",
         "//pkg/client/clientset_generated/internalclientset:go_default_library",

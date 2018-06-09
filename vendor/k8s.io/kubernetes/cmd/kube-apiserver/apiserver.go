@@ -24,9 +24,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/spf13/pflag"
-
-	"k8s.io/apiserver/pkg/server"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/util/flag"
 	"k8s.io/apiserver/pkg/util/logs"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app"
@@ -34,6 +32,8 @@ import (
 	_ "k8s.io/kubernetes/pkg/client/metrics/prometheus" // for client metric registration
 	_ "k8s.io/kubernetes/pkg/version/prometheus"        // for version metric registration
 	"k8s.io/kubernetes/pkg/version/verflag"
+
+	"github.com/spf13/pflag"
 )
 
 func main() {
@@ -48,8 +48,7 @@ func main() {
 
 	verflag.PrintAndExitIfRequested()
 
-	stopCh := server.SetupSignalHandler()
-	if err := app.Run(s, stopCh); err != nil {
+	if err := app.Run(s, wait.NeverStop); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}

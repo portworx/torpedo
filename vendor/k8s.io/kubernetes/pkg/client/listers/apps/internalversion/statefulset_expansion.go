@@ -40,6 +40,7 @@ type StatefulSetNamespaceListerExpansion interface{}
 // Returns an error only if no matching StatefulSets are found.
 func (s *statefulSetLister) GetPodStatefulSets(pod *api.Pod) ([]*apps.StatefulSet, error) {
 	var selector labels.Selector
+	var ps *apps.StatefulSet
 
 	if len(pod.Labels) == 0 {
 		return nil, fmt.Errorf("no StatefulSets found for pod %v because it has no labels", pod.Name)
@@ -51,7 +52,8 @@ func (s *statefulSetLister) GetPodStatefulSets(pod *api.Pod) ([]*apps.StatefulSe
 	}
 
 	var psList []*apps.StatefulSet
-	for _, ps := range list {
+	for i := range list {
+		ps = list[i]
 		if ps.Namespace != pod.Namespace {
 			continue
 		}

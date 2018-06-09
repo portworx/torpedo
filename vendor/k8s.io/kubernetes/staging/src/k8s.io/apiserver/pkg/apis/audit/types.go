@@ -27,13 +27,6 @@ const (
 	// Header to hold the audit ID as the request is propagated through the serving hierarchy. The
 	// Audit-ID header should be set by the first server to receive the request (e.g. the federation
 	// server or kube-aggregator).
-	//
-	// Audit ID is also returned to client by http response header.
-	// It's not guaranteed Audit-Id http header is sent for all requests. When kube-apiserver didn't
-	// audit the events according to the audit policy, no Audit-ID is returned. Also, for request to
-	// pods/exec, pods/attach, pods/proxy, kube-apiserver works like a proxy and redirect the request
-	// to kubelet node, users will only get http headers sent from kubelet node, so no Audit-ID is
-	// sent when users run command like "kubectl exec" or "kubectl attach".
 	HeaderAuditID = "Audit-ID"
 )
 
@@ -72,8 +65,6 @@ const (
 	StagePanic = "Panic"
 )
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // Event captures all the information that can be included in an API audit log.
 type Event struct {
 	metav1.TypeMeta
@@ -109,8 +100,8 @@ type Event struct {
 	// +optional
 	ObjectRef *ObjectReference
 	// The response status, populated even when the ResponseObject is not a Status type.
-	// For successful responses, this will only include the Code. For non-status type
-	// error responses, this will be auto-populated with the error Message.
+	// For successful responses, this will only include the Code and StatusSuccess.
+	// For non-status type error responses, this will be auto-populated with the error Message.
 	// +optional
 	ResponseStatus *metav1.Status
 
@@ -127,8 +118,6 @@ type Event struct {
 	ResponseObject *runtime.Unknown
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // EventList is a list of audit Events.
 type EventList struct {
 	metav1.TypeMeta
@@ -137,8 +126,6 @@ type EventList struct {
 
 	Items []Event
 }
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Policy defines the configuration of audit logging, and the rules for how different request
 // categories are logged.
@@ -154,8 +141,6 @@ type Policy struct {
 	// PolicyRules are strictly ordered.
 	Rules []PolicyRule
 }
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // PolicyList is a list of audit Policies.
 type PolicyList struct {
@@ -207,10 +192,6 @@ type PolicyRule struct {
 	//  "/healthz*" - Log all health checks
 	// +optional
 	NonResourceURLs []string
-
-	// OmitStages specify events generated in which stages will not be emitted to backend.
-	// An empty list means no restrictions will apply.
-	OmitStages []Stage
 }
 
 // GroupResources represents resource kinds in an API group.
@@ -219,17 +200,10 @@ type GroupResources struct {
 	// The empty string represents the core API group.
 	// +optional
 	Group string
-	// Resources is a list of resources within the API group. Subresources are
-	// matched using a "/" to indicate the subresource. For example, "pods/log"
-	// would match request to the log subresource of pods. The top level resource
-	// does not match subresources, "pods" doesn't match "pods/log".
+	// Resources is a list of resources within the API group.
+	// Any empty list implies every resource kind in the API group.
 	// +optional
 	Resources []string
-	// ResourceNames is a list of resource instance names that the policy matches.
-	// Using this field requires Resources to be specified.
-	// An empty list implies that every instance of the resource is matched.
-	// +optional
-	ResourceNames []string
 }
 
 // ObjectReference contains enough information to let you inspect or modify the referred object.
@@ -242,11 +216,6 @@ type ObjectReference struct {
 	Name string
 	// +optional
 	UID types.UID
-	// APIGroup is the name of the API group that contains the referred object.
-	// The empty string represents the core API group.
-	// +optional
-	APIGroup string
-	// APIVersion is the version of the API group that contains the referred object.
 	// +optional
 	APIVersion string
 	// +optional

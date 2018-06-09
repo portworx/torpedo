@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/extensions"
 )
 
 func TestGenerateAdds(t *testing.T) {
@@ -247,12 +246,6 @@ func TestValidateAdds(t *testing.T) {
 		// container requests match allowed
 		"no required, allowed, container requests valid": {
 			allowedCaps: []api.Capability{"foo"},
-			containerCaps: &api.Capabilities{
-				Add: []api.Capability{"foo"},
-			},
-		},
-		"no required, all allowed, container requests valid": {
-			allowedCaps: []api.Capability{extensions.AllowAllCapabilities},
 			containerCaps: &api.Capabilities{
 				Add: []api.Capability{"foo"},
 			},

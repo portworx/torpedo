@@ -17,15 +17,14 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
-// +genclient
+// +genclient=true
 // +resourceName=nodes
-// +genclient:readonly
-// +genclient:nonNamespaced
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +readonly=true
+// +nonNamespaced=true
 
 // resource usage metrics of a node.
 type NodeMetrics struct {
@@ -38,10 +37,8 @@ type NodeMetrics struct {
 	Window    metav1.Duration `json:"window" protobuf:"bytes,3,opt,name=window"`
 
 	// The memory usage is the memory working set.
-	Usage v1.ResourceList `json:"usage" protobuf:"bytes,4,rep,name=usage,casttype=k8s.io/api/core/v1.ResourceList,castkey=k8s.io/api/core/v1.ResourceName,castvalue=k8s.io/apimachinery/pkg/api/resource.Quantity"`
+	Usage v1.ResourceList `json:"usage" protobuf:"bytes,4,rep,name=usage,casttype=k8s.io/client-go/pkg/api/v1.ResourceList,castkey=k8s.io/client-go/pkg/api/v1.ResourceName,castvalue=k8s.io/apimachinery/pkg/api/resource.Quantity"`
 }
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NodeMetricsList is a list of NodeMetrics.
 type NodeMetricsList struct {
@@ -54,10 +51,9 @@ type NodeMetricsList struct {
 	Items []NodeMetrics `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-// +genclient
+// +genclient=true
 // +resourceName=pods
-// +genclient:readonly
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +readonly=true
 
 // resource usage metrics of a pod.
 type PodMetrics struct {
@@ -72,8 +68,6 @@ type PodMetrics struct {
 	// Metrics for all containers are collected within the same time window.
 	Containers []ContainerMetrics `json:"containers" protobuf:"bytes,4,rep,name=containers"`
 }
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // PodMetricsList is a list of PodMetrics.
 type PodMetricsList struct {
@@ -91,5 +85,5 @@ type ContainerMetrics struct {
 	// Container name corresponding to the one from pod.spec.containers.
 	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
 	// The memory usage is the memory working set.
-	Usage v1.ResourceList `json:"usage" protobuf:"bytes,2,rep,name=usage,casttype=k8s.io/api/core/v1.ResourceList,castkey=k8s.io/api/core/v1.ResourceName,castvalue=k8s.io/apimachinery/pkg/api/resource.Quantity"`
+	Usage v1.ResourceList `json:"usage" protobuf:"bytes,2,rep,name=usage,casttype=k8s.io/client-go/pkg/api/v1.ResourceList,castkey=k8s.io/client-go/pkg/api/v1.ResourceName,castvalue=k8s.io/apimachinery/pkg/api/resource.Quantity"`
 }

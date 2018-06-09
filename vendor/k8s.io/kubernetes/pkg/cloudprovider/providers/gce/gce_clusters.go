@@ -16,8 +16,13 @@ limitations under the License.
 
 package gce
 
+import "time"
+
 func newClustersMetricContext(request, zone string) *metricContext {
-	return newGenericMetricContext("clusters", request, unusedMetricLabel, zone, computeV1Version)
+	return &metricContext{
+		start:      time.Now(),
+		attributes: []string{"clusters_" + request, unusedMetricLabel, zone},
+	}
 }
 
 func (gce *GCECloud) ListClusters() ([]string, error) {

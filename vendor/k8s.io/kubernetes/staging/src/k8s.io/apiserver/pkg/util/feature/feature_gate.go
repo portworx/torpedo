@@ -21,7 +21,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -66,28 +65,23 @@ const (
 	Alpha = prerelease("ALPHA")
 	Beta  = prerelease("BETA")
 	GA    = prerelease("")
+
+	// Deprecated
+	Deprecated = prerelease("DEPRECATED")
 )
 
 // FeatureGate parses and stores flag gates for known features from
 // a string like feature1=true,feature2=false,...
 type FeatureGate interface {
-	// AddFlag adds a flag for setting global feature gates to the specified FlagSet.
 	AddFlag(fs *pflag.FlagSet)
-	// Set parses and stores flag gates for known features
-	// from a string like feature1=true,feature2=false,...
 	Set(value string) error
-	// Enabled returns true if the key is enabled.
 	Enabled(key Feature) bool
-	// Add adds features to the featureGate.
 	Add(features map[Feature]FeatureSpec) error
-	// KnownFeatures returns a slice of strings describing the FeatureGate's known features.
 	KnownFeatures() []string
 }
 
 // featureGate implements FeatureGate as well as pflag.Value for flag parsing.
 type featureGate struct {
-	lock sync.RWMutex
-
 	known   map[Feature]FeatureSpec
 	special map[Feature]func(*featureGate, bool)
 	enabled map[Feature]bool
@@ -121,19 +115,16 @@ func NewFeatureGate() *featureGate {
 	return f
 }
 
-// Set Parses a string of the form "key1=value1,key2=value2,..." into a
+// Set Parses a string of the form // "key1=value1,key2=value2,..." into a
 // map[string]bool of known keys or returns an error.
 func (f *featureGate) Set(value string) error {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
 	for _, s := range strings.Split(value, ",") {
 		if len(s) == 0 {
 			continue
 		}
 		arr := strings.SplitN(s, "=", 2)
 		k := Feature(strings.TrimSpace(arr[0]))
-		_, ok := f.known[Feature(k)]
+		featureSpec, ok := f.known[Feature(k)]
 		if !ok {
 			return fmt.Errorf("unrecognized key: %s", k)
 		}
@@ -146,6 +137,9 @@ func (f *featureGate) Set(value string) error {
 			return fmt.Errorf("invalid value of %s: %s, err: %v", k, v, err)
 		}
 		f.enabled[k] = boolValue
+		if boolValue && featureSpec.PreRelease == Deprecated {
+			glog.Warningf("enabling deprecated feature gate %s", k)
+		}
 
 		// Handle "special" features like "all alpha gates"
 		if fn, found := f.special[k]; found {
@@ -157,11 +151,7 @@ func (f *featureGate) Set(value string) error {
 	return nil
 }
 
-// String returns a string containing all enabled feature gates, formatted as "key1=value1,key2=value2,...".
 func (f *featureGate) String() string {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
 	pairs := []string{}
 	for k, v := range f.enabled {
 		pairs = append(pairs, fmt.Sprintf("%s=%t", k, v))
@@ -174,11 +164,7 @@ func (f *featureGate) Type() string {
 	return "mapStringBool"
 }
 
-// Add adds features to the featureGate.
 func (f *featureGate) Add(features map[Feature]FeatureSpec) error {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
 	if f.closed {
 		return fmt.Errorf("cannot add a feature gate after adding it to the flag set")
 	}
@@ -196,11 +182,7 @@ func (f *featureGate) Add(features map[Feature]FeatureSpec) error {
 	return nil
 }
 
-// Enabled returns true if the key is enabled.
 func (f *featureGate) Enabled(key Feature) bool {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
 	defaultValue := f.known[key].Default
 	if f.enabled != nil {
 		if v, ok := f.enabled[key]; ok {
@@ -212,9 +194,7 @@ func (f *featureGate) Enabled(key Feature) bool {
 
 // AddFlag adds a flag for setting global feature gates to the specified FlagSet.
 func (f *featureGate) AddFlag(fs *pflag.FlagSet) {
-	f.lock.Lock()
 	f.closed = true
-	f.lock.Unlock()
 
 	known := f.KnownFeatures()
 	fs.Var(f, flagName, ""+
@@ -222,10 +202,8 @@ func (f *featureGate) AddFlag(fs *pflag.FlagSet) {
 		"Options are:\n"+strings.Join(known, "\n"))
 }
 
-// KnownFeatures returns a slice of strings describing the FeatureGate's known features.
+// Returns a string describing the FeatureGate's known features.
 func (f *featureGate) KnownFeatures() []string {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
 	var known []string
 	for k, v := range f.known {
 		pre := ""

@@ -20,32 +20,31 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/utils/exec"
-	fakeexec "k8s.io/utils/exec/testing"
+	"k8s.io/kubernetes/pkg/util/exec"
 )
 
-func TestEnsureChain(t *testing.T) {
-	fcmd := fakeexec.FakeCmd{
-		CombinedOutputScript: []fakeexec.FakeCombinedOutputAction{
+func testEnsureChain(t *testing.T) {
+	fcmd := exec.FakeCmd{
+		CombinedOutputScript: []exec.FakeCombinedOutputAction{
 			// Does not Exists
-			func() ([]byte, error) { return nil, &fakeexec.FakeExitError{Status: 1} },
+			func() ([]byte, error) { return nil, &exec.FakeExitError{Status: 1} },
 			// Success
 			func() ([]byte, error) { return []byte{}, nil },
 			// Exists
 			func() ([]byte, error) { return nil, nil },
 			// Does not Exists
-			func() ([]byte, error) { return nil, &fakeexec.FakeExitError{Status: 1} },
+			func() ([]byte, error) { return nil, &exec.FakeExitError{Status: 1} },
 			// Fail to create chain
-			func() ([]byte, error) { return nil, &fakeexec.FakeExitError{Status: 2} },
+			func() ([]byte, error) { return nil, &exec.FakeExitError{Status: 2} },
 		},
 	}
-	fexec := fakeexec.FakeExec{
-		CommandScript: []fakeexec.FakeCommandAction{
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
+	fexec := exec.FakeExec{
+		CommandScript: []exec.FakeCommandAction{
+			func(cmd string, args ...string) exec.Cmd { return exec.InitFakeCmd(&fcmd, cmd, args...) },
+			func(cmd string, args ...string) exec.Cmd { return exec.InitFakeCmd(&fcmd, cmd, args...) },
+			func(cmd string, args ...string) exec.Cmd { return exec.InitFakeCmd(&fcmd, cmd, args...) },
+			func(cmd string, args ...string) exec.Cmd { return exec.InitFakeCmd(&fcmd, cmd, args...) },
+			func(cmd string, args ...string) exec.Cmd { return exec.InitFakeCmd(&fcmd, cmd, args...) },
 		},
 	}
 
@@ -76,9 +75,9 @@ func TestEnsureChain(t *testing.T) {
 	}
 }
 
-func TestEnsureRule(t *testing.T) {
-	fcmd := fakeexec.FakeCmd{
-		CombinedOutputScript: []fakeexec.FakeCombinedOutputAction{
+func testEnsureRule(t *testing.T) {
+	fcmd := exec.FakeCmd{
+		CombinedOutputScript: []exec.FakeCombinedOutputAction{
 			// Exists
 			func() ([]byte, error) {
 				return []byte(`Bridge table: filter
@@ -94,14 +93,14 @@ Bridge chain: OUTPUT, entries: 4, policy: ACCEPT
 Bridge chain: TEST, entries: 0, policy: ACCEPT`), nil
 			},
 			// Fail to create
-			func() ([]byte, error) { return nil, &fakeexec.FakeExitError{Status: 2} },
+			func() ([]byte, error) { return nil, &exec.FakeExitError{Status: 2} },
 		},
 	}
-	fexec := fakeexec.FakeExec{
-		CommandScript: []fakeexec.FakeCommandAction{
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
-			func(cmd string, args ...string) exec.Cmd { return fakeexec.InitFakeCmd(&fcmd, cmd, args...) },
+	fexec := exec.FakeExec{
+		CommandScript: []exec.FakeCommandAction{
+			func(cmd string, args ...string) exec.Cmd { return exec.InitFakeCmd(&fcmd, cmd, args...) },
+			func(cmd string, args ...string) exec.Cmd { return exec.InitFakeCmd(&fcmd, cmd, args...) },
+			func(cmd string, args ...string) exec.Cmd { return exec.InitFakeCmd(&fcmd, cmd, args...) },
 		},
 	}
 
@@ -119,7 +118,7 @@ Bridge chain: TEST, entries: 0, policy: ACCEPT`), nil
 	if exists {
 		t.Errorf("expected exists = false")
 	}
-	errStr := "Failed to ensure rule: exit 2, output: "
+	errStr := "Failed to ensure rule: exist 2, output: "
 	if err == nil || err.Error() != errStr {
 		t.Errorf("expected error: %q", errStr)
 	}

@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -8,6 +10,7 @@ load(
 go_library(
     name = "go_default_library",
     srcs = ["doc.go"],
+    tags = ["automanaged"],
 )
 
 filegroup(
@@ -22,8 +25,10 @@ filegroup(
     srcs = [
         ":package-srcs",
         "//federation/pkg/federation-controller/cluster:all-srcs",
+        "//federation/pkg/federation-controller/deployment:all-srcs",
         "//federation/pkg/federation-controller/ingress:all-srcs",
-        "//federation/pkg/federation-controller/job:all-srcs",
+        "//federation/pkg/federation-controller/namespace:all-srcs",
+        "//federation/pkg/federation-controller/replicaset:all-srcs",
         "//federation/pkg/federation-controller/service:all-srcs",
         "//federation/pkg/federation-controller/sync:all-srcs",
         "//federation/pkg/federation-controller/util:all-srcs",

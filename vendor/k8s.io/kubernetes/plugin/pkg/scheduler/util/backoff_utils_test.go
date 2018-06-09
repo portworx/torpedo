@@ -17,10 +17,9 @@ limitations under the License.
 package util
 
 import (
+	ktypes "k8s.io/apimachinery/pkg/types"
 	"testing"
 	"time"
-
-	ktypes "k8s.io/apimachinery/pkg/types"
 )
 
 type fakeClock struct {

@@ -64,13 +64,7 @@ type TestPatchSubType struct {
 	StringField string `json:"theField"`
 }
 
-func (obj *testPatchType) DeepCopyObject() runtime.Object {
-	if obj == nil {
-		return nil
-	}
-	clone := *obj
-	return &clone
-}
+func (obj *testPatchType) GetObjectKind() schema.ObjectKind { return &obj.TypeMeta }
 
 func TestPatchAnonymousField(t *testing.T) {
 	testGV := schema.GroupVersion{Group: "", Version: "v"}

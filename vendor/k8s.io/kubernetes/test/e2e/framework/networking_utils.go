@@ -29,7 +29,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -38,10 +37,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
-	clientset "k8s.io/client-go/kubernetes"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/kubernetes/pkg/api/testapi"
-	imageutils "k8s.io/kubernetes/test/utils/image"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	coreclientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset/typed/core/v1"
 )
 
 const (
@@ -50,6 +49,8 @@ const (
 	TestContainerHttpPort = 8080
 	ClusterHttpPort       = 80
 	ClusterUdpPort        = 90
+	NetexecImageName      = "gcr.io/google_containers/netexec:1.7"
+	HostexecImageName     = "gcr.io/google_containers/hostexec:1.2"
 	testPodName           = "test-container-pod"
 	hostTestPodName       = "host-test-container-pod"
 	nodePortServiceName   = "node-port-service"
@@ -62,8 +63,6 @@ const (
 	// Maximum number of pods in a test, to make test work in large clusters.
 	maxNetProxyPodsCount = 10
 )
-
-var NetexecImageName = imageutils.GetE2EImage(imageutils.Netexec)
 
 // NewNetworkingTestConfig creates and sets up a new test config helper.
 func NewNetworkingTestConfig(f *Framework) *NetworkingTestConfig {
@@ -215,7 +214,7 @@ func (config *NetworkingTestConfig) DialFromContainer(protocol, containerIP, tar
 	}
 
 	config.diagnoseMissingEndpoints(eps)
-	Failf("Failed to find expected endpoints:\nTries %d\nCommand %v\nretrieved %v\nexpected %v\n", maxTries, cmd, eps, expectedEps)
+	Failf("Failed to find expected endpoints:\nTries %d\nCommand %v\nretrieved %v\nexpected %v\n", minTries, cmd, eps, expectedEps)
 }
 
 // DialFromNode executes a tcp or udp request based on protocol via kubectl exec
@@ -271,7 +270,7 @@ func (config *NetworkingTestConfig) DialFromNode(protocol, targetIP string, targ
 	}
 
 	config.diagnoseMissingEndpoints(eps)
-	Failf("Failed to find expected endpoints:\nTries %d\nCommand %v\nretrieved %v\nexpected %v\n", maxTries, cmd, eps, expectedEps)
+	Failf("Failed to find expected endpoints:\nTries %d\nCommand %v\nretrieved %v\nexpected %v\n", minTries, cmd, eps, expectedEps)
 }
 
 // GetSelfURL executes a curl against the given path via kubectl exec into a
@@ -280,22 +279,9 @@ func (config *NetworkingTestConfig) DialFromNode(protocol, targetIP string, targ
 func (config *NetworkingTestConfig) GetSelfURL(port int32, path string, expected string) {
 	cmd := fmt.Sprintf("curl -i -q -s --connect-timeout 1 http://localhost:%d%s", port, path)
 	By(fmt.Sprintf("Getting kube-proxy self URL %s", path))
-	config.executeCurlCmd(cmd, expected)
-}
 
-// GetSelfStatusCode executes a curl against the given path via kubectl exec into a
-// test container running with host networking, and fails if the returned status
-// code doesn't match the expected string.
-func (config *NetworkingTestConfig) GetSelfURLStatusCode(port int32, path string, expected string) {
-	// check status code
-	cmd := fmt.Sprintf("curl -o /dev/null -i -q -s -w %%{http_code} --connect-timeout 1 http://localhost:%d%s", port, path)
-	By(fmt.Sprintf("Checking status code against http://localhost:%d%s", port, path))
-	config.executeCurlCmd(cmd, expected)
-}
-
-func (config *NetworkingTestConfig) executeCurlCmd(cmd string, expected string) {
 	// These are arbitrary timeouts. The curl command should pass on first try,
-	// unless remote server is starved/bootstrapping/restarting etc.
+	// unless kubeproxy is starved/bootstrapping/restarting etc.
 	const retryInterval = 1 * time.Second
 	const retryTimeout = 30 * time.Second
 	podName := config.HostTestContainerPod.Name
@@ -339,7 +325,7 @@ func (config *NetworkingTestConfig) createNetShellPodSpec(podName, hostname stri
 	pod := &v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
-			APIVersion: testapi.Groups[v1.GroupName].GroupVersion().String(),
+			APIVersion: api.Registry.GroupOrDie(v1.GroupName).GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -383,7 +369,7 @@ func (config *NetworkingTestConfig) createTestPodSpec() *v1.Pod {
 	pod := &v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
-			APIVersion: testapi.Groups[v1.GroupName].GroupVersion().String(),
+			APIVersion: api.Registry.GroupOrDie(v1.GroupName).GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testPodName,
@@ -650,20 +636,11 @@ func TestReachableHTTP(ip string, port int, request string, expect string) (bool
 	return TestReachableHTTPWithContent(ip, port, request, expect, nil)
 }
 
-func TestReachableHTTPWithRetriableErrorCodes(ip string, port int, request string, expect string, retriableErrCodes []int) (bool, error) {
-	return TestReachableHTTPWithContentTimeoutWithRetriableErrorCodes(ip, port, request, expect, nil, retriableErrCodes, time.Second*5)
-}
-
 func TestReachableHTTPWithContent(ip string, port int, request string, expect string, content *bytes.Buffer) (bool, error) {
 	return TestReachableHTTPWithContentTimeout(ip, port, request, expect, content, 5*time.Second)
 }
 
 func TestReachableHTTPWithContentTimeout(ip string, port int, request string, expect string, content *bytes.Buffer, timeout time.Duration) (bool, error) {
-	return TestReachableHTTPWithContentTimeoutWithRetriableErrorCodes(ip, port, request, expect, content, []int{}, timeout)
-}
-
-func TestReachableHTTPWithContentTimeoutWithRetriableErrorCodes(ip string, port int, request string, expect string, content *bytes.Buffer, retriableErrCodes []int, timeout time.Duration) (bool, error) {
-
 	url := fmt.Sprintf("http://%s:%d%s", ip, port, request)
 	if ip == "" {
 		Failf("Got empty IP for reachability check (%s)", url)
@@ -688,11 +665,6 @@ func TestReachableHTTPWithContentTimeoutWithRetriableErrorCodes(ip string, port 
 		return false, nil
 	}
 	if resp.StatusCode != 200 {
-		for _, code := range retriableErrCodes {
-			if resp.StatusCode == code {
-				return false, nil
-			}
-		}
 		return false, fmt.Errorf("received non-success return status %q trying to access %s; got body: %s",
 			resp.Status, url, string(body))
 	}

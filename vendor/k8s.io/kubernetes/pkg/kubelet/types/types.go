@@ -20,8 +20,7 @@ import (
 	"net/http"
 	"time"
 
-	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubernetes/pkg/api/v1"
 )
 
 // TODO: Reconcile custom types in kubelet/types and this subpackage
@@ -92,9 +91,3 @@ type Reservation struct {
 	// Kubernetes represents resources reserved for kubernetes system components.
 	Kubernetes v1.ResourceList
 }
-
-// A pod UID which has been translated/resolved to the representation known to kubelets.
-type ResolvedPodUID types.UID
-
-// A pod UID for a mirror pod.
-type MirrorPodUID types.UID

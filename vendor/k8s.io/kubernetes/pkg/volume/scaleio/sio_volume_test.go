@@ -24,12 +24,12 @@ import (
 	"testing"
 
 	"github.com/golang/glog"
-
-	api "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	fakeclient "k8s.io/client-go/kubernetes/fake"
 	utiltesting "k8s.io/client-go/util/testing"
+	api "k8s.io/kubernetes/pkg/api/v1"
+	fakeclient "k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
+	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 	volumetest "k8s.io/kubernetes/pkg/volume/testing"
 )
@@ -60,16 +60,10 @@ func newPluginMgr(t *testing.T) (*volume.VolumePluginMgr, string) {
 			"password": []byte("password"),
 		},
 	}
-
 	fakeClient := fakeclient.NewSimpleClientset(config)
-	host := volumetest.NewFakeVolumeHostWithNodeLabels(
-		tmpDir,
-		fakeClient,
-		nil,
-		map[string]string{sdcGuidLabelName: "abc-123"},
-	)
+	host := volumetest.NewFakeVolumeHost(tmpDir, fakeClient, nil)
 	plugMgr := &volume.VolumePluginMgr{}
-	plugMgr.InitPlugins(ProbeVolumePlugins(), nil /* prober */, host)
+	plugMgr.InitPlugins(ProbeVolumePlugins(), host)
 
 	return plugMgr, tmpDir
 }
@@ -143,6 +137,8 @@ func TestVolumeMounterUnmounter(t *testing.T) {
 		t.Errorf("Cannot assert plugin to be type sioPlugin")
 	}
 
+	sioPlug.mounter = &mount.FakeMounter{}
+
 	vol := &api.Volume{
 		Name: testSioVolName,
 		VolumeSource: api.VolumeSource{
@@ -199,11 +195,6 @@ func TestVolumeMounterUnmounter(t *testing.T) {
 
 	if sio.isMultiMap {
 		t.Errorf("SetUp() - expecting multiple volume disabled by default")
-	}
-
-	// did we read sdcGuid label
-	if _, ok := sioVol.sioMgr.configData[confKey.sdcGuid]; !ok {
-		t.Errorf("Expected to find node label scaleio.sdcGuid, but did not find it")
 	}
 
 	// rebuild spec
@@ -331,11 +322,6 @@ func TestVolumeProvisioner(t *testing.T) {
 	sioVol.sioMgr.client = sio
 	if err := sioMounter.SetUp(nil); err != nil {
 		t.Fatalf("Expected success, got: %v", err)
-	}
-
-	// did we read sdcGuid label
-	if _, ok := sioVol.sioMgr.configData[confKey.sdcGuid]; !ok {
-		t.Errorf("Expected to find node label scaleio.sdcGuid, but did not find it")
 	}
 
 	// isMultiMap applied

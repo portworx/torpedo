@@ -24,8 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/utils/exec"
-	fakeexec "k8s.io/utils/exec/testing"
+	"k8s.io/kubernetes/pkg/util/exec"
 )
 
 func TestFindPairInterfaceOfContainerInterface(t *testing.T) {
@@ -55,15 +54,15 @@ func TestFindPairInterfaceOfContainerInterface(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		fcmd := fakeexec.FakeCmd{
-			CombinedOutputScript: []fakeexec.FakeCombinedOutputAction{
+		fcmd := exec.FakeCmd{
+			CombinedOutputScript: []exec.FakeCombinedOutputAction{
 				func() ([]byte, error) { return []byte(test.output), test.err },
 			},
 		}
-		fexec := fakeexec.FakeExec{
-			CommandScript: []fakeexec.FakeCommandAction{
+		fexec := exec.FakeExec{
+			CommandScript: []exec.FakeCommandAction{
 				func(cmd string, args ...string) exec.Cmd {
-					return fakeexec.InitFakeCmd(&fcmd, cmd, args...)
+					return exec.InitFakeCmd(&fcmd, cmd, args...)
 				},
 			},
 			LookPathFunc: func(file string) (string, error) {

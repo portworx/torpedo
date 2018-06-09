@@ -25,11 +25,10 @@ import (
 	"path"
 	"strings"
 
-	"k8s.io/api/core/v1"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/features"
-	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
-	utilfile "k8s.io/kubernetes/pkg/util/file"
+	"k8s.io/kubernetes/pkg/util"
 )
 
 // Whether AppArmor should be disabled by default.
@@ -112,8 +111,8 @@ func validateHost(runtime string) error {
 	}
 
 	// Check runtime support. Currently only Docker is supported.
-	if runtime != kubetypes.DockerContainerRuntime && runtime != kubetypes.RemoteContainerRuntime {
-		return fmt.Errorf("AppArmor is only enabled for 'docker' and 'remote' runtimes. Found: %q.", runtime)
+	if runtime != "docker" {
+		return fmt.Errorf("AppArmor is only enabled for 'docker' runtime. Found: %q.", runtime)
 	}
 
 	return nil
@@ -195,7 +194,7 @@ func getAppArmorFS() (string, error) {
 		}
 		if fields[2] == "securityfs" {
 			appArmorFS := path.Join(fields[1], "apparmor")
-			if ok, err := utilfile.FileExists(appArmorFS); !ok {
+			if ok, err := util.FileExists(appArmorFS); !ok {
 				msg := fmt.Sprintf("path %s does not exist", appArmorFS)
 				if err != nil {
 					return "", fmt.Errorf("%s: %v", msg, err)

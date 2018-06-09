@@ -1,6 +1,7 @@
 // Package context provides several utilities for working with
-// Go's context in http requests. Primarily, the focus is on logging relevant
-// request information but this package is not limited to that purpose.
+// golang.org/x/net/context in http requests. Primarily, the focus is on
+// logging relevant request information but this package is not limited to
+// that purpose.
 //
 // The easiest way to get started is to get the background context:
 //
@@ -63,7 +64,7 @@
 // Note that this only affects the new context, the previous context, with the
 // version field, can be used independently. Put another way, the new logger,
 // added to the request context, is unique to that context and can have
-// request scoped variables.
+// request scoped varaibles.
 //
 // HTTP Requests
 //

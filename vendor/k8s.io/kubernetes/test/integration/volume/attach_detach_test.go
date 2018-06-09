@@ -21,14 +21,14 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
-	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/kubernetes/pkg/api/testapi"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/externalversions"
 	fakecloud "k8s.io/kubernetes/pkg/cloudprovider/providers/fake"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach"
 	volumecache "k8s.io/kubernetes/pkg/controller/volume/attachdetach/cache"
@@ -82,6 +82,7 @@ func TestPodDeletionWithDswp(t *testing.T) {
 	_, server, closeFn := framework.RunAMaster(framework.NewIntegrationTestMasterConfig())
 	defer closeFn()
 	namespaceName := "test-pod-deletion"
+
 	node := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node-sandbox",
@@ -282,7 +283,7 @@ func TestPodUpdateWithKeepTerminatedPodVolumes(t *testing.T) {
 // running the RC manager to prevent the rc manager from creating new pods
 // rather than adopting the existing ones.
 func waitToObservePods(t *testing.T, podInformer cache.SharedIndexInformer, podNum int) {
-	if err := wait.Poll(100*time.Millisecond, 60*time.Second, func() (bool, error) {
+	if err := wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
 		objects := podInformer.GetIndexer().List()
 		if len(objects) == podNum {
 			return true, nil
@@ -323,7 +324,7 @@ func waitForPodFuncInDSWP(t *testing.T, dswp volumecache.DesiredStateOfWorld, ch
 func createAdClients(ns *v1.Namespace, t *testing.T, server *httptest.Server, syncPeriod time.Duration) (*clientset.Clientset, attachdetach.AttachDetachController, informers.SharedInformerFactory) {
 	config := restclient.Config{
 		Host:          server.URL,
-		ContentConfig: restclient.ContentConfig{GroupVersion: testapi.Groups[v1.GroupName].GroupVersion()},
+		ContentConfig: restclient.ContentConfig{GroupVersion: &api.Registry.GroupOrDie(v1.GroupName).GroupVersion},
 		QPS:           1000000,
 		Burst:         1000000,
 	}
@@ -346,12 +347,6 @@ func createAdClients(ns *v1.Namespace, t *testing.T, server *httptest.Server, sy
 	plugins := []volume.VolumePlugin{plugin}
 	cloud := &fakecloud.FakeCloud{}
 	informers := informers.NewSharedInformerFactory(testClient, resyncPeriod)
-	timers := attachdetach.TimerConfig{
-		ReconcilerLoopPeriod:                              100 * time.Millisecond,
-		ReconcilerMaxWaitForUnmountDuration:               6 * time.Second,
-		DesiredStateOfWorldPopulatorLoopSleepPeriod:       1 * time.Second,
-		DesiredStateOfWorldPopulatorListPodsRetryDuration: 3 * time.Second,
-	}
 	ctrl, err := attachdetach.NewAttachDetachController(
 		testClient,
 		informers.Core().V1().Pods(),
@@ -360,10 +355,8 @@ func createAdClients(ns *v1.Namespace, t *testing.T, server *httptest.Server, sy
 		informers.Core().V1().PersistentVolumes(),
 		cloud,
 		plugins,
-		nil, /* prober */
 		false,
-		5*time.Second,
-		timers)
+		time.Second*5)
 
 	if err != nil {
 		t.Fatalf("Error creating AttachDetach : %v", err)
@@ -431,7 +424,14 @@ func TestPodAddedByDswp(t *testing.T) {
 
 	// let's stop pod events from getting triggered
 	close(podStopCh)
-	podNew := pod.DeepCopy()
+	podObj, err := api.Scheme.DeepCopy(pod)
+	if err != nil {
+		t.Fatalf("Error copying pod : %v", err)
+	}
+	podNew, ok := podObj.(*v1.Pod)
+	if !ok {
+		t.Fatalf("Error converting pod : %v", err)
+	}
 	newPodName := "newFakepod"
 	podNew.SetName(newPodName)
 	err = podInformer.GetStore().Add(podNew)

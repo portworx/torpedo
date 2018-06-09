@@ -22,10 +22,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 )
 
-// +genclient
-// +genclient:method=GetScale,verb=get,subresource=scale,result=k8s.io/kubernetes/pkg/apis/extensions.Scale
-// +genclient:method=UpdateScale,verb=update,subresource=scale,input=k8s.io/kubernetes/pkg/apis/extensions.Scale,result=k8s.io/kubernetes/pkg/apis/extensions.Scale
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient=true
 
 // StatefulSet represents a set of pods with consistent identities.
 // Identities are defined as:
@@ -189,15 +186,7 @@ type StatefulSetStatus struct {
 	// updateRevision, if not empty, indicates the version of the StatefulSet used to generate Pods in the sequence
 	// [replicas-updatedReplicas,replicas)
 	UpdateRevision string
-
-	// collisionCount is the count of hash collisions for the StatefulSet. The StatefulSet controller
-	// uses this field as a collision avoidance mechanism when it needs to create the name for the
-	// newest ControllerRevision.
-	// +optional
-	CollisionCount *int32
 }
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // StatefulSetList is a collection of StatefulSets.
 type StatefulSetList struct {
@@ -207,8 +196,7 @@ type StatefulSetList struct {
 	Items []StatefulSet
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient=true
 
 // ControllerRevision implements an immutable snapshot of state data. Clients
 // are responsible for serializing and deserializing the objects that contain
@@ -229,8 +217,6 @@ type ControllerRevision struct {
 	// Revision indicates the revision of the state represented by Data.
 	Revision int64
 }
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ControllerRevisionList is a resource containing a list of ControllerRevision objects.
 type ControllerRevisionList struct {

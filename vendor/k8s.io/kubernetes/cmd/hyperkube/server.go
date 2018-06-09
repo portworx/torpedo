@@ -21,12 +21,12 @@ import (
 	"strings"
 
 	"k8s.io/apiserver/pkg/util/flag"
-	utiltemplate "k8s.io/kubernetes/pkg/util/template"
+	"k8s.io/kubernetes/pkg/util"
 
 	"github.com/spf13/pflag"
 )
 
-type serverRunFunc func(s *Server, args []string, stopCh <-chan struct{}) error
+type serverRunFunc func(s *Server, args []string) error
 
 // Server describes a server that this binary can morph into.
 type Server struct {
@@ -34,7 +34,6 @@ type Server struct {
 	Long            string        // Longer free form description of the server
 	Run             serverRunFunc // Run the server.  This is not expected to return.
 	AlternativeName string
-	RespectsStopCh  bool
 
 	flags *pflag.FlagSet // Flags for the command (and all dependents)
 	name  string
@@ -50,7 +49,7 @@ func (s *Server) Usage() error {
 Available Flags:
 {{.Flags.FlagUsages}}`
 
-	return utiltemplate.ExecuteTemplate(s.hk.Out(), tt, s)
+	return util.ExecuteTemplate(s.hk.Out(), tt, s)
 }
 
 // Name returns the name of the command as derived from the usage line.

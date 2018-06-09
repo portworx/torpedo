@@ -25,14 +25,13 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
+	"k8s.io/kubernetes/pkg/util/exec"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
-	"k8s.io/kubernetes/pkg/volume/util/volumehelper"
 )
 
 type gcePersistentDiskAttacher struct {
@@ -57,7 +56,7 @@ func (plugin *gcePersistentDiskPlugin) NewAttacher() (volume.Attacher, error) {
 }
 
 func (plugin *gcePersistentDiskPlugin) GetDeviceMountRefs(deviceMountPath string) ([]string, error) {
-	mounter := plugin.host.GetMounter(plugin.GetPluginName())
+	mounter := plugin.host.GetMounter()
 	return mount.GetMountRefs(mounter, deviceMountPath)
 }
 
@@ -131,7 +130,7 @@ func (attacher *gcePersistentDiskAttacher) VolumesAreAttached(specs []*volume.Sp
 	return volumesAttachedCheck, nil
 }
 
-func (attacher *gcePersistentDiskAttacher) WaitForAttach(spec *volume.Spec, devicePath string, _ *v1.Pod, timeout time.Duration) (string, error) {
+func (attacher *gcePersistentDiskAttacher) WaitForAttach(spec *volume.Spec, devicePath string, timeout time.Duration) (string, error) {
 	ticker := time.NewTicker(checkSleepDuration)
 	defer ticker.Stop()
 	timer := time.NewTimer(timeout)
@@ -186,7 +185,7 @@ func (attacher *gcePersistentDiskAttacher) GetDeviceMountPath(
 
 func (attacher *gcePersistentDiskAttacher) MountDevice(spec *volume.Spec, devicePath string, deviceMountPath string) error {
 	// Only mount the PD globally once.
-	mounter := attacher.host.GetMounter(gcePersistentDiskPluginName)
+	mounter := attacher.host.GetMounter()
 	notMnt, err := mounter.IsLikelyNotMountPoint(deviceMountPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -209,7 +208,7 @@ func (attacher *gcePersistentDiskAttacher) MountDevice(spec *volume.Spec, device
 		options = append(options, "ro")
 	}
 	if notMnt {
-		diskMounter := volumehelper.NewSafeFormatAndMountFromHost(gcePersistentDiskPluginName, attacher.host)
+		diskMounter := &mount.SafeFormatAndMount{Interface: mounter, Runner: exec.New()}
 		mountOptions := volume.MountOptionFromSpec(spec, options...)
 		err = diskMounter.FormatAndMount(devicePath, deviceMountPath, volumeSource.FSType, mountOptions)
 		if err != nil {
@@ -273,5 +272,5 @@ func (detacher *gcePersistentDiskDetacher) Detach(deviceMountPath string, nodeNa
 }
 
 func (detacher *gcePersistentDiskDetacher) UnmountDevice(deviceMountPath string) error {
-	return volumeutil.UnmountPath(deviceMountPath, detacher.host.GetMounter(gcePersistentDiskPluginName))
+	return volumeutil.UnmountPath(deviceMountPath, detacher.host.GetMounter())
 }

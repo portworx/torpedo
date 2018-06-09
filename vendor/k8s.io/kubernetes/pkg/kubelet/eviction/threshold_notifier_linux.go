@@ -1,3 +1,5 @@
+// +build cgo
+
 /*
 Copyright 2016 The Kubernetes Authors.
 
@@ -16,11 +18,16 @@ limitations under the License.
 
 package eviction
 
+/*
+#include <sys/eventfd.h>
+*/
+import "C"
+
 import (
 	"fmt"
+	"syscall"
 
 	"github.com/golang/glog"
-	"golang.org/x/sys/unix"
 )
 
 type memcgThresholdNotifier struct {
@@ -36,40 +43,41 @@ var _ ThresholdNotifier = &memcgThresholdNotifier{}
 // NewMemCGThresholdNotifier sends notifications when a cgroup threshold
 // is crossed (in either direction) for a given cgroup attribute
 func NewMemCGThresholdNotifier(path, attribute, threshold, description string, handler thresholdNotifierHandlerFunc) (ThresholdNotifier, error) {
-	watchfd, err := unix.Open(fmt.Sprintf("%s/%s", path, attribute), unix.O_RDONLY, 0)
+	watchfd, err := syscall.Open(fmt.Sprintf("%s/%s", path, attribute), syscall.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			unix.Close(watchfd)
+			syscall.Close(watchfd)
 		}
 	}()
-	controlfd, err := unix.Open(fmt.Sprintf("%s/cgroup.event_control", path), unix.O_WRONLY, 0)
+	controlfd, err := syscall.Open(fmt.Sprintf("%s/cgroup.event_control", path), syscall.O_WRONLY, 0)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			unix.Close(controlfd)
+			syscall.Close(controlfd)
 		}
 	}()
-	eventfd, err := unix.Eventfd(0, unix.EFD_CLOEXEC)
+	efd, err := C.eventfd(0, C.EFD_CLOEXEC)
 	if err != nil {
 		return nil, err
 	}
+	eventfd := int(efd)
 	if eventfd < 0 {
 		err = fmt.Errorf("eventfd call failed")
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			unix.Close(eventfd)
+			syscall.Close(eventfd)
 		}
 	}()
 	glog.V(2).Infof("eviction: setting notification threshold to %s", threshold)
 	config := fmt.Sprintf("%d %d %s", eventfd, watchfd, threshold)
-	_, err = unix.Write(controlfd, []byte(config))
+	_, err = syscall.Write(controlfd, []byte(config))
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +93,7 @@ func NewMemCGThresholdNotifier(path, attribute, threshold, description string, h
 func getThresholdEvents(eventfd int, eventCh chan<- struct{}, stopCh <-chan struct{}) {
 	for {
 		buf := make([]byte, 8)
-		_, err := unix.Read(eventfd, buf)
+		_, err := syscall.Read(eventfd, buf)
 		if err != nil {
 			return
 		}
@@ -105,9 +113,9 @@ func (n *memcgThresholdNotifier) Start(stopCh <-chan struct{}) {
 		select {
 		case <-stopCh:
 			glog.V(2).Infof("eviction: stopping threshold notifier")
-			unix.Close(n.watchfd)
-			unix.Close(n.controlfd)
-			unix.Close(n.eventfd)
+			syscall.Close(n.watchfd)
+			syscall.Close(n.controlfd)
+			syscall.Close(n.eventfd)
 			return
 		case <-eventCh:
 			glog.V(2).Infof("eviction: threshold crossed")

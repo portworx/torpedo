@@ -23,22 +23,20 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
 	appcschema "github.com/appc/spec/schema"
 	appctypes "github.com/appc/spec/schema/types"
-	"github.com/coreos/go-systemd/unit"
 	rktapi "github.com/coreos/rkt/api/v1alpha"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/errors"
 	utiltesting "k8s.io/client-go/util/testing"
+	"k8s.io/kubernetes/pkg/api/v1"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	containertesting "k8s.io/kubernetes/pkg/kubelet/container/testing"
 	kubetesting "k8s.io/kubernetes/pkg/kubelet/container/testing"
@@ -47,8 +45,8 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/network/kubenet"
 	nettest "k8s.io/kubernetes/pkg/kubelet/network/testing"
 	"k8s.io/kubernetes/pkg/kubelet/types"
-	"k8s.io/utils/exec"
-	fakeexec "k8s.io/utils/exec/testing"
+	utilexec "k8s.io/kubernetes/pkg/util/exec"
+	"strings"
 )
 
 func mustMarshalPodManifest(man *appcschema.PodManifest) []byte {
@@ -938,7 +936,6 @@ func baseImageManifest(t *testing.T) *appcschema.ImageManifest {
 func baseAppWithRootUserGroup(t *testing.T) *appctypes.App {
 	app := baseApp(t)
 	app.User, app.Group = "0", "0"
-	app.Isolators = append(app.Isolators)
 	return app
 }
 
@@ -1073,8 +1070,8 @@ func TestSetApp(t *testing.T) {
 				Command:    []string{"/bin/bar", "$(env-bar)"},
 				WorkingDir: tmpDir,
 				Resources: v1.ResourceRequirements{
-					Limits:   v1.ResourceList{v1.ResourceCPU: resource.MustParse("50m"), v1.ResourceMemory: resource.MustParse("50M")},
-					Requests: v1.ResourceList{v1.ResourceCPU: resource.MustParse("5m"), v1.ResourceMemory: resource.MustParse("5M")},
+					Limits:   v1.ResourceList{"cpu": resource.MustParse("50m"), "memory": resource.MustParse("50M")},
+					Requests: v1.ResourceList{"cpu": resource.MustParse("5m"), "memory": resource.MustParse("5M")},
 				},
 			},
 			mountPoints: []appctypes.MountPoint{
@@ -1137,8 +1134,8 @@ func TestSetApp(t *testing.T) {
 				Args:       []string{"hello", "world", "$(env-bar)"},
 				WorkingDir: tmpDir,
 				Resources: v1.ResourceRequirements{
-					Limits:   v1.ResourceList{v1.ResourceCPU: resource.MustParse("50m")},
-					Requests: v1.ResourceList{v1.ResourceMemory: resource.MustParse("5M")},
+					Limits:   v1.ResourceList{"cpu": resource.MustParse("50m")},
+					Requests: v1.ResourceList{"memory": resource.MustParse("5M")},
 				},
 			},
 			mountPoints: []appctypes.MountPoint{
@@ -1417,8 +1414,8 @@ func TestGenerateRunCommand(t *testing.T) {
 			HostName:    tt.hostName,
 			Err:         tt.err,
 		}
-		rkt.execer = &fakeexec.FakeExec{CommandScript: []fakeexec.FakeCommandAction{func(cmd string, args ...string) exec.Cmd {
-			return fakeexec.InitFakeCmd(&fakeexec.FakeCmd{}, cmd, args...)
+		rkt.execer = &utilexec.FakeExec{CommandScript: []utilexec.FakeCommandAction{func(cmd string, args ...string) utilexec.Cmd {
+			return utilexec.InitFakeCmd(&utilexec.FakeCmd{}, cmd, args...)
 		}}}
 
 		// a command should be created of this form, but the returned command shouldn't be called (asserted by having no expectations on it)
@@ -1636,7 +1633,7 @@ func TestGarbageCollect(t *testing.T) {
 	fs := newFakeSystemd()
 	cli := newFakeRktCli()
 	fakeOS := kubetesting.NewFakeOS()
-	deletionProvider := newFakePodDeletionProvider()
+	getter := newFakePodGetter()
 	fug := newfakeUnitGetter()
 	frh := &containertesting.FakeRuntimeHelper{}
 
@@ -1644,7 +1641,7 @@ func TestGarbageCollect(t *testing.T) {
 		os:                  fakeOS,
 		cli:                 cli,
 		apisvc:              fr,
-		podDeletionProvider: deletionProvider,
+		podGetter:           getter,
 		systemd:             fs,
 		containerRefManager: kubecontainer.NewRefManager(),
 		unitGetter:          fug,
@@ -1830,7 +1827,7 @@ func TestGarbageCollect(t *testing.T) {
 
 		fr.pods = tt.pods
 		for _, p := range tt.apiPods {
-			deletionProvider.pods[p.UID] = struct{}{}
+			getter.pods[p.UID] = p
 		}
 
 		allSourcesReady := true
@@ -1862,7 +1859,7 @@ func TestGarbageCollect(t *testing.T) {
 		ctrl.Finish()
 		fakeOS.Removes = []string{}
 		fs.resetFailedUnits = []string{}
-		deletionProvider.pods = make(map[kubetypes.UID]struct{})
+		getter.pods = make(map[kubetypes.UID]*v1.Pod)
 	}
 }
 
@@ -2075,56 +2072,6 @@ func TestGetPodSystemdServiceFiles(t *testing.T) {
 		for _, f := range serviceFiles {
 			assert.Contains(t, tt.expected, f.Name(), fmt.Sprintf("Test case #%d", i))
 
-		}
-	}
-}
-
-func TestSetupSystemdCustomFields(t *testing.T) {
-	testCases := []struct {
-		unitOpts       []*unit.UnitOption
-		podAnnotations map[string]string
-		expectedValues []string
-		raiseErr       bool
-	}{
-		// without annotation
-		{
-			[]*unit.UnitOption{
-				{Section: "Service", Name: "ExecStart", Value: "/bin/true"},
-			},
-			map[string]string{},
-			[]string{"/bin/true"},
-			false,
-		},
-		// with valid annotation for LimitNOFile
-		{
-			[]*unit.UnitOption{
-				{Section: "Service", Name: "ExecStart", Value: "/bin/true"},
-			},
-			map[string]string{k8sRktLimitNoFileAnno: "1024"},
-			[]string{"/bin/true", "1024"},
-			false,
-		},
-		// with invalid annotation for LimitNOFile
-		{
-			[]*unit.UnitOption{
-				{Section: "Service", Name: "ExecStart", Value: "/bin/true"},
-			},
-			map[string]string{k8sRktLimitNoFileAnno: "-1"},
-			[]string{"/bin/true"},
-			true,
-		},
-	}
-
-	for i, tt := range testCases {
-		raiseErr := false
-		newUnitsOpts, err := setupSystemdCustomFields(tt.podAnnotations, tt.unitOpts)
-		if err != nil {
-			raiseErr = true
-		}
-		assert.Equal(t, tt.raiseErr, raiseErr, fmt.Sprintf("Test case #%d", i))
-		for _, opt := range newUnitsOpts {
-			assert.Equal(t, "Service", opt.Section, fmt.Sprintf("Test case #%d", i))
-			assert.Contains(t, tt.expectedValues, opt.Value, fmt.Sprintf("Test case #%d", i))
 		}
 	}
 }

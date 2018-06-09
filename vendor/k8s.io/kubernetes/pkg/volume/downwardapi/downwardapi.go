@@ -22,10 +22,10 @@ import (
 	"sort"
 	"strings"
 
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api/v1/resource"
 	"k8s.io/kubernetes/pkg/fieldpath"
 	utilstrings "k8s.io/kubernetes/pkg/util/strings"
@@ -182,6 +182,9 @@ func (b *downwardAPIVolumeMounter) SetUpAt(dir string, fsGroup *int64) error {
 	}
 	if err := wrapped.SetUpAt(dir, fsGroup); err != nil {
 		glog.Errorf("Unable to setup downwardAPI volume %v for pod %v/%v: %s", b.volName, b.pod.Namespace, b.pod.Name, err.Error())
+		return err
+	}
+	if err := volumeutil.MakeNestedMountpoints(b.volName, dir, *b.pod); err != nil {
 		return err
 	}
 

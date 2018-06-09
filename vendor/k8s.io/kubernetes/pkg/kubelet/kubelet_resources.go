@@ -21,19 +21,19 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/api/v1/resource"
 )
 
-// defaultPodLimitsForDownwardAPI copies the input pod, and optional container,
+// defaultPodLimitsForDownwardApi copies the input pod, and optional container,
 // and applies default resource limits. it returns a copy of the input pod,
 // and a copy of the input container (if specified) with default limits
 // applied. if a container has no limit specified, it will default the limit to
 // the node allocatable.
 // TODO: if/when we have pod level resources, we need to update this function
 // to use those limits instead of node allocatable.
-func (kl *Kubelet) defaultPodLimitsForDownwardAPI(pod *v1.Pod, container *v1.Container) (*v1.Pod, *v1.Container, error) {
+func (kl *Kubelet) defaultPodLimitsForDownwardApi(pod *v1.Pod, container *v1.Container) (*v1.Pod, *v1.Container, error) {
 	if pod == nil {
 		return nil, nil, fmt.Errorf("invalid input, pod cannot be nil")
 	}
@@ -43,8 +43,8 @@ func (kl *Kubelet) defaultPodLimitsForDownwardAPI(pod *v1.Pod, container *v1.Con
 		return nil, nil, fmt.Errorf("failed to find node object, expected a node")
 	}
 	allocatable := node.Status.Allocatable
-	glog.Infof("allocatable: %v", allocatable)
-	podCopy, err := scheme.Scheme.Copy(pod)
+	glog.Errorf("allocatable: %v", allocatable)
+	podCopy, err := api.Scheme.Copy(pod)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to perform a deep copy of pod object: %v", err)
 	}
@@ -58,7 +58,7 @@ func (kl *Kubelet) defaultPodLimitsForDownwardAPI(pod *v1.Pod, container *v1.Con
 
 	var outputContainer *v1.Container
 	if container != nil {
-		containerCopy, err := scheme.Scheme.DeepCopy(container)
+		containerCopy, err := api.Scheme.DeepCopy(container)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to perform a deep copy of container object: %v", err)
 		}

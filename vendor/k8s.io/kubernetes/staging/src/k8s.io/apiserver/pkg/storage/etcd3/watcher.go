@@ -19,18 +19,20 @@ package etcd3
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 
-	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/value"
 
 	"github.com/coreos/etcd/clientv3"
+	etcdrpc "github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 )
@@ -137,7 +139,7 @@ func (wc *watchChan) run() {
 		if err == context.Canceled {
 			break
 		}
-		errResult := transformErrorToEvent(err)
+		errResult := parseError(err)
 		if errResult != nil {
 			// error result is guaranteed to be received by user before closing ResultChan.
 			select {
@@ -317,15 +319,28 @@ func (wc *watchChan) transform(e *event) (res *watch.Event) {
 	return res
 }
 
-func transformErrorToEvent(err error) *watch.Event {
-	err = interpretWatchError(err)
-	if _, ok := err.(apierrs.APIStatus); !ok {
-		err = apierrs.NewInternalError(err)
+func parseError(err error) *watch.Event {
+	var status *metav1.Status
+	switch {
+	case err == etcdrpc.ErrCompacted:
+		status = &metav1.Status{
+			Status:  metav1.StatusFailure,
+			Message: err.Error(),
+			Code:    http.StatusGone,
+			Reason:  metav1.StatusReasonExpired,
+		}
+	default:
+		status = &metav1.Status{
+			Status:  metav1.StatusFailure,
+			Message: err.Error(),
+			Code:    http.StatusInternalServerError,
+			Reason:  metav1.StatusReasonInternalError,
+		}
 	}
-	status := err.(apierrs.APIStatus).Status()
+
 	return &watch.Event{
 		Type:   watch.Error,
-		Object: &status,
+		Object: status,
 	}
 }
 

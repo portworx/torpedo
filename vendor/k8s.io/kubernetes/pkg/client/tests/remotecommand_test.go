@@ -37,7 +37,6 @@ import (
 	remotecommandconsts "k8s.io/apimachinery/pkg/util/remotecommand"
 	restclient "k8s.io/client-go/rest"
 	remoteclient "k8s.io/client-go/tools/remotecommand"
-	"k8s.io/client-go/transport/spdy"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/pkg/kubelet/server/remotecommand"
@@ -125,7 +124,7 @@ func fakeServer(t *testing.T, testName string, exec bool, stdinData, stdoutData,
 		opts, err := remotecommand.NewOptions(req)
 		require.NoError(t, err)
 		if exec {
-			cmd := req.URL.Query()[api.ExecCommandParam]
+			cmd := req.URL.Query()[api.ExecCommandParamm]
 			remotecommand.ServeExec(w, req, executor, "pod", "uid", "container", cmd, opts, 0, 10*time.Second, serverProtocols)
 		} else {
 			remotecommand.ServeAttach(w, req, executor, "pod", "uid", "container", opts, 0, 10*time.Second, serverProtocols)
@@ -256,16 +255,17 @@ func TestStream(t *testing.T) {
 			conf := &restclient.Config{
 				Host: server.URL,
 			}
-			e, err := remoteclient.NewSPDYExecutorForProtocols(conf, "POST", req.URL(), testCase.ClientProtocols...)
+			e, err := remoteclient.NewExecutor(conf, "POST", req.URL())
 			if err != nil {
 				t.Errorf("%s: unexpected error: %v", name, err)
 				continue
 			}
 			err = e.Stream(remoteclient.StreamOptions{
-				Stdin:  streamIn,
-				Stdout: streamOut,
-				Stderr: streamErr,
-				Tty:    testCase.Tty,
+				SupportedProtocols: testCase.ClientProtocols,
+				Stdin:              streamIn,
+				Stdout:             streamOut,
+				Stderr:             streamErr,
+				Tty:                testCase.Tty,
 			})
 			hasErr := err != nil
 
@@ -311,13 +311,11 @@ type fakeUpgrader struct {
 	conn          httpstream.Connection
 	err, connErr  error
 	checkResponse bool
-	called        bool
 
 	t *testing.T
 }
 
 func (u *fakeUpgrader) RoundTrip(req *http.Request) (*http.Response, error) {
-	u.called = true
 	u.req = req
 	return u.resp, u.err
 }
@@ -346,16 +344,27 @@ func TestDial(t *testing.T) {
 			Body:       ioutil.NopCloser(&bytes.Buffer{}),
 		},
 	}
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: upgrader}, "POST", &url.URL{Host: "something.com", Scheme: "https"})
-	conn, protocol, err := dialer.Dial("protocol1")
+	var called bool
+	testFn := func(rt http.RoundTripper) http.RoundTripper {
+		if rt != upgrader {
+			t.Fatalf("unexpected round tripper: %#v", rt)
+		}
+		called = true
+		return rt
+	}
+	exec, err := remoteclient.NewStreamExecutor(upgrader, testFn, "POST", &url.URL{Host: "something.com", Scheme: "https"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, protocol, err := exec.Dial("protocol1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if conn != upgrader.conn {
 		t.Errorf("unexpected connection: %#v", conn)
 	}
-	if !upgrader.called {
-		t.Errorf("request not called")
+	if !called {
+		t.Errorf("wrapper not called")
 	}
 	_ = protocol
 }

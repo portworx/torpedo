@@ -61,7 +61,11 @@ func SetOriginalConfiguration(info *resource.Info, original []byte) error {
 	}
 
 	annots[api.LastAppliedConfigAnnotation] = string(original)
-	return info.Mapping.MetadataAccessor.SetAnnotations(info.Object, annots)
+	if err := info.Mapping.MetadataAccessor.SetAnnotations(info.Object, annots); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // GetModifiedConfiguration retrieves the modified configuration of the object.

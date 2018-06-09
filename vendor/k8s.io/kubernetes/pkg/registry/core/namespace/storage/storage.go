@@ -31,6 +31,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	storageerr "k8s.io/apiserver/pkg/storage/errors"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/registry/core/namespace"
 )
 
@@ -53,11 +54,12 @@ type FinalizeREST struct {
 // NewREST returns a RESTStorage object that will work against namespaces.
 func NewREST(optsGetter generic.RESTOptionsGetter) (*REST, *StatusREST, *FinalizeREST) {
 	store := &genericregistry.Store{
-		Copier:                   api.Scheme,
-		NewFunc:                  func() runtime.Object { return &api.Namespace{} },
-		NewListFunc:              func() runtime.Object { return &api.NamespaceList{} },
-		PredicateFunc:            namespace.MatchNamespace,
-		DefaultQualifiedResource: api.Resource("namespaces"),
+		Copier:            api.Scheme,
+		NewFunc:           func() runtime.Object { return &api.Namespace{} },
+		NewListFunc:       func() runtime.Object { return &api.NamespaceList{} },
+		PredicateFunc:     namespace.MatchNamespace,
+		QualifiedResource: api.Resource("namespaces"),
+		WatchCacheSize:    cachesize.GetWatchCacheSizeByResource("namespaces"),
 
 		CreateStrategy:      namespace.Strategy,
 		UpdateStrategy:      namespace.Strategy,

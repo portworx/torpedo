@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,31 +41,26 @@ type networkPolicyInformer struct {
 	factory internalinterfaces.SharedInformerFactory
 }
 
-// NewNetworkPolicyInformer constructs a new informer for NetworkPolicy type.
-// Always prefer using an informer factory to get a shared informer instead of getting an independent
-// one. This reduces memory footprint and number of connections to the server.
-func NewNetworkPolicyInformer(client internalclientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+func newNetworkPolicyInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	sharedIndexInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
-				return client.Networking().NetworkPolicies(namespace).List(options)
+				return client.Networking().NetworkPolicies(v1.NamespaceAll).List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
-				return client.Networking().NetworkPolicies(namespace).Watch(options)
+				return client.Networking().NetworkPolicies(v1.NamespaceAll).Watch(options)
 			},
 		},
 		&networking.NetworkPolicy{},
 		resyncPeriod,
-		indexers,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 	)
-}
 
-func defaultNetworkPolicyInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewNetworkPolicyInformer(client, v1.NamespaceAll, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	return sharedIndexInformer
 }
 
 func (f *networkPolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&networking.NetworkPolicy{}, defaultNetworkPolicyInformer)
+	return f.factory.InformerFor(&networking.NetworkPolicy{}, newNetworkPolicyInformer)
 }
 
 func (f *networkPolicyInformer) Lister() internalversion.NetworkPolicyLister {

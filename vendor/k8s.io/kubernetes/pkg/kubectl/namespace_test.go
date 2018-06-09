@@ -54,12 +54,6 @@ func TestNamespaceGenerate(t *testing.T) {
 		},
 		{
 			params: map[string]interface{}{
-				"name": "",
-			},
-			expectErr: true,
-		},
-		{
-			params: map[string]interface{}{
 				"name": nil,
 			},
 			expectErr: true,

@@ -17,13 +17,12 @@ limitations under the License.
 package serviceaccount
 
 import (
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
-	clientset "k8s.io/client-go/kubernetes"
-	apiv1 "k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/registry/core/secret"
 	secretstore "k8s.io/kubernetes/pkg/registry/core/secret/storage"
 	serviceaccountregistry "k8s.io/kubernetes/pkg/registry/core/serviceaccount"
@@ -68,7 +67,7 @@ func (r *registryGetter) GetServiceAccount(namespace, name string) (*v1.ServiceA
 		return nil, err
 	}
 	v1ServiceAccount := v1.ServiceAccount{}
-	err = apiv1.Convert_api_ServiceAccount_To_v1_ServiceAccount(internalServiceAccount, &v1ServiceAccount, nil)
+	err = v1.Convert_api_ServiceAccount_To_v1_ServiceAccount(internalServiceAccount, &v1ServiceAccount, nil)
 	return &v1ServiceAccount, err
 
 }
@@ -79,7 +78,7 @@ func (r *registryGetter) GetSecret(namespace, name string) (*v1.Secret, error) {
 		return nil, err
 	}
 	v1Secret := v1.Secret{}
-	err = apiv1.Convert_api_Secret_To_v1_Secret(internalSecret, &v1Secret, nil)
+	err = v1.Convert_api_Secret_To_v1_Secret(internalSecret, &v1Secret, nil)
 	return &v1Secret, err
 
 }

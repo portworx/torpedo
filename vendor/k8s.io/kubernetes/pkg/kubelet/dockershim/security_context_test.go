@@ -22,10 +22,11 @@ import (
 	"testing"
 
 	"github.com/blang/semver"
-	dockercontainer "github.com/docker/docker/api/types/container"
+	dockercontainer "github.com/docker/engine-api/types/container"
 	"github.com/stretchr/testify/assert"
 
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1/runtime"
+	"k8s.io/kubernetes/pkg/kubelet/dockershim/securitycontext"
 )
 
 func TestModifyContainerConfig(t *testing.T) {
@@ -82,10 +83,10 @@ func TestModifyHostConfig(t *testing.T) {
 	}
 	setSELinuxHC := &dockercontainer.HostConfig{
 		SecurityOpt: []string{
-			fmt.Sprintf("%s:%s", selinuxLabelUser('='), "user"),
-			fmt.Sprintf("%s:%s", selinuxLabelRole('='), "role"),
-			fmt.Sprintf("%s:%s", selinuxLabelType('='), "type"),
-			fmt.Sprintf("%s:%s", selinuxLabelLevel('='), "level"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelUser('='), "user"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelRole('='), "role"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelType('='), "type"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelLevel('='), "level"),
 		},
 	}
 
@@ -183,10 +184,10 @@ func TestModifyHostConfigAndNamespaceOptionsForContainer(t *testing.T) {
 	}
 	setSELinuxHC := &dockercontainer.HostConfig{
 		SecurityOpt: []string{
-			fmt.Sprintf("%s:%s", selinuxLabelUser('='), "user"),
-			fmt.Sprintf("%s:%s", selinuxLabelRole('='), "role"),
-			fmt.Sprintf("%s:%s", selinuxLabelType('='), "type"),
-			fmt.Sprintf("%s:%s", selinuxLabelLevel('='), "level"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelUser('='), "user"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelRole('='), "role"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelType('='), "type"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelLevel('='), "level"),
 		},
 		IpcMode:     dockercontainer.IpcMode(sandboxNSMode),
 		NetworkMode: dockercontainer.NetworkMode(sandboxNSMode),
@@ -414,10 +415,10 @@ func fullValidHostConfig() *dockercontainer.HostConfig {
 		CapAdd:     []string{"addCapA", "addCapB"},
 		CapDrop:    []string{"dropCapA", "dropCapB"},
 		SecurityOpt: []string{
-			fmt.Sprintf("%s:%s", selinuxLabelUser('='), "user"),
-			fmt.Sprintf("%s:%s", selinuxLabelRole('='), "role"),
-			fmt.Sprintf("%s:%s", selinuxLabelType('='), "type"),
-			fmt.Sprintf("%s:%s", selinuxLabelLevel('='), "level"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelUser('='), "user"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelRole('='), "role"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelType('='), "type"),
+			fmt.Sprintf("%s:%s", securitycontext.DockerLabelLevel('='), "level"),
 		},
 	}
 }

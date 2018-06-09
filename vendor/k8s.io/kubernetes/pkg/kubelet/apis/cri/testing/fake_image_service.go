@@ -34,8 +34,6 @@ type FakeImageService struct {
 	Images        map[string]*runtimeapi.Image
 
 	pulledImages []*pulledImage
-
-	FakeFilesystemUsage []*runtimeapi.FilesystemUsage
 }
 
 func (r *FakeImageService) SetFakeImages(images []string) {
@@ -53,13 +51,6 @@ func (r *FakeImageService) SetFakeImageSize(size uint64) {
 	defer r.Unlock()
 
 	r.FakeImageSize = size
-}
-
-func (r *FakeImageService) SetFakeFilesystemUsage(usage []*runtimeapi.FilesystemUsage) {
-	r.Lock()
-	defer r.Unlock()
-
-	r.FakeFilesystemUsage = usage
 }
 
 func NewFakeImageService() *FakeImageService {
@@ -135,13 +126,13 @@ func (r *FakeImageService) RemoveImage(image *runtimeapi.ImageSpec) error {
 }
 
 // ImageFsInfo returns information of the filesystem that is used to store images.
-func (r *FakeImageService) ImageFsInfo() ([]*runtimeapi.FilesystemUsage, error) {
+func (r *FakeImageService) ImageFsInfo(req *runtimeapi.ImageFsInfoRequest) (*runtimeapi.ImageFsInfoResponse, error) {
 	r.Lock()
 	defer r.Unlock()
 
 	r.Called = append(r.Called, "ImageFsInfo")
 
-	return r.FakeFilesystemUsage, nil
+	return nil, nil
 }
 
 func (r *FakeImageService) AssertImagePulledWithAuth(t *testing.T, image *runtimeapi.ImageSpec, auth *runtimeapi.AuthConfig, failMsg string) {

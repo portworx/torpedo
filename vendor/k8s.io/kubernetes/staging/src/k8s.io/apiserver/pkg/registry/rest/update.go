@@ -27,8 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
-	"k8s.io/apiserver/pkg/features"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 )
 
 // RESTUpdateStrategy defines the minimum validation, accepted input, and
@@ -100,12 +98,6 @@ func BeforeUpdate(strategy RESTUpdateStrategy, ctx genericapirequest.Context, ob
 		return err
 	}
 	objectMeta.SetGeneration(oldMeta.GetGeneration())
-
-	// Ensure Initializers are not set unless the feature is enabled
-	if !utilfeature.DefaultFeatureGate.Enabled(features.Initializers) {
-		oldMeta.SetInitializers(nil)
-		objectMeta.SetInitializers(nil)
-	}
 
 	strategy.PrepareForUpdate(ctx, obj, old)
 
@@ -180,7 +172,10 @@ func (i *defaultUpdatedObjectInfo) UpdatedObject(ctx genericapirequest.Context, 
 	// so we don't return the original. BeforeUpdate can mutate the returned object, doing things like clearing ResourceVersion.
 	// If we're re-called, we need to be able to return the pristine version.
 	if newObj != nil {
-		newObj = newObj.DeepCopyObject()
+		newObj, err = i.copier.Copy(newObj)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Allow any configured transformers to update the new object

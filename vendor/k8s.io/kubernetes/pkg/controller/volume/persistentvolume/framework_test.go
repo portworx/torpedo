@@ -29,8 +29,6 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/api/core/v1"
-	storage "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,14 +36,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/informers"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
-	storagelisters "k8s.io/client-go/listers/storage/v1"
 	core "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
+	"k8s.io/kubernetes/pkg/api/v1"
+	storage "k8s.io/kubernetes/pkg/apis/storage/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset/fake"
+	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/externalversions"
+	storagelisters "k8s.io/kubernetes/pkg/client/listers/storage/v1"
 	"k8s.io/kubernetes/pkg/controller"
 	vol "k8s.io/kubernetes/pkg/volume"
 )
@@ -307,7 +308,8 @@ func (r *volumeReactor) checkVolumes(expectedVolumes []*v1.PersistentVolume) err
 	for _, v := range r.volumes {
 		// We must clone the volume because of golang race check - it was
 		// written by the controller without any locks on it.
-		v := v.DeepCopy()
+		clone, _ := api.Scheme.DeepCopy(v)
+		v = clone.(*v1.PersistentVolume)
 		v.ResourceVersion = ""
 		if v.Spec.ClaimRef != nil {
 			v.Spec.ClaimRef.ResourceVersion = ""
@@ -337,7 +339,8 @@ func (r *volumeReactor) checkClaims(expectedClaims []*v1.PersistentVolumeClaim) 
 	for _, c := range r.claims {
 		// We must clone the claim because of golang race check - it was
 		// written by the controller without any locks on it.
-		c = c.DeepCopy()
+		clone, _ := api.Scheme.DeepCopy(c)
+		c = clone.(*v1.PersistentVolumeClaim)
 		c.ResourceVersion = ""
 		gotMap[c.Name] = c
 	}
@@ -505,7 +508,9 @@ func (r *volumeReactor) deleteVolumeEvent(volume *v1.PersistentVolume) {
 	// Generate deletion event. Cloned volume is needed to prevent races (and we
 	// would get a clone from etcd too).
 	if r.fakeVolumeWatch != nil {
-		r.fakeVolumeWatch.Delete(volume.DeepCopy())
+		clone, _ := api.Scheme.DeepCopy(volume)
+		volumeClone := clone.(*v1.PersistentVolume)
+		r.fakeVolumeWatch.Delete(volumeClone)
 	}
 }
 
@@ -521,7 +526,9 @@ func (r *volumeReactor) deleteClaimEvent(claim *v1.PersistentVolumeClaim) {
 	// Generate deletion event. Cloned volume is needed to prevent races (and we
 	// would get a clone from etcd too).
 	if r.fakeClaimWatch != nil {
-		r.fakeClaimWatch.Delete(claim.DeepCopy())
+		clone, _ := api.Scheme.DeepCopy(claim)
+		claimClone := clone.(*v1.PersistentVolumeClaim)
+		r.fakeClaimWatch.Delete(claimClone)
 	}
 }
 
@@ -549,7 +556,9 @@ func (r *volumeReactor) modifyVolumeEvent(volume *v1.PersistentVolume) {
 	// Generate deletion event. Cloned volume is needed to prevent races (and we
 	// would get a clone from etcd too).
 	if r.fakeVolumeWatch != nil {
-		r.fakeVolumeWatch.Modify(volume.DeepCopy())
+		clone, _ := api.Scheme.DeepCopy(volume)
+		volumeClone := clone.(*v1.PersistentVolume)
+		r.fakeVolumeWatch.Modify(volumeClone)
 	}
 }
 
@@ -798,14 +807,12 @@ const operationDelete = "Delete"
 const operationRecycle = "Recycle"
 
 var (
-	classGold                    string = "gold"
-	classSilver                  string = "silver"
-	classEmpty                   string = ""
-	classNonExisting             string = "non-existing"
-	classExternal                string = "external"
-	classUnknownInternal         string = "unknown-internal"
-	classUnsupportedMountOptions string = "unsupported-mountoptions"
-	classLarge                   string = "large"
+	classGold            string = "gold"
+	classSilver          string = "silver"
+	classEmpty           string = ""
+	classNonExisting     string = "non-existing"
+	classExternal        string = "external"
+	classUnknownInternal string = "unknown-internal"
 )
 
 // wrapTestWithPluginCalls returns a testCall that:
@@ -820,7 +827,7 @@ func wrapTestWithPluginCalls(expectedRecycleCalls, expectedDeleteCalls []error, 
 			deleteCalls:    expectedDeleteCalls,
 			provisionCalls: expectedProvisionCalls,
 		}
-		ctrl.volumePluginMgr.InitPlugins([]vol.VolumePlugin{plugin}, nil /* prober */, ctrl)
+		ctrl.volumePluginMgr.InitPlugins([]vol.VolumePlugin{plugin}, ctrl)
 		return toWrap(ctrl, reactor, test)
 	}
 }

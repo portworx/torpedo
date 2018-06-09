@@ -25,10 +25,10 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/kubernetes/pkg/api/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1/runtime"
 	"k8s.io/kubernetes/pkg/volume"
 )
@@ -389,8 +389,6 @@ type Mount struct {
 	ReadOnly bool
 	// Whether the mount needs SELinux relabeling
 	SELinuxRelabel bool
-	// Requested propagation mode
-	Propagation runtimeapi.MountPropagation
 }
 
 type PortMapping struct {
@@ -454,6 +452,9 @@ type VolumeInfo struct {
 	// SELinuxLabeled indicates whether this volume has had the
 	// pod's SELinux label applied to it or not
 	SELinuxLabeled bool
+	// Inner volume spec name, which is the PV name if used, otherwise
+	// it is the same as the outer volume spec name.
+	InnerVolumeSpecName string
 }
 
 type VolumeMap map[string]VolumeInfo

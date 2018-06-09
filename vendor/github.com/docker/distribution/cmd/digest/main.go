@@ -7,11 +7,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/docker/distribution/digest"
 	"github.com/docker/distribution/version"
-	"github.com/opencontainers/go-digest"
-
-	_ "crypto/sha256"
-	_ "crypto/sha512"
 )
 
 var (
@@ -35,7 +32,7 @@ func init() {
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage: %s [files...]\n", os.Args[0])
-	fmt.Fprint(os.Stderr, `
+	fmt.Fprintf(os.Stderr, `
 Calculate the digest of one or more input files, emitting the result
 to standard out. If no files are provided, the digest of stdin will
 be calculated.

@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM BASEIMAGE
-
-CROSS_BUILD_COPY qemu-QEMUARCH-static /usr/bin/
-
+FROM alpine
 COPY net /net
 RUN apk update && apk add curl

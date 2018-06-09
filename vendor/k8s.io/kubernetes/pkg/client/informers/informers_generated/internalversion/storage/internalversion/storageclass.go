@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,11 +41,8 @@ type storageClassInformer struct {
 	factory internalinterfaces.SharedInformerFactory
 }
 
-// NewStorageClassInformer constructs a new informer for StorageClass type.
-// Always prefer using an informer factory to get a shared informer instead of getting an independent
-// one. This reduces memory footprint and number of connections to the server.
-func NewStorageClassInformer(client internalclientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+func newStorageClassInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	sharedIndexInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				return client.Storage().StorageClasses().List(options)
@@ -56,16 +53,14 @@ func NewStorageClassInformer(client internalclientset.Interface, resyncPeriod ti
 		},
 		&storage.StorageClass{},
 		resyncPeriod,
-		indexers,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 	)
-}
 
-func defaultStorageClassInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewStorageClassInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	return sharedIndexInformer
 }
 
 func (f *storageClassInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&storage.StorageClass{}, defaultStorageClassInformer)
+	return f.factory.InformerFor(&storage.StorageClass{}, newStorageClassInformer)
 }
 
 func (f *storageClassInformer) Lister() internalversion.StorageClassLister {

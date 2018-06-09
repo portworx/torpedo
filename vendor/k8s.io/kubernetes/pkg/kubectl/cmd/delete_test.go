@@ -26,8 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/cobra"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,13 +40,6 @@ import (
 )
 
 var unstructuredSerializer = dynamic.ContentConfig().NegotiatedSerializer
-
-var fakecmd = &cobra.Command{
-	Use: "delete ([-f FILENAME] | TYPE [(NAME | -l label | --all)])",
-	Run: func(cmd *cobra.Command, args []string) {
-		cmdutil.CheckErr(cmdutil.ValidateOutputArgs(cmd))
-	},
-}
 
 func TestDeleteObjectByTuple(t *testing.T) {
 	initTestErrorHandler(t)
@@ -354,7 +345,7 @@ func TestDeleteObjectNotFound(t *testing.T) {
 		Cascade:     false,
 		Output:      "name",
 	}
-	err := options.Complete(f, buf, errBuf, []string{}, fakecmd)
+	err := options.Complete(f, buf, errBuf, []string{})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -435,7 +426,7 @@ func TestDeleteAllNotFound(t *testing.T) {
 		IgnoreNotFound:  false,
 		Output:          "name",
 	}
-	err := options.Complete(f, buf, errBuf, []string{"services"}, fakecmd)
+	err := options.Complete(f, buf, errBuf, []string{"services"})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -555,7 +546,7 @@ func TestDeleteMultipleObjectContinueOnMissing(t *testing.T) {
 		Cascade:     false,
 		Output:      "name",
 	}
-	err := options.Complete(f, buf, errBuf, []string{}, fakecmd)
+	err := options.Complete(f, buf, errBuf, []string{})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -723,7 +714,7 @@ func TestResourceErrors(t *testing.T) {
 			Cascade:         false,
 			Output:          "name",
 		}
-		err := options.Complete(f, buf, errBuf, testCase.args, fakecmd)
+		err := options.Complete(f, buf, errBuf, testCase.args)
 		if !testCase.errFn(err) {
 			t.Errorf("%s: unexpected error: %v", k, err)
 			continue

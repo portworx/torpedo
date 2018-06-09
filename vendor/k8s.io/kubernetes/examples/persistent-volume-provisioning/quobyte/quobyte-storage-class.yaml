@@ -12,4 +12,3 @@ parameters:
     group: "root"
     quobyteConfig: "BASE"
     quobyteTenant: "DEFAULT"
-    createQuota: "False"

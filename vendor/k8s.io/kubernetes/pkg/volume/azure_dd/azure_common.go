@@ -21,22 +21,27 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"regexp"
+	"strconv"
 	libstrings "strings"
 
 	storage "github.com/Azure/azure-sdk-for-go/arm/storage"
-	"k8s.io/api/core/v1"
+	"github.com/golang/glog"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/azure"
+	"k8s.io/kubernetes/pkg/util/exec"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"k8s.io/kubernetes/pkg/util/strings"
 	"k8s.io/kubernetes/pkg/volume"
 )
 
 const (
-	defaultFSType             = "ext4"
-	defaultStorageAccountType = storage.StandardLRS
+	defaultFSType                   = "ext4"
+	defaultStorageAccountType       = storage.StandardLRS
+	defaultAzureDataDiskCachingMode = v1.AzureDataDiskCachingNone
 )
 
 type dataDisk struct {
@@ -57,7 +62,7 @@ var (
 		string(api.AzureDedicatedBlobDisk),
 		string(api.AzureManagedDisk))
 
-	supportedStorageAccountTypes = sets.NewString("Premium_LRS", "Standard_LRS")
+	supportedStorageAccountTypes = sets.NewString("Premium_LRS", "Standard_LRS", "Standard_GRS", "Standard_RAGRS")
 )
 
 func getPath(uid types.UID, volName string, host volume.VolumeHost) string {
@@ -140,7 +145,7 @@ func normalizeStorageAccountType(storageAccountType string) (storage.SkuName, er
 
 func normalizeCachingMode(cachingMode v1.AzureDataDiskCachingMode) (v1.AzureDataDiskCachingMode, error) {
 	if cachingMode == "" {
-		return v1.AzureDataDiskCachingReadWrite, nil
+		return defaultAzureDataDiskCachingMode, nil
 	}
 
 	if !supportedCachingModes.Has(string(cachingMode)) {
@@ -154,7 +159,6 @@ type ioHandler interface {
 	ReadDir(dirname string) ([]os.FileInfo, error)
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 	Readlink(name string) (string, error)
-	ReadFile(filename string) ([]byte, error)
 }
 
 //TODO: check if priming the iscsi interface is actually needed
@@ -173,8 +177,187 @@ func (handler *osIOHandler) Readlink(name string) (string, error) {
 	return os.Readlink(name)
 }
 
-func (handler *osIOHandler) ReadFile(filename string) ([]byte, error) {
-	return ioutil.ReadFile(filename)
+// exclude those used by azure as resource and OS root in /dev/disk/azure
+func listAzureDiskPath(io ioHandler) []string {
+	azureDiskPath := "/dev/disk/azure/"
+	var azureDiskList []string
+	if dirs, err := io.ReadDir(azureDiskPath); err == nil {
+		for _, f := range dirs {
+			name := f.Name()
+			diskPath := azureDiskPath + name
+			if link, linkErr := io.Readlink(diskPath); linkErr == nil {
+				sd := link[(libstrings.LastIndex(link, "/") + 1):]
+				azureDiskList = append(azureDiskList, sd)
+			}
+		}
+	}
+	glog.V(12).Infof("Azure sys disks paths: %v", azureDiskList)
+	return azureDiskList
+}
+
+// getDiskLinkByDevName get disk link by device name from devLinkPath, e.g. /dev/disk/azure/, /dev/disk/by-id/
+func getDiskLinkByDevName(io ioHandler, devLinkPath, devName string) (string, error) {
+	dirs, err := io.ReadDir(devLinkPath)
+	glog.V(12).Infof("azureDisk - begin to find %s from %s", devName, devLinkPath)
+	if err == nil {
+		for _, f := range dirs {
+			diskPath := devLinkPath + f.Name()
+			glog.V(12).Infof("azureDisk - begin to Readlink: %s", diskPath)
+			link, linkErr := io.Readlink(diskPath)
+			if linkErr != nil {
+				glog.Warningf("azureDisk - read link (%s) error: %v", diskPath, linkErr)
+				continue
+			}
+			if libstrings.HasSuffix(link, devName) {
+				return diskPath, nil
+			}
+		}
+		return "", fmt.Errorf("device name(%s) is not found under %s", devName, devLinkPath)
+	}
+	return "", fmt.Errorf("read %s error: %v", devLinkPath, err)
+}
+
+func scsiHostRescan(io ioHandler) {
+	scsi_path := "/sys/class/scsi_host/"
+	if dirs, err := io.ReadDir(scsi_path); err == nil {
+		for _, f := range dirs {
+			name := scsi_path + f.Name() + "/scan"
+			data := []byte("- - -")
+			if err = io.WriteFile(name, data, 0666); err != nil {
+				glog.Warningf("failed to rescan scsi host %s", name)
+			}
+		}
+	} else {
+		glog.Warningf("failed to read %s, err %v", scsi_path, err)
+	}
+}
+
+func findDiskByLun(lun int, io ioHandler, exe exec.Interface) (string, error) {
+	azureDisks := listAzureDiskPath(io)
+	return findDiskByLunWithConstraint(lun, io, exe, azureDisks)
+}
+
+// finds a device mounted to "current" node
+func findDiskByLunWithConstraint(lun int, io ioHandler, exe exec.Interface, azureDisks []string) (string, error) {
+	var err error
+	sys_path := "/sys/bus/scsi/devices"
+	if dirs, err := io.ReadDir(sys_path); err == nil {
+		for _, f := range dirs {
+			name := f.Name()
+			// look for path like /sys/bus/scsi/devices/3:0:0:1
+			arr := libstrings.Split(name, ":")
+			if len(arr) < 4 {
+				continue
+			}
+			if len(azureDisks) == 0 {
+				glog.V(4).Infof("/dev/disk/azure is not populated, now try to parse %v directly", name)
+				target, err := strconv.Atoi(arr[0])
+				if err != nil {
+					glog.Errorf("failed to parse target from %v (%v), err %v", arr[0], name, err)
+					continue
+				}
+				// as observed, targets 0-3 are used by OS disks. Skip them
+				if target <= 3 {
+					continue
+				}
+			}
+
+			// extract LUN from the path.
+			// LUN is the last index of the array, i.e. 1 in /sys/bus/scsi/devices/3:0:0:1
+			l, err := strconv.Atoi(arr[3])
+			if err != nil {
+				// unknown path format, continue to read the next one
+				glog.V(4).Infof("azure disk - failed to parse lun from %v (%v), err %v", arr[3], name, err)
+				continue
+			}
+			if lun == l {
+				// find the matching LUN
+				// read vendor and model to ensure it is a VHD disk
+				vendor := path.Join(sys_path, name, "vendor")
+				model := path.Join(sys_path, name, "model")
+				out, err := exe.Command("cat", vendor, model).CombinedOutput()
+				if err != nil {
+					glog.V(4).Infof("azure disk - failed to cat device vendor and model, err: %v", err)
+					continue
+				}
+				matched, err := regexp.MatchString("^MSFT[ ]{0,}\nVIRTUAL DISK[ ]{0,}\n$", libstrings.ToUpper(string(out)))
+				if err != nil || !matched {
+					glog.V(4).Infof("azure disk - doesn't match VHD, output %v, error %v", string(out), err)
+					continue
+				}
+				// find a disk, validate name
+				dir := path.Join(sys_path, name, "block")
+				if dev, err := io.ReadDir(dir); err == nil {
+					found := false
+					devName := dev[0].Name()
+					for _, diskName := range azureDisks {
+						glog.V(12).Infof("azureDisk - validating disk %q with sys disk %q", devName, diskName)
+						if devName == diskName {
+							found = true
+							break
+						}
+					}
+					if !found {
+						devLinkPaths := []string{"/dev/disk/azure/scsi1/", "/dev/disk/by-id/"}
+						for _, devLinkPath := range devLinkPaths {
+							diskPath, err := getDiskLinkByDevName(io, devLinkPath, devName)
+							if err == nil {
+								glog.V(4).Infof("azureDisk - found %s by %s under %s", diskPath, devName, devLinkPath)
+								return diskPath, nil
+							}
+							glog.Warningf("azureDisk - getDiskLinkByDevName by %s under %s failed, error: %v", devName, devLinkPath, err)
+						}
+						return "/dev/" + devName, nil
+					}
+				}
+			}
+		}
+	}
+	return "", err
+}
+
+func formatIfNotFormatted(disk string, fstype string) {
+	notFormatted, err := diskLooksUnformatted(disk)
+	if err == nil && notFormatted {
+		args := []string{disk}
+		// Disk is unformatted so format it.
+		// Use 'ext4' as the default
+		if len(fstype) == 0 {
+			fstype = "ext4"
+		}
+		if fstype == "ext4" || fstype == "ext3" {
+			args = []string{"-E", "lazy_itable_init=0,lazy_journal_init=0", "-F", disk}
+		}
+		glog.Infof("azureDisk - Disk %q appears to be unformatted, attempting to format as type: %q with options: %v", disk, fstype, args)
+		runner := exec.New()
+		cmd := runner.Command("mkfs."+fstype, args...)
+		_, err := cmd.CombinedOutput()
+		if err == nil {
+			// the disk has been formatted successfully try to mount it again.
+			glog.Infof("azureDisk - Disk successfully formatted (mkfs): %s - %s %s", fstype, disk, "tt")
+		}
+		glog.Warningf("azureDisk - format of disk %q failed: type:(%q) target:(%q) options:(%q)error:(%v)", disk, fstype, "tt", "o", err)
+	} else {
+		if err != nil {
+			glog.Warningf("azureDisk - Failed to check if the disk %s formatted with error %s, will attach anyway", disk, err)
+		} else {
+			glog.Infof("azureDisk - Disk %s already formatted, will not format", disk)
+		}
+	}
+}
+
+func diskLooksUnformatted(disk string) (bool, error) {
+	args := []string{"-nd", "-o", "FSTYPE", disk}
+	runner := exec.New()
+	cmd := runner.Command("lsblk", args...)
+	glog.V(4).Infof("Attempting to determine if disk %q is formatted using lsblk with args: (%v)", disk, args)
+	dataOut, err := cmd.CombinedOutput()
+	if err != nil {
+		glog.Errorf("Could not determine if disk %q is formatted (%v)", disk, err)
+		return false, err
+	}
+	output := libstrings.TrimSpace(string(dataOut))
+	return output == "", nil
 }
 
 func getDiskController(host volume.VolumeHost) (DiskController, error) {

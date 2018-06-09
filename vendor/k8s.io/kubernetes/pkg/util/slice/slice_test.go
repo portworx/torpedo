@@ -22,29 +22,15 @@ import (
 )
 
 func TestCopyStrings(t *testing.T) {
-	var src1 []string
-	dest1 := CopyStrings(src1)
+	src := []string{"a", "c", "b"}
+	dest := CopyStrings(src)
 
-	if !reflect.DeepEqual(src1, dest1) {
-		t.Errorf("%v and %v are not equal", src1, dest1)
+	if !reflect.DeepEqual(src, dest) {
+		t.Errorf("%v and %v are not equal", src, dest)
 	}
 
-	src2 := []string{}
-	dest2 := CopyStrings(src2)
-
-	if !reflect.DeepEqual(src2, dest2) {
-		t.Errorf("%v and %v are not equal", src2, dest2)
-	}
-
-	src3 := []string{"a", "c", "b"}
-	dest3 := CopyStrings(src3)
-
-	if !reflect.DeepEqual(src3, dest3) {
-		t.Errorf("%v and %v are not equal", src3, dest3)
-	}
-
-	src3[0] = "A"
-	if reflect.DeepEqual(src3, dest3) {
+	src[0] = "A"
+	if reflect.DeepEqual(src, dest) {
 		t.Errorf("CopyStrings didn't make a copy")
 	}
 }
@@ -64,15 +50,8 @@ func TestSortStrings(t *testing.T) {
 }
 
 func TestShuffleStrings(t *testing.T) {
-	var src []string
+	src := []string{"a", "b", "c", "d", "e", "f"}
 	dest := ShuffleStrings(src)
-
-	if dest != nil {
-		t.Errorf("ShuffleStrings for a nil slice got a non-nil slice")
-	}
-
-	src = []string{"a", "b", "c", "d", "e", "f"}
-	dest = ShuffleStrings(src)
 
 	if len(src) != len(dest) {
 		t.Errorf("Shuffled slice is wrong length, expected %v got %v", len(src), len(dest))
@@ -87,5 +66,14 @@ func TestShuffleStrings(t *testing.T) {
 		if _, exists := m[k]; !exists {
 			t.Errorf("Element %v missing from shuffled slice", k)
 		}
+	}
+}
+
+func TestSortInts64(t *testing.T) {
+	src := []int64{10, 1, 2, 3, 4, 5, 6}
+	expected := []int64{1, 2, 3, 4, 5, 6, 10}
+	SortInts64(src)
+	if !reflect.DeepEqual(src, expected) {
+		t.Errorf("func Ints64 didnt sort correctly, %v !- %v", src, expected)
 	}
 }

@@ -39,7 +39,8 @@ func Install(groupFactoryRegistry announced.APIGroupFactoryRegistry, registry *r
 		&announced.GroupMetaFactoryArgs{
 			GroupName:                  authorization.GroupName,
 			VersionPreferenceOrder:     []string{v1.SchemeGroupVersion.Version, v1beta1.SchemeGroupVersion.Version},
-			RootScopedKinds:            sets.NewString("SubjectAccessReview", "SelfSubjectAccessReview", "SelfSubjectRulesReview"),
+			ImportPrefix:               "k8s.io/kubernetes/pkg/apis/authorization",
+			RootScopedKinds:            sets.NewString("SubjectAccessReview", "SelfSubjectAccessReview"),
 			AddInternalObjectsToScheme: authorization.AddToScheme,
 		},
 		announced.VersionToSchemeFunc{

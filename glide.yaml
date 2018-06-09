@@ -17,20 +17,28 @@ import:
   version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh
+- package: google.golang.org/grpc
+  version: v1.7.5
+- package: golang.org/x/net/http2
+  version: bb807669a61aca6092d8137da1fab2150bb96ad7 
+- package: github.com/grpc-ecosystem/grpc-gateway
+  version: v1.4.1
+- package: github.com/docker/spdystream
+  version: bc6354cbbc295e925e4c611ffe90c1f287ee54db
+- package: github.com/golang/protobuf
+  version: v1.1.0 
 - package: k8s.io/kubernetes
-  version: v1.8.2
+  version: v1.7.16
   subpackages:
   - pkg/api/v1/helper
 - package: k8s.io/apimachinery
-  version: kubernetes-1.8.2
+  version: kubernetes-1.7.16
   subpackages:
   - pkg/runtime
-- package: k8s.io/api
-  version: kubernetes-1.8.2
 - package: k8s.io/client-go
-  version: v5.0.1
+  version: kubernetes-1.7.16
 - package: github.com/portworx/sched-ops
-  version: master
+  version: 1.7 
   repo: git@github.com:portworx/sched-ops.git
 - package: github.com/aws/aws-sdk-go
   version: f9a6880d84e16e2a37055793e17164a228d637f4

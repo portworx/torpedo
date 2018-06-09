@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,31 +41,26 @@ type statefulSetInformer struct {
 	factory internalinterfaces.SharedInformerFactory
 }
 
-// NewStatefulSetInformer constructs a new informer for StatefulSet type.
-// Always prefer using an informer factory to get a shared informer instead of getting an independent
-// one. This reduces memory footprint and number of connections to the server.
-func NewStatefulSetInformer(client internalclientset.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+func newStatefulSetInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	sharedIndexInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
-				return client.Apps().StatefulSets(namespace).List(options)
+				return client.Apps().StatefulSets(v1.NamespaceAll).List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
-				return client.Apps().StatefulSets(namespace).Watch(options)
+				return client.Apps().StatefulSets(v1.NamespaceAll).Watch(options)
 			},
 		},
 		&apps.StatefulSet{},
 		resyncPeriod,
-		indexers,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 	)
-}
 
-func defaultStatefulSetInformer(client internalclientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewStatefulSetInformer(client, v1.NamespaceAll, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	return sharedIndexInformer
 }
 
 func (f *statefulSetInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apps.StatefulSet{}, defaultStatefulSetInformer)
+	return f.factory.InformerFor(&apps.StatefulSet{}, newStatefulSetInformer)
 }
 
 func (f *statefulSetInformer) Lister() internalversion.StatefulSetLister {

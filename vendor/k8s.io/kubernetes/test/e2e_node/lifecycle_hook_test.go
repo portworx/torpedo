@@ -19,11 +19,10 @@ package e2e_node
 import (
 	"time"
 
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-	imageutils "k8s.io/kubernetes/test/utils/image"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -47,7 +46,7 @@ var _ = framework.KubeDescribe("Container Lifecycle Hook", func() {
 				Containers: []v1.Container{
 					{
 						Name:  "pod-handle-http-request",
-						Image: imageutils.GetE2EImage(imageutils.Netexec),
+						Image: "gcr.io/google_containers/netexec:1.7",
 						Ports: []v1.ContainerPort{
 							{
 								ContainerPort: 8080,
@@ -92,7 +91,7 @@ var _ = framework.KubeDescribe("Container Lifecycle Hook", func() {
 					},
 				},
 			}
-			podWithHook := getPodWithHook("pod-with-poststart-exec-hook", imageutils.GetE2EImage(imageutils.Hostexec), lifecycle)
+			podWithHook := getPodWithHook("pod-with-poststart-exec-hook", "gcr.io/google_containers/hostexec:1.2", lifecycle)
 			testPodWithHook(podWithHook)
 		})
 		It("should execute prestop exec hook properly [Conformance]", func() {
@@ -103,7 +102,7 @@ var _ = framework.KubeDescribe("Container Lifecycle Hook", func() {
 					},
 				},
 			}
-			podWithHook := getPodWithHook("pod-with-prestop-exec-hook", imageutils.GetE2EImage(imageutils.Hostexec), lifecycle)
+			podWithHook := getPodWithHook("pod-with-prestop-exec-hook", "gcr.io/google_containers/hostexec:1.2", lifecycle)
 			testPodWithHook(podWithHook)
 		})
 		It("should execute poststart http hook properly [Conformance]", func() {

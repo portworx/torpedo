@@ -35,7 +35,6 @@ import (
 	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/helper"
-	"k8s.io/kubernetes/pkg/api/pod"
 	"k8s.io/kubernetes/pkg/api/validation"
 )
 
@@ -65,10 +64,6 @@ func (rcStrategy) PrepareForCreate(ctx genericapirequest.Context, obj runtime.Ob
 	controller.Status = api.ReplicationControllerStatus{}
 
 	controller.Generation = 1
-
-	if controller.Spec.Template != nil {
-		pod.DropDisabledAlphaFields(&controller.Spec.Template.Spec)
-	}
 }
 
 // PrepareForUpdate clears fields that are not allowed to be set by end users on update.
@@ -77,13 +72,6 @@ func (rcStrategy) PrepareForUpdate(ctx genericapirequest.Context, obj, old runti
 	oldController := old.(*api.ReplicationController)
 	// update is not allowed to set status
 	newController.Status = oldController.Status
-
-	if oldController.Spec.Template != nil {
-		pod.DropDisabledAlphaFields(&oldController.Spec.Template.Spec)
-	}
-	if newController.Spec.Template != nil {
-		pod.DropDisabledAlphaFields(&newController.Spec.Template.Spec)
-	}
 
 	// Any changes to the spec increment the generation number, any changes to the
 	// status should reflect the generation number of the corresponding object. We push

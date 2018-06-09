@@ -46,8 +46,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&Flunder{},
 		&FlunderList{},
-		&Fischer{},
-		&FischerList{},
 	)
 	return nil
 }

@@ -23,7 +23,6 @@ import (
 	"net"
 	"net/http"
 	"sync"
-	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -43,19 +42,43 @@ func WithAudit(handler http.Handler, requestContextMapper request.RequestContext
 		return handler
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		ctx, ev, omitStages, err := createAuditEventAndAttachToContext(requestContextMapper, req, policy)
-		if err != nil {
-			utilruntime.HandleError(fmt.Errorf("failed to create audit event: %v", err))
-			responsewriters.InternalError(w, req, errors.New("failed to create audit event"))
+		ctx, ok := requestContextMapper.Get(req)
+		if !ok {
+			responsewriters.InternalError(w, req, errors.New("no context found for request"))
 			return
 		}
-		if ev == nil || ctx == nil {
+
+		attribs, err := GetAuthorizerAttributes(ctx)
+		if err != nil {
+			utilruntime.HandleError(fmt.Errorf("failed to GetAuthorizerAttributes: %v", err))
+			responsewriters.InternalError(w, req, errors.New("failed to parse request"))
+			return
+		}
+
+		level := policy.Level(attribs)
+		audit.ObservePolicyLevel(level)
+		if level == auditinternal.LevelNone {
+			// Don't audit.
 			handler.ServeHTTP(w, req)
 			return
 		}
 
+		ev, err := audit.NewEventFromRequest(req, level, attribs)
+		if err != nil {
+			utilruntime.HandleError(fmt.Errorf("failed to complete audit event from request: %v", err))
+			responsewriters.InternalError(w, req, errors.New("failed to update context"))
+			return
+		}
+
+		ctx = request.WithAuditEvent(ctx, ev)
+		if err := requestContextMapper.Update(req, ctx); err != nil {
+			utilruntime.HandleError(fmt.Errorf("failed to attach audit event to the context: %v", err))
+			responsewriters.InternalError(w, req, errors.New("failed to update context"))
+			return
+		}
+
 		ev.Stage = auditinternal.StageRequestReceived
-		processAuditEvent(sink, ev, omitStages)
+		processEvent(sink, ev)
 
 		// intercept the status code
 		var longRunningSink audit.Sink
@@ -65,7 +88,7 @@ func WithAudit(handler http.Handler, requestContextMapper request.RequestContext
 				longRunningSink = sink
 			}
 		}
-		respWriter := decorateResponseWriter(w, ev, longRunningSink, omitStages)
+		respWriter := decorateResponseWriter(w, ev, longRunningSink)
 
 		// send audit event when we leave this func, either via a panic or cleanly. In the case of long
 		// running requests, this will be the second audit event.
@@ -79,12 +102,11 @@ func WithAudit(handler http.Handler, requestContextMapper request.RequestContext
 					Reason:  metav1.StatusReasonInternalError,
 					Message: fmt.Sprintf("APIServer panic'd: %v", r),
 				}
-				processAuditEvent(sink, ev, omitStages)
+				processEvent(sink, ev)
 				return
 			}
 
 			// if no StageResponseStarted event was sent b/c neither a status code nor a body was sent, fake it here
-			// But Audit-Id http header will only be sent when http.ResponseWriter.WriteHeader is called.
 			fakedSuccessStatus := &metav1.Status{
 				Code:    http.StatusOK,
 				Status:  metav1.StatusSuccess,
@@ -93,72 +115,29 @@ func WithAudit(handler http.Handler, requestContextMapper request.RequestContext
 			if ev.ResponseStatus == nil && longRunningSink != nil {
 				ev.ResponseStatus = fakedSuccessStatus
 				ev.Stage = auditinternal.StageResponseStarted
-				processAuditEvent(longRunningSink, ev, omitStages)
+				processEvent(longRunningSink, ev)
 			}
 
 			ev.Stage = auditinternal.StageResponseComplete
 			if ev.ResponseStatus == nil {
 				ev.ResponseStatus = fakedSuccessStatus
 			}
-			processAuditEvent(sink, ev, omitStages)
+			processEvent(sink, ev)
 		}()
 		handler.ServeHTTP(respWriter, req)
 	})
 }
 
-// createAuditEventAndAttachToContext is responsible for creating the audit event
-// and attaching it to the appropriate request context. It returns:
-// - context with audit event attached to it
-// - created audit event
-// - error if anything bad happened
-func createAuditEventAndAttachToContext(requestContextMapper request.RequestContextMapper, req *http.Request, policy policy.Checker) (request.Context, *auditinternal.Event, []auditinternal.Stage, error) {
-	ctx, ok := requestContextMapper.Get(req)
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("no context found for request")
-	}
-
-	attribs, err := GetAuthorizerAttributes(ctx)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to GetAuthorizerAttributes: %v", err)
-	}
-
-	level, omitStages := policy.LevelAndStages(attribs)
-	audit.ObservePolicyLevel(level)
-	if level == auditinternal.LevelNone {
-		// Don't audit.
-		return nil, nil, nil, nil
-	}
-
-	ev, err := audit.NewEventFromRequest(req, level, attribs)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to complete audit event from request: %v", err)
-	}
-
-	ctx = request.WithAuditEvent(ctx, ev)
-	if err := requestContextMapper.Update(req, ctx); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to attach audit event to context: %v", err)
-	}
-
-	return ctx, ev, omitStages, nil
-}
-
-func processAuditEvent(sink audit.Sink, ev *auditinternal.Event, omitStages []auditinternal.Stage) {
-	for _, stage := range omitStages {
-		if ev.Stage == stage {
-			return
-		}
-	}
-	ev.CreationTimestamp = metav1.NewTime(time.Now())
+func processEvent(sink audit.Sink, ev *auditinternal.Event) {
 	audit.ObserveEvent()
 	sink.ProcessEvents(ev)
 }
 
-func decorateResponseWriter(responseWriter http.ResponseWriter, ev *auditinternal.Event, sink audit.Sink, omitStages []auditinternal.Stage) http.ResponseWriter {
+func decorateResponseWriter(responseWriter http.ResponseWriter, ev *auditinternal.Event, sink audit.Sink) http.ResponseWriter {
 	delegate := &auditResponseWriter{
 		ResponseWriter: responseWriter,
 		event:          ev,
 		sink:           sink,
-		omitStages:     omitStages,
 	}
 
 	// check if the ResponseWriter we're wrapping is the fancy one we need
@@ -178,14 +157,9 @@ var _ http.ResponseWriter = &auditResponseWriter{}
 // create immediately an event (for long running requests).
 type auditResponseWriter struct {
 	http.ResponseWriter
-	event      *auditinternal.Event
-	once       sync.Once
-	sink       audit.Sink
-	omitStages []auditinternal.Stage
-}
-
-func (a *auditResponseWriter) setHttpHeader() {
-	a.ResponseWriter.Header().Set(auditinternal.HeaderAuditID, string(a.event.AuditID))
+	event *auditinternal.Event
+	once  sync.Once
+	sink  audit.Sink
 }
 
 func (a *auditResponseWriter) processCode(code int) {
@@ -197,21 +171,18 @@ func (a *auditResponseWriter) processCode(code int) {
 		a.event.Stage = auditinternal.StageResponseStarted
 
 		if a.sink != nil {
-			processAuditEvent(a.sink, a.event, a.omitStages)
+			processEvent(a.sink, a.event)
 		}
 	})
 }
 
 func (a *auditResponseWriter) Write(bs []byte) (int, error) {
-	// the Go library calls WriteHeader internally if no code was written yet. But this will go unnoticed for us
-	a.processCode(http.StatusOK)
-	a.setHttpHeader()
+	a.processCode(http.StatusOK) // the Go library calls WriteHeader internally if no code was written yet. But this will go unnoticed for us
 	return a.ResponseWriter.Write(bs)
 }
 
 func (a *auditResponseWriter) WriteHeader(code int) {
 	a.processCode(code)
-	a.setHttpHeader()
 	a.ResponseWriter.WriteHeader(code)
 }
 
@@ -233,13 +204,6 @@ func (f *fancyResponseWriterDelegator) Flush() {
 func (f *fancyResponseWriterDelegator) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	// fake a response status before protocol switch happens
 	f.processCode(http.StatusSwitchingProtocols)
-
-	// This will be ignored if WriteHeader() function has aready been called.
-	// It's not guaranteed Audit-ID http header is sent for all requests.
-	// For example, when user run "kubectl exec", apiserver uses a proxy handler
-	// to deal with the request, users can only get http headers returned by kubelet node.
-	f.setHttpHeader()
-
 	return f.ResponseWriter.(http.Hijacker).Hijack()
 }
 

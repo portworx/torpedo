@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_test",
@@ -7,12 +9,11 @@ load(
 
 go_test(
     name = "go_default_test",
-    size = "large",
-    srcs = [
-        "kubectl_test.go",
-        "main_test.go",
+    srcs = ["kubectl_test.go"],
+    tags = [
+        "automanaged",
+        "integration",
     ],
-    tags = ["integration"],
     deps = [
         "//pkg/kubectl/cmd/util:go_default_library",
         "//test/integration/framework:go_default_library",

@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -9,6 +11,7 @@ load(
 go_library(
     name = "go_default_library",
     srcs = ["slice.go"],
+    tags = ["automanaged"],
     deps = ["//vendor/k8s.io/apimachinery/pkg/util/rand:go_default_library"],
 )
 
@@ -16,6 +19,7 @@ go_test(
     name = "go_default_test",
     srcs = ["slice_test.go"],
     library = ":go_default_library",
+    tags = ["automanaged"],
 )
 
 filegroup(

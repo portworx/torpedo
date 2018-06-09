@@ -25,7 +25,6 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/batch"
 	"k8s.io/kubernetes/pkg/apis/batch/v1"
-	"k8s.io/kubernetes/pkg/apis/batch/v1beta1"
 	"k8s.io/kubernetes/pkg/apis/batch/v2alpha1"
 )
 
@@ -38,12 +37,12 @@ func Install(groupFactoryRegistry announced.APIGroupFactoryRegistry, registry *r
 	if err := announced.NewGroupMetaFactory(
 		&announced.GroupMetaFactoryArgs{
 			GroupName:                  batch.GroupName,
-			VersionPreferenceOrder:     []string{v1.SchemeGroupVersion.Version, v1beta1.SchemeGroupVersion.Version, v2alpha1.SchemeGroupVersion.Version},
+			VersionPreferenceOrder:     []string{v1.SchemeGroupVersion.Version, v2alpha1.SchemeGroupVersion.Version},
+			ImportPrefix:               "k8s.io/kubernetes/pkg/apis/batch",
 			AddInternalObjectsToScheme: batch.AddToScheme,
 		},
 		announced.VersionToSchemeFunc{
 			v1.SchemeGroupVersion.Version:       v1.AddToScheme,
-			v1beta1.SchemeGroupVersion.Version:  v1beta1.AddToScheme,
 			v2alpha1.SchemeGroupVersion.Version: v2alpha1.AddToScheme,
 		},
 	).Announce(groupFactoryRegistry).RegisterAndEnable(registry, scheme); err != nil {

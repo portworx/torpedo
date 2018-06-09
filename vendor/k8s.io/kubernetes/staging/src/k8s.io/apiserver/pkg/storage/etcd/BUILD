@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -14,6 +16,7 @@ go_test(
         "etcd_watcher_test.go",
     ],
     library = ":go_default_library",
+    tags = ["automanaged"],
     deps = [
         "//vendor/github.com/coreos/etcd/client:go_default_library",
         "//vendor/golang.org/x/net/context:go_default_library",
@@ -46,6 +49,7 @@ go_library(
         "etcd_helper.go",
         "etcd_watcher.go",
     ],
+    tags = ["automanaged"],
     deps = [
         "//vendor/github.com/coreos/etcd/client:go_default_library",
         "//vendor/github.com/golang/glog:go_default_library",
@@ -62,23 +66,4 @@ go_library(
         "//vendor/k8s.io/apiserver/pkg/storage/etcd/util:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/util/trace:go_default_library",
     ],
-)
-
-filegroup(
-    name = "package-srcs",
-    srcs = glob(["**"]),
-    tags = ["automanaged"],
-    visibility = ["//visibility:private"],
-)
-
-filegroup(
-    name = "all-srcs",
-    srcs = [
-        ":package-srcs",
-        "//staging/src/k8s.io/apiserver/pkg/storage/etcd/etcdtest:all-srcs",
-        "//staging/src/k8s.io/apiserver/pkg/storage/etcd/metrics:all-srcs",
-        "//staging/src/k8s.io/apiserver/pkg/storage/etcd/testing:all-srcs",
-        "//staging/src/k8s.io/apiserver/pkg/storage/etcd/util:all-srcs",
-    ],
-    tags = ["automanaged"],
 )

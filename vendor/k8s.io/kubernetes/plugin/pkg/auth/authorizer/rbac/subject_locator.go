@@ -31,12 +31,6 @@ type RoleToRuleMapper interface {
 	GetRoleReferenceRules(roleRef rbac.RoleRef, namespace string) ([]rbac.PolicyRule, error)
 }
 
-type SubjectLocator interface {
-	AllowedSubjects(attributes authorizer.Attributes) ([]rbac.Subject, error)
-}
-
-var _ = SubjectLocator(&SubjectAccessEvaluator{})
-
 type SubjectAccessEvaluator struct {
 	superUser string
 

@@ -19,9 +19,9 @@ limitations under the License.
 package rlimit
 
 import (
-	"golang.org/x/sys/unix"
+	"syscall"
 )
 
 func RlimitNumFiles(maxOpenFiles uint64) {
-	unix.Setrlimit(unix.RLIMIT_NOFILE, &unix.Rlimit{Max: maxOpenFiles, Cur: maxOpenFiles})
+	syscall.Setrlimit(syscall.RLIMIT_NOFILE, &syscall.Rlimit{Max: maxOpenFiles, Cur: maxOpenFiles})
 }

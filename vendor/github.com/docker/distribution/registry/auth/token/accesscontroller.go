@@ -1,7 +1,6 @@
 package token
 
 import (
-	"context"
 	"crypto"
 	"crypto/x509"
 	"encoding/pem"
@@ -12,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	dcontext "github.com/docker/distribution/context"
+	"github.com/docker/distribution/context"
 	"github.com/docker/distribution/registry/auth"
 	"github.com/docker/libtrust"
 )
@@ -177,14 +176,12 @@ func newAccessController(options map[string]interface{}) (auth.AccessController,
 	var rootCerts []*x509.Certificate
 	pemBlock, rawCertBundle := pem.Decode(rawCertBundle)
 	for pemBlock != nil {
-		if pemBlock.Type == "CERTIFICATE" {
-			cert, err := x509.ParseCertificate(pemBlock.Bytes)
-			if err != nil {
-				return nil, fmt.Errorf("unable to parse token auth root certificate: %s", err)
-			}
-
-			rootCerts = append(rootCerts, cert)
+		cert, err := x509.ParseCertificate(pemBlock.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse token auth root certificate: %s", err)
 		}
+
+		rootCerts = append(rootCerts, cert)
 
 		pemBlock, rawCertBundle = pem.Decode(rawCertBundle)
 	}
@@ -222,7 +219,7 @@ func (ac *accessController) Authorized(ctx context.Context, accessItems ...auth.
 		accessSet: newAccessSet(accessItems...),
 	}
 
-	req, err := dcontext.GetRequest(ctx)
+	req, err := context.GetRequest(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -261,8 +258,6 @@ func (ac *accessController) Authorized(ctx context.Context, accessItems ...auth.
 			return nil, challenge
 		}
 	}
-
-	ctx = auth.WithResources(ctx, token.resources())
 
 	return auth.WithUser(ctx, auth.UserInfo{Name: token.Claims.Subject}), nil
 }

@@ -43,10 +43,6 @@ type RequestHeaderAuthenticationOptions struct {
 }
 
 func (s *RequestHeaderAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
-	if s == nil {
-		return
-	}
-
 	fs.StringSliceVar(&s.UsernameHeaders, "requestheader-username-headers", s.UsernameHeaders, ""+
 		"List of request headers to inspect for usernames. X-Remote-User is common.")
 
@@ -147,11 +143,6 @@ func (s *DelegatingAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 }
 
 func (s *DelegatingAuthenticationOptions) ApplyTo(c *server.Config) error {
-	if s == nil {
-		c.Authenticator = nil
-		return nil
-	}
-
 	clientCA, err := s.getClientCA()
 	if err != nil {
 		return err

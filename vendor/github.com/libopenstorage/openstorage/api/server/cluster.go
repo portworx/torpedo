@@ -11,6 +11,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/cluster"
+	"github.com/libopenstorage/openstorage/objectstore"
+	sched "github.com/libopenstorage/openstorage/schedpolicy"
 	"github.com/libopenstorage/openstorage/secrets"
 )
 
@@ -21,7 +23,9 @@ const (
 
 type clusterApi struct {
 	restBase
-	SecretManager *secrets.Manager
+	SecretManager      secrets.Secrets
+	SchedPolicyManager sched.SchedulePolicy
+	ObjectStoreManager objectstore.ObjectStore
 }
 
 // ClusterServerConfiguration holds manager implementation
@@ -29,7 +33,11 @@ type clusterApi struct {
 // StartClusterAPIWithConfiguration() to override with his own implementation
 type ClusterServerConfiguration struct {
 	// holds implementation to Secrets interface
-	ConfigSecretManager *secrets.Manager
+	ConfigSecretManager secrets.Secrets
+	// holds implementeation to SchedulePolicy interface
+	ConfigSchedManager sched.SchedulePolicy
+	// holds implementation to ObjectStore interface
+	ConfigObjectStoreManager objectstore.ObjectStore
 }
 
 func newClusterAPI(config ClusterServerConfiguration) restServer {
@@ -38,7 +46,9 @@ func newClusterAPI(config ClusterServerConfiguration) restServer {
 			version: cluster.APIVersion,
 			name:    "Cluster API",
 		},
-		SecretManager: config.ConfigSecretManager,
+		SecretManager:      config.ConfigSecretManager,
+		SchedPolicyManager: config.ConfigSchedManager,
+		ObjectStoreManager: config.ConfigObjectStoreManager,
 	}
 }
 

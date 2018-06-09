@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_test",
@@ -7,15 +9,13 @@ load(
 
 go_test(
     name = "go_default_test",
-    size = "large",
-    srcs = [
-        "main_test.go",
-        "openshift_test.go",
+    srcs = ["openshift_test.go"],
+    tags = [
+        "automanaged",
+        "integration",
     ],
-    tags = ["integration"],
     deps = [
         "//pkg/master:go_default_library",
-        "//test/integration/framework:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/server:go_default_library",
     ],
 )

@@ -20,8 +20,6 @@ import (
 	"reflect"
 	"testing"
 
-	autoscalingv1 "k8s.io/api/autoscaling/v1"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/api"
 	_ "k8s.io/kubernetes/pkg/api/install"
@@ -31,18 +29,18 @@ import (
 
 func TestSetDefaultHPA(t *testing.T) {
 	tests := []struct {
-		hpa            autoscalingv1.HorizontalPodAutoscaler
+		hpa            HorizontalPodAutoscaler
 		expectReplicas int32
 		test           string
 	}{
 		{
-			hpa:            autoscalingv1.HorizontalPodAutoscaler{},
+			hpa:            HorizontalPodAutoscaler{},
 			expectReplicas: 1,
 			test:           "unspecified min replicas, use the default value",
 		},
 		{
-			hpa: autoscalingv1.HorizontalPodAutoscaler{
-				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+			hpa: HorizontalPodAutoscaler{
+				Spec: HorizontalPodAutoscalerSpec{
 					MinReplicas: newInt32(3),
 				},
 			},
@@ -54,7 +52,7 @@ func TestSetDefaultHPA(t *testing.T) {
 	for _, test := range tests {
 		hpa := &test.hpa
 		obj2 := roundTrip(t, runtime.Object(hpa))
-		hpa2, ok := obj2.(*autoscalingv1.HorizontalPodAutoscaler)
+		hpa2, ok := obj2.(*HorizontalPodAutoscaler)
 		if !ok {
 			t.Fatalf("unexpected object: %v", obj2)
 		}

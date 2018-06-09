@@ -18,6 +18,8 @@ package stats
 
 import (
 	"time"
+
+	"k8s.io/kubernetes/pkg/kubelet/container"
 )
 
 // ResourceAnalyzer provides statistics on node resource consumption
@@ -37,9 +39,9 @@ type resourceAnalyzer struct {
 var _ ResourceAnalyzer = &resourceAnalyzer{}
 
 // NewResourceAnalyzer returns a new ResourceAnalyzer
-func NewResourceAnalyzer(statsProvider StatsProvider, calVolumeFrequency time.Duration) ResourceAnalyzer {
+func NewResourceAnalyzer(statsProvider StatsProvider, calVolumeFrequency time.Duration, runtime container.Runtime) ResourceAnalyzer {
 	fsAnalyzer := newFsResourceAnalyzer(statsProvider, calVolumeFrequency)
-	summaryProvider := NewSummaryProvider(statsProvider)
+	summaryProvider := NewSummaryProvider(statsProvider, fsAnalyzer, runtime)
 	return &resourceAnalyzer{fsAnalyzer, summaryProvider}
 }
 

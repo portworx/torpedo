@@ -108,7 +108,6 @@ func NewContainerRuntimeOptions() *ContainerRuntimeOptions {
 		DockerEndpoint:            dockerEndpoint,
 		DockershimRootDirectory:   "/var/lib/dockershim",
 		DockerExecHandlerName:     "native",
-		DockerDisableSharedPID:    true,
 		PodSandboxImage:           defaultPodSandboxImage,
 		ImagePullProgressDeadline: metav1.Duration{Duration: 1 * time.Minute},
 		RktAPIEndpoint:            defaultRktAPIServiceEndpoint,

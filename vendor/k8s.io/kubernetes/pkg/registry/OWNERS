@@ -3,7 +3,6 @@ approvers:
 - lavalamp
 - smarterclayton
 - wojtek-t
-- liggitt
 reviewers:
 - thockin
 - lavalamp
@@ -16,10 +15,12 @@ reviewers:
 - mikedanese
 - liggitt
 - nikhiljindal
+- bprashanth
 - gmarek
 - erictune
 - davidopp
 - pmorie
+- kargakis
 - saad-ali
 - zmerlynn
 - luxas
@@ -28,7 +29,7 @@ reviewers:
 - pwittrock
 - roberthbailey
 - ncdc
-- tallclair
+- timstclair
 - eparis
 - mwielgus
 - timothysc
@@ -38,4 +39,3 @@ reviewers:
 - dims
 - madhusudancs
 - hongchaodeng
-- enj

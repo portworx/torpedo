@@ -19,7 +19,10 @@ import (
 	"github.com/libopenstorage/gossip/types"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/config"
+	"github.com/libopenstorage/openstorage/objectstore"
 	"github.com/libopenstorage/openstorage/osdconfig"
+	sched "github.com/libopenstorage/openstorage/schedpolicy"
+	"github.com/libopenstorage/openstorage/secrets"
 	"github.com/libopenstorage/systemutils"
 	"github.com/portworx/kvdb"
 	"github.com/sirupsen/logrus"
@@ -46,6 +49,10 @@ var (
 
 // ClusterManager implements the cluster interface
 type ClusterManager struct {
+	secrets.Secrets
+	sched.SchedulePolicy
+	objectstore.ObjectStore
+
 	size          int
 	listeners     *list.List
 	config        config.ClusterConfig
@@ -272,7 +279,6 @@ func (c *ClusterManager) nodeIdFromIp(idIp string) (string, error) {
 	// Caller's responsibility to lock the access to the NodeCache.
 	for _, n := range c.nodeCache {
 		if n.DataIp == idIp || n.MgmtIp == idIp {
-			logrus.Infof("Node IP: " + idIp + " maps to ID: " + n.Id)
 			return n.Id, nil // return Id
 		}
 	}
@@ -1270,8 +1276,6 @@ func (c *ClusterManager) Enumerate() (api.Cluster, error) {
 	// Allow listeners to add/modify data
 	for e := c.listeners.Front(); e != nil; e = e.Next() {
 		if err := e.Value.(ClusterListener).Enumerate(cluster); err != nil {
-			logrus.Warnf("listener %s enumerate failed: %v",
-				e.Value.(ClusterListener).String(), err)
 			continue
 		}
 	}
@@ -1617,8 +1621,6 @@ func (c *ClusterManager) EnumerateAlerts(ts, te time.Time, resource api.Resource
 	for e := c.listeners.Front(); e != nil; e = e.Next() {
 		listenerAlerts, err := e.Value.(ClusterListener).EnumerateAlerts(ts, te, resource)
 		if err != nil {
-			logrus.Warnf("Failed to enumerate alerts from (%v): %v",
-				e.Value.(ClusterListener).String(), err)
 			continue
 		}
 		if listenerAlerts != nil {
@@ -1692,39 +1694,4 @@ func (c *ClusterManager) DeleteNodeConf(nodeID string) error {
 
 func (c *ClusterManager) EnumerateNodeConf() (*osdconfig.NodesConfig, error) {
 	return c.configManager.EnumerateNodeConf()
-}
-
-// This needs to be added since clusterclient is REST wrapper over ClusterManager
-// we can also create custom secretclient i.e Rest wrapper over SecretManager
-// may be related to issue :  #382 (https://github.com/libopenstorage/openstorage/issues/382)
-// TODO : Find cleaner way for this
-
-// SecretLogin create session with secret store
-func (c *ClusterManager) SecretLogin(secretType string, secretConfig map[string]string) error {
-	return nil
-}
-
-// SecretSetDefaultSecretKey sets the cluster wide secret key
-func (c *ClusterManager) SecretSetDefaultSecretKey(secretKey string, override bool) error {
-	return nil
-}
-
-// SecretCheckLogin validates session with secret store
-func (c *ClusterManager) SecretCheckLogin() error {
-	return nil
-}
-
-// SecretSet stores the given value/data against the key
-func (c *ClusterManager) SecretSet(key string, value interface{}) error {
-	return nil
-}
-
-// SecretGet retrieves the data for the given key
-func (c *ClusterManager) SecretGet(string) (interface{}, error) {
-	return "", nil
-}
-
-// SecretGetDefaultSecretKey return cluster wide secret key
-func (c *ClusterManager) SecretGetDefaultSecretKey() (interface{}, error) {
-	return nil, nil
 }

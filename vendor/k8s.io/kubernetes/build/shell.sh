@@ -24,5 +24,8 @@ set -o pipefail
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/..
 source "${KUBE_ROOT}/build/common.sh"
+source "${KUBE_ROOT}/build/lib/release.sh"
 
-KUBE_RUN_COPY_OUTPUT="${KUBE_RUN_COPY_OUTPUT:-n}" "${KUBE_ROOT}/build/run.sh" bash "$@"
+kube::build::verify_prereqs
+kube::build::build_image
+kube::build::run_build_command bash || true

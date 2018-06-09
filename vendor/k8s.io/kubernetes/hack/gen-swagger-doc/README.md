@@ -9,7 +9,7 @@ $ sudo docker build -t gcr.io/google_containers/gen-swagger-docs:v1 .
 To generate the html docs,
 
 ```
-$ ./gen-swagger-docs.sh <API version> <absolute output path, default to PWD>
+$ ./run-gen-swagger-docs.sh <API version> <absolute output path, default to PWD>
 ```
 
 The generated definitions.html and operations.html will be stored in output paths.

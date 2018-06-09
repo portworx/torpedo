@@ -1,5 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
+licenses(["notice"])
+
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
@@ -12,6 +14,7 @@ go_library(
         "fake_networking_client.go",
         "fake_networkpolicy.go",
     ],
+    tags = ["automanaged"],
     deps = [
         "//pkg/apis/networking:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/networking/internalversion:go_default_library",

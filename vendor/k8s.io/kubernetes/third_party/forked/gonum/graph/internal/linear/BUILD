@@ -10,6 +10,7 @@ load(
 go_library(
     name = "go_default_library",
     srcs = ["linear.go"],
+    tags = ["automanaged"],
     deps = ["//third_party/forked/gonum/graph:go_default_library"],
 )
 

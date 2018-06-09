@@ -29,7 +29,9 @@ type CommandGroups []CommandGroup
 
 func (g CommandGroups) Add(c *cobra.Command) {
 	for _, group := range g {
-		c.AddCommand(group.Commands...)
+		for _, command := range group.Commands {
+			c.AddCommand(command)
+		}
 	}
 }
 

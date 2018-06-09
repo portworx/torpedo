@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -20,15 +19,15 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/sirupsen/logrus"
-	apps_api "k8s.io/api/apps/v1beta2"
-	"k8s.io/api/core/v1"
-	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
+	v1 "k8s.io/client-go/pkg/api/v1"
+	apps_api "k8s.io/client-go/pkg/apis/apps/v1beta1"
+	storage_api "k8s.io/client-go/pkg/apis/storage/v1"
 )
 
 const (
@@ -167,9 +166,9 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 	if err != nil {
 		scheme := runtime.NewScheme()
-		if err := snap_v1.AddToScheme(scheme); err != nil {
-			return nil, err
-		}
+		//if err := snap_v1.AddToScheme(scheme); err != nil {
+		//	return nil, err
+		//}
 		codecs := serializer.NewCodecFactory(scheme)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 		if err != nil {
@@ -190,8 +189,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*storage_api.StorageClass); ok {
 		return specObj, nil
-	} else if specObj, ok := in.(*snap_v1.VolumeSnapshot); ok {
-		return specObj, nil
+		//	} else if specObj, ok := in.(*snap_v1.VolumeSnapshot); ok {
+		//		return specObj, nil
 	} else if specObj, ok := in.(*v1.Secret); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.ConfigMap); ok {
@@ -381,24 +380,24 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		logrus.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
 		return pvc, nil
 
-	} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
-		obj.Metadata.Namespace = ns.Name
-		snap, err := k8sOps.CreateSnapshot(obj)
-		if errors.IsAlreadyExists(err) {
-			if snap, err = k8sOps.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err == nil {
-				logrus.Infof("[%v] Found existing snapshot: %v", app.Key, snap.Metadata.Name)
-				return snap, nil
-			}
-		}
-		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", obj.Metadata.Name, err),
-			}
-		}
-
-		logrus.Infof("[%v] Created Snapshot: %v", app.Key, snap.Metadata.Name)
-		return snap, nil
+		//	} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+		//		obj.Metadata.Namespace = ns.Name
+		//		snap, err := k8sOps.CreateSnapshot(obj)
+		//		if errors.IsAlreadyExists(err) {
+		//			if snap, err = k8sOps.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err == nil {
+		//				logrus.Infof("[%v] Found existing snapshot: %v", app.Key, snap.Metadata.Name)
+		//				return snap, nil
+		//			}
+		//		}
+		//		if err != nil {
+		//			return nil, &scheduler.ErrFailedToScheduleApp{
+		//				App:   app,
+		//				Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", obj.Metadata.Name, err),
+		//			}
+		//		}
+		//
+		//		logrus.Infof("[%v] Created Snapshot: %v", app.Key, snap.Metadata.Name)
+		//		return snap, nil
 	}
 
 	return nil, nil
@@ -760,19 +759,19 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			}
 
 			result[pvc.Spec.VolumeName] = params
-		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
-			snap, err := k8sOps.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToGetVolumeParameters{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get Snapshot: %v. Err: %v", obj.Metadata.Name, err),
-				}
-			}
-
-			result[snap.Metadata.Name] = map[string]string{
-				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
-			}
-
+			//		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+			//			snap, err := k8sOps.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace)
+			//			if err != nil {
+			//				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+			//					App:   ctx.App,
+			//					Cause: fmt.Sprintf("failed to get Snapshot: %v. Err: %v", obj.Metadata.Name, err),
+			//				}
+			//			}
+			//
+			//			result[snap.Metadata.Name] = map[string]string{
+			//				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
+			//			}
+			//
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
@@ -832,15 +831,15 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 			}
 
 			logrus.Infof("[%v] Validated PVC: %v", ctx.App.Key, obj.Name)
-		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
-			if err := k8sOps.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
-				return &scheduler.ErrFailedToValidateStorage{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate snapshot: %v. Err: %v", obj.Metadata.Name, err),
-				}
-			}
-
-			logrus.Infof("[%v] Validated snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+			//		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+			//			if err := k8sOps.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
+			//				return &scheduler.ErrFailedToValidateStorage{
+			//					App:   ctx.App,
+			//					Cause: fmt.Sprintf("Failed to validate snapshot: %v. Err: %v", obj.Metadata.Name, err),
+			//				}
+			//			}
+			//
+			//			logrus.Infof("[%v] Validated snapshot: %v", ctx.App.Key, obj.Metadata.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
@@ -896,17 +895,17 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			logrus.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
-		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
-			if err := k8sOps.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
-				if !errors.IsNotFound(err) {
-					return nil, &scheduler.ErrFailedToDestroyStorage{
-						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to destroy Snapshot: %v. Err: %v", obj.Metadata.Name, err),
-					}
-				}
-			}
-
-			logrus.Infof("[%v] Destroyed snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+			//		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+			//			if err := k8sOps.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
+			//				if !errors.IsNotFound(err) {
+			//					return nil, &scheduler.ErrFailedToDestroyStorage{
+			//						App:   ctx.App,
+			//						Cause: fmt.Sprintf("Failed to destroy Snapshot: %v. Err: %v", obj.Metadata.Name, err),
+			//					}
+			//				}
+			//			}
+			//
+			//			logrus.Infof("[%v] Destroyed snapshot: %v", ctx.App.Key, obj.Metadata.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			pvcList, err := k8sOps.GetPVCsForStatefulSet(obj)
 			if err != nil || pvcList == nil {
@@ -983,16 +982,16 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 func (k *k8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 	var snaps []*volume.Snapshot
-	for _, spec := range ctx.App.SpecList {
-		if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
-			snap := &volume.Snapshot{
-				ID:        string(obj.Metadata.UID),
-				Name:      obj.Metadata.Name,
-				Namespace: obj.Metadata.Namespace,
-			}
-			snaps = append(snaps, snap)
-		}
-	}
+	//	for _, spec := range ctx.App.SpecList {
+	//		if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+	//			snap := &volume.Snapshot{
+	//				ID:        string(obj.Metadata.UID),
+	//				Name:      obj.Metadata.Name,
+	//				Namespace: obj.Metadata.Namespace,
+	//			}
+	//			snaps = append(snaps, snap)
+	//		}
+	//	}
 
 	return snaps, nil
 }

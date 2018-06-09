@@ -21,10 +21,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_clientset"
+	fedclientset "k8s.io/kubernetes/federation/client/clientset_generated/federation_internalclientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	oldclient "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/version"
@@ -59,35 +58,6 @@ type ClientCache struct {
 	// argument evaluation
 	discoveryClientFactory DiscoveryClientFactory
 	discoveryClient        discovery.DiscoveryInterface
-
-	kubernetesClientCache kubernetesClientCache
-}
-
-// kubernetesClientCache creates a new kubernetes.Clientset one time
-// and then returns the result for all future requests
-type kubernetesClientCache struct {
-	// once makes sure the client is only initialized once
-	once sync.Once
-	// client is the cached client value
-	client *kubernetes.Clientset
-	// err is the cached error value
-	err error
-}
-
-// KubernetesClientSetForVersion returns a new kubernetes.Clientset.  It will cache the value
-// the first time it is called and return the cached value on subsequent calls.
-// If an error is encountered the first time KubernetesClientSetForVersion is called,
-// the error will be cached.
-func (c *ClientCache) KubernetesClientSetForVersion(requiredVersion *schema.GroupVersion) (*kubernetes.Clientset, error) {
-	c.kubernetesClientCache.once.Do(func() {
-		config, err := c.ClientConfigForVersion(requiredVersion)
-		if err != nil {
-			c.kubernetesClientCache.err = err
-			return
-		}
-		c.kubernetesClientCache.client, c.kubernetesClientCache.err = kubernetes.NewForConfig(config)
-	})
-	return c.kubernetesClientCache.client, c.kubernetesClientCache.err
 }
 
 // also looks up the discovery client.  We can't do this during init because the flags won't have been set

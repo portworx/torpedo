@@ -26,6 +26,7 @@ import (
 
 	"os"
 
+	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 )
 
@@ -179,7 +180,7 @@ func TestRunInitMasterChecks(t *testing.T) {
 	}{
 		{
 			cfg: &kubeadmapi.MasterConfiguration{
-				API: kubeadmapi.API{AdvertiseAddress: "foo"},
+				API: kubeadm.API{AdvertiseAddress: "foo"},
 			},
 			expected: false,
 		},
@@ -238,17 +239,6 @@ func TestRunChecks(t *testing.T) {
 		{[]Checker{FileContentCheck{Path: "/", Content: []byte("does not exist")}}, false, ""},
 		{[]Checker{InPathCheck{executable: "foobarbaz"}}, true, "[preflight] WARNING: foobarbaz not found in system path\n"},
 		{[]Checker{InPathCheck{executable: "foobarbaz", mandatory: true}}, false, ""},
-		{[]Checker{ExtraArgsCheck{
-			APIServerExtraArgs:         map[string]string{"secure-port": "1234"},
-			ControllerManagerExtraArgs: map[string]string{"use-service-account-credentials": "true"},
-			SchedulerExtraArgs:         map[string]string{"leader-elect": "true"},
-		}}, true, ""},
-		{[]Checker{ExtraArgsCheck{
-			APIServerExtraArgs: map[string]string{"secure-port": "foo"},
-		}}, true, "[preflight] WARNING: kube-apiserver: failed to parse extra argument --secure-port=foo\n"},
-		{[]Checker{ExtraArgsCheck{
-			APIServerExtraArgs: map[string]string{"invalid-argument": "foo"},
-		}}, true, "[preflight] WARNING: kube-apiserver: failed to parse extra argument --invalid-argument=foo\n"},
 	}
 	for _, rt := range tokenTest {
 		buf := new(bytes.Buffer)
@@ -344,68 +334,5 @@ func TestConfigCertAndKey(t *testing.T) {
 			"failed configCertAndKey:\n\texpected: Certificates not equal to nil\n\tactual:%v",
 			config.Certificates,
 		)
-	}
-}
-
-func TestKubernetesVersionCheck(t *testing.T) {
-	var tests = []struct {
-		check          KubernetesVersionCheck
-		expectWarnings bool
-	}{
-		{
-			check: KubernetesVersionCheck{
-				KubeadmVersion:    "v1.6.6", //Same version
-				KubernetesVersion: "v1.6.6",
-			},
-			expectWarnings: false,
-		},
-		{
-			check: KubernetesVersionCheck{
-				KubeadmVersion:    "v1.6.6", //KubernetesVersion version older than KubeadmVersion
-				KubernetesVersion: "v1.5.5",
-			},
-			expectWarnings: false,
-		},
-		{
-			check: KubernetesVersionCheck{
-				KubeadmVersion:    "v1.6.6", //KubernetesVersion newer than KubeadmVersion, within the same minor release (new patch)
-				KubernetesVersion: "v1.6.7",
-			},
-			expectWarnings: false,
-		},
-		{
-			check: KubernetesVersionCheck{
-				KubeadmVersion:    "v1.6.6", //KubernetesVersion newer than KubeadmVersion, in a different minor/in pre-release
-				KubernetesVersion: "v1.7.0-alpha.0",
-			},
-			expectWarnings: true,
-		},
-		{
-			check: KubernetesVersionCheck{
-				KubeadmVersion:    "v1.6.6", //KubernetesVersion newer than KubeadmVersion, in a different minor/stable
-				KubernetesVersion: "v1.7.0",
-			},
-			expectWarnings: true,
-		},
-		{
-			check: KubernetesVersionCheck{
-				KubeadmVersion:    "v0.0.0", //"super-custom" builds - Skip this check
-				KubernetesVersion: "v1.7.0",
-			},
-			expectWarnings: false,
-		},
-	}
-
-	for _, rt := range tests {
-		warning, _ := rt.check.Check()
-		if (warning != nil) != rt.expectWarnings {
-			t.Errorf(
-				"failed KubernetesVersionCheck:\n\texpected: %t\n\t  actual: %t (KubeadmVersion:%s, KubernetesVersion: %s)",
-				rt.expectWarnings,
-				(warning != nil),
-				rt.check.KubeadmVersion,
-				rt.check.KubernetesVersion,
-			)
-		}
 	}
 }

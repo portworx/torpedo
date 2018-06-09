@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -ex
+sysctl -w vm.max_map_count=262144
 
 export NODE_NAME=${NODE_NAME:-${HOSTNAME}}
 export NODE_MASTER=${NODE_MASTER:-true}
@@ -23,7 +23,8 @@ export HTTP_PORT=${HTTP_PORT:-9200}
 export TRANSPORT_PORT=${TRANSPORT_PORT:-9300}
 export MINIMUM_MASTER_NODES=${MINIMUM_MASTER_NODES:-2}
 
+/elasticsearch_logging_discovery >> /elasticsearch/config/elasticsearch.yml
+
 chown -R elasticsearch:elasticsearch /data
 
-./bin/elasticsearch_logging_discovery >> ./config/elasticsearch.yml
-exec su elasticsearch -c ./bin/es-docker
+exec gosu elasticsearch sh /elasticsearch/bin/elasticsearch

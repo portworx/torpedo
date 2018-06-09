@@ -24,6 +24,7 @@ import (
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/registry/cachesize"
 	"k8s.io/kubernetes/pkg/registry/core/persistentvolumeclaim"
 )
 
@@ -34,11 +35,12 @@ type REST struct {
 // NewREST returns a RESTStorage object that will work against persistent volume claims.
 func NewREST(optsGetter generic.RESTOptionsGetter) (*REST, *StatusREST) {
 	store := &genericregistry.Store{
-		Copier:                   api.Scheme,
-		NewFunc:                  func() runtime.Object { return &api.PersistentVolumeClaim{} },
-		NewListFunc:              func() runtime.Object { return &api.PersistentVolumeClaimList{} },
-		PredicateFunc:            persistentvolumeclaim.MatchPersistentVolumeClaim,
-		DefaultQualifiedResource: api.Resource("persistentvolumeclaims"),
+		Copier:            api.Scheme,
+		NewFunc:           func() runtime.Object { return &api.PersistentVolumeClaim{} },
+		NewListFunc:       func() runtime.Object { return &api.PersistentVolumeClaimList{} },
+		PredicateFunc:     persistentvolumeclaim.MatchPersistentVolumeClaim,
+		QualifiedResource: api.Resource("persistentvolumeclaims"),
+		WatchCacheSize:    cachesize.GetWatchCacheSizeByResource("persistentvolumeclaims"),
 
 		CreateStrategy:      persistentvolumeclaim.Strategy,
 		UpdateStrategy:      persistentvolumeclaim.Strategy,
