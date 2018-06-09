@@ -227,6 +227,9 @@ type RBACOps interface {
 type PodOps interface {
 	// GetPods returns pods for the given namespace
 	GetPods(string) (*v1.PodList, error)
+	// GetPodsByNode returns all pods in given namespace and given k8s node name.
+	// 	  If namespace is empty, it will return pods from all namespaces
+	GetPodsByNode(nodeName, namespace string) (*v1.PodList, error)
 	// GetPodsByOwner returns pods for the given owner and namespace
 	GetPodsByOwner(types.UID, string) ([]v1.Pod, error)
 	// GetPodsUsingPV returns all pods in cluster using given pv
@@ -1663,6 +1666,18 @@ func (k *k8sOps) GetPods(namespace string) (*v1.PodList, error) {
 	}
 
 	return k.client.CoreV1().Pods(namespace).List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) GetPodsByNode(nodeName, namespace string) (*v1.PodList, error) {
+	if len(nodeName) == 0 {
+		return nil, fmt.Errorf("node name is required for this API")
+	}
+
+	listOptions := meta_v1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
+	}
+
+	return k.getPodsWithListOptions(namespace, listOptions)
 }
 
 func (k *k8sOps) GetPodsByOwner(ownerUID types.UID, namespace string) ([]v1.Pod, error) {
