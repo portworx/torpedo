@@ -195,6 +195,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.ConfigMap); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*v1.Pod); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("Unsupported object: %v", reflect.TypeOf(in))
@@ -497,6 +499,7 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spec.AppSpec) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
 	var pods interface{}
+	var podList *v1.PodList
 	var err error
 	if obj, ok := spec.(*apps_api.Deployment); ok {
 		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
@@ -539,6 +542,21 @@ func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		logrus.Infof("[%v] Destroyed Service: %v", app.Key, obj.Name)
+	} else if obj, ok := spec.(*v1.Pod); ok {
+		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+			if podList, err = k8sOps.GetPods(obj.Name); err != nil {
+				logrus.Warnf("[%v] Error getting pods. Err: %v", app.Key, err)
+			}
+		}
+		err := k8sOps.DeletePods(podList.Items, false)
+		if err != nil {
+			return pods, &scheduler.ErrFailedToDestroyPod{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy Pod: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Destroyed Pod: %v", app.Key, obj.Name)
 	}
 	return pods, nil
 
@@ -587,6 +605,16 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 			}
 
 			logrus.Infof("[%v] Validated Service: %v", ctx.App.Key, svc.Name)
+		} else if obj, ok := spec.(*v1.Pod); ok {
+			isPodReady := k8sOps.IsPodReady(*obj)
+			if !isPodReady {
+				return &scheduler.ErrFailedToValidatePod{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate Pod: %s. Err: Pod is not ready", obj.Name),
+				}
+			}
+
+			logrus.Infof("[%v] Validated pod: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -1125,6 +1153,17 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 			//Dump storage class parameters
 			buf.WriteString(fmt.Sprintf("%v\n", scParams))
 			buf.WriteString(insertLineBreak("END Storage Class"))
+		} else if obj, ok := spec.(*v1.Pod); ok {
+			buf.WriteString(insertLineBreak(obj.Name))
+			var podStatus *v1.PodList
+			if podStatus, err = k8sOps.GetPods(obj.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetPodStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get status of pod: %v. Err: %v", obj.Name, err),
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", podStatus))
+			buf.WriteString(insertLineBreak("END Pod"))
 		} else {
 			logrus.Warnf("Object type unknown/not supported: %v", obj)
 		}
