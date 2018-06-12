@@ -22,7 +22,7 @@ spec:
       securityContext:
         fsGroup: 1000
       containers:
-      - image: samuelmyers/wp-cli:1.2.26
+      - image: samuelmyers/wp-cli:1.2.27
         name: installer
         env:
         - name: WORDPRESS_URL
@@ -45,7 +45,7 @@ spec:
           exec:
             command:
             - cat
-            - /wordpress/alive
+            - /tmp/alive
           initialDelaySeconds: 5
           periodSeconds: 5
       volumes:
