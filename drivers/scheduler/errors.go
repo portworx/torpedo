@@ -91,6 +91,18 @@ func (e *ErrFailedToValidateApp) Error() string {
 	return fmt.Sprintf("Failed to validate app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
+// ErrFailedToSchedulePod error type for failing to schedule a pod
+type ErrFailedToSchedulePod struct {
+	// Pod is the pod that failed to schedule
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToSchedulePod) Error() string {
+	return fmt.Sprintf("Failed to schedule app: %v due to err: %v", e.App.Key, e.Cause)
+}
+
 // ErrFailedToValidatePod error type for failing to validate a pod
 type ErrFailedToValidatePod struct {
 	// App is the app whose validation failed
@@ -125,6 +137,18 @@ type ErrFailedToGetPodStatus struct {
 
 func (e *ErrFailedToGetPodStatus) Error() string {
 	return fmt.Sprintf("Failed to get status of pod: %v due to err: %v", e.App.Key, e.Cause)
+}
+
+// ErrFailedToValidatePodDestroy error type for failing to validate destroy of an pod
+type ErrFailedToValidatePodDestroy struct {
+	// App is the app that failed to destroy
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToValidatePodDestroy) Error() string {
+	return fmt.Sprintf("Failed to validate destroy of pod: %v due to err: %v", e.App.Key, e.Cause)
 }
 
 // ErrFailedToGetAppStatus error type for failing to get app's status

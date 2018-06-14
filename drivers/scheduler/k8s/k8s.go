@@ -491,6 +491,23 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 
 		logrus.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
 		return secret, nil
+	} else if obj, ok := spec.(*v1.Pod); ok {
+		pod, err := k8sOps.CreatePod(obj)
+		if errors.IsAlreadyExists(err) {
+			if pods, err := k8sOps.GetPods(obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Pods: %v", app.Key, pods)
+				return pod, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToSchedulePod{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Pod: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Pod: %v", app.Key, pod.Name)
+		return pod, nil
 	}
 
 	return nil, nil
@@ -726,6 +743,15 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 			}
 
 			logrus.Infof("[%v] Validated destroy of Service: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*v1.Pod); ok {
+			if err := k8sOps.ValidateDeletedPod(obj.Name, obj.Namespace); err != nil {
+				return &scheduler.ErrFailedToValidatePodDestroy{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate destroy of pod: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			logrus.Infof("[%v] Validated destroy of Pod: %v", ctx.App.Key, obj.Name)
 		}
 	}
 	return nil
