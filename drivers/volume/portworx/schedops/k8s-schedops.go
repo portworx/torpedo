@@ -223,9 +223,9 @@ func (k *k8sSchedOps) ValidateSnapshot(params map[string]string, parent *api.Vol
 	if parentPVCAnnotation, ok := params[snapshotAnnotation]; ok {
 		logrus.Debugf("Validating annotation based snapshot/clone")
 		return k.validateVolumeClone(parent, parentPVCAnnotation)
-	} else if snapshotAnnotation, ok := params[storkSnapshotAnnotation]; ok {
+	} else if snapshotName, ok := params[storkSnapshotAnnotation]; ok {
 		logrus.Debugf("Validating Stork clone")
-		return k.validateStorkClone(parent, snapshotAnnotation)
+		return k.validateStorkClone(parent, snapshotName)
 	}
 	logrus.Debugf("Validating Stork snapshot")
 	return k.validateStorkSnapshot(parent, params)
@@ -244,22 +244,22 @@ func (k *k8sSchedOps) validateVolumeClone(parent *api.Volume, parentAnnotation s
 	return nil
 }
 
-func (k *k8sSchedOps) validateStorkClone(parent *api.Volume, snapshotAnnotation string) error {
+func (k *k8sSchedOps) validateStorkClone(parent *api.Volume, snapshotName string) error {
 	volumeLabels := parent.Locator.VolumeLabels
 	if volumeLabels != nil {
 		snapName, ok := volumeLabels[storkSnapshotNameKey]
-		if ok && snapName == snapshotAnnotation {
+		if ok && snapName == snapshotName {
 			return nil
 		}
 	}
 
 	parentName := parent.Locator.Name
-	if parentName == snapshotAnnotation {
+	if parentName == snapshotName {
 		return nil
 	}
 
 	return fmt.Errorf("snapshot annotation: %s on the clone PVC matches neither parent volume "+
-		"name: %s nor parent volume labels: %v", snapshotAnnotation, parentName, volumeLabels)
+		"name: %s nor parent volume labels: %v", snapshotName, parentName, volumeLabels)
 }
 
 func (k *k8sSchedOps) validateStorkSnapshot(parent *api.Volume, params map[string]string) error {
