@@ -42,7 +42,7 @@ spec:
         - containerPort: 3306
         livenessProbe:
           exec:
-            command: ["sh", "-c", "mysqladmin -u root -p -p$MYSQL_ROOT_PASSWORD ping"]
+            command: ["sh", "-c", "mysqladmin -u root -p$MYSQL_ROOT_PASSWORD ping"]
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
