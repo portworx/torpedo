@@ -37,7 +37,9 @@ const (
 	//   the name of the stork volume snapshot
 	storkSnapshotNameKey = "stork-snap"
 	// pvcLabel is the label used on volume to identify the pvc name
-	pvcLabel               = "pvc"
+	pvcLabel = "pvc"
+	// pxenable is label used to check whethere px installation is enabled/disabled on node
+	pxenabled              = "px/enabled"
 	talismanServiceAccount = "talisman-account"
 	talismanImage          = "portworx/talisman:latest"
 )
@@ -477,6 +479,25 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 		}
 	}
 	return true
+}
+
+// IsPXInstalled returns true/false if px label is enabled/disabled on kubernetes node
+func (k *k8sSchedOps) IsPXInstalled(n node.Node) bool {
+	isPxInstalled := true
+	kubeNode, err := k8s.Instance().GetNodeByName(n.Name)
+	if err != nil {
+		logrus.Errorf("Failed to get node %v", err)
+		return false
+	}
+
+	// if label is set make above assumption wrong
+	// TODO: add taint check and kubernetes.dcos.io/node-type=public check
+	if kubeNode.Labels[pxenabled] == "false" {
+		logrus.Infof("[%v] Px Disabled: ", n.Name)
+		isPxInstalled = false
+	}
+	logrus.Infof("PX status on node %v %v\n", n.Name, isPxInstalled)
+	return isPxInstalled
 }
 
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that

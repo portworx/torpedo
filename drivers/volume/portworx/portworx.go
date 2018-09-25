@@ -97,8 +97,10 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 	}
 
 	for _, n := range node.GetWorkerNodes() {
-		if err := d.WaitDriverUpOnNode(n); err != nil {
-			return err
+		if n.IsDriverInstalled {
+			if err := d.WaitDriverUpOnNode(n); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -127,15 +129,22 @@ func (d *portworx) updateNodes(pxNodes []api.Node) error {
 
 func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 	for _, address := range n.Addresses {
+		isPX := d.schedOps.IsPXInstalled(n)
 		for _, pxNode := range pxNodes {
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {
 				n.VolDriverNodeID = pxNode.Id
+				n.IsDriverInstalled = isPX
+				node.UpdateNode(n)
+				return nil
+			} else if !isPX {
+				n.IsDriverInstalled = false
 				node.UpdateNode(n)
 				return nil
 			}
 		}
 	}
-
+	// This is when we get node where label is not applied but for some reason
+	// PX not installed
 	return fmt.Errorf("failed to find px node for node: %v PX nodes: %v", n, pxNodes)
 }
 
@@ -499,7 +508,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 	for _, n := range nodes {
 		logrus.Infof("Stopping volume driver on %s.", n.Name)
 		if force {
-			pxCrashCmd := "sudo kill -9 px-storage"
+			pxCrashCmd := "sudo pkill -9 px-storage"
 			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
 				Timeout:         crashDriverTimeout,
 				TimeBeforeRetry: defaultRetryInterval,

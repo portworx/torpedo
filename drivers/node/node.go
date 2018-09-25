@@ -19,12 +19,13 @@ const (
 
 // Node encapsulates a node in the cluster
 type Node struct {
-	uuid            string
-	VolDriverNodeID string
-	Name            string
-	Addresses       []string
-	UsableAddr      string
-	Type            Type
+	uuid              string
+	VolDriverNodeID   string
+	Name              string
+	Addresses         []string
+	UsableAddr        string
+	Type              Type
+	IsDriverInstalled bool
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options
