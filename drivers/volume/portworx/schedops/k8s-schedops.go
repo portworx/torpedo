@@ -39,7 +39,7 @@ const (
 	// pvcLabel is the label used on volume to identify the pvc name
 	pvcLabel = "pvc"
 	// pxenable is label used to check whethere px installation is enabled/disabled on node
-	pxenabled = "px/enabled"
+	pxEnabled = "px/enabled"
 	// nodeType is label used to check kubernetes node-type
 	nodeType               = "kubernetes.dcos.io/node-type"
 	talismanServiceAccount = "talisman-account"
@@ -483,23 +483,33 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	return true
 }
 
-// IsPXInstalled returns true/false if px label is enabled/disabled on kubernetes node
-func (k *k8sSchedOps) IsPXInstalled(n node.Node) bool {
-	isPxInstalled := true
-	kubeNode, err := k8s.Instance().GetNodeByName(n.Name)
-	if err != nil {
-		logrus.Errorf("Failed to get node %v", err)
-		return false
+// IsPXEnabled returns true  if px is enabled on given node
+func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
+	isPxEnabled := true
+	t := func() (interface{}, bool, error) {
+		node, err := k8s.Instance().GetNodeByName(n.Name)
+		if err != nil {
+			logrus.Errorf("Failed to get node %v", err)
+			return nil, true, err
+		}
+		return node, false, nil
 	}
 
-	// if node has px/enabled label set to false or node-type public or
-	// has any taints then make above assumption wrong
-	if kubeNode.Labels[pxenabled] == "false" || kubeNode.Labels[nodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
-		logrus.Infof("[%v] Px Disabled: ", n.Name)
-		isPxInstalled = false
+	node, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		logrus.Errorf("Failed to get node %v", err)
+		return false, err
 	}
-	logrus.Infof("PX status on node %v %v\n", n.Name, isPxInstalled)
-	return isPxInstalled
+
+	kubeNode := node.(*corev1.Node)
+	// if node has px/enabled label set to false or node-type public or
+	// has any taints then px is disabled on node
+	if kubeNode.Labels[pxEnabled] == "false" || kubeNode.Labels[nodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
+		logrus.Infof("[%v] Px Disabled: ", n.Name)
+		isPxEnabled = false
+	}
+	logrus.Infof("PX status on node %v %v", n.Name, isPxEnabled)
+	return isPxEnabled, nil
 }
 
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that

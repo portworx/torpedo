@@ -96,11 +96,9 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		return err
 	}
 
-	for _, n := range node.GetWorkerNodes() {
-		if n.IsDriverInstalled {
-			if err := d.WaitDriverUpOnNode(n); err != nil {
-				return err
-			}
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := d.WaitDriverUpOnNode(n); err != nil {
+			return err
 		}
 	}
 
@@ -128,23 +126,26 @@ func (d *portworx) updateNodes(pxNodes []api.Node) error {
 }
 
 func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
+	isPX, err := d.schedOps.IsPXEnabled(n)
+	if err != nil {
+		return err
+	}
+	// No need to check in pxNodes if px is not installed
+	if !isPX {
+		return nil
+	}
 	for _, address := range n.Addresses {
-		isPX := d.schedOps.IsPXInstalled(n)
 		for _, pxNode := range pxNodes {
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {
 				n.VolDriverNodeID = pxNode.Id
-				n.IsDriverInstalled = isPX
-				node.UpdateNode(n)
-				return nil
-			} else if !isPX {
-				n.IsDriverInstalled = false
+				n.IsStorageDriverInstalled = isPX
 				node.UpdateNode(n)
 				return nil
 			}
 		}
 	}
-	// This is when we get node where label is not applied but for some reason
-	// PX not installed
+
+	// Return error where PX is not explicitly disabled but was not found installed
 	return fmt.Errorf("failed to find px node for node: %v PX nodes: %v", n, pxNodes)
 }
 
@@ -558,7 +559,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	}
 
 	pxVol := v.(*api.Volume)
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		if n.VolDriverNodeID == pxVol.AttachedOn {
 			return &n, nil
 		}
@@ -949,7 +950,7 @@ func (d *portworx) UpgradeDriver(version string) error {
 		}
 	}
 
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		if err := d.WaitForUpgrade(n, image, tag); err != nil {
 			return err
 		}

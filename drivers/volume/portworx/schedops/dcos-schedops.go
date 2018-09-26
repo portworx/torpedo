@@ -61,10 +61,10 @@ func (d *dcosSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	return true
 }
 
-// IsPXInstalled should return whether perticualr node has px installed or not
-func (d *dcosSchedOps) IsPXInstalled(n node.Node) bool {
+// IsPXEnabled should return whether given node has px installed or not
+func (d *dcosSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	// TODO: Implement this method
-	return true
+	return true, nil
 }
 func init() {
 	d := &dcosSchedOps{}

@@ -31,8 +31,8 @@ type Driver interface {
 	UpgradePortworx(image, tag string) error
 	// IsPXReadyOnNode returns true if PX pod is up on that node, else returns false
 	IsPXReadyOnNode(n node.Node) bool
-	// IsPXInstalled returns true is px/enable flag is disabled/not applied on node
-	IsPXInstalled(n node.Node) bool
+	// IsPXEnabled returns true if portworx is enabled on given node
+	IsPXEnabled(n node.Node) (bool, error)
 }
 
 var (
