@@ -41,7 +41,7 @@ const (
 	// pxenable is label used to check whethere px installation is enabled/disabled on node
 	pxEnabled = "px/enabled"
 	// nodeType is label used to check kubernetes node-type
-	nodeType               = "kubernetes.dcos.io/node-type"
+	dcosNodeType           = "kubernetes.dcos.io/node-type"
 	talismanServiceAccount = "talisman-account"
 	talismanImage          = "portworx/talisman:latest"
 )
@@ -485,7 +485,6 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 
 // IsPXEnabled returns true  if px is enabled on given node
 func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
-	isPxEnabled := true
 	t := func() (interface{}, bool, error) {
 		node, err := k8s.Instance().GetNodeByName(n.Name)
 		if err != nil {
@@ -504,12 +503,13 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	kubeNode := node.(*corev1.Node)
 	// if node has px/enabled label set to false or node-type public or
 	// has any taints then px is disabled on node
-	if kubeNode.Labels[pxEnabled] == "false" || kubeNode.Labels[nodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
-		logrus.Infof("[%v] Px Disabled: ", n.Name)
-		isPxEnabled = false
+	if kubeNode.Labels[pxEnabled] == "false" || kubeNode.Labels[dcosNodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
+		logrus.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
+		return false, nil
 	}
-	logrus.Infof("PX status on node %v %v", n.Name, isPxEnabled)
-	return isPxEnabled, nil
+
+	logrus.Infof("PX is enabled on node %v.", n.Name)
+	return true, nil
 }
 
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that
