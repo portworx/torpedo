@@ -39,7 +39,9 @@ const (
 	// pvcLabel is the label used on volume to identify the pvc name
 	pvcLabel = "pvc"
 	// pxenable is label used to check whethere px installation is enabled/disabled on node
-	pxenabled              = "px/enabled"
+	pxenabled = "px/enabled"
+	// nodeType is label used to check kubernetes node-type
+	nodeType               = "kubernetes.dcos.io/node-type"
 	talismanServiceAccount = "talisman-account"
 	talismanImage          = "portworx/talisman:latest"
 )
@@ -490,9 +492,9 @@ func (k *k8sSchedOps) IsPXInstalled(n node.Node) bool {
 		return false
 	}
 
-	// if label is set make above assumption wrong
-	// TODO: add taint check and kubernetes.dcos.io/node-type=public check
-	if kubeNode.Labels[pxenabled] == "false" {
+	// if node has px/enabled label set to false or node-type public or
+	// has any taints then make above assumption wrong
+	if kubeNode.Labels[pxenabled] == "false" || kubeNode.Labels[nodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
 		logrus.Infof("[%v] Px Disabled: ", n.Name)
 		isPxInstalled = false
 	}
