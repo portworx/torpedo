@@ -295,6 +295,23 @@ func CollectSupport() {
 	})
 }
 
+// CheckForCoreFiles check if cores files are present on each node
+func CheckForCoreFiles() {
+	context(fmt.Sprintf("checking for core files..."), func() {
+		Step(fmt.Sprintf("verifying if core files are present on each node"), func() {
+			nodes := node.GetWorkerNodes()
+			expect(nodes).NotTo(beEmpty())
+			for _, n := range nodes {
+				file, err := Inst().N.SystemCheck(n)
+				if err != nil {
+					logrus.Warnf("failed to check system. err: %v", err)
+				}
+				expect(file).To(beEmpty())
+			}
+		})
+	})
+}
+
 // Inst returns the Torpedo instances
 func Inst() *Torpedo {
 	return instance

@@ -10,11 +10,21 @@ import (
 // Type identifies the type of the cluster node
 type Type string
 
+// FindType identifies the type of find command
+type FindType string
+
 const (
 	// TypeMaster identifies a cluster node that is a master/manager
 	TypeMaster Type = "Master"
 	// TypeWorker identifies a cluster node that is a worker
 	TypeWorker Type = "Worker"
+)
+
+const (
+	// File identifies a search on find command to look for files only
+	File FindType = "f"
+	// Directory identifies a search on find command to look for directories only
+	Directory FindType = "d"
 )
 
 // Node encapsulates a node in the cluster
@@ -50,6 +60,7 @@ type FindOpts struct {
 	Name     string
 	MinDepth int
 	MaxDepth int
+	Type	 FindType
 	ConnectionOpts
 }
 
@@ -100,6 +111,8 @@ type Driver interface {
 
 	// RecoverDrive recovers the given drive from failure on the given node.
 	RecoverDrive(node Node, driveNameToRecover string, driveUUID string, options ConnectionOpts) error
+
+	SystemCheck(node Node) (string, error)
 }
 
 // Register registers the given node driver
@@ -193,5 +206,12 @@ func (d *notSupportedDriver) TestConnection(node Node, options ConnectionOpts) e
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "TestConnection()",
+	}
+}
+
+func (d* notSupportedDriver) SystemCheck(node Node) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SystemCheck()",
 	}
 }
