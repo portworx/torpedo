@@ -91,5 +91,5 @@ type ErrFailedToSystemCheck struct {
 }
 
 func (e *ErrFailedToSystemCheck) Error() string {
-	return fmt.Sprintf("Failed to check core file on: %v. Cause: %v", e.Node.Name, e.Cause)
+	return fmt.Sprintf("System check failed on: %v. Cause: %v", e.Node.Name, e.Cause)
 }

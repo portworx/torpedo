@@ -112,6 +112,7 @@ type Driver interface {
 	// RecoverDrive recovers the given drive from failure on the given node.
 	RecoverDrive(node Node, driveNameToRecover string, driveUUID string, options ConnectionOpts) error
 
+	// SystemCheck checks whether core files are present on the given node.
 	SystemCheck(node Node) (string, error)
 }
 

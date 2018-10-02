@@ -315,6 +315,7 @@ func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 		}
 	}
 
+
 	systemctlCmd := fmt.Sprintf("sudo systemctl %v %v", options.Action, service)
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(addr, systemctlCmd, false)
