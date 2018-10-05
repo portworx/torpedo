@@ -42,7 +42,8 @@ const (
 	DeploymentSuffix = "-dep"
 	// StatefulSetSuffix is the suffix for statefulset names stored as keys in maps
 	StatefulSetSuffix = "-ss"
-	//SystemdSchedServiceName is the name of the system service resposible for scheduling
+	// SystemdSchedServiceName is the name of the system service resposible for scheduling
+	// TODO Change this when running on openshift for the proper service name
 	SystemdSchedServiceName = "kubelet"
 )
 
@@ -1360,7 +1361,7 @@ func (k *k8s) StopSchedOnNode(n node.Node) error {
 		return &scheduler.ErrFailedToStopSchedOnNode {
 			Node:          n,
 			SystemService: SystemdSchedServiceName,
-			Cause:         fmt.Sprintf("Failed to start %v on node %v due to: %v", SystemdSchedServiceName, n.Name, err),
+			Cause:         err.Error(),
 		}
 	}
 	return nil
@@ -1380,7 +1381,7 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 		return &scheduler.ErrFailedToStartSchedOnNode {
 			Node:          n,
 			SystemService: SystemdSchedServiceName,
-			Cause:         fmt.Sprintf("Failed to start %v on node %v due to: %v", SystemdSchedServiceName, n.Name, err),
+			Cause:         err.Error(),
 		}
 	}
 	return nil
