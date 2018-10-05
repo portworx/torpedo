@@ -59,7 +59,7 @@ const (
 
 const (
 	waitResourceCleanup  = 2 * time.Minute
-	k8sNodeReadyTimeout  = 5 * time.Minute
+	defaultTimeout       = 5 * time.Minute
 	defaultRetryInterval = 10 * time.Second
 )
 
@@ -110,7 +110,7 @@ func ValidateContext(ctx *scheduler.Context) {
 		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
-			err := Inst().S.WaitForRunning(ctx, k8sNodeReadyTimeout, defaultRetryInterval)
+			err := Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
 			expect(err).NotTo(haveOccurred())
 		})
 
@@ -133,7 +133,7 @@ func ValidateVolumes(ctx *scheduler.Context) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			err = Inst().S.InspectVolumes(ctx, 10*time.Second, 2*time.Second)
+			err = Inst().S.InspectVolumes(ctx, defaultTimeout, defaultRetryInterval)
 			expect(err).NotTo(haveOccurred())
 		})
 
