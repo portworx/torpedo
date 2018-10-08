@@ -35,7 +35,17 @@ spec:
         volumeMounts:
         - mountPath: /var/lib/postgresql/data
           name: postgredb
+        - mountPath: /var/lib/postgresql/data-aggr
+          name: postgredb-aggr
+        - mountPath: /var/lib/postgresql/data-seq
+          name: postgredb-seq
       volumes:
       - name: postgredb
         persistentVolumeClaim:
           claimName: postgres-data
+      - name: postgredb-aggr
+        persistentVolumeClaim:
+          claimName: postgres-data-aggr
+      - name: postgredb-seq
+        persistentVolumeClaim:
+          claimName: postgres-data-seq

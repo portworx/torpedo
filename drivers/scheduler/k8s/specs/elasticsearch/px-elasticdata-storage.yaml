@@ -4,4 +4,10 @@ metadata:
     name: px-elasticdata-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-   repl: "3"
+  fs: "ext4"
+  block_size: "512b"
+  repl: "3"
+  aggregation_level: "1"
+  io_profile: "db"
+  priority_io: "high"
+  shared: "false"
