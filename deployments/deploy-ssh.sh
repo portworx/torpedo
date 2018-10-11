@@ -41,7 +41,20 @@ if [ -z "${TORPEDO_IMG}" ]; then
     echo "Using default torpedo image: ${TORPEDO_IMG}"
 fi
 
-kubectl delete pod torpedo || true
+kubectl delete pod torpedo
+state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+timeout=0
+while [ "$state" == "Terminating" -a $timeout -le 600 ]; do
+  echo "Terminating torpedo..."
+  sleep 1
+  state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+  timeout=$[$timeout+1]
+done
+
+if [ $timeout -gt 600 ]; then
+  echo "Torpedo is taking too long to terminate. Operation timeout."
+  describe_pod_then_exit
+fi
 
 echo "Deploying torpedo pod..."
 cat <<EOF | kubectl create -f -
@@ -109,6 +122,7 @@ spec:
             "bin/upgrade.test",
             "bin/drive_failure.test",
             "bin/volume_ops.test",
+            "bin/sched.test",
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",

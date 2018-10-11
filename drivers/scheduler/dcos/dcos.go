@@ -214,7 +214,7 @@ func (d *dcos) randomizeVolumeNames(application *marathon.Application) error {
 	return nil
 }
 
-func (d *dcos) WaitForRunning(ctx *scheduler.Context) error {
+func (d *dcos) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
 			if err := MarathonClient().WaitForApplicationStart(obj.ID); err != nil {
@@ -307,7 +307,7 @@ func (d *dcos) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[strin
 	return result, nil
 }
 
-func (d *dcos) InspectVolumes(ctx *scheduler.Context) error {
+func (d *dcos) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	inspectDockerVolumeFunc := func(volName string, _ map[string]string) error {
 		t := func() (interface{}, bool, error) {
 			out, err := d.dockerClient.VolumeInspect(context.Background(), volName)
@@ -407,6 +407,16 @@ func (d *dcos) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[strin
 func (d *dcos) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error) {
 	//TODO implement this method
 	return nil, nil
+}
+
+func (d *dcos) StopSchedOnNode(node node.Node) error {
+	//TODO implement this method
+	return nil
+}
+
+func (d *dcos) StartSchedOnNode(node node.Node) error {
+	//TODO implement this method
+	return nil
 }
 
 func init() {
