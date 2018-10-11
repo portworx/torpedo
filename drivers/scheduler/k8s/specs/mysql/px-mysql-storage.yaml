@@ -13,13 +13,9 @@ metadata:
   name: px-mysql-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  fs: "ext4"
-  block_size: "512b"
   repl: "3"
-  aggregation_level: "1"
-  io_profile: "db"
   priority_io: "high"
-  shared: "false"
+  io_profile: "db"
 ---
 ##### Portworx persistent volume claim
 kind: PersistentVolumeClaim

@@ -4,13 +4,10 @@ metadata:
   name: portworx-sc-cms-repl3-shared
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  fs: "ext4"
-  block_size: "512b"
   repl: "3"
-  aggregation_level: "1"
-  io_profile: "cms"
   priority_io: "high"
   shared: "true"
+  io_profile: "cms"
 ---
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -18,13 +15,9 @@ metadata:
   name: portworx-sc-db-repl3
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  fs: "ext4"
-  block_size: "512b"
   repl: "3"
-  aggregation_level: "1"
   io_profile: "db"
   priority_io: "high"
-  shared: "false"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
