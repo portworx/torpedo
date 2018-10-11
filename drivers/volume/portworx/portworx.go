@@ -442,7 +442,7 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 				return errFailedToInspectVolume(name, k, requestedSpec.Sticky, vol.Spec.Sticky)
 			}
 		case api.SpecGroup:
-			if requestedSpec.Group != vol.Spec.Group {
+			if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group){
 				return errFailedToInspectVolume(name, k, requestedSpec.Group, vol.Spec.Group)
 			}
 		case api.SpecGroupEnforce:
