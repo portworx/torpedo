@@ -1,83 +1,20 @@
-##### Portworx storage classes
+##### Portworx storage class
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
     name: px-postgres-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-   fs: "ext4"
    repl: "3"
-   aggregation_level: "1"
-   io_profile: "db"
    priority_io: "high"
-   shared: "false"
 ---
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-    name: px-postgres-sc-aggr
-provisioner: kubernetes.io/portworx-volume
-parameters:
-   fs: "ext4"
-   block_size: "512b"
-   repl: "1"
-   aggregation_level: "3"
-   io_profile: "random"
-   priority_io: "high"
-   shared: "false"
-   snap_schedule: "periodic=60,5"
-   label: "group=postgres-data"
-   group: "postgres-data"
----
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-    name: px-postgres-sc-seq
-provisioner: kubernetes.io/portworx-volume
-parameters:
-   fs: "ext4"
-   repl: "3"
-   aggregation_level: "1"
-   io_profile: "sequential"
-   priority_io: "high"
-   shared: "false"
-   snap_schedule: "periodic=60,5"
-   label: "group=postgres-data"
-   group: "postgres-data"
----
-##### Portworx persistent volume claims
+##### Portworx persistent volume claim
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
    name: postgres-data
    annotations:
      volume.beta.kubernetes.io/storage-class: px-postgres-sc
-spec:
-   accessModes:
-     - ReadWriteOnce
-   resources:
-     requests:
-       storage: 2Gi
----
-kind: PersistentVolumeClaim
-apiVersion: v1
-metadata:
-   name: postgres-data-seq
-   annotations:
-     volume.beta.kubernetes.io/storage-class: px-postgres-sc-seq
-spec:
-   accessModes:
-     - ReadWriteOnce
-   resources:
-     requests:
-       storage: 2Gi
----
-kind: PersistentVolumeClaim
-apiVersion: v1
-metadata:
-   name: postgres-data-aggr
-   annotations:
-     volume.beta.kubernetes.io/storage-class: px-postgres-sc-aggr
 spec:
    accessModes:
      - ReadWriteOnce
