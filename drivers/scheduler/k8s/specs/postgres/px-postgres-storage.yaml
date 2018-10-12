@@ -6,7 +6,6 @@ metadata:
 provisioner: kubernetes.io/portworx-volume
 parameters:
    fs: "ext4"
-   block_size: "512b"
    repl: "3"
    aggregation_level: "1"
    io_profile: "db"
@@ -37,7 +36,6 @@ metadata:
 provisioner: kubernetes.io/portworx-volume
 parameters:
    fs: "ext4"
-   block_size: "512b"
    repl: "3"
    aggregation_level: "1"
    io_profile: "sequential"
