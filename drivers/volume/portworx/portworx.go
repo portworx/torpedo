@@ -430,9 +430,11 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 				return errFailedToInspectVolume(name, k, requestedSpec.SnapshotInterval, vol.Spec.SnapshotInterval)
 			}
 		case api.SpecSnapshotSchedule:
-			if requestedSpec.SnapshotSchedule != vol.Spec.SnapshotSchedule {
-				return errFailedToInspectVolume(name, k, requestedSpec.SnapshotSchedule, vol.Spec.SnapshotSchedule)
-			}
+			// TODO currently volume spec has a different format than request
+			// i.e request "daily=12:00,7" turns into "- freq: daily\n  hour: 12\n  retain: 7\n" in volume spec
+			//if requestedSpec.SnapshotSchedule != vol.Spec.SnapshotSchedule {
+			//	return errFailedToInspectVolume(name, k, requestedSpec.SnapshotSchedule, vol.Spec.SnapshotSchedule)
+			//}
 		case api.SpecAggregationLevel:
 			if requestedSpec.AggregationLevel != vol.Spec.AggregationLevel {
 				return errFailedToInspectVolume(name, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
