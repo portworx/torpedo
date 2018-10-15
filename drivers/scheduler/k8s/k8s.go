@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -1113,6 +1114,68 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			for _, pvc := range pvcList.Items {
+				vols = append(vols, &volume.Volume{
+					ID:        string(pvc.UID),
+					Name:      pvc.Name,
+					Namespace: pvc.Namespace,
+				})
+			}
+		}
+	}
+
+	return vols, nil
+}
+
+func (d *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
+	k8sOps := k8s_ops.Instance()
+	var vols []*volume.Volume
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+			ret := obj.Spec.Resources.Requests[v1.ResourceStorage]
+			qty, _ := resource.ParseQuantity("1Gi")
+			ret.Add(qty)
+			obj.Spec.Resources.Requests[v1.ResourceStorage] = ret
+			_, err := k8sOps.UpdatePersistentVolumeClaim(obj)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: err.Error(),
+				}
+			}
+			vols = append(vols, &volume.Volume{
+				ID:        string(obj.UID),
+				Name:      obj.Name,
+				Namespace: obj.Namespace,
+			})
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				ret := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+				qty, _ := resource.ParseQuantity("1Gi")
+				ret.Add(qty)
+				pvc.Spec.Resources.Requests[v1.ResourceStorage] = ret
+				_, err := k8sOps.UpdatePersistentVolumeClaim(&pvc)
+				if err != nil {
+					return nil, &scheduler.ErrFailedToResizeStorage{
+						App:   ctx.App,
+						Cause: err.Error(),
+					}
+				}
 				vols = append(vols, &volume.Volume{
 					ID:        string(pvc.UID),
 					Name:      pvc.Name,

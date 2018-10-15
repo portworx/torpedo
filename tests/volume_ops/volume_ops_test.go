@@ -135,6 +135,22 @@ var _ = Describe("{VolumeReplicationIncrease}", func() {
 							Expect(newRepl).To(Equal(expReplMap[v]))
 						}
 					})
+				Step(
+					fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
+						Inst().V.String(), ctx.App.Key, appVolumes),
+					func() {
+						_, err = Inst().S.ResizeVolume(ctx)
+						Expect(err).NotTo(HaveOccurred())
+					})
+				Step(
+					fmt.Sprintf("validate successful volume size increase"),
+					func() {
+						for _, v := range appVolumes {
+							newRepl, err := Inst().V.GetReplicationFactor(v)
+							Expect(err).NotTo(HaveOccurred())
+							Expect(newRepl).To(Equal(expReplMap[v]))
+						}
+					})
 
 			}
 		})
