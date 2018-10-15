@@ -470,6 +470,44 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 	return nil
 }
 
+func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume) error {
+	t := func() (interface{}, bool, error) {
+		vols, err := d.getVolDriver().Inspect([]string{vol.Name})
+		if err != nil {
+			return nil, true, err
+		}
+
+		if len(vols) != 1 {
+			return nil, true, &ErrFailedToInspectVolume{
+				ID:    vol.Name,
+				Cause: fmt.Sprintf("Volume inspect result has invalid length. Expected:1 Actual:%v", len(vols)),
+			}
+		}
+
+		return vols[0], false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	if err != nil {
+		return &ErrFailedToInspectVolume{
+			ID:    vol.Name,
+			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
+		}
+	}
+
+	respVol := out.(*api.Volume)
+
+	// Size Update
+	if respVol.Spec.Size != vol.Size {
+		return &ErrFailedToInspectVolume{
+			ID: vol.Name,
+			Cause: fmt.Sprintf("Volume has size. Expected:%v Actual:%v",
+				vol.Size, respVol.Spec.Size),
+		}
+	}
+	return nil
+}
+
 func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 	name := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {

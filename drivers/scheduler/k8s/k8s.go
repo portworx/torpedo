@@ -1126,27 +1126,16 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	return vols, nil
 }
 
-func (d *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
+func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	k8sOps := k8s_ops.Instance()
 	var vols []*volume.Volume
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			ret := obj.Spec.Resources.Requests[v1.ResourceStorage]
-			qty, _ := resource.ParseQuantity("1Gi")
-			ret.Add(qty)
-			obj.Spec.Resources.Requests[v1.ResourceStorage] = ret
-			_, err := k8sOps.UpdatePersistentVolumeClaim(obj)
+			vol, err := k.resizePVCBy1GB(ctx, obj.DeepCopy())
 			if err != nil {
-				return nil, &scheduler.ErrFailedToResizeStorage{
-					App:   ctx.App,
-					Cause: err.Error(),
-				}
+				return nil, err
 			}
-			vols = append(vols, &volume.Volume{
-				ID:        string(obj.UID),
-				Name:      obj.Name,
-				Namespace: obj.Namespace,
-			})
+			vols = append(vols, vol)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
@@ -1165,27 +1154,37 @@ func (d *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			for _, pvc := range pvcList.Items {
-				ret := pvc.Spec.Resources.Requests[v1.ResourceStorage]
-				qty, _ := resource.ParseQuantity("1Gi")
-				ret.Add(qty)
-				pvc.Spec.Resources.Requests[v1.ResourceStorage] = ret
-				_, err := k8sOps.UpdatePersistentVolumeClaim(&pvc)
+				vol, err := k.resizePVCBy1GB(ctx, pvc.DeepCopy());
 				if err != nil {
-					return nil, &scheduler.ErrFailedToResizeStorage{
-						App:   ctx.App,
-						Cause: err.Error(),
-					}
+					return nil, err
 				}
-				vols = append(vols, &volume.Volume{
-					ID:        string(pvc.UID),
-					Name:      pvc.Name,
-					Namespace: pvc.Namespace,
-				})
+				vols = append(vols, vol)
 			}
 		}
 	}
 
 	return vols, nil
+}
+
+func (k* k8s) resizePVCBy1GB(ctx *scheduler.Context , pvc *v1.PersistentVolumeClaim) (*volume.Volume, error) {
+	k8sOps := k8s_ops.Instance()
+	ret := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+	qty, _ := resource.ParseQuantity("1Gi")
+	ret.Add(qty)
+	pvc.Spec.Resources.Requests[v1.ResourceStorage] = ret
+	if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
+		return nil, &scheduler.ErrFailedToResizeStorage{
+			App:   ctx.App,
+			Cause: err.Error(),
+		}
+	}
+	vol := &volume.Volume{
+		ID:        string(pvc.UID),
+		Name:      pvc.Name,
+		Namespace: pvc.Namespace,
+		Size:      uint64(pvc.Spec.Size()),
+	}
+	return vol, nil
 }
 
 func (k *k8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {

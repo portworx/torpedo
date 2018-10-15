@@ -86,7 +86,7 @@ var _ = Describe("{VolumeReplicationDecrease}", func() {
 })
 
 // Volume replication increase
-var _ = Describe("{VolumeReplicationIncrease}", func() {
+var _ = Describe("{VolumeUpdate}", func() {
 	It("has to schedule apps and increase replication factor on all volumes of the apps", func() {
 		var err error
 		var contexts []*scheduler.Context
@@ -146,9 +146,8 @@ var _ = Describe("{VolumeReplicationIncrease}", func() {
 					fmt.Sprintf("validate successful volume size increase"),
 					func() {
 						for _, v := range appVolumes {
-							newRepl, err := Inst().V.GetReplicationFactor(v)
+							err := Inst().V.ValidateUpdateVolume(v)
 							Expect(err).NotTo(HaveOccurred())
-							Expect(newRepl).To(Equal(expReplMap[v]))
 						}
 					})
 
