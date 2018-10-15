@@ -959,6 +959,56 @@ func (d *portworx) UpgradeDriver(version string) error {
 	return nil
 }
 
+func (d *portworx) DecommissionNode(n node.Node) error {
+	d.StopDriver([]node.Node{n}, false)
+	clusterManager := d.getClusterManager()
+	storageNode, err := clusterManager.GetNodeIdFromIp(n.UsableAddr)
+	if err != nil {
+		return &ErrFailedToDecommissionNode {
+			Node:    n.Name,
+			Cause:   fmt.Sprintf("Failed to get NodeId from IP node: %v. Err: %v", n.Name, err),
+		}
+	}
+	node := api.Node{
+		Id: storageNode,
+	}
+	err = clusterManager.Remove([]api.Node{node}, false)
+	if err != nil {
+		if err != nil {
+			return &ErrFailedToDecommissionNode {
+				Node:    n.Name,
+				Cause:   err.Error(),
+			}
+		}
+	}
+	return nil
+}
+
+func (d *portworx) DecommissionNodeStatus(n node.Node) (string, error) {
+	d.StopDriver([]node.Node{n}, false)
+	clusterManager := d.getClusterManager()
+	storageNode, err := clusterManager.GetNodeIdFromIp(n.UsableAddr)
+	if err != nil {
+		return "", &ErrFailedToDecommissionNode {
+			Node:    n.Name,
+			Cause:   fmt.Sprintf("Failed to get NodeId from IP node: %v. Err: %v", n.Name, err),
+		}
+	}
+	node := api.Node{
+		Id: storageNode,
+	}
+	err = clusterManager.NodeStatus()
+	if err != nil {
+		if err != nil {
+			return "", &ErrFailedToDecommissionNode {
+				Node:    n.Name,
+				Cause:   err.Error(),
+			}
+		}
+	}
+	return "", nil
+}
+
 func (d *portworx) getVolDriver() volume.VolumeDriver {
 	if d.refreshEndpoint {
 		d.setDriver()

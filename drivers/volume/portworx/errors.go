@@ -97,3 +97,15 @@ type ErrFailedToGetReplicationFactor struct {
 func (e *ErrFailedToGetReplicationFactor) Error() string {
 	return fmt.Sprintf("Failed to get replication factor of the volume: %v due to err: %v", e.ID, e.Cause)
 }
+
+// ErrFailedToDecommissionNode error type for failed to remove from cluster
+type ErrFailedToDecommissionNode struct {
+	// Node is the node on which PX failed to remove from cluster
+	Node string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToDecommissionNode) Error() string {
+	return fmt.Sprintf("Failed to decommission node: %v due to err: %v", e.Node, e.Cause)
+}

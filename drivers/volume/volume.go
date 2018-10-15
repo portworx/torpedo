@@ -93,6 +93,12 @@ type Driver interface {
 
 	// GetMinReplicationFactor returns the min supported repl factor of a volume
 	GetMinReplicationFactor() int64
+
+	// DecommissionNode decommission the given node from the cluster
+	DecommissionNode(n node.Node) error
+
+	// DecommissionNodeStatus return the status of decomission of the given node
+	DecommissionNodeStatus(n node.Node) (string, error)
 }
 
 var (

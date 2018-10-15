@@ -92,6 +92,9 @@ type Driver interface {
 
 	// Start scheduler service on the given node
 	StartSchedOnNode(n node.Node) error
+
+	// DecommissionNode decommission the given node from the cluster
+	DecommissionNode(n node.Node) error
 }
 
 var (

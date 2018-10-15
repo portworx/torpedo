@@ -274,3 +274,15 @@ type ErrFailedToStartSchedOnNode struct {
 func (e *ErrFailedToStartSchedOnNode) Error() string {
 	return fmt.Sprintf("Failed to start scheduler service %v on node: %v due to err: %v", e.SystemService, e.Node, e.Cause)
 }
+
+// ErrFailedToDecommissionNode error type when fail to decommission a node
+type ErrFailedToDecommissionNode struct {
+	// Node where the service is not starting
+	Node node.Node
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToDecommissionNode) Error() string {
+	return fmt.Sprintf("Failed to decommission node: %v due to err: %v", e.Node, e.Cause)
+}
