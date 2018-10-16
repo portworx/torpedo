@@ -34,6 +34,7 @@ parameters:
    snap_schedule: "periodic=60,5"
    labels: "type=aggregated"
    group: "mysql-data"
+allowVolumeExpansion: true
 ---
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
@@ -50,6 +51,7 @@ parameters:
    snap_schedule: "daily=12:00,7"
    labels: "type=replicated"
    group: "mysql-data"
+allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim
 kind: PersistentVolumeClaim
