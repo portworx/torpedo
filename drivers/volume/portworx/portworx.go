@@ -501,7 +501,7 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume) error {
 	if respVol.Spec.Size != vol.Size {
 		return &ErrFailedToInspectVolume{
 			ID: vol.Name,
-			Cause: fmt.Sprintf("Volume has size. Expected:%v Actual:%v",
+			Cause: fmt.Sprintf("Volume size differs. Expected:%v Actual:%v",
 				vol.Size, respVol.Spec.Size),
 		}
 	}

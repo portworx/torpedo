@@ -16,6 +16,7 @@ parameters:
   repl: "3"
   priority_io: "high"
   io_profile: "db"
+allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim
 kind: PersistentVolumeClaim
