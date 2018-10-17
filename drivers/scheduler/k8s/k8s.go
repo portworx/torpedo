@@ -1168,21 +1168,22 @@ func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 func (k* k8s) resizePVCBy1GB(ctx *scheduler.Context , pvc *v1.PersistentVolumeClaim) (*volume.Volume, error) {
 	k8sOps := k8s_ops.Instance()
-	ret := pvc.Spec.Resources.Requests[v1.ResourceStorage]
-	qty, _ := resource.ParseQuantity("1Gi")
-	ret.Add(qty)
-	pvc.Spec.Resources.Requests[v1.ResourceStorage] = ret
+	storageSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+	extraAmount, _ := resource.ParseQuantity("1Gi")
+	storageSize.Add(extraAmount)
+	pvc.Spec.Resources.Requests[v1.ResourceStorage] = storageSize
 	if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
 		return nil, &scheduler.ErrFailedToResizeStorage{
 			App:   ctx.App,
 			Cause: err.Error(),
 		}
 	}
+	sizeInt64, _ := storageSize.AsInt64()
 	vol := &volume.Volume{
 		ID:        string(pvc.UID),
 		Name:      pvc.Name,
 		Namespace: pvc.Namespace,
-		Size:      uint64(pvc.Spec.Size()),
+		Size:      uint64(sizeInt64),
 	}
 	return vol, nil
 }

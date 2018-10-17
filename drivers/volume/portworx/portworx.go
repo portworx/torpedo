@@ -481,15 +481,16 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 }
 
 func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume) error {
+	name := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
-		vols, err := d.getVolDriver().Inspect([]string{vol.Name})
+		vols, err := d.getVolDriver().Inspect([]string{name})
 		if err != nil {
 			return nil, true, err
 		}
 
 		if len(vols) != 1 {
 			return nil, true, &ErrFailedToInspectVolume{
-				ID:    vol.Name,
+				ID:    name,
 				Cause: fmt.Sprintf("Volume inspect result has invalid length. Expected:1 Actual:%v", len(vols)),
 			}
 		}
@@ -500,7 +501,7 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume) error {
 	out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
 	if err != nil {
 		return &ErrFailedToInspectVolume{
-			ID:    vol.Name,
+			ID:    name,
 			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
 		}
 	}
@@ -510,7 +511,7 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume) error {
 	// Size Update
 	if respVol.Spec.Size != vol.Size {
 		return &ErrFailedToInspectVolume{
-			ID: vol.Name,
+			ID: name,
 			Cause: fmt.Sprintf("Volume size differs. Expected:%v Actual:%v",
 				vol.Size, respVol.Spec.Size),
 		}
