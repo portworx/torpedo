@@ -330,18 +330,17 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 			}
 			orphanPods = append(orphanPods, podUID)
 
-			// Check if there are files under portworx volume
-			// We use a depth of 2 because the files stored in the volume are in the pvc
-			// directory under the portworx-volume folder for that pod. For instance,
-			// ../kubernetes-io~portworx-volume/pvc-<id>/<all_user_files>
+			// Check if /var/lib/kubelet/pods/{podUID}/volumes/kubernetes.io~portworx-volume is empty
 			n := nodeMap[nodeName]
 			findFileOpts := node.FindOpts{
 				ConnectionOpts: connOpts,
-				MinDepth:       2,
-				MaxDepth:       2,
+				MaxDepth:       0,
+				MinDepth:       0,
+				Type:           node.Directory,
+				Empty:          true,
 			}
-			files, _ := d.FindFiles(path, n, findFileOpts)
-			if len(strings.TrimSpace(files)) > 0 {
+			emptyDir, _ := d.FindFiles(path, n, findFileOpts)
+			if len(emptyDir) == 0 {
 				dirtyVolPods = append(dirtyVolPods, podUID)
 			}
 		}
