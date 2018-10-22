@@ -47,20 +47,19 @@ const (
 	// SystemdSchedServiceName is the name of the system service resposible for scheduling
 	// TODO Change this when running on openshift for the proper service name
 	SystemdSchedServiceName = "kubelet"
-	// ResizeSupported is the parameter key for the annotation when a pvc is resizeble or not
-	ResizeSupported = "torpedo/resize-supported"
 )
 
 const (
-	statefulSetValidateTimeout = 20 * time.Minute
-	k8sNodeReadyTimeout        = 5 * time.Minute
-	volDirCleanupTimeout       = 5 * time.Minute
-	k8sObjectCreateTimeout     = 2 * time.Minute
-	k8sDestroyTimeout          = 2 * time.Minute
-	findFilesOnWorkerTimeout   = 1 * time.Minute
-	deleteTasksWaitTimeout     = 3 * time.Minute
-	defaultRetryInterval       = 10 * time.Second
-	defaultTimeout             = 2 * time.Minute
+	statefulSetValidateTimeout   = 20 * time.Minute
+	k8sNodeReadyTimeout          = 5 * time.Minute
+	volDirCleanupTimeout         = 5 * time.Minute
+	k8sObjectCreateTimeout       = 2 * time.Minute
+	k8sDestroyTimeout            = 2 * time.Minute
+	findFilesOnWorkerTimeout     = 1 * time.Minute
+	deleteTasksWaitTimeout       = 3 * time.Minute
+	defaultRetryInterval         = 10 * time.Second
+	defaultTimeout               = 2 * time.Minute
+	resizeSupportedAnnotationKey = "torpedo/resize-supported"
 )
 
 var (
@@ -1176,7 +1175,7 @@ func (k* k8s) resizePVCBy1GB(ctx *scheduler.Context , pvc *v1.PersistentVolumeCl
 
 	// TODO this test is required since stork snapshot doesn't support resizing, remove when feature is added
 	var resizeSupported bool = true
-	if annotationValue, hasKey := pvc.Annotations[ResizeSupported]; hasKey {
+	if annotationValue, hasKey := pvc.Annotations[resizeSupportedAnnotationKey]; hasKey {
 		resizeSupported, _ = strconv.ParseBool(annotationValue)
 	}
 	if resizeSupported {
