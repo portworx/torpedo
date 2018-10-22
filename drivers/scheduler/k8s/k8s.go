@@ -47,6 +47,8 @@ const (
 	// SystemdSchedServiceName is the name of the system service resposible for scheduling
 	// TODO Change this when running on openshift for the proper service name
 	SystemdSchedServiceName = "kubelet"
+	// ResizeSupported is the parameter key for the annotation when a pvc is resizeble or not
+	ResizeSupported = "torpedo/resize-supported"
 )
 
 const (
@@ -1173,7 +1175,11 @@ func (k* k8s) resizePVCBy1GB(ctx *scheduler.Context , pvc *v1.PersistentVolumeCl
 	storageSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
 
 	// TODO this test is required since stork snapshot doesn't support resizing, remove when feature is added
-	if resizeSupported, _ := strconv.ParseBool(pvc.Annotations["torpedo/resize-supported"]); resizeSupported{
+	var resizeSupported bool = true
+	if annotationValue, hasKey := pvc.Annotations[ResizeSupported]; hasKey {
+		resizeSupported, _ = strconv.ParseBool(annotationValue)
+	}
+	if resizeSupported {
 		extraAmount, _ := resource.ParseQuantity("1Gi")
 		storageSize.Add(extraAmount)
 		pvc.Spec.Resources.Requests[v1.ResourceStorage] = storageSize
