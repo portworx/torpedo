@@ -1174,7 +1174,7 @@ func (k* k8s) resizePVCBy1GB(ctx *scheduler.Context , pvc *v1.PersistentVolumeCl
 	storageSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
 
 	// TODO this test is required since stork snapshot doesn't support resizing, remove when feature is added
-	var resizeSupported bool = true
+	resizeSupported := true
 	if annotationValue, hasKey := pvc.Annotations[resizeSupportedAnnotationKey]; hasKey {
 		resizeSupported, _ = strconv.ParseBool(annotationValue)
 	}
