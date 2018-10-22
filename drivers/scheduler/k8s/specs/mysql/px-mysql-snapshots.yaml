@@ -19,6 +19,6 @@ kind: VolumeSnapshot
 metadata:
   name: mysql-snapshot
   annotations:
-    torpedo/resize-supported: false
+    torpedo/resize-supported: "false"
 spec:
   persistentVolumeClaimName: mysql-data
