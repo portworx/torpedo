@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"strconv"
 )
 
 const (
@@ -1131,7 +1132,8 @@ func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			vol, err := k.resizePVCBy1GB(ctx, obj.DeepCopy())
+			updatedPVC, _ := k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			vol, err := k.resizePVCBy1GB(ctx, updatedPVC)
 			if err != nil {
 				return nil, err
 			}
@@ -1154,7 +1156,7 @@ func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			for _, pvc := range pvcList.Items {
-				vol, err := k.resizePVCBy1GB(ctx, pvc.DeepCopy());
+				vol, err := k.resizePVCBy1GB(ctx, &pvc);
 				if err != nil {
 					return nil, err
 				}
@@ -1169,13 +1171,17 @@ func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 func (k* k8s) resizePVCBy1GB(ctx *scheduler.Context , pvc *v1.PersistentVolumeClaim) (*volume.Volume, error) {
 	k8sOps := k8s_ops.Instance()
 	storageSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
-	extraAmount, _ := resource.ParseQuantity("1Gi")
-	storageSize.Add(extraAmount)
-	pvc.Spec.Resources.Requests[v1.ResourceStorage] = storageSize
-	if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
-		return nil, &scheduler.ErrFailedToResizeStorage{
-			App:   ctx.App,
-			Cause: err.Error(),
+
+	// TODO this test is required since stork snapshot doesn't support resizing, remove when feature is added
+	if resizeSupported, _ := strconv.ParseBool(pvc.Annotations["torpedo/resize-supported"]); resizeSupported{
+		extraAmount, _ := resource.ParseQuantity("1Gi")
+		storageSize.Add(extraAmount)
+		pvc.Spec.Resources.Requests[v1.ResourceStorage] = storageSize
+		if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
+			return nil, &scheduler.ErrFailedToResizeStorage{
+				App:   ctx.App,
+				Cause: err.Error(),
+			}
 		}
 	}
 	sizeInt64, _ := storageSize.AsInt64()
