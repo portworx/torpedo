@@ -16,6 +16,7 @@ parameters:
   repl: "3"
   priority_io: "high"
   io_profile: "db"
+allowVolumeExpansion: true
 ---
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
@@ -25,14 +26,15 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
    fs: "ext4"
    block_size: "512b"
-   repl: "1"
-   aggregation_level: "3"
+   repl: "2"
+   aggregation_level: "2"
    io_profile: "random"
    priority_io: "high"
    shared: "false"
    snap_schedule: "periodic=60,5"
    labels: "type=aggregated"
    group: "mysql-data"
+allowVolumeExpansion: true
 ---
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
@@ -49,6 +51,7 @@ parameters:
    snap_schedule: "daily=12:00,7"
    labels: "type=replicated"
    group: "mysql-data"
+allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim
 kind: PersistentVolumeClaim
