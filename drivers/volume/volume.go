@@ -97,7 +97,7 @@ type Driver interface {
 	// DecommissionNode decommission the given node from the cluster
 	DecommissionNode(n node.Node) error
 
-	// DecommissionNodeStatus return the status of decomission of the given node
+	// DecommissionNodeStatus return the status of decommission of the given node
 	DecommissionNodeStatus(n node.Node) (string, error)
 }
 

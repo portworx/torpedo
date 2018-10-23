@@ -11,6 +11,12 @@ import (
 "github.com/portworx/torpedo/drivers/scheduler"
 . "github.com/portworx/torpedo/tests"
 "math/rand"
+	"github.com/portworx/sched-ops/task"
+)
+
+const (
+	defaultTimeout       = 6 * time.Minute
+	defaultRetryInterval = 10 * time.Second
 )
 
 func TestDecommissionNode(t *testing.T) {
@@ -24,36 +30,44 @@ var _ = BeforeSuite(func() {
 
 var _ = Describe("{DecommissionNode}", func() {
 	testName := "decommissionnode"
-	It("has to decomission a node and check if node was decommissioned successfuly", func() {
+	It("has to decommission a node and check if node was decommissioned successfuly", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
 		}
 
-		Step("get nodes for all apps in test, select randomly a node and decommission it", func() {
-			for _, ctx := range contexts {
-				var appNode node.Node
+		Step("pick a random node and decommission it", func() {
 
-				Step(fmt.Sprintf("get nodes where %s app is running and select a node", ctx.App.Key), func() {
-					appNodes, err := Inst().S.GetNodesForApp(ctx)
+			var nodeToDecommission node.Node
+			Step(fmt.Sprintf("pick a node to decommission"), func() {
+				workerNodes := node.GetWorkerNodes()
+				Expect(workerNodes).NotTo(BeEmpty())
+				randNode := rand.Intn(len(workerNodes))
+				nodeToDecommission = workerNodes[randNode]
+			})
+
+			Step(fmt.Sprintf("decommission the node"), func() {
+				err := Inst().S.DecommissionNode(nodeToDecommission)
+				Expect(err).NotTo(HaveOccurred())
+				err = Inst().V.DecommissionNode(nodeToDecommission)
+				Expect(err).NotTo(HaveOccurred())
+				Step(fmt.Sprintf("check if the node was decommissioned"), func() {
+					t := func() (interface{}, bool, error) {
+						status, err := Inst().V.DecommissionNodeStatus(nodeToDecommission)
+						if err != nil {
+							return 0, false, fmt.Errorf("Not able to check node decomission. Cause: %v", err)
+						}
+						if len(status) == 0 {
+							return 0, true, nil
+						}
+						return 0, false, nil
+					}
+					decomissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(appNodes).NotTo(BeEmpty())
-					randNode := rand.Intn(len(appNodes))
-					appNode = appNodes[randNode]
+					Expect(decomissioned).NotTo(BeTrue())
 				})
+			})
 
-				Step(fmt.Sprintf("decomission the node"), func() {
-					err := Inst().S.DecommissionNode(appNode)
-					Expect(err).NotTo(HaveOccurred())
-					Step("wait for the node to be decomissioned", func() {
-						time.Sleep(6 * time.Minute)
-					})
-
-					Step(fmt.Sprintf("check if the node was decomissioned"), func() {
-						ValidateContext(ctx)
-					})
-				})
-			}
 		})
 
 		ValidateAndDestroy(contexts, nil)
