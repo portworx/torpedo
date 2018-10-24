@@ -337,7 +337,7 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 
 			n := nodeMap[nodeName]
 			// Check if /var/lib/kubelet/pods/{podUID}/volumes/kubernetes.io~portworx-volume is empty
-			if isDirEmpty(path, n, d) {
+			if !isDirEmpty(path, n, d) {
 				pvcDirsFind, _ := d.FindFiles(path, n, dirFindOpts)
 				pvcDirs := separateFilePaths(pvcDirsFind)
 				for _, pvcDir := range pvcDirs {
