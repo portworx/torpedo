@@ -100,6 +100,13 @@ type Driver interface {
 
 	// GetAggregationLevel returns the aggregation level for the given volume
 	GetAggregationLevel(vol *Volume) (int64, error)
+
+	// DecommissionNode decommission the given node from the cluster
+	DecommissionNode(n node.Node) error
+
+	// DecommissionNodeStatus return the status of decommission of the given node
+	DecommissionNodeStatus(n node.Node) (string, error)
+
 }
 
 var (

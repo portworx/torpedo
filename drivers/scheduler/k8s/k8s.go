@@ -1461,6 +1461,32 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 	return nil
 }
 
+func (d *k8s) DecommissionNode(n node.Node) error {
+	k8sOps := k8s_ops.Instance()
+	pods, err := k8sOps.GetPodsByNode(n.Name, "")
+	if err != nil {
+		return &scheduler.ErrFailedToDecommissionNode {
+			Node:          n,
+			Cause:         fmt.Sprintf("Failed to get pods on the node: %v. Err: %v", n.Name, err),
+		}
+	}
+	err = k8sOps.DrainPodsFromNode(n.Name, pods.Items, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return &scheduler.ErrFailedToDecommissionNode {
+			Node:          n,
+			Cause:         fmt.Sprintf("Failed to drain pods from node: %v. Err: %v", n.Name, err),
+		}
+	}
+	err = k8sOps.CordonNode(n.Name, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return &scheduler.ErrFailedToDecommissionNode {
+			Node:          n,
+			Cause:         fmt.Sprintf("Failed to cordon node: %v. Err: %v", n.Name, err),
+		}
+	}
+	return nil
+}
+
 func insertLineBreak(note string) string {
 	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
 }
