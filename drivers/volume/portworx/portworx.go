@@ -1051,51 +1051,40 @@ func (d *portworx) UpgradeDriver(version string) error {
 }
 
 func (d *portworx) DecommissionNode(n node.Node) error {
-	d.StopDriver([]node.Node{n}, false)
-	clusterManager := d.getClusterManager()
-	storageNode, err := clusterManager.GetNodeIdFromIp(n.UsableAddr)
-	if err != nil {
+
+	if err := d.StopDriver([]node.Node{n}, false); err != nil {
 		return &ErrFailedToDecommissionNode {
 			Node:    n.Name,
-			Cause:   fmt.Sprintf("Failed to get NodeId from IP node: %v. Err: %v", n.Name, err),
+			Cause:   fmt.Sprintf("Failed to stop driver on node: %v. Err: %v", n.Name, err),
 		}
 	}
-	pxNode, err := d.clusterManager.Inspect(storageNode)
+	clusterManager := d.getClusterManager()
+	pxNode, err := clusterManager.Inspect(n.VolDriverNodeID)
 	if err != nil {
 		return &ErrFailedToDecommissionNode {
 			Node:    n.Name,
 			Cause:   fmt.Sprintf("Failed to inspect node: %v. Err: %v", pxNode, err),
 		}
 	}
-	err = clusterManager.Remove([]api.Node{pxNode}, false)
-	if err != nil {
-		if err != nil {
-			return &ErrFailedToDecommissionNode {
-				Node:    n.Name,
-				Cause:   err.Error(),
-			}
+
+	if err = clusterManager.Remove([]api.Node{pxNode}, false); err != nil {
+		return &ErrFailedToDecommissionNode {
+			Node:    n.Name,
+			Cause:   err.Error(),
 		}
 	}
 	return nil
 }
 
 func (d *portworx) DecommissionNodeStatus(n node.Node) (string, error) {
-	d.StopDriver([]node.Node{n}, false)
 	clusterManager := d.getClusterManager()
-	storageNode, err := clusterManager.GetNodeIdFromIp(n.UsableAddr)
-	if err != nil {
+	pxNode, err := clusterManager.Inspect(n.VolDriverNodeID)
+	if err != nil && pxNode.Status == api.Status_STATUS_NONE {
+		return "", nil
+	} else if err != nil {
 		return "", &ErrFailedToDecommissionNode {
 			Node:    n.Name,
-			Cause:   fmt.Sprintf("Failed to get NodeId from IP node: %v. Err: %v", n.Name, err),
-		}
-	}
-	pxNode, err := d.clusterManager.Inspect(storageNode)
-	if err != nil {
-		if err != nil {
-			return "", &ErrFailedToDecommissionNode {
-				Node:    n.Name,
-				Cause:   fmt.Sprintf("Failed to inspect node: %v. Err: %v", pxNode, err),
-			}
+			Cause:   fmt.Sprintf("Failed to inspect node: %v. Err: %v", pxNode, err),
 		}
 	}
 	return pxNode.Status.SimpleString(), nil

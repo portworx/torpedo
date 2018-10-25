@@ -1461,7 +1461,7 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 	return nil
 }
 
-func (d *k8s) DecommissionNode(n node.Node) error {
+func (k *k8s) DecommissionNode(n node.Node) error {
 	k8sOps := k8s_ops.Instance()
 	pods, err := k8sOps.GetPodsByNode(n.Name, "")
 	if err != nil {
@@ -1470,18 +1470,23 @@ func (d *k8s) DecommissionNode(n node.Node) error {
 			Cause:         fmt.Sprintf("Failed to get pods on the node: %v. Err: %v", n.Name, err),
 		}
 	}
-	err = k8sOps.DrainPodsFromNode(n.Name, pods.Items, defaultTimeout, defaultRetryInterval)
-	if err != nil {
+	if err = k8sOps.DrainPodsFromNode(n.Name, pods.Items, defaultTimeout, defaultRetryInterval); err != nil {
 		return &scheduler.ErrFailedToDecommissionNode {
 			Node:          n,
 			Cause:         fmt.Sprintf("Failed to drain pods from node: %v. Err: %v", n.Name, err),
 		}
 	}
-	err = k8sOps.CordonNode(n.Name, defaultTimeout, defaultRetryInterval)
-	if err != nil {
+
+	if err = k8sOps.CordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
 		return &scheduler.ErrFailedToDecommissionNode {
 			Node:          n,
 			Cause:         fmt.Sprintf("Failed to cordon node: %v. Err: %v", n.Name, err),
+		}
+	}
+	if err = k8sOps.AddLabelOnNode(n.Name, "px/enabled", "remove"); err != nil {
+		return &scheduler.ErrFailedToDecommissionNode {
+			Node:          n,
+			Cause:         fmt.Sprintf("Failed to add label to node: %v. Err: %v", n.Name, err),
 		}
 	}
 	return nil

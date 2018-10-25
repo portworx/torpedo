@@ -55,22 +55,30 @@ var _ = Describe("{DecommissionNode}", func() {
 					t := func() (interface{}, bool, error) {
 						status, err := Inst().V.DecommissionNodeStatus(nodeToDecommission)
 						if err != nil {
-							return 0, false, fmt.Errorf("Not able to check node decomission. Cause: %v", err)
+							return false, false, fmt.Errorf("Not able to check node decomission. Cause: %v", err)
 						}
 						if len(status) == 0 {
-							return 0, true, nil
+							return true, false, nil
 						}
-						return 0, false, nil
+						return false, true, fmt.Errorf("Node %s not decomissioned yet", nodeToDecommission.Name)
 					}
-					decomissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+					decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(decomissioned).NotTo(BeTrue())
+					Expect(decommissioned).To(BeTrue())
 				})
 			})
 
 		})
 
-		ValidateAndDestroy(contexts, nil)
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+
+
 	})
 })
 
