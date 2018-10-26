@@ -268,7 +268,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				Step("Giving few seconds for scaled applications to stabilize", func() {
+				Step("Giving few seconds for scaled up applications to stabilize", func() {
 					time.Sleep(10 * time.Second)
 				})
 
@@ -284,7 +284,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				Step("Giving few seconds for scaled applications to stabilize", func() {
+				Step("Giving few seconds for scaled down applications to stabilize", func() {
 					time.Sleep(10 * time.Second)
 				})
 
