@@ -1241,14 +1241,23 @@ func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 			if node.Contains(result, n) {
 				continue
 			}
+
 			if k8s_ops.Instance().IsPodRunning(p) {
 				result = append(result, n)
 			}
 		}
-		return result, false, nil
+
+		if len(result) > 0{
+			return result, false, nil
+		}
+
+		return result, true, &scheduler.ErrFailedToGetNodesForApp{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("no pods in running state %v", pods),
+		}
 	}
 
-	nodes, err := task.DoRetryWithTimeout(t, k8sNodeReadyTimeout, defaultRetryInterval)
+	nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 	if err != nil {
 		return nil, err
 	}
