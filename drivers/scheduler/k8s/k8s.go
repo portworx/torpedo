@@ -1251,7 +1251,7 @@ func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 			}
 		}
 
-		if len(result) > 0{
+		if len(result) > 0 {
 			return result, false, nil
 		}
 
@@ -1485,7 +1485,12 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 // CreateCRDObjects and Validate their deployment
 func (k *k8s) CreateCRDObjects(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	var err error
-	k8sOps := k8s_ops.Instance()
+	k8sOps, err := GetInstance(ctx)
+	if err != nil {
+		logrus.Errorf("Unable to get sched-ops k8s instance %v", err)
+		return err
+	}
+
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*stork_api.ClusterPair); ok {
 			logrus.Info("Applying clusterpair spec")
@@ -1527,6 +1532,19 @@ func (k *k8s) CreateCRDObjects(ctx *scheduler.Context, timeout, retryInterval ti
 
 	logrus.Info("Custom specs created successfully")
 	return nil
+}
+
+// GetInstance return k8s Ops instance based on KubeConfig file specifed in
+// Scheduler context
+func GetInstance(ctx *scheduler.Context) (k8s_ops.Ops, error) {
+	if ctx.KubeConfig == "" {
+		k8sInstance := k8s_ops.Instance()
+		if k8sInstance == nil {
+			return nil, fmt.Errorf("Found empty k8s Ops")
+		}
+		return k8sInstance, nil
+	}
+	return k8s_ops.NewInstance(ctx.KubeConfig)
 }
 
 func insertLineBreak(note string) string {
