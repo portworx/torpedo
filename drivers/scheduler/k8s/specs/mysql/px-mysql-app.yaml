@@ -59,6 +59,8 @@ spec:
           name: mysql-persistent-storage-aggr
         - mountPath: /var/lib/mysql-seq
           name: mysql-persistent-storage-seq
+        - mountPath: /var/lib/mysql-shared
+          name: mysql-persistent-storage-shared-enc
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
@@ -69,6 +71,9 @@ spec:
       - name: mysql-persistent-storage-seq
         persistentVolumeClaim:
           claimName: mysql-data-seq
+      - name: mysql-persistent-storage-shared-enc
+        persistentVolumeClaim:
+          claimName: mysql-data-shared-enc
 ---
 apiVersion: apps/v1beta2
 kind: Deployment
