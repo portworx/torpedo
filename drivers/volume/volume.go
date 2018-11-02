@@ -137,6 +137,6 @@ func Get(name string) (Driver, error) {
 	}
 }
 
-func (v *Volume) String() string{
+func (v *Volume) String() string {
 	return v.Name
 }

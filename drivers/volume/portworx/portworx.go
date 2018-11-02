@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,10 @@ const (
 	exitMaintenancePath     = "/exitmaintenance"
 	pxSystemdServiceName    = "portworx.service"
 	storageStatusUp         = "Up"
+	tokenKey                = "token"
+	clusterIP               = "clusterip"
+	clusterPort             = "clusterport"
+	remoteKubeConfigPath    = "/tmp/kubeconfig"
 )
 
 const (
@@ -550,7 +555,7 @@ func (d *portworx) ValidateVolumeCleanup() error {
 }
 
 func (d *portworx) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
-	return d.schedOps.ValidateVolumeSetup(vol)
+	return d.schedOps.ValidateVolumeSetup(vol, d.nodeDriver)
 }
 
 func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
@@ -1050,6 +1055,33 @@ func (d *portworx) UpgradeDriver(version string) error {
 	return nil
 }
 
+// GetClusterPairingInfo return underlying storage details
+func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
+	pairInfo := make(map[string]string)
+	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
+	if err != nil {
+		logrus.Errorf("err retrieving remote px nodes: %v", err)
+		return nil, err
+	}
+
+	clusterMgr, err := d.getClusterManagerByAddress(pxNodes[0].Addresses[0])
+	if err != nil {
+		return nil, err
+	}
+	resp, err := clusterMgr.GetPairToken(false)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Infof("Response for token: %v", resp.Token)
+
+	// file up cluster pair info
+	pairInfo[clusterIP] = pxNodes[0].Addresses[0]
+	pairInfo[tokenKey] = resp.Token
+	pairInfo[clusterPort] = strconv.Itoa(pxdRestPort)
+
+	return pairInfo, nil
+}
+
 func (d *portworx) DecommissionNode(n node.Node) error {
 
 	if err := d.StopDriver([]node.Node{n}, false); err != nil {
@@ -1113,6 +1145,17 @@ func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, err
 	}
 
 	return clusterclient.ClusterManager(cClient), nil
+}
+
+func (d *portworx) getVolumeDriverByAddress(addr string) (volume.VolumeDriver, error) {
+	pxEndpoint := d.constructURL(addr)
+
+	dClient, err := volumeclient.NewDriverClient(pxEndpoint, DriverName, "", pxdClientSchedUserAgent)
+	if err != nil {
+		return nil, err
+	}
+
+	return volumeclient.VolumeDriver(dClient), nil
 }
 
 func (d *portworx) maintenanceOp(n node.Node, op string) error {

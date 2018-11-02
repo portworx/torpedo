@@ -20,7 +20,7 @@ type Driver interface {
 	// ValidateVolumeCleanup validates that volume dir does not exist and no data present inside it
 	ValidateVolumeCleanup(d node.Driver) error
 	// ValidateVolumeSetup checks if the given volume is setup correctly
-	ValidateVolumeSetup(v *volume.Volume) error
+	ValidateVolumeSetup(v *volume.Volume, d node.Driver) error
 	// ValidateSnapshot validates the snapshot volume
 	ValidateSnapshot(volumeParams map[string]string, parent *api.Volume) error
 	// GetVolumeName returns the volume name based on the volume object recevied
@@ -33,6 +33,9 @@ type Driver interface {
 	IsPXReadyOnNode(n node.Node) bool
 	// IsPXEnabled returns true if portworx is enabled on given node
 	IsPXEnabled(n node.Node) (bool, error)
+	// GetRemotePXNodes returns list of PX node found on destination k8s cluster
+	// refereced by kubeconfig
+	GetRemotePXNodes(destKubeConfig string) ([]node.Node, error)
 }
 
 var (
