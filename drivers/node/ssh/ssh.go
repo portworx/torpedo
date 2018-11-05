@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	ssh_pkg "golang.org/x/crypto/ssh"
@@ -369,11 +370,13 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	err = session.Wait()
 	if resp, err1 := ioutil.ReadAll(stdout); err1 == nil {
 		out = string(resp)
+		logrus.Debugf("Command: %s result: %s", cmd, out)
 	} else {
 		return "", fmt.Errorf("fail to read stdout")
 	}
 	if resp, err1 := ioutil.ReadAll(stderr); err1 == nil {
 		sterr = string(resp)
+		logrus.Debugf("Command: %s errors: %s", cmd, sterr)
 	} else {
 		return "", fmt.Errorf("fail to read stderr")
 	}
