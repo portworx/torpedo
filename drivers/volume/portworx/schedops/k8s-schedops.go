@@ -200,7 +200,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		}
 
 		volMount, _ := d.RunCommand(currentNode,
-			fmt.Sprintf("mount | grep -E '(pxd|pxfs|pxns|pxd-enc|loop)' | grep %s", pvName), connOpts)
+			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop)' | grep %s", pvName), connOpts)
 		if len(volMount) == 0 {
 			return fmt.Errorf("volume %s not mounted om node %s", vol.Name, currentNode.Name)
 		}
