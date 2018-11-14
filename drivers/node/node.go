@@ -36,6 +36,7 @@ type Node struct {
 	UsableAddr               string
 	Type                     Type
 	IsStorageDriverInstalled bool
+	IsIKS                    bool
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options

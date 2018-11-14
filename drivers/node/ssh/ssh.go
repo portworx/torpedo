@@ -2,7 +2,10 @@ package ssh
 
 import (
 	"fmt"
+	"github.com/Sirupsen/logrus"
+	"github.com/portworx/sched-ops/k8s"
 	"io/ioutil"
+	"k8s.io/api/core/v1"
 	"os"
 	"strconv"
 	"strings"
@@ -117,7 +120,14 @@ func (s *ssh) Init() error {
 }
 
 func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
-	_, err := s.getAddrToConnect(n, options)
+	var err error
+	if n.IsIKS {
+		_, err = s.doCmdIks(n, options, "cat /etc/hostname", false)
+
+	} else {
+		_, err = s.getAddrToConnect(n, options)
+	}
+
 	if err != nil {
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
@@ -129,21 +139,13 @@ func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
 }
 
 func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
-	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
-	if err != nil {
-		return &node.ErrFailedToRebootNode{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
-		}
-	}
-
 	rebootCmd := "sudo reboot"
 	if options.Force {
 		rebootCmd = rebootCmd + " -f"
 	}
 
 	t := func() (interface{}, bool, error) {
-		out, err := s.doCmd(addr, rebootCmd, true)
+		out, err := s.doCmd(n, options.ConnectionOpts, rebootCmd, true)
 		return out, true, err
 	}
 
@@ -158,21 +160,13 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 }
 
 func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
-	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
-	if err != nil {
-		return &node.ErrFailedToShutdownNode{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
-		}
-	}
-
 	shutdownCmd := "sudo shutdown"
 	if options.Force {
 		shutdownCmd = "halt"
 	}
 
 	t := func() (interface{}, bool, error) {
-		out, err := s.doCmd(addr, shutdownCmd, true)
+		out, err := s.doCmd(n, options.ConnectionOpts, shutdownCmd, true)
 		return out, true, err
 	}
 
@@ -189,17 +183,10 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.ConnectionOpts) (string, error) {
 	// Currently only works for iSCSI drives
 	// TODO: Make it generic (Add support dev mapper devices)
-	addr, err := s.getAddrToConnect(n, options)
-	if err != nil {
-		return "", &node.ErrFailedToYankDrive{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
-		}
-	}
 
 	//Get the scsi bus ID
 	busIDCmd := "lsscsi | grep " + driveNameToFail + " | awk -F\":\" '{print $1}'" + "| awk -F\"[\" '{print $2}'"
-	busID, err := s.doCmd(addr, busIDCmd, false)
+	busID, err := s.doCmd(n, options, busIDCmd, false)
 	if err != nil {
 		return "", &node.ErrFailedToYankDrive{
 			Node:  n,
@@ -213,9 +200,7 @@ func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.Connec
 
 	// Disable the block device, so that it returns IO errors
 	yankCommand := "echo 1 > /sys/block/" + devices[len(devices)-1] + "/device/delete"
-
-	_, err = s.doCmd(addr, yankCommand, false)
-	if err != nil {
+	if _, err = s.doCmd(n, options, yankCommand, false); err != nil {
 		return "", &node.ErrFailedToYankDrive{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to yank drive %v due to: %v", driveNameToFail, err),
@@ -225,18 +210,9 @@ func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.Connec
 }
 
 func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRecover string, options node.ConnectionOpts) error {
-	addr, err := s.getAddrToConnect(n, options)
-	if err != nil {
-		return &node.ErrFailedToRecoverDrive{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
-		}
-	}
-
 	// Enable the drive by rescaning
 	recoverCmd := "echo \" - - -\" > /sys/class/scsi_host/host" + driveUUIDToRecover + "\"/\"scan"
-	_, err = s.doCmd(addr, recoverCmd, false)
-	if err != nil {
+	if _, err := s.doCmd(n, options, recoverCmd, false); err != nil {
 		return &node.ErrFailedToRecoverDrive{
 			Node:  n,
 			Cause: fmt.Sprintf("Unable to rescan the drive (%v): %v", driveNameToRecover, err),
@@ -246,15 +222,7 @@ func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRe
 }
 
 func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpts) (string, error) {
-	addr, err := s.getAddrToConnect(n, options)
-	if err != nil {
-		return "", &node.ErrFailedToRunCommand{
-			Addr:  n.Name,
-			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
-		}
-	}
-
-	output, err := s.doCmd(addr, command, options.IgnoreError)
+	output, err := s.doCmd(n, options, command, options.IgnoreError)
 	if err != nil {
 		return "", &node.ErrFailedToRunCommand{
 			Addr:  n.Name,
@@ -266,14 +234,6 @@ func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpt
 }
 
 func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
-	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
-	if err != nil {
-		return "", &node.ErrFailedToFindFileOnNode{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
-		}
-	}
-
 	findCmd := "sudo find " + path
 	if options.Name != "" {
 		findCmd += " -name " + options.Name
@@ -292,7 +252,7 @@ func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string
 	}
 
 	t := func() (interface{}, bool, error) {
-		out, err := s.doCmd(addr, findCmd, true)
+		out, err := s.doCmd(n, options.ConnectionOpts, findCmd, true)
 		return out, true, err
 	}
 
@@ -310,17 +270,9 @@ func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string
 }
 
 func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
-	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
-	if err != nil {
-		return &node.ErrFailedToRunSystemctlOnNode{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
-		}
-	}
-
 	systemctlCmd := fmt.Sprintf("sudo systemctl %v %v", options.Action, service)
 	t := func() (interface{}, bool, error) {
-		out, err := s.doCmd(addr, systemctlCmd, false)
+		out, err := s.doCmd(n, options.ConnectionOpts, systemctlCmd, false)
 		return out, true, err
 	}
 
@@ -335,9 +287,64 @@ func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 	return nil
 }
 
-func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
+func (s *ssh) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
+	if n.IsIKS {
+		return s.doCmdIks(n, options, cmd, ignoreErr)
+	}
+	return s.doCmdSSH(n, options, cmd, ignoreErr)
+}
+
+func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
+	cmdPreffix := []string{"--", "nsenter", "--mount=/host_proc/1/ns/mnt", "/bin/bash", "-c"}
+	cmdPreffix = append(cmdPreffix, fmt.Sprintf("\"%s\"", cmd))
+
+
+	pxPods, err := k8s.Instance().GetPodsByNode(n.Name, "kube-system")
+	if err != nil {
+		logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
+		return "", err
+	}
+	var pxPod *v1.Pod
+	for _, pod := range pxPods.Items {
+		if pod.Labels["name"] == "portworx" && k8s.Instance().IsPodReady(pod) {
+			pxPod = &pod
+			break
+		}
+	}
+
+	if pxPod == nil{
+
+	}
+
+	t := func() (interface{}, bool, error) {
+		output, err := k8s.Instance().RunCommandInPod(cmdPreffix, pxPod.Name, "", pxPod.Namespace)
+		if err != nil {
+			logrus.Errorf("failed to run command in pod: %v err: %v", pxPod, err)
+			return nil, true, err
+		}
+
+		return output, false, nil
+	}
+
+	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
+	if err != nil {
+		return "", err
+	}
+	return output.(string), nil
+}
+
+func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 	var out string
 	var sterr string
+
+	addr, err := s.getAddrToConnect(n, options)
+	if err != nil {
+		return "", &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get node address for node %s due to: %v", n.Name, err),
+		}
+	}
+
 	connection, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%s:%d", addr, DefaultSSHPort), s.sshConfig)
 	if err != nil {
 		return "", &node.ErrFailedToRunCommand{
@@ -399,7 +406,7 @@ func (s *ssh) getAddrToConnect(n node.Node, options node.ConnectionOpts) (string
 func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string, error) {
 	for _, addr := range n.Addresses {
 		t := func() (interface{}, bool, error) {
-			out, err := s.doCmd(addr, "hostname", false)
+			out, err := s.doCmd(n, options, "hostname", false)
 			return out, true, err
 		}
 		if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
