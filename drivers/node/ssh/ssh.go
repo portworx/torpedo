@@ -2,7 +2,7 @@ package ssh
 
 import (
 	"fmt"
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/portworx/sched-ops/k8s"
 	"io/ioutil"
 	"k8s.io/api/core/v1"
@@ -25,6 +25,10 @@ const (
 	DefaultSSHPort = 22
 	// DefaultSSHKey is the default public keyPath path used for ssh operations
 	DefaultSSHKey = "/home/torpedo/key4torpedo.pem"
+)
+
+const (
+	iksDaemonSetLabel = "ssh"
 )
 
 type ssh struct {
@@ -121,17 +125,19 @@ func (s *ssh) Init() error {
 
 func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
-	if n.IsIKS {
+	switch n.PlatformType {
+	case node.PlatformIKS:
 		_, err = s.doCmdIks(n, options, "cat /etc/hostname", false)
-
-	} else {
+	case node.PlatformGeneric:
+		fallthrough
+	default:
 		_, err = s.getAddrToConnect(n, options)
 	}
 
 	if err != nil {
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
-			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
+			Cause: err.Error(),
 		}
 	}
 
@@ -288,14 +294,18 @@ func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 }
 
 func (s *ssh) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
-	if n.IsIKS {
+	switch n.PlatformType {
+	case node.PlatformIKS:
 		return s.doCmdIks(n, options, cmd, ignoreErr)
+	case node.PlatformGeneric:
+		fallthrough
+	default:
+		return s.doCmdSSH(n, options, cmd, ignoreErr)
 	}
-	return s.doCmdSSH(n, options, cmd, ignoreErr)
 }
 
 func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
-	cmdPreffix := []string{"--", "nsenter", "--mount=/host_proc/1/ns/mnt", "/bin/bash", "-c"}
+	cmdPreffix := []string{"--", "nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c"}
 	cmdPreffix = append(cmdPreffix, fmt.Sprintf("\"%s\"", cmd))
 
 
@@ -306,7 +316,7 @@ func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ign
 	}
 	var pxPod *v1.Pod
 	for _, pod := range pxPods.Items {
-		if pod.Labels["name"] == "portworx" && k8s.Instance().IsPodReady(pod) {
+		if pod.Labels["name"] == iksDaemonSetLabel && k8s.Instance().IsPodReady(pod) {
 			pxPod = &pod
 			break
 		}

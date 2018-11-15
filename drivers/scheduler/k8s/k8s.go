@@ -244,8 +244,15 @@ func (k *k8s) parseK8SNode(n v1.Node) node.Node {
 		Name:      n.Name,
 		Addresses: k.getAddressesForNode(n),
 		Type:      nodeType,
-		IsIKS: strings.Contains(n.Status.NodeInfo.KubeletVersion, "IKS"),
+		PlatformType: getPlatform(n),
 	}
+}
+
+func getPlatform(n v1.Node) node.PlatformType {
+	if strings.Contains(n.Status.NodeInfo.KubeletVersion, "IKS") {
+		return node.PlatformIKS
+	}
+	return node.PlatformGeneric
 }
 
 func getAppNamespaceName(app *spec.AppSpec, instanceID string) string {

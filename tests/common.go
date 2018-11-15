@@ -4,6 +4,9 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"k8s.io/api/apps/v1beta2"
 	"os"
 	"strings"
 	"sync"
@@ -84,6 +87,27 @@ func InitInstance() {
 
 	err = Inst().N.Init()
 	expect(err).NotTo(haveOccurred())
+
+	nodes := node.GetWorkerNodes()
+	expect(nodes).NotTo(beEmpty())
+
+	switch nodes[0].PlatformType{
+	case node.PlatformIKS:
+		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/ssh", defaultSpecsRoot), Inst().S)
+		expect(err).NotTo(haveOccurred())
+		dsSpec, err := specFactory.Get("ssh")
+		expect(err).NotTo(haveOccurred())
+		ds, err := k8s.Instance().CreateDaemonSet(dsSpec.SpecList[0].(*v1beta2.DaemonSet))
+		expect(err).NotTo(haveOccurred())
+		err = k8s.Instance().ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
+		expect(err).NotTo(haveOccurred())
+	case node.PlatformGeneric:
+		fallthrough
+	default:
+		// nothing to do
+	}
+
+
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
