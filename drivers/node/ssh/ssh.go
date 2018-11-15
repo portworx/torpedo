@@ -372,33 +372,12 @@ func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	}
 	defer session.Close()
 
-	stderr, err := session.StderrPipe()
-	if err != nil {
-		return "", fmt.Errorf("fail to setup stderr")
-	}
-
-	stdout, err := session.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("fail to setup stdout")
-	}
-
-	session.Start(cmd)
-	err = session.Wait()
-	if resp, err1 := ioutil.ReadAll(stdout); err1 == nil {
-		out = string(resp)
-	} else {
-		return "", fmt.Errorf("fail to read stdout")
-	}
-	if resp, err1 := ioutil.ReadAll(stderr); err1 == nil {
-		sterr = string(resp)
-	} else {
-		return "", fmt.Errorf("fail to read stderr")
-	}
-
+	byteout, err := session.Output(cmd)
+	out = string(byteout)
 	if ignoreErr == false && err != nil {
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  addr,
-			Cause: fmt.Sprintf("failed to run command due to: %v [%s]", err, sterr),
+			Cause: fmt.Sprintf("failed to run command due to: %v", err),
 		}
 	}
 	return out, nil
