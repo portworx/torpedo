@@ -345,7 +345,6 @@ func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ign
 
 func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 	var out string
-	var sterr string
 
 	addr, err := s.getAddrToConnect(n, options)
 	if err != nil {
