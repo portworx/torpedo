@@ -317,28 +317,30 @@ func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ign
 	cmdPreffix := []string{"--", "nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c"}
 	cmdPreffix = append(cmdPreffix, fmt.Sprintf("\"%s\"", cmd))
 
-
-	debugPods, err := k8s.Instance().GetPodsByNode(n.Name, iksDefaultNamespace)
+	allPodsForNode, err := k8s.Instance().GetPodsByNode(n.Name, iksDefaultNamespace)
 	if err != nil {
 		logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 		return "", err
 	}
-	var pxPod *v1.Pod
-	for _, pod := range debugPods.Items {
+	var debugPod *v1.Pod
+	for _, pod := range allPodsForNode.Items {
 		if pod.Labels["name"] == iksDaemonSetLabel && k8s.Instance().IsPodReady(pod) {
-			pxPod = &pod
+			debugPod = &pod
 			break
 		}
 	}
 
-	if pxPod == nil{
-
+	if debugPod == nil{
+		return "", &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: fmt.Sprintf("debug pod not found in node %v", n),
+		}
 	}
 
 	t := func() (interface{}, bool, error) {
-		output, err := k8s.Instance().RunCommandInPod(cmdPreffix, pxPod.Name, "", pxPod.Namespace)
+		output, err := k8s.Instance().RunCommandInPod(cmdPreffix, debugPod.Name, "", debugPod.Namespace)
 		if err != nil {
-			logrus.Errorf("failed to run command in pod: %v err: %v", pxPod, err)
+			logrus.Errorf("failed to run command in pod: %v err: %v", debugPod, err)
 			return nil, true, err
 		}
 
