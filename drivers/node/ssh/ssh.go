@@ -229,15 +229,31 @@ func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRe
 }
 
 func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpts) (string, error) {
-	output, err := s.doCmd(n, options, command, options.IgnoreError)
+	addr, err := s.getAddrToConnect(n, options)
 	if err != nil {
 		return "", &node.ErrFailedToRunCommand{
 			Addr:  n.Name,
-			Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
+			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
 		}
 	}
 
-	return output, nil
+	t := func() (interface{}, bool, error) {
+		output, err := s.doCmd(addr, command, options.IgnoreError)
+		if err != nil {
+			return "", true, &node.ErrFailedToRunCommand{
+				Addr:  n.Name,
+				Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
+			}
+		}
+		return output, false, nil
+	}
+
+	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry);
+	if err != nil {
+		return "", err
+	}
+
+	return output.(string), nil
 }
 
 func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
