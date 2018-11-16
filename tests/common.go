@@ -111,8 +111,6 @@ func InitInstance() {
 	default:
 		// nothing to do
 	}
-
-
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run

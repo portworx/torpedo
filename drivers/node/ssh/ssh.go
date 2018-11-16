@@ -2,18 +2,18 @@ package ssh
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"github.com/portworx/sched-ops/k8s"
 	"io/ioutil"
-	"k8s.io/api/core/v1"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/sirupsen/logrus"
 	ssh_pkg "golang.org/x/crypto/ssh"
+	"k8s.io/api/core/v1"
 )
 
 const (
@@ -132,7 +132,7 @@ func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	case node.PlatformGeneric:
 		fallthrough
 	default:
-		_, err = s.getAddrToConnect(n, options)
+		_, err = s.getConnection(n, options)
 	}
 
 	if err != nil {
@@ -347,18 +347,10 @@ func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ign
 func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 	var out string
 
-	addr, err := s.getAddrToConnect(n, options)
+	connection, err := s.getConnection(n, options)
 	if err != nil {
 		return "", &node.ErrFailedToRunCommand{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to get node address for node %s due to: %v", n.Name, err),
-		}
-	}
-
-	connection, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%s:%d", addr, DefaultSSHPort), s.sshConfig)
-	if err != nil {
-		return "", &node.ErrFailedToRunCommand{
-			Addr:  addr,
+			Addr:  n.UsableAddr,
 			Cause: fmt.Sprintf("failed to dial: %v", err),
 		}
 	}
@@ -366,7 +358,7 @@ func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	session, err := connection.NewSession()
 	if err != nil {
 		return "", &node.ErrFailedToRunCommand{
-			Addr:  addr,
+			Addr:  n.UsableAddr,
 			Cause: fmt.Sprintf("failed to create session: %s", err),
 		}
 	}
@@ -376,34 +368,35 @@ func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	out = string(byteout)
 	if ignoreErr == false && err != nil {
 		return out, &node.ErrFailedToRunCommand{
-			Addr:  addr,
+			Addr:  n.UsableAddr,
 			Cause: fmt.Sprintf("failed to run command due to: %v", err),
 		}
 	}
 	return out, nil
 }
 
-func (s *ssh) getAddrToConnect(n node.Node, options node.ConnectionOpts) (string, error) {
+func (s *ssh) getConnection(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
 	if n.Addresses == nil || len(n.Addresses) == 0 {
-		return "", fmt.Errorf("no address available to connect")
+		return nil, fmt.Errorf("no address available to connect")
 	}
 
-	addr, err := s.getOneUsableAddr(n, options)
+	addr, err := s.getConnectionOnUsableAddr(n, options)
 	return addr, err
 }
 
-func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string, error) {
+func (s *ssh) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
 	for _, addr := range n.Addresses {
 		t := func() (interface{}, bool, error) {
-			out, err := s.doCmd(n, options, "hostname", false)
-			return out, true, err
+			// check if address is responding on port 22
+			conn, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%s:%s", addr, DefaultSSHPort), s.sshConfig)
+			return conn, true, err
 		}
-		if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
+		if cli, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
 			n.UsableAddr = addr
-			return addr, nil
+			return cli.(*ssh_pkg.Client), nil
 		}
 	}
-	return "", fmt.Errorf("no usable address found. Tried: %v. "+
+	return nil, fmt.Errorf("no usable address found. Tried: %v. "+
 		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses)
 }
 
