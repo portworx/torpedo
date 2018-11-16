@@ -207,6 +207,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*apps_api.StatefulSet); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*apps_api.DaemonSet); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*v1.Service); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.PersistentVolumeClaim); ok {
@@ -251,9 +253,9 @@ func (k *k8s) parseK8SNode(n v1.Node) node.Node {
 	}
 
 	return node.Node{
-		Name:      n.Name,
-		Addresses: k.getAddressesForNode(n),
-		Type:      nodeType,
+		Name:         n.Name,
+		Addresses:    k.getAddressesForNode(n),
+		Type:         nodeType,
 		PlatformType: getPlatform(n),
 	}
 }
@@ -672,7 +674,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
 			if err := k8sOps.ValidateDeployment(obj, timeout, retryInterval); err != nil {
-				return &scheduler.ErrFailedToValidateApp{
+				return &scheduler.ErrFailedToValidateApp {
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate Deployment: %v. Err: %v", obj.Name, err),
 				}
