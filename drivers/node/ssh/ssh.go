@@ -28,7 +28,8 @@ const (
 )
 
 const (
-	iksDaemonSetLabel = "ssh"
+	iksDaemonSetLabel = "debug"
+	iksDefaultNamespace = "kube-system"
 )
 
 type ssh struct {
@@ -309,13 +310,13 @@ func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ign
 	cmdPreffix = append(cmdPreffix, fmt.Sprintf("\"%s\"", cmd))
 
 
-	pxPods, err := k8s.Instance().GetPodsByNode(n.Name, "kube-system")
+	debugPods, err := k8s.Instance().GetPodsByNode(n.Name, iksDefaultNamespace)
 	if err != nil {
 		logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 		return "", err
 	}
 	var pxPod *v1.Pod
-	for _, pod := range pxPods.Items {
+	for _, pod := range debugPods.Items {
 		if pod.Labels["name"] == iksDaemonSetLabel && k8s.Instance().IsPodReady(pod) {
 			pxPod = &pod
 			break

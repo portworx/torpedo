@@ -58,6 +58,8 @@ const (
 	// Eventually we should remove the defaults and make it mandatory with documentation.
 	defaultStorageDriverUpgradeVersion = "1.2.11.6"
 	defaultStorageDriverBaseVersion    = "1.2.11.5"
+	iksDaemonSetLabel = "debug"
+	iksDefaultNamespace = "kube-system"
 )
 
 const (
@@ -93,12 +95,15 @@ func InitInstance() {
 
 	switch nodes[0].PlatformType{
 	case node.PlatformIKS:
-		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/ssh", defaultSpecsRoot), Inst().S)
-		expect(err).NotTo(haveOccurred())
-		dsSpec, err := specFactory.Get("ssh")
-		expect(err).NotTo(haveOccurred())
-		ds, err := k8s.Instance().CreateDaemonSet(dsSpec.SpecList[0].(*v1beta2.DaemonSet))
-		expect(err).NotTo(haveOccurred())
+		var ds *v1beta2.DaemonSet
+		if ds, _ = k8s.Instance().GetDaemonSet(iksDaemonSetLabel, iksDefaultNamespace); ds == nil {
+			specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, iksDaemonSetLabel), Inst().S)
+			expect(err).NotTo(haveOccurred())
+			dsSpec, err := specFactory.Get(iksDaemonSetLabel)
+			expect(err).NotTo(haveOccurred())
+			ds, err = k8s.Instance().CreateDaemonSet(dsSpec.SpecList[0].(*v1beta2.DaemonSet))
+			expect(err).NotTo(haveOccurred())
+		}
 		err = k8s.Instance().ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
 		expect(err).NotTo(haveOccurred())
 	case node.PlatformGeneric:

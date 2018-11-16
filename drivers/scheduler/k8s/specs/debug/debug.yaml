@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta2
+apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: debug-daemonset
@@ -12,7 +12,7 @@ spec:
   template:
     metadata:
       labels:
-        name: ssh
+        name: debug
     spec:
       affinity:
         nodeAffinity:

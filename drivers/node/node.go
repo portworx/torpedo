@@ -34,7 +34,7 @@ const (
 	// PlatformGeneric identifies a generic node
 	PlatformGeneric PlatformType = "generic"
 	// PlatformIKS identifies a IKS node
-	PlatformIKS PlatformType = "iks"
+	PlatformIKS PlatformType = "IKS"
 )
 
 // Node encapsulates a node in the cluster
