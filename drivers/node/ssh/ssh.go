@@ -28,7 +28,7 @@ const (
 )
 
 const (
-	iksDaemonSetLabel = "debug"
+	iksDaemonSetLabel   = "debug"
 	iksDefaultNamespace = "kube-system"
 )
 
@@ -126,16 +126,18 @@ func (s *ssh) Init() error {
 
 func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
+	var cmd string
+
 	switch n.PlatformType {
 	case node.PlatformIKS:
-		_, err = s.doCmdIks(n, options, "cat /etc/hostname", false)
+		cmd = "cat /etc/hostname"
 	case node.PlatformGeneric:
 		fallthrough
 	default:
-		_, err = s.getConnection(n, options)
+		cmd = "hostname"
 	}
 
-	if err != nil {
+	if _, err = s.doCmd(n, options, cmd, false); err != nil {
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
 			Cause: err.Error(),
@@ -330,8 +332,8 @@ func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ign
 		}
 	}
 
-	if debugPod == nil{
-		return "", &node.ErrFailedToRunCommand{
+	if debugPod == nil {
+		return "", &node.ErrFailedToRunCommand {
 			Node:  n,
 			Cause: fmt.Sprintf("debug pod not found in node %v", n),
 		}
