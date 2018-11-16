@@ -257,7 +257,7 @@ func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpt
 	t := func() (interface{}, bool, error) {
 		output, err := s.doCmd(addr, command, options.IgnoreError)
 		if err != nil {
-			return "",true , &node.ErrFailedToRunCommand{
+			return "", true, &node.ErrFailedToRunCommand{
 				Addr:  n.Name,
 				Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
 			}
