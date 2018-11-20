@@ -100,13 +100,6 @@ spec:
   - key: node-role.kubernetes.io/master
     operator: Equal
     effect: NoSchedule
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-        - matchExpressions:
-          - key: node-role.kubernetes.io/master
-            operator: Exists
   containers:
   - name: torpedo
     image: ${TORPEDO_IMG}
