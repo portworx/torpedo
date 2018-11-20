@@ -11,8 +11,12 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	k8s_driver "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/sirupsen/logrus"
 	ssh_pkg "golang.org/x/crypto/ssh"
+	"k8s.io/api/apps/v1beta2"
 	"k8s.io/api/core/v1"
 )
 
@@ -30,6 +34,12 @@ const (
 const (
 	iksDaemonSetLabel   = "debug"
 	iksDefaultNamespace = "kube-system"
+	defaultSpecsRoot    = "../drivers/scheduler/k8s/specs"
+)
+
+const (
+	defaultTimeout       = 5 * time.Minute
+	defaultRetryInterval = 10 * time.Second
 )
 
 type ssh struct {
@@ -63,6 +73,66 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 }
 
 func (s *ssh) Init() error {
+
+	nodes := node.GetWorkerNodes()
+	var err error
+
+	switch nodes[0].PlatformType {
+	case node.PlatformIKS:
+		err = s.initIKS()
+	case node.PlatformGeneric:
+		fallthrough
+	default:
+		err = s.initSSH()
+	}
+
+	if err != nil {
+		return err
+	}
+
+	for _, n := range nodes {
+		if err := s.TestConnection(n, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}); err != nil {
+			return &node.ErrFailedToTestConnection{
+				Node:  n,
+				Cause: err.Error(),
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *ssh) initIKS() error {
+	var ds *v1beta2.DaemonSet
+	var err error
+	k8sops := k8s.Instance()
+	if ds, err = k8sops.GetDaemonSet(iksDaemonSetLabel, iksDefaultNamespace); ds == nil {
+		logrus.Infof("error: %s", err)
+		s, err := scheduler.Get(k8s_driver.SchedName)
+		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, iksDaemonSetLabel), s)
+		if err != nil {
+			return fmt.Errorf("Error while loading debug daemonset spec file. Err: %s", err)
+		}
+		dsSpec, err := specFactory.Get(iksDaemonSetLabel)
+		if err != nil {
+			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
+		}
+		ds, err = k8sops.CreateDaemonSet(dsSpec.SpecList[0].(*v1beta2.DaemonSet))
+		if err != nil {
+			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
+		}
+	}
+	err = k8sops.ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
+	if err != nil {
+		return fmt.Errorf("Error while validating debug daemonset. Err: %s", err)
+	}
+	return nil
+}
+
+func (s *ssh) initSSH() error {
 	keyPath := os.Getenv("TORPEDO_SSH_KEY")
 	if len(keyPath) == 0 {
 		s.keyPath = DefaultSSHKey
@@ -106,19 +176,6 @@ func (s *ssh) Init() error {
 
 	} else {
 		return fmt.Errorf("Unknown auth type")
-	}
-
-	nodes := node.GetWorkerNodes()
-	for _, n := range nodes {
-		if err := s.TestConnection(n, node.ConnectionOpts{
-			Timeout:         1 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		}); err != nil {
-			return &node.ErrFailedToTestConnection{
-				Node:  n,
-				Cause: err.Error(),
-			}
-		}
 	}
 
 	return nil
@@ -316,8 +373,7 @@ func (s *ssh) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignore
 }
 
 func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
-	cmdPreffix := []string{"--", "nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c"}
-	cmdPreffix = append(cmdPreffix, fmt.Sprintf("\"%s\"", cmd))
+	cmds:= []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
 
 	allPodsForNode, err := k8s.Instance().GetPodsByNode(n.Name, iksDefaultNamespace)
 	if err != nil {
@@ -333,14 +389,14 @@ func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ign
 	}
 
 	if debugPod == nil {
-		return "", &node.ErrFailedToRunCommand {
+		return "", &node.ErrFailedToRunCommand{
 			Node:  n,
 			Cause: fmt.Sprintf("debug pod not found in node %v", n),
 		}
 	}
 
 	t := func() (interface{}, bool, error) {
-		output, err := k8s.Instance().RunCommandInPod(cmdPreffix, debugPod.Name, "", debugPod.Namespace)
+		output, err := k8s.Instance().RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 		if err != nil {
 			logrus.Errorf("failed to run command in pod: %v err: %v", debugPod, err)
 			return nil, true, err
@@ -349,6 +405,7 @@ func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ign
 		return output, false, nil
 	}
 
+	logrus.Infof("Running command on pod %s [%s]", debugPod.Name, cmds)
 	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
 	if err != nil {
 		return "", err

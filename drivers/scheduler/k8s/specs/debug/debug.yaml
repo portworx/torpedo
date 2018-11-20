@@ -1,7 +1,7 @@
 apiVersion: apps/v1beta2
 kind: DaemonSet
 metadata:
-  name: debug-daemonset
+  name: debug
   namespace: kube-system
 spec:
   minReadySeconds: 0
@@ -9,6 +9,9 @@ spec:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 1
+  selector:
+    matchLabels:
+      name: debug
   template:
     metadata:
       labels:
