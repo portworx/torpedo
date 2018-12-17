@@ -44,7 +44,7 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	file := keypath
 	buf, err := ioutil.ReadFile(file)
 	if err != nil {
-		logrus.Errorf("failed to reade ssh key file. Cause: %s", err.Error())
+		logrus.Errorf("failed to read ssh key file. Cause: %s", err.Error())
 		return nil, err
 	}
 
