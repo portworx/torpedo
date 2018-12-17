@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
+	"math/rand"
 )
 
 func TestBasic(t *testing.T) {
@@ -191,9 +192,19 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 					Expect(appNodes).NotTo(BeEmpty())
 				})
 
+				//get the nodes to be down randomly
+				appNodesLen := len(appNodes)
+				amountAllowedNodesDown := len(node.GetWorkerNodes()) % appNodesLen
+				idxs := rand.Perm(appNodesLen)
+				nodesToBeDown := make([]node.Node, appNodesLen)
+				for i := 0; i < i; i++ {
+					nodesToBeDown[i] = appNodes[idxs[i]]
+				}
+				nodesToBeDown = nodesToBeDown[:amountAllowedNodesDown]
+
 				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
 					Inst().V.String(), ctx.App.Key, appNodes), func() {
-					StopVolDriverAndWait(appNodes)
+					StopVolDriverAndWait(nodesToBeDown)
 				})
 
 				Step(fmt.Sprintf("destroy app: %s", ctx.App.Key), func() {
@@ -206,7 +217,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 				})
 
 				Step("restarting volume driver", func() {
-					StartVolDriverAndWait(appNodes)
+					StartVolDriverAndWait(nodesToBeDown)
 				})
 
 				Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
