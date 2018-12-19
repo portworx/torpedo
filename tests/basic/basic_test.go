@@ -9,8 +9,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
-	"math/rand"
 )
 
 func TestBasic(t *testing.T) {
@@ -192,18 +192,35 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 					Expect(appNodes).NotTo(BeEmpty())
 				})
 
-				//get the nodes to be down randomly
-				appNodesLen := len(appNodes)
-				amountAllowedNodesDown := len(node.GetWorkerNodes()) % appNodesLen
-				idxs := rand.Perm(appNodesLen)
-				nodesToBeDown := make([]node.Node, appNodesLen)
-				for i := 0; i < i; i++ {
-					nodesToBeDown[i] = appNodes[idxs[i]]
-				}
-				nodesToBeDown = nodesToBeDown[:amountAllowedNodesDown]
+				var appVolumes []*volume.Volume
+				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(appVolumes).NotTo(BeEmpty())
+				})
+
+				// avoid dup
+				nodesThatCantBeDown := make(map[string]bool)
+				nodesToBeDown := make([]node.Node, 0)
+				Step(fmt.Sprintf("choose nodes to be down for %s app", ctx.App.Key), func() {
+					for _, vol := range appVolumes {
+						replicas, err := Inst().V.GetReplicaSetNodes(vol)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(replicas).NotTo(BeEmpty())
+						// at least 1 node with replica needs to be up
+						nodesThatCantBeDown[replicas[0]] = true
+					}
+
+					for _, node := range node.GetWorkerNodes() {
+						if _, exists := nodesThatCantBeDown[node.Name]; !exists {
+							nodesToBeDown = append(nodesToBeDown, node)
+						}
+					}
+
+				})
 
 				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
-					Inst().V.String(), ctx.App.Key, appNodes), func() {
+					Inst().V.String(), ctx.App.Key, nodesToBeDown), func() {
 					StopVolDriverAndWait(nodesToBeDown)
 				})
 
