@@ -1170,6 +1170,7 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 	var pxNodes []string
 	vols, err := d.getVolDriver().Inspect([]string{torpedovol.Name})
 	if err != nil || len(vols) != 1 {
+		logrus.Infof("volumes %v", vols)
 		return nil, &ErrFailedToInspectVolume{
 			ID:    torpedovol.Name,
 			Cause: err.Error(),
