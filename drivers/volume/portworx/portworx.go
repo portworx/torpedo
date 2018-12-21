@@ -1168,14 +1168,21 @@ func (d *portworx) getStorageStatus(n node.Node) string {
 
 func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]string, error) {
 	var pxNodes []string
-	vols, err := d.getVolDriver().Inspect([]string{torpedovol.Name})
-	if err != nil || len(vols) != 1 {
-		logrus.Infof("volumes %v", vols)
+	vols, err := d.getVolDriver().Inspect([]string{torpedovol.ID})
+	if err != nil {
 		return nil, &ErrFailedToInspectVolume{
 			ID:    torpedovol.Name,
 			Cause: err.Error(),
 		}
 	}
+
+	if len(vols) == 0 {
+		return nil, &ErrFailedToInspectVolume{
+			ID:    torpedovol.Name,
+			Cause: fmt.Sprintf("unable to find volume %s", torpedovol.Name),
+		}
+	}
+
 	for _, rs := range vols[0].ReplicaSets {
 		for _, n := range rs.Nodes {
 			pxNode, err := d.clusterManager.Inspect(n)
