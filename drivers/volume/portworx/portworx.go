@@ -1178,7 +1178,7 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 
 	if len(vols) == 0 {
 		return nil, &ErrFailedToInspectVolume{
-			ID:    torpedovol.Name,
+			ID:    torpedovol.ID,
 			Cause: fmt.Sprintf("unable to find volume %s", torpedovol.Name),
 		}
 	}
