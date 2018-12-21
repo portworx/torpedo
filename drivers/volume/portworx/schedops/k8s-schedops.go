@@ -174,12 +174,13 @@ func (k *k8sSchedOps) validatePods(pods []corev1.Pod, pvName string) ([]corev1.P
 		updatedPods := make([]corev1.Pod, 0)
 		pods, err := k8s.Instance().GetPodsUsingPV(pvName)
 		if err != nil {
+			logrus.Errorf("failed to find pods using pv %s", pvName)
 			return nil, true, err
 		}
 		for _, pod := range pods {
 			updatedPod, err := k8s.Instance().GetPodByName(pod.Name, pod.Namespace)
-			if err != nil || !k8s.Instance().IsPodReady(*updatedPod){
-				logrus.Error("failed to update pod %v err: %v", pod, err)
+			if err != nil || !k8s.Instance().IsPodReady(*updatedPod) {
+				logrus.Errorf("failed to update pod %v err: %v", pod, err)
 				return nil, true, err
 			}
 			updatedPods = append(updatedPods, *updatedPod)
