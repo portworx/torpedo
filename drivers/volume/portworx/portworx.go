@@ -1168,7 +1168,8 @@ func (d *portworx) getStorageStatus(n node.Node) string {
 
 func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]string, error) {
 	var pxNodes []string
-	vols, err := d.getVolDriver().Inspect([]string{torpedovol.ID})
+	volName := d.schedOps.GetVolumeName(torpedovol)
+	vols, err := d.getVolDriver().Inspect([]string{volName})
 	if err != nil {
 		return nil, &ErrFailedToInspectVolume{
 			ID:    torpedovol.Name,
@@ -1179,7 +1180,7 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 	if len(vols) == 0 {
 		return nil, &ErrFailedToInspectVolume{
 			ID:    torpedovol.ID,
-			Cause: fmt.Sprintf("unable to find volume %s", torpedovol.Name),
+			Cause: fmt.Sprintf("unable to find volume %s [%s]", torpedovol.Name, volName),
 		}
 	}
 
