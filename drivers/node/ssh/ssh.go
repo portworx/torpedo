@@ -10,6 +10,7 @@ import (
 
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/sirupsen/logrus"
 	ssh_pkg "golang.org/x/crypto/ssh"
 )
 
@@ -43,11 +44,13 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	file := keypath
 	buf, err := ioutil.ReadFile(file)
 	if err != nil {
+		logrus.Errorf("failed to read ssh key file. Cause: %s", err.Error())
 		return nil, err
 	}
 
 	pubkey, err := ssh_pkg.ParsePrivateKey(buf)
 	if err != nil {
+		logrus.Errorf("failed to parse private key. Cause: %s", err.Error())
 		return nil, err
 	}
 
@@ -254,15 +257,23 @@ func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpt
 		}
 	}
 
-	output, err := s.doCmd(addr, command, options.IgnoreError)
-	if err != nil {
-		return "", &node.ErrFailedToRunCommand{
-			Addr:  n.Name,
-			Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
+	t := func() (interface{}, bool, error) {
+		output, err := s.doCmd(addr, command, options.IgnoreError)
+		if err != nil {
+			return "", true, &node.ErrFailedToRunCommand{
+				Addr:  n.Name,
+				Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
+			}
 		}
+		return output, false, nil
 	}
 
-	return output, nil
+	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
+	if err != nil {
+		return "", err
+	}
+
+	return output.(string), nil
 }
 
 func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
@@ -337,7 +348,6 @@ func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 
 func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	var out string
-	var sterr string
 	connection, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%s:%d", addr, DefaultSSHPort), s.sshConfig)
 	if err != nil {
 		return "", &node.ErrFailedToRunCommand{
@@ -355,33 +365,12 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	}
 	defer session.Close()
 
-	stderr, err := session.StderrPipe()
-	if err != nil {
-		return "", fmt.Errorf("fail to setup stderr")
-	}
-
-	stdout, err := session.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("fail to setup stdout")
-	}
-
-	session.Start(cmd)
-	err = session.Wait()
-	if resp, err1 := ioutil.ReadAll(stdout); err1 == nil {
-		out = string(resp)
-	} else {
-		return "", fmt.Errorf("fail to read stdout")
-	}
-	if resp, err1 := ioutil.ReadAll(stderr); err1 == nil {
-		sterr = string(resp)
-	} else {
-		return "", fmt.Errorf("fail to read stderr")
-	}
-
+	byteout, err := session.Output(cmd)
+	out = string(byteout)
 	if ignoreErr == false && err != nil {
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  addr,
-			Cause: fmt.Sprintf("failed to run command due to: %v [%s]", err, sterr),
+			Cause: fmt.Sprintf("failed to run command due to: %v", err),
 		}
 	}
 	return out, nil

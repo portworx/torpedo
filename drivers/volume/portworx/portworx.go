@@ -36,8 +36,8 @@ const (
 	pxSystemdServiceName    = "portworx.service"
 	storageStatusUp         = "Up"
 	tokenKey                = "token"
-	clusterIP               = "clusterip"
-	clusterPort             = "clusterport"
+	clusterIP               = "ip"
+	clusterPort             = "port"
 	remoteKubeConfigPath    = "/tmp/kubeconfig"
 )
 
@@ -309,9 +309,11 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		}
 
 		if len(vols) != 1 {
+			errCause := fmt.Sprintf("Volume: %s inspect result has invalid length. Expected:1 Actual:%v", name, len(vols))
+			logrus.Warnf(errCause)
 			return nil, true, &ErrFailedToInspectVolume{
 				ID:    name,
-				Cause: fmt.Sprintf("Volume inspect result has invalid length. Expected:1 Actual:%v", len(vols)),
+				Cause: errCause,
 			}
 		}
 
@@ -555,7 +557,7 @@ func (d *portworx) ValidateVolumeCleanup() error {
 }
 
 func (d *portworx) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
-	return d.schedOps.ValidateVolumeSetup(vol, d.nodeDriver)
+	return d.schedOps.ValidateVolumeSetup(vol)
 }
 
 func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
@@ -596,11 +598,15 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	t := func() (interface{}, bool, error) {
 		vols, err := d.getVolDriver().Inspect([]string{name})
 		if err != nil {
+			logrus.Warnf("failed to inspect volume: %s due to: %v", name, err)
 			return nil, true, err
 		}
 		if len(vols) != 1 {
-			return nil, true, fmt.Errorf("Incorrect number of volumes returned")
+			err = fmt.Errorf("Incorrect number of volumes (%d) returned for vol: %s", len(vols), name)
+			logrus.Warnf(err.Error())
+			return nil, true, err
 		}
+
 		return vols[0], false, nil
 	}
 
@@ -1055,13 +1061,16 @@ func (d *portworx) UpgradeDriver(version string) error {
 	return nil
 }
 
-// GetClusterPairingInfo return underlying storage details
+// GetClusterPairingInfo returns cluster pair information
 func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
 	if err != nil {
 		logrus.Errorf("err retrieving remote px nodes: %v", err)
 		return nil, err
+	}
+	if len(pxNodes) == 0 {
+		return nil, fmt.Errorf("No PX Node found")
 	}
 
 	clusterMgr, err := d.getClusterManagerByAddress(pxNodes[0].Addresses[0])
