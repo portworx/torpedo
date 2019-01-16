@@ -24,7 +24,7 @@ import:
 - package: github.com/docker/distribution
   version: 749f6afb4572201e3c37325d0ffedb6f32be8950
 - package: github.com/libopenstorage/openstorage
-  version: v3.0.0-beta
+  version: 09ee5d92a4ff827a284d26be193584be88c10cf4
   subpackages:
   - api
   - api/client
@@ -45,6 +45,7 @@ import:
   subpackages:
   - k8s
   - task
+  version: kubernetes-1.11
 - package: github.com/sirupsen/logrus
   version: ^1.0.5
 - package: golang.org/x/crypto
@@ -87,7 +88,7 @@ import:
   - ptypes/struct
   - ptypes/timestamp
 - package: github.com/libopenstorage/stork
-  version: master
+  version: migration_scope
   subpackages:
   - pkg/apis/stork
   - pkg/apis/stork/v1alpha1
@@ -96,3 +97,7 @@ import:
   - pkg/client/clientset/versioned/typed/stork/v1alpha1
 - package: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
+- package: github.com/operator-framework/operator-sdk
+  version: v0.0.7
+  subpackages:
+  - pkg/util/k8sutil

@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -26,12 +26,12 @@ import (
 	"k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -117,6 +117,16 @@ func (k *k8s) Init(specDir, volDriverName, nodeDriverName string) error {
 	}
 
 	k.nodeDriverName = nodeDriverName
+	return nil
+}
+
+func (k *k8s) RescanSpecs(specDir string) error {
+	var err error
+	logrus.Infof("Rescanning specs for %v", specDir)
+	k.specFactory, err = spec.NewFactory(specDir, k)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -213,6 +223,10 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.Pod); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.ClusterPair); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.Migration); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("Unsupported object: %v", reflect.TypeOf(in))
@@ -269,6 +283,16 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 		}
 
 		var specObjects []interface{}
+		for _, spec := range app.SpecList {
+			obj, err := k.createCRDObjects(spec, defaultTimeout, defaultRetryInterval)
+			if err != nil {
+				return nil, err
+			}
+			if obj != nil {
+				specObjects = append(specObjects, obj)
+			}
+		}
+
 		for _, spec := range app.SpecList {
 			t := func() (interface{}, bool, error) {
 				obj, err := k.createStorageObject(spec, ns, app)
@@ -685,6 +709,24 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 
 			logrus.Infof("[%v] Validated pod: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.ClusterPair); ok {
+			if err := k8sOps.ValidateClusterPair(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToApplyCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate cluster Pair: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated Cluster Pair: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.Migration); ok {
+			if err := k8sOps.ValidateMigration(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToApplyCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate Migration: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated Migration specs: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -1157,7 +1199,7 @@ func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			for _, pvc := range pvcList.Items {
-				vol, err := k.resizePVCBy1GB(ctx, &pvc);
+				vol, err := k.resizePVCBy1GB(ctx, &pvc)
 				if err != nil {
 					return nil, err
 				}
@@ -1169,7 +1211,7 @@ func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	return vols, nil
 }
 
-func (k* k8s) resizePVCBy1GB(ctx *scheduler.Context , pvc *v1.PersistentVolumeClaim) (*volume.Volume, error) {
+func (k *k8s) resizePVCBy1GB(ctx *scheduler.Context, pvc *v1.PersistentVolumeClaim) (*volume.Volume, error) {
 	k8sOps := k8s_ops.Instance()
 	storageSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
 
@@ -1216,36 +1258,53 @@ func (k *k8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 }
 
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
-	pods, err := k.getPodsForApp(ctx)
-	if err != nil {
-		return nil, &scheduler.ErrFailedToGetNodesForApp{
-			App:   ctx.App,
-			Cause: fmt.Sprintf("failed to get pods due to: %v", err),
-		}
-	}
-
-	// We should have pods from a supported application at this point
-	var result []node.Node
-	nodeMap := node.GetNodesByName()
-
-	for _, p := range pods {
-		n, ok := nodeMap[p.Spec.NodeName]
-		if !ok {
-			return nil, &scheduler.ErrFailedToGetNodesForApp{
+	t := func() (interface{}, bool, error) {
+		pods, err := k.getPodsForApp(ctx)
+		if err != nil {
+			return nil, false, &scheduler.ErrFailedToGetNodesForApp{
 				App:   ctx.App,
-				Cause: fmt.Sprintf("node: %v not present in node map", p.Spec.NodeName),
+				Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 			}
 		}
 
-		if node.Contains(result, n) {
-			continue
+		// We should have pods from a supported application at this point
+		var result []node.Node
+		nodeMap := node.GetNodesByName()
+
+		for _, p := range pods {
+			n, ok := nodeMap[p.Spec.NodeName]
+			if !ok {
+				return nil, true, &scheduler.ErrFailedToGetNodesForApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("node: %v not present in node map", p.Spec.NodeName),
+				}
+			}
+
+			if node.Contains(result, n) {
+				continue
+			}
+
+			if k8s_ops.Instance().IsPodRunning(p) {
+				result = append(result, n)
+			}
 		}
-		if k8s_ops.Instance().IsPodRunning(p) {
-			result = append(result, n)
+
+		if len(result) > 0 {
+			return result, false, nil
+		}
+
+		return result, true, &scheduler.ErrFailedToGetNodesForApp{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("no pods in running state %v", pods),
 		}
 	}
 
-	return result, nil
+	nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	return nodes.([]node.Node), nil
 }
 
 func (k *k8s) getPodsForApp(ctx *scheduler.Context) ([]v1.Pod, error) {
@@ -1432,7 +1491,7 @@ func (k *k8s) StopSchedOnNode(n node.Node) error {
 	}
 	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
-		return &scheduler.ErrFailedToStopSchedOnNode {
+		return &scheduler.ErrFailedToStopSchedOnNode{
 			Node:          n,
 			SystemService: SystemdSchedServiceName,
 			Cause:         err.Error(),
@@ -1452,13 +1511,44 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 	}
 	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
-		return &scheduler.ErrFailedToStartSchedOnNode {
+		return &scheduler.ErrFailedToStartSchedOnNode{
 			Node:          n,
 			SystemService: SystemdSchedServiceName,
 			Cause:         err.Error(),
 		}
 	}
 	return nil
+}
+
+// createCRDObjects and Validate their deployment
+func (k *k8s) createCRDObjects(specObj interface{}, timeout, retryInterval time.Duration) (interface{}, error) {
+	var err error
+	k8sOps := k8s_ops.Instance()
+	if obj, ok := specObj.(*stork_api.ClusterPair); ok {
+		logrus.Info("Applying clusterpair spec")
+		err = k8sOps.CreateClusterPair(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToApplyCustomSpec{
+				Name:  obj.Name,
+				Cause: fmt.Sprintf("Failed to apply spec: %v. Err: %v", obj.Name, err),
+				Type:  obj,
+			}
+		}
+		return obj, nil
+	} else if obj, ok := specObj.(*stork_api.Migration); ok {
+		logrus.Info("Applying Migration Spec")
+		err = k8sOps.CreateMigration(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToApplyCustomSpec{
+				Name:  obj.Name,
+				Cause: fmt.Sprintf("Failed to apply spec: %v. Err: %v", obj.Name, err),
+				Type:  obj,
+			}
+		}
+		return obj, nil
+	}
+
+	return nil, nil
 }
 
 func insertLineBreak(note string) string {

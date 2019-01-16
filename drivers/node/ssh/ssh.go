@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/sirupsen/logrus"
 	ssh_pkg "golang.org/x/crypto/ssh"
 )
 
@@ -44,11 +44,13 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	file := keypath
 	buf, err := ioutil.ReadFile(file)
 	if err != nil {
+		logrus.Errorf("failed to read ssh key file. Cause: %s", err.Error())
 		return nil, err
 	}
 
 	pubkey, err := ssh_pkg.ParsePrivateKey(buf)
 	if err != nil {
+		logrus.Errorf("failed to parse private key. Cause: %s", err.Error())
 		return nil, err
 	}
 
@@ -255,15 +257,23 @@ func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpt
 		}
 	}
 
-	output, err := s.doCmd(addr, command, options.IgnoreError)
-	if err != nil {
-		return "", &node.ErrFailedToRunCommand{
-			Addr:  n.Name,
-			Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
+	t := func() (interface{}, bool, error) {
+		output, err := s.doCmd(addr, command, options.IgnoreError)
+		if err != nil {
+			return "", true, &node.ErrFailedToRunCommand{
+				Addr:  n.Name,
+				Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
+			}
 		}
+		return output, false, nil
 	}
 
-	return output, nil
+	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
+	if err != nil {
+		return "", err
+	}
+
+	return output.(string), nil
 }
 
 func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {

@@ -100,6 +100,9 @@ type Driver interface {
 
 	// GetAggregationLevel returns the aggregation level for the given volume
 	GetAggregationLevel(vol *Volume) (int64, error)
+
+	// GetClusterPairingInfo returns cluster pairing information from remote cluster
+	GetClusterPairingInfo() (map[string]string, error)
 }
 
 var (
@@ -130,6 +133,6 @@ func Get(name string) (Driver, error) {
 	}
 }
 
-func (v *Volume) String() string{
+func (v *Volume) String() string {
 	return v.Name
 }

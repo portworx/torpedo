@@ -424,6 +424,11 @@ func (d *dcos) StartSchedOnNode(node node.Node) error {
 	return nil
 }
 
+func (d *dcos) RescanSpecs(specDir string) error {
+	// TODO implement this method
+	return nil
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

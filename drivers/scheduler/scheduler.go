@@ -95,6 +95,9 @@ type Driver interface {
 
 	// Start scheduler service on the given node
 	StartSchedOnNode(n node.Node) error
+
+	// RescanSpecs specified in specDir
+	RescanSpecs(specDir string) error
 }
 
 var (

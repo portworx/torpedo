@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,10 @@ const (
 	exitMaintenancePath     = "/exitmaintenance"
 	pxSystemdServiceName    = "portworx.service"
 	storageStatusUp         = "Up"
+	tokenKey                = "token"
+	clusterIP               = "ip"
+	clusterPort             = "port"
+	remoteKubeConfigPath    = "/tmp/kubeconfig"
 )
 
 const (
@@ -304,9 +309,11 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		}
 
 		if len(vols) != 1 {
+			errCause := fmt.Sprintf("Volume: %s inspect result has invalid length. Expected:1 Actual:%v", name, len(vols))
+			logrus.Warnf(errCause)
 			return nil, true, &ErrFailedToInspectVolume{
 				ID:    name,
-				Cause: fmt.Sprintf("Volume inspect result has invalid length. Expected:1 Actual:%v", len(vols)),
+				Cause: errCause,
 			}
 		}
 
@@ -591,11 +598,15 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	t := func() (interface{}, bool, error) {
 		vols, err := d.getVolDriver().Inspect([]string{name})
 		if err != nil {
+			logrus.Warnf("failed to inspect volume: %s due to: %v", name, err)
 			return nil, true, err
 		}
 		if len(vols) != 1 {
-			return nil, true, fmt.Errorf("Incorrect number of volumes returned")
+			err = fmt.Errorf("Incorrect number of volumes (%d) returned for vol: %s", len(vols), name)
+			logrus.Warnf(err.Error())
+			return nil, true, err
 		}
+
 		return vols[0], false, nil
 	}
 
@@ -1050,6 +1061,36 @@ func (d *portworx) UpgradeDriver(version string) error {
 	return nil
 }
 
+// GetClusterPairingInfo returns cluster pair information
+func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
+	pairInfo := make(map[string]string)
+	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
+	if err != nil {
+		logrus.Errorf("err retrieving remote px nodes: %v", err)
+		return nil, err
+	}
+	if len(pxNodes) == 0 {
+		return nil, fmt.Errorf("No PX Node found")
+	}
+
+	clusterMgr, err := d.getClusterManagerByAddress(pxNodes[0].Addresses[0])
+	if err != nil {
+		return nil, err
+	}
+	resp, err := clusterMgr.GetPairToken(false)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Infof("Response for token: %v", resp.Token)
+
+	// file up cluster pair info
+	pairInfo[clusterIP] = pxNodes[0].Addresses[0]
+	pairInfo[tokenKey] = resp.Token
+	pairInfo[clusterPort] = strconv.Itoa(pxdRestPort)
+
+	return pairInfo, nil
+}
+
 func (d *portworx) getVolDriver() volume.VolumeDriver {
 	if d.refreshEndpoint {
 		d.setDriver()
@@ -1073,6 +1114,17 @@ func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, err
 	}
 
 	return clusterclient.ClusterManager(cClient), nil
+}
+
+func (d *portworx) getVolumeDriverByAddress(addr string) (volume.VolumeDriver, error) {
+	pxEndpoint := d.constructURL(addr)
+
+	dClient, err := volumeclient.NewDriverClient(pxEndpoint, DriverName, "", pxdClientSchedUserAgent)
+	if err != nil {
+		return nil, err
+	}
+
+	return volumeclient.VolumeDriver(dClient), nil
 }
 
 func (d *portworx) maintenanceOp(n node.Node, op string) error {
