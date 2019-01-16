@@ -1193,8 +1193,11 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
 				}
 			}
-
-			pxNodes = append(pxNodes, pxNode.Hostname)
+			nodeName := pxNode.SchedulerNodeName
+			if nodeName == "" {
+				nodeName = pxNode.Hostname
+			}
+			pxNodes = append(pxNodes, nodeName)
 		}
 	}
 	return pxNodes, nil

@@ -207,8 +207,10 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 						replicas, err := Inst().V.GetReplicaSetNodes(vol)
 						Expect(err).NotTo(HaveOccurred())
 						Expect(replicas).NotTo(BeEmpty())
-						// at least 1 node with replica needs to be up
-						nodesThatCantBeDown[replicas[0]] = true
+						// at least n-1 nodes with replica need to be up
+						for i := 0; i <= len(replicas)-1; i++ {
+							nodesThatCantBeDown[replicas[i]] = true
+						}
 					}
 
 					for _, node := range node.GetWorkerNodes() {
