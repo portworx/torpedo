@@ -25,10 +25,10 @@ import (
 	"syscall"
 
 	"github.com/golang/glog"
+	"github.com/kubernetes-incubator/external-storage/lib/controller"
+	"github.com/kubernetes-incubator/external-storage/lib/util"
 	mApiv1 "github.com/kubernetes-incubator/external-storage/openebs/pkg/v1"
 	mayav1 "github.com/kubernetes-incubator/external-storage/openebs/types/v1"
-	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/controller"
-	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/util"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -119,7 +119,7 @@ func (p *openEBSProvisioner) Provision(options controller.VolumeOptions) (*v1.Pe
 	glog.V(2).Infof("Volume IQN: %v , Volume Target: %v", iqn, targetPortal)
 
 	if !util.AccessModesContainedInAll(p.GetAccessModes(), options.PVC.Spec.AccessModes) {
-		glog.V(1).Infof("Invalid Access Modes: %v, Supported Access Modes: %v", options.PVC.Spec.AccessModes, p.GetAccessModes())
+		glog.V(1).Info("Invalid Access Modes: %v, Supported Access Modes: %v", options.PVC.Spec.AccessModes, p.GetAccessModes())
 		return nil, fmt.Errorf("Invalid Access Modes: %v, Supported Access Modes: %v", options.PVC.Spec.AccessModes, p.GetAccessModes())
 	}
 

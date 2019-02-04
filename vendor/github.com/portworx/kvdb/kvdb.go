@@ -86,6 +86,8 @@ const (
 	MemVersion1 = "memv1"
 	// BoltVersion1 key
 	BoltVersion1 = "boltv1"
+	// ZookeeperVersion1 key
+	ZookeeperVersion1 = "zookeeperv1"
 )
 
 const (

@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"github.com/golang/glog"
-	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/controller"
+	"github.com/kubernetes-incubator/external-storage/lib/controller"
 	"k8s.io/api/core/v1"
 )
 

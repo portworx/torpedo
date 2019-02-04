@@ -22,6 +22,8 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	var namespaceList []string
 	var includeResources bool
 	var startApplications bool
+	var preExecRule string
+	var postExecRule string
 
 	createMigrationCommand := &cobra.Command{
 		Use:     migrationSubcommand,
@@ -48,11 +50,13 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 					Namespaces:        namespaceList,
 					IncludeResources:  includeResources,
 					StartApplications: startApplications,
+					PreExecRule:       preExecRule,
+					PostExecRule:      postExecRule,
 				},
 			}
 			migration.Name = migrationName
 			migration.Namespace = cmdFactory.GetNamespace()
-			err := k8s.Instance().CreateMigration(migration)
+			_, err := k8s.Instance().CreateMigration(migration)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -65,6 +69,8 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	createMigrationCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "ClusterPair name for migration")
 	createMigrationCommand.Flags().BoolVarP(&includeResources, "includeResources", "r", true, "Include resources in the migration")
 	createMigrationCommand.Flags().BoolVarP(&startApplications, "startApplications", "a", true, "Start applications on the destination cluster after migration")
+	createMigrationCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing migration")
+	createMigrationCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing migration")
 
 	return createMigrationCommand
 }

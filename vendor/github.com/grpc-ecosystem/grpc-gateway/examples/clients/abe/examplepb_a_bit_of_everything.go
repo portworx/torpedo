@@ -14,19 +14,21 @@ import (
 	"time"
 )
 
+// Intentionaly complicated message type to cover many features of Protobuf.
 type ExamplepbABitOfEverything struct {
 
 	SingleNested ABitOfEverythingNested `json:"single_nested,omitempty"`
 
-	Uuid string `json:"uuid,omitempty"`
+	Uuid string `json:"uuid"`
 
 	Nested []ABitOfEverythingNested `json:"nested,omitempty"`
 
+	// Float value field
 	FloatValue float32 `json:"float_value,omitempty"`
 
-	DoubleValue float64 `json:"double_value,omitempty"`
+	DoubleValue float64 `json:"double_value"`
 
-	Int64Value string `json:"int64_value,omitempty"`
+	Int64Value string `json:"int64_value"`
 
 	Uint64Value string `json:"uint64_value,omitempty"`
 
@@ -40,9 +42,15 @@ type ExamplepbABitOfEverything struct {
 
 	StringValue string `json:"string_value,omitempty"`
 
+	BytesValue string `json:"bytes_value,omitempty"`
+
 	Uint32Value int64 `json:"uint32_value,omitempty"`
 
 	EnumValue ExamplepbNumericEnum `json:"enum_value,omitempty"`
+
+	PathEnumValue PathenumPathEnum `json:"path_enum_value,omitempty"`
+
+	NestedPathEnumValue MessagePathEnumNestedPathEnum `json:"nested_path_enum_value,omitempty"`
 
 	Sfixed32Value int32 `json:"sfixed32_value,omitempty"`
 
@@ -54,7 +62,7 @@ type ExamplepbABitOfEverything struct {
 
 	RepeatedStringValue []string `json:"repeated_string_value,omitempty"`
 
-	OneofEmpty ProtobufEmpty `json:"oneof_empty,omitempty"`
+	OneofEmpty interface{} `json:"oneof_empty,omitempty"`
 
 	OneofString string `json:"oneof_string,omitempty"`
 

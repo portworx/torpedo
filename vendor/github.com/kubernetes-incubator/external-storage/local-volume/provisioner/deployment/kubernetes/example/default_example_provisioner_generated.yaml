@@ -13,9 +13,7 @@ data:
        mountDir:  /mnt/fast-disks 
        blockCleanerCommand:
          - "/scripts/shred.sh"
-         - "2"
-       volumeMode: Filesystem
-       fsType: ext4
+         - "2" 
 ---
 apiVersion: extensions/v1beta1
 kind: DaemonSet

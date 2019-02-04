@@ -49,6 +49,7 @@ func createUsingCAS(kv kvdb.Kvdb, t *testing.T) {
 	_, err = kv.CompareAndSet(kvPair, kvdb.KVModifiedIndex, []byte("some"))
 	assert.Error(t, err, "CompareAndSet did not fail on create")
 }
+
 func Start(removeDir bool) error {
 	if removeDir {
 		if err := os.RemoveAll("/tmp/consul"); err != nil {

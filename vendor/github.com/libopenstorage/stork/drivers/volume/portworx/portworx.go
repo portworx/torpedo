@@ -641,9 +641,10 @@ func (p *portworx) SnapshotRestore(
 
 	snapID := snapshotData.Spec.PortworxSnapshot.SnapshotID
 	restoreVolumeName := "pvc-" + string(pvc.UID)
+	var restoreVolumeID string
 
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
-	case crdv1.PortworxSnapshotTypeLocal:
+	case "", crdv1.PortworxSnapshotTypeLocal:
 		snapshotNamespace, ok := pvc.Annotations[snapshot.StorkSnapshotSourceNamespaceAnnotation]
 		if !ok {
 			snapshotNamespace = pvc.GetNamespace()
@@ -667,7 +668,7 @@ func (p *portworx) SnapshotRestore(
 				namespaceLabel: pvc.Namespace,
 			},
 		}
-		_, err = p.volDriver.Snapshot(snapID, false, locator, true)
+		restoreVolumeID, err = p.volDriver.Snapshot(snapID, false, locator, true)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -691,20 +692,21 @@ func (p *portworx) SnapshotRestore(
 		if err != nil {
 			return nil, nil, err
 		}
+		restoreVolumeID = restoreVolumeName
 	}
 
 	// create PV from restored volume
-	vols, err := p.volDriver.Inspect([]string{restoreVolumeName})
+	vols, err := p.volDriver.Inspect([]string{restoreVolumeID})
 	if err != nil {
 		return nil, nil, &ErrFailedToInspectVolume{
-			ID:    restoreVolumeName,
+			ID:    restoreVolumeID,
 			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
 		}
 	}
 
 	if len(vols) == 0 {
 		return nil, nil, &errors.ErrNotFound{
-			ID:   restoreVolumeName,
+			ID:   restoreVolumeID,
 			Type: "Volume",
 		}
 	}
@@ -729,7 +731,7 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 	}
 
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
-	case crdv1.PortworxSnapshotTypeLocal:
+	case "", crdv1.PortworxSnapshotTypeLocal:
 		r := csv.NewReader(strings.NewReader(snapshotData.Spec.PortworxSnapshot.SnapshotID))
 		snapshotIDs, err := r.Read()
 		if err != nil {
@@ -1420,7 +1422,8 @@ func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *stork_crd.GroupVolume
 
 		dataSource := &crdv1.VolumeSnapshotDataSource{
 			PortworxSnapshot: &crdv1.PortworxVolumeSnapshotSource{
-				SnapshotID: newSnapID,
+				SnapshotType: crdv1.PortworxSnapshotTypeLocal,
+				SnapshotID:   newSnapID,
 			},
 		}
 

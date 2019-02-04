@@ -23,11 +23,11 @@ import (
 	"testing"
 
 	"github.com/golang/glog"
+	esUtil "github.com/kubernetes-incubator/external-storage/lib/util"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/cache"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/common"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/deleter"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/util"
-	esUtil "github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/util"
 
 	"k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
@@ -78,7 +78,6 @@ var testStorageClasses = []*storagev1.StorageClass{
 			Name: "sc1",
 		},
 		ReclaimPolicy: &reclaimPolicyDelete,
-		MountOptions:  []string{"ro"},
 	},
 	{
 		ObjectMeta: metav1.ObjectMeta{
@@ -90,14 +89,12 @@ var testStorageClasses = []*storagev1.StorageClass{
 
 var scMapping = map[string]common.MountConfig{
 	"sc1": {
-		HostDir:    testHostDir + "/dir1",
-		MountDir:   testMountDir + "/dir1",
-		VolumeMode: "Filesystem",
+		HostDir:  testHostDir + "/dir1",
+		MountDir: testMountDir + "/dir1",
 	},
 	"sc2": {
-		HostDir:    testHostDir + "/dir2",
-		MountDir:   testMountDir + "/dir2",
-		VolumeMode: "Block",
+		HostDir:  testHostDir + "/dir2",
+		MountDir: testMountDir + "/dir2",
 	},
 }
 
@@ -124,7 +121,7 @@ func TestDiscoverVolumes_Basic(t *testing.T) {
 			{Name: "symlink2", Hash: 0x23645a36, VolumeType: util.FakeEntryBlock, Capacity: 100 * 1024 * 1024},
 		},
 		"dir2": {
-			{Name: "symlink1", Hash: 0x55d5adba, VolumeType: util.FakeEntryBlock},
+			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
 			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
 		},
 	}
@@ -145,7 +142,7 @@ func TestDiscoverVolumes_BasicTwice(t *testing.T) {
 			{Name: "symlink2", Hash: 0x23645a36, VolumeType: util.FakeEntryBlock},
 		},
 		"dir2": {
-			{Name: "symlink1", Hash: 0x55d5adba, VolumeType: util.FakeEntryBlock},
+			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
 			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
 		},
 	}
@@ -197,7 +194,7 @@ func TestDiscoverVolumes_NewVolumesLater(t *testing.T) {
 			{Name: "symlink2", Hash: 0x23645a36, VolumeType: util.FakeEntryBlock},
 		},
 		"dir2": {
-			{Name: "symlink1", Hash: 0x55d5adba, VolumeType: util.FakeEntryBlock},
+			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
 			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
 		},
 	}
@@ -233,7 +230,7 @@ func TestDiscoverVolumes_CreatePVFails(t *testing.T) {
 			{Name: "mount2", Hash: 0x79412c38, VolumeType: util.FakeEntryFile},
 		},
 		"dir2": {
-			{Name: "mount1", Hash: 0x55d5adba, VolumeType: util.FakeEntryFile},
+			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
 			{Name: "mount2", Hash: 0x7c4130f1, VolumeType: util.FakeEntryFile},
 		},
 	}
@@ -275,7 +272,7 @@ func TestDiscoverVolumes_CleaningInProgress(t *testing.T) {
 			{Name: "symlink2", Hash: 0x23645a36, VolumeType: util.FakeEntryBlock, Capacity: 100 * 1024 * 1024},
 		},
 		"dir2": {
-			{Name: "symlink1", Hash: 0x55d5adba, VolumeType: util.FakeEntryBlock},
+			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
 			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
 		},
 	}
@@ -286,7 +283,7 @@ func TestDiscoverVolumes_CleaningInProgress(t *testing.T) {
 			{Name: "mount1", Hash: 0xaaaafef5, VolumeType: util.FakeEntryFile, Capacity: 100 * 1024},
 		},
 		"dir2": {
-			{Name: "symlink1", Hash: 0x55d5adba, VolumeType: util.FakeEntryBlock},
+			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
 			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
 		},
 	}
@@ -299,38 +296,6 @@ func TestDiscoverVolumes_CleaningInProgress(t *testing.T) {
 	// Mark dir1/mount2 PV as being cleaned. This one should not get created
 	pvName := getPVName(vols["dir1"][1])
 	test.cleanupTracker.ProcTable.MarkRunning(pvName)
-
-	d.DiscoverLocalVolumes()
-	verifyCreatedPVs(t, test)
-}
-
-func TestDiscoverVolumes_InvalidMode(t *testing.T) {
-	vols := map[string][]*util.FakeDirEntry{
-		"dir1": {
-			{Name: "mount1", Hash: 0xaaaafef5, VolumeType: util.FakeEntryFile, Capacity: 100 * 1024},
-			{Name: "symlink2", Hash: 0x23645a36, VolumeType: util.FakeEntryBlock, Capacity: 100 * 1024 * 1024},
-		},
-		"dir2": {
-			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
-			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
-		},
-	}
-
-	// Don't expect dir2/mount1 to be created, due to invalid volume mode.
-	expectedVols := map[string][]*util.FakeDirEntry{
-		"dir1": {
-			{Name: "mount1", Hash: 0xaaaafef5, VolumeType: util.FakeEntryFile, Capacity: 100 * 1024},
-			{Name: "symlink2", Hash: 0x23645a36, VolumeType: util.FakeEntryBlock, Capacity: 100 * 1024 * 1024},
-		},
-		"dir2": {
-			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
-		},
-	}
-	test := &testConfig{
-		dirLayout:       vols,
-		expectedVolumes: expectedVols,
-	}
-	d := testSetup(t, test, false)
 
 	d.DiscoverLocalVolumes()
 	verifyCreatedPVs(t, test)
@@ -393,15 +358,15 @@ func testSetup(t *testing.T, test *testConfig, useAlphaAPI bool) *Discoverer {
 	return d
 }
 
-func findSCNameAndVolumeMode(t *testing.T, targetDir string, test *testConfig) (string, string) {
+func findSCName(t *testing.T, targetDir string, test *testConfig) string {
 	for sc, config := range scMapping {
 		_, dir := filepath.Split(config.HostDir)
 		if dir == targetDir {
-			return sc, config.VolumeMode
+			return sc
 		}
 	}
 	t.Fatalf("Failed to find SC Name for directory %v", targetDir)
-	return "", ""
+	return ""
 }
 
 func verifyNodeAffinity(t *testing.T, pv *v1.PersistentVolume) {
@@ -496,36 +461,12 @@ func verifyCapacity(t *testing.T, createdPV *v1.PersistentVolume, expectedPV *te
 	}
 }
 
-func verifyVolumeMode(t *testing.T, createdPV *v1.PersistentVolume, expectedPV *testPVInfo) {
-	if createdPV.Spec.VolumeMode == nil {
-		t.Errorf("Unknown volume mode in created PV")
-	}
-
-	if *createdPV.Spec.VolumeMode != expectedPV.volumeMode {
-		t.Errorf("Expected mode %q, got %q", expectedPV.volumeMode, *createdPV.Spec.VolumeMode)
-	}
-}
-
-func verifyMountOptions(t *testing.T, createdPV *v1.PersistentVolume) {
-	var expectedMountOptions []string
-	for _, class := range testStorageClasses {
-		if class.Name == createdPV.Spec.StorageClassName {
-			expectedMountOptions = class.MountOptions
-		}
-	}
-	eq := reflect.DeepEqual(expectedMountOptions, createdPV.Spec.MountOptions)
-	if !eq {
-		t.Errorf("MountOptions not as expected %v != %v", createdPV.Spec.MountOptions, expectedMountOptions)
-	}
-}
-
 // testPVInfo contains all the fields we are intested in validating.
 type testPVInfo struct {
 	pvName       string
 	path         string
 	capacity     int64
 	storageClass string
-	volumeMode   v1.PersistentVolumeMode
 }
 
 func getPVName(entry *util.FakeDirEntry) string {
@@ -538,13 +479,11 @@ func verifyCreatedPVs(t *testing.T, test *testConfig) {
 		for _, file := range files {
 			pvName := getPVName(file)
 			path := filepath.Join(testHostDir, dir, file.Name)
-			sc, mode := findSCNameAndVolumeMode(t, dir, test)
 			expectedPVs[pvName] = &testPVInfo{
 				pvName:       pvName,
 				path:         path,
 				capacity:     file.Capacity,
-				storageClass: sc,
-				volumeMode:   v1.PersistentVolumeMode(mode),
+				storageClass: findSCName(t, dir, test),
 			}
 		}
 	}
@@ -577,8 +516,6 @@ func verifyCreatedPVs(t *testing.T, test *testConfig) {
 		verifyNodeAffinity(t, createdPV)
 		verifyPVLabels(t, createdPV)
 		verifyCapacity(t, createdPV, expectedPV)
-		verifyVolumeMode(t, createdPV, expectedPV)
-		verifyMountOptions(t, createdPV)
 		// TODO: Verify volume type once that is supported in the API.
 	}
 }

@@ -1225,7 +1225,7 @@ func (gce *Cloud) computeHostTags(hosts []*gceInstance) ([]string, error) {
 	nodeInstancePrefix := gce.nodeInstancePrefix
 	for _, host := range hosts {
 		if !strings.HasPrefix(host.Name, gce.nodeInstancePrefix) {
-			glog.Warningf("instance '%v' does not conform to prefix '%s', ignoring filter", host, gce.nodeInstancePrefix)
+			glog.Warningf("instance '%s' does not conform to prefix '%s', ignoring filter", host, gce.nodeInstancePrefix)
 			nodeInstancePrefix = ""
 		}
 
@@ -2734,7 +2734,7 @@ func (gce *Cloud) getDiskByNameUnknownZone(diskName string) (*gceDisk, error) {
 	// Note: this is the gotcha right now with GCE PD support:
 	// disk names are not unique per-region.
 	// (I can create two volumes with name "myvol" in e.g. us-central1-b & us-central1-f)
-	// For now, this is simply undefined behaviour.
+	// For now, this is simply undefined behvaiour.
 	//
 	// In future, we will have to require users to qualify their disk
 	// "us-central1-a/mydisk".  We could do this for them as part of

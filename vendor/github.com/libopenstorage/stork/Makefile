@@ -10,7 +10,7 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
 endif
 
-RELEASE_VER := 2.1.0
+RELEASE_VER := 2.2.0
 BASE_DIR    := $(shell git rev-parse --show-toplevel)
 GIT_SHA     := $(shell git rev-parse --short HEAD)
 BIN         :=$(BASE_DIR)/bin
@@ -101,10 +101,10 @@ storkctl:
 
 container: help
 	@echo "Building container: docker build --tag $(STORK_IMG) -f Dockerfile ."
-	sudo docker build --tag $(STORK_IMG) -f Dockerfile .
+	sudo docker build --tag $(STORK_IMG) --no-cache -f Dockerfile .
 
 	@echo "Building container: docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor ."
-	sudo docker build --tag $(CMD_EXECUTOR_IMG) -f Dockerfile.cmdexecutor .
+	sudo docker build --tag $(CMD_EXECUTOR_IMG) --no-cache -f Dockerfile.cmdexecutor .
 
 help:
 	@echo "Updating help file"

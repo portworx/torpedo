@@ -27,8 +27,8 @@ import (
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/common"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/metrics"
 
+	esUtil "github.com/kubernetes-incubator/external-storage/lib/util"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/deleter"
-	esUtil "github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/util"
 	"k8s.io/api/core/v1"
 	storagev1listers "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/client-go/tools/cache"
@@ -168,15 +168,6 @@ func (d *Discoverer) getReclaimPolicyFromStorageClass(name string) (v1.Persisten
 	return v1.PersistentVolumeReclaimDelete, nil
 }
 
-func (d *Discoverer) getMountOptionsFromStorageClass(name string) ([]string, error) {
-	class, err := d.classLister.Get(name)
-	if err != nil {
-		return nil, err
-	}
-
-	return class.MountOptions, nil
-}
-
 func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConfig) {
 	glog.V(7).Infof("Discovering volumes at hostpath %q, mount path %q for storage class %q", config.HostDir, config.MountDir, class)
 
@@ -197,7 +188,7 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 		return
 	}
 
-	// Retrieve list of mount points to iterate through discovered paths (aka files) below
+	// Retreive list of mount points to iterate through discovered paths (aka files) below
 	mountPoints, mountPointsErr := d.RuntimeConfig.Mounter.List()
 	if mountPointsErr != nil {
 		glog.Errorf("Error retreiving mountpoints: %v", err)
@@ -213,7 +204,7 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 	for _, file := range files {
 		startTime := time.Now()
 		filePath := filepath.Join(config.MountDir, file)
-		volMode, err := common.GetVolumeMode(d.VolUtil, filePath)
+		volMode, err := d.getVolumeMode(filePath)
 		if err != nil {
 			glog.Error(err)
 			continue
@@ -222,9 +213,10 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 		pvName := generatePVName(file, d.Node.Name, class)
 		pv, exists := d.Cache.GetPV(pvName)
 		if exists {
-			if pv.Spec.VolumeMode != nil && *pv.Spec.VolumeMode == v1.PersistentVolumeBlock &&
-				volMode == v1.PersistentVolumeFilesystem {
-				errStr := fmt.Sprintf("Incorrect Volume Mode: PV %q requires block mode but path %q was in fs mode.", pvName, filePath)
+			if volMode == v1.PersistentVolumeBlock && (pv.Spec.VolumeMode == nil ||
+				*pv.Spec.VolumeMode != v1.PersistentVolumeBlock) {
+				errStr := fmt.Sprintf("Incorrect Volume Mode: PV %q (path %q) was not created in block mode. "+
+					"Please check if BlockVolume features gate has been enabled for the cluster.", pvName, filePath)
 				glog.Errorf(errStr)
 				d.Recorder.Eventf(pv, v1.EventTypeWarning, common.EventVolumeFailedDelete, errStr)
 			}
@@ -240,14 +232,7 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 			continue
 		}
 
-		mountOptions, err := d.getMountOptionsFromStorageClass(class)
-		if err != nil {
-			glog.Errorf("Failed to get mount options from storage class %s: %v", class, err)
-			continue
-		}
-
 		var capacityByte int64
-		desireVolumeMode := v1.PersistentVolumeMode(config.VolumeMode)
 		switch volMode {
 		case v1.PersistentVolumeBlock:
 			capacityByte, err = d.VolUtil.GetBlockCapacityByte(filePath)
@@ -255,15 +240,7 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 				glog.Errorf("Path %q block stats error: %v", filePath, err)
 				continue
 			}
-			if desireVolumeMode == v1.PersistentVolumeBlock && len(mountOptions) != 0 {
-				glog.Warningf("Path %q will be used to create block volume, "+
-					"mount options %v will not take effect.", filePath, mountOptions)
-			}
 		case v1.PersistentVolumeFilesystem:
-			if desireVolumeMode == v1.PersistentVolumeBlock {
-				glog.Errorf("Path %q of filesystem mode cannot be used to create block volume", filePath)
-				continue
-			}
 			// Validate that this path is an actual mountpoint
 			if _, isMntPnt := mountPointMap[filePath]; isMntPnt == false {
 				glog.Errorf("Path %q is not an actual mountpoint", filePath)
@@ -279,8 +256,30 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 			continue
 		}
 
-		d.createPV(file, class, reclaimPolicy, mountOptions, config, capacityByte, desireVolumeMode, startTime)
+		d.createPV(file, class, reclaimPolicy, config, capacityByte, volMode, startTime)
 	}
+}
+
+func (d *Discoverer) getVolumeMode(fullPath string) (v1.PersistentVolumeMode, error) {
+	isdir, errdir := d.VolUtil.IsDir(fullPath)
+	if isdir {
+		return v1.PersistentVolumeFilesystem, nil
+	}
+	// check for Block before returning errdir
+	isblk, errblk := d.VolUtil.IsBlock(fullPath)
+	if isblk {
+		return v1.PersistentVolumeBlock, nil
+	}
+
+	if errdir == nil && errblk == nil {
+		return "", fmt.Errorf("Skipping file %q: not a directory nor block device", fullPath)
+	}
+
+	// report the first error found
+	if errdir != nil {
+		return "", fmt.Errorf("Directory check for %q failed: %s", fullPath, errdir)
+	}
+	return "", fmt.Errorf("Block device check for %q failed: %s", fullPath, errblk)
 }
 
 func generatePVName(file, node, class string) string {
@@ -292,12 +291,12 @@ func generatePVName(file, node, class string) string {
 	return fmt.Sprintf("local-pv-%x", h.Sum32())
 }
 
-func (d *Discoverer) createPV(file, class string, reclaimPolicy v1.PersistentVolumeReclaimPolicy, mountOptions []string, config common.MountConfig, capacityByte int64, volMode v1.PersistentVolumeMode, startTime time.Time) {
+func (d *Discoverer) createPV(file, class string, reclaimPolicy v1.PersistentVolumeReclaimPolicy, config common.MountConfig, capacityByte int64, volMode v1.PersistentVolumeMode, startTime time.Time) {
 	pvName := generatePVName(file, d.Node.Name, class)
 	outsidePath := filepath.Join(config.HostDir, file)
 
-	glog.Infof("Found new volume at host path %q with capacity %d, creating Local PV %q, required volumeMode %q",
-		outsidePath, capacityByte, pvName, volMode)
+	glog.Infof("Found new volume of volumeMode %q at host path %q with capacity %d, creating Local PV %q",
+		volMode, outsidePath, capacityByte, pvName)
 
 	localPVConfig := &common.LocalPVConfig{
 		Name:            pvName,
@@ -308,7 +307,6 @@ func (d *Discoverer) createPV(file, class string, reclaimPolicy v1.PersistentVol
 		ProvisionerName: d.Name,
 		VolumeMode:      volMode,
 		Labels:          d.Labels,
-		MountOptions:    mountOptions,
 	}
 
 	if d.UseAlphaAPI {
@@ -316,10 +314,6 @@ func (d *Discoverer) createPV(file, class string, reclaimPolicy v1.PersistentVol
 		localPVConfig.AffinityAnn = d.nodeAffinityAnn
 	} else {
 		localPVConfig.NodeAffinity = d.nodeAffinity
-	}
-
-	if config.FsType != "" {
-		localPVConfig.FsType = &config.FsType
 	}
 
 	pvSpec := common.CreateLocalPVSpec(localPVConfig)

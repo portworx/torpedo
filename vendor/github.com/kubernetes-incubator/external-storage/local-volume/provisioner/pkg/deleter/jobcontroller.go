@@ -142,7 +142,7 @@ func (c *jobController) runWorker() {
 	}
 }
 
-// processNextItem serially handles the events provided by the informer.
+// processNextWorkItem serially handles the events provided by the informer.
 func (c *jobController) processNextItem() bool {
 	key, quit := c.queue.Get()
 	if quit {

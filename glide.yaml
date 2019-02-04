@@ -18,7 +18,7 @@ import:
   version: ^0.7.1
 - package: github.com/kubernetes-incubator/external-storage
   repo: https://github.com/libopenstorage/external-storage.git
-  version: master
+  version: 5.1-openstorage
   subpackages:
   - snapshot/pkg/apis/crd/v1
 - package: github.com/docker/distribution
@@ -109,3 +109,5 @@ import:
   version: v0.0.7
   subpackages:
   - pkg/util/k8sutil
+- package: google.golang.org/grpc
+  version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e

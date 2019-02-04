@@ -1,5 +1,5 @@
-hash: 01d3f3bb7ff678817e85f35bffc99662c16d133c7efe625a26f92c76239ddd64
-updated: 2019-01-27T15:18:07.786075644-08:00
+hash: 919ce53f64eb5398984174b3b6352be8a6b4d82d14029c6f6a15e293bc63421c
+updated: 2019-02-04T12:59:01.758846088-08:00
 imports:
 - name: github.com/aws/aws-sdk-go
   version: 5e98666858b97db54a61044bb1150d3b81436860
@@ -76,7 +76,7 @@ imports:
 - name: github.com/docker/libtrust
   version: aabc10ec26b754e797f9028f4589c5b7bd90dc20
 - name: github.com/docker/spdystream
-  version: 449fdfce4d962303d702fec724ef0ad181c92528
+  version: 6480d4af844c189cf5dd913db24ddd339d3a4f85
   subpackages:
   - spdy
 - name: github.com/donovanhide/eventsource
@@ -102,11 +102,15 @@ imports:
   - jsonpb
   - proto
   - protoc-gen-go/descriptor
+  - protoc-gen-go/generator
+  - protoc-gen-go/generator/internal/remap
+  - protoc-gen-go/plugin
   - ptypes
   - ptypes/any
   - ptypes/duration
   - ptypes/struct
   - ptypes/timestamp
+  - ptypes/wrappers
 - name: github.com/google/btree
   version: 7d79101e329e5a3adf994758c578dab82b90c017
 - name: github.com/google/go-querystring
@@ -123,16 +127,27 @@ imports:
   - OpenAPIv2
   - compiler
   - extensions
+- name: github.com/gorhill/cronexpr
+  version: 88b0669f7d75f171bd612b874e52b95c190218df
 - name: github.com/gregjones/httpcache
   version: 787624de3eb7bd915c329cba748687a3b22666a6
   subpackages:
   - diskcache
 - name: github.com/grpc-ecosystem/grpc-gateway
-  version: 8cc3a55af3bcf171a1c23a90c4df9cf591706104
+  version: 1b220ea401fc5adad31a4259514d934f76c74280
   subpackages:
+  - internal
   - runtime
-  - runtime/internal
   - utilities
+- name: github.com/hashicorp/go-cleanhttp
+  version: e8ab9daed8d1ddd2d3c4efba338fe2eeae2e4f18
+- name: github.com/hashicorp/go-rootcerts
+  version: 63503fb4e1eca22f9ae0f90b49c5d5538a0e87eb
+- name: github.com/hashicorp/nomad
+  version: a8e9c4aec2d2f272f3a56e682787a9b6e3b27988
+  subpackages:
+  - api
+  - api/contexts
 - name: github.com/hpcloud/tail
   version: a1dbeea552b7c8df4b542c66073e393de198a800
   subpackages:
@@ -149,7 +164,7 @@ imports:
 - name: github.com/konsorten/go-windows-terminal-sequences
   version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/kubernetes-incubator/external-storage
-  version: 3702b40218ee0c072755a7e65e28376dabb6d210
+  version: 83aa29470096d814a8075556c4d8d2032dbe4fe0
   repo: https://github.com/libopenstorage/external-storage.git
   subpackages:
   - snapshot/pkg/apis/crd/v1
@@ -177,7 +192,7 @@ imports:
   - secrets
   - volume
 - name: github.com/libopenstorage/stork
-  version: 4042abb54093f253b427b94987732a760796385c
+  version: d4fa569978ad4b5da75ef29dc1cf6459bf1b215f
   subpackages:
   - pkg/apis/stork
   - pkg/apis/stork/v1alpha1
@@ -192,10 +207,12 @@ imports:
   version: 75bf6ca3d7cb77506c52495e61472c131a254d56
 - name: github.com/miekg/dns
   version: e7c3f513a170118cc2f407db58de97aa20c07c85
+- name: github.com/mitchellh/go-homedir
+  version: af06845cf3004701891bf4fdb884bfe4920b3727
 - name: github.com/modern-go/concurrent
   version: bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94
 - name: github.com/modern-go/reflect2
-  version: 05fbef0ca5da472bbf96c9322b84a53edc03c9fd
+  version: 94122c33edd36123c84d5368cfb2b69df93a0ec8
 - name: github.com/mohae/deepcopy
   version: c48cc78d482608239f6c4c92a4abd87eb8761c90
 - name: github.com/onsi/ginkgo
@@ -233,7 +250,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/opencontainers/go-digest
-  version: c9281466c8b2f606084ac71339773efd177436e7
+  version: 4eb64ca734023ea9a10c70ff11dc0e3f69d38482
 - name: github.com/operator-framework/operator-sdk
   version: e5a0ab096e1a7c0e6b937d2b41707eccb82c3c77
   subpackages:
@@ -245,7 +262,7 @@ imports:
 - name: github.com/pkg/errors
   version: ffb6e22f01932bf7ac35e0bad9be11f01d1c8685
 - name: github.com/portworx/kvdb
-  version: 1c18ebeaf685dfc584a49545bc590a13fa8b7617
+  version: 6d7f8e1bc3c44e8f40f024ba1d8acefd08ea5f07
   subpackages:
   - common
   - mem
@@ -263,11 +280,11 @@ imports:
   - pkg/client/clientset/versioned/scheme
   - pkg/client/clientset/versioned/typed/portworx/v1beta1
 - name: github.com/Sirupsen/logrus
-  version: 7d8d63893b994a654b3bc8d16ffd7fb6b9f884a4
+  version: 4ea4861398d99a2d05be29675c5b74caf7bea95e
 - name: github.com/sirupsen/logrus
   version: e1e72e9de974bd926e5c56f83753fba2df402ce5
 - name: github.com/spf13/pflag
-  version: 583c0c0531f06d5278b7d917446061adc344b5cd
+  version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: golang.org/x/crypto
   version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
@@ -318,14 +335,15 @@ imports:
   - unicode/bidi
   - unicode/norm
 - name: golang.org/x/time
-  version: f51c12702a4d776e4c1fa9b0fabab841babae631
+  version: 85acf8d2951cb2a3bde7632f9ff273ef0379bcbd
   subpackages:
   - rate
 - name: google.golang.org/genproto
-  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
+  version: 4b09977fb92221987e99d190c8f88f2c92727a29
   subpackages:
   - googleapis/api/annotations
   - googleapis/rpc/status
+  - protobuf/field_mask
 - name: google.golang.org/grpc
   version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
   subpackages:
@@ -352,7 +370,7 @@ imports:
 - name: gopkg.in/tomb.v1
   version: c131134a1947e9afd9cecfe11f4c6dff0732ae58
 - name: gopkg.in/yaml.v2
-  version: 670d4cfef0544295bc27a114dbac37980d83185a
+  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
   version: 072894a440bdee3a891dea811fe42902311cd2a3
   subpackages:

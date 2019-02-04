@@ -20,12 +20,12 @@ import (
 	"fmt"
 
 	"github.com/golang/glog"
-	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/controller"
+	"github.com/kubernetes-incubator/external-storage/lib/controller"
 	"k8s.io/api/core/v1"
 )
 
 func (p *flexProvisioner) Delete(volume *v1.PersistentVolume) error {
-	glog.Infof("Delete called for volume: %s", volume.Name)
+	glog.Infof("Delete called for volume:", volume.Name)
 
 	provisioned, err := p.provisioned(volume)
 	if err != nil {

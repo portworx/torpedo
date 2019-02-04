@@ -20,33 +20,29 @@ ifeq ($(VERSION),)
 	VERSION = latest
 endif
 
-ifeq ($(GOVERSION),)
-	GOVERSION = 1.11.1
-endif
-
 IMAGE = $(REGISTRY)local-volume-provisioner:$(VERSION)
 MUTABLE_IMAGE = $(REGISTRY)local-volume-provisioner:latest
 
-all: build
-.PHONY: all
-
-build:
+all build:
 	CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o local-volume-provisioner ./cmd
-.PHONY: build
+.PHONY: all build
 
-container:
-	docker build -t $(MUTABLE_IMAGE) --build-arg GOVERSION=${GOVERSION} -f deployment/docker/Dockerfile $(PWD)/../..
-	docker tag $(MUTABLE_IMAGE) $(IMAGE)
+container: build quick-container
 .PHONY: container
+
+quick-container:
+	cp local-volume-provisioner deployment/docker
+	docker build -t $(MUTABLE_IMAGE) deployment/docker
+	docker tag $(MUTABLE_IMAGE) $(IMAGE)
+.PHONY: quick-container
 
 push: container
 	docker push $(IMAGE)
 	docker push $(MUTABLE_IMAGE)
 .PHONY: push
 
-test: container
+test:
 	go test ./...
-	docker run --privileged -v $(PWD)/deployment/docker/test.sh:/test.sh --entrypoint bash quay.io/external_storage/local-volume-provisioner:latest /test.sh
 .PHONY: test
 
 clean:

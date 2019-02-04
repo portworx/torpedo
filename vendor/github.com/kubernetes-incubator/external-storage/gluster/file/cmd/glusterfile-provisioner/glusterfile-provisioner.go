@@ -26,9 +26,9 @@ import (
 	"github.com/golang/glog"
 	gcli "github.com/heketi/heketi/client/api/go-client"
 	gapi "github.com/heketi/heketi/pkg/glusterfs/api"
-	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/controller"
-	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/gidallocator"
-	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/util"
+	"github.com/kubernetes-incubator/external-storage/lib/controller"
+	"github.com/kubernetes-incubator/external-storage/lib/gidallocator"
+	"github.com/kubernetes-incubator/external-storage/lib/util"
 	"github.com/pborman/uuid"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -234,6 +234,7 @@ func (p *glusterfileProvisioner) Provision(options controller.VolumeOptions) (*v
 			}
 		}
 	} else {
+
 		nGlusterfs, sizeGiB, nVolID, createErr := p.CreateVolume(gid, cfg, volszInt)
 		if createErr != nil {
 			glog.Errorf("failed to create volume: %v", createErr)
@@ -251,7 +252,7 @@ func (p *glusterfileProvisioner) Provision(options controller.VolumeOptions) (*v
 			glog.Errorf("annotating PVC %v failed: %v", options.PVC.Name, annotateErr)
 
 		}
-		glog.V(1).Infof("successfully created Gluster File volume %+v with size %d and volID %s", glusterfs, sizeGiB, volID)
+		glog.V(1).Infof("successfully created Gluster File volume %+v with size and volID", glusterfs, sizeGiB, volID)
 	}
 
 	if glusterfs == nil {
@@ -445,7 +446,7 @@ func (p *glusterfileProvisioner) ExpandVolumeDevice(spec *volume.Spec, newSize r
 		return oldSize, fmt.Errorf("failed to retrieve REST credentials from pv: %v", credErr)
 	}
 
-	glog.V(4).Infof("Expanding volume %q with configuration %+v", volumeID, heketiModeArgs)
+	glog.V(4).Infof("Expanding volume %q with configuration %+v", volumeID)
 
 	//Create REST server connection
 	cli := gcli.NewClient(heketiModeArgs["url"], heketiModeArgs["user"], heketiModeArgs["restsecretvalue"])
