@@ -1,0 +1,6 @@
+export DOCKER_HUB_REPO=hrishi
+export DOCKER_HUB_TORPEDO_IMAGE=torpedo
+export DOCKER_HUB_TAG=latest
+make deploy
+
+TORPEDO_SSH_PASSWORD=Password1 TORPEDO_IMG=hrishi/torpedo:latest VERBOSE=true FOCUS_TESTS=SetupTeardown SCALE_FACTOR=1 APP_LIST=mysql,nginx,postgres deployments/deploy-ssh.sh
