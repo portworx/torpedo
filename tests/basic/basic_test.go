@@ -23,30 +23,35 @@ var _ = BeforeSuite(func() {
 
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{SetupTeardown}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to setup, validate and teardown apps", func() {
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("setupteardown-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("setupteardown-%d", i))...)
 		}
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 	})
+
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
+	})
+
 })
 
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverDown}", func() {
+	var contexts []*scheduler.Context
 	It("has to schedule apps and stop volume driver on app nodes", func() {
 		var err error
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdown-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("voldriverdown-%d", i))...)
 		}
-
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 		Step("get nodes for all apps in test and bounce volume driver", func() {
 			for _, ctx := range contexts {
 				var appNodes []node.Node
@@ -73,25 +78,26 @@ var _ = Describe("{VolumeDriverDown}", func() {
 			}
 		})
 
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
+	})
 
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
 	})
 })
 
 // Volume Driver Plugin is down, unavailable on the nodes where the volumes are
 // attached - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
+	var contexts []*scheduler.Context
 	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdownattachednode-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("voldriverdownattachednode-%d", i))...)
 		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 
 		Step("get nodes for all apps in test and restart volume driver", func() {
 			for _, ctx := range contexts {
@@ -132,20 +138,28 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 			}
 		})
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 	})
+
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
+	})
+
 })
 
 // Volume Driver Plugin has crashed - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverCrash}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps and crash volume driver on app nodes", func() {
 		var err error
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldrivercrash-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("voldrivercrash-%d", i))...)
 		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 
 		Step("get nodes for all apps in test and crash volume driver", func() {
 			for _, ctx := range contexts {
@@ -164,10 +178,13 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 					})
 			}
 		})
+	})
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
 	})
 })
 
@@ -175,12 +192,13 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 // There is a lost unmount call in this case. When the volume driver is
 // back up, we should be able to detach and delete the volume.
 var _ = Describe("{VolumeDriverAppDown}", func() {
+	var contexts []*scheduler.Context
 	It("has to schedule apps, stop volume driver on app nodes and destroy apps", func() {
 		var err error
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverappdown-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("voldriverappdown-%d", i))...)
 		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 
 		Step("get nodes for all apps in test and bounce volume driver", func() {
 			for _, ctx := range contexts {
@@ -218,16 +236,25 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 			}
 		})
 	})
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
+	})
 })
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
 var _ = Describe("{AppTasksDown}", func() {
+	var contexts []*scheduler.Context
 	It("has to schedule app and delete app tasks", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("apptasksdown-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("apptasksdown-%d", i))...)
 		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 
 		Step("delete all application tasks", func() {
 			for _, ctx := range contexts {
@@ -246,15 +273,26 @@ var _ = Describe("{AppTasksDown}", func() {
 			}
 		})
 	})
+
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
+	})
+
 })
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
 var _ = Describe("{AppScaleUpAndDown}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to scale up and scale down the app", func() {
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("applicationscaleupdown-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("applicationscaleupdown-%d", i))...)
 		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 
 		Step("Scale up and down all app", func() {
 			for _, ctx := range contexts {
@@ -298,6 +336,13 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 			}
 		})
 
+	})
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
 	})
 })
 

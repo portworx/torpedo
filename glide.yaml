@@ -36,7 +36,7 @@ import:
 - package: github.com/miekg/dns
   version: e7c3f513a170118cc2f407db58de97aa20c07c85
 - package: github.com/onsi/ginkgo
-  version: ^1.5.0
+  version: ^1.7.0
 - package: github.com/onsi/gomega
   version: ^1.4.0
 - package: github.com/pborman/uuid

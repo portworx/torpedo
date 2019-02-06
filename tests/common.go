@@ -13,22 +13,15 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/sirupsen/logrus"
-
-	// import aws driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/aws"
-	// import ssh driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/node/aws" // import ssh driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
-	"github.com/portworx/torpedo/drivers/scheduler"
-
-	// import scheduler drivers to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler" // import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/volume"
-
-	// import portworx driver to invoke it's init
+	"github.com/portworx/torpedo/drivers/volume" // import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/sirupsen/logrus" // import aws driver to invoke it's init
 )
 
 const (
@@ -64,7 +57,8 @@ const (
 )
 
 var (
-	context = ginkgo.Context
+	context       = ginkgo.Context
+	justAfterEach = ginkgo.JustAfterEach
 	// Step is an alias for ginko "By" which represents a step in the spec
 	Step         = ginkgo.By
 	expect       = gomega.Expect
@@ -186,6 +180,32 @@ func DeleteVolumesAndWait(ctx *scheduler.Context) {
 	}
 }
 
+// ScheduleApps schedules applications
+func ScheduleApps(testname string) []*scheduler.Context {
+	var contexts []*scheduler.Context
+	var err error
+
+	Step("schedule applications", func() {
+		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+			AppKeys: Inst().AppList,
+		})
+		expect(err).NotTo(haveOccurred())
+		expect(contexts).NotTo(beEmpty())
+	})
+
+	return contexts
+}
+
+// ValidateApps validates applications
+func ValidateApps(testname string, contexts []*scheduler.Context) {
+	Step("validate applications", func() {
+		for _, ctx := range contexts {
+			ValidateContext(ctx)
+		}
+	})
+}
+
 // ScheduleAndValidate schedules and validates applications
 func ScheduleAndValidate(testname string) []*scheduler.Context {
 	var contexts []*scheduler.Context
@@ -278,6 +298,41 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 			TearDownContext(ctx, opts)
 		}
 	})
+}
+
+// TearDownAfterEachSpec tears down the context.
+func TearDownAfterEachSpec(contexts []*scheduler.Context) {
+
+	fmt.Printf("Contexts: %d", len(contexts))
+	opts := make(map[string]bool)
+	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+	for _, ctx := range contexts {
+		fmt.Println("------------------ Tearing Down Context : ----------------------")
+		TearDownContext(ctx, opts)
+	}
+
+}
+
+// DescribeNamespaceJustAfterEachSpec takes in the scheduler contexts and describes each object within the test context.
+func DescribeNamespaceJustAfterEachSpec(contexts []*scheduler.Context) {
+
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		fmt.Printf("Collecting diags just after failed test in %s\n", ginkgo.CurrentGinkgoTestDescription().TestText)
+		for _, ctx := range contexts {
+			Inst().S.Describe(ctx)
+		}
+
+	}
+	fmt.Printf("Describing Namespace objects within the test %s", ginkgo.CurrentGinkgoTestDescription().TestText)
+	fmt.Printf("Contexts in JustAfterEach %d", len(contexts))
+
+	for _, ctx := range contexts {
+		fmt.Println("-------------------------Describing Namespace----------------------------")
+		for _, spec := range ctx.App.SpecList {
+			fmt.Printf("Spec: %s", spec)
+		}
+		Inst().S.Describe(ctx)
+	}
 }
 
 // CollectSupport creates a support bundle
