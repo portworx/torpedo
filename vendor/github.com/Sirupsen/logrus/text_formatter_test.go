@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -145,7 +144,7 @@ func TestDisableLevelTruncation(t *testing.T) {
 		tf := &TextFormatter{DisableLevelTruncation: disabled}
 		var b bytes.Buffer
 		entry.Level = level
-		tf.printColored(&b, entry, keys, nil, timestampFormat)
+		tf.printColored(&b, entry, keys, timestampFormat)
 		logLine := (&b).String()
 		if disabled {
 			expected := strings.ToUpper(level.String())
@@ -444,11 +443,7 @@ func TestTextFormatterIsColored(t *testing.T) {
 				os.Setenv("CLICOLOR_FORCE", val.clicolorForceVal)
 			}
 			res := tf.isColored()
-			if runtime.GOOS == "windows" && !tf.ForceColors && !val.clicolorForceIsSet {
-				assert.Equal(subT, false, res)
-			} else {
-				assert.Equal(subT, val.expectedResult, res)
-			}
+			assert.Equal(subT, val.expectedResult, res)
 		})
 	}
 }

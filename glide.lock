@@ -1,5 +1,5 @@
-hash: 01d3f3bb7ff678817e85f35bffc99662c16d133c7efe625a26f92c76239ddd64
-updated: 2019-01-27T15:18:07.786075644-08:00
+hash: 20be178de1840a6f7888645d3d9b67e115f51fe265d8aaea7fcac65e3a89fa23
+updated: 2019-01-28T16:05:42.515530474+05:30
 imports:
 - name: github.com/aws/aws-sdk-go
   version: 5e98666858b97db54a61044bb1150d3b81436860
@@ -36,7 +36,7 @@ imports:
   - service/ssm
   - service/sts
 - name: github.com/cenkalti/backoff
-  version: 1e4cf3da559842a91afcb6ea6141451e6c30c618
+  version: 62661b46c4093e2c1f38d943e663db1a29873e80
 - name: github.com/docker/distribution
   version: 749f6afb4572201e3c37325d0ffedb6f32be8950
   subpackages:
@@ -88,7 +88,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 6ed8d5f64cd79a498d1f3fab5880cc376ce41bbe
+  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -149,7 +149,7 @@ imports:
 - name: github.com/konsorten/go-windows-terminal-sequences
   version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/kubernetes-incubator/external-storage
-  version: 3702b40218ee0c072755a7e65e28376dabb6d210
+  version: aa30660b0fc86897efc88cd1d9c9489f576cdb93
   repo: https://github.com/libopenstorage/external-storage.git
   subpackages:
   - snapshot/pkg/apis/crd/v1
@@ -189,7 +189,7 @@ imports:
 - name: github.com/mattn/go-isatty
   version: 3fb116b820352b7f0c281308a4d6250c22d94e27
 - name: github.com/Microsoft/go-winio
-  version: 75bf6ca3d7cb77506c52495e61472c131a254d56
+  version: 97e4973ce50b2ff5f09635a57e2b88a037aae829
 - name: github.com/miekg/dns
   version: e7c3f513a170118cc2f407db58de97aa20c07c85
 - name: github.com/modern-go/concurrent
@@ -243,9 +243,9 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/pkg/errors
-  version: ffb6e22f01932bf7ac35e0bad9be11f01d1c8685
+  version: 059132a15dd08d6704c67711dae0cf35ab991756
 - name: github.com/portworx/kvdb
-  version: 1c18ebeaf685dfc584a49545bc590a13fa8b7617
+  version: cbc0d300ec8a247e9a03bac5d31f9eb6a872c78c
   subpackages:
   - common
   - mem
@@ -263,7 +263,7 @@ imports:
   - pkg/client/clientset/versioned/scheme
   - pkg/client/clientset/versioned/typed/portworx/v1beta1
 - name: github.com/Sirupsen/logrus
-  version: 7d8d63893b994a654b3bc8d16ffd7fb6b9f884a4
+  version: 91da99df23e3bad7f384338a5a8f636d04093d9a
 - name: github.com/sirupsen/logrus
   version: e1e72e9de974bd926e5c56f83753fba2df402ce5
 - name: github.com/spf13/pflag

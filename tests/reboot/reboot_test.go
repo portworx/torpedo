@@ -22,12 +22,14 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{RebootOneNode}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps and reboot node(s) with volumes", func() {
 		var err error
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootonenode-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("rebootonenode-%d", i))...)
 		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 
 		Step("get nodes for all apps in test and reboot their nodes", func() {
 			for _, ctx := range contexts {
@@ -90,17 +92,27 @@ var _ = Describe("{RebootOneNode}", func() {
 			}
 		})
 
-		ValidateAndDestroy(contexts, nil)
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
+	})
+
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
 	})
 })
 
 var _ = Describe("{RebootAllNodes}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to scheduler apps and reboot app node(s)", func() {
 		var err error
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootallnodes-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("rebootallnodes-%d", i))...)
 		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 
 		Step("get nodes for all apps in test and reboot their nodes", func() {
 			for _, ctx := range contexts {
@@ -149,7 +161,14 @@ var _ = Describe("{RebootAllNodes}", func() {
 			}
 		})
 
-		ValidateAndDestroy(contexts, nil)
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
+	})
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
 	})
 })
 

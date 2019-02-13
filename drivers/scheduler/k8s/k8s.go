@@ -1452,8 +1452,9 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 	var buf bytes.Buffer
 	var err error
 	for _, spec := range ctx.App.SpecList {
+		// fmt.Printf("Spec: %v", spec)
 		if obj, ok := spec.(*apps_api.Deployment); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak("Deployment :" + obj.Name))
 			var depStatus *apps_api.DeploymentStatus
 			if depStatus, err = k8sOps.DescribeDeployment(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
@@ -1469,7 +1470,7 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 			}
 			buf.WriteString(insertLineBreak("END Deployment"))
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak("Statefulset: " + obj.Name))
 			var ssetStatus *apps_api.StatefulSetStatus
 			if ssetStatus, err = k8sOps.DescribeStatefulSet(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
@@ -1485,7 +1486,7 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 			}
 			buf.WriteString(insertLineBreak("END StatefulSet"))
 		} else if obj, ok := spec.(*v1.Service); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak("Service: " + obj.Name))
 			var svcStatus *v1.ServiceStatus
 			if svcStatus, err = k8sOps.DescribeService(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
@@ -1497,7 +1498,7 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 			buf.WriteString(fmt.Sprintf("%v\n", *svcStatus))
 			buf.WriteString(insertLineBreak("END Service"))
 		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak("PersistentVolumeClaim :" + obj.Name))
 			var pvcStatus *v1.PersistentVolumeClaimStatus
 			if pvcStatus, err = k8sOps.GetPersistentVolumeClaimStatus(obj); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetStorageStatus{
@@ -1509,7 +1510,7 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 			buf.WriteString(fmt.Sprintf("%v\n", *pvcStatus))
 			buf.WriteString(insertLineBreak("END PersistentVolumeClaim"))
 		} else if obj, ok := spec.(*storage_api.StorageClass); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak("StorageClass: " + obj.Name))
 			var scParams map[string]string
 			if scParams, err = k8sOps.GetStorageClassParams(obj); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetVolumeParameters{
@@ -1521,7 +1522,7 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 			buf.WriteString(fmt.Sprintf("%v\n", scParams))
 			buf.WriteString(insertLineBreak("END Storage Class"))
 		} else if obj, ok := spec.(*v1.Pod); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak("Pod:" + obj.Name))
 			var podStatus *v1.PodList
 			if podStatus, err = k8sOps.GetPods(obj.Name, nil); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetPodStatus{
@@ -1531,6 +1532,17 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 			}
 			buf.WriteString(fmt.Sprintf("%v\n", podStatus))
 			buf.WriteString(insertLineBreak("END Pod"))
+		} else if obj, ok := spec.(*v1.Secret); ok {
+			buf.WriteString(insertLineBreak("Secret: " + obj.Name))
+			var secret *v1.Secret
+			if secret, err = k8sOps.GetSecret(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetSecret{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get secret : %v. Error is : %v", obj.Name, err),
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", secret))
+			buf.WriteString(insertLineBreak("END Secret"))
 		} else {
 			logrus.Warnf("Object type unknown/not supported: %v", obj)
 		}

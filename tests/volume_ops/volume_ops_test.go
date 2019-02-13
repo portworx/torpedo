@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -11,7 +12,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
-	"time"
 )
 
 func TestVolOps(t *testing.T) {
@@ -25,13 +25,15 @@ var _ = BeforeSuite(func() {
 
 // Volume replication change
 var _ = Describe("{VolumeUpdate}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps and update replication factor and size on all volumes of the apps", func() {
 		var err error
-		var contexts []*scheduler.Context
 		expReplMap := make(map[*volume.Volume]int64)
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("volupdate-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("volupdate-%d", i))...)
 		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 
 		Step("get volumes for all apps in test and update replication factor and size", func() {
 			for _, ctx := range contexts {
@@ -131,15 +133,14 @@ var _ = Describe("{VolumeUpdate}", func() {
 
 			}
 		})
+	})
 
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
 
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
 	})
 })
 

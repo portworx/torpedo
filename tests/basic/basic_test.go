@@ -32,6 +32,7 @@ var _ = Describe("{SetupTeardown}", func() {
 
 		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 	})
+	fmt.Println(len(contexts))
 
 	AfterEach(func() {
 		TearDownAfterEachSpec(contexts)
@@ -266,12 +267,6 @@ var _ = Describe("{AppTasksDown}", func() {
 				ValidateContext(ctx)
 			}
 		})
-
-		Step("teardown all apps", func() {
-			for _, ctx := range contexts {
-				TearDownContext(ctx, nil)
-			}
-		})
 	})
 
 	AfterEach(func() {
@@ -329,13 +324,6 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 				ValidateContext(ctx)
 			}
 		})
-
-		Step("teardown all apps", func() {
-			for _, ctx := range contexts {
-				TearDownContext(ctx, nil)
-			}
-		})
-
 	})
 	AfterEach(func() {
 		TearDownAfterEachSpec(contexts)

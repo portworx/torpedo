@@ -20,8 +20,9 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{UpgradeVolumeDriver}", func() {
+	var contexts []*scheduler.Context
+
 	It("upgrade volume driver and ensure everything is running fine", func() {
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
@@ -37,22 +38,24 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			}
 		})
 
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
+	})
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
 	})
 })
 
 var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
+	var contexts []*scheduler.Context
+
 	It("upgrade and downgrade volume driver and ensure everything is running fine", func() {
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradedowngradevolumedriver-%d", i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("upgradedowngradevolumedriver-%d", i))...)
 		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 
 		Step("start the upgrade of volume driver", func() {
 			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeVersion)
@@ -72,7 +75,14 @@ var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
+	})
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
 	})
 })
 

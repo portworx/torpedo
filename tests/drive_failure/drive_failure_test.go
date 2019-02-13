@@ -29,13 +29,14 @@ var _ = BeforeSuite(func() {
 
 var _ = Describe("{DriveFailure}", func() {
 	testName := "drivefailure"
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps and induce a drive failure on one of the nodes", func() {
 		var err error
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("%s-%d", testName, i))...)
 		}
-
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 		Step("get nodes for all apps in test and induce drive failure on one of the nodes", func() {
 			for _, ctx := range contexts {
 				var (
@@ -100,7 +101,14 @@ var _ = Describe("{DriveFailure}", func() {
 			}
 		})
 
-		ValidateAndDestroy(contexts, nil)
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
+	})
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
 	})
 })
 

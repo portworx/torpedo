@@ -475,6 +475,11 @@ func (d *dcos) RescanSpecs(specDir string) error {
 	return nil
 }
 
+// Printspec not implemented in dcos scheduler
+func (d *dcos) PrintSpec(in interface{}) {
+	fmt.Println("Not implemented")
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

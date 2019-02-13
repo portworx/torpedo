@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
-	"math/rand"
 )
 
 func TestStopScheduler(t *testing.T) {
@@ -24,12 +24,14 @@ var _ = BeforeSuite(func() {
 
 var _ = Describe("{StopScheduler}", func() {
 	testName := "stopscheduler"
+	var contexts []*scheduler.Context
+
 	It("has to stop scheduler service and check if applications are fine", func() {
 		var err error
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
+			contexts = append(contexts, ScheduleApps(fmt.Sprintf("%s-%d", testName, i))...)
 		}
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
 
 		Step("get nodes for all apps in test and induce scheduler service to stop on one of the nodes", func() {
 			for _, ctx := range contexts {
@@ -61,7 +63,14 @@ var _ = Describe("{StopScheduler}", func() {
 			}
 		})
 
-		ValidateAndDestroy(contexts, nil)
+		ValidateApps(fmt.Sprintf("validate apps for %s", CurrentGinkgoTestDescription().TestText), contexts)
+	})
+	AfterEach(func() {
+		TearDownAfterEachSpec(contexts)
+	})
+
+	JustAfterEach(func() {
+		DescribeNamespaceJustAfterEachSpec(contexts)
 	})
 })
 

@@ -275,7 +275,7 @@ func (kv *memKV) Get(key string) (*kvdb.KVPair, error) {
 	return v.copy(), nil
 }
 
-func (kv *memKV) Snapshot(prefixes []string) (kvdb.Kvdb, uint64, error) {
+func (kv *memKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
 	_, err := kv.put(bootstrapKey, time.Now().UnixNano(), 0)
@@ -284,18 +284,7 @@ func (kv *memKV) Snapshot(prefixes []string) (kvdb.Kvdb, uint64, error) {
 	}
 	data := make(map[string]*memKVPair)
 	for key, value := range kv.m {
-		if strings.Contains(key, "/_") {
-			continue
-		}
-		found := false
-		for _, prefix := range prefixes {
-			prefix = kv.domain + prefix
-			if strings.HasPrefix(key, prefix) {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !strings.HasPrefix(key, prefix) && strings.Contains(key, "/_") {
 			continue
 		}
 		snap := &memKVPair{}
@@ -307,11 +296,9 @@ func (kv *memKV) Snapshot(prefixes []string) (kvdb.Kvdb, uint64, error) {
 	}
 	highestKvPair, _ := kv.delete(bootstrapKey)
 	// Snapshot only data, watches are not copied.
-	return &snapMem{
-		&memKV{
-			m:      data,
-			domain: kv.domain,
-		},
+	return &memKV{
+		m:      data,
+		domain: kv.domain,
 	}, highestKvPair.ModifiedIndex, nil
 }
 

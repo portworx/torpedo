@@ -273,6 +273,7 @@ func (p *parser) readValue(in []byte,
 		parserBufferPeekResult, _ := p.buf.Peek(parserBufferSize)
 		peekBuffer := bytes.NewBuffer(parserBufferPeekResult)
 
+		identSize := -1
 		val := line
 
 		for {
@@ -289,11 +290,12 @@ func (p *parser) readValue(in []byte,
 				return val, nil
 			}
 
-			// NOTE: Return if not a python-ini multi-line value.
 			currentIdentSize := len(peekMatches[1])
-			if currentIdentSize <= 0 {
+			// NOTE: Return if not a python-ini multi-line value.
+			if currentIdentSize < 0 {
 				return val, nil
 			}
+			identSize = currentIdentSize
 
 			// NOTE: Just advance the parser reader (buffer) in-sync with the peek buffer.
 			_, err := p.readUntil('\n')
@@ -302,6 +304,12 @@ func (p *parser) readValue(in []byte,
 			}
 
 			val += fmt.Sprintf("\n%s", peekMatches[2])
+		}
+
+		// NOTE: If it was a Python multi-line value,
+		// return the appended value.
+		if identSize > 0 {
+			return val, nil
 		}
 	}
 

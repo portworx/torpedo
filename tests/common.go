@@ -302,14 +302,13 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 
 // TearDownAfterEachSpec tears down the context.
 func TearDownAfterEachSpec(contexts []*scheduler.Context) {
-
-	fmt.Printf("Contexts: %d", len(contexts))
-	opts := make(map[string]bool)
-	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-	for _, ctx := range contexts {
-		fmt.Println("------------------ Tearing Down Context : ----------------------")
-		TearDownContext(ctx, opts)
-	}
+	Step(fmt.Sprintf("Tearing down contexts for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
 
 }
 
@@ -317,21 +316,11 @@ func TearDownAfterEachSpec(contexts []*scheduler.Context) {
 func DescribeNamespaceJustAfterEachSpec(contexts []*scheduler.Context) {
 
 	if ginkgo.CurrentGinkgoTestDescription().Failed {
-		fmt.Printf("Collecting diags just after failed test in %s\n", ginkgo.CurrentGinkgoTestDescription().TestText)
-		for _, ctx := range contexts {
-			Inst().S.Describe(ctx)
-		}
-
-	}
-	fmt.Printf("Describing Namespace objects within the test %s", ginkgo.CurrentGinkgoTestDescription().TestText)
-	fmt.Printf("Contexts in JustAfterEach %d", len(contexts))
-
-	for _, ctx := range contexts {
-		fmt.Println("-------------------------Describing Namespace----------------------------")
-		for _, spec := range ctx.App.SpecList {
-			fmt.Printf("Spec: %s", spec)
-		}
-		Inst().S.Describe(ctx)
+		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
+			for _, ctx := range contexts {
+				fmt.Println(Inst().S.Describe(ctx))
+			}
+		})
 	}
 }
 
