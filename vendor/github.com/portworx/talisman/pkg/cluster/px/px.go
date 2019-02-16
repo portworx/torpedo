@@ -456,6 +456,12 @@ func (ops *pxClusterOps) upgradePX(newVersion string) error {
 				Resources: []string{"configmaps"},
 				Verbs:     []string{"get", "update", "list", "create"},
 			},
+			{
+				APIGroups:     []string{"extensions"},
+				Resources:     []string{"podsecuritypolicies"},
+				ResourceNames: []string{"privileged"},
+				Verbs:         []string{"use"},
+			},
 		},
 	}
 

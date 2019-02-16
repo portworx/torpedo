@@ -110,4 +110,4 @@ import:
   subpackages:
   - pkg/util/k8sutil
 - package: google.golang.org/grpc
-  version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
+  version: v1.8.x

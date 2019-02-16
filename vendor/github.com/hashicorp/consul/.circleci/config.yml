@@ -1,0 +1,218 @@
+version: 2.1
+
+# reusable 'executor' object for jobs
+executors:
+  go:
+    docker:
+      - image: circleci/golang:1.11.4
+    environment:
+      - TEST_RESULTS: /tmp/test-results  # path to where test results are saved
+
+# reusable 'commands' to be added as a step in jobs
+commands:
+  integration-test:
+    description: Run integration tests
+    parameters:
+      version:
+        description: what branch/version/tag to checkout
+        type: string
+        default: master
+      checkout-url:
+        description: HTTPS checkout URL (SSH checkout if using SSH key)
+        type: string
+      checkout-path:
+        description: path to checkout code
+        type: string
+      test-command:
+        description: command to run tests
+        type: string
+    steps:
+        - run: git clone << parameters.checkout-url >> --branch << parameters.version >> << parameters.checkout-path >>
+        
+        # get consul binary
+        - attach_workspace:
+            at: /go/bin
+        # make dev build of nomad
+        - run:
+            command: make dev
+            working_directory: << parameters.checkout-path >>
+
+        - run:
+            name: install junit and setup test path
+            command: |
+              go get github.com/jstemmer/go-junit-report
+              mkdir -p /tmp/test-results
+        
+        # run integration tests
+        - run: 
+            command: << parameters.test-command >> | tee ${TEST_RESULTS}/results.out
+            working_directory: << parameters.checkout-path >>
+
+
+        # generate XML results
+        - run:
+            command: go-junit-report < ${TEST_RESULTS}/results.out > ${TEST_RESULTS}/results.xml
+            when: always
+        
+        # store test results for CircleCI
+        - store_test_results:
+            path: /tmp/test-results
+
+
+jobs:
+  dev-build:
+    executor: go
+    working_directory: /go/src/github.com/hashicorp/consul
+    steps:
+      - checkout
+      - run: make dev
+
+      # save dev build to CircleCI
+      - store_artifacts:
+          path: /go/bin/consul
+
+      # save dev build to pass to downstream jobs
+      - persist_to_workspace:
+          root: /go/bin
+          paths:
+            - consul
+
+  # Nomad 0.8 builds on go0.10
+  # Run integration tests on nomad/v0.8.7
+  nomad-integration-0_8:
+      docker:
+        - image: circleci/golang:1.10
+      environment:
+        - TEST_RESULTS: /tmp/test-results
+      steps:
+        - integration-test:
+            version: v0.8.7
+            checkout-url: https://github.com/hashicorp/nomad.git
+            checkout-path: /go/src/github.com/hashicorp/nomad
+            test-command: go test -v ./command/agent/consul -run TestConsul
+
+  # run integration tests on nomad/master
+  nomad-integration-master:
+      executor: go
+      steps:
+        - integration-test:
+            version: master
+            checkout-url: https://github.com/hashicorp/nomad.git
+            checkout-path: /go/src/github.com/hashicorp/nomad
+            test-command: go test -v ./command/agent/consul -run TestConsul
+
+  build-website:
+    # setting the working_directory along with the checkout path allows us to not have
+    # to cd into the website/ directory for commands
+    working_directory: ~/project/website
+    docker:
+      - image: hashicorp/middleman-hashicorp:0.3.35
+    steps:
+      - checkout:
+          path: ~/project
+
+      # restores gem cache
+      - restore_cache:
+          key: static-site-gems-v1-{{ checksum "Gemfile.lock" }}
+
+      - run:
+          name: install gems
+          command: bundle check || bundle install --path vendor/bundle --retry=3
+
+      # saves gem cache if we have changed the Gemfile
+      - save_cache:
+          key: static-site-gems-v1-{{ checksum "Gemfile.lock" }}
+          paths:
+            - ~/project/website/vendor/bundle
+
+      - run:
+          name: middleman build
+          command: bundle exec middleman build
+
+      - run:
+          name: website deploy
+          command: ./scripts/deploy.sh
+
+  # build frontend yarn cache
+  frontend-cache:
+    docker:
+      - image: circleci/node:8
+    steps:
+      - checkout
+      
+      # cache yarn deps
+      - restore_cache:
+          key: consul-ui-v1-{{ checksum "ui-v2/yarn.lock" }}
+      
+      - run:
+          name: install yarn packages
+          command: cd ui-v2 && yarn install
+      
+      - save_cache:
+          key: consul-ui-v1-{{ checksum "ui-v2/yarn.lock" }}
+          paths:
+            - ui-v2/node_modules
+  
+  # build ember so frontend tests run faster
+  ember-build:
+    docker:
+      - image: circleci/node:8
+    steps:
+      - checkout
+      - restore_cache:
+          key: consul-ui-v1-{{ checksum "ui-v2/yarn.lock" }}
+      - run: cd ui-v2 && yarn build-ci --output-path=dist
+
+      # saves the build to a workspace to be passed to a downstream job
+      - persist_to_workspace:
+          root: ui-v2
+          paths:
+            - dist
+
+  # run ember frontend tests
+  ember-test:
+    docker:
+      - image: circleci/node:8-browsers
+    environment:
+      EMBER_TEST_PARALLEL: true #enables test parallelization with ember-exam
+      EMBER_TEST_REPORT: test-results/report.xml #outputs test report for CircleCI test summary
+    parallelism: 4
+    steps:
+      - checkout
+      - restore_cache:
+          key: consul-ui-v1-{{ checksum "ui-v2/yarn.lock" }}
+      - attach_workspace:
+          at: ui-v2
+      - run:
+          working_directory: ui-v2
+          command: node_modules/ember-cli/bin/ember exam --split=$CIRCLE_NODE_TOTAL --partition=`expr $CIRCLE_NODE_INDEX + 1` --path dist --silent -r xunit
+      - store_test_results:
+          path: ui-v2/test-results
+
+workflows:
+  version: 2
+  test-apis:
+    jobs:
+      - dev-build
+      - nomad-integration-master:
+          requires:
+            - dev-build 
+      - nomad-integration-0_8:
+          requires:
+            - dev-build
+  website:
+    jobs:
+      - build-website:
+          context: static-sites
+          filters:
+            branches:
+              only: stable-website
+  frontend:
+    jobs:
+      - frontend-cache
+      - ember-build:
+          requires:
+            - frontend-cache
+      - ember-test:
+          requires:
+            - ember-build
