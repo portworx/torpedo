@@ -35,6 +35,11 @@ func (in *Context) DeepCopy() *Context {
 	return out
 }
 
+// GetNamespace returns the namespace for the context
+func (in *Context) GetNamespace() string {
+	return in.App.GetNamespaceName(in.UID)
+}
+
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)

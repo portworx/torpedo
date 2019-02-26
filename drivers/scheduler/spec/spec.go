@@ -1,5 +1,7 @@
 package spec
 
+import "fmt"
+
 // Parser provides operations for parsing application specs
 type Parser interface {
 	ParseSpecs(specDir string) ([]interface{}, error)
@@ -13,6 +15,12 @@ type AppSpec struct {
 	SpecList []interface{}
 	// Enabled indicates if the application is enabled in the factory
 	Enabled bool
+}
+
+// GetNamespaceName returns the namespace name that will be used for the app and
+// instanceID
+func (in *AppSpec) GetNamespaceName(instanceID string) string {
+	return fmt.Sprintf("%s-%s", in.Key, instanceID)
 }
 
 // DeepCopy Creates a copy of the AppSpec
