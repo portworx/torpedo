@@ -541,7 +541,7 @@
   revision = "521b74b015921fbc75a973aefc1c1d056db25f75"
 
 [[projects]]
-  branch = "schedules"
+  branch = "master"
   digest = "1:b0f0cc8054b0060383e8269bd733178072d2e5e21b6d8a6ef579345fa8550032"
   name = "github.com/portworx/sched-ops"
   packages = [
@@ -549,7 +549,7 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "851e3a45f060f06e9aa8c12e91dc24581906d45b"
+  revision = "47c0646da0c8b63858b6b33ecfe5537a7b323001"
 
 [[projects]]
   branch = "master"

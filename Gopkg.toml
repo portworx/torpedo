@@ -44,8 +44,7 @@
   branch = "release-4.0"
 
 [[constraint]]
-# change to master after https://github.com/portworx/sched-ops/pull/105 is merged
-  branch = "schedules"
+  branch = "master"
   name = "github.com/portworx/sched-ops"
 
 [[constraint]]
