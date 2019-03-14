@@ -280,7 +280,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	var contexts []*scheduler.Context
 	for _, app := range apps {
 
-		appNamespace := app.GetNamespaceName(instanceID)
+		appNamespace := app.GetID(instanceID)
 		specObjects, err := k.createSpecObjects(app, appNamespace)
 		if err != nil {
 			return nil, err
@@ -374,7 +374,7 @@ func (k *k8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 		return fmt.Errorf("Need to specify list of applications to add to context")
 	}
 
-	appNamespace := ctx.GetNamespace()
+	appNamespace := ctx.GetID()
 	var apps []*spec.AppSpec
 	specObjects := ctx.App.SpecList
 	for _, key := range options.AppKeys {

@@ -17,9 +17,8 @@ type AppSpec struct {
 	Enabled bool
 }
 
-// GetNamespaceName returns the namespace name that will be used for the app and
-// instanceID
-func (in *AppSpec) GetNamespaceName(instanceID string) string {
+// GetID returns the unique ID for the app specs
+func (in *AppSpec) GetID(instanceID string) string {
 	return fmt.Sprintf("%s-%s", in.Key, instanceID)
 }
 
