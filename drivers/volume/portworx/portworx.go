@@ -568,7 +568,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 				return err
 			}
 		} else {
-			err = d.schedOps.DisableOnNode(n)
+			err = d.schedOps.StopPxOnNode(n)
 			if err != nil {
 				return err
 			}

@@ -9,11 +9,11 @@ import (
 
 type dcosSchedOps struct{}
 
-func (d *dcosSchedOps) EnableOnNode(n node.Node) error {
+func (d *dcosSchedOps) StartPxOnNode(n node.Node) error {
 	return nil
 }
 
-func (d *dcosSchedOps) DisableOnNode(n node.Node) error {
+func (d *dcosSchedOps) StopPxOnNode(n node.Node) error {
 	return nil
 }
 

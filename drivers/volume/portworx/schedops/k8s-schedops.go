@@ -84,11 +84,11 @@ func (e *errLabelAbsent) Error() string {
 
 type k8sSchedOps struct{}
 
-func (k *k8sSchedOps) EnableOnNode(n node.Node) error {
+func (k *k8sSchedOps) StopPxOnNode(n node.Node) error {
 	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxServiceLabelKey, k8sServiceOperationStart)
 }
 
-func (k *k8sSchedOps) DisableOnNode(n node.Node) error {
+func (k *k8sSchedOps) StartPxOnNode(n node.Node) error {
 	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxServiceLabelKey, k8sServiceOperationStop)
 }
 
