@@ -568,6 +568,10 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 				return err
 			}
 		} else {
+			err = d.schedOps.DisableOnNode(n)
+			if err != nil {
+				return err
+			}
 			err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 				Action: "stop",
 				ConnectionOpts: node.ConnectionOpts{
