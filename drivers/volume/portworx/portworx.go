@@ -1020,6 +1020,10 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
+	err := d.schedOps.StartPxOnNode(n)
+	if err != nil {
+		return err
+	}
 	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 		Action: "start",
 		ConnectionOpts: node.ConnectionOpts{
