@@ -49,7 +49,7 @@ const (
 	maintenanceWaitTimeout           = 2 * time.Minute
 	inspectVolumeTimeout             = 10 * time.Second
 	inspectVolumeRetryInterval       = 2 * time.Second
-	validateDeleteVolumeTimeout      = 3 * time.Minute
+	validateDeleteVolumeTimeout      = 5 * time.Minute
 	validateReplicationUpdateTimeout = 10 * time.Minute
 	validateClusterStartTimeout      = 2 * time.Minute
 	validateNodeStartTimeout         = 3 * time.Minute
