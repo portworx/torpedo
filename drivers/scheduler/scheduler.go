@@ -118,6 +118,12 @@ type Driver interface {
 
 	// RescanSpecs specified in specDir
 	RescanSpecs(specDir string) error
+
+	// EnableSchedulingOnNode enable apps to be scheduled to a given node
+	EnableSchedulingOnNode(n node.Node) error
+
+	// DisableSchedulingOnNode disable apps to be scheduled to a given node
+	DisableSchedulingOnNode(n node.Node) error
 }
 
 var (

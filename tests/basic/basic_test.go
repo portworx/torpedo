@@ -316,6 +316,53 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 	})
 })
 
+var _ = Describe("{CordonDeployDestroy}", func() {
+	It("has to cordon all nodes but one, deploy and destroy app", func() {
+
+		Step("Cordon all nodes but one", func() {
+			nodes := node.GetWorkerNodes()
+			for _, node := range nodes[1:] {
+				err := Inst().S.DisableSchedulingOnNode(node)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		var contexts []*scheduler.Context
+		Step("Deploy applications", func() {
+			for i := 0; i < Inst().ScaleFactor; i++ {
+				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("cordondeploydestroy-%d", i))...)
+			}
+		})
+		Step("Destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				err := Inst().S.Destroy(ctx, opts)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		Step("Validate destroy", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForDestroy(ctx)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		Step("teardown all apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+		Step("Cordon all nodes but one", func() {
+			nodes := node.GetWorkerNodes()
+			for _, node := range nodes {
+				err := Inst().S.EnableSchedulingOnNode(node)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+	})
+})
+
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
 	CollectSupport()

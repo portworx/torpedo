@@ -1659,6 +1659,14 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 	return nil
 }
 
+func (k *k8s) EnableSchedulingOnNode(n node.Node) error {
+	return k8s_ops.Instance().UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval)
+}
+
+func (k *k8s) DisableSchedulingOnNode(n node.Node) error {
+	return k8s_ops.Instance().CordonNode(n.Name, defaultTimeout, defaultRetryInterval)
+}
+
 func (k *k8s) createMigrationObjects(
 	specObj interface{},
 	ns *v1.Namespace,
