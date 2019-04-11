@@ -916,7 +916,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
-			if err := k8sOps.ValidateTerminatedDeployment(obj); err != nil {
+			if err := k8sOps.ValidateTerminatedDeployment(obj, defaultTimeout, defaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate destroy of deployment: %v. Err: %v", obj.Name, err),
@@ -925,7 +925,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Validated destroy of Deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			if err := k8sOps.ValidateTerminatedStatefulSet(obj); err != nil {
+			if err := k8sOps.ValidateTerminatedStatefulSet(obj, defaultTimeout, defaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate destroy of statefulset: %v. Err: %v", obj.Name, err),
