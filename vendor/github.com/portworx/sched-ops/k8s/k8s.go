@@ -172,7 +172,7 @@ type StatefulSetOps interface {
 	// ValidateStatefulSet validates the given statefulset if it's running and healthy within the given timeout
 	ValidateStatefulSet(ss *apps_api.StatefulSet, timeout time.Duration) error
 	// ValidateTerminatedStatefulSet validates if given deployment is terminated
-	ValidateTerminatedStatefulSet(ss *apps_api.StatefulSet) error
+	ValidateTerminatedStatefulSet(ss *apps_api.StatefulSet, timeout, retryInterval time.Duration) error
 	// GetStatefulSetPods returns pods for the given statefulset
 	GetStatefulSetPods(ss *apps_api.StatefulSet) ([]v1.Pod, error)
 	// DescribeStatefulSet gets status of the statefulset
@@ -200,7 +200,7 @@ type DeploymentOps interface {
 	// ValidateDeployment validates the given deployment if it's running and healthy
 	ValidateDeployment(deployment *apps_api.Deployment, timeout, retryInterval time.Duration) error
 	// ValidateTerminatedDeployment validates if given deployment is terminated
-	ValidateTerminatedDeployment(*apps_api.Deployment) error
+	ValidateTerminatedDeployment(*apps_api.Deployment, time.Duration, time.Duration) error
 	// GetDeploymentPods returns pods for the given deployment
 	GetDeploymentPods(*apps_api.Deployment) ([]v1.Pod, error)
 	// DescribeDeployment gets the deployment status
@@ -1332,7 +1332,7 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment, timeout, re
 	return nil
 }
 
-func (k *k8sOps) ValidateTerminatedDeployment(deployment *apps_api.Deployment) error {
+func (k *k8sOps) ValidateTerminatedDeployment(deployment *apps_api.Deployment, timeout, timeBeforeRetry time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		dep, err := k.GetDeployment(deployment.Name, deployment.Namespace)
 		if err != nil {
@@ -1364,7 +1364,7 @@ func (k *k8sOps) ValidateTerminatedDeployment(deployment *apps_api.Deployment) e
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, timeBeforeRetry); err != nil {
 		return err
 	}
 	return nil
@@ -1762,7 +1762,7 @@ func (k *k8sOps) GetStatefulSetPods(statefulset *apps_api.StatefulSet) ([]v1.Pod
 	return k.GetPodsByOwner(statefulset.UID, statefulset.Namespace)
 }
 
-func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet) error {
+func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet, timeout, timeBeforeRetry time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		sset, err := k.GetStatefulSet(statefulset.Name, statefulset.Namespace)
 		if err != nil {
@@ -1795,7 +1795,7 @@ func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, timeBeforeRetry); err != nil {
 		return err
 	}
 	return nil
