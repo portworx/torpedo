@@ -813,30 +813,44 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var pods interface{}
 	var err error
 	for _, spec := range ctx.App.SpecList {
-		t := func() (interface{}, bool, error) {
-			currPods, err := k.destroyCoreObject(spec, opts, ctx.App)
-			if err != nil {
-				return nil, true, err
+		if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
+			t := func() (interface{}, bool, error) {
+				currPods, err := k.destroyCoreObject(spec, opts, ctx.App)
+				if err != nil {
+					return nil, true, err
+				}
+				return currPods, false, nil
 			}
-			return currPods, false, nil
-		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
+			pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+			if err != nil {
+				podList = append(podList, pods.(v1.Pod))
+			}
+		} else {
+			_, err := k.destroyCoreObject(spec, opts, ctx.App)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	for _, spec := range ctx.App.SpecList {
-		t := func() (interface{}, bool, error) {
+		if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
+			t := func() (interface{}, bool, error) {
+				err := k.destroyMigrationObject(spec, ctx.App)
+				if err != nil {
+					return nil, true, err
+				}
+				return nil, false, nil
+			}
+			pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+			if err != nil {
+				podList = append(podList, pods.(v1.Pod))
+			}
+		} else {
 			err := k.destroyMigrationObject(spec, ctx.App)
 			if err != nil {
-				return nil, true, err
+				return err
 			}
-			return nil, false, nil
-		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
 		}
 	}
 

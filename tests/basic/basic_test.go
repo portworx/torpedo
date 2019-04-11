@@ -334,15 +334,14 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 		})
 		Step("Destroy apps", func() {
 			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			opts[scheduler.OptionsWaitForDestroy] = false
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = false
 			for _, ctx := range contexts {
 				err := Inst().S.Destroy(ctx, opts)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
 		Step("Validate destroy", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
 				err := Inst().S.WaitForDestroy(ctx)
 				Expect(err).NotTo(HaveOccurred())
@@ -353,7 +352,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 				TearDownContext(ctx, nil)
 			}
 		})
-		Step("Cordon all nodes but one", func() {
+		Step("Uncordon all nodes", func() {
 			nodes := node.GetWorkerNodes()
 			for _, node := range nodes {
 				err := Inst().S.EnableSchedulingOnNode(node)
