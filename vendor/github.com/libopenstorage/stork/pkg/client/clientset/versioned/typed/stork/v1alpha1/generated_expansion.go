@@ -20,6 +20,14 @@ package v1alpha1
 
 type ClusterPairExpansion interface{}
 
+type GroupVolumeSnapshotExpansion interface{}
+
 type MigrationExpansion interface{}
 
+type MigrationScheduleExpansion interface{}
+
 type RuleExpansion interface{}
+
+type SchedulePolicyExpansion interface{}
+
+type StorageClusterExpansion interface{}

@@ -13,6 +13,7 @@ type Volume struct {
 	Name      string
 	Namespace string
 	Size      uint64
+	Shared    bool
 }
 
 // Snapshot is a generic struct encapsulating snapshots in the cluster
@@ -110,6 +111,8 @@ type Driver interface {
 	// DecommissionNodeStatus return the status of decommission of the given node
 	DecommissionNodeStatus(n node.Node) (string, error)
 
+	// GetReplicaSetNodes returns the replica sets for a given volume
+	GetReplicaSetNodes(vol *Volume) ([]string, error)
 }
 
 var (

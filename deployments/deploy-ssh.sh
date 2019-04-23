@@ -64,6 +64,36 @@ if [ -n "${TORPEDO_SSH_KEY}" ]; then
     TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
 fi
 
+TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
+
+VOLUMES="${TESTRESULTS_VOLUME}"
+
+if [ -n "${TORPEDO_SSH_KEY_VOLUME}" ]; then
+    VOLUMES="${VOLUMES},${TORPEDO_SSH_KEY_VOLUME}"
+fi
+
+VOLUME_MOUNTS="${TESTRESULTS_MOUNT}"
+
+if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
+    VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_SSH_KEY_MOUNT}"
+fi
+
+K8S_VENDOR_KEY=""
+if [ -n "${K8S_VENDOR}" ]; then
+    case "$K8S_VENDOR" in
+        kubernetes)
+            K8S_VENDOR_KEY=node-role.kubernetes.io/master
+            ;;
+        rancher)
+            K8S_VENDOR_KEY=node-role.kubernetes.io/controlplane
+            ;;
+    esac
+else
+    K8S_VENDOR_KEY=node-role.kubernetes.io/master
+fi
+
+
 echo "Deploying torpedo pod..."
 cat <<EOF | kubectl create -f -
 ---
@@ -103,17 +133,25 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: torpedo
+  labels:
+    app: torpedo
 spec:
   tolerations:
   - key: node-role.kubernetes.io/master
     operator: Equal
     effect: NoSchedule
+  - key: node-role.kubernetes.io/controlplane
+    operator: Equal
+    value: "true"
+  - key: node-role.kubernetes.io/etcd
+    operator: Equal
+    value: "true"
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
         - matchExpressions:
-          - key: node-role.kubernetes.io/master
+          - key: ${K8S_VENDOR_KEY}
             operator: Exists
   containers:
   - name: torpedo
@@ -140,13 +178,13 @@ spec:
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true
-    volumeMounts: [${TORPEDO_SSH_KEY_MOUNT}]
+    volumeMounts: [${VOLUME_MOUNTS}]
     env:
     - name: TORPEDO_SSH_USER
       value: "${TORPEDO_SSH_USER}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
-  volumes: [${TORPEDO_SSH_KEY_VOLUME}]
+  volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
 EOF
