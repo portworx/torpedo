@@ -79,6 +79,10 @@
   name = "github.com/russross/blackfriday"
   revision = "300106c228d52c8941d4b3de6054a6062a86dda3"
 
+[[override]]
+  name = "github.com/ugorji/go"
+  revision = "0053ebfd9d0ee06ccefbfe17072021e1d4acebee"
+
 [prune]
   go-tests = true
   unused-packages = true
