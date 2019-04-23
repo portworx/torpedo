@@ -81,6 +81,11 @@ func (d *dcosSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, err
 	return nil, nil
 }
 
+func (d *dcosSchedOps) MarkPXNodeForRemoval(n node.Node) error {
+	// TODO: Implement this methid
+	return nil
+}
+
 func init() {
 	d := &dcosSchedOps{}
 	Register("dcos", d)

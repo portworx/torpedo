@@ -1101,41 +1101,39 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 func (d *portworx) DecommissionNode(n node.Node) error {
 
 	if err := d.StopDriver([]node.Node{n}, false); err != nil {
-		return &ErrFailedToDecommissionNode {
-			Node:    n.Name,
-			Cause:   fmt.Sprintf("Failed to stop driver on node: %v. Err: %v", n.Name, err),
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to stop driver on node: %v. Err: %v", n.Name, err),
 		}
 	}
 	clusterManager := d.getClusterManager()
 	pxNode, err := clusterManager.Inspect(n.VolDriverNodeID)
 	if err != nil {
-		return &ErrFailedToDecommissionNode {
-			Node:    n.Name,
-			Cause:   fmt.Sprintf("Failed to inspect node: %v. Err: %v", pxNode, err),
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to inspect node: %v. Err: %v", pxNode, err),
 		}
 	}
 
 	if err = clusterManager.Remove([]api.Node{pxNode}, false); err != nil {
-		return &ErrFailedToDecommissionNode {
-			Node:    n.Name,
-			Cause:   err.Error(),
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: err.Error(),
 		}
 	}
 	return nil
 }
 
-func (d *portworx) DecommissionNodeStatus(n node.Node) (string, error) {
+func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
 	clusterManager := d.getClusterManager()
 	pxNode, err := clusterManager.Inspect(n.VolDriverNodeID)
-	if err != nil && pxNode.Status == api.Status_STATUS_NONE {
-		return "", nil
-	} else if err != nil {
-		return "", &ErrFailedToDecommissionNode {
-			Node:    n.Name,
-			Cause:   fmt.Sprintf("Failed to inspect node: %v. Err: %v", pxNode, err),
+	if err != nil {
+		return nil, &ErrFailedToGetNodeStatus{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to check node status: %v. Err: %v", pxNode, err),
 		}
 	}
-	return pxNode.Status.SimpleString(), nil
+	return &pxNode.Status, nil
 }
 
 func (d *portworx) getVolDriver() volume.VolumeDriver {

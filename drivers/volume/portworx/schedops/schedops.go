@@ -40,6 +40,8 @@ type Driver interface {
 	// GetRemotePXNodes returns list of PX node found on destination k8s cluster
 	// refereced by kubeconfig
 	GetRemotePXNodes(destKubeConfig string) ([]node.Node, error)
+	// MarkPXNodeForRemoval adds the proper removal label a given node
+	MarkPXNodeForRemoval(n node.Node) error
 }
 
 var (

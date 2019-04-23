@@ -750,6 +750,13 @@ func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
 	return pxNodes, nil
 }
 
+func (k *k8sSchedOps) MarkPXNodeForRemoval(n node.Node) error {
+	if err := k8s.Instance().AddLabelOnNode(n.Name, "px/enabled", "remove"); err != nil {
+		return fmt.Errorf("Failed to add label to node: %v. Err: %v", n.Name, err)
+	}
+	return nil
+}
+
 func init() {
 	k := &k8sSchedOps{}
 	Register("k8s", k)

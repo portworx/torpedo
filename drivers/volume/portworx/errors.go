@@ -121,3 +121,15 @@ type ErrFailedToDecommissionNode struct {
 func (e *ErrFailedToDecommissionNode) Error() string {
 	return fmt.Sprintf("Failed to decommission node: %v due to err: %v", e.Node, e.Cause)
 }
+
+// ErrFailedToGetNodeStatus error type when fail to get node status
+type ErrFailedToGetNodeStatus struct {
+	// Node where the service is not starting
+	Node string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetNodeStatus) Error() string {
+	return fmt.Sprintf("Failed to get status for node: %v due to err: %v", e.Node, e.Cause)
+}

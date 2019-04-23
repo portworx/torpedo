@@ -1,17 +1,19 @@
 package tests
 
 import (
-"fmt"
-"testing"
-"time"
+	"fmt"
+	"math/rand"
+	"testing"
+	"time"
 
-. "github.com/onsi/ginkgo"
-. "github.com/onsi/gomega"
-"github.com/portworx/torpedo/drivers/node"
-"github.com/portworx/torpedo/drivers/scheduler"
-. "github.com/portworx/torpedo/tests"
-"math/rand"
+	"github.com/libopenstorage/openstorage/api"
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	. "github.com/portworx/torpedo/tests"
 )
 
 const (
@@ -21,7 +23,11 @@ const (
 
 func TestDecommissionNode(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Torpedo: DecommissionNode")
+
+	var specReporters []Reporter
+	junitReporter := reporters.NewJUnitReporter("/testresults/junit_DecommissionNode.xml")
+	specReporters = append(specReporters, junitReporter)
+	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo: DecommissionNode", specReporters)
 }
 
 var _ = BeforeSuite(func() {
@@ -47,17 +53,17 @@ var _ = Describe("{DecommissionNode}", func() {
 			})
 
 			Step(fmt.Sprintf("decommission the node"), func() {
-				err := Inst().S.DecommissionNode(nodeToDecommission)
+				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission)
 				Expect(err).NotTo(HaveOccurred())
 				err = Inst().V.DecommissionNode(nodeToDecommission)
 				Expect(err).NotTo(HaveOccurred())
 				Step(fmt.Sprintf("check if the node was decommissioned"), func() {
 					t := func() (interface{}, bool, error) {
-						status, err := Inst().V.DecommissionNodeStatus(nodeToDecommission)
+						status, err := Inst().V.GetNodeStatus(nodeToDecommission)
 						if err != nil {
-							return false, false, fmt.Errorf("Not able to check node decomission. Cause: %v", err)
+							return false, false, err
 						}
-						if len(status) == 0 {
+						if *status == api.Status_STATUS_NONE {
 							return true, false, nil
 						}
 						return false, true, fmt.Errorf("Node %s not decomissioned yet", nodeToDecommission.Name)
@@ -77,7 +83,6 @@ var _ = Describe("{DecommissionNode}", func() {
 				TearDownContext(ctx, opts)
 			}
 		})
-
 
 	})
 })

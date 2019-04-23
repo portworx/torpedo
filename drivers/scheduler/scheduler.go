@@ -119,8 +119,8 @@ type Driver interface {
 	// RescanSpecs specified in specDir
 	RescanSpecs(specDir string) error
 
-	// DecommissionNode decommission the given node from the cluster
-	DecommissionNode(n node.Node) error
+	// PrepareNodeToDecommission prepares a given node for decommissioning
+	PrepareNodeToDecommission(n node.Node) error
 
 	// IsScalable check if a given spec is scalable or not
 	IsScalable(spec interface{}) bool

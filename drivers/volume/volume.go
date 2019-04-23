@@ -3,6 +3,7 @@ package volume
 import (
 	"fmt"
 
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 )
@@ -105,11 +106,11 @@ type Driver interface {
 	// GetClusterPairingInfo returns cluster pairing information from remote cluster
 	GetClusterPairingInfo() (map[string]string, error)
 
-	// DecommissionNode decommission the given node from the cluster
+	// DecommissionNode decommissions the given node from the cluster
 	DecommissionNode(n node.Node) error
 
-	// DecommissionNodeStatus return the status of decommission of the given node
-	DecommissionNodeStatus(n node.Node) (string, error)
+	// GetNodeStatus returns the status of a given node
+	GetNodeStatus(n node.Node) (*api.Status, error)
 
 	// GetReplicaSetNodes returns the replica sets for a given volume
 	GetReplicaSetNodes(vol *Volume) ([]string, error)
