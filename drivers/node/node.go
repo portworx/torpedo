@@ -13,9 +13,6 @@ type Type string
 // FindType identifies the type of find command
 type FindType string
 
-// PlatformType identifies the type of platform being used i.e, generic, iks, kops, etc.
-type PlatformType string
-
 const (
 	// TypeMaster identifies a cluster node that is a master/manager
 	TypeMaster Type = "Master"
@@ -30,13 +27,6 @@ const (
 	Directory FindType = "d"
 )
 
-const (
-	// PlatformGeneric identifies a generic node
-	PlatformGeneric PlatformType = "generic"
-	// PlatformIKS identifies a IKS node
-	PlatformIKS PlatformType = "IKS"
-)
-
 // Node encapsulates a node in the cluster
 type Node struct {
 	uuid                     string
@@ -46,7 +36,6 @@ type Node struct {
 	UsableAddr               string
 	Type                     Type
 	IsStorageDriverInstalled bool
-	PlatformType             PlatformType
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options

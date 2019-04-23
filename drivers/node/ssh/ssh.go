@@ -32,9 +32,9 @@ const (
 )
 
 const (
-	iksDaemonSetLabel   = "debug"
-	iksDefaultNamespace = "kube-system"
-	defaultSpecsRoot    = "../drivers/scheduler/k8s/specs"
+	execPodDaemonSetLabel   = "debug"
+	execPodDefaultNamespace = "kube-system"
+	defaultSpecsRoot        = "../drivers/scheduler/k8s/specs"
 )
 
 const (
@@ -74,18 +74,18 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	return pubkey, nil
 }
 
+func useSSH() bool {
+	return len(os.Getenv("TORPEDO_SSH_KEY")) > 0 || len(os.Getenv("TORPEDO_SSH_PASSWORD")) > 0
+}
+
 func (s *ssh) Init() error {
 
 	nodes := node.GetWorkerNodes()
 	var err error
-
-	switch nodes[0].PlatformType {
-	case node.PlatformIKS:
-		err = s.initIKS()
-	case node.PlatformGeneric:
-		fallthrough
-	default:
+	if useSSH() {
 		err = s.initSSH()
+	} else {
+		err = s.initExecPod()
 	}
 
 	if err != nil {
@@ -107,18 +107,18 @@ func (s *ssh) Init() error {
 	return nil
 }
 
-func (s *ssh) initIKS() error {
+func (s *ssh) initExecPod() error {
 	var ds *v1beta2.DaemonSet
 	var err error
 	k8sops := k8s.Instance()
-	if ds, err = k8sops.GetDaemonSet(iksDaemonSetLabel, iksDefaultNamespace); ds == nil {
+	if ds, err = k8sops.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
 		logrus.Infof("error: %s", err)
 		s, err := scheduler.Get(k8s_driver.SchedName)
-		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, iksDaemonSetLabel), s)
+		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, execPodDaemonSetLabel), s)
 		if err != nil {
 			return fmt.Errorf("Error while loading debug daemonset spec file. Err: %s", err)
 		}
-		dsSpec, err := specFactory.Get(iksDaemonSetLabel)
+		dsSpec, err := specFactory.Get(execPodDaemonSetLabel)
 		if err != nil {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
@@ -187,13 +187,10 @@ func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
 	var cmd string
 
-	switch n.PlatformType {
-	case node.PlatformIKS:
-		cmd = "cat /etc/hostname"
-	case node.PlatformGeneric:
-		fallthrough
-	default:
+	if useSSH() {
 		cmd = "hostname"
+	} else {
+		cmd = "cat /etc/hostname"
 	}
 
 	if _, err = s.doCmd(n, options, cmd, false); err != nil {
@@ -364,27 +361,24 @@ func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 }
 
 func (s *ssh) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
-	switch n.PlatformType {
-	case node.PlatformIKS:
-		return s.doCmdIks(n, options, cmd, ignoreErr)
-	case node.PlatformGeneric:
-		fallthrough
-	default:
+
+	if useSSH() {
 		return s.doCmdSSH(n, options, cmd, ignoreErr)
 	}
+	return s.doCmdUsingPod(n, options, cmd, ignoreErr)
 }
 
-func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
-	cmds:= []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
+func (s *ssh) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
+	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
 
-	allPodsForNode, err := k8s.Instance().GetPodsByNode(n.Name, iksDefaultNamespace)
+	allPodsForNode, err := k8s.Instance().GetPodsByNode(n.Name, execPodDefaultNamespace)
 	if err != nil {
 		logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 		return "", err
 	}
 	var debugPod *v1.Pod
 	for _, pod := range allPodsForNode.Items {
-		if pod.Labels["name"] == iksDaemonSetLabel && k8s.Instance().IsPodReady(pod) {
+		if pod.Labels["name"] == execPodDaemonSetLabel && k8s.Instance().IsPodReady(pod) {
 			debugPod = &pod
 			break
 		}
@@ -417,7 +411,7 @@ func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ign
 
 func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 	var out string
-  var sterr string
+	var sterr string
 	connection, err := s.getConnection(n, options)
 	if err != nil {
 		return "", &node.ErrFailedToRunCommand{

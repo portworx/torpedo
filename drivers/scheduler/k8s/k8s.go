@@ -259,22 +259,10 @@ func (k *k8s) parseK8SNode(n v1.Node) node.Node {
 	}
 
 	return node.Node{
-		Name:         n.Name,
-		Addresses:    k.getAddressesForNode(n),
-		Type:         nodeType,
-		PlatformType: getPlatform(n),
+		Name:      n.Name,
+		Addresses: k.getAddressesForNode(n),
+		Type:      nodeType,
 	}
-}
-
-func getPlatform(n v1.Node) node.PlatformType {
-	if strings.Contains(n.Status.NodeInfo.KubeletVersion, "IKS") {
-		return node.PlatformIKS
-	}
-	return node.PlatformGeneric
-}
-
-func getAppNamespaceName(app *spec.AppSpec, instanceID string) string {
-	return fmt.Sprintf("%s-%s", app.Key, instanceID)
 }
 
 func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
@@ -744,7 +732,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
 			if err := k8sOps.ValidateDeployment(obj, timeout, retryInterval); err != nil {
-				return &scheduler.ErrFailedToValidateApp {
+				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate Deployment: %v. Err: %v", obj.Name, err),
 				}
