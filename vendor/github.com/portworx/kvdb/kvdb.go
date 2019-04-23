@@ -86,6 +86,8 @@ const (
 	MemVersion1 = "memv1"
 	// BoltVersion1 key
 	BoltVersion1 = "boltv1"
+	// ZookeeperVersion1 key
+	ZookeeperVersion1 = "zookeeperv1"
 )
 
 const (
@@ -110,6 +112,8 @@ var (
 	ErrIllegal = errors.New("Illegal operation")
 	// ErrValueMismatch raised if existing KVDB value mismatches with user provided value
 	ErrValueMismatch = errors.New("Value mismatch")
+	// ErrEmptyValue raised if the value is empty
+	ErrEmptyValue = errors.New("Value cannot be empty")
 	// ErrModified raised during an atomic operation if the index does not match the one in the store
 	ErrModified = errors.New("Key Index mismatch")
 	// ErrSetTTLFailed raised if unable to set ttl value for a key create/put/update action
@@ -256,8 +260,11 @@ type Kvdb interface {
 	// WatchTree is the same as WatchKey except that watchCB is triggered
 	// for updates on all keys that share the prefix.
 	WatchTree(prefix string, waitIndex uint64, opaque interface{}, watchCB WatchCB) error
-	// Snapshot returns a kvdb snapshot and its version.
-	Snapshot(prefix string) (Kvdb, uint64, error)
+	// Snapshot returns a kvdb snapshot of the provided list of prefixes and the last updated index.
+	// If no prefixes are provided, then the whole kvdb tree is snapshotted and could be potentially an expensive operation
+	// If consistent is true, then snapshot is going to return all the updates happening during the snapshot operation and the last
+	// updated index from the snapshot
+	Snapshot(prefixes []string, consistent bool) (Kvdb, uint64, error)
 	// SnapPut records the key value pair including the index.
 	SnapPut(kvp *KVPair) (*KVPair, error)
 	// Lock specfied key and associate a lockerID with it, probably to identify
@@ -350,6 +357,7 @@ type MemberInfo struct {
 	Leader     bool
 	DbSize     int64
 	IsHealthy  bool
+	ID         string
 }
 
 // Controller interface provides APIs to manage Kvdb Cluster and Kvdb Clients.
@@ -362,7 +370,11 @@ type Controller interface {
 
 	// RemoveMember removes a member from an existing kvdb cluster
 	// Returns: error if it fails to remove a member
-	RemoveMember(nodeID string) error
+	RemoveMember(nodeName, nodeIP string) error
+
+	// UpdateMember updates the IP for the given node in an existing kvdb cluster
+	// Returns: map of nodeID to peerUrls of all members from the existing cluster
+	UpdateMember(nodeIP, nodePeerPort, nodeName string) (map[string][]string, error)
 
 	// ListMembers enumerates the members of the kvdb cluster
 	// Returns: the nodeID  to memberInfo mappings of all the members
@@ -373,4 +385,8 @@ type Controller interface {
 
 	// GetEndpoints returns the kvdb endpoints for the client
 	GetEndpoints() []string
+
+	// Defragment defrags the underlying database for the given endpoint
+	// with a timeout specified in seconds
+	Defragment(endpoint string, timeout int) error
 }

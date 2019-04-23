@@ -28,8 +28,12 @@ import (
 type StorkV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ClusterPairsGetter
+	GroupVolumeSnapshotsGetter
 	MigrationsGetter
+	MigrationSchedulesGetter
 	RulesGetter
+	SchedulePoliciesGetter
+	StorageClustersGetter
 }
 
 // StorkV1alpha1Client is used to interact with features provided by the stork.libopenstorage.org group.
@@ -37,16 +41,32 @@ type StorkV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *StorkV1alpha1Client) ClusterPairs() ClusterPairInterface {
-	return newClusterPairs(c)
+func (c *StorkV1alpha1Client) ClusterPairs(namespace string) ClusterPairInterface {
+	return newClusterPairs(c, namespace)
 }
 
-func (c *StorkV1alpha1Client) Migrations() MigrationInterface {
-	return newMigrations(c)
+func (c *StorkV1alpha1Client) GroupVolumeSnapshots(namespace string) GroupVolumeSnapshotInterface {
+	return newGroupVolumeSnapshots(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) Migrations(namespace string) MigrationInterface {
+	return newMigrations(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) MigrationSchedules(namespace string) MigrationScheduleInterface {
+	return newMigrationSchedules(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) Rules(namespace string) RuleInterface {
 	return newRules(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) SchedulePolicies() SchedulePolicyInterface {
+	return newSchedulePolicies(c)
+}
+
+func (c *StorkV1alpha1Client) StorageClusters(namespace string) StorageClusterInterface {
+	return newStorageClusters(c, namespace)
 }
 
 // NewForConfig creates a new StorkV1alpha1Client for the given config.

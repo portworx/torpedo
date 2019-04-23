@@ -15,10 +15,12 @@ import (
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkclientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	"github.com/portworx/sched-ops/task"
+	talisman_v1beta1 "github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
+	talismanclientset "github.com/portworx/talisman/pkg/client/clientset/versioned"
 	"github.com/sirupsen/logrus"
 	apps_api "k8s.io/api/apps/v1beta2"
 	batch_v1 "k8s.io/api/batch/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	rbac_v1 "k8s.io/api/rbac/v1"
 	storage_api "k8s.io/api/storage/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -26,13 +28,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -72,6 +73,7 @@ type Ops interface {
 	StorageClassOps
 	PersistentVolumeClaimOps
 	SnapshotOps
+	GroupSnapshotOps
 	RuleOps
 	SecretOps
 	ConfigMapOps
@@ -80,7 +82,14 @@ type Ops interface {
 	ClusterPairOps
 	MigrationOps
 	ObjectOps
+	SchedulePolicyOps
+	VolumePlacementStrategyOps
+	GetVersion() (*version.Info, error)
 	SetConfig(config *rest.Config)
+	SetClient(client kubernetes.Interface, snapClient rest.Interface, storkClient storkclientset.Interface, apiExtensionClient apiextensionsclient.Interface, dynamicInterface dynamic.Interface)
+
+	// private methods for unit tests
+	privateMethods
 }
 
 // EventOps is an interface to put and get k8s events
@@ -93,6 +102,8 @@ type EventOps interface {
 
 // NamespaceOps is an interface to perform namespace operations
 type NamespaceOps interface {
+	// ListNamespaces returns all the namespaces
+	ListNamespaces() (*v1.NamespaceList, error)
 	// GetNamespace returns a namespace object for given name
 	GetNamespace(name string) (*v1.Namespace, error)
 	// CreateNamespace creates a namespace with given name and metadata
@@ -122,7 +133,7 @@ type NodeOps interface {
 	// RemoveLabelOnNode removes the label with key on given node
 	RemoveLabelOnNode(string, string) error
 	// WatchNode sets up a watcher that listens for the changes on Node.
-	WatchNode(node *v1.Node, fn NodeWatchFunc) error
+	WatchNode(node *v1.Node, fn WatchFunc) error
 	// CordonNode cordons the given node
 	CordonNode(nodeName string, timeout, retryInterval time.Duration) error
 	// UnCordonNode uncordons the given node
@@ -148,6 +159,8 @@ type ServiceOps interface {
 
 // StatefulSetOps is an interface to perform k8s stateful set operations
 type StatefulSetOps interface {
+	// ListStatefulSets lists all the statefulsets for a given namespace
+	ListStatefulSets(namespace string) (*apps_api.StatefulSetList, error)
 	// GetStatefulSet returns a statefulset for given name and namespace
 	GetStatefulSet(name, namespace string) (*apps_api.StatefulSet, error)
 	// CreateStatefulSet creates the given statefulset
@@ -174,6 +187,8 @@ type StatefulSetOps interface {
 
 // DeploymentOps is an interface to perform k8s deployment operations
 type DeploymentOps interface {
+	// ListDeployments lists all deployments for the given namespace
+	ListDeployments(namespace string) (*apps_api.DeploymentList, error)
 	// GetDeployment returns a deployment for the give name and namespace
 	GetDeployment(name, namespace string) (*apps_api.Deployment, error)
 	// CreateDeployment creates the given deployment
@@ -260,7 +275,7 @@ type PodOps interface {
 	// CreatePod creates the given pod
 	CreatePod(pod *v1.Pod) (*v1.Pod, error)
 	// GetPods returns pods for the given namespace
-	GetPods(string) (*v1.PodList, error)
+	GetPods(string, map[string]string) (*v1.PodList, error)
 	// GetPodsByNode returns all pods in given namespace and given k8s node name.
 	//  If namespace is empty, it will return pods from all namespaces
 	GetPodsByNode(nodeName, namespace string) (*v1.PodList, error)
@@ -376,6 +391,25 @@ type SnapshotOps interface {
 	ValidateSnapshotData(name string, retry bool, timeout, retryInterval time.Duration) error
 }
 
+// GroupSnapshotOps is an interface to perform k8s GroupVolumeSnapshot operations
+type GroupSnapshotOps interface {
+	// GetGroupSnapshot returns the group snapshot for the given name and namespace
+	GetGroupSnapshot(name, namespace string) (*v1alpha1.GroupVolumeSnapshot, error)
+	// ListGroupSnapshots lists all group snapshots for the given namespace
+	ListGroupSnapshots(namespace string) (*v1alpha1.GroupVolumeSnapshotList, error)
+	// CreateGroupSnapshot creates the given group snapshot
+	CreateGroupSnapshot(*v1alpha1.GroupVolumeSnapshot) (*v1alpha1.GroupVolumeSnapshot, error)
+	// UpdateGroupSnapshot updates the given group snapshot
+	UpdateGroupSnapshot(*v1alpha1.GroupVolumeSnapshot) (*v1alpha1.GroupVolumeSnapshot, error)
+	// DeleteGroupSnapshot deletes the group snapshot with the given name and namespace
+	DeleteGroupSnapshot(name, namespace string) error
+	// ValidateGroupSnapshot checks if the group snapshot with given name and namespace is in ready state
+	//  If retry is true, the validation will be retried with given timeout and retry internal
+	ValidateGroupSnapshot(name, namespace string, retry bool, timeout, retryInterval time.Duration) error
+	// GetSnapshotsForGroupSnapshot returns all child snapshots for the group snapshot
+	GetSnapshotsForGroupSnapshot(name, namespace string) ([]*snap_v1.VolumeSnapshot, error)
+}
+
 // RuleOps is an interface to perform operations for k8s stork rule
 type RuleOps interface {
 	// GetRule fetches the given stork rule
@@ -410,6 +444,8 @@ type ConfigMapOps interface {
 	DeleteConfigMap(name, namespace string) error
 	// UpdateConfigMap updates the given config map object
 	UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
+	// WatchConfigMap sets up a watcher that listens for changes on the config map
+	WatchConfigMap(configMap *v1.ConfigMap, fn WatchFunc) error
 }
 
 // CRDOps is an interface to perfrom k8s Customer Resource operations
@@ -423,31 +459,49 @@ type CRDOps interface {
 // ClusterPairOps is an interface to perfrom k8s ClusterPair operations
 type ClusterPairOps interface {
 	// CreateClusterPair creates the ClusterPair
-	CreateClusterPair(*v1alpha1.ClusterPair) error
+	CreateClusterPair(*v1alpha1.ClusterPair) (*v1alpha1.ClusterPair, error)
 	// GetClusterPair gets the ClusterPair
-	GetClusterPair(string) (*v1alpha1.ClusterPair, error)
+	GetClusterPair(string, string) (*v1alpha1.ClusterPair, error)
 	// ListClusterPairs gets all the ClusterPairs
-	ListClusterPairs() (*v1alpha1.ClusterPairList, error)
+	ListClusterPairs(string) (*v1alpha1.ClusterPairList, error)
+	// UpdateClusterPair updates the ClusterPair
+	UpdateClusterPair(*v1alpha1.ClusterPair) (*v1alpha1.ClusterPair, error)
 	// DeleteClusterPair deletes the ClusterPair
-	DeleteClusterPair(string) error
+	DeleteClusterPair(string, string) error
 	// ValidateClusterPair validates clusterpair status
-	ValidateClusterPair(name string, timeout, retryInterval time.Duration) error
+	ValidateClusterPair(string, string, time.Duration, time.Duration) error
 }
 
 // MigrationOps is an interface to perfrom k8s Migration operations
 type MigrationOps interface {
 	// CreateMigration creates the Migration
-	CreateMigration(*v1alpha1.Migration) error
+	CreateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
 	// GetMigration gets the Migration
-	GetMigration(string) (*v1alpha1.Migration, error)
-	// ListMigrations lists all the Migration
-	ListMigrations() (*v1alpha1.MigrationList, error)
+	GetMigration(string, string) (*v1alpha1.Migration, error)
+	// ListMigrations lists all the Migrations
+	ListMigrations(string) (*v1alpha1.MigrationList, error)
 	// UpdateMigration updates the Migration
 	UpdateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
 	// DeleteMigration deletes the Migration
-	DeleteMigration(string) error
+	DeleteMigration(string, string) error
 	// ValidateMigration validate the Migration status
-	ValidateMigration(name string, timeout, retryInterval time.Duration) error
+	ValidateMigration(string, string, time.Duration, time.Duration) error
+	// GetMigrationSchedule gets the MigrationSchedule
+	GetMigrationSchedule(string, string) (*v1alpha1.MigrationSchedule, error)
+	// CreateMigrationSchedule creates a MigrationSchedule
+	CreateMigrationSchedule(*v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error)
+	// UpdateMigrationSchedule updates the MigrationSchedule
+	UpdateMigrationSchedule(*v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error)
+	// ListMigrationSchedules lists all the MigrationSchedules
+	ListMigrationSchedules(string) (*v1alpha1.MigrationScheduleList, error)
+	// DeleteMigrationSchedule deletes the MigrationSchedule
+	DeleteMigrationSchedule(string, string) error
+	// ValidateMigrationSchedule validates the given MigrationSchedule. It checks the status of each of
+	// the migrations triggered for this schedule and returns a map of successfull migrations. The key of the
+	// map will be the schedule type and value will be list of migrations for that schedule type.
+	// The caller is expected to validate if the returned map has all migrations expected at that point of time
+	ValidateMigrationSchedule(string, string, time.Duration, time.Duration) (
+		map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledMigrationStatus, error)
 }
 
 // ObjectOps is an interface to perform generic Object operations
@@ -458,10 +512,45 @@ type ObjectOps interface {
 	UpdateObject(object runtime.Object) (runtime.Object, error)
 }
 
+// SchedulePolicyOps is an interface to manage SchedulePolicy Object
+type SchedulePolicyOps interface {
+	// CreateSchedulePolicy creates a SchedulePolicy
+	CreateSchedulePolicy(*v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error)
+	// GetSchedulePolicy gets the SchedulePolicy
+	GetSchedulePolicy(string) (*v1alpha1.SchedulePolicy, error)
+	// ListSchedulePolicies lists all the SchedulePolicies
+	ListSchedulePolicies() (*v1alpha1.SchedulePolicyList, error)
+	// UpdateSchedulePolicy updates the SchedulePolicy
+	UpdateSchedulePolicy(*v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error)
+	// DeleteSchedulePolicy deletes the SchedulePolicy
+	DeleteSchedulePolicy(string) error
+}
+
+// VolumePlacementStrategyOps is an interface to perform CRUD volume placememt strategy ops
+type VolumePlacementStrategyOps interface {
+	// CreateVolumePlacementStrategy creates a new volume placement strategy
+	CreateVolumePlacementStrategy(spec *talisman_v1beta1.VolumePlacementStrategy) (*talisman_v1beta1.VolumePlacementStrategy, error)
+	// UpdateVolumePlacementStrategy updates an existing volume placement strategy
+	UpdateVolumePlacementStrategy(spec *talisman_v1beta1.VolumePlacementStrategy) (*talisman_v1beta1.VolumePlacementStrategy, error)
+	// ListVolumePlacementStrategies lists all volume placement strategies
+	ListVolumePlacementStrategies() (*talisman_v1beta1.VolumePlacementStrategyList, error)
+	// DeleteVolumePlacementStrategy deletes the volume placement strategy with given name
+	DeleteVolumePlacementStrategy(name string) error
+	// GetVolumePlacementStrategy returns the volume placememt strategy with given name
+	GetVolumePlacementStrategy(name string) (*talisman_v1beta1.VolumePlacementStrategy, error)
+}
+
+type privateMethods interface {
+	initK8sClient() error
+}
+
 // CustomResource is for creating a Kubernetes TPR/CRD
 type CustomResource struct {
 	// Name of the custom resource
 	Name string
+
+	// ShortNames are short names for the resource.  It must be all lowercase.
+	ShortNames []string
 
 	// Plural of the custom resource in plural
 	Plural string
@@ -485,9 +574,10 @@ var (
 )
 
 type k8sOps struct {
-	client             *kubernetes.Clientset
-	snapClient         *rest.RESTClient
+	client             kubernetes.Interface
+	snapClient         rest.Interface
 	storkClient        storkclientset.Interface
+	talismanClient     talismanclientset.Interface
 	apiExtensionClient apiextensionsclient.Interface
 	config             *rest.Config
 	dynamicInterface   dynamic.Interface
@@ -518,6 +608,21 @@ func NewInstance(config string) (Ops, error) {
 	return newInstance, nil
 }
 
+// Set the k8s clients
+func (k *k8sOps) SetClient(
+	client kubernetes.Interface,
+	snapClient rest.Interface,
+	storkClient storkclientset.Interface,
+	apiExtensionClient apiextensionsclient.Interface,
+	dynamicInterface dynamic.Interface) {
+
+	k.client = client
+	k.snapClient = snapClient
+	k.storkClient = storkClient
+	k.apiExtensionClient = apiExtensionClient
+	k.dynamicInterface = dynamicInterface
+}
+
 // Initialize the k8s client if uninitialized
 func (k *k8sOps) initK8sClient() error {
 	if k.client == nil {
@@ -527,7 +632,7 @@ func (k *k8sOps) initK8sClient() error {
 		}
 
 		// Quick validation if client connection works
-		_, err = k.client.ServerVersion()
+		_, err = k.client.Discovery().ServerVersion()
 		if err != nil {
 			return fmt.Errorf("failed to connect to k8s server: %s", err)
 		}
@@ -536,7 +641,23 @@ func (k *k8sOps) initK8sClient() error {
 	return nil
 }
 
+func (k *k8sOps) GetVersion() (*version.Info, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.Discovery().ServerVersion()
+}
+
 // Namespace APIs - BEGIN
+
+func (k *k8sOps) ListNamespaces() (*v1.NamespaceList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().Namespaces().List(meta_v1.ListOptions{})
+}
 
 func (k *k8sOps) GetNamespace(name string) (*v1.Namespace, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -751,39 +872,46 @@ func (k *k8sOps) RemoveLabelOnNode(name, key string) error {
 	return err
 }
 
-// NodeWatchFunc is a callback provided to the WatchNode function
-// which is invoked when the v1.Node object is changed.
-type NodeWatchFunc func(node *v1.Node) error
+// WatchFunc is a callback provided to the Watch functions
+// which is invoked when the given object is changed.
+type WatchFunc func(object runtime.Object) error
 
-// handleWatch is internal function that handles the Node-watch.  On channel shutdown (ie. stop watch),
+// handleWatch is internal function that handles the watch.  On channel shutdown (ie. stop watch),
 // it'll attempt to reestablish its watch function.
-func (k *k8sOps) handleWatch(watchInterface watch.Interface, node *v1.Node, watchNodeFn NodeWatchFunc) {
+func (k *k8sOps) handleWatch(watchInterface watch.Interface, object runtime.Object, fn WatchFunc) {
 	for {
 		select {
 		case event, more := <-watchInterface.ResultChan():
 			if !more {
-				logrus.Debug("Kubernetes NodeWatch closed (attempting to reestablish)")
+				logrus.Debug("Kubernetes watch closed (attempting to re-establish)")
 
 				t := func() (interface{}, bool, error) {
-					err := k.WatchNode(node, watchNodeFn)
+					var err error
+					if node, ok := object.(*v1.Node); ok {
+						err = k.WatchNode(node, fn)
+					} else if cm, ok := object.(*v1.ConfigMap); ok {
+						err = k.WatchConfigMap(cm, fn)
+					} else {
+						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
+					}
+
 					return "", true, err
 				}
+
 				if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
-					logrus.WithError(err).Error("Could not reestablish the NodeWatch")
+					logrus.WithError(err).Error("Could not re-establish the watch")
 				} else {
-					logrus.Debug("NodeWatch reestablished")
+					logrus.Debug("watch re-established")
 				}
 				return
 			}
-			if k8sNode, ok := event.Object.(*v1.Node); ok {
-				// CHECKME: handle errors?
-				watchNodeFn(k8sNode)
-			}
+
+			fn(event.Object)
 		}
 	}
 }
 
-func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn NodeWatchFunc) error {
+func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn WatchFunc) error {
 	if node == nil {
 		return fmt.Errorf("no node given to watch")
 	}
@@ -792,22 +920,8 @@ func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn NodeWatchFunc) error {
 		return err
 	}
 
-	nodeHostname, has := node.GetLabels()[hostnameKey]
-	if !has || nodeHostname == "" {
-		return fmt.Errorf("no hostname label")
-	}
-
-	requirement, err := labels.NewRequirement(
-		hostnameKey,
-		selection.DoubleEquals,
-		[]string{nodeHostname},
-	)
-	if err != nil {
-		return fmt.Errorf("Could not create Label requirement: %s", err)
-	}
-
 	listOptions := meta_v1.ListOptions{
-		LabelSelector: requirement.String(),
+		FieldSelector: fields.OneTermEqualSelector("metadata.name", node.Name).String(),
 		Watch:         true,
 	}
 
@@ -984,7 +1098,7 @@ func (k *k8sOps) RunCommandInPod(cmds []string, podName, containerName, namespac
 	})
 
 	if err != nil {
-		return execErr.String(), fmt.Errorf("could not execute: %v", err)
+		return execErr.String(), fmt.Errorf("could not execute: %v: %v %v", err, execErr.String(), execOut.String())
 	}
 
 	if execErr.Len() > 0 {
@@ -1062,6 +1176,14 @@ func (k *k8sOps) ValidateDeletedService(svcName string, svcNS string) error {
 // Service APIs - END
 
 // Deployment APIs - BEGIN
+
+func (k *k8sOps) ListDeployments(namespace string) (*apps_api.DeploymentList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.appsClient().Deployments(namespace).List(meta_v1.ListOptions{})
+}
 
 func (k *k8sOps) GetDeployment(name, namespace string) (*apps_api.Deployment, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -1522,6 +1644,14 @@ func (k *k8sOps) ValidateJob(name, namespace string, timeout time.Duration) erro
 
 // StatefulSet APIs - BEGIN
 
+func (k *k8sOps) ListStatefulSets(namespace string) (*apps_api.StatefulSetList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.appsClient().StatefulSets(namespace).List(meta_v1.ListOptions{})
+}
+
 func (k *k8sOps) GetStatefulSet(name, namespace string) (*apps_api.StatefulSet, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -1576,7 +1706,7 @@ func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet, timeout 
 			return "", true, err
 		}
 
-		pods, err := k.GetStatefulSetPods(statefulset)
+		pods, err := k.GetStatefulSetPods(sset)
 		if err != nil || pods == nil {
 			return "", true, &ErrAppNotReady{
 				ID:    sset.Name,
@@ -1906,8 +2036,10 @@ func (k *k8sOps) CreatePod(pod *v1.Pod) (*v1.Pod, error) {
 	return k.client.Core().Pods(pod.Namespace).Create(pod)
 }
 
-func (k *k8sOps) GetPods(namespace string) (*v1.PodList, error) {
-	return k.getPodsWithListOptions(namespace, meta_v1.ListOptions{})
+func (k *k8sOps) GetPods(namespace string, labelSelector map[string]string) (*v1.PodList, error) {
+	return k.getPodsWithListOptions(namespace, meta_v1.ListOptions{
+		LabelSelector: mapToCSV(labelSelector),
+	})
 }
 
 func (k *k8sOps) GetPodsByNode(nodeName, namespace string) (*v1.PodList, error) {
@@ -1923,7 +2055,7 @@ func (k *k8sOps) GetPodsByNode(nodeName, namespace string) (*v1.PodList, error) 
 }
 
 func (k *k8sOps) GetPodsByOwner(ownerUID types.UID, namespace string) ([]v1.Pod, error) {
-	pods, err := k.GetPods(namespace)
+	pods, err := k.GetPods(namespace, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2058,7 +2190,7 @@ func (k *k8sOps) GetPodByName(podName string, namespace string) (*v1.Pod, error)
 }
 
 func (k *k8sOps) GetPodByUID(uid types.UID, namespace string) (*v1.Pod, error) {
-	pods, err := k.GetPods(namespace)
+	pods, err := k.GetPods(namespace, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2103,6 +2235,12 @@ func (k *k8sOps) IsPodReady(pod v1.Pod) bool {
 	}
 
 	for _, c := range pod.Status.ContainerStatuses {
+		if c.State.Terminated != nil &&
+			c.State.Terminated.ExitCode == 0 &&
+			c.State.Terminated.Reason == "Completed" {
+			continue // container has exited successfully
+		}
+
 		if c.State.Running == nil {
 			return false
 		}
@@ -2641,6 +2779,145 @@ func (k *k8sOps) DeleteSnapshotData(name string) error {
 
 // Snapshot APIs - END
 
+// GroupSnapshot APIs - BEGIN
+
+func (k *k8sOps) GetGroupSnapshot(name, namespace string) (*v1alpha1.GroupVolumeSnapshot, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().GroupVolumeSnapshots(namespace).Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListGroupSnapshots(namespace string) (*v1alpha1.GroupVolumeSnapshotList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().GroupVolumeSnapshots(namespace).List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) CreateGroupSnapshot(snap *v1alpha1.GroupVolumeSnapshot) (*v1alpha1.GroupVolumeSnapshot, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().GroupVolumeSnapshots(snap.Namespace).Create(snap)
+}
+
+func (k *k8sOps) UpdateGroupSnapshot(snap *v1alpha1.GroupVolumeSnapshot) (*v1alpha1.GroupVolumeSnapshot, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().GroupVolumeSnapshots(snap.Namespace).Update(snap)
+}
+
+func (k *k8sOps) DeleteGroupSnapshot(name, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.storkClient.Stork().GroupVolumeSnapshots(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) ValidateGroupSnapshot(name, namespace string, retry bool, timeout, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		snap, err := k.GetGroupSnapshot(name, namespace)
+		if err != nil {
+			return "", true, err
+		}
+
+		if len(snap.Status.VolumeSnapshots) == 0 {
+			return "", true, &ErrSnapshotNotReady{
+				ID:    name,
+				Cause: fmt.Sprintf("group snapshot has 0 child snapshots yet"),
+			}
+		}
+
+		if snap.Status.Stage == v1alpha1.GroupSnapshotStageFinal {
+			if snap.Status.Status == v1alpha1.GroupSnapshotSuccessful {
+				// Perform extra check that all child snapshots are also ready
+				notDoneChildSnaps := make([]string, 0)
+				for _, childSnap := range snap.Status.VolumeSnapshots {
+					conditions := childSnap.Conditions
+					if len(conditions) == 0 {
+						notDoneChildSnaps = append(notDoneChildSnaps, childSnap.VolumeSnapshotName)
+						continue
+					}
+
+					lastCondition := conditions[0]
+					if lastCondition.Status != v1.ConditionTrue || lastCondition.Type != snap_v1.VolumeSnapshotConditionReady {
+						notDoneChildSnaps = append(notDoneChildSnaps, childSnap.VolumeSnapshotName)
+						continue
+					}
+				}
+
+				if len(notDoneChildSnaps) > 0 {
+					return "", false, &ErrSnapshotFailed{
+						ID: name,
+						Cause: fmt.Sprintf("group snapshot is marked as successfull "+
+							" but following child volumesnapshots are in pending or error state: %s", notDoneChildSnaps),
+					}
+				}
+
+				return "", false, nil
+			}
+
+			if snap.Status.Status == v1alpha1.GroupSnapshotFailed {
+				return "", false, &ErrSnapshotFailed{
+					ID:    name,
+					Cause: fmt.Sprintf("group snapshot is in failed state"),
+				}
+			}
+		}
+
+		return "", true, &ErrSnapshotNotReady{
+			ID:    name,
+			Cause: fmt.Sprintf("stage: %s status: %s", snap.Status.Stage, snap.Status.Status),
+		}
+	}
+
+	if retry {
+		if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+			return err
+		}
+	} else {
+		if _, _, err := t(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (k *k8sOps) GetSnapshotsForGroupSnapshot(name, namespace string) ([]*snap_v1.VolumeSnapshot, error) {
+	snap, err := k.GetGroupSnapshot(name, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(snap.Status.VolumeSnapshots) == 0 {
+		return nil, fmt.Errorf("group snapshot: [%s] %s does not have any volume snapshots", namespace, name)
+	}
+
+	snapshots := make([]*snap_v1.VolumeSnapshot, 0)
+	for _, snapStatus := range snap.Status.VolumeSnapshots {
+		snap, err := k.GetSnapshot(snapStatus.VolumeSnapshotName, namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		snapshots = append(snapshots, snap)
+	}
+
+	return snapshots, nil
+}
+
+// GroupSnapshot APIs - END
+
 // Rule APIs - BEGIN
 func (k *k8sOps) GetRule(name, namespace string) (*v1alpha1.Rule, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -2785,50 +3062,78 @@ func (k *k8sOps) UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
 	return k.client.CoreV1().ConfigMaps(ns).Update(configMap)
 }
 
+func (k *k8sOps) WatchConfigMap(configMap *v1.ConfigMap, fn WatchFunc) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	listOptions := meta_v1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector("metadata.name", configMap.Name).String(),
+		Watch:         true,
+	}
+
+	watchInterface, err := k.client.Core().ConfigMaps(configMap.Namespace).Watch(listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for config maps")
+		return err
+	}
+
+	// fire off watch function
+	go k.handleWatch(watchInterface, configMap, fn)
+	return nil
+}
+
 // ConfigMap APIs - END
 
 // ClusterPair APIs - BEGIN
-func (k *k8sOps) GetClusterPair(name string) (*v1alpha1.ClusterPair, error) {
+func (k *k8sOps) GetClusterPair(name string, namespace string) (*v1alpha1.ClusterPair, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
 	}
 
-	return k.storkClient.Stork().ClusterPairs().Get(name, meta_v1.GetOptions{})
+	return k.storkClient.Stork().ClusterPairs(namespace).Get(name, meta_v1.GetOptions{})
 }
 
-func (k *k8sOps) ListClusterPairs() (*v1alpha1.ClusterPairList, error) {
+func (k *k8sOps) ListClusterPairs(namespace string) (*v1alpha1.ClusterPairList, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
 	}
 
-	return k.storkClient.Stork().ClusterPairs().List(meta_v1.ListOptions{})
+	return k.storkClient.Stork().ClusterPairs(namespace).List(meta_v1.ListOptions{})
 }
 
-func (k *k8sOps) CreateClusterPair(pair *v1alpha1.ClusterPair) error {
+func (k *k8sOps) CreateClusterPair(pair *v1alpha1.ClusterPair) (*v1alpha1.ClusterPair, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ClusterPairs(pair.Namespace).Create(pair)
+}
+
+func (k *k8sOps) UpdateClusterPair(pair *v1alpha1.ClusterPair) (*v1alpha1.ClusterPair, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ClusterPairs(pair.Namespace).Update(pair)
+}
+
+func (k *k8sOps) DeleteClusterPair(name string, namespace string) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 
-	_, err := k.storkClient.Stork().ClusterPairs().Create(pair)
-	return err
-}
-
-func (k *k8sOps) DeleteClusterPair(name string) error {
-	if err := k.initK8sClient(); err != nil {
-		return err
-	}
-
-	return k.storkClient.Stork().ClusterPairs().Delete(name, &meta_v1.DeleteOptions{
+	return k.storkClient.Stork().ClusterPairs(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
 
-func (k *k8sOps) ValidateClusterPair(name string, timeout, retryInterval time.Duration) error {
+func (k *k8sOps) ValidateClusterPair(name string, namespace string, timeout, retryInterval time.Duration) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 	t := func() (interface{}, bool, error) {
-		clusterPair, err := k.GetClusterPair(name)
+		clusterPair, err := k.GetClusterPair(name, namespace)
 		if err != nil {
 			return "", true, err
 		}
@@ -2840,14 +3145,14 @@ func (k *k8sOps) ValidateClusterPair(name string, timeout, retryInterval time.Du
 			clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusError {
 			return "", true, &ErrFailedToValidateCustomSpec{
 				Name:  name,
-				Cause: fmt.Sprintf("Storage Status %v \t Schedular Status %v", clusterPair.Status.StorageStatus, clusterPair.Status.SchedulerStatus),
+				Cause: fmt.Sprintf("Storage Status: %v \t Scheduler Status: %v", clusterPair.Status.StorageStatus, clusterPair.Status.SchedulerStatus),
 				Type:  clusterPair,
 			}
 		}
 
 		return "", true, &ErrFailedToValidateCustomSpec{
 			Name:  name,
-			Cause: fmt.Sprintf("Storage Status %v \t Schedular Status %v", clusterPair.Status.StorageStatus, clusterPair.Status.SchedulerStatus),
+			Cause: fmt.Sprintf("Storage Status: %v \t Scheduler Status: %v", clusterPair.Status.StorageStatus, clusterPair.Status.SchedulerStatus),
 			Type:  clusterPair,
 		}
 	}
@@ -2862,37 +3167,36 @@ func (k *k8sOps) ValidateClusterPair(name string, timeout, retryInterval time.Du
 // ClusterPair APIs - END
 
 // Migration APIs - BEGIN
-func (k *k8sOps) GetMigration(name string) (*v1alpha1.Migration, error) {
+func (k *k8sOps) GetMigration(name string, namespace string) (*v1alpha1.Migration, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
 	}
 
-	return k.storkClient.Stork().Migrations().Get(name, meta_v1.GetOptions{})
+	return k.storkClient.Stork().Migrations(namespace).Get(name, meta_v1.GetOptions{})
 }
 
-func (k *k8sOps) ListMigrations() (*v1alpha1.MigrationList, error) {
+func (k *k8sOps) ListMigrations(namespace string) (*v1alpha1.MigrationList, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
 	}
 
-	return k.storkClient.Stork().Migrations().List(meta_v1.ListOptions{})
+	return k.storkClient.Stork().Migrations(namespace).List(meta_v1.ListOptions{})
 }
 
-func (k *k8sOps) CreateMigration(migration *v1alpha1.Migration) error {
+func (k *k8sOps) CreateMigration(migration *v1alpha1.Migration) (*v1alpha1.Migration, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().Migrations(migration.Namespace).Create(migration)
+}
+
+func (k *k8sOps) DeleteMigration(name string, namespace string) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 
-	_, err := k.storkClient.Stork().Migrations().Create(migration)
-	return err
-}
-
-func (k *k8sOps) DeleteMigration(name string) error {
-	if err := k.initK8sClient(); err != nil {
-		return err
-	}
-
-	return k.storkClient.Stork().Migrations().Delete(name, &meta_v1.DeleteOptions{
+	return k.storkClient.Stork().Migrations(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -2902,15 +3206,15 @@ func (k *k8sOps) UpdateMigration(migration *v1alpha1.Migration) (*v1alpha1.Migra
 		return nil, err
 	}
 
-	return k.storkClient.Stork().Migrations().Update(migration)
+	return k.storkClient.Stork().Migrations(migration.Namespace).Update(migration)
 }
 
-func (k *k8sOps) ValidateMigration(name string, timeout, retryInterval time.Duration) error {
+func (k *k8sOps) ValidateMigration(name string, namespace string, timeout, retryInterval time.Duration) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 	t := func() (interface{}, bool, error) {
-		resp, err := k.GetMigration(name)
+		resp, err := k.GetMigration(name, namespace)
 		if err != nil {
 			return "", true, err
 		}
@@ -2918,7 +3222,7 @@ func (k *k8sOps) ValidateMigration(name string, timeout, retryInterval time.Dura
 		if resp.Status.Status == v1alpha1.MigrationStatusSuccessful {
 			return "", false, nil
 		} else if resp.Status.Status == v1alpha1.MigrationStatusFailed {
-			return "", true, &ErrFailedToValidateCustomSpec{
+			return "", false, &ErrFailedToValidateCustomSpec{
 				Name:  name,
 				Cause: fmt.Sprintf("Migration Status %v", resp.Status.Status),
 				Type:  resp,
@@ -2939,7 +3243,175 @@ func (k *k8sOps) ValidateMigration(name string, timeout, retryInterval time.Dura
 	return nil
 }
 
+func (k *k8sOps) GetMigrationSchedule(name string, namespace string) (*v1alpha1.MigrationSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(namespace).Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListMigrationSchedules(namespace string) (*v1alpha1.MigrationScheduleList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(namespace).List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) CreateMigrationSchedule(migrationSchedule *v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(migrationSchedule.Namespace).Create(migrationSchedule)
+}
+
+func (k *k8sOps) UpdateMigrationSchedule(migrationSchedule *v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(migrationSchedule.Namespace).Update(migrationSchedule)
+}
+func (k *k8sOps) DeleteMigrationSchedule(name string, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) ValidateMigrationSchedule(name string, namespace string, timeout, retryInterval time.Duration) (
+	map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledMigrationStatus, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	t := func() (interface{}, bool, error) {
+		resp, err := k.GetMigrationSchedule(name, namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		if len(resp.Status.Items) == 0 {
+			return nil, true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("0 migrations have yet run for the migration schedule"),
+				Type:  resp,
+			}
+		}
+
+		failedMigrations := make([]string, 0)
+		pendingMigrations := make([]string, 0)
+		for _, migrationStatuses := range resp.Status.Items {
+			// The check below assumes that the status will not have a failed migration if the last one succeeded
+			// so just get the last status
+			if len(migrationStatuses) > 0 {
+				status := migrationStatuses[len(migrationStatuses)-1]
+				if status == nil {
+					return nil, true, &ErrFailedToValidateCustomSpec{
+						Name:  name,
+						Cause: "MigrationSchedule has an empty migration in it's most recent status",
+						Type:  resp,
+					}
+				}
+
+				if status.Status == v1alpha1.MigrationStatusSuccessful {
+					continue
+				}
+
+				if status.Status == v1alpha1.MigrationStatusFailed {
+					failedMigrations = append(failedMigrations,
+						fmt.Sprintf("migration: %s failed. status: %v", status.Name, status.Status))
+				} else {
+					pendingMigrations = append(pendingMigrations,
+						fmt.Sprintf("migration: %s is not done. status: %v", status.Name, status.Status))
+				}
+			}
+		}
+
+		if len(failedMigrations) > 0 {
+			return nil, false, &ErrFailedToValidateCustomSpec{
+				Name: name,
+				Cause: fmt.Sprintf("MigrationSchedule failed as one or more migrations have failed. %s",
+					failedMigrations),
+				Type: resp,
+			}
+		}
+
+		if len(pendingMigrations) > 0 {
+			return nil, true, &ErrFailedToValidateCustomSpec{
+				Name: name,
+				Cause: fmt.Sprintf("MigrationSchedule has certain migrations pending: %s",
+					pendingMigrations),
+				Type: resp,
+			}
+		}
+
+		return resp.Status.Items, false, nil
+	}
+
+	ret, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	migrations, ok := ret.(map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledMigrationStatus)
+	if !ok {
+		return nil, fmt.Errorf("invalid type when checking migration schedules: %v", migrations)
+	}
+
+	return migrations, nil
+}
+
 // Migration APIs - END
+
+// SchedulePolicy APIs - BEGIN
+func (k *k8sOps) GetSchedulePolicy(name string) (*v1alpha1.SchedulePolicy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListSchedulePolicies() (*v1alpha1.SchedulePolicyList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) CreateSchedulePolicy(schedulePolicy *v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Create(schedulePolicy)
+}
+
+func (k *k8sOps) DeleteSchedulePolicy(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) UpdateSchedulePolicy(schedulePolicy *v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Update(schedulePolicy)
+}
+
+// SchedulePolicy APIs - END
 
 // Event APIs - BEGIN
 // CreateEvent puts an event into k8s etcd
@@ -2962,6 +3434,10 @@ func (k *k8sOps) ListEvents(namespace string, opts meta_v1.ListOptions) (*v1.Eve
 
 // CRD APIs - BEGIN
 func (k *k8sOps) CreateCRD(resource CustomResource) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
 	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
 	crd := &apiextensionsv1beta1.CustomResourceDefinition{
 		ObjectMeta: meta_v1.ObjectMeta{
@@ -2972,9 +3448,10 @@ func (k *k8sOps) CreateCRD(resource CustomResource) error {
 			Version: resource.Version,
 			Scope:   resource.Scope,
 			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
-				Singular: resource.Name,
-				Plural:   resource.Plural,
-				Kind:     resource.Kind,
+				Singular:   resource.Name,
+				Plural:     resource.Plural,
+				Kind:       resource.Kind,
+				ShortNames: resource.ShortNames,
 			},
 		},
 	}
@@ -2988,6 +3465,10 @@ func (k *k8sOps) CreateCRD(resource CustomResource) error {
 }
 
 func (k *k8sOps) ValidateCRD(resource CustomResource, timeout, retryInterval time.Duration) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
 	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
 	return wait.Poll(timeout, retryInterval, func() (bool, error) {
 		crd, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, meta_v1.GetOptions{})
@@ -3010,6 +3491,47 @@ func (k *k8sOps) ValidateCRD(resource CustomResource, timeout, retryInterval tim
 	})
 }
 
+func (k *k8sOps) CreateVolumePlacementStrategy(spec *talisman_v1beta1.VolumePlacementStrategy) (*talisman_v1beta1.VolumePlacementStrategy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.talismanClient.Portworx().VolumePlacementStrategies().Create(spec)
+}
+
+func (k *k8sOps) UpdateVolumePlacementStrategy(spec *talisman_v1beta1.VolumePlacementStrategy) (*talisman_v1beta1.VolumePlacementStrategy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.talismanClient.Portworx().VolumePlacementStrategies().Update(spec)
+}
+
+func (k *k8sOps) ListVolumePlacementStrategies() (*talisman_v1beta1.VolumePlacementStrategyList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.talismanClient.Portworx().VolumePlacementStrategies().List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) DeleteVolumePlacementStrategy(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.talismanClient.Portworx().VolumePlacementStrategies().Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) GetVolumePlacementStrategy(name string) (*talisman_v1beta1.VolumePlacementStrategy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.talismanClient.Portworx().VolumePlacementStrategies().Get(name, meta_v1.GetOptions{})
+}
+
 // CRD APIs - END
 
 // Object APIs - BEGIN
@@ -3021,7 +3543,17 @@ func (k *k8sOps) getDynamicClient(object runtime.Object) (dynamic.ResourceInterf
 		return nil, err
 	}
 
-	return k.dynamicInterface.Resource(object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(strings.ToLower(objectType.GetKind()) + "s")), nil
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return nil, err
+	}
+
+	resourceInterface := k.dynamicInterface.Resource(object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(strings.ToLower(objectType.GetKind()) + "s"))
+	if metadata.GetNamespace() == "" {
+		return resourceInterface, nil
+	} else {
+		return resourceInterface.Namespace(metadata.GetNamespace()), nil
+	}
 }
 
 // GetObject returns the latest object given a generic Object
@@ -3035,7 +3567,7 @@ func (k *k8sOps) GetObject(object runtime.Object) (runtime.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.Get(metadata.GetName(), metav1.GetOptions{}, "")
+	return client.Get(metadata.GetName(), meta_v1.GetOptions{}, "")
 }
 
 // UpdateObject updates a generic Object
@@ -3119,6 +3651,11 @@ func (k *k8sOps) loadClientFor(config *rest.Config) error {
 	}
 
 	k.storkClient, err = storkclientset.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	k.talismanClient, err = talismanclientset.NewForConfig(config)
 	if err != nil {
 		return err
 	}

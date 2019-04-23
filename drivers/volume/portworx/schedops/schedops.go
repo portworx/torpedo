@@ -11,6 +11,10 @@ import (
 
 // Driver is the interface for portworx operations under various schedulers
 type Driver interface {
+	// StartPxOnNode enables portworx service on given node
+	StartPxOnNode(n node.Node) error
+	// StopPxOnNode disables portworx service  on given node
+	StopPxOnNode(n node.Node) error
 	// ValidateOnNode validates portworx on given node (from scheduler perspective)
 	ValidateOnNode(n node.Node) error
 	// ValidateAddLabels validates whether the labels for the volume are applied appropriately on the vol replica nodes
@@ -20,7 +24,7 @@ type Driver interface {
 	// ValidateVolumeCleanup validates that volume dir does not exist and no data present inside it
 	ValidateVolumeCleanup(d node.Driver) error
 	// ValidateVolumeSetup checks if the given volume is setup correctly
-	ValidateVolumeSetup(v *volume.Volume) error
+	ValidateVolumeSetup(v *volume.Volume, d node.Driver) error
 	// ValidateSnapshot validates the snapshot volume
 	ValidateSnapshot(volumeParams map[string]string, parent *api.Volume) error
 	// GetVolumeName returns the volume name based on the volume object recevied

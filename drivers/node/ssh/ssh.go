@@ -61,11 +61,13 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	file := keypath
 	buf, err := ioutil.ReadFile(file)
 	if err != nil {
+		logrus.Errorf("failed to read ssh key file. Cause: %s", err.Error())
 		return nil, err
 	}
 
 	pubkey, err := ssh_pkg.ParsePrivateKey(buf)
 	if err != nil {
+		logrus.Errorf("failed to parse private key. Cause: %s", err.Error())
 		return nil, err
 	}
 
@@ -299,7 +301,7 @@ func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpt
 		return output, false, nil
 	}
 
-	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry);
+	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
 	if err != nil {
 		return "", err
 	}
@@ -415,7 +417,7 @@ func (s *ssh) doCmdIks(n node.Node, options node.ConnectionOpts, cmd string, ign
 
 func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 	var out string
-
+  var sterr string
 	connection, err := s.getConnection(n, options)
 	if err != nil {
 		return "", &node.ErrFailedToRunCommand{
@@ -433,8 +435,31 @@ func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	}
 	defer session.Close()
 
-	byteout, err := session.Output(cmd)
-	out = string(byteout)
+	stderr, err := session.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("fail to setup stderr")
+	}
+
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("fail to setup stdout")
+	}
+
+	session.Start(cmd)
+	err = session.Wait()
+	if resp, err1 := ioutil.ReadAll(stdout); err1 == nil {
+		out = string(resp)
+		logrus.Debugf("Command: %s result: %s", cmd, out)
+	} else {
+		return "", fmt.Errorf("fail to read stdout")
+	}
+	if resp, err1 := ioutil.ReadAll(stderr); err1 == nil {
+		sterr = string(resp)
+		logrus.Debugf("Command: %s errors: %s", cmd, sterr)
+	} else {
+		return "", fmt.Errorf("fail to read stderr")
+	}
+
 	if ignoreErr == false && err != nil {
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  n.UsableAddr,

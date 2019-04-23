@@ -23,7 +23,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/sirupsen/logrus"
 	apps_api "k8s.io/api/apps/v1beta2"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -217,6 +217,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*snap_v1.VolumeSnapshot); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.GroupVolumeSnapshot); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*v1.Secret); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.ConfigMap); ok {
@@ -228,6 +230,10 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*stork_api.ClusterPair); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*stork_api.Migration); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.MigrationSchedule); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.SchedulePolicy); ok {
 		return specObj, nil
 	}
 
@@ -287,58 +293,11 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 
 	var contexts []*scheduler.Context
 	for _, app := range apps {
-		ns, err := k.createNamespace(app, instanceID)
+
+		appNamespace := app.GetID(instanceID)
+		specObjects, err := k.createSpecObjects(app, appNamespace)
 		if err != nil {
 			return nil, err
-		}
-
-		var specObjects []interface{}
-		for _, spec := range app.SpecList {
-			obj, err := k.createCRDObjects(spec, defaultTimeout, defaultRetryInterval)
-			if err != nil {
-				return nil, err
-			}
-			if obj != nil {
-				specObjects = append(specObjects, obj)
-			}
-		}
-
-		for _, spec := range app.SpecList {
-			t := func() (interface{}, bool, error) {
-				obj, err := k.createStorageObject(spec, ns, app)
-				if err != nil {
-					return nil, true, err
-				}
-				return obj, false, nil
-			}
-
-			obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
-			if err != nil {
-				return nil, err
-			}
-
-			if obj != nil {
-				specObjects = append(specObjects, obj)
-			}
-		}
-
-		for _, spec := range app.SpecList {
-			t := func() (interface{}, bool, error) {
-				obj, err := k.createCoreObject(spec, ns, app)
-				if err != nil {
-					return nil, true, err
-				}
-				return obj, false, nil
-			}
-
-			obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
-			if err != nil {
-				return nil, err
-			}
-
-			if obj != nil {
-				specObjects = append(specObjects, obj)
-			}
 		}
 
 		ctx := &scheduler.Context{
@@ -356,19 +315,112 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	return contexts, nil
 }
 
-func (k *k8s) createNamespace(app *spec.AppSpec, instanceID string) (*v1.Namespace, error) {
+func (k *k8s) createSpecObjects(app *spec.AppSpec, namespace string) ([]interface{}, error) {
+	var specObjects []interface{}
+	ns, err := k.createNamespace(app, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createMigrationObjects(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createStorageObject(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createCoreObject(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+	return specObjects, nil
+}
+
+// AddTasks adds tasks to an existing context
+func (k *k8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
+	if ctx == nil {
+		return fmt.Errorf("Context to add tasks to cannot be nil")
+	}
+	if len(options.AppKeys) == 0 {
+		return fmt.Errorf("Need to specify list of applications to add to context")
+	}
+
+	appNamespace := ctx.GetID()
+	var apps []*spec.AppSpec
+	specObjects := ctx.App.SpecList
+	for _, key := range options.AppKeys {
+		spec, err := k.specFactory.Get(key)
+		if err != nil {
+			return err
+		}
+		apps = append(apps, spec)
+	}
+	for _, app := range apps {
+		objects, err := k.createSpecObjects(app, appNamespace)
+		if err != nil {
+			return err
+		}
+		specObjects = append(specObjects, objects...)
+	}
+	ctx.App.SpecList = specObjects
+	return nil
+}
+
+func (k *k8s) createNamespace(app *spec.AppSpec, namespace string) (*v1.Namespace, error) {
 	k8sOps := k8s_ops.Instance()
-	appNamespace := getAppNamespaceName(app, instanceID)
 
 	t := func() (interface{}, bool, error) {
-		ns, err := k8sOps.CreateNamespace(appNamespace,
+		ns, err := k8sOps.CreateNamespace(namespace,
 			map[string]string{
 				"creater": "torpedo",
 				"app":     app.Key,
 			})
 
 		if errors.IsAlreadyExists(err) {
-			if ns, err = k8sOps.GetNamespace(appNamespace); err == nil {
+			if ns, err = k8sOps.GetNamespace(namespace); err == nil {
 				return ns, false, nil
 			}
 		}
@@ -376,7 +428,7 @@ func (k *k8s) createNamespace(app *spec.AppSpec, instanceID string) (*v1.Namespa
 		if err != nil {
 			return nil, true, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to create namespace: %v. Err: %v", appNamespace, err),
+				Cause: fmt.Sprintf("Failed to create namespace: %v. Err: %v", namespace, err),
 			}
 		}
 
@@ -449,6 +501,24 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		}
 
 		logrus.Infof("[%v] Created Snapshot: %v", app.Key, snap.Metadata.Name)
+		return snap, nil
+	} else if obj, ok := spec.(*stork_api.GroupVolumeSnapshot); ok {
+		obj.Namespace = ns.Name
+		snap, err := k8sOps.CreateGroupSnapshot(obj)
+		if errors.IsAlreadyExists(err) {
+			if snap, err = k8sOps.GetGroupSnapshot(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing group snapshot: %v", app.Key, snap.Name)
+				return snap, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create group snapshot: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Group snapshot: %v", app.Key, snap.Name)
 		return snap, nil
 	}
 
@@ -720,23 +790,32 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 
 			logrus.Infof("[%v] Validated pod: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*stork_api.ClusterPair); ok {
-			if err := k8sOps.ValidateClusterPair(obj.Name, timeout, retryInterval); err != nil {
-				return &scheduler.ErrFailedToApplyCustomSpec{
+			if err := k8sOps.ValidateClusterPair(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate cluster Pair: %v. Err: %v", obj.Name, err),
 					Type:  obj,
 				}
 			}
-			logrus.Infof("[%v] Validated Cluster Pair: %v", ctx.App.Key, obj.Name)
+			logrus.Infof("[%v] Validated ClusterPair: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*stork_api.Migration); ok {
-			if err := k8sOps.ValidateMigration(obj.Name, timeout, retryInterval); err != nil {
-				return &scheduler.ErrFailedToApplyCustomSpec{
+			if err := k8sOps.ValidateMigration(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate Migration: %v. Err: %v", obj.Name, err),
 					Type:  obj,
 				}
 			}
-			logrus.Infof("[%v] Validated Migration specs: %v", ctx.App.Key, obj.Name)
+			logrus.Infof("[%v] Validated Migration: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.MigrationSchedule); ok {
+			if _, err := k8sOps.ValidateMigrationSchedule(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate MigrationSchedule: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated MigrationSchedule: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -760,6 +839,21 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			podList = append(podList, pods.(v1.Pod))
 		}
 	}
+
+	for _, spec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyMigrationObject(spec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
+		}
+	}
+
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 		if err = k.WaitForDestroy(ctx); err != nil {
 			return err
@@ -1040,6 +1134,15 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time
 			}
 
 			logrus.Infof("[%v] Validated snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+		} else if obj, ok := spec.(*stork_api.GroupVolumeSnapshot); ok {
+			if err := k8sOps.ValidateGroupSnapshot(obj.Name, obj.Namespace, true, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate group snapshot: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			logrus.Infof("[%v] Validated group snapshot: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
@@ -1063,6 +1166,16 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time
 	return nil
 }
 
+func (k *k8s) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
+	for _, mode := range pvc.Spec.AccessModes {
+		if mode == v1.PersistentVolumeAccessMode(v1.ReadOnlyMany) ||
+			mode == v1.PersistentVolumeAccessMode(v1.ReadWriteMany) {
+			return true
+		}
+	}
+	return false
+}
+
 func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	k8sOps := k8s_ops.Instance()
 	var vols []*volume.Volume
@@ -1083,6 +1196,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				ID:        string(obj.UID),
 				Name:      obj.Name,
 				Namespace: obj.Namespace,
+				Shared:    k.isPVCShared(obj),
 			})
 
 			if err := k8sOps.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
@@ -1106,6 +1220,17 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			logrus.Infof("[%v] Destroyed snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+		} else if obj, ok := spec.(*stork_api.GroupVolumeSnapshot); ok {
+			if err := k8sOps.DeleteGroupSnapshot(obj.Name, obj.Namespace); err != nil {
+				if !errors.IsNotFound(err) {
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to destroy group snapshot: %v. Err: %v", obj.Name, err),
+					}
+				}
+			}
+
+			logrus.Infof("[%v] Destroyed group snapshot: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			pvcList, err := k8sOps.GetPVCsForStatefulSet(obj)
 			if err != nil || pvcList == nil {
@@ -1120,6 +1245,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					ID:        string(pvc.UID),
 					Name:      pvc.Name,
 					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
 				})
 
 				if err := k8sOps.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
@@ -1148,6 +1274,7 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				ID:        string(obj.UID),
 				Name:      obj.Name,
 				Namespace: obj.Namespace,
+				Shared:    k.isPVCShared(obj),
 			}
 			vols = append(vols, vol)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
@@ -1172,6 +1299,7 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					ID:        string(pvc.UID),
 					Name:      pvc.Name,
 					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
 				})
 			}
 		}
@@ -1247,6 +1375,7 @@ func (k *k8s) resizePVCBy1GB(ctx *scheduler.Context, pvc *v1.PersistentVolumeCla
 		Name:      pvc.Name,
 		Namespace: pvc.Namespace,
 		Size:      uint64(sizeInt64),
+		Shared:    k.isPVCShared(pvc),
 	}
 	return vol, nil
 }
@@ -1261,6 +1390,20 @@ func (k *k8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 				Namespace: obj.Metadata.Namespace,
 			}
 			snaps = append(snaps, snap)
+		} else if obj, ok := spec.(*stork_api.GroupVolumeSnapshot); ok {
+			snapsForGroupsnap, err := k8s_ops.Instance().GetSnapshotsForGroupSnapshot(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, snapForGroupsnap := range snapsForGroupsnap {
+				snap := &volume.Snapshot{
+					ID:        string(snapForGroupsnap.Metadata.UID),
+					Name:      snapForGroupsnap.Metadata.Name,
+					Namespace: snapForGroupsnap.Metadata.Namespace,
+				}
+				snaps = append(snaps, snap)
+			}
 		}
 	}
 
@@ -1416,7 +1559,7 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 		} else if obj, ok := spec.(*v1.Pod); ok {
 			buf.WriteString(insertLineBreak(obj.Name))
 			var podStatus *v1.PodList
-			if podStatus, err = k8sOps.GetPods(obj.Name); err != nil {
+			if podStatus, err = k8sOps.GetPods(obj.Name, nil); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetPodStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get status of pod: %v. Err: %v", obj.Name, err),
@@ -1434,8 +1577,11 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 func (k *k8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
 	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
-		logrus.Infof("Scale all Deployments")
+		if !k.IsScalable(spec) {
+			continue
+		}
 		if obj, ok := spec.(*apps_api.Deployment); ok {
+			logrus.Infof("Scale all Deployments")
 			dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
 			if err != nil {
 				return err
@@ -1530,35 +1676,136 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 	return nil
 }
 
-// createCRDObjects and Validate their deployment
-func (k *k8s) createCRDObjects(specObj interface{}, timeout, retryInterval time.Duration) (interface{}, error) {
-	var err error
+func (k *k8s) IsScalable(spec interface{}) bool {
+	if obj, ok := spec.(*apps_api.Deployment); ok {
+		dep, err := k8s_ops.Instance().GetDeployment(obj.Name, obj.Namespace)
+		if err != nil {
+			logrus.Errorf("Failed to retrieve deployment [%s] %s. Cause: %v", obj.Namespace, obj.Name, err)
+			return false
+		}
+		for _, vol := range dep.Spec.Template.Spec.Volumes {
+			pvcName := vol.PersistentVolumeClaim.ClaimName
+			pvc, err := k8s_ops.Instance().GetPersistentVolumeClaim(pvcName, dep.Namespace)
+			if err != nil {
+				logrus.Errorf("Failed to retrieve PVC [%s] %s. Cause: %v", obj.Namespace, pvcName, err)
+				return false
+			}
+			for _, ac := range pvc.Spec.AccessModes {
+				if ac == v1.ReadWriteOnce {
+					return false
+				}
+			}
+		}
+	} else if _, ok := spec.(*apps_api.StatefulSet); ok {
+		return true
+	}
+	return false
+}
+
+func (k *k8s) createMigrationObjects(
+	specObj interface{},
+	ns *v1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
 	if obj, ok := specObj.(*stork_api.ClusterPair); ok {
-		logrus.Info("Applying clusterpair spec")
-		err = k8sOps.CreateClusterPair(obj)
+		obj.Namespace = ns.Name
+		clusterPair, err := k8sOps.CreateClusterPair(obj)
 		if err != nil {
-			return nil, &scheduler.ErrFailedToApplyCustomSpec{
-				Name:  obj.Name,
-				Cause: fmt.Sprintf("Failed to apply spec: %v. Err: %v", obj.Name, err),
-				Type:  obj,
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create ClusterPair: %v. Err: %v", obj.Name, err),
 			}
 		}
-		return obj, nil
+		logrus.Infof("[%v] Created ClusterPair: %v", app.Key, clusterPair.Name)
+		return clusterPair, nil
 	} else if obj, ok := specObj.(*stork_api.Migration); ok {
-		logrus.Info("Applying Migration Spec")
-		err = k8sOps.CreateMigration(obj)
+		obj.Namespace = ns.Name
+		migration, err := k8sOps.CreateMigration(obj)
 		if err != nil {
-			return nil, &scheduler.ErrFailedToApplyCustomSpec{
-				Name:  obj.Name,
-				Cause: fmt.Sprintf("Failed to apply spec: %v. Err: %v", obj.Name, err),
-				Type:  obj,
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Migration: %v. Err: %v", obj.Name, err),
 			}
 		}
-		return obj, nil
+		logrus.Infof("[%v] Created Migration: %v", app.Key, migration.Name)
+		return migration, nil
+	} else if obj, ok := specObj.(*stork_api.MigrationSchedule); ok {
+		obj.Namespace = ns.Name
+		migrationSchedule, err := k8sOps.CreateMigrationSchedule(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create MigrationSchedule: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created MigrationSchedule: %v", app.Key, migrationSchedule.Name)
+		return migrationSchedule, nil
+	} else if obj, ok := specObj.(*stork_api.SchedulePolicy); ok {
+		schedPolicy, err := k8sOps.CreateSchedulePolicy(obj)
+		if errors.IsAlreadyExists(err) {
+			if schedPolicy, err = k8sOps.GetSchedulePolicy(obj.Name); err == nil {
+				logrus.Infof("[%v] Found existing schedule policy: %v", app.Key, schedPolicy.Name)
+				return schedPolicy, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create SchedulePolicy: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created SchedulePolicy: %v", app.Key, schedPolicy.Name)
+		return schedPolicy, nil
 	}
 
 	return nil, nil
+}
+
+func (k *k8s) destroyMigrationObject(
+	specObj interface{},
+	app *spec.AppSpec,
+) error {
+	k8sOps := k8s_ops.Instance()
+	if obj, ok := specObj.(*stork_api.ClusterPair); ok {
+		err := k8sOps.DeleteClusterPair(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete ClusterPair: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed ClusterPair: %v", app.Key, obj.Name)
+	} else if obj, ok := specObj.(*stork_api.Migration); ok {
+		err := k8sOps.DeleteMigration(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete Migration: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed Migration: %v", app.Key, obj.Name)
+	} else if obj, ok := specObj.(*stork_api.MigrationSchedule); ok {
+		err := k8sOps.DeleteMigrationSchedule(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete MigrationSchedule: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed MigrationSchedule: %v", app.Key, obj.Name)
+	} else if obj, ok := specObj.(*stork_api.SchedulePolicy); ok {
+		err := k8sOps.DeleteSchedulePolicy(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete SchedulePolicy: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed SchedulePolicy: %v", app.Key, obj.Name)
+	}
+	return nil
 }
 
 func insertLineBreak(note string) string {

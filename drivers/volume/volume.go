@@ -13,6 +13,7 @@ type Volume struct {
 	Name      string
 	Namespace string
 	Size      uint64
+	Shared    bool
 }
 
 // Snapshot is a generic struct encapsulating snapshots in the cluster
@@ -103,6 +104,9 @@ type Driver interface {
 
 	// GetClusterPairingInfo returns cluster pairing information from remote cluster
 	GetClusterPairingInfo() (map[string]string, error)
+
+	// GetReplicaSetNodes returns the replica sets for a given volume
+	GetReplicaSetNodes(vol *Volume) ([]string, error)
 }
 
 var (

@@ -27,6 +27,12 @@ const (
 	PXNamespace = "kube-system"
 	// PXDaemonSet is the name of portworx daemon set in k8s deployment
 	PXDaemonSet = "portworx"
+	// k8sPxServiceLabelKey is the label key used for px systemd service control
+	k8sPxServiceLabelKey = "px/service"
+	// k8sServiceOperationStart is label value for starting Portworx service
+	k8sServiceOperationStart = "start"
+	// k8sServiceOperationStop is label value for stopping Portworx service
+	k8sServiceOperationStop = "stop"
 	// k8sPodsRootDir is the directory under which k8s keeps all pods data
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
 	// snapshotAnnotation is the annotation used to get the parent of a PVC
@@ -47,8 +53,8 @@ const (
 )
 
 const (
-	podExecTimeout       = 2 * time.Minute
-	defaultRetryInterval = 10 * time.Second
+	defaultRetryInterval = 5 * time.Second
+	defaultTimeout       = 2 * time.Minute
 )
 
 // errLabelPresent error type for a label being present on a node
@@ -76,6 +82,14 @@ func (e *errLabelAbsent) Error() string {
 }
 
 type k8sSchedOps struct{}
+
+func (k *k8sSchedOps) StopPxOnNode(n node.Node) error {
+	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxServiceLabelKey, k8sServiceOperationStop)
+}
+
+func (k *k8sSchedOps) StartPxOnNode(n node.Node) error {
+	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxServiceLabelKey, k8sServiceOperationStart)
+}
 
 func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 	return &errors.ErrNotSupported{
@@ -168,61 +182,157 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 	return nil
 }
 
-func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
+func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) error {
 	pvName := k.GetVolumeName(vol)
 	if len(pvName) == 0 {
 		return fmt.Errorf("failed to get PV name for : %v", vol)
 	}
 
-	pods, err := k8s.Instance().GetPodsUsingPV(pvName)
-	if err != nil {
+	validatedPods := make([]string, 0)
+	t := func() (interface{}, bool, error) {
+		pods, err := k8s.Instance().GetPodsUsingPV(pvName)
+		if err != nil {
+			return nil, true, err
+		}
+		resp, err := k.validateMountsInPods(vol, pvName, pods, d, validatedPods)
+		if err != nil {
+			logrus.Errorf("failed to validate mount in pod. Cause: %v", err)
+			return nil, true, err
+		}
+		validatedPods = append(validatedPods, resp...)
+		lenValidatedPods := len(validatedPods)
+		lenExpectedPods := len(pods)
+		if lenValidatedPods == lenExpectedPods {
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("pods pending validation current: %d. Expected: %d", lenValidatedPods, lenExpectedPods)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
-	for _, p := range pods {
-		if ready := k8s.Instance().IsPodReady(p); !ready {
-			continue
+	return nil
+}
+
+func excludePods(pods []corev1.Pod, excludePods []string) []corev1.Pod {
+	if len(excludePods) == 0 {
+		return pods
+	}
+	newPods := make([]corev1.Pod, 0)
+	for _, pod := range pods {
+		count := 0
+		for _, podName := range excludePods {
+			if podName == pod.Name {
+				count++
+			}
 		}
-		//TODO: Debug why this fails intermittently
-		//Display pod status at this point.
-		logrus.Infof("Pod [%s] %s ready for volume setup check.\n Pod phase: %v\n Pod Init Container statuses: %v\n Pod Container Statuses: %v", p.Namespace, p.Name, p.Status.Phase, p.Status.InitContainerStatuses, p.Status.ContainerStatuses)
-		containerPaths := getContainerPVCMountMap(p)
+		if count == 0 {
+			newPods = append(newPods, pod)
+		}
+	}
+	return newPods
+}
+
+func (k *k8sSchedOps) validateMountsInPods(
+	vol *volume.Volume,
+	pvName string,
+	pods []corev1.Pod,
+	d node.Driver,
+	podsToExclude []string) ([]string, error) {
+
+	validatedMountPods := make([]string, 0)
+	nodes := node.GetNodesByName()
+	newPods := excludePods(pods, podsToExclude)
+	for _, p := range newPods {
+		pod, err := k8s.Instance().GetPodByName(p.Name, p.Namespace)
+		if err != nil && err == k8s.ErrPodsNotFound {
+			logrus.Warnf("pod %s not found. probably it got rescheduled", p.Name)
+			continue
+		} else if !k8s.Instance().IsPodReady(*pod) && ((len(validatedMountPods) > 0 || len(podsToExclude) > 0) && !vol.Shared) {
+			//when volume is not shared and there is one pod already validated, skip the other pods
+			remainingPods := excludePods(newPods, validatedMountPods)
+			t := func() []string {
+				pods := make([]string, 0)
+				for _, pod := range remainingPods {
+					pods = append(pods, pod.Name)
+				}
+				return pods
+			}
+			validatedMountPods = append(validatedMountPods, t()...)
+			break
+		} else if !k8s.Instance().IsPodReady(*pod) {
+			// if pod is not ready, delay the check
+			logrus.Warnf("pod %s still not running. Status: %v", pod.Name, pod.Status.Phase)
+			continue
+		} else if err != nil {
+			return validatedMountPods, err
+		}
+
+		containerPaths := getContainerPVCMountMap(*pod)
+		skipHostMountCheck := false
 		for containerName, path := range containerPaths {
 			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+) %s.+", path))
-
-			t := func() (interface{}, bool, error) {
-				output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, p.Name, containerName, p.Namespace)
-				if err != nil {
-					logrus.Errorf("failed to run command in pod: %v err: %v", p, err)
-					return nil, true, err
-				}
-
-				return output, false, nil
+			output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
+			if err != nil && err != k8s.ErrPodsNotFound {
+				return validatedMountPods, err
+			} else if err == k8s.ErrPodsNotFound {
+				// if pod is not found it is probably rescheduled so delay the check
+				logrus.Warnf("Failed to execute command in pod, %s not found. probably it got rescheduled", pod.Name)
+				continue
 			}
-
-			output, err := task.DoRetryWithTimeout(t, podExecTimeout, defaultRetryInterval)
-			if err != nil {
-				return err
-			}
-
-			mounts := strings.Split(output.(string), "\n")
+			mounts := strings.Split(output, "\n")
 			pxMountFound := false
 			for _, line := range mounts {
 				pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
 				if len(pxMounts) > 0 {
-					logrus.Debugf("pod: [%s] %s have PX mount: %v", p.Namespace, p.Name, pxMounts)
+					logrus.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
 					pxMountFound = true
+					// in case there are two pods running with non shared volume, one of them will be in read-only
+					skipHostMountCheck = isMountReadOnly(line)
 					break
 				}
 			}
 
 			if !pxMountFound {
-				return fmt.Errorf("pod: [%s] %s does not have PX mount. Mounts are: %v", p.Namespace, p.Name, mounts)
+				return validatedMountPods, fmt.Errorf("pod: [%s] %s does not have PX mount. Mounts are: %v", pod.Namespace, pod.Name, mounts)
 			}
 		}
-	}
 
-	return nil
+		// if there is at least one pod with non shared volume already validaded, mark this one as validated and skip host mount check
+		if skipHostMountCheck && ((len(validatedMountPods) > 0 || len(podsToExclude) > 0) && !vol.Shared) {
+			validatedMountPods = append(validatedMountPods, pod.Name)
+			continue
+		} else if skipHostMountCheck {
+			continue
+		}
+
+		currentNode, nodeExists := nodes[p.Spec.NodeName]
+		if !nodeExists {
+			return validatedMountPods, fmt.Errorf("node %s for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
+		}
+
+		// ignore error when a command not exactly fail, like grep when empty return exit 1
+		connOpts := node.ConnectionOpts{
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+			IgnoreError:     true,
+		}
+
+		volMount, _ := d.RunCommand(currentNode,
+			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop)' | grep %s", pvName), connOpts)
+		if len(volMount) == 0 {
+			return validatedMountPods, fmt.Errorf("volume %s not mounted on node %s", vol.Name, currentNode.Name)
+		}
+
+		validatedMountPods = append(validatedMountPods, pod.Name)
+	}
+	return validatedMountPods, nil
+}
+
+func isMountReadOnly(mount string) bool {
+	var re = regexp.MustCompile(`ro,|,ro`)
+	return re.MatchString(mount)
 }
 
 func (k *k8sSchedOps) ValidateSnapshot(params map[string]string, parent *api.Volume) error {
@@ -307,7 +417,7 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 		nodeMap[n.Name] = n
 	}
 
-	existingPods, _ := k8s.Instance().GetPods("")
+	existingPods, _ := k8s.Instance().GetPods("", nil)
 
 	orphanPodsMap := make(map[string][]string)
 	dirtyVolPodsMap := make(map[string][]string)
