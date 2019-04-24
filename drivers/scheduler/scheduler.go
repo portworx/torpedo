@@ -124,6 +124,9 @@ type Driver interface {
 
 	// DisableSchedulingOnNode disable apps to be scheduled to a given node
 	DisableSchedulingOnNode(n node.Node) error
+
+	// IsScalable check if a given spec is scalable or not
+	IsScalable(spec interface{}) bool
 }
 
 var (

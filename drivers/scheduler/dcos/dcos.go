@@ -485,6 +485,11 @@ func (d *dcos) DisableSchedulingOnNode(n node.Node) error {
 	return nil
 }
 
+func (d *dcos) IsScalable(spec interface{}) bool {
+	// TODO implement this method
+	return false
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)
