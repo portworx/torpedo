@@ -133,3 +133,15 @@ type ErrFailedToGetNodeStatus struct {
 func (e *ErrFailedToGetNodeStatus) Error() string {
 	return fmt.Sprintf("Failed to get status for node: %v due to err: %v", e.Node, e.Cause)
 }
+
+// ErrFailedToRejoinNode error type for failed to remove from cluster
+type ErrFailedToRejoinNode struct {
+	// Node is the node on which PX failed to remove from cluster
+	Node string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToRejoinNode) Error() string {
+	return fmt.Sprintf("Failed to rejoin node: %v due to err: %v", e.Node, e.Cause)
+}

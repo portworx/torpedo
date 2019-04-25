@@ -56,10 +56,10 @@ type Driver interface {
 	// ValidateVolumeSetup validates if the given volume is setup correctly in the cluster
 	ValidateVolumeSetup(vol *Volume) error
 
-	// Stop must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
+	// StopDriver must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
 	StopDriver(nodes []node.Node, force bool) error
 
-	// Start must cause the volume driver to start on a given node.
+	// StartDriver must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
 
 	// WaitDriverUpOnNode must wait till the volume driver becomes usable on a given node
@@ -88,7 +88,7 @@ type Driver interface {
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 
-	// GetVolumeReplicationFactor returns the current replication factor of the volume.
+	// GetReplicationFactor returns the current replication factor of the volume.
 	GetReplicationFactor(vol *Volume) (int64, error)
 
 	// SetReplicationFactor sets the volume's replication factor to the passed param rf.
@@ -108,6 +108,9 @@ type Driver interface {
 
 	// DecommissionNode decommissions the given node from the cluster
 	DecommissionNode(n node.Node) error
+
+	// RejoinNode rejoins a given node back to the cluster
+	RejoinNode(n node.Node) error
 
 	// GetNodeStatus returns the status of a given node
 	GetNodeStatus(n node.Node) (*api.Status, error)

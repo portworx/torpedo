@@ -1764,13 +1764,6 @@ func (k *k8s) PrepareNodeToDecommission(n node.Node) error {
 			Cause: fmt.Sprintf("Failed to drain pods from node: %v. Err: %v", n.Name, err),
 		}
 	}
-
-	if err = k8sOps.CordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
-		return &scheduler.ErrFailedToDecommissionNode{
-			Node:  n,
-			Cause: fmt.Sprintf("Failed to cordon node: %v. Err: %v", n.Name, err),
-		}
-	}
 	return nil
 }
 

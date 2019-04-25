@@ -17,6 +17,7 @@ import (
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
@@ -1100,6 +1101,13 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 
 func (d *portworx) DecommissionNode(n node.Node) error {
 
+	if err := k8s.Instance().AddLabelOnNode(n.Name, "px/enabled", "remove"); err != nil {
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+		}
+	}
+
 	if err := d.StopDriver([]node.Node{n}, false); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
@@ -1119,6 +1127,28 @@ func (d *portworx) DecommissionNode(n node.Node) error {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
 			Cause: err.Error(),
+		}
+	}
+	return nil
+}
+
+func (d *portworx) RejoinNode(n node.Node) error {
+	if err := d.getClusterManager().DeleteNodeConf(n.Name); err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: err.Error(),
+		}
+	}
+	if err := k8s.Instance().RemoveLabelOnNode(n.Name, "px/service"); err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+		}
+	}
+	if err := k8s.Instance().RemoveLabelOnNode(n.Name, "px/enabled"); err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
 		}
 	}
 	return nil
