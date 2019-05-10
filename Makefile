@@ -100,3 +100,7 @@ sidecar: sidecar-wp-cli
 sidecar-wp-cli:
 	docker build -t $(SIDECAR_WP_CLI_IMG) -f $(SIDECAR_DIR)/wp-cli.dockerfile $(SIDECAR_DIR)
 	docker push $(SIDECAR_WP_CLI_IMG)
+
+sidecar-mysql:
+	docker build -t $(SIDECAR_MYSQL_CLI_IMG) -f scripts/sidecar-mysql/Dockerfile scripts/sidecar-mysql/
+	docker push $(SIDECAR_MYSQL_CLI_IMG)

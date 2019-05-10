@@ -100,3 +100,32 @@ spec:
           value: password
         - name: MYSQL_SERVICE_PORT
           value: "3306"
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: mysqlsidecar
+  labels:
+    app: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysqlsidecar
+          image: portworx/mysqlsidecar
+          imagePullPolicy: "Always"
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
