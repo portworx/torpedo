@@ -160,14 +160,23 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 	context("For tearing down of an app context", func() {
 		var err error
 
-		vols := DeleteVolumes(ctx)
+		if Inst().S.String() == defaultScheduler {
+			vols := DeleteVolumes(ctx)
 
-		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
-			err = Inst().S.Destroy(ctx, opts)
-			expect(err).NotTo(haveOccurred())
-		})
+			Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
+				err = Inst().S.Destroy(ctx, opts)
+				expect(err).NotTo(haveOccurred())
+			})
 
-		ValidateVolumesDeleted(ctx.App.Key, vols)
+			ValidateVolumesDeleted(ctx.App.Key, vols)
+		} else {
+			Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
+				err = Inst().S.Destroy(ctx, opts)
+				expect(err).NotTo(haveOccurred())
+			})
+
+			DeleteVolumesAndWait(ctx)
+		}
 
 	})
 }
