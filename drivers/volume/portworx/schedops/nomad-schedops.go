@@ -27,7 +27,9 @@ func (nm *nomadSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 }
 
 func (nm *nomadSchedOps) GetVolumeName(vol *volume.Volume) string {
-	// TODO: Implement this method
+	if vol != nil && vol.Name != "" {
+		return vol.Name
+	}
 	return ""
 }
 
