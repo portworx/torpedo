@@ -235,13 +235,35 @@ var _ = Describe("{AppTasksDown}", func() {
 		}
 
 		Step("delete all application tasks", func() {
-			for _, ctx := range contexts {
-				Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
-					err = Inst().S.DeleteTasks(ctx)
-					Expect(err).NotTo(HaveOccurred())
-				})
+			// Add interval based sleep here to check what time we will exit out of this delete task loop
+			minRunTime := Inst().MinRunTimeMins
+			timeout := (minRunTime) * 60
+			frequency := Inst().AppDeleteFreqMins * 60
+			if minRunTime == 0 {
+				for _, ctx := range contexts {
+					Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
+						err = Inst().S.DeleteTasks(ctx)
+						Expect(err).NotTo(HaveOccurred())
+					})
 
-				ValidateContext(ctx)
+					ValidateContext(ctx)
+				}
+			} else {
+				start := time.Now().Local()
+				for int(time.Since(start).Seconds()) < timeout {
+					for _, ctx := range contexts {
+						Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
+							err = Inst().S.DeleteTasks(ctx)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						ValidateContext(ctx)
+					}
+					Step(fmt.Sprintf("Sleeping for given duration %d", frequency), func() {
+						d := time.Duration(frequency)
+						time.Sleep(time.Second * d)
+					})
+				}
 			}
 		})
 

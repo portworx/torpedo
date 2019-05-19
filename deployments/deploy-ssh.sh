@@ -189,6 +189,8 @@ spec:
             "--app-list", "$APP_LIST",
             "--node-driver", "ssh",
             "--scale-factor", "$SCALE_FACTOR",
+			"--minimun-runtime-mins", "$MIN_RUN_TIME",
+			"--app-delete-freq-mins", "$APP_DELETE_FREQ",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true
