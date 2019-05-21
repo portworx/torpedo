@@ -62,6 +62,16 @@ const (
 	resizeSupportedAnnotationKey = "torpedo/resize-supported"
 )
 
+const (
+	portworxStorage = "portworx"
+	csiStorage      = "csi"
+)
+
+var provisioners = map[string]string{
+	portworxStorage: "kubernetes.io/portworx-volume",
+	csiStorage:      "com.openstorage.pxd",
+}
+
 var (
 	namespaceRegex = regexp.MustCompile("{{NAMESPACE}}")
 )
@@ -283,7 +293,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	for _, app := range apps {
 
 		appNamespace := app.GetID(instanceID)
-		specObjects, err := k.createSpecObjects(app, appNamespace)
+		specObjects, err := k.createSpecObjects(app, appNamespace, options.StorageProvisioner)
 		if err != nil {
 			return nil, err
 		}
@@ -303,7 +313,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	return contexts, nil
 }
 
-func (k *k8s) createSpecObjects(app *spec.AppSpec, namespace string) ([]interface{}, error) {
+func (k *k8s) createSpecObjects(app *spec.AppSpec, namespace, storageprovisioner string) ([]interface{}, error) {
 	var specObjects []interface{}
 	ns, err := k.createNamespace(app, namespace)
 	if err != nil {
@@ -329,7 +339,7 @@ func (k *k8s) createSpecObjects(app *spec.AppSpec, namespace string) ([]interfac
 
 	for _, spec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createStorageObject(spec, ns, app)
+			obj, err := k.createStorageObject(spec, ns, app, storageprovisioner)
 			if err != nil {
 				return nil, true, err
 			}
@@ -387,7 +397,7 @@ func (k *k8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 		apps = append(apps, spec)
 	}
 	for _, app := range apps {
-		objects, err := k.createSpecObjects(app, appNamespace)
+		objects, err := k.createSpecObjects(app, appNamespace, options.StorageProvisioner)
 		if err != nil {
 			return err
 		}
@@ -431,10 +441,18 @@ func (k *k8s) createNamespace(app *spec.AppSpec, namespace string) (*v1.Namespac
 	return nsObj.(*v1.Namespace), nil
 }
 
-func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
+func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec, storageprovisioner string) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
+
 	if obj, ok := spec.(*storage_api.StorageClass); ok {
 		obj.Namespace = ns.Name
+		if storageProvisioner, ok := provisioners[storageprovisioner]; ok {
+			logrus.Infof("[%v] Requested provisioner: %s", app.Key, storageprovisioner)
+			obj.Provisioner = storageProvisioner
+		} else {
+			obj.Provisioner = provisioners[portworxStorage]
+		}
+
 		sc, err := k8sOps.CreateStorageClass(obj)
 		if errors.IsAlreadyExists(err) {
 			if sc, err = k8sOps.GetStorageClass(obj.Name); err == nil {
