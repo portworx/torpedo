@@ -242,15 +242,15 @@ var _ = Describe("{AppTasksDown}", func() {
 			var frequency int
 			switch Inst().ChaosLevel {
 			case 5:
-				frequency = 10
+				frequency = 1
 			case 4:
-				frequency = 7
+				frequency = 3
 			case 3:
 				frequency = 5
 			case 2:
-				frequency = 3
+				frequency = 7
 			case 1:
-				frequency = 1
+				frequency = 10
 			default:
 				frequency = 10
 
