@@ -45,6 +45,7 @@ const (
 )
 
 const (
+	defaultTimeout                   = 2 * time.Minute
 	defaultRetryInterval             = 10 * time.Second
 	maintenanceOpTimeout             = 1 * time.Minute
 	maintenanceWaitTimeout           = 2 * time.Minute
@@ -1151,7 +1152,14 @@ func (d *portworx) DecommissionNode(n node.Node) error {
 }
 
 func (d *portworx) RejoinNode(n node.Node) error {
-	if err := d.getClusterManager().DeleteNodeConf(n.Name); err != nil {
+
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+	_, err := d.nodeDriver.RunCommand(n, "/opt/pwx/bin/pxctl sv node-wipe --all", opts)
+	if err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: err.Error(),
