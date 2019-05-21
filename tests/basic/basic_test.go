@@ -238,21 +238,21 @@ var _ = Describe("{AppTasksDown}", func() {
 			// Add interval based sleep here to check what time we will exit out of this delete task loop
 			minRunTime := Inst().MinRunTimeMins
 			timeout := (minRunTime) * 60
-			// convert chaos level to seconds
+			// set frequency mins depending on the chaos level
 			var frequency int
 			switch Inst().ChaosLevel {
 			case 5:
-				frequency = 10 * 60
+				frequency = 10
 			case 4:
-				frequency = 7 * 60
+				frequency = 7
 			case 3:
-				frequency = 5 * 60
+				frequency = 5
 			case 2:
-				frequency = 3 * 60
+				frequency = 3
 			case 1:
-				frequency = 1 * 60
+				frequency = 1
 			default:
-				frequency = 5 * 60
+				frequency = 10
 
 			}
 			if minRunTime == 0 {
@@ -277,7 +277,7 @@ var _ = Describe("{AppTasksDown}", func() {
 					}
 					Step(fmt.Sprintf("Sleeping for given duration %d", frequency), func() {
 						d := time.Duration(frequency)
-						time.Sleep(time.Second * d)
+						time.Sleep(time.Minute * d)
 					})
 				}
 			}
