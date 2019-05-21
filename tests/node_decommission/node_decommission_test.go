@@ -60,17 +60,17 @@ var _ = Describe("{DecommissionNode}", func() {
 				Step(fmt.Sprintf("check if the node was decommissioned"), func() {
 					t := func() (interface{}, bool, error) {
 						status, err := Inst().V.GetNodeStatus(nodeToDecommission)
-						if err != nil {
-							return false, false, err
-						}
-						if *status == api.Status_STATUS_NONE {
+						if err != nil && *status == api.Status_STATUS_NONE {
 							return true, false, nil
 						}
-						return false, true, fmt.Errorf("Node %s not decomissioned yet", nodeToDecommission.Name)
+						if err != nil {
+							return false, true, err
+						}
+						return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
 					}
 					decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(decommissioned).To(BeTrue())
+					Expect(decommissioned.(bool)).To(BeTrue())
 				})
 			})
 			Step(fmt.Sprintf("Rejoin node"), func() {
