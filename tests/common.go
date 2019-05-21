@@ -54,7 +54,7 @@ const (
 	defaultLogLocation    = "/mnt/torpedo_support_dir"
 	defaultAppScaleFactor = 1
 	defaultMinRunTimeMins = 0
-	defaultChaosLevel     = 1
+	defaultChaosLevel     = 5
 	// TODO: These are Portworx specific versions and will not work with other storage drivers.
 	// Eventually we should remove the defaults and make it mandatory with documentation.
 	defaultStorageDriverUpgradeVersion = "1.2.11.6"

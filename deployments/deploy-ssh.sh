@@ -8,6 +8,13 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+if [ -z "${CHAOS_LEVEL}" ]; then
+    CHAOS_LEVEL="5"
+fi
+if [ -z "${MIN_RUN_TIME}" ]; then
+    MIN_RUN_TIME="0"
+fi
+
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
     FAIL_FAST="--failFast"
 else
