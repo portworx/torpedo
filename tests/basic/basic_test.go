@@ -238,7 +238,20 @@ var _ = Describe("{AppTasksDown}", func() {
 			// Add interval based sleep here to check what time we will exit out of this delete task loop
 			minRunTime := Inst().MinRunTimeMins
 			timeout := (minRunTime) * 60
-			frequency := Inst().AppDeleteFreqMins * 60
+			var frequency int
+			switch Inst().ChaosLevel {
+			case 5:
+				frequency = 10 * 60
+			case 4:
+				frequency = 7 * 60
+			case 3:
+				frequency = 5 * 60
+			case 2:
+				frequency = 3 * 60
+			case 1:
+				frequency = 1 * 60
+
+			}
 			if minRunTime == 0 {
 				for _, ctx := range contexts {
 					Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {

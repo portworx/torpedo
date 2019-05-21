@@ -42,19 +42,19 @@ const (
 	logLocationCliFlag                 = "log-location"
 	scaleFactorCliFlag                 = "scale-factor"
 	minRunTimeMinsFlag                 = "minimun-runtime-mins"
-	appDeleteFreqMinsFlag              = "app-delete-freq-mins"
+	chaosLevelFlag                     = "chaos-level"
 	storageDriverUpgradeVersionCliFlag = "storage-driver-upgrade-version"
 	storageDriverBaseVersionCliFlag    = "storage-driver-base-version"
 )
 
 const (
-	defaultScheduler         = "k8s"
-	defaultNodeDriver        = "ssh"
-	defaultStorageDriver     = "pxd"
-	defaultLogLocation       = "/mnt/torpedo_support_dir"
-	defaultAppScaleFactor    = 1
-	defaultMinRunTimeMins    = 0
-	defaultAppDeleteFreqMins = 120
+	defaultScheduler      = "k8s"
+	defaultNodeDriver     = "ssh"
+	defaultStorageDriver  = "pxd"
+	defaultLogLocation    = "/mnt/torpedo_support_dir"
+	defaultAppScaleFactor = 1
+	defaultMinRunTimeMins = 0
+	defaultChaosLevel     = 1
 	// TODO: These are Portworx specific versions and will not work with other storage drivers.
 	// Eventually we should remove the defaults and make it mandatory with documentation.
 	defaultStorageDriverUpgradeVersion = "1.2.11.6"
@@ -360,7 +360,7 @@ type Torpedo struct {
 	StorageDriverUpgradeVersion string
 	StorageDriverBaseVersion    string
 	MinRunTimeMins              int
-	AppDeleteFreqMins           int
+	ChaosLevel                  int
 }
 
 // ParseFlags parses command line flags
@@ -373,7 +373,7 @@ func ParseFlags() {
 	var appScaleFactor int
 	var volUpgradeVersion, volBaseVersion string
 	var minRunTimeMins int
-	var appDeleteFreqMins int
+	var chaosLevel int
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -383,7 +383,7 @@ func ParseFlags() {
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
 	flag.IntVar(&minRunTimeMins, minRunTimeMinsFlag, defaultMinRunTimeMins, "Minimum Run Time in minutes for appliation deletion tests")
-	flag.IntVar(&appDeleteFreqMins, appDeleteFreqMinsFlag, defaultAppDeleteFreqMins, "Application deletion frequency in minutes")
+	flag.IntVar(&chaosLevel, chaosLevelFlag, defaultChaosLevel, "Application deletion frequency in minutes")
 	flag.StringVar(&volUpgradeVersion, storageDriverUpgradeVersionCliFlag, defaultStorageDriverUpgradeVersion,
 		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
 			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
@@ -418,7 +418,7 @@ func ParseFlags() {
 				LogLoc:                      logLoc,
 				ScaleFactor:                 appScaleFactor,
 				MinRunTimeMins:              minRunTimeMins,
-				AppDeleteFreqMins:           appDeleteFreqMins,
+				ChaosLevel:                  chaosLevel,
 				StorageDriverUpgradeVersion: volUpgradeVersion,
 				StorageDriverBaseVersion:    volBaseVersion,
 				AppList:                     appList,
