@@ -387,7 +387,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:d8ccefd14f23c8742ee91bd0092f74f229f4220ef024415ff85b03a9e38e0f8d"
+  digest = "1:135046d0c09c26954826ee6a5b850f41b5dd21e10e9a12a3afcc687c0b0f1f17"
   name = "github.com/libopenstorage/stork"
   packages = [
     "pkg/apis/stork",
@@ -397,7 +397,7 @@
     "pkg/client/clientset/versioned/typed/stork/v1alpha1",
   ]
   pruneopts = "UT"
-  revision = "9a577f63072d4e7c374adc82728181649bd9e832"
+  revision = "8a0d552989bb585b61a9266cecc5437ad0de2d85"
 
 [[projects]]
   digest = "1:c658e84ad3916da105a761660dcaeb01e63416c8ec7bc62256a9b411a05fcd67"
@@ -507,6 +507,26 @@
   version = "v1.0.1"
 
 [[projects]]
+  branch = "release-3.11"
+  digest = "1:21e11e06ebb4c8dbdfab6198acf6cd68ffe61d67c58c858f2218f048c557bf4f"
+  name = "github.com/openshift/api"
+  packages = ["apps/v1"]
+  pruneopts = "UT"
+  revision = "8741ff068a473be041d7bafb4502c12e4f10aab5"
+
+[[projects]]
+  branch = "release-3.11"
+  digest = "1:8f8c9a60a25a3d5e5981067f438ce42ecc4217d00c6cdb7ad1067f1e563666c6"
+  name = "github.com/openshift/client-go"
+  packages = [
+    "apps/clientset/versioned",
+    "apps/clientset/versioned/scheme",
+    "apps/clientset/versioned/typed/apps/v1",
+  ]
+  pruneopts = "UT"
+  revision = "431ec9a26e5021f35fa41ee9a89842db9bfdb370"
+
+[[projects]]
   digest = "1:bde6c3a610bd01ea7e2c8d9c7fd1116531fb6619f46f73f4f2ea16adb70da6be"
   name = "github.com/operator-framework/operator-sdk"
   packages = ["pkg/util/k8sutil"]
@@ -560,28 +580,30 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:b0f0cc8054b0060383e8269bd733178072d2e5e21b6d8a6ef579345fa8550032"
+  digest = "1:8dea5f278f7935c01a6cb1757a6b10c2b9dbab5306b14b644c16bb168406b391"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "47c0646da0c8b63858b6b33ecfe5537a7b323001"
+  revision = "5ad42621478d99aa5b313ab00c7d706c0407313b"
 
 [[projects]]
   branch = "master"
-  digest = "1:b072f24b225b508e79b7fce8027dc44921d22f8d9671627c910df8c7455125cd"
+  digest = "1:5b1a5dd8d7969a4476afbc74b4418888185f2f82184cd3a9640b3af044dcbba3"
   name = "github.com/portworx/talisman"
   packages = [
     "pkg/apis/portworx",
     "pkg/apis/portworx/v1beta1",
+    "pkg/apis/portworx/v1beta2",
     "pkg/client/clientset/versioned",
     "pkg/client/clientset/versioned/scheme",
     "pkg/client/clientset/versioned/typed/portworx/v1beta1",
+    "pkg/client/clientset/versioned/typed/portworx/v1beta2",
   ]
   pruneopts = "UT"
-  revision = "86f6dacb3f22e8aaa30b03e402eb4a481a3705d8"
+  revision = "81f70f63459acc2624772125c3223dc3401ff0d0"
 
 [[projects]]
   branch = "master"
