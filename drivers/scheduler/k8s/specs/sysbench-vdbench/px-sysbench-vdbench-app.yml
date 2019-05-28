@@ -1,0 +1,81 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: sysbench
+  labels:
+    app: sysbench
+spec:
+  selector:
+    matchLabels:
+      app: sysbench
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: sysbench
+    spec:
+      schedulerName: stork
+      containers:
+        - image: mysql:5.7
+          name: mysql
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin -u root -p$MYSQL_ROOT_PASSWORD ping"]
+            initialDelaySeconds: 70
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "mysql -u root -p$MYSQL_ROOT_PASSWORD -e \"select 1\""]
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+        - name: sysbench
+          image: thiagogonzaga/sysbench:latest
+          env:
+            - name: MYSQL_HOST
+              value: 127.0.0.1
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
+      volumes:
+        - name: mysql-persistent-storage
+          persistentVolumeClaim:
+            claimName: mysql-data
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: vdbench
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vdbench
+  template:
+    metadata:
+      labels:
+        app: vdbench
+    spec:
+      containers:
+        - name: vdbench
+          image: openebs/tests-vdbench
+          command: ["./bench_runner.sh"]
+          args: ["Basic", "5400"]
+          volumeMounts:
+            - name: vdbench-persistent-storage
+              mountPath: /datadir1
+      volumes:
+        - name: vdbench-persistent-storage
+          persistentVolumeClaim:
+            claimName: vdbench-pvc
