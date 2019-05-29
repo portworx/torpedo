@@ -8,6 +8,10 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+if [ -z "${SCHEDULER}" ]; then
+    SCHEDULER="k8s"
+fi
+
 if [ -z "${CHAOS_LEVEL}" ]; then
     CHAOS_LEVEL="5"
 fi
@@ -198,6 +202,7 @@ spec:
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
+			"--scheduler", "$SCHEDULER",
             "--node-driver", "ssh",
             "--scale-factor", "$SCALE_FACTOR",
       			"--minimun-runtime-mins", "$MIN_RUN_TIME",

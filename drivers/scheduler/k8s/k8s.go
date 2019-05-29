@@ -78,8 +78,8 @@ var (
 
 //K8s  The kubernetes structure
 type K8s struct {
-	specFactory    *spec.Factory
-	nodeDriverName string
+	SpecFactory    *spec.Factory
+	NodeDriverName string
 }
 
 //IsNodeReady  Check whether the cluster node is ready
@@ -124,12 +124,12 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
 		}
 	}
 
-	k.specFactory, err = spec.NewFactory(specDir, k)
+	k.SpecFactory, err = spec.NewFactory(specDir, k)
 	if err != nil {
 		return err
 	}
 
-	k.nodeDriverName = nodeDriverName
+	k.NodeDriverName = nodeDriverName
 	return nil
 }
 
@@ -138,7 +138,7 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
 func (k *K8s) RescanSpecs(specDir string) error {
 	var err error
 	logrus.Infof("Rescanning specs for %v", specDir)
-	k.specFactory, err = spec.NewFactory(specDir, k)
+	k.SpecFactory, err = spec.NewFactory(specDir, k)
 	if err != nil {
 		return err
 	}
@@ -289,14 +289,14 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	var apps []*spec.AppSpec
 	if len(options.AppKeys) > 0 {
 		for _, key := range options.AppKeys {
-			spec, err := k.specFactory.Get(key)
+			spec, err := k.SpecFactory.Get(key)
 			if err != nil {
 				return nil, err
 			}
 			apps = append(apps, spec)
 		}
 	} else {
-		apps = k.specFactory.GetAll()
+		apps = k.SpecFactory.GetAll()
 	}
 
 	var contexts []*scheduler.Context
@@ -400,7 +400,7 @@ func (k *K8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 	var apps []*spec.AppSpec
 	specObjects := ctx.App.SpecList
 	for _, key := range options.AppKeys {
-		spec, err := k.specFactory.Get(key)
+		spec, err := k.SpecFactory.Get(key)
 		if err != nil {
 			return err
 		}
@@ -937,7 +937,7 @@ func (k *K8s) waitForCleanup(ctx *scheduler.Context, podList []v1.Pod) error {
 
 func (k *K8s) validateVolumeDirCleanup(podUID types.UID, app *spec.AppSpec) error {
 	podVolDir := k.getVolumeDirPath(podUID)
-	driver, _ := node.Get(k.nodeDriverName)
+	driver, _ := node.Get(k.NodeDriverName)
 	options := node.FindOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         findFilesOnWorkerTimeout,
@@ -1707,7 +1707,7 @@ func (k *K8s) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error
 
 //StopSchedOnNode stop schedule on node
 func (k *K8s) StopSchedOnNode(n node.Node) error {
-	driver, _ := node.Get(k.nodeDriverName)
+	driver, _ := node.Get(k.NodeDriverName)
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         findFilesOnWorkerTimeout,
@@ -1728,7 +1728,7 @@ func (k *K8s) StopSchedOnNode(n node.Node) error {
 
 //StartSchedOnNode start schedule on node
 func (k *K8s) StartSchedOnNode(n node.Node) error {
-	driver, _ := node.Get(k.nodeDriverName)
+	driver, _ := node.Get(k.NodeDriverName)
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         defaultTimeout,

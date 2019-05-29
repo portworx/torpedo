@@ -4,7 +4,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/sirupsen/logrus"
 	"regexp"
 	"time"
 )
@@ -53,12 +53,10 @@ var (
 
 type openshift struct {
 	kube.K8s
-	specFactory    *spec.Factory
-	nodeDriverName string
 }
 
 func (k *openshift) StopSchedOnNode(n node.Node) error {
-	driver, _ := node.Get(k.nodeDriverName)
+	driver, _ := node.Get(k.K8s.NodeDriverName)
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         findFilesOnWorkerTimeout,
@@ -69,6 +67,27 @@ func (k *openshift) StopSchedOnNode(n node.Node) error {
 	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStopSchedOnNode{
+			Node:          n,
+			SystemService: SystemdSchedServiceName,
+			Cause:         err.Error(),
+		}
+	}
+	return nil
+}
+
+
+func (k *openshift) StartSchedOnNode(n node.Node) error {
+	driver, _ := node.Get(k.K8s.NodeDriverName)
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         defaultTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	if err != nil {
+		return &scheduler.ErrFailedToStartSchedOnNode{
 			Node:          n,
 			SystemService: SystemdSchedServiceName,
 			Cause:         err.Error(),
