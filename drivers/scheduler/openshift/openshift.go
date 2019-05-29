@@ -4,7 +4,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/sirupsen/logrus"
 	"regexp"
 	"time"
 )
@@ -74,7 +73,6 @@ func (k *openshift) StopSchedOnNode(n node.Node) error {
 	}
 	return nil
 }
-
 
 func (k *openshift) StartSchedOnNode(n node.Node) error {
 	driver, _ := node.Get(k.K8s.NodeDriverName)
