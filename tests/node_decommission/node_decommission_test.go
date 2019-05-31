@@ -53,14 +53,14 @@ var _ = Describe("{DecommissionNode}", func() {
 			})
 
 			Step(fmt.Sprintf("decommission the node"), func() {
-				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission)
+				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
 				Expect(err).NotTo(HaveOccurred())
 				err = Inst().V.DecommissionNode(nodeToDecommission)
 				Expect(err).NotTo(HaveOccurred())
 				Step(fmt.Sprintf("check if the node was decommissioned"), func() {
 					t := func() (interface{}, bool, error) {
 						status, err := Inst().V.GetNodeStatus(nodeToDecommission)
-						if err != nil && *status == api.Status_STATUS_NONE {
+						if err != nil && status != nil && *status == api.Status_STATUS_NONE {
 							return true, false, nil
 						}
 						if err != nil {

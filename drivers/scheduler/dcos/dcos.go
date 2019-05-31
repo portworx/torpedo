@@ -475,7 +475,7 @@ func (d *dcos) RescanSpecs(specDir string) error {
 	return nil
 }
 
-func (d *dcos) PrepareNodeToDecommission(n node.Node) error {
+func (d *dcos) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 	//TODO implement this method
 	return nil
 }
