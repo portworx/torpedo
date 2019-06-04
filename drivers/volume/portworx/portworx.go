@@ -217,15 +217,14 @@ func (d *portworx) getPxNode(n node.Node, cManager cluster.Cluster) (api.Node, e
 		cManager = d.getClusterManager()
 	}
 	pxNode, err := cManager.Inspect(n.VolDriverNodeID)
-	if err != nil {
-		return api.Node{}, err
-	}
-	if pxNode.Status == api.Status_STATUS_OFFLINE || pxNode.Status == api.Status_STATUS_NONE {
+	if (err == nil && pxNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && pxNode.Status == api.Status_STATUS_NONE) {
 		n, err = d.updateNodeID(n)
 		if err != nil {
 			return api.Node{}, err
 		}
 		return d.getPxNode(n, cManager)
+	} else if err != nil {
+		return api.Node{}, err
 	}
 	return pxNode, nil
 }
@@ -1204,7 +1203,7 @@ func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
 	clusterManager := d.getClusterManager()
 	pxNode, err := clusterManager.Inspect(n.VolDriverNodeID)
 	if err != nil {
-		return nil, &ErrFailedToGetNodeStatus{
+		return &pxNode.Status, &ErrFailedToGetNodeStatus{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to check node status: %v. Err: %v", pxNode, err),
 		}

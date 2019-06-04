@@ -36,7 +36,7 @@ var _ = BeforeSuite(func() {
 
 var _ = Describe("{DecommissionNode}", func() {
 	testName := "decommissionnode"
-	It("has to decommission a node and check if node was decommissioned successfuly", func() {
+	It("has to decommission a node and check if node was decommissioned successfully", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
