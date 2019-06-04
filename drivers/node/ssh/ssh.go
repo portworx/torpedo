@@ -401,7 +401,7 @@ func (s *ssh) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 		return output, false, nil
 	}
 
-	logrus.Infof("Running command on pod %s [%s]", debugPod.Name, cmds)
+	logrus.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
 	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
 	if err != nil {
 		return "", err
@@ -438,7 +438,9 @@ func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	if err != nil {
 		return "", fmt.Errorf("fail to setup stdout")
 	}
-
+	if options.Sudo {
+		cmd = fmt.Sprintf("sudo su -c '%s'", cmd)
+	}
 	session.Start(cmd)
 	err = session.Wait()
 	if resp, err1 := ioutil.ReadAll(stdout); err1 == nil {
