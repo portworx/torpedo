@@ -23,6 +23,10 @@ spec:
       containers:
         - image: mysql:5.7
           name: mysql
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
           env:
             - name: MYSQL_ROOT_PASSWORD
               value: password
