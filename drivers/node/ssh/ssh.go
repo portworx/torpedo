@@ -112,7 +112,6 @@ func (s *ssh) initExecPod() error {
 	var err error
 	k8sops := k8s.Instance()
 	if ds, err = k8sops.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
-		logrus.Infof("error: %s", err)
 		s, err := scheduler.Get(k8s_driver.SchedName)
 		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, execPodDaemonSetLabel), s)
 		if err != nil {
