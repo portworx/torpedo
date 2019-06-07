@@ -101,7 +101,7 @@ sidecar-wp-cli:
 	docker build -t $(SIDECAR_WP_CLI_IMG) -f $(SIDECAR_DIR)/wp-cli.dockerfile $(SIDECAR_DIR)
 	docker push $(SIDECAR_WP_CLI_IMG)
 
-SYSBENCH_IMG=$(DOCKER_HUB_REPO)/sysbench:latest
+SYSBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-sysbench:latest
 SIDECAR_DIR=drivers/scheduler/sidecars
 
 sysbench:
