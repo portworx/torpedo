@@ -42,44 +42,51 @@ var _ = Describe("{DecommissionNode}", func() {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
 		}
 
-		Step("pick a random node and decommission it", func() {
-
-			var nodeToDecommission node.Node
-			Step(fmt.Sprintf("pick a node to decommission"), func() {
+		Step("pick a random nodes to decommission", func() {
+			var workerNodes []node.Node
+			Step(fmt.Sprintf("get worker nodes"), func() {
 				workerNodes := node.GetWorkerNodes()
 				Expect(workerNodes).NotTo(BeEmpty())
-				randNode := rand.Intn(len(workerNodes))
-				nodeToDecommission = workerNodes[randNode]
 			})
 
-			Step(fmt.Sprintf("decommission the node"), func() {
-				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
-				Expect(err).NotTo(HaveOccurred())
-				err = Inst().V.DecommissionNode(nodeToDecommission)
-				Expect(err).NotTo(HaveOccurred())
-				Step(fmt.Sprintf("check if the node was decommissioned"), func() {
-					t := func() (interface{}, bool, error) {
-						status, err := Inst().V.GetNodeStatus(nodeToDecommission)
-						if err != nil && status != nil && *status == api.Status_STATUS_NONE {
-							return true, false, nil
-						}
-						if err != nil {
-							return false, true, err
-						}
-						return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
-					}
-					decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+			// Random sort worker nodes according to chaos level
+			nodeIndexMap := make(map[int]int)
+			for len(nodeIndexMap) != Inst().ChaosLevel {
+				index := rand.Intn(len(workerNodes))
+				nodeIndexMap[index] = index
+			}
+
+			for nodeIndex := range nodeIndexMap {
+				nodeToDecommission := workerNodes[nodeIndex]
+				Step(fmt.Sprintf("decommission node %s", nodeToDecommission.Name), func() {
+					err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(decommissioned.(bool)).To(BeTrue())
+					err = Inst().V.DecommissionNode(nodeToDecommission)
+					Expect(err).NotTo(HaveOccurred())
+					Step(fmt.Sprintf("check if node %s was decommissioned", nodeToDecommission.Name), func() {
+						t := func() (interface{}, bool, error) {
+							status, err := Inst().V.GetNodeStatus(nodeToDecommission)
+							if err != nil && status != nil && *status == api.Status_STATUS_NONE {
+								return true, false, nil
+							}
+							if err != nil {
+								return false, true, err
+							}
+							return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
+						}
+						decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(decommissioned.(bool)).To(BeTrue())
+					})
 				})
-			})
-			Step(fmt.Sprintf("Rejoin node"), func() {
-				err := Inst().V.RejoinNode(nodeToDecommission)
-				Expect(err).NotTo(HaveOccurred())
-				err = Inst().V.WaitDriverUpOnNode(nodeToDecommission)
-				Expect(err).NotTo(HaveOccurred())
-			})
+				Step(fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name), func() {
+					err := Inst().V.RejoinNode(nodeToDecommission)
+					Expect(err).NotTo(HaveOccurred())
+					err = Inst().V.WaitDriverUpOnNode(nodeToDecommission)
+					Expect(err).NotTo(HaveOccurred())
+				})
 
+			}
 		})
 
 		Step("destroy apps", func() {

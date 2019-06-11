@@ -1803,17 +1803,6 @@ func (k *k8s) createMigrationObjects(
 	return nil, nil
 }
 
-func (k *k8s) getScName(pvc *v1.PersistentVolumeClaim) string {
-	if pvc != nil && pvc.Labels != nil {
-		for key, value := range pvc.Labels {
-			if key == "volume.beta.kubernetes.io/storage-class" {
-				return value
-			}
-		}
-	}
-	return ""
-}
-
 func (k *k8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 	k8sOps := k8s_ops.Instance()
 	podsUsingStorage := make([]v1.Pod, 0)
@@ -1827,18 +1816,7 @@ func (k *k8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 				logrus.Errorf("failed to get pvc [%s] %s. Cause: %v", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, err)
 				return podsUsingStorage
 			}
-			scName := ""
-			if pvc.Spec.StorageClassName != nil {
-				scName = *pvc.Spec.StorageClassName
-			} else {
-				scName = k.getScName(pvc)
-			}
-			sc, err := k8sOps.GetStorageClass(scName)
-			if err != nil {
-				logrus.Errorf("failed to retrieve storageclass %s. Cause: %v", *pvc.Spec.StorageClassName, err)
-				return podsUsingStorage
-			}
-			if sc.Provisioner == provisioners[provisioner] {
+			if scProvisioner, err := k8sOps.GetStorageProvisionerForPVC(pvc); err == nil && scProvisioner == provisioners[provisioner] {
 				podsUsingStorage = append(podsUsingStorage, pod)
 				break
 			}
@@ -1857,7 +1835,9 @@ func (k *k8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 		}
 	}
 	podsUsingStorage := k.getPodsUsingStorage(pods.Items, provisioner)
-	if err = k8sOps.DrainPodsFromNode(n.Name, podsUsingStorage, defaultTimeout, defaultRetryInterval); err != nil {
+	// double the timeout every 40 pods
+	timeout := defaultTimeout * time.Duration(len(podsUsingStorage)/40+1)
+	if err = k8sOps.DrainPodsFromNode(n.Name, podsUsingStorage, timeout, defaultRetryInterval); err != nil {
 		return &scheduler.ErrFailedToDecommissionNode{
 			Node:  n,
 			Cause: fmt.Sprintf("Failed to drain pods from node: %v. Err: %v", n.Name, err),
