@@ -45,7 +45,7 @@ var _ = Describe("{DecommissionNode}", func() {
 		Step("pick a random nodes to decommission", func() {
 			var workerNodes []node.Node
 			Step(fmt.Sprintf("get worker nodes"), func() {
-				workerNodes := node.GetWorkerNodes()
+				workerNodes = node.GetWorkerNodes()
 				Expect(workerNodes).NotTo(BeEmpty())
 			})
 
