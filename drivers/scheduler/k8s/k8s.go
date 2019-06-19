@@ -901,11 +901,11 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			if err := k8sOps.ValidateApplicationRestore(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
-					Cause: fmt.Sprintf("Failed to validate ApplicationBackup: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate ApplicationRestore: %v. Err: %v", obj.Name, err),
 					Type:  obj,
 				}
 			}
-			logrus.Infof("[%v] Validated ApplicationBackupRestore: %v", ctx.App.Key, obj.Name)
+			logrus.Infof("[%v] Validated ApplicationRestore: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
