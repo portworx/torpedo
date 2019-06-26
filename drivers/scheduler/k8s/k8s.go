@@ -44,7 +44,7 @@ const (
 	DeploymentSuffix = "-dep"
 	// StatefulSetSuffix is the suffix for statefulset names stored as keys in maps
 	StatefulSetSuffix = "-ss"
-	// SystemdSchedServiceName is the name of the system service resposible for scheduling
+	// SystemdSchedServiceName is the name of the system service responsible for scheduling
 	// TODO Change this when running on openshift for the proper service name
 	SystemdSchedServiceName = "kubelet"
 )
@@ -224,6 +224,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*apps_api.StatefulSet); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*apps_api.DaemonSet); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*v1.Service); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.PersistentVolumeClaim); ok {
@@ -248,7 +250,13 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*stork_api.MigrationSchedule); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.BackupLocation); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.ApplicationBackup); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*stork_api.SchedulePolicy); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.ApplicationRestore); ok {
 		return specObj, nil
 	}
 
@@ -384,6 +392,23 @@ func (k *K8s) createSpecObjects(app *spec.AppSpec, namespace, storageprovisioner
 			specObjects = append(specObjects, obj)
 		}
 	}
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createBackupObjects(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
 	return specObjects, nil
 }
 
@@ -868,6 +893,33 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated MigrationSchedule: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.BackupLocation); ok {
+			if err := k8sOps.ValidateBackupLocation(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate BackupLocation: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated BackupLocation: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.ApplicationBackup); ok {
+			if err := k8sOps.ValidateApplicationBackup(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate ApplicationBackup: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated ApplicationBackup: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.ApplicationRestore); ok {
+			if err := k8sOps.ValidateApplicationRestore(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate ApplicationRestore: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated ApplicationRestore: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -896,6 +948,20 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	for _, spec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyMigrationObject(spec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
+		}
+	}
+
+	for _, spec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyBackupObjects(spec, ctx.App)
 			if err != nil {
 				return nil, true, err
 			}
@@ -1835,7 +1901,51 @@ func (k *K8s) createMigrationObjects(
 	return nil, nil
 }
 
-func (k *K8s) destroyMigrationObject(
+
+func (k *k8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
+	k8sOps := k8s_ops.Instance()
+	podsUsingStorage := make([]v1.Pod, 0)
+	for _, pod := range pods {
+		for _, volume := range pod.Spec.Volumes {
+			if volume.PersistentVolumeClaim == nil {
+				continue
+			}
+			pvc, err := k8sOps.GetPersistentVolumeClaim(volume.PersistentVolumeClaim.ClaimName, pod.Namespace)
+			if err != nil {
+				logrus.Errorf("failed to get pvc [%s] %s. Cause: %v", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, err)
+				return podsUsingStorage
+			}
+			if scProvisioner, err := k8sOps.GetStorageProvisionerForPVC(pvc); err == nil && scProvisioner == provisioners[provisioner] {
+				podsUsingStorage = append(podsUsingStorage, pod)
+				break
+			}
+		}
+	}
+	return podsUsingStorage
+}
+
+func (k *k8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
+	k8sOps := k8s_ops.Instance()
+	pods, err := k8sOps.GetPodsByNode(n.Name, "")
+	if err != nil {
+		return &scheduler.ErrFailedToDecommissionNode{
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to get pods on the node: %v. Err: %v", n.Name, err),
+		}
+	}
+	podsUsingStorage := k.getPodsUsingStorage(pods.Items, provisioner)
+	// double the timeout every 40 pods
+	timeout := defaultTimeout * time.Duration(len(podsUsingStorage)/40+1)
+	if err = k8sOps.DrainPodsFromNode(n.Name, podsUsingStorage, timeout, defaultRetryInterval); err != nil {
+		return &scheduler.ErrFailedToDecommissionNode{
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to drain pods from node: %v. Err: %v", n.Name, err),
+		}
+	}
+	return nil
+}
+
+func (k *k8s) destroyMigrationObject(
 	specObj interface{},
 	app *spec.AppSpec,
 ) error {
@@ -1880,6 +1990,84 @@ func (k *K8s) destroyMigrationObject(
 	return nil
 }
 
+func (k *k8s) createBackupObjects(
+	specObj interface{},
+	ns *v1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	k8sOps := k8s_ops.Instance()
+	if obj, ok := specObj.(*stork_api.BackupLocation); ok {
+		obj.Namespace = ns.Name
+		backupLocation, err := k8sOps.CreateBackupLocation(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create BackupLocation: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created BackupLocation: %v", app.Key, backupLocation.Name)
+		return backupLocation, nil
+	} else if obj, ok := specObj.(*stork_api.ApplicationBackup); ok {
+		obj.Namespace = ns.Name
+		applicationBackup, err := k8sOps.CreateApplicationBackup(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create ApplicationBackup: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created ApplicationBackup: %v", app.Key, applicationBackup.Name)
+		return applicationBackup, nil
+	} else if obj, ok := specObj.(*stork_api.ApplicationRestore); ok {
+		obj.Namespace = ns.Name
+		applicationRestore, err := k8sOps.CreateApplicationRestore(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create ApplicationBackupRestore: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created ApplicationBackupRestore: %v", app.Key, applicationRestore.Name)
+		return applicationRestore, nil
+	}
+	return nil, nil
+}
+
+func (k *k8s) destroyBackupObjects(
+	specObj interface{},
+	app *spec.AppSpec,
+) error {
+	k8sOps := k8s_ops.Instance()
+	if obj, ok := specObj.(*stork_api.BackupLocation); ok {
+		err := k8sOps.DeleteBackupLocation(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete BackupLocation: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed BackupLocation: %v", app.Key, obj.Name)
+	} else if obj, ok := specObj.(*stork_api.ApplicationBackup); ok {
+		err := k8sOps.DeleteApplicationBackup(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete ApplicationBackup: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed ApplicationBackup: %v", app.Key, obj.Name)
+	} else if obj, ok := specObj.(*stork_api.ApplicationRestore); ok {
+		err := k8sOps.DeleteApplicationRestore(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete ApplicationBackupRestore: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed ApplicationBackupRestore: %v", app.Key, obj.Name)
+	}
+	return nil
+}
 func insertLineBreak(note string) string {
 	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
 }
