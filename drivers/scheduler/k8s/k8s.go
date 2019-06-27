@@ -1924,7 +1924,7 @@ func (k *K8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 	return podsUsingStorage
 }
 
-//Prepare the Node for decomission
+//PrepareNodeToDecommission Prepare the Node for decomission
 func (k *K8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 	k8sOps := k8s_ops.Instance()
 	pods, err := k8sOps.GetPodsByNode(n.Name, "")
