@@ -1902,7 +1902,7 @@ func (k *K8s) createMigrationObjects(
 }
 
 
-func (k *k8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
+func (k *K8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 	k8sOps := k8s_ops.Instance()
 	podsUsingStorage := make([]v1.Pod, 0)
 	for _, pod := range pods {
@@ -1924,7 +1924,7 @@ func (k *k8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 	return podsUsingStorage
 }
 
-func (k *k8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
+func (k *K8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 	k8sOps := k8s_ops.Instance()
 	pods, err := k8sOps.GetPodsByNode(n.Name, "")
 	if err != nil {
@@ -1945,7 +1945,7 @@ func (k *k8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 	return nil
 }
 
-func (k *k8s) destroyMigrationObject(
+func (k *K8s) destroyMigrationObject(
 	specObj interface{},
 	app *spec.AppSpec,
 ) error {
@@ -1990,7 +1990,7 @@ func (k *k8s) destroyMigrationObject(
 	return nil
 }
 
-func (k *k8s) createBackupObjects(
+func (k *K8s) createBackupObjects(
 	specObj interface{},
 	ns *v1.Namespace,
 	app *spec.AppSpec,
@@ -2033,7 +2033,7 @@ func (k *k8s) createBackupObjects(
 	return nil, nil
 }
 
-func (k *k8s) destroyBackupObjects(
+func (k *K8s) destroyBackupObjects(
 	specObj interface{},
 	app *spec.AppSpec,
 ) error {
