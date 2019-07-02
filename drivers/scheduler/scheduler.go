@@ -106,16 +106,16 @@ type Driver interface {
 	// Describe generates a bundle that can be used by support - logs, cores, states, etc
 	Describe(*Context) (string, error)
 
-	// Scale the current applications using the new scales from the GetScaleFactorMap.
+	// ScaleApplication scales the current applications using the new scales from the GetScaleFactorMap.
 	ScaleApplication(*Context, map[string]int32) error
 
-	// Get a map of current applications to their new scales, based on "factor"
+	// GetScaleFactorMap gets a map of current applications to their new scales, based on "factor"
 	GetScaleFactorMap(*Context) (map[string]int32, error)
 
-	// Stop scheduler service on the given node
+	// StopSchedOnNode stops scheduler service on the given node
 	StopSchedOnNode(n node.Node) error
 
-	// Start scheduler service on the given node
+	// StartSchedOnNode starts scheduler service on the given node
 	StartSchedOnNode(n node.Node) error
 
 	// RescanSpecs specified in specDir
@@ -126,6 +126,9 @@ type Driver interface {
 
 	// DisableSchedulingOnNode disable apps to be scheduled to a given node
 	DisableSchedulingOnNode(n node.Node) error
+ 
+	// PrepareNodeToDecommission prepares a given node for decommissioning
+	PrepareNodeToDecommission(n node.Node, provisioner string) error
 
 	// IsScalable check if a given spec is scalable or not
 	IsScalable(spec interface{}) bool

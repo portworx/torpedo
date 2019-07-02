@@ -8,6 +8,13 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+if [ -z "${CHAOS_LEVEL}" ]; then
+    CHAOS_LEVEL="5"
+fi
+if [ -z "${MIN_RUN_TIME}" ]; then
+    MIN_RUN_TIME="0"
+fi
+
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
     FAIL_FAST="--failFast"
 else
@@ -94,13 +101,13 @@ if [ -n "${K8S_VENDOR}" ]; then
         rancher)
             K8S_VENDOR_KEY=node-role.kubernetes.io/controlplane
             K8S_VENDOR_OPERATOR="In"
-            K8S_VENDOR_VALUE="values: [true]"
+            K8S_VENDOR_VALUE='values: ["true"]'
             ;;
         gke)
             # Run torpedo on worker node, where px installation is disabled. 
             K8S_VENDOR_KEY=px/enabled
             K8S_VENDOR_OPERATOR="In"
-            K8S_VENDOR_VALUE="values: [false]"
+            K8S_VENDOR_VALUE='values: ["false"]'
             ;;
     esac
 else
@@ -188,11 +195,14 @@ spec:
             "bin/drive_failure.test",
             "bin/volume_ops.test",
             "bin/sched.test",
+            "bin/node_decommission.test",
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
             "--node-driver", "ssh",
             "--scale-factor", "$SCALE_FACTOR",
+      			"--minimun-runtime-mins", "$MIN_RUN_TIME",
+		      	"--chaos-level", "$CHAOS_LEVEL",
             "--provisioner", "$PROVISIONER",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
