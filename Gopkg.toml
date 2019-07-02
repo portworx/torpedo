@@ -44,8 +44,9 @@
   branch = "release-4.0"
 
 [[constraint]]
-  branch = "master"
+  branch = "PTX-1262"
   name = "github.com/portworx/sched-ops"
+  source = "github.com/thiguetta/sched-ops"
 
 [[constraint]]
   name = "k8s.io/api"
