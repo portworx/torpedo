@@ -561,15 +561,16 @@
   revision = "e2f1ab4961e1124b8231b4b048df4d278e00ba82"
 
 [[projects]]
-  branch = "master"
-  digest = "1:61ce5f7aae7da51da1bdb942b191c49041bd6429650b2d713e76ad5df81b6dea"
+  branch = "PTX-1620"
+  digest = "1:6ecde4bf41a56c857e9610001ae44f7b60cc3dd75291761a7d631d9a9fd73da0"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "f7caadba3274323304f77576cd8b380b97f45d6b"
+  revision = "10e27978b40605f7354c7cb1449685a736437def"
+  source = "github.com/thiguetta/sched-ops"
 
 [[projects]]
   branch = "master"
