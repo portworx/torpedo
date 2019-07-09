@@ -8,6 +8,13 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+if [ -z "${CHAOS_LEVEL}" ]; then
+    CHAOS_LEVEL="5"
+fi
+if [ -z "${MIN_RUN_TIME}" ]; then
+    MIN_RUN_TIME="0"
+fi
+
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
     FAIL_FAST="--failFast"
 else
@@ -34,6 +41,10 @@ fi
 UPGRADE_BASE_VERSION_ARG=""
 if [ -n "${STORAGE_BASE_VERSION}" ]; then
     UPGRADE_BASE_VERSION_ARG="--storage-driver-base-version=$STORAGE_BASE_VERSION"
+fi
+
+if [ -n "${PROVISIONER}" ]; then
+	PROVISIONER="$PROVISIONER"
 fi
 
 if [ -z "${TORPEDO_IMG}" ]; then
@@ -80,6 +91,8 @@ if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
 fi
 
 K8S_VENDOR_KEY=""
+K8S_VENDOR_VALUE=""
+K8S_VENDOR_OPERATOR="Exists"
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
         kubernetes)
@@ -87,6 +100,14 @@ if [ -n "${K8S_VENDOR}" ]; then
             ;;
         rancher)
             K8S_VENDOR_KEY=node-role.kubernetes.io/controlplane
+            K8S_VENDOR_OPERATOR="In"
+            K8S_VENDOR_VALUE='values: ["true"]'
+            ;;
+        gke)
+            # Run torpedo on worker node, where px installation is disabled. 
+            K8S_VENDOR_KEY=px/enabled
+            K8S_VENDOR_OPERATOR="In"
+            K8S_VENDOR_VALUE='values: ["false"]'
             ;;
     esac
 else
@@ -146,13 +167,18 @@ spec:
   - key: node-role.kubernetes.io/etcd
     operator: Equal
     value: "true"
+  - key: apps
+    operator: Equal
+    value: "false"
+    effect: "NoSchedule"
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
         - matchExpressions:
           - key: ${K8S_VENDOR_KEY}
-            operator: Exists
+            operator: ${K8S_VENDOR_OPERATOR}
+            ${K8S_VENDOR_VALUE}
   containers:
   - name: torpedo
     image: ${TORPEDO_IMG}
@@ -169,11 +195,15 @@ spec:
             "bin/drive_failure.test",
             "bin/volume_ops.test",
             "bin/sched.test",
+            "bin/node_decommission.test",
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
             "--node-driver", "ssh",
             "--scale-factor", "$SCALE_FACTOR",
+      			"--minimun-runtime-mins", "$MIN_RUN_TIME",
+		      	"--chaos-level", "$CHAOS_LEVEL",
+            "--provisioner", "$PROVISIONER",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true
@@ -183,6 +213,8 @@ spec:
       value: "${TORPEDO_SSH_USER}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
+    - name: TORPEDO_SSH_KEY
+      value: "${TORPEDO_SSH_KEY}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
