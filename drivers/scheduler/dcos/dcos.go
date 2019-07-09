@@ -513,12 +513,18 @@ func (d *dcos) PrepareNodeToDecommission(n node.Node, provisioner string) error 
 
 func (d *dcos) EnableSchedulingOnNode(n node.Node) error {
 	// TODO implement this method
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "EnableSchedulingOnNode()",
+	}
 }
 
 func (d *dcos) DisableSchedulingOnNode(n node.Node) error {
 	// TODO implement this method
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DisableSchedulingOnNode()",
+	}
 }
 
 func (d *dcos) IsScalable(spec interface{}) bool {

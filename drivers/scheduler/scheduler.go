@@ -126,7 +126,7 @@ type Driver interface {
 
 	// DisableSchedulingOnNode disable apps to be scheduled to a given node
 	DisableSchedulingOnNode(n node.Node) error
- 
+
 	// PrepareNodeToDecommission prepares a given node for decommissioning
 	PrepareNodeToDecommission(n node.Node, provisioner string) error
 
