@@ -1,0 +1,66 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: nginx-service
+spec:
+  selector:
+    app: nginx
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-persistent-storage
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: nginx-persistent-storage
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-1
+      - name: nginx-persistent-storage
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-2
+      - name: nginx-persistent-storage
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-3
+      - name: nginx-persistent-storage
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-4
+      - name: nginx-persistent-storage
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-6
+      - name: nginx-persistent-storage
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-6
+      - name: nginx-persistent-storage
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-7
+      - name: nginx-persistent-storage
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-8
+      - name: nginx-persistent-storage
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-9
+      - name: nginx-persistent-storage
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-10
