@@ -222,12 +222,17 @@ spec:
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
 <<<<<<< HEAD
+<<<<<<< HEAD
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
             "--chaos-level", "$CHAOS_LEVEL",
 =======
 			"--minimun-runtime-mins", "$MIN_RUN_TIME",
 			"--chaos-level", "$CHAOS_LEVEL",
 >>>>>>> Add time out param with default 24hr to deploy script.
+=======
+            "--minimun-runtime-mins", "$MIN_RUN_TIME",
+            "--chaos-level", "$CHAOS_LEVEL",
+>>>>>>> Set default timeout to 30 days.
             "--provisioner", "$PROVISIONER",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
