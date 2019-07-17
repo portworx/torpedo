@@ -244,6 +244,7 @@ func (k *k8sSchedOps) validateMountsInPods(
 	validatedMountPods := make([]string, 0)
 	nodes := node.GetNodesByName()
 	newPods := excludePods(pods, podsToExclude)
+PodLoop:
 	for _, p := range newPods {
 		pod, err := k8s.Instance().GetPodByName(p.Name, p.Namespace)
 		if err != nil && err == k8s.ErrPodsNotFound {
@@ -274,12 +275,12 @@ func (k *k8sSchedOps) validateMountsInPods(
 		for containerName, path := range containerPaths {
 			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+) %s.+", path))
 			output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
-			if err != nil && !isErrPodNotFound(err) {
+			if err != nil && err != k8s.ErrPodsNotFound {
 				return validatedMountPods, err
-			} else if err != nil && isErrPodNotFound(err) {
-				// if pod is not found it is probably rescheduled so delay the check
-				logrus.Warnf("Failed to execute command in pod, %s not found. probably it got rescheduled", pod.Name)
-				continue
+			} else if err != nil && (err == k8s.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
+				// if pod is not found or in completed state so delay the check and move to next pod
+				logrus.Warnf("Failed to execute command in pod. Cause %v", err)
+				continue PodLoop
 			}
 			mounts := strings.Split(output, "\n")
 			pxMountFound := false
@@ -333,10 +334,6 @@ func (k *k8sSchedOps) validateMountsInPods(
 func isMountReadOnly(mount string) bool {
 	var re = regexp.MustCompile(`ro,|,ro`)
 	return re.MatchString(mount)
-}
-
-func isErrPodNotFound(err error) bool {
-	return err == k8s.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")
 }
 
 func (k *k8sSchedOps) ValidateSnapshot(params map[string]string, parent *api.Volume) error {
