@@ -145,6 +145,8 @@ func (k *K8s) RescanSpecs(specDir string) error {
 	return nil
 }
 
+//RefreshNodeRegistry update the k8 node list registry
+//
 func (k *K8s) RefreshNodeRegistry() error {
 
 	nodes, err := k8s_ops.Instance().GetNodes()
