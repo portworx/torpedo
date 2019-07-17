@@ -145,6 +145,27 @@ func (k *K8s) RescanSpecs(specDir string) error {
 	return nil
 }
 
+func (k *K8s) RefreshNodeRegistry() error {
+
+	nodes, err := k8s_ops.Instance().GetNodes()
+	if err != nil {
+		return err
+	}
+
+	node.CleanupRegistry()
+
+	for _, n := range nodes.Items {
+		newNode := k.parseK8SNode(n)
+		if err := k.IsNodeReady(newNode); err != nil {
+			return err
+		}
+		if err := node.AddNode(newNode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 //ParseSpecs Parse the application spec file
 //
 func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
