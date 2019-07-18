@@ -5,7 +5,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"regexp"
-	"time"
 )
 
 const (
@@ -23,27 +22,11 @@ const (
 	SystemdSchedServiceName = "atomic-openshift-node"
 )
 
-const (
-	statefulSetValidateTimeout   = 20 * time.Minute
-	k8sNodeReadyTimeout          = 5 * time.Minute
-	volDirCleanupTimeout         = 5 * time.Minute
-	k8sObjectCreateTimeout       = 2 * time.Minute
-	k8sDestroyTimeout            = 2 * time.Minute
-	findFilesOnWorkerTimeout     = 1 * time.Minute
-	deleteTasksWaitTimeout       = 3 * time.Minute
-	defaultRetryInterval         = 10 * time.Second
-	defaultTimeout               = 2 * time.Minute
-	resizeSupportedAnnotationKey = "torpedo/resize-supported"
-)
 
-const (
-	portworxStorage = "portworx"
-	csiStorage      = "csi"
-)
 
 var provisioners = map[string]string{
-	portworxStorage: "kubernetes.io/portworx-volume",
-	csiStorage:      "com.openstorage.pxd",
+	kube.PortworxStorage: "kubernetes.io/portworx-volume",
+	kube.CsiStorage:      "com.openstorage.pxd",
 }
 
 var (
@@ -58,8 +41,8 @@ func (k *openshift) StopSchedOnNode(n node.Node) error {
 	driver, _ := node.Get(k.K8s.NodeDriverName)
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         findFilesOnWorkerTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         kube.FindFilesOnWorkerTimeout,
+			TimeBeforeRetry: kube.DefaultRetryInterval,
 		},
 		Action: "stop",
 	}
@@ -78,8 +61,8 @@ func (k *openshift) StartSchedOnNode(n node.Node) error {
 	driver, _ := node.Get(k.K8s.NodeDriverName)
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         defaultTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         kube.DefaultTimeout,
+			TimeBeforeRetry: kube.DefaultRetryInterval,
 		},
 		Action: "start",
 	}

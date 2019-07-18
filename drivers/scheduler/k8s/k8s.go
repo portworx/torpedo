@@ -55,21 +55,21 @@ const (
 	volDirCleanupTimeout         = 5 * time.Minute
 	k8sObjectCreateTimeout       = 2 * time.Minute
 	k8sDestroyTimeout            = 2 * time.Minute
-	findFilesOnWorkerTimeout     = 1 * time.Minute
+	FindFilesOnWorkerTimeout     = 1 * time.Minute
 	deleteTasksWaitTimeout       = 3 * time.Minute
-	defaultRetryInterval         = 10 * time.Second
-	defaultTimeout               = 2 * time.Minute
+	DefaultRetryInterval         = 10 * time.Second
+	DefaultTimeout               = 2 * time.Minute
 	resizeSupportedAnnotationKey = "torpedo/resize-supported"
 )
 
 const (
-	portworxStorage = "portworx"
-	csiStorage      = "csi"
+	PortworxStorage = "portworx"
+	CsiStorage      = "csi"
 )
 
 var provisioners = map[string]string{
-	portworxStorage: "kubernetes.io/portworx-volume",
-	csiStorage:      "com.openstorage.pxd",
+	PortworxStorage: "kubernetes.io/portworx-volume",
+	CsiStorage:      "com.openstorage.pxd",
 }
 
 var (
@@ -95,7 +95,7 @@ func (k *K8s) IsNodeReady(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, k8sNodeReadyTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, k8sNodeReadyTimeout, DefaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -369,7 +369,7 @@ func (k *K8s) createSpecObjects(app *spec.AppSpec, namespace, storageprovisioner
 			}
 			return obj, false, nil
 		}
-		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
 		if err != nil {
 			return nil, err
 		}
@@ -387,7 +387,7 @@ func (k *K8s) createSpecObjects(app *spec.AppSpec, namespace, storageprovisioner
 			return obj, false, nil
 		}
 
-		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
 		if err != nil {
 			return nil, err
 		}
@@ -406,7 +406,7 @@ func (k *K8s) createSpecObjects(app *spec.AppSpec, namespace, storageprovisioner
 			return obj, false, nil
 		}
 
-		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
 		if err != nil {
 			return nil, err
 		}
@@ -423,7 +423,7 @@ func (k *K8s) createSpecObjects(app *spec.AppSpec, namespace, storageprovisioner
 			}
 			return obj, false, nil
 		}
-		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
 		if err != nil {
 			return nil, err
 		}
@@ -491,7 +491,7 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string) (*v1.Namespac
 		return ns, false, nil
 	}
 
-	nsObj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+	nsObj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -508,7 +508,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 			logrus.Infof("[%v] Requested provisioner: %s", app.Key, storageprovisioner)
 			obj.Provisioner = storageProvisioner
 		} else {
-			obj.Provisioner = provisioners[portworxStorage]
+			obj.Provisioner = provisioners[PortworxStorage]
 		}
 
 		sc, err := k8sOps.CreateStorageClass(obj)
@@ -962,7 +962,7 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return currPods, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
 		if err != nil {
 			podList = append(podList, pods.(v1.Pod))
 		}
@@ -976,7 +976,7 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
 		if err != nil {
 			podList = append(podList, pods.(v1.Pod))
 		}
@@ -990,7 +990,7 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
 		if err != nil {
 			podList = append(podList, pods.(v1.Pod))
 		}
@@ -1016,7 +1016,7 @@ func (k *K8s) waitForCleanup(ctx *scheduler.Context, podList []v1.Pod) error {
 		t := func() (interface{}, bool, error) {
 			return nil, true, k.validateVolumeDirCleanup(pod.UID, ctx.App)
 		}
-		if _, err := task.DoRetryWithTimeout(t, volDirCleanupTimeout, defaultRetryInterval); err != nil {
+		if _, err := task.DoRetryWithTimeout(t, volDirCleanupTimeout, DefaultRetryInterval); err != nil {
 			return err
 		}
 		logrus.Infof("Validated resource cleanup for pod: %v", pod.UID)
@@ -1029,8 +1029,8 @@ func (k *K8s) validateVolumeDirCleanup(podUID types.UID, app *spec.AppSpec) erro
 	driver, _ := node.Get(k.NodeDriverName)
 	options := node.FindOpts{
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         findFilesOnWorkerTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         FindFilesOnWorkerTimeout,
+			TimeBeforeRetry: DefaultRetryInterval,
 		},
 		MinDepth: 1,
 		MaxDepth: 1,
@@ -1606,7 +1606,7 @@ func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 		}
 	}
 
-	nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	nodes, err := task.DoRetryWithTimeout(t, DefaultTimeout, DefaultRetryInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -1799,8 +1799,8 @@ func (k *K8s) StopSchedOnNode(n node.Node) error {
 	driver, _ := node.Get(k.NodeDriverName)
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         findFilesOnWorkerTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         FindFilesOnWorkerTimeout,
+			TimeBeforeRetry: DefaultRetryInterval,
 		},
 		Action: "stop",
 	}
@@ -1820,8 +1820,8 @@ func (k *K8s) StartSchedOnNode(n node.Node) error {
 	driver, _ := node.Get(k.NodeDriverName)
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         defaultTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         DefaultTimeout,
+			TimeBeforeRetry: DefaultRetryInterval,
 		},
 		Action: "start",
 	}
@@ -1959,8 +1959,8 @@ func (k *K8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 	}
 	podsUsingStorage := k.getPodsUsingStorage(pods.Items, provisioner)
 	// double the timeout every 40 pods
-	timeout := defaultTimeout * time.Duration(len(podsUsingStorage)/40+1)
-	if err = k8sOps.DrainPodsFromNode(n.Name, podsUsingStorage, timeout, defaultRetryInterval); err != nil {
+	timeout := DefaultTimeout * time.Duration(len(podsUsingStorage)/40+1)
+	if err = k8sOps.DrainPodsFromNode(n.Name, podsUsingStorage, timeout, DefaultRetryInterval); err != nil {
 		return &scheduler.ErrFailedToDecommissionNode{
 			Node:  n,
 			Cause: fmt.Sprintf("Failed to drain pods from node: %v. Err: %v", n.Name, err),
