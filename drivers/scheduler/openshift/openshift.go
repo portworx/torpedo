@@ -4,7 +4,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"regexp"
 )
 
 const (
@@ -24,14 +23,7 @@ const (
 
 
 
-var provisioners = map[string]string{
-	kube.PortworxStorage: "kubernetes.io/portworx-volume",
-	kube.CsiStorage:      "com.openstorage.pxd",
-}
 
-var (
-	namespaceRegex = regexp.MustCompile("{{NAMESPACE}}")
-)
 
 type openshift struct {
 	kube.K8s
