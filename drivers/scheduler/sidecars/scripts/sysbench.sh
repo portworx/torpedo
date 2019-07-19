@@ -9,8 +9,8 @@ do
 done
 while :
 do
-    sysbench --db-driver=mysql --oltp-table-size=1000000 --oltp-tables-count=24 --threads=4 --mysql-host=${MYSQL_HOST} --mysql-port=3306 --mysql-user=sysbench --mysql-password=password /usr/share/sysbench/tests/include/oltp_legacy/parallel_prepare.lua prepare
-    sysbench --db-driver=mysql --report-interval=1 --mysql-table-engine=innodb --oltp-table-size=1000000 --threads=16 --time=5400 --mysql-host=${MYSQL_HOST} --mysql-port=3306 --mysql-user=sysbench --mysql-password=password --olpt-skip-trx /usr/share/sysbench/tests/include/oltp_legacy/oltp.lua run
-    sysbench --db-driver=mysql --oltp-table-size=1000000 --oltp-tables-count=24 --threads=4 --mysql-host=${MYSQL_HOST} --mysql-port=3306 --mysql-user=sysbench --mysql-password=password /usr/share/sysbench/tests/include/oltp_legacy/oltp.lua cleanup
+    sysbench --db-driver=mysql --oltp-table-size=10000 --oltp-tables-count=10 --threads=1 --mysql-host=${MYSQL_HOST} --mysql-port=3306 --mysql-user=sysbench --mysql-password=password /usr/share/sysbench/tests/include/oltp_legacy/parallel_prepare.lua prepare
+    sysbench --db-driver=mysql --report-interval=1 --mysql-table-engine=innodb --oltp-table-size=10000 --threads=1 --time=5400 --mysql-host=${MYSQL_HOST} --mysql-port=3306 --mysql-user=sysbench --mysql-password=password --olpt-skip-trx /usr/share/sysbench/tests/include/oltp_legacy/oltp.lua run
+    sysbench --db-driver=mysql --oltp-table-size=10000 --oltp-tables-count=10 --threads=1 --mysql-host=${MYSQL_HOST} --mysql-port=3306 --mysql-user=sysbench --mysql-password=password /usr/share/sysbench/tests/include/oltp_legacy/oltp.lua cleanup
     sleep 2
 done
