@@ -9,15 +9,7 @@ import (
 const (
 	// SchedName is the name of the kubernetes scheduler driver implementation
 	SchedName = "openshift"
-	// SnapshotParent is the parameter key for the parent of a snapshot
-	SnapshotParent = "snapshot_parent"
-	k8sPodsRootDir = "/var/lib/kubelet/pods"
-	// DeploymentSuffix is the suffix for deployment names stored as keys in maps
-	DeploymentSuffix = "-dep"
-	// StatefulSetSuffix is the suffix for statefulset names stored as keys in maps
-	StatefulSetSuffix = "-ss"
 	// SystemdSchedServiceName is the name of the system service resposible for scheduling
-	// TODO Change this when running on openshift for the proper service name
 	SystemdSchedServiceName = "atomic-openshift-node"
 )
 
