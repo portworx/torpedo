@@ -8,6 +8,10 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+if [ -z "${SCHEDULER}" ]; then
+    SCHEDULER="k8s"
+fi
+
 if [ -z "${CHAOS_LEVEL}" ]; then
     CHAOS_LEVEL="5"
 fi
@@ -116,6 +120,12 @@ if [ -n "${K8S_VENDOR}" ]; then
             K8S_VENDOR_VALUE='values: ["false"]'
             NODE_DRIVER="gke"
             ;;
+        aks)
+            # Run torpedo on worker node, where px installation is disabled. 
+            K8S_VENDOR_KEY=px/enabled
+            K8S_VENDOR_OPERATOR="In"
+            K8S_VENDOR_VALUE='values: ["false"]'
+            ;;
     esac
 else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
@@ -208,6 +218,7 @@ spec:
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
+            "--scheduler", "$SCHEDULER",
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
