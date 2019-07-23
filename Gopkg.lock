@@ -61,14 +61,6 @@
   version = "v1.19.49"
 
 [[projects]]
-  digest = "1:c1100fc71e23b6a32b2c68a5202a848fd13811d5a10b12edb8019c3667d1cd9a"
-  name = "github.com/cenkalti/backoff"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "4b4cebaf850ec58f1bb1fec5bdebdf8501c2bc3f"
-  version = "v3.0.0"
-
-[[projects]]
   digest = "1:4189ee6a3844f555124d9d2656fe7af02fca961c2a9bad9074789df13a0c62e0"
   name = "github.com/docker/distribution"
   packages = [
@@ -353,16 +345,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:6842b4a6a6ec28ed353323ea6cd10c16ed04ac8e8d3d2049069e60448c156412"
-  name = "github.com/libopenstorage/gossip"
-  packages = ["types"]
-  pruneopts = "UT"
-  revision = "c26073a01952b2ed00aba97a7768645c19a06011"
-
-  
-[[projects]]
-  branch = "master"
-  digest = "1:fd50c39a5dfbb559f94d260f2c46034e2a23ffad8fad1f1aff0dcf770aeea3b9"
+  digest = "1:451d7ffcf4bc223d51ae800795a3f68176418bbe378efc5414270739c0891d79"
   name = "github.com/libopenstorage/cloudops"
   packages = [
     ".",
@@ -370,35 +353,19 @@
     "gce",
     "unsupported",
   ]
-
-[[projects]]
-  branch = "master"
-  digest = "1:99cd39df3fc3d9b27fd5a150935e36141fbcb7045d59ff1ca0e2027c44aa599d"
-  name = "github.com/libopenstorage/gossip"
-  packages = ["types"]
   pruneopts = "UT"
-  revision = "c26073a01952b2ed00aba97a7768645c19a06011"
+  revision = "1f7cce4009f2d9c295777ea65a3202b1e6bd39e5"
 
 [[projects]]
   branch = "release-4.0"
-  digest = "1:2a01a31d80a3a9f211a50e36f4ae127b829cc3ae06bd76a689ffeb563a6f20e9"
+  digest = "1:98afff12bed99b20c3ac15ac6f6c9dbd5da7ba23ae50492442cb9401c2fdddf0"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
     "api/client",
-    "api/client/cluster",
-    "api/client/volume",
-    "api/errors",
     "api/spec",
-    "cluster",
-    "objectstore",
-    "osdconfig",
-    "pkg/dbg",
     "pkg/parser",
     "pkg/units",
-    "schedpolicy",
-    "secrets",
-    "volume",
   ]
   pruneopts = "UT"
   revision = "28d0b70bc27c132245b2ecae6851324d72631135"
@@ -583,18 +550,6 @@
   pruneopts = "UT"
   revision = "ba968bfe8b2f7e042a574c888954fccecfa385b4"
   version = "v0.8.1"
-
-[[projects]]
-  branch = "master"
-  digest = "1:5a071421cdfe4558081de5087f334aae1a785eb79c0e33f75680ee2e7a312eee"
-  name = "github.com/portworx/kvdb"
-  packages = [
-    ".",
-    "common",
-    "mem",
-  ]
-  pruneopts = "UT"
-  revision = "e2f1ab4961e1124b8231b4b048df4d278e00ba82"
 
 [[projects]]
   branch = "master"
@@ -1084,11 +1039,7 @@
     "github.com/libopenstorage/cloudops/gce",
     "github.com/libopenstorage/openstorage/api",
     "github.com/libopenstorage/openstorage/api/client",
-    "github.com/libopenstorage/openstorage/api/client/cluster",
-    "github.com/libopenstorage/openstorage/api/client/volume",
     "github.com/libopenstorage/openstorage/api/spec",
-    "github.com/libopenstorage/openstorage/cluster",
-    "github.com/libopenstorage/openstorage/volume",
     "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1",
     "github.com/onsi/ginkgo",
     "github.com/onsi/ginkgo/reporters",
