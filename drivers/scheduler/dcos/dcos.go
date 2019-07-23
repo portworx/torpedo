@@ -494,7 +494,6 @@ func (d *dcos) StartSchedOnNode(node node.Node) error {
 		Operation: "StartSchedOnNode()",
 	}
 }
-
 func (d *dcos) RescanSpecs(specDir string) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
@@ -525,6 +524,11 @@ func (d *dcos) DisableSchedulingOnNode(n node.Node) error {
 		Type:      "Function",
 		Operation: "DisableSchedulingOnNode()",
 	}
+}
+
+func (d *dcos) RefreshNodeRegistry() error {
+	// TODO implement this method
+	return nil
 }
 
 func (d *dcos) IsScalable(spec interface{}) bool {

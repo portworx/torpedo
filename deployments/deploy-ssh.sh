@@ -8,6 +8,10 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+if [ -z "${SCHEDULER}" ]; then
+    SCHEDULER="k8s"
+fi
+
 if [ -z "${CHAOS_LEVEL}" ]; then
     CHAOS_LEVEL="5"
 fi
@@ -52,6 +56,11 @@ if [ -z "${TORPEDO_IMG}" ]; then
     echo "Using default torpedo image: ${TORPEDO_IMG}"
 fi
 
+if [ -z "${TIMEOUT}" ]; then
+    TIMEOUT="720h0m0s"
+    echo "Using default timeout of ${TIMEOUT}"
+fi
+
 kubectl delete pod torpedo
 state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
 timeout=0
@@ -93,6 +102,7 @@ fi
 K8S_VENDOR_KEY=""
 K8S_VENDOR_VALUE=""
 K8S_VENDOR_OPERATOR="Exists"
+NODE_DRIVER="ssh"
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
         kubernetes)
@@ -104,6 +114,13 @@ if [ -n "${K8S_VENDOR}" ]; then
             K8S_VENDOR_VALUE='values: ["true"]'
             ;;
         gke)
+            # Run torpedo on worker node, where px installation is disabled. 
+            K8S_VENDOR_KEY=px/enabled
+            K8S_VENDOR_OPERATOR="In"
+            K8S_VENDOR_VALUE='values: ["false"]'
+            NODE_DRIVER="gke"
+            ;;
+        aks)
             # Run torpedo on worker node, where px installation is disabled. 
             K8S_VENDOR_KEY=px/enabled
             K8S_VENDOR_OPERATOR="In"
@@ -184,11 +201,13 @@ spec:
     image: ${TORPEDO_IMG}
     command: [ "ginkgo" ]
     args: [ "--trace",
+            "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
             "--slowSpecThreshold", "600",
             "$VERBOSE",
             "$FOCUS_ARG",
             "$SKIP_ARG",
+            "bin/asg.test",
             "bin/basic.test",
             "bin/reboot.test",
             "bin/upgrade.test",
@@ -199,10 +218,11 @@ spec:
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
-            "--node-driver", "ssh",
+            "--scheduler", "$SCHEDULER",
+            "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
-      			"--minimun-runtime-mins", "$MIN_RUN_TIME",
-		      	"--chaos-level", "$CHAOS_LEVEL",
+            "--minimun-runtime-mins", "$MIN_RUN_TIME",
+            "--chaos-level", "$CHAOS_LEVEL",
             "--provisioner", "$PROVISIONER",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
