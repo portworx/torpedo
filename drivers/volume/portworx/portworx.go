@@ -1,6 +1,7 @@
 package portworx
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"reflect"
@@ -18,6 +19,7 @@ import (
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -132,11 +134,11 @@ func (d *portworx) RefreshDriverEndpoints() error {
 		return err
 	}
 
-	if len(cluster.Nodes) == 0 {
+	if len(cluster) == 0 {
 		return fmt.Errorf("cluster inspect returned empty nodes")
 	}
 
-	err = d.updateNodes(cluster.Nodes)
+	err = d.updateNodes(cluster)
 	if err != nil {
 		return err
 	}
