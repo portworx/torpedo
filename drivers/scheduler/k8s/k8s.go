@@ -50,26 +50,26 @@ const (
 )
 
 const (
-	statefulSetValidateTimeout   = 20 * time.Minute
-	k8sNodeReadyTimeout          = 5 * time.Minute
-	volDirCleanupTimeout         = 5 * time.Minute
-	k8sObjectCreateTimeout       = 2 * time.Minute
-	k8sDestroyTimeout            = 2 * time.Minute
+	statefulSetValidateTimeout = 20 * time.Minute
+	k8sNodeReadyTimeout        = 5 * time.Minute
+	volDirCleanupTimeout       = 5 * time.Minute
+	k8sObjectCreateTimeout     = 2 * time.Minute
+	k8sDestroyTimeout          = 2 * time.Minute
 	//FindFilesOnWorkerTimeout timeout for find files on worker
-	FindFilesOnWorkerTimeout     = 1 * time.Minute
-	deleteTasksWaitTimeout       = 3 * time.Minute
+	FindFilesOnWorkerTimeout = 1 * time.Minute
+	deleteTasksWaitTimeout   = 3 * time.Minute
 	//DefaultRetryInterval  Default retry interval
-	DefaultRetryInterval         = 10 * time.Second
+	DefaultRetryInterval = 10 * time.Second
 	//DefaultTimeout default timeout
 	DefaultTimeout               = 2 * time.Minute
 	resizeSupportedAnnotationKey = "torpedo/resize-supported"
 )
 
 const (
-	//PortworxStorage portworx storage name	
+	//PortworxStorage portworx storage name
 	PortworxStorage = "portworx"
 	//CsiStorage csi storage name
-	CsiStorage      = "csi"
+	CsiStorage = "csi"
 )
 
 var provisioners = map[string]string{
@@ -1928,7 +1928,6 @@ func (k *K8s) createMigrationObjects(
 
 	return nil, nil
 }
-
 
 func (k *K8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 	k8sOps := k8s_ops.Instance()

@@ -294,11 +294,12 @@ var _ = Describe("{AppTasksDown}", func() {
 	})
 })
 
+// getMaxNodesToBeDown based on the worker nodes and volume replicas it determines the maximum nodes that can be down
 func getMaxNodesToBeDown(nodes, replicas int) int {
 	if replicas == 1 {
 		return 0
 	}
-	if nodes > 3 && replicas%2 != 0 {
+	if nodes > 4 && replicas%2 != 0 {
 		return replicas/2 + 1
 	}
 
