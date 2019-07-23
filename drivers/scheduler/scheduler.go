@@ -80,7 +80,7 @@ type Driver interface {
 	Destroy(*Context, map[string]bool) error
 
 	// WaitForDestroy waits for application to destroy.
-	WaitForDestroy(*Context) error
+	WaitForDestroy(*Context, time.Duration) error
 
 	// DeleteTasks deletes all tasks of the application (not the applicaton)
 	DeleteTasks(*Context) error

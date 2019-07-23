@@ -176,7 +176,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 				})
 
 				Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
-					err = Inst().S.WaitForDestroy(ctx)
+					err = Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -381,7 +381,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 		})
 		Step("Validate destroy", func() {
 			for _, ctx := range contexts {
-				err := Inst().S.WaitForDestroy(ctx)
+				err := Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})

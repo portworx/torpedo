@@ -22,7 +22,8 @@ import (
 
 const (
 	// SchedName is the name of the dcos scheduler driver implementation
-	SchedName = "dcos"
+	SchedName      = "dcos"
+	defaultTimeout = 5 * time.Minute
 )
 
 type dcos struct {
@@ -295,11 +296,11 @@ func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 		// TODO: wait until all the resources have been cleaned up properly
-		if err := d.WaitForDestroy(ctx); err != nil {
+		if err := d.WaitForDestroy(ctx, defaultTimeout); err != nil {
 			return err
 		}
 	} else if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-		if err := d.WaitForDestroy(ctx); err != nil {
+		if err := d.WaitForDestroy(ctx, defaultTimeout); err != nil {
 			return err
 		}
 	}
@@ -307,7 +308,7 @@ func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	return nil
 }
 
-func (d *dcos) WaitForDestroy(ctx *scheduler.Context) error {
+func (d *dcos) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
 			if err := MarathonClient().WaitForApplicationTermination(obj.ID); err != nil {

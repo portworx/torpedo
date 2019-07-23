@@ -383,6 +383,7 @@ type Torpedo struct {
 	ChaosLevel                  int
 	Provisioner                 string
 	MaxStorageNodesPerAZ        int
+	DestroyAppTimeout           time.Duration
 }
 
 // ParseFlags parses command line flags
@@ -397,6 +398,7 @@ func ParseFlags() {
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
+	var destroyAppTimeout time.Duration
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -416,6 +418,7 @@ func ParseFlags() {
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
+	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
 
 	flag.Parse()
 
@@ -449,6 +452,7 @@ func ParseFlags() {
 				AppList:                     appList,
 				Provisioner:                 provisionerName,
 				MaxStorageNodesPerAZ:        storageNodesPerAZ,
+				DestroyAppTimeout:           destroyAppTimeout,
 			}
 		})
 	}
