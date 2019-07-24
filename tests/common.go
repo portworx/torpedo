@@ -17,6 +17,8 @@ import (
 
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
+	_ "github.com/portworx/torpedo/drivers/node/gke"
+
 	// import ssh driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -24,6 +26,7 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	// import portworx driver to invoke it's init
@@ -46,6 +49,7 @@ const (
 	storageDriverUpgradeVersionCliFlag = "storage-driver-upgrade-version"
 	storageDriverBaseVersionCliFlag    = "storage-driver-base-version"
 	provisionerFlag                    = "provisioner"
+	storageNodesPerAZFlag              = "max-storage-nodes-per-az"
 )
 
 const (
@@ -60,6 +64,8 @@ const (
 	// Eventually we should remove the defaults and make it mandatory with documentation.
 	defaultStorageDriverUpgradeVersion = "1.2.11.6"
 	defaultStorageDriverBaseVersion    = "1.2.11.5"
+	defaultStorageProvisioner          = "portworx"
+	defaultStorageNodesPerAZ           = 2
 )
 
 const (
@@ -256,12 +262,16 @@ func StopVolDriverAndWait(appNodes []node.Node) {
 			expect(err).NotTo(haveOccurred())
 		})
 
-		Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
-			for _, n := range appNodes {
-				err := Inst().V.WaitDriverDownOnNode(n)
-				expect(err).NotTo(haveOccurred())
-			}
-		})
+		/* this static sleep to avoid problem when the driver takes longer to go down or oci pod not flapping when px
+		 * goes down
+		 */
+		time.Sleep(15 * time.Second)
+		//Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
+		//	for _, n := range appNodes {
+		//		err := Inst().V.WaitDriverDownOnNode(n)
+		//		expect(err).NotTo(haveOccurred())
+		//	}
+		//})
 
 	})
 }
@@ -310,6 +320,9 @@ func CollectSupport() {
 				"echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v",
 				time.Now().Format(time.RFC3339))
 			for _, n := range nodes {
+				if !n.IsStorageDriverInstalled {
+					continue
+				}
 				logrus.Infof("saving journal output on %s", n.Name)
 				_, err := Inst().N.RunCommand(n, journalCmd, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
@@ -331,6 +344,9 @@ func PerformSystemCheck() {
 			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
+				if !n.IsStorageDriverInstalled {
+					continue
+				}
 				logrus.Infof("looking for core files on node %s", n.Name)
 				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
@@ -366,6 +382,7 @@ type Torpedo struct {
 	MinRunTimeMins              int
 	ChaosLevel                  int
 	Provisioner                 string
+	MaxStorageNodesPerAZ        int
 }
 
 // ParseFlags parses command line flags
@@ -379,6 +396,7 @@ func ParseFlags() {
 	var volUpgradeVersion, volBaseVersion string
 	var minRunTimeMins int
 	var chaosLevel int
+	var storageNodesPerAZ int
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -396,7 +414,8 @@ func ParseFlags() {
 		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
 			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
-	flag.StringVar(&provisionerName, provisionerFlag, "", "Name of the storage provisioner Portworx or CSI.")
+	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
+	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 
 	flag.Parse()
 
@@ -429,6 +448,7 @@ func ParseFlags() {
 				StorageDriverBaseVersion:    volBaseVersion,
 				AppList:                     appList,
 				Provisioner:                 provisionerName,
+				MaxStorageNodesPerAZ:        storageNodesPerAZ,
 			}
 		})
 	}
