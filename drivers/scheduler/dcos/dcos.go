@@ -246,6 +246,14 @@ func (d *dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOption
 	return nil
 }
 
+func (d *dcos) UpdateTasksID(ctx *scheduler.Context, id string) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateTasksID()",
+	}
+}
+
 func (d *dcos) randomizeVolumeNames(application *marathon.Application) error {
 	volDriver, err := volume.Get(d.volDriverName)
 	if err != nil {
@@ -535,6 +543,10 @@ func (d *dcos) RefreshNodeRegistry() error {
 func (d *dcos) IsScalable(spec interface{}) bool {
 	// TODO implement this method
 	return false
+}
+
+func (d *dcos) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart time.Time) error {
+	return fmt.Errorf("not implemenented")
 }
 
 func init() {

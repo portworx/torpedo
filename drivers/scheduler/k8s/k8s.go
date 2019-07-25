@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -85,6 +86,7 @@ var (
 type K8s struct {
 	SpecFactory    *spec.Factory
 	NodeDriverName string
+	VolDriverName  string
 }
 
 //IsNodeReady  Check whether the cluster node is ready
@@ -135,6 +137,7 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
 	}
 
 	k.NodeDriverName = nodeDriverName
+	k.VolDriverName = volDriverName
 	return nil
 }
 
@@ -286,6 +289,10 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*stork_api.ApplicationRestore); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.ApplicationClone); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.VolumeSnapshotRestore); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("Unsupported object: %v", reflect.TypeOf(in))
@@ -385,6 +392,25 @@ func (k *K8s) createSpecObjects(app *spec.AppSpec, namespace, storageprovisioner
 
 	for _, spec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
+			obj, err := k.createVolumeSnapshotRestore(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
 			obj, err := k.createStorageObject(spec, ns, app, storageprovisioner)
 			if err != nil {
 				return nil, true, err
@@ -467,6 +493,20 @@ func (k *K8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 		specObjects = append(specObjects, objects...)
 	}
 	ctx.App.SpecList = specObjects
+	return nil
+}
+
+// UpdateTasksID updates task IDs in the given context
+func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
+	ctx.UID = id
+
+	for _, spec := range ctx.App.SpecList {
+		metadata, err := meta.Accessor(spec)
+		if err != nil {
+			return err
+		}
+		metadata.SetNamespace(id)
+	}
 	return nil
 }
 
@@ -599,6 +639,28 @@ func (k *K8s) substituteNamespaceInPVC(pvc *v1.PersistentVolumeClaim, ns string)
 	for k, v := range pvc.Annotations {
 		pvc.Annotations[k] = namespaceRegex.ReplaceAllString(v, ns)
 	}
+}
+
+func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
+	ns *v1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+
+	k8sOps := k8s_ops.Instance()
+	if obj, ok := specObj.(*stork_api.VolumeSnapshotRestore); ok {
+		obj.Namespace = ns.Name
+		snapRestore, err := k8sOps.CreateVolumeSnapshotRestore(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create VolumeSnapshotRestore: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created VolumeSnapshotRestore: %v", app.Key, snapRestore.Name)
+		return snapRestore, nil
+	}
+
+	return nil, nil
 }
 
 func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
@@ -948,6 +1010,24 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated ApplicationRestore: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.ApplicationClone); ok {
+			if err := k8sOps.ValidateApplicationClone(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate ApplicationClone: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated ApplicationClone: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.VolumeSnapshotRestore); ok {
+			if err := k8sOps.ValidateVolumeSnapshotRestore(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate VolumeSnapshotRestore: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated VolumeSnapshotRestore: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -960,44 +1040,42 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var pods interface{}
 	var err error
 	for _, spec := range ctx.App.SpecList {
-		if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-			t := func() (interface{}, bool, error) {
-				currPods, err := k.destroyCoreObject(spec, opts, ctx.App)
-				if err != nil {
-					return nil, true, err
-				}
-				return currPods, false, nil
-			}
-			pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		t := func() (interface{}, bool, error) {
+			currPods, err := k.destroyCoreObject(spec, opts, ctx.App)
 			if err != nil {
-				podList = append(podList, pods.(v1.Pod))
+				return nil, true, err
 			}
-		} else {
-			_, err := k.destroyCoreObject(spec, opts, ctx.App)
-			if err != nil {
-				return err
-			}
+			return currPods, false, nil
+		}
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
 		}
 	}
-
 	for _, spec := range ctx.App.SpecList {
-		if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-			t := func() (interface{}, bool, error) {
-				err := k.destroyMigrationObject(spec, ctx.App)
-				if err != nil {
-					return nil, true, err
-				}
-				return nil, false, nil
-			}
-			pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		t := func() (interface{}, bool, error) {
+			err := k.destroyVolumeSnapshotRestoreObject(spec, ctx.App)
 			if err != nil {
-				podList = append(podList, pods.(v1.Pod))
+				return nil, true, err
 			}
-		} else {
+			return nil, false, nil
+		}
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
+		}
+	}
+	for _, spec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
 			err := k.destroyMigrationObject(spec, ctx.App)
 			if err != nil {
-				return err
+				return nil, true, err
 			}
+			return nil, false, nil
+		}
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
 		}
 	}
 
@@ -2042,6 +2120,73 @@ func (k *K8s) destroyMigrationObject(
 	return nil
 }
 
+func (k *K8s) destroyVolumeSnapshotRestoreObject(
+	specObj interface{},
+	app *spec.AppSpec,
+) error {
+	k8sOps := k8s_ops.Instance()
+	if obj, ok := specObj.(*stork_api.VolumeSnapshotRestore); ok {
+		err := k8sOps.DeleteVolumeSnapshotRestore(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete VolumeSnapshotRestore: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed VolumeSnapshotRestore: %v", app.Key, obj.Name)
+	}
+	return nil
+}
+
+// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
+// parent volumes
+func (k *K8s) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart time.Time) error {
+	var err error
+	var snapRestore *stork_api.VolumeSnapshotRestore
+	if ctx == nil {
+		return fmt.Errorf("no context provided")
+	}
+	// extract volume name and snapshotname from context
+	// can do it using snapRestore.Status.Volume
+	k8sOps := k8s_ops.Instance()
+	specObjects := ctx.App.SpecList
+	driver, err := volume.Get(k.VolDriverName)
+	if err != nil {
+		return err
+	}
+
+	for _, specObj := range specObjects {
+		if obj, ok := specObj.(*stork_api.VolumeSnapshotRestore); ok {
+			snapRestore, err = k8sOps.GetVolumeSnapshotRestore(obj.Name, obj.Namespace)
+			if err != nil {
+				return fmt.Errorf("unable to restore volumesnapshotrestore details %v", err)
+			}
+
+		}
+	}
+	if snapRestore == nil {
+		return fmt.Errorf("no valid volumesnapshotrestore specs found")
+	}
+
+	for snap, vol := range snapRestore.Status.RestoreVolumes {
+		snapshotData, err := k8sOps.GetSnapshotData(snap)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v",
+				snap, err)
+		}
+		err = k8sOps.ValidateSnapshotData(snapshotData.Metadata.Name, false, DefaultTimeout, DefaultRetryInterval)
+		if err != nil {
+			return fmt.Errorf("snapshot: %s is not complete. %v", snapshotData.Metadata.Name, err)
+		}
+		// validate each snap restore
+		if err := driver.ValidateVolumeSnapshotRestore(vol, snapshotData.Spec.PortworxSnapshot.SnapshotID, timeStart); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (k *K8s) createBackupObjects(
 	specObj interface{},
 	ns *v1.Namespace,
@@ -2076,11 +2221,21 @@ func (k *K8s) createBackupObjects(
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to create ApplicationBackupRestore: %v. Err: %v", obj.Name, err),
+				Cause: fmt.Sprintf("Failed to create ApplicationRestore: %v. Err: %v", obj.Name, err),
 			}
 		}
-		logrus.Infof("[%v] Created ApplicationBackupRestore: %v", app.Key, applicationRestore.Name)
+		logrus.Infof("[%v] Created ApplicationRestore: %v", app.Key, applicationRestore.Name)
 		return applicationRestore, nil
+	} else if obj, ok := specObj.(*stork_api.ApplicationClone); ok {
+		applicationClone, err := k8sOps.CreateApplicationClone(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create ApplicationClone: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created ApplicationClone: %v", app.Key, applicationClone.Name)
+		return applicationClone, nil
 	}
 	return nil, nil
 }
@@ -2113,10 +2268,19 @@ func (k *K8s) destroyBackupObjects(
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to delete ApplicationBackupRestore: %v. Err: %v", obj.Name, err),
+				Cause: fmt.Sprintf("Failed to delete ApplicationRestore: %v. Err: %v", obj.Name, err),
 			}
 		}
-		logrus.Infof("[%v] Destroyed ApplicationBackupRestore: %v", app.Key, obj.Name)
+		logrus.Infof("[%v] Destroyed ApplicationRestore: %v", app.Key, obj.Name)
+	} else if obj, ok := specObj.(*stork_api.ApplicationClone); ok {
+		err := k8sOps.DeleteApplicationClone(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete ApplicationClone: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed ApplicationClone: %v", app.Key, obj.Name)
 	}
 	return nil
 }

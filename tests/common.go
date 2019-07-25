@@ -246,7 +246,7 @@ func StartVolDriverAndWait(appNodes []node.Node) {
 
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
-				err := Inst().V.WaitDriverUpOnNode(n)
+				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -286,7 +286,7 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
-				err := Inst().V.WaitDriverUpOnNode(n)
+				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -384,6 +384,7 @@ type Torpedo struct {
 	Provisioner                 string
 	MaxStorageNodesPerAZ        int
 	DestroyAppTimeout           time.Duration
+	DriverStartTimeout          time.Duration
 }
 
 // ParseFlags parses command line flags
@@ -399,6 +400,7 @@ func ParseFlags() {
 	var chaosLevel int
 	var storageNodesPerAZ int
 	var destroyAppTimeout time.Duration
+	var driverStartTimeout time.Duration
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -419,6 +421,7 @@ func ParseFlags() {
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
+	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 
 	flag.Parse()
 
@@ -453,6 +456,7 @@ func ParseFlags() {
 				Provisioner:                 provisionerName,
 				MaxStorageNodesPerAZ:        storageNodesPerAZ,
 				DestroyAppTimeout:           destroyAppTimeout,
+				DriverStartTimeout:          driverStartTimeout,
 			}
 		})
 	}
