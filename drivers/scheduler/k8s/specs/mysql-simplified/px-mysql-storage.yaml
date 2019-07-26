@@ -155,3 +155,143 @@ spec:
   resources:
     requests:
       storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-11
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+  storageClassName: px-mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-12
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+  storageClassName: px-mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-13
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+  storageClassName: px-mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-14
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+  storageClassName: px-mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-15
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+  storageClassName: px-mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-16
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+  storageClassName: px-mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-17
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+  storageClassName: px-mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-18
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+  storageClassName: px-mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-19
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+  storageClassName: px-mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-20
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+  storageClassName: px-mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi

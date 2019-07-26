@@ -129,3 +129,123 @@ spec:
   resources:
     requests:
       storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-shared-11
+spec:
+  storageClassName: px-nginx-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-shared-12
+spec:
+  storageClassName: px-nginx-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-shared-13
+spec:
+  storageClassName: px-nginx-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-shared-14
+spec:
+  storageClassName: px-nginx-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-shared-15
+spec:
+  storageClassName: px-nginx-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-shared-16
+spec:
+  storageClassName: px-nginx-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-shared-17
+spec:
+  storageClassName: px-nginx-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-shared-18
+spec:
+  storageClassName: px-nginx-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-shared-19
+spec:
+  storageClassName: px-nginx-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-shared-20
+spec:
+  storageClassName: px-nginx-shared-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
