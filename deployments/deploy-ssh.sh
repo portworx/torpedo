@@ -196,6 +196,13 @@ spec:
           - key: ${K8S_VENDOR_KEY}
             operator: ${K8S_VENDOR_OPERATOR}
             ${K8S_VENDOR_VALUE}
+  initContainers:
+  - name: init-sysctl
+    image: busybox
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      privileged: true
+    command: ["sh", "-c", "mkdir -p /mnt/testresults && chmod 777 /mnt/testresults/"]
   containers:
   - name: torpedo
     image: ${TORPEDO_IMG}
