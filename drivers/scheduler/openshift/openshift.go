@@ -77,10 +77,9 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 	for _, app := range apps {
 
 		appNamespace := app.GetID(instanceID)
-		k8sOps := k8s_ops.Instance()
 
 		// Update security context for namespace and user
-		if err := k.updateSecurityContextConstraints(k8sOps, appNamespace); err != nil {
+		if err := k.updateSecurityContextConstraints(appNamespace); err != nil {
 			return nil, err
 		}
 
@@ -104,9 +103,9 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 	return contexts, nil
 }
 
-func (k *openshift) updateSecurityContextConstraints(k8sOps k8s_ops.Ops, namespace string) error {
-	// Get priviledged context
-	context, err := k8sOps.GetSecurityContextConstraints("privileged")
+func (k *openshift) updateSecurityContextConstraints(namespace string) error {
+	// Get privileged context
+	context, err := k8s_ops.Instance().GetSecurityContextConstraints("privileged")
 	if err != nil {
 		return err
 	}
@@ -115,7 +114,7 @@ func (k *openshift) updateSecurityContextConstraints(k8sOps k8s_ops.Ops, namespa
 	context.Users = append(context.Users, "system:serviceaccount:"+namespace+":default")
 
 	// Update context
-	_, err = k8sOps.UpdateSecurityContextConstraints(context)
+	_, err = k8s_ops.Instance().UpdateSecurityContextConstraints(context)
 	if err != nil {
 		return err
 	}

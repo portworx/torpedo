@@ -387,6 +387,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	return contexts, nil
 }
 
+// CreateSpecObjects Create application
 func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace, storageprovisioner string) ([]interface{}, error) {
 	var specObjects []interface{}
 	ns, err := k.createNamespace(app, namespace)
