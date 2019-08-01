@@ -39,17 +39,15 @@ spec:
           - mountPath: /var/lib/postgresql/data
             name: pgbenchdb
         - name: pgbench
-          image: sudarshandarga/torpedo-pgbench:testing
+          image: sudarshandarga/torpedo-pgbench:latest
           imagePullPolicy: Always
           env:
             - name: PG_HOST
               value: 127.0.0.1
             - name: PG_USER
               value: pgbench
-            - name: PG_DB
-              value: pxdemo
-            - name: TABLE_COUNT
-              value: "50"
+            - name: SIZE
+              value: "5800"
       volumes:
       - name: pgbenchdb
         persistentVolumeClaim:
