@@ -317,7 +317,7 @@ func CollectSupport() {
 			expect(nodes).NotTo(beEmpty())
 
 			journalCmd := fmt.Sprintf(
-				"echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v",
+				"journalctl -l > ~/all_journal_%v",
 				time.Now().Format(time.RFC3339))
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
