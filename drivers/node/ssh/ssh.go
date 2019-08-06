@@ -407,7 +407,7 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 		output, err := k8s.Instance().RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 		if ignoreErr == false && err != nil {
 			return nil, true, &node.ErrFailedToRunCommand{
-				Addr:  n.UsableAddr,
+				Node:  n,
 				Cause: fmt.Sprintf("failed to run command in pod: %v err: %v", debugPod, err),
 			}
 		}
