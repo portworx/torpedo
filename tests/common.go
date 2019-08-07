@@ -309,34 +309,6 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	})
 }
 
-// CollectSupport creates a support bundle
-func CollectSupport() {
-	context(fmt.Sprintf("generating support bundle..."), func() {
-		Step(fmt.Sprintf("save journal output on each node"), func() {
-			nodes := node.GetWorkerNodes()
-			expect(nodes).NotTo(beEmpty())
-
-			journalCmd := fmt.Sprintf(
-				"echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v",
-				time.Now().Format(time.RFC3339))
-			for _, n := range nodes {
-				if !n.IsStorageDriverInstalled {
-					continue
-				}
-				logrus.Infof("saving journal output on %s", n.Name)
-				_, err := Inst().N.RunCommand(n, journalCmd, node.ConnectionOpts{
-					Timeout:         2 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
-					Sudo:            true,
-				})
-				if err != nil {
-					logrus.Warnf("failed to run cmd: %s. err: %v", journalCmd, err)
-				}
-			}
-		})
-	})
-}
-
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
 	context(fmt.Sprintf("checking for core files..."), func() {
@@ -383,6 +355,7 @@ type Torpedo struct {
 	ChaosLevel                  int
 	Provisioner                 string
 	MaxStorageNodesPerAZ        int
+	DestroyAppTimeout           time.Duration
 	DriverStartTimeout          time.Duration
 }
 
@@ -398,6 +371,7 @@ func ParseFlags() {
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
+	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
@@ -418,6 +392,7 @@ func ParseFlags() {
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
+	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 
 	flag.Parse()
@@ -452,6 +427,7 @@ func ParseFlags() {
 				AppList:                     appList,
 				Provisioner:                 provisionerName,
 				MaxStorageNodesPerAZ:        storageNodesPerAZ,
+				DestroyAppTimeout:           destroyAppTimeout,
 				DriverStartTimeout:          driverStartTimeout,
 			}
 		})
