@@ -438,14 +438,12 @@ func ParseFlags() {
 		})
 	}
 
-	// Set logging
+	// Set log level
 	logLvl, err := logrus.ParseLevel(instance.LogLevel)
 	if err != nil {
 		logrus.Fatalf("Failed to set log level due to Err: %v", err)
 	}
 	logrus.SetLevel(logLvl)
-	logrus.StandardLogger().Hooks.Add(log.NewHook())
-	logrus.SetOutput(ginkgo.GinkgoWriter)
 }
 
 func splitCsv(in string) ([]string, error) {
