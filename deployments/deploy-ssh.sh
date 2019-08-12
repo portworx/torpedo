@@ -235,7 +235,7 @@ spec:
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
             "--scheduler", "$SCHEDULER",
-			"--log-level", "$LOGLEVEL",
+            "--log-level", "$LOGLEVEL",
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
