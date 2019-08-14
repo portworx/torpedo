@@ -1068,8 +1068,6 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 //Destroy destroy
 func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []v1.Pod
-	var pods interface{}
-	var err error
 	for _, spec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			currPods, err := k.destroyCoreObject(spec, opts, ctx.App)
@@ -1078,9 +1076,9 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return currPods, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
+		pods, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if err != nil && pods != nil {
+			podList = append(podList, pods.([]v1.Pod)...)
 		}
 	}
 	for _, spec := range ctx.App.SpecList {
@@ -1091,10 +1089,8 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
-		}
+
+		task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
 	}
 	for _, spec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
@@ -1104,10 +1100,8 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
-		}
+
+		task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
 	}
 
 	for _, spec := range ctx.App.SpecList {
@@ -1118,21 +1112,19 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
-		}
+
+		task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
 	}
 
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-		if err = k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
+		if err := k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err
 		}
-		if err = k.waitForCleanup(ctx, podList); err != nil {
+		if err := k.waitForCleanup(ctx, podList); err != nil {
 			return err
 		}
-	} else if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-		if err = k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
+	} else if value, ok = opts[scheduler.OptionsWaitForDestroy]; ok && value {
+		if err := k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err
 		}
 	}
@@ -2084,7 +2076,7 @@ func (k *K8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 	return podsUsingStorage
 }
 
-//PrepareNodeToDecommission Prepare the Node for decomission
+//PrepareNodeToDecommission Prepare the Node for decommission
 func (k *K8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 	k8sOps := k8s_ops.Instance()
 	pods, err := k8sOps.GetPodsByNode(n.Name, "")
