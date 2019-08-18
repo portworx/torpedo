@@ -1,0 +1,23 @@
+apiVersion: libopenstorage.org/v1alpha1
+kind: VolumePlacementStrategy
+metadata:
+  name: ssd-sata-pool-placement-spread
+spec:
+  replicaAffinity:
+  - affectedReplicas: 1                                                                                                                 
+    enforcement: required                                                                                                               
+#    type: affinity
+    matchExpressions:                                                                                                                   
+    - key: media_type
+      operator: In
+      values:                                                                                                                           
+      - "SSD"                                                                                                                           
+  replicaAffinity:                                                                                                                      
+  - affectedReplicas: 1
+    enforcement: required
+#    type: affinity
+    matchExpressions:                                                                                                                   
+    - key: media_type
+      operator: In
+      values:
+      - "SATA"

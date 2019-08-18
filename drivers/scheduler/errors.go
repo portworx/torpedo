@@ -313,3 +313,15 @@ type ErrFailedToDecommissionNode struct {
 func (e *ErrFailedToDecommissionNode) Error() string {
 	return fmt.Sprintf("Failed to decommission node: %v due to err: %v", e.Node, e.Cause)
 }
+
+// ErrFailedToProvision  error type when fail to provision volume
+type ErrFailedToProvision struct {
+	// Node where the label or volume could not be applied
+	Node node.Node
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToProvision) Error() string {
+	return fmt.Sprintf("Failed to label node: %v due to err: %v", e.Node, e.Cause)
+}

@@ -17,6 +17,7 @@ import (
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
+	px_api "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -215,7 +216,7 @@ func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 			if len(bytes.TrimSpace(specContents)) > 0 {
 				obj, err := decodeSpec(specContents)
 				if err != nil {
-					logrus.Warnf("Error decoding spec from %v: %v", fileName, err)
+					logrus.Warnf("Thisis one: Error decoding spec from %v: %v", fileName, err)
 					return nil, err
 				}
 
@@ -235,19 +236,28 @@ func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 
 func decodeSpec(specContents []byte) (runtime.Object, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
+	logrus.Infof("===========Decoding spec call %v",  err)
 	if err != nil {
+		logrus.Infof("===========Decoding spec error  %v",  err)
 		scheme := runtime.NewScheme()
 		if err := snap_v1.AddToScheme(scheme); err != nil {
+			logrus.Warnf("============Snap v1 addtoscheme %v: %v", scheme, err)
 			return nil, err
 		}
 
 		if err := stork_api.AddToScheme(scheme); err != nil {
+			logrus.Warnf("============stork api addtoscheme %v: %v", scheme, err)
 			return nil, err
 		}
 
+		if err := px_api.AddToScheme(scheme); err != nil {
+			logrus.Warnf("============px api addtoscheme %v: %v", scheme, err)
+			return nil, err
+		}
 		codecs := serializer.NewCodecFactory(scheme)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 		if err != nil {
+			logrus.Warnf("===============codec deserializer %v: %v", scheme, err)
 			return nil, err
 		}
 	}
@@ -296,6 +306,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*stork_api.ApplicationClone); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*stork_api.VolumeSnapshotRestore); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*px_api.VolumePlacementStrategy); ok {
 		return specObj, nil
 	}
 
@@ -485,6 +497,22 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace, storageprovisioner
 		}
 	}
 
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createVpsObjects(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
 	return specObjects, nil
 }
 
@@ -1126,6 +1154,19 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		}
 	}
 
+	for _, spec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyVpsObjects(spec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
+		}
+	}
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 		if err = k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err
@@ -1216,6 +1257,23 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 			}
 
 			logrus.Infof("[%v] Validated destroy of Service: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.Rule); ok {
+			_, err := k8sOps.GetRule(obj.Name, obj.Namespace)
+			if err == nil {
+				return &scheduler.ErrFailedToValidateAppDestroy{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("stork rule: %v is still present.", obj.Name),
+				}
+			}
+
+			if errors.IsNotFound(err) {
+				logrus.Infof("[%v] Validated destroy of Rule: %v", ctx.App.Key, obj.Name)
+			} else {
+				return &scheduler.ErrFailedToValidateAppDestroy{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to validate destroy of stork rule: %v due to: %v", obj.Name, err),
+				}
+			}
 		} else if obj, ok := spec.(*v1.Pod); ok {
 			if err := k8sOps.WaitForPodDeletion(obj.UID, obj.Namespace, deleteTasksWaitTimeout); err != nil {
 				return &scheduler.ErrFailedToValidatePodDestroy{
@@ -2301,6 +2359,46 @@ func (k *K8s) destroyBackupObjects(
 	}
 	return nil
 }
+
+func (k *K8s) createVpsObjects(
+	specObj interface{},
+	ns *v1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	k8sOps := k8s_ops.Instance()
+	if obj, ok := specObj.(*px_api.VolumePlacementStrategy); ok {
+		obj.Namespace = ns.Name
+		backupLocation, err := k8sOps.CreateVolumePlacementStrategy(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create VolumePlacementStrategy: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created VolumePlacementStrategy: %v", app.Key, backupLocation.Name)
+		return backupLocation, nil
+	}
+	return nil, nil
+}
+
+func (k *K8s) destroyVpsObjects(
+	specObj interface{},
+	app *spec.AppSpec,
+) error {
+	k8sOps := k8s_ops.Instance()
+	if obj, ok := specObj.(*px_api.VolumePlacementStrategy); ok {
+		err := k8sOps.DeleteVolumePlacementStrategy(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete VolumePlacementStrategy: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed VolumePlacementStrategy: %v", app.Key, obj.Name)
+	}
+	return nil
+}
+
 func insertLineBreak(note string) string {
 	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
 }
