@@ -16,6 +16,7 @@ parameters:
   repl: "3"
   priority_io: "high"
   io_profile: "db"
+  placement_strategy: "placement-1"
 allowVolumeExpansion: true
 ---
 kind: StorageClass
@@ -33,7 +34,8 @@ parameters:
    shared: "false"
    snap_schedule: "periodic=60,5"
    labels: "type=aggregated"
-   group: "mysql-data"
+#   group: "mysql-data"
+   placement_strategy: "placement-3"
 allowVolumeExpansion: true
 ---
 kind: StorageClass
@@ -50,7 +52,8 @@ parameters:
    shared: "false"
    snap_schedule: "daily=12:00,7"
    labels: "type=replicated"
-   group: "mysql-data"
+#   group: "mysql-data"
+   placement_strategy: "placement-2"
 allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim
@@ -58,6 +61,9 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: mysql-data
+  labels:
+    app: mysql
+    voltype: data
   annotations:
     px/secret-name: volume-secrets
     px/secret-namespace: "_NAMESPACE_"
@@ -75,6 +81,9 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
    name: mysql-data-seq
+   labels:
+     app: mysql
+     voltype: seq
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc-seq
 spec:
@@ -88,6 +97,9 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
    name: mysql-data-aggr
+   labels:
+     app2: mysql-aggr
+     voltype: aggr
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc-aggr
 spec:

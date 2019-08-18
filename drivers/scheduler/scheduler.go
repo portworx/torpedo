@@ -68,6 +68,11 @@ type InitOptions struct {
 	CustomAppConfig map[string]AppConfig
 }
 
+type VpsParameters struct {
+	//Contains Mapping with storagecalss and
+	ScVpsMap map[string]string
+}
+
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)

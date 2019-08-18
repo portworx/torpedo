@@ -13,6 +13,10 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
+const (
+	defaultVstate = 1
+)
+
 func TestUpgrade(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -46,7 +50,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 		Step("validate all apps after upgrade", func() {
 			for _, ctx := range contexts {
-				ValidateContext(ctx)
+				ValidateContext(ctx, defaultVstate)
 			}
 		})
 
@@ -95,7 +99,7 @@ var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 
 		Step("validate all apps after upgrade", func() {
 			for _, ctx := range contexts {
-				ValidateContext(ctx)
+				ValidateContext(ctx,defaultVstate)
 			}
 		})
 

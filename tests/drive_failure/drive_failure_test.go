@@ -17,6 +17,7 @@ const (
 	defaultTimeout       = 1 * time.Minute
 	driveFailTimeout     = 2 * time.Minute
 	defaultRetryInterval = 5 * time.Second
+	defaultVstate        = 1
 )
 
 func TestDriveFailure(t *testing.T) {
@@ -82,7 +83,7 @@ var _ = Describe("{DriveFailure}", func() {
 					})
 
 					Step(fmt.Sprintf("check if apps are running"), func() {
-						ValidateContext(ctx)
+						ValidateContext(ctx, defaultVstate)
 					})
 
 				})

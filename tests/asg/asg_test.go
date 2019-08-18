@@ -158,7 +158,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 
 				Step("validate applications", func() {
 					for _, ctx := range contexts {
-						ValidateContext(ctx)
+						ValidateContext(ctx, defaultVstate)
 					}
 				})
 
@@ -173,7 +173,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 
 						Step("validate applications", func() {
 							for _, ctx := range contexts {
-								ValidateContext(ctx)
+								ValidateContext(ctx, defaultVstate)
 							}
 						})
 					case <-stopChannel:

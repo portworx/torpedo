@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+const (
+	defaultVstate = 1
+)
+
 func TestVolOps(t *testing.T) {
 	RegisterFailHandler(Fail)
 

@@ -28,6 +28,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 
 	"github.com/portworx/sched-ops/task"
+	px_api "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -311,6 +312,9 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		if err := apapi.AddToScheme(schemeObj); err != nil {
 			return nil, err
 		}
+		if err := px_api.AddToScheme(scheme); err != nil {
+			return nil, err
+		}
 
 		codecs := serializer.NewCodecFactory(schemeObj)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
@@ -371,6 +375,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*rbacv1.Role); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*rbacv1.RoleBinding); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*px_api.VolumePlacementStrategy); ok {
 		return specObj, nil
 	}
 
@@ -561,6 +567,22 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 		}
 	}
 
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createVpsObjects(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
 	return specObjects, nil
 }
 
@@ -827,6 +849,32 @@ func (k *K8s) substituteNamespaceInPVC(pvc *v1.PersistentVolumeClaim, ns string)
 	pvc.Name = namespaceRegex.ReplaceAllString(pvc.Name, ns)
 	for k, v := range pvc.Annotations {
 		pvc.Annotations[k] = namespaceRegex.ReplaceAllString(v, ns)
+	}
+}
+
+//Set or disable the placement_strategy in the storageclass
+func (k *K8s) substituteVpsNameInStorageClass(sc *storage_api.StorageClass, vps_map map[string]string) {
+	//	sc.Name = namespaceRegex.ReplaceAllString(sc.Name, ns)
+	for k, v := range sc.Parameters {
+		logrus.Infof("[%v] storaegeclass parameters: %v", k, v)
+		newstr := placement1Regex.ReplaceAllString(v, vps_map["placement-1"])
+		if newstr != v {
+			sc.Parameters[k] = newstr
+			logrus.Infof("[%v] post replace placement-1 storaegeclass parameters: %v Sub:%v", k, sc.Parameters[k], vps_map["placement-1"])
+			break
+		}
+		newstr = placement2Regex.ReplaceAllString(v, vps_map["placement-2"])
+		if newstr != v {
+			sc.Parameters[k] = newstr
+			logrus.Infof("[%v] post replace placement-2 storaegeclass parameters: %v Sub:%v", k, sc.Parameters[k], vps_map["placement-2"])
+			break
+		}
+		newstr = placement3Regex.ReplaceAllString(v, vps_map["placement-3"])
+		if newstr != v {
+			sc.Parameters[k] = newstr
+			logrus.Infof("[%v] post replace placement-3 storaegeclass parameters: %v Sub:%v", k, sc.Parameters[k], vps_map["placement-3"])
+			break
+		}
 	}
 }
 
@@ -1461,6 +1509,19 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		}
 	}
 
+	for _, spec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyVpsObjects(spec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
+		}
+	}
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 		if err := k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err

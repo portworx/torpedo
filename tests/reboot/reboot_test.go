@@ -13,6 +13,10 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
+const (
+	defaultVstate = 1
+)
+
 func TestReboot(t *testing.T) {
 	RegisterFailHandler(Fail)
 
