@@ -1,22 +1,24 @@
-apiVersion: libopenstorage.org/v1alpha1
+apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
   name: ssd-sata-pool-placement-spread
 spec:
   replicaAffinity:
-  - affectedReplicas: 1                                                                                                                 
-    enforcement: required                                                                                                               
+  - affectedReplicas: 1
+#    enforcement: required
+    enforcement: preferred
 #    type: affinity
-    matchExpressions:                                                                                                                   
+    matchExpressions:
     - key: media_type
       operator: In
-      values:                                                                                                                           
-      - "SSD"                                                                                                                           
-  replicaAffinity:                                                                                                                      
+      values:
+      - "SSD"
+  replicaAffinity:
   - affectedReplicas: 1
-    enforcement: required
+    enforcement: preferred
+#    enforcement: required
 #    type: affinity
-    matchExpressions:                                                                                                                   
+    matchExpressions:
     - key: media_type
       operator: In
       values:
