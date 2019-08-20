@@ -1557,8 +1557,25 @@ func (d *portworx) CollectDiags(n node.Node) error {
 	if err != nil {
 		return err
 	}
+
+	logrus.Debugf("Collecting diags on node %v", pxNode.Hostname)
+
 	if pxNode.Status == api.Status_STATUS_OFFLINE {
-		return fmt.Errorf("Failed to generate diagnostics for node: %v, Err: Node %v is offline", pxNode.Hostname, pxNode.Hostname)
+		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
+
+		opts := node.ConnectionOpts{
+			IgnoreError:     false,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		}
+
+		// Only way to collect diags when PX is offline is using pxctl
+		out, err := d.nodeDriver.RunCommand(n, "/opt/pwx/bin/pxctl sv diags -a -f", opts)
+		if err != nil {
+			return fmt.Errorf("Failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+		}
+		logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+		return nil
 	}
 
 	url := fmt.Sprintf("http://%s:9014", n.Addresses[0])
@@ -1569,7 +1586,7 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		Profile:       false,
 		Live:          true,
 		Upload:        false,
-		All:           true,
+		All:           false,
 		Force:         true,
 		OnHost:        true,
 		Extra:         false,
@@ -1581,7 +1598,10 @@ func (d *portworx) CollectDiags(n node.Node) error {
 	}
 	req := c.Post().Resource(pxDiagPath).Body(r)
 	resp := req.Do()
-	return resp.Error()
+	if resp.Error() != nil {
+		return fmt.Errorf("Failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
+	}
+	return nil
 }
 
 func init() {
