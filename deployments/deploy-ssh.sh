@@ -237,6 +237,7 @@ spec:
             "bin/volume_ops.test",
             "bin/sched.test",
             "bin/node_decommission.test",
+            "bin/provision.test",
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",

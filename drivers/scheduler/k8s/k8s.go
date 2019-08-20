@@ -216,7 +216,7 @@ func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 			if len(bytes.TrimSpace(specContents)) > 0 {
 				obj, err := decodeSpec(specContents)
 				if err != nil {
-					logrus.Warnf("Thisis one: Error decoding spec from %v: %v", fileName, err)
+					logrus.Warnf("Error decoding spec from %v: %v", fileName, err)
 					return nil, err
 				}
 
@@ -236,28 +236,22 @@ func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 
 func decodeSpec(specContents []byte) (runtime.Object, error) {
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
-	logrus.Infof("===========Decoding spec call %v",  err)
 	if err != nil {
-		logrus.Infof("===========Decoding spec error  %v",  err)
 		scheme := runtime.NewScheme()
 		if err := snap_v1.AddToScheme(scheme); err != nil {
-			logrus.Warnf("============Snap v1 addtoscheme %v: %v", scheme, err)
 			return nil, err
 		}
 
 		if err := stork_api.AddToScheme(scheme); err != nil {
-			logrus.Warnf("============stork api addtoscheme %v: %v", scheme, err)
 			return nil, err
 		}
 
 		if err := px_api.AddToScheme(scheme); err != nil {
-			logrus.Warnf("============px api addtoscheme %v: %v", scheme, err)
 			return nil, err
 		}
 		codecs := serializer.NewCodecFactory(scheme)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 		if err != nil {
-			logrus.Warnf("===============codec deserializer %v: %v", scheme, err)
 			return nil, err
 		}
 	}

@@ -37,25 +37,25 @@ var _ = Describe("{ReplicaAffinity}", func() {
 	It("has to schedule app and verify the replication affinity", func() {
 
 		var contexts []*scheduler.Context
-		lbldata := []labelDict{}
+		var nodelist []node.Node
+		var volcheck [] string
+		var vpsspec string
+
+// loop	for multiple replica affinity test cases	
 		Step("get nodes and set labels", func() {
-			// Label list
-			node1lbl := labelDict{"media_type": "SSD"} //,
-			node2lbl := labelDict{"media_type": "SATA"}
-			lbldata = append(lbldata, node1lbl, node2lbl)
-			status := SetNodeLabels(lbldata)
-			Expect(status).To(BeEmpty())
+			lbldata := getTestLabels()
+			lblnode := SetNodeLabels(lbldata)
+			logrus.Info("Nodes containing label", lblnode)
+			Expect(lblnode).NotTo(BeEmpty())
+			volcheck,nodelist = pvcNodeMap(lblnode)	
 		})
-		volrules := []labelDict{}
-		Step("Rules pf volume Placement", func() {
 
-			rule1 := labelDict{"vpsname": "ssd-sata-pool-placement-spread",
-				"label": "media_type:SSD", "affectedrepl": "1", "enforcement": "required"}
-			rule2 := labelDict{"vpsname": "ssd-sata-pool-placement-spread",
-				"label": "media_type:SSD", "affectedrepl": "1", "enforcement": "required"}
-			volrules := append(volrules, rule1, rule2)
 
+		Step("Rules of volume Placement", func () {
+			volrules := getTestRules()
 			logrus.Info("Rules to check per volume", volrules)
+			vpsspec = getVpsSpec(volrules)
+			applyVpsSpec(vpsspec)
 		})
 
 		Step("Launch Application ", func() {
@@ -64,13 +64,10 @@ var _ = Describe("{ReplicaAffinity}", func() {
 			}
 		})
 
-		Step("get volumes and replica affinity", func() {
-			// Get volumes  Inst().S.GetVolumes(ctx)
-			// Get Inst().V.GetReplicaSetNodes(vol)
-			// Verify & Confirm replica placement
+		Step("Validate volumes and replica affinity", func() {
 
 			for _, ctx := range contexts {
-				ValidateVpsRules(ctx, lbldata)
+				ValidateVpsRules(ctx, volcheck, nodelist)
 			}
 
 		})
@@ -78,11 +75,62 @@ var _ = Describe("{ReplicaAffinity}", func() {
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
+		//TODO:
+		//Clean labels set on node
+		//Clean  Vps  kubectl delete vps ssd-sata-pool-placement-spread
+		cleanVps()
 		for _, ctx := range contexts {
 			TearDownContext(ctx, opts)
 		}
 	})
 })
+
+
+
+
+
+
+//Support functions
+
+func getTestLabels () [] labelDict {
+		lbldata := []labelDict{}
+		node1lbl := labelDict{"media_type": "SSD"} //, 
+		node2lbl := labelDict{"media_type": "SATA"}
+		lbldata = append(lbldata, node1lbl, node2lbl)
+		return lbldata
+}
+
+func getTestRules () [] labelDict{
+
+		volrules := []labelDict{}
+		rule1 := labelDict {"vpsname":"ssd-sata-pool-placement-spread",
+		"label":"media_type:SSD", "affectedrepl":"1", "enforcement":"required"  }
+		rule2 := labelDict { "vpsname":"ssd-sata-pool-placement-spread", 
+		"label":"media_type:SSD", "affectedrepl":"1", "enforcement":"required"  }
+		volrules = append(volrules, rule1,rule2)
+		return volrules 
+}
+
+
+//pvcNodeMap  The nodes on which this pvc is  expected to have replica
+func pvcNodeMap(labelnodes []node.Node ) ([]string, []node.Node) {
+
+	var volcheck [] string
+
+
+	for key,val := range labelnodes {
+		logrus.Infof("label node: key:%v Val:%v", key,val)
+		logrus.Infof(" node details: node name Val:%v", val.Name)
+	}
+	volcheck=append(volcheck, "mysql-data")
+	volcheck=append(volcheck, "mysql-data-seq")
+
+	//Create 3 node lists (mustNodes, preferedNodes, notOnNodes)
+
+	return volcheck, labelnodes
+}
+ 	
+
 
 /*
  * To ways to Validate
@@ -91,51 +139,65 @@ var _ = Describe("{ReplicaAffinity}", func() {
  *
  */
 
-//Support functions
 //ValidateVpsRules check applied vps rules on the app
-func ValidateVpsRules(ctx *scheduler.Context, labels []labelDict) {
+func ValidateVpsRules(ctx *scheduler.Context,volscheck [] string, mustnodes []node.Node) {
 	// Get Volumes
 	// Get Replicas
 	// Get Rules applied on the app
 	// Get node labels
 	// Verify rules
 	//
-	var rules []string
 	var err error
 	var appVolumes []*volume.Volume
 	appVolumes, err = Inst().S.GetVolumes(ctx)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(appVolumes).NotTo(BeEmpty())
-	for _, vol := range appVolumes {
-		replicas, err := Inst().V.GetReplicaSetNodes(vol)
-		logrus.Infof("==Replicas for vol: %s, Replicas:%v ", vol, replicas)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(replicas).NotTo(BeEmpty())
+	logrus.Infof("Deployed volumes:%v,  volumes to check for %v and nodes on which the volumes should be %v", appVolumes, volscheck, mustnodes)
+	for _, appvol := range appVolumes {
+		for _,vol := range volscheck {
+			if appvol.Name == vol {
+				replicas, err := Inst().V.GetReplicaSetNodes(appvol)
+				logrus.Infof("==Replicas for vol: %s, appvol:%v Replicas:%v ", vol, appvol,replicas)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(replicas).NotTo(BeEmpty())
 
-		// create list of vol-replica-node mapping
-	}
+				// Must have (required)
+				for _,mnode := range mustnodes {
+					found := 0
+					for _,rnode := range replicas {
+						logrus.Infof("mnode:%v rnode:%v", mnode.Name, rnode)
+						if mnode.Name == rnode {
+							found=1
+							break	
+						}
+					}
+					 if found == 0 {
+						logrus.Errorf("Volume '%v' does not have replica on node:'%v'", appvol,mnode)
+					}
+					  // Expect(found).NotTo(BeEmpty())
+				}
 
-	//TODO: refer to the spawn code for template: instance/instancelist.go
-	//		instance/ansible.go
-	//For each rule, verify the volume,replica placement
-	for _, rule := range rules {
-		logrus.Info("Rule:", rule)
-		//ValidateVpsReplicaRule()
-		//ValidateVpsVolumeRule()
 
+				// Preferred
+				//
+
+				// NotonNode
+			}
+		}
 	}
 }
 
 //SetNodeLabels set the provided labels on the portworx worker nodes
-func SetNodeLabels(labels []labelDict) int {
+func SetNodeLabels(labels []labelDict) []node.Node {
 
+appNodes  := make([]node.Node,0)
 	workerNodes := node.GetWorkerNodes()
 	workerCnt := len(workerNodes)
 	nodes2lbl := len(labels)
 
 	if workerCnt < nodes2lbl {
 		fmt.Printf("Required(%v) number of worker nodes(%v) not available", nodes2lbl, workerCnt)
-		return 0
+		return appNodes
 	}
 
 	// Get nodes
@@ -145,14 +207,40 @@ func SetNodeLabels(labels []labelDict) int {
 		for lkey, lval := range nlbl {
 			if err := k8s.Instance().AddLabelOnNode(n.Name, lkey, lval.(string)); err != nil {
 				logrus.Errorf("Failed to set node label %v: %v Err: %v", lkey, nlbl, err)
-				return 0
+				return appNodes
 			}
-
+			appNodes = append(appNodes, n)
 		}
 
 	}
 	//TODO: Return node list with the labels attached
-	return 1
+	return appNodes
+}
+
+
+func getVpsSpec(rules [] labelDict ) string {
+
+	var vpsspec string 
+	logrus.Infof(" rules:%v ", rules)	
+	vpsspec =`
+apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: ssd-sata-pool-placement-spread
+spec:
+	`
+	return vpsspec
+}
+
+func applyVpsSpec (vpsspec string) error {
+	var err error
+	logrus.Infof("vpsspec:%v", vpsspec)
+
+	return err
+}
+
+func cleanVps() {
+	logrus.Infof("Cleanup test case context")
 }
 
 var _ = AfterSuite(func() {
