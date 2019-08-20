@@ -249,6 +249,11 @@ func StartVolDriverAndWait(appNodes []node.Node) {
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+				if err != nil {
+					logrus.Errorf("Collecting diags because there was an Err: %v", err)
+					diagsErr := Inst().V.CollectDiags(n)
+					expect(diagsErr).NotTo(haveOccurred())
+				}
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -289,6 +294,11 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+				if err != nil {
+					logrus.Errorf("Collecting diags because there was an Err: %v", err)
+					diagsErr := Inst().V.CollectDiags(n)
+					expect(diagsErr).NotTo(haveOccurred())
+				}
 				expect(err).NotTo(haveOccurred())
 			}
 		})

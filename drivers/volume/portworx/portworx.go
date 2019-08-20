@@ -33,6 +33,8 @@ const (
 	DriverName              = "pxd"
 	pxdClientSchedUserAgent = "pxd-sched"
 	pxdRestPort             = 9001
+	pxDiagPort              = 9014
+	pxDiagPath              = "/remotediags"
 	pxVersionLabel          = "PX Version"
 	maintenanceOpRetries    = 3
 	enterMaintenancePath    = "/entermaintenance"
@@ -84,6 +86,37 @@ type metadataNode struct {
 	DbSize     int      `json:"DbSize"`
 	IsHealthy  bool     `json:"IsHealthy"`
 	ID         string   `json:"ID"`
+}
+
+// DiagRequestConfig is a request object which provides all the configuration details
+// to PX for running diagnostics on a node. This object can also be passed over
+// the wire through an API server for remote diag requests.
+type DiagRequestConfig struct {
+	// OutputFile for the diags.tgz
+	OutputFile string
+	// DockerHost config
+	DockerHost string
+	// ContainerName for PX
+	ContainerName string
+	// ExecPath of the program making this request (pxctl)
+	ExecPath string
+	// Profile when set diags command only dumps the go profile
+	Profile bool
+	// Live gets live diagnostics
+	Live bool
+	// Upload uploads the diags.tgz to s3
+	Upload bool
+	// All gets all possible diagnostics from PX
+	All bool
+	// Force overwrite of existing diags file.
+	Force bool
+	// OnHost indicates whether diags is being run on the host
+	// or inside the container
+	OnHost bool
+	// Token for security authentication (if enabled)of the program making this request (pxctl)
+	Token string
+	// Extra indicates whether diags should attempt to collect extra information
+	Extra bool
 }
 
 func (d *portworx) String() string {
@@ -1495,6 +1528,40 @@ func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) 
 	}
 	err = resp.Unmarshal(&kvdbMembers)
 	return kvdbMembers, err
+}
+
+func (d *portworx) CollectDiags(n node.Node) error {
+	var err error
+
+	pxNode, err := d.getPxNode(n, nil)
+	if err != nil {
+		return err
+	}
+	if pxNode.Status == api.Status_STATUS_OFFLINE {
+		return fmt.Errorf("Failed to generate diagnostics for node: %v, Err: Node %v is offline", pxNode.Hostname, pxNode.Hostname)
+	}
+
+	url := fmt.Sprintf("http://%s:9014", n.Addresses[0])
+
+	r := &DiagRequestConfig{
+		DockerHost:    "unix:///var/run/docker.sock",
+		ContainerName: "",
+		Profile:       false,
+		Live:          true,
+		Upload:        false,
+		All:           true,
+		Force:         true,
+		OnHost:        true,
+		Extra:         false,
+	}
+
+	c, err := client.NewClient(url, "", "")
+	if err != nil {
+		return err
+	}
+	req := c.Post().Resource(pxDiagPath).Body(r)
+	resp := req.Do()
+	return resp.Error()
 }
 
 func init() {

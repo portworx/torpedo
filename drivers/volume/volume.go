@@ -132,6 +132,9 @@ type Driver interface {
 	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 	// given volumes
 	ValidateVolumeSnapshotRestore(vol string, snapData *snap_v1.VolumeSnapshotData, timeStart time.Time) error
+
+	// Collect live diags on a node
+	CollectDiags(n node.Node) error
 }
 
 var (
