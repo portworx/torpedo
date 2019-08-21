@@ -43,11 +43,11 @@ var _ = Describe("{ReplicaAffinity}", func() {
 
 // loop	for multiple replica affinity test cases	
 		Step("get nodes and set labels", func() {
-lbldata := getTestLabels() //TODO: function argument for getting testcase labels
+			lbldata := getTestLabels(getCaseReqLabel) //TODO: function argument for getting testcase labels
 			lblnode := SetNodeLabels(lbldata)
 			logrus.Info("Nodes containing label", lblnode)
 			Expect(lblnode).NotTo(BeEmpty())
-			volnodes  = pvcNodeMap(lblnode)	//TODO: function argument for vol's expected nodes
+			volnodes  = pvcNodeMap(getCaseReqPvcNode,lblnode)	//TODO: function argument for vol's expected nodes
 		})
 
 		Step("Rules of volume Placement", func () {
@@ -65,7 +65,7 @@ lbldata := getTestLabels() //TODO: function argument for getting testcase labels
 
 		Step("Validate volumes and replica affinity", func() {
 			for _, ctx := range contexts {
-				ValidateVpsRules(ctx, volnodes) //TODO function arg for validating mapping
+				ValidateVpsRules(getCaseReqValidate,ctx, volnodes) //TODO function arg for validating mapping
 			}
 
 		})
@@ -87,28 +87,18 @@ lbldata := getTestLabels() //TODO: function argument for getting testcase labels
 
 //Support functions
 
-func getTestLabels () [] labelDict {
+//#--enforcemnt: Required
+
+func getCaseReqLabel() [] labelDict {
+
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"media_type": "SSD","vps_test":"test"}  
 	node2lbl := labelDict{"media_type": "SATA","vps_test":"test"}
 	lbldata = append(lbldata, node1lbl, node2lbl)
-	return lbldata
+		return lbldata
 }
 
-func getTestRules () [] labelDict{
-
-		volrules := []labelDict{}
-		rule1 := labelDict {"vpsname":"ssd-sata-pool-placement-spread",
-		"label":"media_type:SSD", "affectedrepl":"1", "enforcement":"required"  }
-		rule2 := labelDict { "vpsname":"ssd-sata-pool-placement-spread", 
-		"label":"media_type:SSD", "affectedrepl":"1", "enforcement":"required"  }
-		volrules = append(volrules, rule1,rule2)
-		return volrules 
-}
-
-
-//pvcNodeMap  The nodes on which this pvc is  expected to have replica
-func pvcNodeMap(lblnodes map[string][]string ) map[string]map[string][]string  {
+func getCaseReqPvcNode( lblnodes map[string][]string) map[string]map[string][]string {
 
 	for key,val := range lblnodes {
 		logrus.Infof("label node: key:%v Val:%v", key,val)
@@ -128,7 +118,7 @@ func pvcNodeMap(lblnodes map[string][]string ) map[string]map[string][]string  {
 		volnodelist ["mysql-data"]["rnodes"] = append(volnodelist ["mysql-data"]["rnodes"], lnode)
 		volnodelist ["mysql-data-aggr"]["rnodes"] = append(volnodelist ["mysql-data-aggr"]["rnodes"], lnode)
 	}
-	//SATA
+
 	for _,lnode := range lblnodes["media_typeSATA"] {
 		volnodelist ["mysql-data"]["rnodes"] = append(volnodelist ["mysql-data"]["rnodes"], lnode)
 		volnodelist ["mysql-data-aggr"]["rnodes"] = append(volnodelist ["mysql-data-aggr"]["rnodes"], lnode)
@@ -136,31 +126,17 @@ func pvcNodeMap(lblnodes map[string][]string ) map[string]map[string][]string  {
 
 	return volnodelist
 }
- 	
 
 
 /*
- * To ways to Validate
  * 1. Each rule template, will provide the expected output
- * 2. Parse each rule, interpret and generate the expected output
- *
  */
 
-//ValidateVpsRules check applied vps rules on the app
-func ValidateVpsRules(ctx *scheduler.Context,volscheck map[string]map[string][]string) {
-	// Get Volumes
-	// Get Replicas
-	// Get Rules applied on the app
-	// Get node labels
-	// Verify rules
-	//
-	var err error
-	var appVolumes []*volume.Volume
-	appVolumes, err = Inst().S.GetVolumes(ctx)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(appVolumes).NotTo(BeEmpty())
-	logrus.Infof("Deployed volumes:%v,  volumes to check for nodes %v ",
+func getCaseReqValidate(appVolumes []*volume.Volume,volscheck map[string]map[string][]string) {
+
+	logrus.Infof("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 			appVolumes, volscheck)
+
 	for _, appvol := range appVolumes {
 
 		for vol, vnodes := range volscheck {
@@ -217,43 +193,25 @@ func ValidateVpsRules(ctx *scheduler.Context,volscheck map[string]map[string][]s
 						logrus.Errorf("Volume '%v' has replica on node:'%v'", appvol,mnode)
 					    Expect(found).To(BeEmpty())
 					}
-					  // Expect(found).NotTo(BeEmpty())
 				}
 			}
 		}
 	}
 }
 
-//SetNodeLabels set the provided labels on the portworx worker nodes
-func SetNodeLabels(labels []labelDict) map[string] [] string  {
 
-	lblnodes := map[string] [] string {}
-	workerNodes := node.GetWorkerNodes()
-	workerCnt := len(workerNodes)
-	nodes2lbl := len(labels)
 
-	if workerCnt < nodes2lbl {
-		fmt.Printf("Required(%v) number of worker nodes(%v) not available", nodes2lbl, workerCnt)
-		return lblnodes
-	}
 
-	// Get nodes
-	for key, nlbl := range labels {
-		//TODO: Randomize node selection
-		n := workerNodes[key]
-		for lkey, lval := range nlbl {
-			if err := k8s.Instance().AddLabelOnNode(n.Name, lkey, lval.(string)); err != nil {
-				logrus.Errorf("Failed to set node label %v: %v Err: %v", lkey, nlbl, err)
-				return lblnodes
-			}
-			lblnodes[lkey+lval.(string)]=append(lblnodes[lkey+lval.(string)],n.Name)
-		}
+func getTestRules () [] labelDict{
 
-	}
-	//TODO: Return node list with the labels attached
-	return lblnodes
+		volrules := []labelDict{}
+		rule1 := labelDict {"vpsname":"ssd-sata-pool-placement-spread",
+		"label":"media_type:SSD", "affectedrepl":"1", "enforcement":"required"  }
+		rule2 := labelDict { "vpsname":"ssd-sata-pool-placement-spread", 
+		"label":"media_type:SSD", "affectedrepl":"1", "enforcement":"required"  }
+		volrules = append(volrules, rule1,rule2)
+		return volrules 
 }
-
 
 func getVpsSpec(rules [] labelDict ) string {
 
@@ -288,6 +246,65 @@ spec:
 	`
 	return vpsspec
 }
+
+
+//-- Common function
+
+//ValidateVpsRules check applied vps rules on the app
+func ValidateVpsRules(f func([]*volume.Volume,map[string]map[string][]string), ctx *scheduler.Context,volscheck map[string]map[string][]string) {
+	var err error
+	var appVolumes []*volume.Volume
+	appVolumes, err = Inst().S.GetVolumes(ctx)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(appVolumes).NotTo(BeEmpty())
+
+	f (appVolumes,volscheck)
+
+
+}
+
+
+func getTestLabels (f func ()  [] labelDict ) [] labelDict {
+	return f()
+}
+
+//pvcNodeMap  The nodes on which this pvc is expected to have replica
+func pvcNodeMap(f func(map[string][]string) map[string]map[string][]string , val map[string][]string ) map[string]map[string][]string  {
+
+	return f(val)
+}
+ 	
+//SetNodeLabels set the provided labels on the portworx worker nodes
+func SetNodeLabels(labels []labelDict) map[string] [] string  {
+
+	lblnodes := map[string] [] string {}
+	workerNodes := node.GetWorkerNodes()
+	workerCnt := len(workerNodes)
+	nodes2lbl := len(labels)
+
+	if workerCnt < nodes2lbl {
+		fmt.Printf("Required(%v) number of worker nodes(%v) not available", nodes2lbl, workerCnt)
+		return lblnodes
+	}
+
+	// Get nodes
+	for key, nlbl := range labels {
+		//TODO: Randomize node selection
+		n := workerNodes[key]
+		for lkey, lval := range nlbl {
+			if err := k8s.Instance().AddLabelOnNode(n.Name, lkey, lval.(string)); err != nil {
+				logrus.Errorf("Failed to set node label %v: %v Err: %v", lkey, nlbl, err)
+				return lblnodes
+			}
+			lblnodes[lkey+lval.(string)]=append(lblnodes[lkey+lval.(string)],n.Name)
+		}
+
+	}
+	//TODO: Return node list with the labels attached
+	return lblnodes
+}
+
+
 
 func applyVpsSpec (vpsspec string) error {
 	var err error
