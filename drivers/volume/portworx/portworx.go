@@ -1570,9 +1570,9 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		}
 
 		// Only way to collect diags when PX is offline is using pxctl
-		out, err := d.nodeDriver.RunCommand(n, "/opt/pwx/bin/pxctl sv diags -a -f", opts)
+		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f", opts)
 		if err != nil {
-			return fmt.Errorf("Failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			logrus.Errorf("Failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
 		logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
 		return nil
@@ -1582,11 +1582,12 @@ func (d *portworx) CollectDiags(n node.Node) error {
 
 	r := &DiagRequestConfig{
 		DockerHost:    "unix:///var/run/docker.sock",
+		OutputFile:    "/var/cores/diags.tar.gz",
 		ContainerName: "",
 		Profile:       false,
 		Live:          true,
 		Upload:        false,
-		All:           false,
+		All:           true,
 		Force:         true,
 		OnHost:        true,
 		Extra:         false,
@@ -1599,8 +1600,9 @@ func (d *portworx) CollectDiags(n node.Node) error {
 	req := c.Post().Resource(pxDiagPath).Body(r)
 	resp := req.Do()
 	if resp.Error() != nil {
-		return fmt.Errorf("Failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
+		logrus.Errorf("Failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
 	}
+	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
 	return nil
 }
 
