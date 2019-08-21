@@ -17,6 +17,7 @@ import (
 )
 
 type labelDict map[string]interface{}
+//type vnode map[string]map[string][]string interface{}
 
 func TestVps(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -37,19 +38,17 @@ var _ = Describe("{ReplicaAffinity}", func() {
 	It("has to schedule app and verify the replication affinity", func() {
 
 		var contexts []*scheduler.Context
-		var nodelist []node.Node
-		var volcheck [] string
+		var volnodes map[string]map[string][]string 
 		var vpsspec string
 
 // loop	for multiple replica affinity test cases	
 		Step("get nodes and set labels", func() {
-			lbldata := getTestLabels()
+lbldata := getTestLabels() //TODO: function argument for getting testcase labels
 			lblnode := SetNodeLabels(lbldata)
 			logrus.Info("Nodes containing label", lblnode)
 			Expect(lblnode).NotTo(BeEmpty())
-			volcheck,nodelist = pvcNodeMap(lblnode)	
+			volnodes  = pvcNodeMap(lblnode)	//TODO: function argument for vol's expected nodes
 		})
-
 
 		Step("Rules of volume Placement", func () {
 			volrules := getTestRules()
@@ -65,9 +64,8 @@ var _ = Describe("{ReplicaAffinity}", func() {
 		})
 
 		Step("Validate volumes and replica affinity", func() {
-
 			for _, ctx := range contexts {
-				ValidateVpsRules(ctx, volcheck, nodelist)
+				ValidateVpsRules(ctx, volnodes) //TODO function arg for validating mapping
 			}
 
 		})
@@ -75,10 +73,7 @@ var _ = Describe("{ReplicaAffinity}", func() {
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
-		//TODO:
-		//Clean labels set on node
-		//Clean  Vps  kubectl delete vps ssd-sata-pool-placement-spread
-		cleanVps()
+		cleanVps() //TODO: function arg for cleaning up the testcase environment
 		for _, ctx := range contexts {
 			TearDownContext(ctx, opts)
 		}
@@ -93,11 +88,11 @@ var _ = Describe("{ReplicaAffinity}", func() {
 //Support functions
 
 func getTestLabels () [] labelDict {
-		lbldata := []labelDict{}
-		node1lbl := labelDict{"media_type": "SSD"} //, 
-		node2lbl := labelDict{"media_type": "SATA"}
-		lbldata = append(lbldata, node1lbl, node2lbl)
-		return lbldata
+	lbldata := []labelDict{}
+	node1lbl := labelDict{"media_type": "SSD","vps_test":"test"}  
+	node2lbl := labelDict{"media_type": "SATA","vps_test":"test"}
+	lbldata = append(lbldata, node1lbl, node2lbl)
+	return lbldata
 }
 
 func getTestRules () [] labelDict{
@@ -113,21 +108,33 @@ func getTestRules () [] labelDict{
 
 
 //pvcNodeMap  The nodes on which this pvc is  expected to have replica
-func pvcNodeMap(labelnodes []node.Node ) ([]string, []node.Node) {
+func pvcNodeMap(lblnodes map[string][]string ) map[string]map[string][]string  {
 
-	var volcheck [] string
-
-
-	for key,val := range labelnodes {
+	for key,val := range lblnodes {
 		logrus.Infof("label node: key:%v Val:%v", key,val)
-		logrus.Infof(" node details: node name Val:%v", val.Name)
 	}
-	volcheck=append(volcheck, "mysql-data")
-	volcheck=append(volcheck, "mysql-data-seq")
 
-	//Create 3 node lists (mustNodes, preferedNodes, notOnNodes)
+	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
+	volnodelist := map[string]map[string][]string{}
+	volnodelist["mysql-data"] = map[string][]string{}
+	volnodelist["mysql-data-aggr"] = map[string][]string{}
+	volnodelist ["mysql-data"]["pnodes"] = [] string{}
+	volnodelist ["mysql-data"]["nnodes"] = [] string{}
+	volnodelist ["mysql-data-aggr"]["pnodes"] = [] string{}
+	volnodelist ["mysql-data-aggr"]["nnodes"] = [] string{}
 
-	return volcheck, labelnodes
+
+	for _,lnode := range lblnodes["media_typeSSD"] {
+		volnodelist ["mysql-data"]["rnodes"] = append(volnodelist ["mysql-data"]["rnodes"], lnode)
+		volnodelist ["mysql-data-aggr"]["rnodes"] = append(volnodelist ["mysql-data-aggr"]["rnodes"], lnode)
+	}
+	//SATA
+	for _,lnode := range lblnodes["media_typeSATA"] {
+		volnodelist ["mysql-data"]["rnodes"] = append(volnodelist ["mysql-data"]["rnodes"], lnode)
+		volnodelist ["mysql-data-aggr"]["rnodes"] = append(volnodelist ["mysql-data-aggr"]["rnodes"], lnode)
+	}
+
+	return volnodelist
 }
  	
 
@@ -140,7 +147,7 @@ func pvcNodeMap(labelnodes []node.Node ) ([]string, []node.Node) {
  */
 
 //ValidateVpsRules check applied vps rules on the app
-func ValidateVpsRules(ctx *scheduler.Context,volscheck [] string, mustnodes []node.Node) {
+func ValidateVpsRules(ctx *scheduler.Context,volscheck map[string]map[string][]string) {
 	// Get Volumes
 	// Get Replicas
 	// Get Rules applied on the app
@@ -152,9 +159,12 @@ func ValidateVpsRules(ctx *scheduler.Context,volscheck [] string, mustnodes []no
 	appVolumes, err = Inst().S.GetVolumes(ctx)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(appVolumes).NotTo(BeEmpty())
-	logrus.Infof("Deployed volumes:%v,  volumes to check for %v and nodes on which the volumes should be %v", appVolumes, volscheck, mustnodes)
+	logrus.Infof("Deployed volumes:%v,  volumes to check for nodes %v ",
+			appVolumes, volscheck)
 	for _, appvol := range appVolumes {
-		for _,vol := range volscheck {
+
+		for vol, vnodes := range volscheck {
+
 			if appvol.Name == vol {
 				replicas, err := Inst().V.GetReplicaSetNodes(appvol)
 				logrus.Infof("==Replicas for vol: %s, appvol:%v Replicas:%v ", vol, appvol,replicas)
@@ -162,42 +172,69 @@ func ValidateVpsRules(ctx *scheduler.Context,volscheck [] string, mustnodes []no
 				Expect(replicas).NotTo(BeEmpty())
 
 				// Must have (required)
-				for _,mnode := range mustnodes {
-					found := 0
+				for _,mnode := range vnodes["rnodes"]  {
+					found := ""
 					for _,rnode := range replicas {
-						logrus.Infof("mnode:%v rnode:%v", mnode.Name, rnode)
-						if mnode.Name == rnode {
-							found=1
+						logrus.Infof("Expected Volume Node:%v Replica Node:%v", mnode, rnode)
+						if mnode == rnode {
+							found=rnode
 							break	
 						}
 					}
-					 if found == 0 {
+					 if found == "" {
 						logrus.Errorf("Volume '%v' does not have replica on node:'%v'", appvol,mnode)
+					  	Expect(found).NotTo(BeEmpty())
 					}
-					  // Expect(found).NotTo(BeEmpty())
 				}
 
 
 				// Preferred
-				//
+				for _,mnode := range vnodes["pnodes"]  {
+					found := ""
+					for _,rnode := range replicas {
+						logrus.Infof("Preferred Volume Node:%v Replica Node:%v", mnode, rnode)
+						if mnode == rnode {
+							found=rnode
+							break	
+						}
+					}
+					 if found != ""  {
+						logrus.Infof("Volume '%v' has replica on node:'%v'", appvol,mnode)
+					}
+				}
 
 				// NotonNode
+				for _,mnode := range vnodes["nnodes"]  {
+					var found  string
+					for _,rnode := range replicas {
+						logrus.Infof("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
+						if mnode == rnode {
+							found = rnode
+							break	
+						}
+					}
+					 if found != ""  {
+						logrus.Errorf("Volume '%v' has replica on node:'%v'", appvol,mnode)
+					    Expect(found).To(BeEmpty())
+					}
+					  // Expect(found).NotTo(BeEmpty())
+				}
 			}
 		}
 	}
 }
 
 //SetNodeLabels set the provided labels on the portworx worker nodes
-func SetNodeLabels(labels []labelDict) []node.Node {
+func SetNodeLabels(labels []labelDict) map[string] [] string  {
 
-appNodes  := make([]node.Node,0)
+	lblnodes := map[string] [] string {}
 	workerNodes := node.GetWorkerNodes()
 	workerCnt := len(workerNodes)
 	nodes2lbl := len(labels)
 
 	if workerCnt < nodes2lbl {
 		fmt.Printf("Required(%v) number of worker nodes(%v) not available", nodes2lbl, workerCnt)
-		return appNodes
+		return lblnodes
 	}
 
 	// Get nodes
@@ -207,14 +244,14 @@ appNodes  := make([]node.Node,0)
 		for lkey, lval := range nlbl {
 			if err := k8s.Instance().AddLabelOnNode(n.Name, lkey, lval.(string)); err != nil {
 				logrus.Errorf("Failed to set node label %v: %v Err: %v", lkey, nlbl, err)
-				return appNodes
+				return lblnodes
 			}
-			appNodes = append(appNodes, n)
+			lblnodes[lkey+lval.(string)]=append(lblnodes[lkey+lval.(string)],n.Name)
 		}
 
 	}
 	//TODO: Return node list with the labels attached
-	return appNodes
+	return lblnodes
 }
 
 
@@ -228,6 +265,26 @@ kind: VolumePlacementStrategy
 metadata:
   name: ssd-sata-pool-placement-spread
 spec:
+  replicaAffinity:
+  - affectedReplicas: 1
+#    enforcement: required
+    enforcement: preferred
+#    type: affinity
+    matchExpressions:
+    - key: media_type
+      operator: In
+      values:
+      - "SSD"
+  replicaAffinity:
+  - affectedReplicas: 1
+    enforcement: preferred
+#    enforcement: required
+#    type: affinity
+    matchExpressions:
+    - key: media_type
+      operator: In
+      values:
+      - "SATA"
 	`
 	return vpsspec
 }
