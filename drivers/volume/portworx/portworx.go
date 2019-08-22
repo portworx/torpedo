@@ -1,4 +1,4 @@
-package portwox
+package portworx
 
 import (
 	"fmt"
