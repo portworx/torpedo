@@ -72,7 +72,7 @@ const (
 	validateVolumeAttachedTimeout    = 30 * time.Second
 	validateVolumeAttachedInterval   = 5 * time.Second
 	validateNodeStopTimeout          = 5 * time.Minute
-	getNodeTimeout                   = 5 * time.Minute
+	getNodeTimeout                   = 3 * time.Minute
 	getNodeRetryInterval             = 5 * time.Second
 	stopDriverTimeout                = 5 * time.Minute
 	crashDriverTimeout               = 2 * time.Minute
