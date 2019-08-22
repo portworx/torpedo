@@ -250,7 +250,6 @@ func StartVolDriverAndWait(appNodes []node.Node) {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				if err != nil {
-					logrus.Errorf("Collecting diags because there was an Err: %v", err)
 					diagsErr := Inst().V.CollectDiags(n)
 					expect(diagsErr).NotTo(haveOccurred())
 				}
@@ -295,7 +294,6 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				if err != nil {
-					logrus.Errorf("Collecting diags because there was an Err: %v", err)
 					diagsErr := Inst().V.CollectDiags(n)
 					expect(diagsErr).NotTo(haveOccurred())
 				}

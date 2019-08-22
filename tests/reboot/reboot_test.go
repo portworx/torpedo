@@ -11,7 +11,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 )
 
 func TestReboot(t *testing.T) {
@@ -92,7 +91,6 @@ var _ = Describe("{RebootOneNode}", func() {
 
 							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 							if err != nil {
-								logrus.Errorf("Collecting diags because there was an Err: %v", err)
 								diagsErr := Inst().V.CollectDiags(n)
 								Expect(diagsErr).NotTo(HaveOccurred())
 							}
@@ -156,7 +154,6 @@ var _ = Describe("{RebootAllNodes}", func() {
 
 							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 							if err != nil {
-								logrus.Errorf("Collecting diags because there was an Err: %v", err)
 								diagsErr := Inst().V.CollectDiags(n)
 								Expect(diagsErr).NotTo(HaveOccurred())
 							}
