@@ -355,6 +355,27 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	for _, app := range apps {
 
 		appNamespace := app.GetID(instanceID)
+		replicas := int32(options.DeploymentReplicas)
+		for i := 0; i < len(app.SpecList); i++ {
+			if obj, ok := app.SpecList[i].(*apps_api.Deployment); ok {
+				for _, vol := range obj.Spec.Template.Spec.Volumes {
+					if vol.PersistentVolumeClaim != nil {
+						pv, err := k8s_ops.Instance().GetPersistentVolume(vol.PersistentVolumeClaim.ClaimName)
+						if err != nil {
+							return nil, err
+						}
+						for _, mode := range pv.Spec.AccessModes {
+							switch mode {
+							case v1.ReadWriteMany, v1.ReadOnlyMany:
+								if replicas != *obj.Spec.Replicas {
+									obj.Spec.Replicas = &replicas
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 		specObjects, err := k.CreateSpecObjects(app, appNamespace)
 		if err != nil {
 			return nil, err

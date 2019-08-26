@@ -23,6 +23,11 @@ if [ -z "${MIN_RUN_TIME}" ]; then
     MIN_RUN_TIME="0"
 fi
 
+APP_REPLICAS_PER_NAMESPACE=""
+if [ -z "$REPLICAS_PER_NAMESPACE" ]; then
+    APP_REPLICAS_PER_NAMESPACE="--replicas-per-namespace=$REPLICAS_PER_NAMESPACE"
+fi
+
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
     FAIL_FAST="--failFast"
 else
@@ -248,6 +253,7 @@ spec:
             "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
             "--chaos-level", "$CHAOS_LEVEL",
             "--provisioner", "$PROVISIONER",
+            "$APP_REPLICAS_PER_NAMESPACE",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true

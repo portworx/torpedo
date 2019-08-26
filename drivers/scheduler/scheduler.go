@@ -49,6 +49,8 @@ type ScheduleOptions struct {
 	Nodes []node.Node
 	// StorageProvisioner identifies what storage provider should be used
 	StorageProvisioner string
+	//DeploymentReplicas specific parameter when we need change statefulset replicas
+	DeploymentReplicas int
 }
 
 // Driver must be implemented to provide test support to various schedulers.

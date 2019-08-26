@@ -68,6 +68,7 @@ const (
 	defaultStorageDriverBaseVersion    = "1.2.11.5"
 	defaultStorageProvisioner          = "portworx"
 	defaultStorageNodesPerAZ           = 2
+	defaultAppReplicas                 = 3
 )
 
 const (
@@ -222,6 +223,7 @@ func ScheduleAndValidate(testname string) []*scheduler.Context {
 		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
+			DeploymentReplicas: Inst().AppReplicasPerNamespace,
 		})
 		expect(err).NotTo(haveOccurred())
 		expect(contexts).NotTo(beEmpty())
@@ -360,6 +362,7 @@ type Torpedo struct {
 	MaxStorageNodesPerAZ        int
 	DestroyAppTimeout           time.Duration
 	DriverStartTimeout          time.Duration
+	AppReplicasPerNamespace     int
 }
 
 // ParseFlags parses command line flags
@@ -376,6 +379,7 @@ func ParseFlags() {
 	var storageNodesPerAZ int
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
+	var appReplicasPerNamespace int
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -398,6 +402,7 @@ func ParseFlags() {
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
+	flag.IntVar(&appReplicasPerNamespace, "replicas-per-namespace", defaultAppReplicas, "Application replicas per namespace for deployments using shared vols")
 
 	flag.Parse()
 
@@ -434,6 +439,7 @@ func ParseFlags() {
 				MaxStorageNodesPerAZ:        storageNodesPerAZ,
 				DestroyAppTimeout:           destroyAppTimeout,
 				DriverStartTimeout:          driverStartTimeout,
+				AppReplicasPerNamespace:     appReplicasPerNamespace,
 			}
 		})
 	}
