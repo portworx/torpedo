@@ -74,6 +74,8 @@ const (
 	validateVolumeAttachedTimeout    = 30 * time.Second
 	validateVolumeAttachedInterval   = 5 * time.Second
 	validateNodeStopTimeout          = 5 * time.Minute
+	getNodeTimeout                   = 3 * time.Minute
+	getNodeRetryInterval             = 5 * time.Second
 	stopDriverTimeout                = 5 * time.Minute
 	crashDriverTimeout               = 2 * time.Minute
 	startDriverTimeout               = 2 * time.Minute
@@ -324,17 +326,25 @@ func (d *portworx) getPxNode(n node.Node, cManager cluster.Cluster) (api.Node, e
 	if cManager == nil {
 		cManager = d.getClusterManager()
 	}
-	pxNode, err := cManager.Inspect(n.VolDriverNodeID)
-	if (err == nil && pxNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && pxNode.Status == api.Status_STATUS_NONE) {
-		n, err = d.updateNodeID(n)
-		if err != nil {
-			return api.Node{}, err
+
+	t := func() (interface{}, bool, error) {
+		logrus.Debugf("Inspecting node %s", n.Name)
+		pxNode, err := cManager.Inspect(n.VolDriverNodeID)
+		if (err == nil && pxNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && pxNode.Status == api.Status_STATUS_NONE) {
+			n, err = d.updateNodeID(n)
+			if err != nil {
+				return api.Node{}, true, err
+			}
 		}
-		return d.getPxNode(n, cManager)
-	} else if err != nil {
-		return api.Node{}, err
+		return pxNode, false, nil
 	}
-	return pxNode, nil
+
+	pxnode, err := task.DoRetryWithTimeout(t, getNodeTimeout, getNodeRetryInterval)
+	if err != nil {
+		return api.Node{}, fmt.Errorf("Timeout after %v waiting to get node info", getNodeTimeout)
+	}
+
+	return pxnode.(api.Node), nil
 }
 
 func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
@@ -707,7 +717,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 			if err != nil {
 				return err
 			}
-			_, err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+			err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 				Action: "stop",
 				ConnectionOpts: node.ConnectionOpts{
 					Timeout:         stopDriverTimeout,
@@ -1193,13 +1203,12 @@ func (d *portworx) StartDriver(n node.Node) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 		Action: "start",
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         startDriverTimeout,
 			TimeBeforeRetry: defaultRetryInterval,
 		}})
-	return err
 }
 
 func (d *portworx) UpgradeDriver(images []torpedovolume.Image) error {
@@ -1282,7 +1291,7 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 
 func (d *portworx) DecommissionNode(n node.Node) error {
 
-	if err := k8s.Instance().AddLabelOnNode(n.Name, "px/enabled", "remove"); err != nil {
+	if err := k8s.Instance().AddLabelOnNode(n.Name, schedops.PXEnabledLabelKey, "remove"); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
@@ -1327,16 +1336,22 @@ func (d *portworx) RejoinNode(n node.Node) error {
 			Cause: err.Error(),
 		}
 	}
-	if err := k8s.Instance().RemoveLabelOnNode(n.Name, "px/service"); err != nil {
+	if err = k8s.Instance().RemoveLabelOnNode(n.Name, schedops.PXServiceLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
 		}
 	}
-	if err := k8s.Instance().RemoveLabelOnNode(n.Name, "px/enabled"); err != nil {
+	if err = k8s.Instance().RemoveLabelOnNode(n.Name, schedops.PXEnabledLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+		}
+	}
+	if err = k8s.Instance().UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to uncordon node: %v. Err: %v", n.Name, err),
 		}
 	}
 	return nil
