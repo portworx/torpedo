@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
+	"github.com/sirupsen/logrus"
 )
 
 func TestBasic(t *testing.T) {
@@ -156,31 +157,34 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 		Step("get nodes for all apps in test and bounce volume driver", func() {
 			for _, ctx := range contexts {
 				nodesToBeDown := getNodesThatCanBeDown(ctx)
-
-				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
-					Inst().V.String(), ctx.App.Key, nodesToBeDown), func() {
-					StopVolDriverAndWait(nodesToBeDown)
-				})
-
-				Step(fmt.Sprintf("destroy app: %s", ctx.App.Key), func() {
-					err = Inst().S.Destroy(ctx, nil)
-					Expect(err).NotTo(HaveOccurred())
-
-					Step("wait for few seconds for app destroy to trigger", func() {
-						time.Sleep(10 * time.Second)
+				if len(nodesToBeDown) != 0 {
+					Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
+						Inst().V.String(), ctx.App.Key, nodesToBeDown), func() {
+						StopVolDriverAndWait(nodesToBeDown)
 					})
-				})
 
-				Step("restarting volume driver", func() {
-					StartVolDriverAndWait(nodesToBeDown)
-				})
+					Step(fmt.Sprintf("destroy app: %s", ctx.App.Key), func() {
+						err = Inst().S.Destroy(ctx, nil)
+						Expect(err).NotTo(HaveOccurred())
 
-				Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
-					err = Inst().S.WaitForDestroy(ctx)
-					Expect(err).NotTo(HaveOccurred())
-				})
+						Step("wait for few seconds for app destroy to trigger", func() {
+							time.Sleep(10 * time.Second)
+						})
+					})
 
-				DeleteVolumesAndWait(ctx)
+					Step("restarting volume driver", func() {
+						StartVolDriverAndWait(nodesToBeDown)
+					})
+
+					Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
+						err = Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					DeleteVolumesAndWait(ctx)
+				} else {
+					logrus.Debug("Not enough nodes to be down, skipping...")
+				}
 			}
 		})
 	})
@@ -209,10 +213,17 @@ func getNodesThatCanBeDown(ctx *scheduler.Context) []node.Node {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(replicas).NotTo(BeEmpty())
 			// at least n-1 nodes with replica need to be up
-			maxNodesToBeDown := getMaxNodesToBeDown(len(replicas))
+			maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(replicas))
 			for _, nodeName := range replicas[maxNodesToBeDown:] {
 				nodesThatCantBeDown[nodeName] = true
 			}
+		}
+
+		metadataNodes := node.GetMetadataNodes()
+		// at least 2 metadata nodes need to be up
+		maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(metadataNodes))
+		for _, n := range metadataNodes[maxNodesToBeDown:] {
+			nodesThatCantBeDown[n.Name] = true
 		}
 
 		for _, node := range appNodes {
@@ -291,13 +302,15 @@ var _ = Describe("{AppTasksDown}", func() {
 	})
 })
 
-func getMaxNodesToBeDown(replicas int) int {
+// getMaxNodesToBeDown based on the worker nodes and volume replicas it determines the maximum nodes that can be down
+func getMaxNodesToBeDown(nodes, replicas int) int {
 	if replicas == 1 {
 		return 0
 	}
-	if replicas%2 != 0 {
+	if nodes > 4 && replicas%2 != 0 {
 		return replicas/2 + 1
 	}
+
 	return replicas / 2
 }
 
@@ -354,9 +367,54 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 	})
 })
 
+var _ = Describe("{CordonDeployDestroy}", func() {
+	It("has to cordon all nodes but one, deploy and destroy app", func() {
+
+		Step("Cordon all nodes but one", func() {
+			nodes := node.GetWorkerNodes()
+			for _, node := range nodes[1:] {
+				err := Inst().S.DisableSchedulingOnNode(node)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		var contexts []*scheduler.Context
+		Step("Deploy applications", func() {
+			for i := 0; i < Inst().ScaleFactor; i++ {
+				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("cordondeploydestroy-%d", i))...)
+			}
+		})
+		Step("Destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForDestroy] = false
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = false
+			for _, ctx := range contexts {
+				err := Inst().S.Destroy(ctx, opts)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		Step("Validate destroy", func() {
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		Step("teardown all apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+		Step("Uncordon all nodes", func() {
+			nodes := node.GetWorkerNodes()
+			for _, node := range nodes {
+				err := Inst().S.EnableSchedulingOnNode(node)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+	})
+})
+
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
-	CollectSupport()
 	ValidateCleanup()
 })
 
