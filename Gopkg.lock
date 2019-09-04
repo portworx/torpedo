@@ -332,20 +332,20 @@
   version = "v1.0.2"
 
 [[projects]]
-  digest = "1:23077f0ac1e8d5cebfa80b9fc0a23d2839b666cc002487ba273549dc38792370"
+  branch = "openstorage-5.1"
+  digest = "1:e77c9766c913e28a0887f851bbe55be019e0a595842dfa3bb70a53f46c6618d1"
   name = "github.com/kubernetes-incubator/external-storage"
   packages = [
     "snapshot/pkg/apis/crd/v1",
     "snapshot/pkg/client",
   ]
   pruneopts = "UT"
-  revision = "83aa29470096d814a8075556c4d8d2032dbe4fe0"
+  revision = "18c097ccef789822b480acd686afa5d8c859484f"
   source = "github.com/libopenstorage/external-storage"
-  version = "v5.1.0-openstorage"
 
 [[projects]]
   branch = "master"
-  digest = "1:451d7ffcf4bc223d51ae800795a3f68176418bbe378efc5414270739c0891d79"
+  digest = "1:51b509e0dbef1a6a3ae7f1507a8f9d9e9fee4ae363ed07861b685d13d1c4327c"
   name = "github.com/libopenstorage/cloudops"
   packages = [
     ".",
@@ -354,7 +354,7 @@
     "unsupported",
   ]
   pruneopts = "UT"
-  revision = "1f7cce4009f2d9c295777ea65a3202b1e6bd39e5"
+  revision = "1a40a0354c3ac999476bf8d915f950d9e0d6c179"
 
 [[projects]]
   branch = "release-4.0"
@@ -372,7 +372,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:3000d4cca0db7c3fafa0f0481be04f39fd5e9468c18dafb468b5d4a337812ab3"
+  digest = "1:c55bc14c1fdd921b44f7dc4c6a55314c44c98b1110f902ffb9e56e1b79c0ba5c"
   name = "github.com/libopenstorage/stork"
   packages = [
     "pkg/apis/stork",
@@ -382,7 +382,7 @@
     "pkg/client/clientset/versioned/typed/stork/v1alpha1",
   ]
   pruneopts = "UT"
-  revision = "603f5f576fb2a6b84f0c9afd1399802c538f6cf4"
+  revision = "cf19c5cf197d58ecae43319fda71c138da802019"
 
 [[projects]]
   digest = "1:c658e84ad3916da105a761660dcaeb01e63416c8ec7bc62256a9b411a05fcd67"
@@ -493,20 +493,26 @@
 
 [[projects]]
   branch = "release-3.11"
-  digest = "1:21e11e06ebb4c8dbdfab6198acf6cd68ffe61d67c58c858f2218f048c557bf4f"
+  digest = "1:9d9940dc42930d44ab32d69336bb12cf4711b8a0bbb04cb7f3b00c98f37951ba"
   name = "github.com/openshift/api"
-  packages = ["apps/v1"]
+  packages = [
+    "apps/v1",
+    "security/v1",
+  ]
   pruneopts = "UT"
   revision = "8741ff068a473be041d7bafb4502c12e4f10aab5"
 
 [[projects]]
   branch = "release-3.11"
-  digest = "1:8f8c9a60a25a3d5e5981067f438ce42ecc4217d00c6cdb7ad1067f1e563666c6"
+  digest = "1:5c14cd12dc22716dfe17ef3f2e74b5d6f5ff290a2324c9850b7fc08b43486ee3"
   name = "github.com/openshift/client-go"
   packages = [
     "apps/clientset/versioned",
     "apps/clientset/versioned/scheme",
     "apps/clientset/versioned/typed/apps/v1",
+    "security/clientset/versioned",
+    "security/clientset/versioned/scheme",
+    "security/clientset/versioned/typed/security/v1",
   ]
   pruneopts = "UT"
   revision = "431ec9a26e5021f35fa41ee9a89842db9bfdb370"
@@ -552,15 +558,15 @@
   version = "v0.8.1"
 
 [[projects]]
-  branch = "master"
-  digest = "1:755c2ae060b9d54d72eddd115c8992e0249fb83690ef7edfd91bfb29b78c8546"
+  branch = "external_storage_dep"
+  digest = "1:37bc6eca8cd566f771a059f545a7a174f3ec22a79146ee4fc2fc4ee94f0932f9"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "1e35a1e8c90673d371bdefe4236ba256a481fb23"
+  revision = "e6bf5542d19ebfaca7a5eb595eda7865eb262e1e"
 
 [[projects]]
   branch = "master"
@@ -1053,12 +1059,13 @@
     "google.golang.org/grpc",
     "google.golang.org/grpc/codes",
     "google.golang.org/grpc/status",
-    "k8s.io/api/apps/v1beta2",
+    "k8s.io/api/apps/v1",
     "k8s.io/api/batch/v1",
     "k8s.io/api/core/v1",
     "k8s.io/api/rbac/v1",
     "k8s.io/api/storage/v1",
     "k8s.io/apimachinery/pkg/api/errors",
+    "k8s.io/apimachinery/pkg/api/meta",
     "k8s.io/apimachinery/pkg/api/resource",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/runtime",

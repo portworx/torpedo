@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 const (
 	scaleTimeout                = 10 * time.Minute
 	autoNodeRecoveryTimeoutMins = 15 * time.Minute
+	nodeDeleteTimeoutMins       = 5 * time.Minute
 )
 
 func TestASG(t *testing.T) {
@@ -84,13 +86,99 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
+	})
+})
 
+// This test randomly kills one volume driver node and ensures cluster remains
+// intact by ASG
+var _ = Describe("{ASGKillRandomNodes}", func() {
+	It("keeps killing worker nodes", func() {
+
+		var contexts []*scheduler.Context
+		var err error
+
+		// Get list of nodes where storage driver is installed
+		storageDriverNodes := node.GetStorageDriverNodes()
+		Expect(err).NotTo(HaveOccurred())
+
+		Step("Ensure apps are deployed", func() {
+			for i := 0; i < Inst().ScaleFactor; i++ {
+				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgchaos-%d", i))...)
+			}
+		})
+
+		Step("Randomly kill one storage node", func() {
+
+			// set frequency mins depending on the chaos level
+			var frequency int
+			switch Inst().ChaosLevel {
+			case 5:
+				frequency = 15
+			case 4:
+				frequency = 30
+			case 3:
+				frequency = 45
+			case 2:
+				frequency = 60
+			case 1:
+				frequency = 90
+			default:
+				frequency = 30
+
+			}
+			if Inst().MinRunTimeMins == 0 {
+				// Run once
+				KillANodeAndValidate(storageDriverNodes)
+
+				// Validate applications and tear down
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				ValidateAndDestroy(contexts, opts)
+			} else {
+				// Run once till timer gets triggered
+				KillANodeAndValidate(storageDriverNodes)
+
+				Step("validate applications", func() {
+					for _, ctx := range contexts {
+						ValidateContext(ctx)
+					}
+				})
+
+				// Run repeatedly
+				ticker := time.NewTicker(time.Duration(frequency) * time.Minute)
+				stopChannel := time.After(time.Duration(Inst().MinRunTimeMins) * time.Minute)
+			L:
+				for {
+					select {
+					case <-ticker.C:
+						KillANodeAndValidate(storageDriverNodes)
+
+						Step("validate applications", func() {
+							for _, ctx := range contexts {
+								ValidateContext(ctx)
+							}
+						})
+					case <-stopChannel:
+						ticker.Stop()
+						// ticker may expire/time out in between, apps may not be
+						// in correct condition to be validated. Just tear them down.
+						opts := make(map[string]bool)
+						opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+						Step("destroy apps", func() {
+							for _, ctx := range contexts {
+								TearDownContext(ctx, opts)
+							}
+						})
+						break L
+					}
+				}
+			}
+		})
 	})
 })
 
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
-	CollectSupport()
 	ValidateCleanup()
 })
 
@@ -143,4 +231,28 @@ func getStorageNodes() ([]node.Node, error) {
 		}
 	}
 	return storageNodes, nil
+}
+
+func KillANodeAndValidate(storageDriverNodes []node.Node) {
+	rand.Seed(time.Now().Unix())
+	nodeToKill := storageDriverNodes[rand.Intn(len(storageDriverNodes))]
+
+	Step(fmt.Sprintf("Deleting node [%v]", nodeToKill.Name), func() {
+		err := Inst().N.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Step("Wait for 10 min. to node get replaced by autoscalling group", func() {
+		time.Sleep(10 * time.Minute)
+	})
+
+	err := Inst().S.RefreshNodeRegistry()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = Inst().V.RefreshDriverEndpoints()
+	Expect(err).NotTo(HaveOccurred())
+
+	Step(fmt.Sprintf("Validate number of storage nodes after killing node [%v]", nodeToKill.Name), func() {
+		ValidateClusterSize(int64(len(storageDriverNodes)))
+	})
 }

@@ -22,7 +22,8 @@ import (
 
 const (
 	// SchedName is the name of the dcos scheduler driver implementation
-	SchedName = "dcos"
+	SchedName      = "dcos"
+	defaultTimeout = 5 * time.Minute
 )
 
 type dcos struct {
@@ -245,6 +246,14 @@ func (d *dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOption
 	return nil
 }
 
+func (d *dcos) UpdateTasksID(ctx *scheduler.Context, id string) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateTasksID()",
+	}
+}
+
 func (d *dcos) randomizeVolumeNames(application *marathon.Application) error {
 	volDriver, err := volume.Get(d.volDriverName)
 	if err != nil {
@@ -295,11 +304,11 @@ func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 		// TODO: wait until all the resources have been cleaned up properly
-		if err := d.WaitForDestroy(ctx); err != nil {
+		if err := d.WaitForDestroy(ctx, defaultTimeout); err != nil {
 			return err
 		}
 	} else if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-		if err := d.WaitForDestroy(ctx); err != nil {
+		if err := d.WaitForDestroy(ctx, defaultTimeout); err != nil {
 			return err
 		}
 	}
@@ -307,7 +316,7 @@ func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	return nil
 }
 
-func (d *dcos) WaitForDestroy(ctx *scheduler.Context) error {
+func (d *dcos) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
 			if err := MarathonClient().WaitForApplicationTermination(obj.ID); err != nil {
@@ -510,6 +519,22 @@ func (d *dcos) PrepareNodeToDecommission(n node.Node, provisioner string) error 
 	}
 }
 
+func (d *dcos) EnableSchedulingOnNode(n node.Node) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "EnableSchedulingOnNode()",
+	}
+}
+
+func (d *dcos) DisableSchedulingOnNode(n node.Node) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DisableSchedulingOnNode()",
+	}
+}
+
 func (d *dcos) RefreshNodeRegistry() error {
 	// TODO implement this method
 	return nil
@@ -518,6 +543,10 @@ func (d *dcos) RefreshNodeRegistry() error {
 func (d *dcos) IsScalable(spec interface{}) bool {
 	// TODO implement this method
 	return false
+}
+
+func (d *dcos) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart time.Time) error {
+	return fmt.Errorf("not implemenented")
 }
 
 func init() {

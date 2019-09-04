@@ -29,6 +29,8 @@ var _ = BeforeSuite(func() {
 var _ = Describe("{RebootOneNode}", func() {
 	It("has to schedule apps and reboot node(s) with volumes", func() {
 		var err error
+		timeout := 60 * time.Second
+		retryInterval := 5 * time.Second
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootonenode-%d", i))...)
@@ -44,7 +46,7 @@ var _ = Describe("{RebootOneNode}", func() {
 
 					nodeMap := make(map[string]struct{})
 					for _, v := range volumes {
-						n, err := Inst().V.GetNodeForVolume(v)
+						n, err := Inst().V.GetNodeForVolume(v, timeout, retryInterval)
 						Expect(err).NotTo(HaveOccurred())
 
 						if n == nil {
@@ -87,7 +89,11 @@ var _ = Describe("{RebootOneNode}", func() {
 							err = Inst().S.IsNodeReady(n)
 							Expect(err).NotTo(HaveOccurred())
 
-							err = Inst().V.WaitDriverUpOnNode(n)
+							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+							if err != nil {
+								diagsErr := Inst().V.CollectDiags(n)
+								Expect(diagsErr).NotTo(HaveOccurred())
+							}
 							Expect(err).NotTo(HaveOccurred())
 						})
 					}
@@ -146,7 +152,11 @@ var _ = Describe("{RebootAllNodes}", func() {
 							err = Inst().S.IsNodeReady(n)
 							Expect(err).NotTo(HaveOccurred())
 
-							err = Inst().V.WaitDriverUpOnNode(n)
+							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+							if err != nil {
+								diagsErr := Inst().V.CollectDiags(n)
+								Expect(diagsErr).NotTo(HaveOccurred())
+							}
 							Expect(err).NotTo(HaveOccurred())
 						})
 					}
@@ -160,7 +170,6 @@ var _ = Describe("{RebootAllNodes}", func() {
 
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
-	CollectSupport()
 	ValidateCleanup()
 })
 

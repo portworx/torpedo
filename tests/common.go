@@ -43,6 +43,7 @@ const (
 	specDirCliFlag                     = "spec-dir"
 	appListCliFlag                     = "app-list"
 	logLocationCliFlag                 = "log-location"
+	logLevelCliFlag                    = "log-level"
 	scaleFactorCliFlag                 = "scale-factor"
 	minRunTimeMinsFlag                 = "minimun-runtime-mins"
 	chaosLevelFlag                     = "chaos-level"
@@ -57,6 +58,7 @@ const (
 	defaultNodeDriver     = "ssh"
 	defaultStorageDriver  = "pxd"
 	defaultLogLocation    = "/mnt/torpedo_support_dir"
+	defaultLogLevel       = "debug"
 	defaultAppScaleFactor = 1
 	defaultMinRunTimeMins = 0
 	defaultChaosLevel     = 5
@@ -90,7 +92,7 @@ func InitInstance() {
 	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String())
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String())
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init()
@@ -246,7 +248,11 @@ func StartVolDriverAndWait(appNodes []node.Node) {
 
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
-				err := Inst().V.WaitDriverUpOnNode(n)
+				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+				if err != nil {
+					diagsErr := Inst().V.CollectDiags(n)
+					expect(diagsErr).NotTo(haveOccurred())
+				}
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -286,7 +292,11 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
-				err := Inst().V.WaitDriverUpOnNode(n)
+				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+				if err != nil {
+					diagsErr := Inst().V.CollectDiags(n)
+					expect(diagsErr).NotTo(haveOccurred())
+				}
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -306,34 +316,6 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 		for _, ctx := range contexts {
 			TearDownContext(ctx, opts)
 		}
-	})
-}
-
-// CollectSupport creates a support bundle
-func CollectSupport() {
-	context(fmt.Sprintf("generating support bundle..."), func() {
-		Step(fmt.Sprintf("save journal output on each node"), func() {
-			nodes := node.GetWorkerNodes()
-			expect(nodes).NotTo(beEmpty())
-
-			journalCmd := fmt.Sprintf(
-				"echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v",
-				time.Now().Format(time.RFC3339))
-			for _, n := range nodes {
-				if !n.IsStorageDriverInstalled {
-					continue
-				}
-				logrus.Infof("saving journal output on %s", n.Name)
-				_, err := Inst().N.RunCommand(n, journalCmd, node.ConnectionOpts{
-					Timeout:         2 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
-					Sudo:            true,
-				})
-				if err != nil {
-					logrus.Warnf("failed to run cmd: %s. err: %v", journalCmd, err)
-				}
-			}
-		})
 	})
 }
 
@@ -376,6 +358,7 @@ type Torpedo struct {
 	SpecDir                     string
 	AppList                     []string
 	LogLoc                      string
+	LogLevel                    string
 	ScaleFactor                 int
 	StorageDriverUpgradeVersion string
 	StorageDriverBaseVersion    string
@@ -383,12 +366,14 @@ type Torpedo struct {
 	ChaosLevel                  int
 	Provisioner                 string
 	MaxStorageNodesPerAZ        int
+	DestroyAppTimeout           time.Duration
+	DriverStartTimeout          time.Duration
 }
 
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, specDir, logLoc, appListCSV, provisionerName string
+	var s, n, v, specDir, logLoc, logLevel, appListCSV, provisionerName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -397,6 +382,8 @@ func ParseFlags() {
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
+	var destroyAppTimeout time.Duration
+	var driverStartTimeout time.Duration
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -404,6 +391,7 @@ func ParseFlags() {
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
+	flag.StringVar(&logLevel, logLevelCliFlag, defaultLogLevel, "Log level")
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
 	flag.IntVar(&minRunTimeMins, minRunTimeMinsFlag, defaultMinRunTimeMins, "Minimum Run Time in minutes for appliation deletion tests")
 	flag.IntVar(&chaosLevel, chaosLevelFlag, defaultChaosLevel, "Application deletion frequency in minutes")
@@ -416,6 +404,8 @@ func ParseFlags() {
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
+	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
+	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 
 	flag.Parse()
 
@@ -441,6 +431,7 @@ func ParseFlags() {
 				N:                           nodeDriver,
 				SpecDir:                     specDir,
 				LogLoc:                      logLoc,
+				LogLevel:                    logLevel,
 				ScaleFactor:                 appScaleFactor,
 				MinRunTimeMins:              minRunTimeMins,
 				ChaosLevel:                  chaosLevel,
@@ -449,9 +440,18 @@ func ParseFlags() {
 				AppList:                     appList,
 				Provisioner:                 provisionerName,
 				MaxStorageNodesPerAZ:        storageNodesPerAZ,
+				DestroyAppTimeout:           destroyAppTimeout,
+				DriverStartTimeout:          driverStartTimeout,
 			}
 		})
 	}
+
+	// Set log level
+	logLvl, err := logrus.ParseLevel(instance.LogLevel)
+	if err != nil {
+		logrus.Fatalf("Failed to set log level due to Err: %v", err)
+	}
+	logrus.SetLevel(logLvl)
 }
 
 func splitCsv(in string) ([]string, error) {
