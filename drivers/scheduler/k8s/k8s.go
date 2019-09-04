@@ -1072,7 +1072,7 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 				podList = append(podList, pods.([]v1.Pod)...)
 			}
 			// we're ignoring this error since we want to verify cleanup down below, so simply logging it
-			logrus.Errorf("Failed to destroy core objects. Cause: %v", err)
+			logrus.Warnf("Failed to destroy core objects. Cause: %v", err)
 		}
 	}
 	for _, spec := range ctx.App.SpecList {
