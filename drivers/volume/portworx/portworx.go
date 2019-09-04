@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"reflect"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/golang/protobuf/ptypes/timestamp"
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
@@ -88,6 +90,7 @@ type portworx struct {
 	mountAttachManager api.OpenStorageMountAttachClient
 	volDriver          api.OpenStorageVolumeClient
 	clusterPairManager api.OpenStorageClusterPairClient
+	alertsManager      api.OpenStorageAlertsClient
 	schedOps           schedops.Driver
 	nodeDriver         node.Driver
 	refreshEndpoint    bool
@@ -327,17 +330,17 @@ func (d *portworx) CleanupVolume(name string) error {
 	return nil
 }
 
-func (d *portworx) getPxNode(n node.Node /*, cManager cluster.Cluster*/) (api.StorageNode, error) {
-	//if cManager == nil {
-	//	cManager = d.getClusterManager()
-	//}
+func (d *portworx) getPxNode(n node.Node, nManager ...api.OpenStorageNodeClient) (api.StorageNode, error) {
+	if nManager == nil {
+		nManager = []api.OpenStorageNodeClient{d.getNodeManager()}
+	}
 	nodeInspectResponse, err := d.nodeManager.Inspect(context.Background(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if (err == nil && nodeInspectResponse.Node.Status == api.Status_STATUS_OFFLINE) || (err != nil && nodeInspectResponse.Node.Status == api.Status_STATUS_NONE) {
 		n, err = d.updateNodeID(n)
 		if err != nil {
 			return api.StorageNode{}, err
 		}
-		return d.getPxNode(n) //, cManager)
+		return d.getPxNode(n, nManager[0])
 	} else if err != nil {
 		return api.StorageNode{}, err
 	}
@@ -345,13 +348,7 @@ func (d *portworx) getPxNode(n node.Node /*, cManager cluster.Cluster*/) (api.St
 }
 
 func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
-	//const (
-	//	storageInfoKey = "STORAGE-INFO"
-	//	resourcesKey   = "Resources"
-	//	pathKey        = "path"
-	//)
-	//
-	pxNode, err := d.getPxNode(n) //, nil)
+	pxNode, err := d.getPxNode(n)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +373,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		return err
 	}
 	t = func() (interface{}, bool, error) {
-		apiNode, err := d.getPxNode(n) //, nil)
+		apiNode, err := d.getPxNode(n)
 		if err != nil {
 			return nil, true, err
 		}
@@ -404,7 +401,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 	}
 
 	t = func() (interface{}, bool, error) {
-		apiNode, err := d.getPxNode(n) //, nil)
+		apiNode, err := d.getPxNode(n)
 		if err != nil {
 			return nil, true, err
 		}
@@ -809,7 +806,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	logrus.Debugf("waiting for PX node to be up: %s", n.Name)
 	t := func() (interface{}, bool, error) {
 		logrus.Debugf("Getting node info: %s", n.Name)
-		pxNode, err := d.getPxNode(n) //, nil)
+		pxNode, err := d.getPxNode(n)
 		if err != nil {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
@@ -827,16 +824,6 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 					n.Name, api.Status_STATUS_OK, pxNode.Status),
 			}
 		}
-
-		//logrus.Debugf("checking PX storage status on node: %s", n.Name)
-		//storageStatus := d.getStorageStatus(n)
-		//if storageStatus != storageStatusUp {
-		//	return "", true, &ErrFailedToWaitForPx{
-		//		Node: n,
-		//		Cause: fmt.Sprintf("px cluster is usable but storage status is not ok. Expected: %v Actual: %v",
-		//			storageStatusUp, storageStatus),
-		//	}
-		//}
 
 		logrus.Infof("px on node: %s is now up. status: %v", n.Name, pxNode.Status)
 
@@ -869,9 +856,14 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 
 func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	t := func() (interface{}, bool, error) {
-		// Check if px is down on all node addresses. We don't want to keep track
-		// which was the actual interface px was listening on before it went down
-		nodeInspectResponse, err := d.nodeManager.Inspect(context.Background(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID}, nil)
+		// to avoid getting the same node which driver has brought down
+		node := getAlternativeNode(n)
+		nManager, err := d.getNodeManagerByAddress(node.Addresses[0])
+		if err != nil {
+			return "", true, err
+		}
+
+		nodeInspectResponse, err := nManager.Inspect(context.Background(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID}, nil)
 		if err != nil {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
@@ -897,9 +889,23 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	return nil
 }
 
+// getAlternativeNode returns a different node than given one, useful in case you want to skip nodes which are down
+func getAlternativeNode(n node.Node) node.Node {
+	nodes := node.GetWorkerNodes()
+	lenNodes := len(nodes)
+	checkedNodes := make([]node.Node, 0)
+	rand.Seed(time.Now().Unix())
+	for i := rand.Intn(lenNodes); len(checkedNodes) != lenNodes; i = rand.Intn(lenNodes) {
+		if nodes[i].Name != n.Name {
+			return nodes[i]
+		}
+	}
+	return node.Node{}
+}
+
 func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
 	t := func() (interface{}, bool, error) {
-		pxNode, err := d.getPxNode(n) //, nil)
+		pxNode, err := d.getPxNode(n)
 		if err != nil {
 			return nil, true, &ErrFailedToWaitForPx{
 				Node:  n,
@@ -1124,11 +1130,17 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 		return err
 	}
 
-	d.volDriver = api.NewOpenStorageVolumeClient(conn)
 	d.clusterManager = api.NewOpenStorageClusterClient(conn)
+	_, err = d.clusterManager.InspectCurrent(context.Background(), &api.SdkClusterInspectCurrentRequest{})
+	if st, ok := status.FromError(err); ok && st.Code() == codes.Unavailable {
+		return err
+	}
+
+	d.volDriver = api.NewOpenStorageVolumeClient(conn)
 	d.nodeManager = api.NewOpenStorageNodeClient(conn)
 	d.mountAttachManager = api.NewOpenStorageMountAttachClient(conn)
 	d.clusterPairManager = api.NewOpenStorageClusterPairClient(conn)
+	d.alertsManager = api.NewOpenStorageAlertsClient(conn)
 	logrus.Infof("Using %v as endpoint for portworx volume driver", pxEndpoint)
 
 	return nil
@@ -1307,28 +1319,71 @@ func (d *portworx) getClusterManager() api.OpenStorageClusterClient {
 
 }
 
-//func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, error) {
-//	pxEndpoint := d.constructURL(addr)
-//	cClient, err := clusterclient.NewClusterClient(pxEndpoint, "v1")
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	return clusterclient.ClusterManager(cClient), nil
-//}
+func (d *portworx) getNodeManager() api.OpenStorageNodeClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.nodeManager
 
-//func (d *portworx) getVolumeDriverByAddress(addr string) (volume.VolumeDriver, error) {
-//	pxEndpoint := d.constructURL(addr)
-//
-//	dClient, err := volumeclient.NewDriverClient(pxEndpoint, DriverName, "", pxdClientSchedUserAgent)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	return volumeclient.VolumeDriver(dClient), nil
-//}
+}
+
+func (d *portworx) getMountAttachManager() api.OpenStorageMountAttachClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.mountAttachManager
+
+}
+
+func (d *portworx) getClusterPairManager() api.OpenStorageClusterPairClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.clusterPairManager
+
+}
+
+func (d *portworx) getAlertsManager() api.OpenStorageAlertsClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.alertsManager
+
+}
+
+func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClient, error) {
+	pxEndpoint := d.constructURL(addr)
+	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	dClient := api.NewOpenStorageNodeClient(conn)
+	_, err = dClient.Enumerate(context.Background(), &api.SdkNodeEnumerateRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	return dClient, nil
+}
+
+func (d *portworx) getVolumeDriverByAddress(addr string) (api.OpenStorageVolumeClient, error) {
+	pxEndpoint := d.constructURL(addr)
+	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	dClient := api.NewOpenStorageVolumeClient(conn)
+	_, err = dClient.Enumerate(context.Background(), &api.SdkVolumeEnumerateRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	return dClient, nil
+}
+
 //
 func (d *portworx) maintenanceOp(n node.Node, op string) error {
+	// TODO replace by sdk call whenever it is available
 	url := fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
@@ -1342,30 +1397,6 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 func (d *portworx) constructURL(ip string) string {
 	return fmt.Sprintf("%s:%d", ip, defaultPxServicePort)
 }
-
-//func (d *portworx) getStorageStatus(n node.Node) string {
-//	const (
-//		storageInfoKey = "STORAGE-INFO"
-//		statusKey      = "Status"
-//	)
-//	pxNode, err := d.getPxNode(n) //, nil)
-//	if err != nil {
-//		return err.Error()
-//	}
-//
-//	storageInfo, ok := pxNode.Disks[""].NodeData[storageInfoKey]
-//	if !ok {
-//		return fmt.Sprintf("Unable to find storage info for node: %v", n.Name)
-//	}
-//	storageInfoMap := storageInfo.(map[string]interface{})
-//
-//	statusInfo, ok := storageInfoMap[statusKey]
-//	if !ok || storageInfoMap == nil {
-//		return fmt.Sprintf("Unable to find status info for node: %v", n.Name)
-//	}
-//	status := statusInfo.(string)
-//	return status
-//}
 
 func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]string, error) {
 	var pxNodes []string
@@ -1435,30 +1466,63 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_
 	if snapshotData.Spec.PortworxSnapshot.SnapshotType == snap_v1.PortworxSnapshotTypeCloud {
 		snap = "in-place-restore-" + vol
 	}
-	alerts, err := d.clusterManager.EnumerateAlerts(timeStart, time.Now(), api.ResourceType_RESOURCE_TYPE_VOLUME)
+
+	tsStart := timestamp.Timestamp{
+		Nanos:   int32(timeStart.UnixNano()),
+		Seconds: timeStart.Unix(),
+	}
+	currentTime := time.Now()
+	tsEnd := timestamp.Timestamp{
+		Nanos:   int32(currentTime.UnixNano()),
+		Seconds: currentTime.Unix(),
+	}
+	alerts, err := d.alertsManager.EnumerateWithFilters(context.Background(), &api.SdkAlertsEnumerateWithFiltersRequest{
+		Queries: []*api.SdkAlertsQuery{
+			{
+				Query: &api.SdkAlertsQuery_ResourceTypeQuery{
+					ResourceTypeQuery: &api.SdkAlertsResourceTypeQuery{
+						ResourceType: api.ResourceType_RESOURCE_TYPE_VOLUME,
+					},
+				},
+				Opts: []*api.SdkAlertsOption{
+					{Opt: &api.SdkAlertsOption_TimeSpan{
+						TimeSpan: &api.SdkAlertsTimeSpan{
+							StartTime: &tsStart,
+							EndTime:   &tsEnd,
+						},
+					}},
+				},
+			},
+		},
+	})
+
 	if err != nil {
 		return err
 	}
 	// get volume and snap info
-	pvcVol, err := d.volDriver.Inspect([]string{vol})
-	if err != nil || len(pvcVol) == 0 {
+	pvcVol, err := d.volDriver.Inspect(context.Background(), &api.SdkVolumeInspectRequest{VolumeId: vol})
+	if err != nil {
 		return fmt.Errorf("inspect failed for %v: %v", vol, err)
 	}
 	// form alert msg for snapshot restore
-	grepMsg := "Volume " + pvcVol[0].GetLocator().GetName() +
-		" (" + pvcVol[0].GetId() + ") restored from snapshot "
-	snapVol, err := d.volDriver.Inspect([]string{snap})
-	if err != nil || len(snapVol) == 0 {
+	grepMsg := "Volume " + pvcVol.Volume.GetLocator().GetName() +
+		" (" + pvcVol.Volume.GetId() + ") restored from snapshot "
+	snapVol, err := d.volDriver.Inspect(context.Background(), &api.SdkVolumeInspectRequest{VolumeId: snap})
+	if err != nil {
 		// Restore object get deleted in case of cloudsnap
 		logrus.Warnf("Snapshot volume %v not found: %v", snap, err)
 		grepMsg = grepMsg + snap
 	} else {
-		grepMsg = grepMsg + snapVol[0].GetLocator().GetName() +
+		grepMsg = grepMsg + snapVol.Volume.GetLocator().GetName() +
 			" (" + snap + ")"
 	}
 
 	isSuccess := false
-	for _, alert := range alerts.GetAlert() {
+	alertsResp, err := alerts.Recv()
+	if err != nil {
+		return err
+	}
+	for _, alert := range alertsResp.Alerts {
 		if strings.Contains(alert.GetMessage(), grepMsg) {
 			isSuccess = true
 			break
@@ -1472,7 +1536,8 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_
 
 func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) {
 	kvdbMembers := make(map[string]metadataNode)
-	url := d.constructURL(n.Addresses[0])
+	// TODO replace by sdk call whenever it is available
+	url := fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
 		return nil, err
@@ -1489,7 +1554,7 @@ func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) 
 func (d *portworx) CollectDiags(n node.Node) error {
 	var err error
 
-	pxNode, err := d.getPxNode(n, nil)
+	pxNode, err := d.getPxNode(n)
 	if err != nil {
 		return err
 	}
