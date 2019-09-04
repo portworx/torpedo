@@ -1063,8 +1063,16 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			return currPods, false, nil
 		}
 		pods, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil && pods != nil {
-			podList = append(podList, pods.([]v1.Pod)...)
+		if err != nil {
+			// in case we're not waiting for resource cleanup
+			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; !ok || !value {
+				return err
+			}
+			if pods != nil {
+				podList = append(podList, pods.([]v1.Pod)...)
+			}
+			// we're ignoring this error since we want to verify cleanup down below, so simply logging it
+			logrus.Errorf("Failed to destroy core objects. Cause: %v", err)
 		}
 	}
 	for _, spec := range ctx.App.SpecList {
@@ -1076,7 +1084,9 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			return nil, false, nil
 		}
 
-		task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
 	}
 	for _, spec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
@@ -1087,7 +1097,9 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			return nil, false, nil
 		}
 
-		task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
 	}
 
 	for _, spec := range ctx.App.SpecList {
@@ -1099,7 +1111,9 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			return nil, false, nil
 		}
 
-		task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
 	}
 
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
