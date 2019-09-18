@@ -55,6 +55,11 @@ if [ -n "${PROVISIONER}" ]; then
 	PROVISIONER="$PROVISIONER"
 fi
 
+CONFIGMAP=""
+if [ -n "${CONFIG_MAP}" ]; then
+	CONFIGMAP="${CONFIG_MAP}"
+fi
+
 if [ -z "${TORPEDO_IMG}" ]; then
     TORPEDO_IMG="portworx/torpedo:latest"
     echo "Using default torpedo image: ${TORPEDO_IMG}"
@@ -69,6 +74,12 @@ if [ -z "$DRIVER_START_TIMEOUT" ]; then
     DRIVER_START_TIMEOUT="5m0s"
     echo "Using default timeout of ${DRIVER_START_TIMEOUT}"
 fi
+
+if [ -z "$STORAGENODE_RECOVERY_TIMEOUT" ]; then
+    STORAGENODE_RECOVERY_TIMEOUT="35m0s"
+    echo "Using default storage node recovery timeout of ${STORAGENODE_RECOVERY_TIMEOUT}"
+fi
+
 
 kubectl delete pod torpedo
 state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
@@ -247,7 +258,9 @@ spec:
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
             "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
             "--chaos-level", "$CHAOS_LEVEL",
-            "--provisioner", "$PROVISIONER",
+            "--storagenode-recovery-timeout", "$STORAGENODE_RECOVERY_TIMEOUT",
+			 "--provisioner", "$PROVISIONER",
+			 "--config-map", "$CONFIGMAP",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true
