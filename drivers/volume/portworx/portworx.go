@@ -273,6 +273,7 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 			}
 		}
 	}
+
 	return false, nil
 }
 
@@ -888,6 +889,8 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
+		//TODO: Remove eventually
+		d.CollectDiags(n)
 		return err
 	}
 
@@ -904,9 +907,13 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
+		//TODO: Remove eventually
+		d.CollectDiags(n)
 		return err
 	}
 
+	//TODO: Remove eventually
+	d.CollectDiags(n)
 	logrus.Debugf("px is fully operational on node: %s", n.Name)
 	return nil
 }
@@ -1642,18 +1649,12 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		Sudo:            true,
 	}
 
-	pxPid, err := d.nodeDriver.RunCommand(n, `ps -ef | grep "px -daemon" | grep -v grep | awk "{print $2}"`, opts)
+	logrus.Infof("Sending SIGUSR1 signal to PX daemon process")
+	_, err = d.nodeDriver.RunCommand(n, `pkill -xf -SIGUSR1 "/usr/local/bin/px -daemon"`, opts)
 	if err != nil {
-		return fmt.Errorf("Failed to get process id of px daemon on %v, Err: %v", pxNode.Hostname, err)
+		logrus.Warnf("Failed to send SIGUSR1 signal to PX daemon process on %v, Err: %v", pxNode.Hostname, err)
 	}
-	logrus.Debugf("PX daemon is running with pid [%s] on [%v]", pxPid, pxNode.Hostname)
-
-	logrus.Debugf("Sending SIGUSR1 signal to PX process [%s]", pxPid)
-	_, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("kill -SIGUSR1 %s", pxPid), opts)
-	if err != nil {
-		return fmt.Errorf("Failed to send SIGUSR1 signal to px process [%s] on %v, Err: %v", pxPid, pxNode.Hostname, err)
-	}
-	logrus.Debugf("Successfully sent SIGUSR1 signal to px process [%s] on [%v]", pxPid, pxNode.Hostname)
+	logrus.Infof("Successfully sent SIGUSR1 signal to PX daemon process on [%v]", pxNode.Hostname)
 
 	logrus.Debugf("Collecting diags on node %v, because there was an error", pxNode.Hostname)
 
@@ -1693,6 +1694,7 @@ func (d *portworx) CollectDiags(n node.Node) error {
 	if resp.Error() != nil {
 		return fmt.Errorf("Failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
 	}
+
 	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
 	return nil
 }
