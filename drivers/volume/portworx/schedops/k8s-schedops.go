@@ -202,6 +202,9 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		validatedPods = append(validatedPods, resp...)
 		lenValidatedPods := len(validatedPods)
 		lenExpectedPods := len(pods)
+		if lenExpectedPods > 0 && !vol.Shared {
+			lenExpectedPods = 1
+		}
 		if lenValidatedPods == lenExpectedPods {
 			return nil, false, nil
 		}
@@ -250,18 +253,6 @@ PodLoop:
 		if err != nil && err == k8s.ErrPodsNotFound {
 			logrus.Warnf("pod %s not found. probably it got rescheduled", p.Name)
 			continue
-		} else if !k8s.Instance().IsPodReady(*pod) && ((len(validatedMountPods) > 0 || len(podsToExclude) > 0) && !vol.Shared) {
-			//when volume is not shared and there is one pod already validated, skip the other pods
-			remainingPods := excludePods(newPods, validatedMountPods)
-			t := func() []string {
-				pods := make([]string, 0)
-				for _, pod := range remainingPods {
-					pods = append(pods, pod.Name)
-				}
-				return pods
-			}
-			validatedMountPods = append(validatedMountPods, t()...)
-			break
 		} else if !k8s.Instance().IsPodReady(*pod) {
 			// if pod is not ready, delay the check
 			logrus.Warnf("pod %s still not running. Status: %v", pod.Name, pod.Status.Phase)
