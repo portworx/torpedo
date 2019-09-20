@@ -10,6 +10,7 @@ import (
 	"time"
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	ap_api "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
@@ -26,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 const (
@@ -92,11 +94,13 @@ const (
 var deleteVolumeLabelList = []string{"auth-token", "pv.kubernetes.io", "volume.beta.kubernetes.io", "kubectl.kubernetes.io", "volume.kubernetes.io"}
 
 type portworx struct {
-	clusterManager  cluster.Cluster
-	volDriver       volume.VolumeDriver
-	schedOps        schedops.Driver
-	nodeDriver      node.Driver
-	refreshEndpoint bool
+	clusterManager           cluster.Cluster
+	volDriver                volume.VolumeDriver
+	schedOps                 schedops.Driver
+	nodeDriver               node.Driver
+	refreshEndpoint          bool
+	PoolScalePercentageUsage int64
+	PoolScaleMaxSize         int64
 }
 
 // TODO temporary solution until sdk supports metadataNode response
@@ -144,22 +148,22 @@ func (d *portworx) String() string {
 	return DriverName
 }
 
-func (d *portworx) Init(sched string, nodeDriver string, token string, storageProvisioner string) error {
-	logrus.Infof("Using the Portworx volume driver under scheduler: %v", sched)
+func (d *portworx) Init(initOpts torpedovolume.InitOptions) error {
+	logrus.Infof("Using the Portworx volume driver under scheduler: %v", initOpts.Sched)
 	var err error
-	if d.nodeDriver, err = node.Get(nodeDriver); err != nil {
+	if d.nodeDriver, err = node.Get(initOpts.NodeDriver); err != nil {
 		return err
 	}
 
-	if d.schedOps, err = schedops.Get(sched); err != nil {
+	if d.schedOps, err = schedops.Get(initOpts.Sched); err != nil {
 		return fmt.Errorf("failed to get scheduler operator for portworx. Err: %v", err)
 	}
 
-	if err = d.setDriver(token); err != nil {
+	if err = d.setDriver(initOpts.Token); err != nil {
 		return err
 	}
 
-	cluster, err := d.getClusterOnStart(token)
+	cluster, err := d.getClusterOnStart(initOpts.Token)
 	if err != nil {
 		return err
 	}
@@ -189,13 +193,24 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 		)
 	}
 	// Set provisioner for torpedo
-	if storageProvisioner != "" {
-		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
+	if initOpts.StorageProvisioner != "" {
+		if p, ok := provisioners[torpedovolume.StorageProvisionerType(initOpts.StorageProvisioner)]; ok {
 			torpedovolume.StorageProvisioner = p
 		}
 	} else {
 		torpedovolume.StorageProvisioner = provisioners[PortworxStorage]
 	}
+
+	if initOpts.AutopilotRuleParams != nil && initOpts.AutopilotRuleParams.Enable {
+		rule, err := d.createAutopilotPoolExpandObject(initOpts.AutopilotRuleParams)
+		if err != nil {
+			return err
+		}
+		if err = d.createAutopilotRule(rule); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -1694,6 +1709,64 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		return fmt.Errorf("Failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
 	}
 	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+	return nil
+}
+
+func (d *portworx) ValidateStorage(timeout time.Duration, retryInterval time.Duration) error {
+
+	//pools
+	//cluster, err := d.getClusterManager().Enumerate()
+	//for _, n := range cluster.Nodes {
+	//	for _, p := range n.Pools {
+	//		p.TotalSize
+	//	}
+	//}
+
+	return nil
+}
+
+func (d *portworx) createAutopilotPoolExpandObject(apParams *torpedovolume.AutopilotRuleParams) (*ap_api.AutopilotRule, error) {
+	obj := &ap_api.AutopilotRule{}
+	obj.Name = apParams.Name
+	obj.Spec.Enforcement = ap_api.EnforcementRequired
+
+	actions := &ap_api.RuleAction{
+		Name: "penstorage.io.action.storagepool/expand",
+		Params: map[string]string{
+			"scalepercentage": strconv.FormatInt(apParams.PoolScalePercentageUsage, 10),
+			"scaletype":       "resize-disk",
+		},
+	}
+	obj.Spec.Actions = append(obj.Spec.Actions, actions)
+
+	expPoolAvailableCapacity := &ap_api.LabelSelectorRequirement{
+		Key:      "100 * ( px_pool_stats_available_bytes/ px_pool_stats_total_bytes)",
+		Operator: "Lt",
+		Values:   []string{strconv.FormatInt(apParams.PoolScalePercentageUsage, 10)},
+	}
+	obj.Spec.Conditions.Expressions = append(obj.Spec.Conditions.Expressions, expPoolAvailableCapacity)
+
+	expVolMaxCapacity := &ap_api.LabelSelectorRequirement{
+		Key:      "px_pool_stats_total_bytes/ 1000000000",
+		Operator: "Lt",
+		Values:   []string{strconv.FormatInt(apParams.PoolScaleMaxSize, 10)},
+	}
+	obj.Spec.Conditions.Expressions = append(obj.Spec.Conditions.Expressions, expVolMaxCapacity)
+
+	logrus.Infof("Created Autopilot Object: %+v\n", obj)
+
+	return obj, nil
+}
+
+func (d *portworx) createAutopilotRule(autopilotRule *ap_api.AutopilotRule) error {
+	err := d.schedOps.CreateAutopilotRule(autopilotRule)
+	if errors.IsAlreadyExists(err) {
+		logrus.Infof("Found existing AutopilotRule: %v", autopilotRule.Name)
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Failed to create AutopilotRule: %v. Err: %v", autopilotRule.Name, err)
+	}
+
 	return nil
 }
 

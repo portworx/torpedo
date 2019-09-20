@@ -103,7 +103,19 @@ func InitInstance() {
 	} else {
 		token = ""
 	}
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
+	initOpt := volume.InitOptions{
+		NodeDriver:         Inst().N.String(),
+		Sched:              Inst().S.String(),
+		Token:              token,
+		StorageProvisioner: Inst().Provisioner,
+		AutopilotRuleParams: &volume.AutopilotRuleParams{
+			Enable:                   true,
+			Name:                     fmt.Sprintf("autopilot-%s", Inst().InstanceID),
+			PoolScalePercentageUsage: 50,
+			PoolScaleMaxSize:         400,
+		},
+	}
+	err = Inst().V.Init(initOpt)
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init()

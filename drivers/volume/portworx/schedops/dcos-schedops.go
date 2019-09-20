@@ -1,6 +1,7 @@
 package schedops
 
 import (
+	ap_api "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -10,11 +11,17 @@ import (
 type dcosSchedOps struct{}
 
 func (d *dcosSchedOps) StartPxOnNode(n node.Node) error {
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StartPxOnNode()",
+	}
 }
 
 func (d *dcosSchedOps) StopPxOnNode(n node.Node) error {
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StopPxOnNode()",
+	}
 }
 
 func (d *dcosSchedOps) ValidateOnNode(n node.Node) error {
@@ -26,12 +33,18 @@ func (d *dcosSchedOps) ValidateOnNode(n node.Node) error {
 
 func (d *dcosSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume) error {
 	// We do not have labels in DC/OS currently
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateAddLabels()",
+	}
 }
 
 func (d *dcosSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 	// We do not have labels in DC/OS currently
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateRemoveLabels()",
+	}
 }
 
 func (d *dcosSchedOps) GetVolumeName(vol *volume.Volume) string {
@@ -40,45 +53,74 @@ func (d *dcosSchedOps) GetVolumeName(vol *volume.Volume) string {
 
 func (d *dcosSchedOps) ValidateVolumeCleanup(n node.Driver) error {
 	// TODO: Implement this
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateVolumeCleanup()",
+	}
 }
 
 func (d *dcosSchedOps) ValidateVolumeSetup(vol *volume.Volume, driver node.Driver) error {
 	// TODO: Implement this
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateVolumeSetup()",
+	}
 }
 
 func (d *dcosSchedOps) ValidateSnapshot(volParams map[string]string, parent *api.Volume) error {
 	// TODO: Implement this
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateSnapshot()",
+	}
 }
 
 func (d *dcosSchedOps) GetServiceEndpoint() (string, error) {
 	// PX driver is accessed directly on agent nodes. There is no DC/OS level
 	// service endpoint which can be used to redirect the calls to PX driver
-	return "", nil
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetServiceEndpoint()",
+	}
 }
 
 func (d *dcosSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error {
 	// TOOD: Implement this method
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpgradePortworx()",
+	}
 }
 
 func (d *dcosSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	// TODO: Implement this method
-	return true
+	return false
 }
 
 // IsPXEnabled should return whether given node has px installed or not
 func (d *dcosSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	// TODO: Implement this method
-	return true, nil
+	return true, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsPXEnabled()",
+	}
 }
 
 // GetStorageInfo returns cluster pair info from destination clusterrefereced by kubeconfig
 func (d *dcosSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, error) {
 	// TODO: Implement this methid
-	return nil, nil
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetRemotePXNodes()",
+	}
+}
+
+// CreateAutopilotRule creates an autopilot rule
+func (d *dcosSchedOps) CreateAutopilotRule(rule *ap_api.AutopilotRule) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateAutopilotRule()",
+	}
 }
 
 func init() {

@@ -32,13 +32,28 @@ type Image struct {
 	Version string
 }
 
+type AutopilotRuleParams struct {
+	Name                     string
+	Enable                   bool
+	PoolScalePercentageUsage int64
+	PoolScaleMaxSize         int64
+}
+
+type InitOptions struct {
+	Sched               string
+	NodeDriver          string
+	Token               string
+	StorageProvisioner  string
+	AutopilotRuleParams *AutopilotRuleParams
+}
+
 // Driver defines an external volume driver interface that must be implemented
 // by any external storage provider that wants to qualify their product with
 // Torpedo.  The functions defined here are meant to be destructive and illustrative
 // of failure scenarious that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string, nodeDriver string, token string, storageProvisioner string) error
+	Init(initOptions InitOptions) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -135,6 +150,9 @@ type Driver interface {
 
 	// Collect live diags on a node
 	CollectDiags(n node.Node) error
+
+	// ValidateStorage validates all the storage
+	ValidateStorage(timeout time.Duration, retryInterval time.Duration) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	ap_api "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
@@ -759,6 +760,11 @@ func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
 	}
 
 	return pxNodes, nil
+}
+
+func (k *k8sSchedOps) CreateAutopilotRule(rule *ap_api.AutopilotRule) error {
+	_, err := k8s.Instance().CreateAutopilotRule(rule)
+	return err
 }
 
 func init() {
