@@ -93,6 +93,11 @@ const (
 
 var deleteVolumeLabelList = []string{"auth-token", "pv.kubernetes.io", "volume.beta.kubernetes.io", "kubectl.kubernetes.io", "volume.kubernetes.io"}
 
+type storagepool struct {
+	NodeName  string
+	PoolSizes []uint64
+}
+
 type portworx struct {
 	clusterManager           cluster.Cluster
 	volDriver                volume.VolumeDriver
@@ -101,6 +106,7 @@ type portworx struct {
 	refreshEndpoint          bool
 	PoolScalePercentageUsage int64
 	PoolScaleMaxSize         int64
+	initialClusterSize       map[string]storagepool
 }
 
 // TODO temporary solution until sdk supports metadataNode response
@@ -870,7 +876,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		logrus.Debugf("Getting node info: %s", n.Name)
 		pxNode, err := d.getPxNode(n, nil)
 		if err != nil {
-			return "", true, &ErrFailedToWaitForPx{
+			return nil, true, &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: fmt.Sprintf("failed to get node info [%s]. Err: %v", n.Name, err),
 			}
@@ -880,7 +886,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION, api.Status_STATUS_OK: // do nothing
 		default:
-			return "", true, &ErrFailedToWaitForPx{
+			return nil, true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable but node %s status is not ok. Expected: %v Actual: %v",
 					n.Name, api.Status_STATUS_OK, pxNode.Status),
@@ -890,7 +896,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		logrus.Debugf("checking PX storage status on node: %s", n.Name)
 		storageStatus := d.getStorageStatus(n)
 		if storageStatus != storageStatusUp {
-			return "", true, &ErrFailedToWaitForPx{
+			return nil, true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable on node: %s but storage status is not ok. Expected: %v Actual: %v",
 					n.Name, storageStatusUp, storageStatus),
@@ -899,10 +905,11 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 
 		logrus.Infof("px on node: %s is now up. status: %v", n.Name, pxNode.Status)
 
-		return "", false, nil
+		return pxNode, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
+	pxNode, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval)
+	if err != nil {
 		return err
 	}
 
@@ -922,8 +929,21 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		return err
 	}
 
+	node := pxNode.(api.Node)
+	d.initialClusterSize[node.SchedulerNodeName] = storagepool{
+		NodeName:  node.SchedulerNodeName,
+		PoolSizes: d.getPools(node),
+	}
 	logrus.Debugf("px is fully operational on node: %s", n.Name)
 	return nil
+}
+
+func (d *portworx) getPools(n api.Node) []uint64 {
+	pools := make([]uint64, 0)
+	for _, p := range n.Pools {
+		pools = append(pools, p.TotalSize)
+	}
+	return pools
 }
 
 func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
@@ -1713,15 +1733,47 @@ func (d *portworx) CollectDiags(n node.Node) error {
 }
 
 func (d *portworx) ValidateStorage(timeout time.Duration, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		cluster, err := d.getClusterManager("").Enumerate()
+		if err != nil {
+			return nil, true, err
+		}
+		nodePools := d.getPoolTotalSizes(cluster.Nodes)
+		for _, nodePool := range *nodePools {
+			if err = d.validatePoolSize(nodePool); err != nil {
+				return nil, true, err
+			}
+		}
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+	return err
+}
 
-	//pools
-	//cluster, err := d.getClusterManager().Enumerate()
-	//for _, n := range cluster.Nodes {
-	//	for _, p := range n.Pools {
-	//		p.TotalSize
-	//	}
-	//}
+func (d *portworx) getPoolTotalSizes(nodes []api.Node) *map[string]storagepool {
+	nodePools := make(map[string]storagepool)
+	for _, n := range nodes {
+		nodePools[n.SchedulerNodeName] = storagepool{
+			NodeName:  n.SchedulerNodeName,
+			PoolSizes: d.getPools(n),
+		}
+	}
+	return &nodePools
+}
 
+func (d *portworx) validatePoolSize(nodePool storagepool) error {
+	initialNodeState, ok := d.initialClusterSize[nodePool.NodeName]
+	if !ok {
+		return fmt.Errorf("initial node state not found for: %s", nodePool.NodeName)
+	}
+	for i, currentPoolSize := range nodePool.PoolSizes {
+		if d.PoolScalePercentageUsage < d.PoolScaleMaxSize*100/int64(currentPoolSize) {
+			calculatedPoolSize := int64(float64(initialNodeState.PoolSizes[i]) * (float64(d.PoolScalePercentageUsage)/100 + 1))
+			if int64(currentPoolSize) < calculatedPoolSize {
+				return fmt.Errorf("pool size differs. Expected: %d Got: %d", calculatedPoolSize, currentPoolSize)
+			}
+		}
+	}
 	return nil
 }
 
@@ -1753,8 +1805,6 @@ func (d *portworx) createAutopilotPoolExpandObject(apParams *torpedovolume.Autop
 	}
 	obj.Spec.Conditions.Expressions = append(obj.Spec.Conditions.Expressions, expVolMaxCapacity)
 
-	logrus.Infof("Created Autopilot Object: %+v\n", obj)
-
 	return obj, nil
 }
 
@@ -1764,7 +1814,7 @@ func (d *portworx) createAutopilotRule(autopilotRule *ap_api.AutopilotRule) erro
 		logrus.Infof("Found existing AutopilotRule: %v", autopilotRule.Name)
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Failed to create AutopilotRule: %v. Err: %v", autopilotRule.Name, err)
+		return fmt.Errorf("failed to create AutopilotRule: %s. Err: %v", autopilotRule.Name, err)
 	}
 
 	return nil

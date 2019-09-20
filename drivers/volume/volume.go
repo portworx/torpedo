@@ -32,6 +32,7 @@ type Image struct {
 	Version string
 }
 
+// AutopilotRuleParams autopilot parameters for enabling/creating a rule
 type AutopilotRuleParams struct {
 	Name                     string
 	Enable                   bool
@@ -39,6 +40,7 @@ type AutopilotRuleParams struct {
 	PoolScaleMaxSize         int64
 }
 
+// InitOptions initial options for creating driver instance
 type InitOptions struct {
 	Sched               string
 	NodeDriver          string

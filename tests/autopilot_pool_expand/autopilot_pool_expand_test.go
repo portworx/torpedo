@@ -19,7 +19,7 @@ var (
 	retryInterval = 30 * time.Second
 )
 
-func TestAutoPilot(t *testing.T) {
+func TestAutopilotPoolExpand(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	var specReporters []Reporter
@@ -33,7 +33,7 @@ var _ = BeforeSuite(func() {
 })
 
 // This test performs basic test of starting an application, fills up the volume with data
-// which is more than the size of volume and waits that volume should be resized.
+// which is more than the size of pool and expects the pool to be resized.
 var _ = Describe(fmt.Sprintf("{%s}", testName), func() {
 	It("has to fill up the storage pool, resize it, validate and teardown apps", func() {
 		var contexts []*scheduler.Context
