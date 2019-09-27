@@ -188,19 +188,17 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		return fmt.Errorf("failed to get PV name for : %v", vol)
 	}
 
-	validatedPods := make([]string, 0)
 	t := func() (interface{}, bool, error) {
 		pods, err := k8s.Instance().GetPodsUsingPV(pvName)
 		if err != nil {
 			return nil, true, err
 		}
-		resp, err := k.validateMountsInPods(vol, pvName, pods, d, validatedPods)
+		resp, err := k.validateMountsInPods(vol, pvName, pods, d)
 		if err != nil {
 			logrus.Errorf("failed to validate mount in pod. Cause: %v", err)
 			return nil, true, err
 		}
-		validatedPods = append(validatedPods, resp...)
-		lenValidatedPods := len(validatedPods)
+		lenValidatedPods := len(resp)
 		lenExpectedPods := len(pods)
 		if lenExpectedPods > 0 && !vol.Shared {
 			lenExpectedPods = 1
@@ -218,37 +216,16 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 	return nil
 }
 
-func excludePods(pods []corev1.Pod, excludePods []string) []corev1.Pod {
-	if len(excludePods) == 0 {
-		return pods
-	}
-	newPods := make([]corev1.Pod, 0)
-	for _, pod := range pods {
-		count := 0
-		for _, podName := range excludePods {
-			if podName == pod.Name {
-				count++
-			}
-		}
-		if count == 0 {
-			newPods = append(newPods, pod)
-		}
-	}
-	return newPods
-}
-
 func (k *k8sSchedOps) validateMountsInPods(
 	vol *volume.Volume,
 	pvName string,
 	pods []corev1.Pod,
-	d node.Driver,
-	podsToExclude []string) ([]string, error) {
+	d node.Driver) ([]string, error) {
 
 	validatedMountPods := make([]string, 0)
 	nodes := node.GetNodesByName()
-	newPods := excludePods(pods, podsToExclude)
 PodLoop:
-	for _, p := range newPods {
+	for _, p := range pods {
 		pod, err := k8s.Instance().GetPodByName(p.Name, p.Namespace)
 		if err != nil && err == k8s.ErrPodsNotFound {
 			logrus.Warnf("pod %s not found. probably it got rescheduled", p.Name)
@@ -291,11 +268,7 @@ PodLoop:
 			}
 		}
 
-		// if there is at least one pod with non shared volume already validaded, mark this one as validated and skip host mount check
-		if skipHostMountCheck && ((len(validatedMountPods) > 0 || len(podsToExclude) > 0) && !vol.Shared) {
-			validatedMountPods = append(validatedMountPods, pod.Name)
-			continue
-		} else if skipHostMountCheck {
+		if skipHostMountCheck {
 			continue
 		}
 
