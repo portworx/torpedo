@@ -5,12 +5,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -88,6 +90,7 @@ type K8s struct {
 	SpecFactory    *spec.Factory
 	NodeDriverName string
 	VolDriverName  string
+	ExternalOpts   *scheduler.ExternalOpts
 }
 
 //IsNodeReady  Check whether the cluster node is ready
@@ -116,7 +119,12 @@ func (k *K8s) String() string {
 }
 
 //Init Initialize the driver
-func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
+func (k *K8s) Init(config scheduler.InitConfig) error {
+
+	k.NodeDriverName = config.NodeDriverName
+	k.VolDriverName = config.VolDriverName
+	k.ExternalOpts = config.ExternalOpts
+
 	nodes, err := k8s_ops.Instance().GetNodes()
 	if err != nil {
 		return err
@@ -132,13 +140,11 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
 		}
 	}
 
-	k.SpecFactory, err = spec.NewFactory(specDir, k)
+	k.SpecFactory, err = spec.NewFactory(config.SpecDir, k)
 	if err != nil {
 		return err
 	}
 
-	k.NodeDriverName = nodeDriverName
-	k.VolDriverName = volDriverName
 	return nil
 }
 
@@ -200,7 +206,28 @@ func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 		}
 		defer file.Close()
 
-		reader := bufio.NewReader(file)
+		specTemplate := template.New("spectemplate")
+		out, err := ioutil.ReadAll(file)
+		if err != nil {
+			return nil, err
+		}
+
+		var buff bytes.Buffer
+		var ioReader io.Reader = &buff
+
+		// in case we're not able to parse the file, warn the user and fallback to file reading
+		if _, err = specTemplate.Parse(string(out)); err != nil {
+			logrus.Warnf("failed to parse template. Cause: %v", err)
+			ioReader = file
+		}
+
+		// in case we're not able to execute the file, warn the user and fallback to file reading
+		if err = specTemplate.Execute(&buff, k.ExternalOpts); err != nil {
+			logrus.Warnf("failed to execute template. Cause: %v", err)
+			ioReader = file
+		}
+
+		reader := bufio.NewReader(ioReader)
 		specReader := yaml.NewYAMLReader(reader)
 
 		for {

@@ -83,6 +83,26 @@ type AutopilotParameters struct {
 	AutopilotRuleParameters AutopilotRuleParameters
 }
 
+// ExternalOpts custom options for templating
+type ExternalOpts struct {
+	//PgbenchStorageSize Initial PVC size
+	PgbenchStorageSize string
+	//PgbenchDataSize amount of data to be written to pgbench volume
+	PgbenchDataSize int
+}
+
+// InitConfig configuration for initializing scheduler
+type InitConfig struct {
+	// SpecDir path to specs directory
+	SpecDir string
+	//VolDriverName volume driver name
+	VolDriverName string
+	// NodeDriverName node driver name
+	NodeDriverName string
+	// Opts used for CustomParameters
+	ExternalOpts *ExternalOpts
+}
+
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)
@@ -102,7 +122,7 @@ type Driver interface {
 	spec.Parser
 
 	// Init initializes the scheduler driver
-	Init(string, string, string) error
+	Init(config InitConfig) error
 
 	// String returns the string name of this driver.
 	String() string

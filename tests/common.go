@@ -92,7 +92,16 @@ var (
 func InitInstance() {
 	var err error
 	var token string
-	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String())
+	schedulerInitConfig := scheduler.InitConfig{
+		SpecDir:        Inst().SpecDir,
+		VolDriverName:  Inst().V.String(),
+		NodeDriverName: Inst().N.String(),
+		ExternalOpts: &scheduler.ExternalOpts{
+			PgbenchDataSize:    Inst().PgbenchDataSize,
+			PgbenchStorageSize: Inst().PgbenchStorageSize,
+		},
+	}
+	err = Inst().S.Init(schedulerInitConfig)
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().ConfigMap != "" {
@@ -398,6 +407,8 @@ type Torpedo struct {
 	DriverStartTimeout             time.Duration
 	AutoStorageNodeRecoveryTimeout time.Duration
 	ConfigMap                      string
+	PgbenchDataSize                int
+	PgbenchStorageSize             string
 }
 
 // ParseFlags parses command line flags
@@ -415,6 +426,8 @@ func ParseFlags() {
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
+	var pgbenchStorageSize string
+	var pgbenchDataSize int
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -439,6 +452,9 @@ func ParseFlags() {
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
+
+	flag.StringVar(&pgbenchStorageSize, "pgbench-storage-size", "5Gi", "PVC size for Pgbench")
+	flag.IntVar(&pgbenchDataSize, "pgbench-data-size", 10, "max data size in GB written by Pgbench")
 
 	flag.Parse()
 
@@ -477,6 +493,8 @@ func ParseFlags() {
 				DriverStartTimeout:             driverStartTimeout,
 				AutoStorageNodeRecoveryTimeout: autoStorageNodeRecoveryTimeout,
 				ConfigMap:                      configMapName,
+				PgbenchStorageSize:             pgbenchStorageSize,
+				PgbenchDataSize:                pgbenchDataSize,
 			}
 		})
 	}

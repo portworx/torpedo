@@ -157,6 +157,13 @@ else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
 fi
 
+if [ -z "${PGBENCH_STORAGE_SIZE}" ]; then
+	PGBENCH_STORAGE_SIZE="--pgbench-storage-size=$PGBENCH_STORAGE_SIZE"
+fi
+
+if [ -z "${PGBENCH_DATA_SIZE}" ]; then
+	PGBENCH_DATA_SIZE="--pgbench-data-size=$PGBENCH_DATA_SIZE"
+fi
 
 echo "Deploying torpedo pod..."
 cat <<EOF | kubectl create -f -
@@ -264,6 +271,8 @@ spec:
             "--storagenode-recovery-timeout", "$STORAGENODE_RECOVERY_TIMEOUT",
 			 "--provisioner", "$PROVISIONER",
 			 "--config-map", "$CONFIGMAP",
+			 "${PGBENCH_STORAGE_SIZE}",
+			 "${PGBENCH_DATA_SIZE}",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true

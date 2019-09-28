@@ -155,6 +155,9 @@ func (d *portworx) String() string {
 }
 
 func (d *portworx) Init(initOpts torpedovolume.InitOptions) error {
+
+	d.initialClusterSize = make(map[string]storagepool)
+
 	logrus.Infof("Using the Portworx volume driver under scheduler: %v", initOpts.Sched)
 	var err error
 	if d.nodeDriver, err = node.Get(initOpts.NodeDriver); err != nil {
