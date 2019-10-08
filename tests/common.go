@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"sync"
@@ -361,6 +362,14 @@ func PerformSystemCheck() {
 func GetNodesThatCanBeDown(ctx *scheduler.Context) []node.Node {
 	var appNodes []node.Node
 	var err error
+	nodeUsageCount := make(map[string]int)
+	nodesThatCanBeDown := make(map[string]bool)
+	nodesToBeDown := make([]node.Node, 0)
+
+	for _, n := range node.GetWorkerNodes() {
+		nodeUsageCount[n.Name] = 0
+	}
+
 	Step(fmt.Sprintf("get nodes for %s app", ctx.App.Key), func() {
 		appNodes, err = Inst().S.GetNodesForApp(ctx)
 		expect(err).NotTo(haveOccurred())
@@ -373,35 +382,67 @@ func GetNodesThatCanBeDown(ctx *scheduler.Context) []node.Node {
 		expect(appVolumes).NotTo(beEmpty())
 	})
 	// avoid dup
-	nodesThatCantBeDown := make(map[string]bool)
-	nodesToBeDown := make([]node.Node, 0)
+	maxNodesToBeDown := make(map[string]int)
 	Step(fmt.Sprintf("choose nodes to be down for %s app", ctx.App.Key), func() {
 		for _, vol := range appVolumes {
 			replicas, err := Inst().V.GetReplicaSetNodes(vol)
 			expect(err).NotTo(haveOccurred())
 			expect(replicas).NotTo(beEmpty())
-			// at least n-1 nodes with replica need to be up
-			maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(replicas))
-			for _, nodeName := range replicas[maxNodesToBeDown:] {
-				nodesThatCantBeDown[nodeName] = true
+			maxNodesToBeDown[vol.Name] = getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(replicas))
+			for _, node := range replicas {
+				nodeUsageCount[node] += 1
+			}
+		}
+
+		for _, vol := range appVolumes {
+			maxNodes := maxNodesToBeDown[vol.Name]
+			if len(nodesToBeDown) >= maxNodes {
+				continue
+			}
+			for i := 0; i < maxNodes; i++ {
+				node := getLeastUsedNode(nodeUsageCount, nodesThatCanBeDown)
+				if node != "" {
+					nodesThatCanBeDown[node] = true
+				}
 			}
 		}
 
 		metadataNodes := node.GetMetadataNodes()
 		// at least 2 metadata nodes need to be up
-		maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(metadataNodes))
-		for _, n := range metadataNodes[maxNodesToBeDown:] {
-			nodesThatCantBeDown[n.Name] = true
+		maxMetadateNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(metadataNodes))
+		nodePresent := 0
+		for _, n := range metadataNodes {
+			if _, exists := nodesThatCanBeDown[n.Name]; exists {
+				nodePresent++
+			}
+			if nodePresent > maxMetadateNodesToBeDown {
+				delete(nodesThatCanBeDown, n.Name)
+			}
 		}
 
 		for _, node := range appNodes {
-			if _, exists := nodesThatCantBeDown[node.Name]; !exists {
+			if _, exists := nodesThatCanBeDown[node.Name]; exists {
 				nodesToBeDown = append(nodesToBeDown, node)
 			}
 		}
 
 	})
 	return nodesToBeDown
+}
+
+func getLeastUsedNode(nodes map[string]int, ignore map[string]bool) string {
+	leastUsed := ""
+	min := math.MaxInt16
+	for node := range nodes {
+		if _, ok := ignore[node]; ok {
+			continue
+		}
+		if nodes[node] < min {
+			leastUsed = node
+			min = nodes[node]
+		}
+	}
+	return leastUsed
 }
 
 // getMaxNodesToBeDown based on the worker nodes and volume replicas it determines the maximum nodes that can be down
