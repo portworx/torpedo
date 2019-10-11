@@ -34,7 +34,7 @@
   branch = "master"
   name = "github.com/libopenstorage/stork"
 
-[[constraint]]
+[[override]]
   name = "github.com/kubernetes-incubator/external-storage"
   source = "github.com/libopenstorage/external-storage"
   branch = "openstorage-5.1"
@@ -47,19 +47,19 @@
   branch = "master"
   name = "github.com/portworx/sched-ops"
 
-[[constraint]]
+[[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.11.0"
+  version = "kubernetes-1.11.9"
 
-[[constraint]]
+[[override]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.11.0"
+  version = "kubernetes-1.11.9"
 
 [[override]]
   name = "k8s.io/apiserver"
-  version = "kubernetes-1.11.0"
+  version = "kubernetes-1.11.9"
 
-[[constraint]]
+[[override]]
   name = "k8s.io/client-go"
   version = "8.0.0"
 
@@ -73,7 +73,7 @@
 
 [[override]]
   name = "github.com/Azure/go-autorest"
-  revision = "1ff28809256a84bb6966640ff3d0371af82ccba4"
+  version = "v11.0.0"
 
 [[override]]
   name = "github.com/russross/blackfriday"
