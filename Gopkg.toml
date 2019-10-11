@@ -49,19 +49,19 @@
 
 [[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.11.9"
+  version = "kubernetes-1.14.7"
 
 [[override]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.11.9"
+  version = "kubernetes-1.14.7"
 
 [[override]]
-  name = "k8s.io/apiserver"
-  version = "kubernetes-1.11.9"
+  name = "k8s.io/apiextensions-apiserver"
+  version = "kubernetes-1.14.7"
 
 [[override]]
   name = "k8s.io/client-go"
-  version = "8.0.0"
+  version = "11.0.0"
 
 [[override]]
   name = "github.com/docker/distribution"
@@ -74,6 +74,14 @@
 [[override]]
   name = "github.com/Azure/go-autorest"
   version = "v11.0.0"
+
+[[constraint]]
+  name = "github.com/openshift/api"
+  branch = "release-3.11"
+
+[[constraint]]
+  name = "github.com/openshift/client-go"
+  branch = "release-3.11"
 
 [[override]]
   name = "github.com/russross/blackfriday"
