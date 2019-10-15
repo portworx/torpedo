@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"testing"
+	"os"
 	//	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -53,11 +54,13 @@ var _ = Describe("{ReplicaAffinity}", func() {
 		Step("Rules of volume Placement", func () {
 			volrules := getTestRules()
 			logrus.Info("Rules to check per volume", volrules)
-			vpsspec = getVpsSpec(volrules)
-			applyVpsSpec(vpsspec)
+			vpsspec = getVpsSpec(getCaseReqSpec,volrules)
 		})
 
-		Step("Launch Application ", func() {
+		Step("==============Launch Application============== ", func() {
+			applyVpsSpec(vpsspec)
+			logrus.Infof("=========== Spec Dir %v", Inst().SpecDir)
+			Inst().S.RescanSpecs(Inst().SpecDir)
 			for i := 0; i < Inst().ScaleFactor; i++ {
 				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i))...)
 			}
@@ -87,7 +90,7 @@ var _ = Describe("{ReplicaAffinity}", func() {
 
 //Support functions
 
-//#--enforcemnt: Required
+//# Case-1--enforcemnt: Required
 
 func getCaseReqLabel() [] labelDict {
 
@@ -199,6 +202,146 @@ func getCaseReqValidate(appVolumes []*volume.Volume,volscheck map[string]map[str
 	}
 }
 
+func getCaseReqSpec(rules [] labelDict ) string {
+
+	var vpsspec string 
+	logrus.Infof(" rules:%v ", rules)	
+	vpsspec =`apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: ssd-sata-pool-placement-spread
+spec:
+  replicaAffinity:
+  - affectedReplicas: 1
+    enforcement: required
+    matchExpressions:
+    - key: media_type
+      operator: In
+      values:
+      - "SSD"
+  replicaAffinity:
+  - affectedReplicas: 1
+    enforcement: required
+    matchExpressions:
+    - key: media_type
+      operator: In
+      values:
+      - "SATA"`
+
+	return vpsspec
+}
+
+//Case 2 ---- enforcement: preferred
+
+func getCasePrefLabel() [] labelDict {
+
+	lbldata := []labelDict{}
+	node1lbl := labelDict{"media_type": "SSD","vps_test":"test"}  
+	node2lbl := labelDict{"media_type": "SATA","vps_test":"test"}
+	lbldata = append(lbldata, node1lbl, node2lbl)
+		return lbldata
+}
+
+func getCasePrefPvcNode( lblnodes map[string][]string) map[string]map[string][]string {
+
+	for key,val := range lblnodes {
+		logrus.Infof("label node: key:%v Val:%v", key,val)
+	}
+
+	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
+	volnodelist := map[string]map[string][]string{}
+	volnodelist["mysql-data"] = map[string][]string{}
+	volnodelist["mysql-data-aggr"] = map[string][]string{}
+	volnodelist ["mysql-data"]["pnodes"] = [] string{}
+	volnodelist ["mysql-data"]["nnodes"] = [] string{}
+	volnodelist ["mysql-data-aggr"]["pnodes"] = [] string{}
+	volnodelist ["mysql-data-aggr"]["nnodes"] = [] string{}
+
+
+	for _,lnode := range lblnodes["media_typeSSD"] {
+		volnodelist ["mysql-data"]["rnodes"] = append(volnodelist ["mysql-data"]["rnodes"], lnode)
+		volnodelist ["mysql-data-aggr"]["rnodes"] = append(volnodelist ["mysql-data-aggr"]["rnodes"], lnode)
+	}
+
+	for _,lnode := range lblnodes["media_typeSATA"] {
+		volnodelist ["mysql-data"]["rnodes"] = append(volnodelist ["mysql-data"]["rnodes"], lnode)
+		volnodelist ["mysql-data-aggr"]["rnodes"] = append(volnodelist ["mysql-data-aggr"]["rnodes"], lnode)
+	}
+
+	return volnodelist
+}
+
+
+/*
+ * 1. Each rule template, will provide the expected output
+ */
+
+func getCasePrefValidate(appVolumes []*volume.Volume,volscheck map[string]map[string][]string) {
+
+	logrus.Infof("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+			appVolumes, volscheck)
+
+	for _, appvol := range appVolumes {
+
+		for vol, vnodes := range volscheck {
+
+			if appvol.Name == vol {
+				replicas, err := Inst().V.GetReplicaSetNodes(appvol)
+				logrus.Infof("==Replicas for vol: %s, appvol:%v Replicas:%v ", vol, appvol,replicas)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(replicas).NotTo(BeEmpty())
+
+				// Must have (required)
+				for _,mnode := range vnodes["rnodes"]  {
+					found := ""
+					for _,rnode := range replicas {
+						logrus.Infof("Expected Volume Node:%v Replica Node:%v", mnode, rnode)
+						if mnode == rnode {
+							found=rnode
+							break	
+						}
+					}
+					 if found == "" {
+						logrus.Errorf("Volume '%v' does not have replica on node:'%v'", appvol,mnode)
+					  	Expect(found).NotTo(BeEmpty())
+					}
+				}
+
+
+				// Preferred
+				for _,mnode := range vnodes["pnodes"]  {
+					found := ""
+					for _,rnode := range replicas {
+						logrus.Infof("Preferred Volume Node:%v Replica Node:%v", mnode, rnode)
+						if mnode == rnode {
+							found=rnode
+							break	
+						}
+					}
+					 if found != ""  {
+						logrus.Infof("Volume '%v' has replica on node:'%v'", appvol,mnode)
+					}
+				}
+
+				// NotonNode
+				for _,mnode := range vnodes["nnodes"]  {
+					var found  string
+					for _,rnode := range replicas {
+						logrus.Infof("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
+						if mnode == rnode {
+							found = rnode
+							break	
+						}
+					}
+					 if found != ""  {
+						logrus.Errorf("Volume '%v' has replica on node:'%v'", appvol,mnode)
+					    Expect(found).To(BeEmpty())
+					}
+				}
+			}
+		}
+	}
+}
 
 
 
@@ -213,21 +356,18 @@ func getTestRules () [] labelDict{
 		return volrules 
 }
 
-func getVpsSpec(rules [] labelDict ) string {
+func getCasePrefSpec(rules [] labelDict ) string {
 
 	var vpsspec string 
 	logrus.Infof(" rules:%v ", rules)	
-	vpsspec =`
-apiVersion: portworx.io/v1beta2
+	vpsspec =`apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
   name: ssd-sata-pool-placement-spread
 spec:
   replicaAffinity:
   - affectedReplicas: 1
-#    enforcement: required
     enforcement: preferred
-#    type: affinity
     matchExpressions:
     - key: media_type
       operator: In
@@ -236,14 +376,11 @@ spec:
   replicaAffinity:
   - affectedReplicas: 1
     enforcement: preferred
-#    enforcement: required
-#    type: affinity
     matchExpressions:
     - key: media_type
       operator: In
       values:
-      - "SATA"
-	`
+      - "SATA"`
 	return vpsspec
 }
 
@@ -305,11 +442,28 @@ func SetNodeLabels(labels []labelDict) map[string] [] string  {
 }
 
 
+func getVpsSpec(f func ( [] labelDict) string, rules [] labelDict  ) string  {
+ 	return f (rules)
+}
 
 func applyVpsSpec (vpsspec string) error {
-	var err error
-	logrus.Infof("vpsspec:%v", vpsspec)
+	logrus.Infof("vpsspec:%v, ---SpecDir:%v--- App: %v ", vpsspec, Inst().SpecDir,Inst().AppList[0])
 
+	appDir:= Inst().AppList[0]	
+	f,err := os.Create(Inst().SpecDir +"/" + appDir +"/vps.yaml")
+	if err != nil {
+		logrus.Infof("Failed to create VPS spec: %v ",Inst().SpecDir +"/" + appDir +"/vps.yaml")
+		return err
+	}
+	defer f.Close()
+
+	nsize, err := f.WriteString(vpsspec)
+	if err != nil {
+		logrus.Infof("Failed to write VPS spec: %v ",Inst().SpecDir +"/" + appDir +"/vps.yaml")
+		return err
+	}
+	f.Sync()
+	logrus.Infof("==============Created VPS spec: %v size: %v",Inst().SpecDir +"/" + appDir +"/vps.yaml",nsize)
 	return err
 }
 

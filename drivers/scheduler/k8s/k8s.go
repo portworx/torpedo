@@ -150,7 +150,7 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
 //
 func (k *K8s) RescanSpecs(specDir string) error {
 	var err error
-	logrus.Infof("Rescanning specs for %v", specDir)
+	logrus.Infof("===Rescanning specs for %v", specDir)
 	k.SpecFactory, err = spec.NewFactory(specDir, k)
 	if err != nil {
 		return err
