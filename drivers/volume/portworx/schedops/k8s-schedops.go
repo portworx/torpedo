@@ -27,8 +27,8 @@ const (
 	PXNamespace = "kube-system"
 	// PXDaemonSet is the name of portworx daemon set in k8s deployment
 	PXDaemonSet = "portworx"
-	// k8sPxServiceLabelKey is the label key used for px systemd service control
-	k8sPxServiceLabelKey = "px/service"
+	// PXServiceLabelKey is the label key used for px systemd service control
+	PXServiceLabelKey = "px/service"
 	// k8sServiceOperationStart is label value for starting Portworx service
 	k8sServiceOperationStart = "start"
 	// k8sServiceOperationStop is label value for stopping Portworx service
@@ -44,8 +44,8 @@ const (
 	storkSnapshotNameKey = "stork-snap"
 	// pvcLabel is the label used on volume to identify the pvc name
 	pvcLabel = "pvc"
-	// pxenable is label used to check whethere px installation is enabled/disabled on node
-	pxEnabled = "px/enabled"
+	// PXEnabledLabelKey is label used to check whethere px installation is enabled/disabled on node
+	PXEnabledLabelKey = "px/enabled"
 	// nodeType is label used to check kubernetes node-type
 	dcosNodeType           = "kubernetes.dcos.io/node-type"
 	talismanServiceAccount = "talisman-account"
@@ -84,11 +84,11 @@ func (e *errLabelAbsent) Error() string {
 type k8sSchedOps struct{}
 
 func (k *k8sSchedOps) StopPxOnNode(n node.Node) error {
-	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxServiceLabelKey, k8sServiceOperationStop)
+	return k8s.Instance().AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStop)
 }
 
 func (k *k8sSchedOps) StartPxOnNode(n node.Node) error {
-	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxServiceLabelKey, k8sServiceOperationStart)
+	return k8s.Instance().AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStart)
 }
 
 func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
@@ -188,20 +188,21 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		return fmt.Errorf("failed to get PV name for : %v", vol)
 	}
 
-	validatedPods := make([]string, 0)
 	t := func() (interface{}, bool, error) {
 		pods, err := k8s.Instance().GetPodsUsingPV(pvName)
 		if err != nil {
 			return nil, true, err
 		}
-		resp, err := k.validateMountsInPods(vol, pvName, pods, d, validatedPods)
+		resp, err := k.validateMountsInPods(vol, pvName, pods, d)
 		if err != nil {
 			logrus.Errorf("failed to validate mount in pod. Cause: %v", err)
 			return nil, true, err
 		}
-		validatedPods = append(validatedPods, resp...)
-		lenValidatedPods := len(validatedPods)
+		lenValidatedPods := len(resp)
 		lenExpectedPods := len(pods)
+		if lenExpectedPods > 0 && !vol.Shared {
+			lenExpectedPods = 1
+		}
 		if lenValidatedPods == lenExpectedPods {
 			return nil, false, nil
 		}
@@ -215,53 +216,20 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 	return nil
 }
 
-func excludePods(pods []corev1.Pod, excludePods []string) []corev1.Pod {
-	if len(excludePods) == 0 {
-		return pods
-	}
-	newPods := make([]corev1.Pod, 0)
-	for _, pod := range pods {
-		count := 0
-		for _, podName := range excludePods {
-			if podName == pod.Name {
-				count++
-			}
-		}
-		if count == 0 {
-			newPods = append(newPods, pod)
-		}
-	}
-	return newPods
-}
-
 func (k *k8sSchedOps) validateMountsInPods(
 	vol *volume.Volume,
 	pvName string,
 	pods []corev1.Pod,
-	d node.Driver,
-	podsToExclude []string) ([]string, error) {
+	d node.Driver) ([]string, error) {
 
 	validatedMountPods := make([]string, 0)
 	nodes := node.GetNodesByName()
-	newPods := excludePods(pods, podsToExclude)
 PodLoop:
-	for _, p := range newPods {
+	for _, p := range pods {
 		pod, err := k8s.Instance().GetPodByName(p.Name, p.Namespace)
 		if err != nil && err == k8s.ErrPodsNotFound {
 			logrus.Warnf("pod %s not found. probably it got rescheduled", p.Name)
 			continue
-		} else if !k8s.Instance().IsPodReady(*pod) && ((len(validatedMountPods) > 0 || len(podsToExclude) > 0) && !vol.Shared) {
-			//when volume is not shared and there is one pod already validated, skip the other pods
-			remainingPods := excludePods(newPods, validatedMountPods)
-			t := func() []string {
-				pods := make([]string, 0)
-				for _, pod := range remainingPods {
-					pods = append(pods, pod.Name)
-				}
-				return pods
-			}
-			validatedMountPods = append(validatedMountPods, t()...)
-			break
 		} else if !k8s.Instance().IsPodReady(*pod) {
 			// if pod is not ready, delay the check
 			logrus.Warnf("pod %s still not running. Status: %v", pod.Name, pod.Status.Phase)
@@ -275,12 +243,12 @@ PodLoop:
 		for containerName, path := range containerPaths {
 			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+) %s.+", path))
 			output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
-			if err != nil && err != k8s.ErrPodsNotFound {
-				return validatedMountPods, err
-			} else if err != nil && (err == k8s.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
+			if err != nil && (err == k8s.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
 				// if pod is not found or in completed state so delay the check and move to next pod
 				logrus.Warnf("Failed to execute command in pod. Cause %v", err)
 				continue PodLoop
+			} else if err != nil {
+				return validatedMountPods, err
 			}
 			mounts := strings.Split(output, "\n")
 			pxMountFound := false
@@ -300,11 +268,7 @@ PodLoop:
 			}
 		}
 
-		// if there is at least one pod with non shared volume already validaded, mark this one as validated and skip host mount check
-		if skipHostMountCheck && ((len(validatedMountPods) > 0 || len(podsToExclude) > 0) && !vol.Shared) {
-			validatedMountPods = append(validatedMountPods, pod.Name)
-			continue
-		} else if skipHostMountCheck {
+		if skipHostMountCheck {
 			continue
 		}
 
@@ -646,7 +610,7 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	kubeNode := node.(*corev1.Node)
 	// if node has px/enabled label set to false or node-type public or
 	// has any taints then px is disabled on node
-	if kubeNode.Labels[pxEnabled] == "false" || kubeNode.Labels[dcosNodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
+	if kubeNode.Labels[PXEnabledLabelKey] == "false" || kubeNode.Labels[dcosNodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
 		logrus.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
 		return false, nil
 	}
@@ -753,7 +717,7 @@ func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
 	// get label on node where PX is Enabled
 	for _, node := range nodes.Items {
 		// worker node and px is not disabled
-		if !destClient.IsNodeMaster(node) && node.Labels[pxEnabled] != "false" {
+		if !destClient.IsNodeMaster(node) && node.Labels[PXEnabledLabelKey] != "false" {
 			pxNodes = append(pxNodes, node)
 		}
 	}
