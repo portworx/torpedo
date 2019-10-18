@@ -8,33 +8,34 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	mediaSsd  = "SSD"
+	mediaSata = "SATA"
+)
 
 type labelDict map[string]interface{}
 
-type VpsTemplate interface {
+type vpsTemplate interface {
 	// Node label
-	GetLabels()  [] labelDict
+	GetLabels() []labelDict
 	// Pvc label
-	GetPvcNodeLabels( lblnodes map[string][]string) map[string]map[string][]string
+	GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string
 	// Vps Spec
-	GetSpec ( ) string
-	// Validate 
-	Validate (appVolumes []*volume.Volume,volscheck map[string]map[string][]string)
+	GetSpec() string
+	// Validate
+	Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string)
 	// Clean up
 	CleanVps()
-	// 
-	
-
 }
 
 var (
-		vpsrules = make(map[string] VpsTemplate)
-	)
+	vpsRules = make(map[string]vpsTemplate)
+)
 
 // Register registers the given vps rule
-func Register(name string, d VpsTemplate) error {
-	if _, ok := vpsrules[name]; !ok {
-		vpsrules[name] = d
+func Register(name string, d vpsTemplate) error {
+	if _, ok := vpsRules[name]; !ok {
+		vpsRules[name] = d
 	} else {
 		return fmt.Errorf("vps rule: %s is already registered", name)
 	}
@@ -42,13 +43,12 @@ func Register(name string, d VpsTemplate) error {
 	return nil
 }
 
-// 
-func GetVpsRules() map[string] VpsTemplate {
-	return vpsrules
+// GetVpsRules return the list of vps rules
+func GetVpsRules() map[string]vpsTemplate {
+	return vpsRules
 }
 
-//-------
-type Vpscase1 struct {
+type vpscase1 struct {
 	//Case description
 	name string
 	// Enabled
@@ -56,56 +56,47 @@ type Vpscase1 struct {
 }
 
 //# Case-1--enforcemnt: Required
-
-func (v * Vpscase1) GetLabels() [] labelDict {
+func (v *vpscase1) GetLabels() []labelDict {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"media_type": "SSD","vps_test":"test"}  
-	node2lbl := labelDict{"media_type": "SATA","vps_test":"test"}
-	node3lbl := labelDict{"media_type": "SSD","vps_test":"test"}
-	node4lbl := labelDict{"media_type": "SSD","vps_test":"test"}
-	lbldata = append(lbldata, node1lbl, node2lbl,node3lbl,node4lbl)
-		return lbldata
+	node1lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	node2lbl := labelDict{"media_type": mediaSata, "vps_test": "test"}
+	node3lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	node4lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl)
+	return lbldata
 }
 
-func (v * Vpscase1) GetPvcNodeLabels( lblnodes map[string][]string) map[string]map[string][]string {
+func (v *vpscase1) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
 
-	for key,val := range lblnodes {
-		logrus.Infof("label node: key:%v Val:%v", key,val)
+	for key, val := range lblnodes {
+		logrus.Debugf("label node: key:%v Val:%v", key, val)
 	}
 
 	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
 	volnodelist := map[string]map[string][]string{}
 	volnodelist["mysql-data"] = map[string][]string{}
 	volnodelist["mysql-data-seq"] = map[string][]string{}
-	volnodelist ["mysql-data"]["pnodes"] = [] string{}
-	volnodelist ["mysql-data"]["nnodes"] = [] string{}
-	volnodelist ["mysql-data-seq"]["pnodes"] = [] string{}
-	volnodelist ["mysql-data-seq"]["nnodes"] = [] string{}
+	volnodelist["mysql-data"]["pnodes"] = []string{}
+	volnodelist["mysql-data"]["nnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["pnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
 
+	for _, lnode := range lblnodes["media_typeSSD"] {
+		volnodelist["mysql-data"]["rnodes"] = append(volnodelist["mysql-data"]["rnodes"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes"] = append(volnodelist["mysql-data-seq"]["rnodes"], lnode)
+	}
 
-	for _,lnode := range lblnodes["media_typeSSD"] {
-		volnodelist ["mysql-data"]["rnodes"] = append(volnodelist ["mysql-data"]["rnodes"], lnode)
-		volnodelist ["mysql-data-seq"]["rnodes"] = append(volnodelist ["mysql-data-seq"]["rnodes"], lnode)
-	}
-/*
-	for _,lnode := range lblnodes["media_typeSATA"] {
-		volnodelist ["mysql-data"]["rnodes"] = append(volnodelist ["mysql-data"]["rnodes"], lnode)
-		volnodelist ["mysql-data-seq"]["rnodes"] = append(volnodelist ["mysql-data-seq"]["rnodes"], lnode)
-	}
-*/
 	return volnodelist
 }
-
 
 /*
  * 1. Each rule template, will provide the expected output
  */
+func (v *vpscase1) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
 
-func (v * Vpscase1) Validate(appVolumes []*volume.Volume,volscheck map[string]map[string][]string) {
-
-	logrus.Infof("Deployed volumes:%v,  volumes to check for nodes placement %v ",
-			appVolumes, volscheck)
+	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+		appVolumes, volscheck)
 
 	for _, appvol := range appVolumes {
 
@@ -113,158 +104,127 @@ func (v * Vpscase1) Validate(appVolumes []*volume.Volume,volscheck map[string]ma
 
 			if appvol.Name == vol {
 				replicas, err := Inst().V.GetReplicaSetNodes(appvol)
-				logrus.Infof("==Replicas for vol: %s, appvol:%v Replicas:%v ", vol, appvol,replicas)
+				logrus.Debugf("==Replicas for vol: %s, appvol:%v Replicas:%v ", vol, appvol, replicas)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(replicas).NotTo(BeEmpty())
 
 				// Must have (required)
-				for _,mnode := range vnodes["rnodes"]  {
+				for _, mnode := range vnodes["rnodes"] {
 					found := ""
-					for _,rnode := range replicas {
-						logrus.Infof("Expected Volume Node:%v Replica Node:%v", mnode, rnode)
+					for _, rnode := range replicas {
+						logrus.Debugf("Expected Volume Node:%v Replica Node:%v", mnode, rnode)
 						if mnode == rnode {
-							found=rnode
-							break	
+							found = rnode
+							break
 						}
 					}
-					 if found == "" {
-						logrus.Errorf("Volume '%v' does not have replica on node:'%v'", appvol,mnode)
-					  	Expect(found).NotTo(BeEmpty())
-					}
+					Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Volume '%v' does not have replica on node:'%v'", appvol, mnode))
 				}
 
-
 				// Preferred
-				for _,mnode := range vnodes["pnodes"]  {
+				for _, mnode := range vnodes["pnodes"] {
 					found := ""
-					for _,rnode := range replicas {
-						logrus.Infof("Preferred Volume Node:%v Replica Node:%v", mnode, rnode)
+					for _, rnode := range replicas {
+						logrus.Debugf("Preferred Volume Node:%v Replica Node:%v", mnode, rnode)
 						if mnode == rnode {
-							found=rnode
-							break	
+							found = rnode
+							break
 						}
 					}
-					 if found != ""  {
-						logrus.Infof("Volume '%v' has replica on node:'%v'", appvol,mnode)
+					if found != "" {
+						logrus.Infof("Volume '%v' has replica on node:'%v'", appvol, mnode)
 					}
 				}
 
 				// NotonNode
-				for _,mnode := range vnodes["nnodes"]  {
-					var found  string
-					for _,rnode := range replicas {
-						logrus.Infof("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
+				for _, mnode := range vnodes["nnodes"] {
+					var found string
+					for _, rnode := range replicas {
+						logrus.Debugf("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
 						if mnode == rnode {
 							found = rnode
-							break	
+							break
 						}
 					}
-					 if found != ""  {
-						logrus.Errorf("Volume '%v' has replica on node:'%v'", appvol,mnode)
-					    Expect(found).To(BeEmpty())
-					}
+					Expect(found).To(BeEmpty(), fmt.Sprintf("Volume '%v' has replica on node:'%v'", appvol, mnode))
 				}
 			}
 		}
 	}
 }
 
-func (v * Vpscase1)  GetSpec( ) string {
+func (v *vpscase1) GetSpec() string {
 
-	var vpsspec string 
-//	logrus.Infof(" rules:%v ", rules)	
-	vpsspec =`apiVersion: portworx.io/v1beta2
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: ssd-sata-pool-placement-spread
+  name: ssd-sata-pool-placement
 spec:
   replicaAffinity:
-#  - affectedReplicas: 1
   - enforcement: required
     matchExpressions:
     - key: media_type
       operator: In
       values:
       - "SSD"`
-/*  replicaAffinity:
-  - affectedReplicas: 1
-    enforcement: required
-    matchExpressions:
-    - key: media_type
-      operator: In
-      values:
-      - "SATA"`
-*/
-	return vpsspec
+	return vpsSpec
 }
 
-func (v * Vpscase1) CleanVps() {
-	logrus.Infof("Cleanup test case contexti for: %v", v.name)
+func (v *vpscase1) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
-func init() {
-	v := &Vpscase1{"case1",true}
-	Register(v.name, v)
-}
-
 
 //#---- Case 2 ---- enforcement: preferred
-
-type Vpscase2 struct {
+type vpscase2 struct {
 	//Case description
 	name string
 	// Enabled
 	enabled bool
 }
 
-func (v * Vpscase2) GetLabels() [] labelDict {
+func (v *vpscase2) GetLabels() []labelDict {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"media_type": "SSD","vps_test":"test"}  
-	node2lbl := labelDict{"media_type": "SATA","vps_test":"test"}
-	node3lbl := labelDict{"media_type": "SSD","vps_test":"test"}
-	node4lbl := labelDict{"media_type": "SSD","vps_test":"test"}
-	lbldata = append(lbldata, node1lbl, node2lbl,node3lbl,node4lbl)
-		return lbldata
+	node1lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	node2lbl := labelDict{"media_type": mediaSata, "vps_test": "test"}
+	node3lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	node4lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl)
+	return lbldata
 }
 
-func (v * Vpscase2) GetPvcNodeLabels( lblnodes map[string][]string) map[string]map[string][]string {
+func (v *vpscase2) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
 
-	for key,val := range lblnodes {
-		logrus.Infof("label node: key:%v Val:%v", key,val)
+	for key, val := range lblnodes {
+		logrus.Debugf("label node: key:%v Val:%v", key, val)
 	}
 
 	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
 	volnodelist := map[string]map[string][]string{}
 	volnodelist["mysql-data"] = map[string][]string{}
 	volnodelist["mysql-data-seq"] = map[string][]string{}
-	volnodelist ["mysql-data"]["rnodes"] = [] string{}
-	volnodelist ["mysql-data"]["nnodes"] = [] string{}
-	volnodelist ["mysql-data-seq"]["rnodes"] = [] string{}
-	volnodelist ["mysql-data-seq"]["nnodes"] = [] string{}
+	volnodelist["mysql-data"]["rnodes"] = []string{}
+	volnodelist["mysql-data"]["nnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
 
+	for _, lnode := range lblnodes["media_typeSSD"] {
+		volnodelist["mysql-data"]["pnodes"] = append(volnodelist["mysql-data"]["pnodes"], lnode)
+		volnodelist["mysql-data-seq"]["pnodes"] = append(volnodelist["mysql-data-seq"]["pnodes"], lnode)
+	}
 
-	for _,lnode := range lblnodes["media_typeSSD"] {
-		volnodelist ["mysql-data"]["pnodes"] = append(volnodelist ["mysql-data"]["pnodes"], lnode)
-		volnodelist ["mysql-data-seq"]["pnodes"] = append(volnodelist ["mysql-data-seq"]["pnodes"], lnode)
-	}
-/*
-	for _,lnode := range lblnodes["media_typeSATA"] {
-		volnodelist ["mysql-data"]["rnodes"] = append(volnodelist ["mysql-data"]["rnodes"], lnode)
-		volnodelist ["mysql-data-seq"]["rnodes"] = append(volnodelist ["mysql-data-seq"]["rnodes"], lnode)
-	}
-*/
 	return volnodelist
 }
-
 
 /*
  * 1. Each rule template, will provide the expected output
  */
 
-func (v * Vpscase2) Validate(appVolumes []*volume.Volume,volscheck map[string]map[string][]string) {
+func (v *vpscase2) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
 
-	logrus.Infof("Deployed volumes:%v,  volumes to check for nodes placement %v ",
-			appVolumes, volscheck)
+	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+		appVolumes, volscheck)
 
 	for _, appvol := range appVolumes {
 
@@ -272,99 +232,84 @@ func (v * Vpscase2) Validate(appVolumes []*volume.Volume,volscheck map[string]ma
 
 			if appvol.Name == vol {
 				replicas, err := Inst().V.GetReplicaSetNodes(appvol)
-				logrus.Infof("==Replicas for vol: %s, appvol:%v Replicas:%v ", vol, appvol,replicas)
+				logrus.Debugf("==Replicas for vol: %s, appvol:%v Replicas:%v ", vol, appvol, replicas)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(replicas).NotTo(BeEmpty())
 
 				// Must have (required)
-				for _,mnode := range vnodes["rnodes"]  {
+				for _, mnode := range vnodes["rnodes"] {
 					found := ""
-					for _,rnode := range replicas {
-						logrus.Infof("Expected Volume Node:%v Replica Node:%v", mnode, rnode)
+					for _, rnode := range replicas {
+						logrus.Debugf("Expected Volume Node:%v Replica Node:%v", mnode, rnode)
 						if mnode == rnode {
-							found=rnode
-							break	
+							found = rnode
+							break
 						}
 					}
-					 if found == "" {
-						logrus.Errorf("Volume '%v' does not have replica on node:'%v'", appvol,mnode)
-					  	Expect(found).NotTo(BeEmpty())
-					}
+					Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Volume '%v' does not have replica on node:'%v'", appvol, mnode))
 				}
 
-
 				// Preferred
-				for _,mnode := range vnodes["pnodes"]  {
+				for _, mnode := range vnodes["pnodes"] {
 					found := ""
-					for _,rnode := range replicas {
-						logrus.Infof("Preferred Volume Node:%v Replica Node:%v", mnode, rnode)
+					for _, rnode := range replicas {
+						logrus.Debugf("Preferred Volume Node:%v Replica Node:%v", mnode, rnode)
 						if mnode == rnode {
-							found=rnode
-							break	
+							found = rnode
+							break
 						}
 					}
-					 if found != ""  {
-						logrus.Infof("Volume '%v' has replica on node:'%v'", appvol,mnode)
+					if found != "" {
+						logrus.Infof("Volume '%v' has replica on node:'%v'", appvol, mnode)
 					}
 				}
 
 				// NotonNode
-				for _,mnode := range vnodes["nnodes"]  {
-					var found  string
-					for _,rnode := range replicas {
-						logrus.Infof("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
+				for _, mnode := range vnodes["nnodes"] {
+					var found string
+					for _, rnode := range replicas {
+						logrus.Debugf("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
 						if mnode == rnode {
 							found = rnode
-							break	
+							break
 						}
 					}
-					 if found != ""  {
-						logrus.Errorf("Volume '%v' has replica on node:'%v'", appvol,mnode)
-					    Expect(found).To(BeEmpty())
-					}
+					Expect(found).To(BeEmpty(), fmt.Sprintf("Volume '%v' has replica on node:'%v'", appvol, mnode))
 				}
 			}
 		}
 	}
 }
 
+func (v *vpscase2) GetSpec() string {
 
-
-
-func (v * Vpscase2) GetSpec( ) string {
-
-	var vpsspec string 
-	//logrus.Infof(" rules:%v ", rules)	
-	vpsspec =`apiVersion: portworx.io/v1beta2
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: ssd-sata-pool-placement-spread
+  name: ssd-sata-pool-placement
 spec:
   replicaAffinity:
-#  - affectedReplicas: 1
   - enforcement: preferred
     matchExpressions:
     - key: media_type
       operator: In
       values:
       - "SSD"`
-/*  replicaAffinity:
-  - affectedReplicas: 1
-    enforcement: preferred
-    matchExpressions:
-    - key: media_type
-      operator: In
-      values:
-      - "SATA"`*/
-	return vpsspec
+	return vpsSpec
 }
 
-func (v * Vpscase2) CleanVps() {
-	logrus.Infof("Cleanup test case contexti for: %v", v.name)
+func (v *vpscase2) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
+
+// Test case inits
 func init() {
-	v := &Vpscase2{"case2",true}
+	v := &vpscase1{"case1", true}
 	Register(v.name, v)
 }
 
-
+func init() {
+	v := &vpscase2{"case2", true}
+	Register(v.name, v)
+}

@@ -16,7 +16,7 @@ parameters:
   repl: "3"
   priority_io: "high"
   io_profile: "db"
-  placement_strategy: "ssd-sata-pool-placement-spread"
+  placement_strategy: "ssd-sata-pool-placement"
 allowVolumeExpansion: true
 ---
 kind: StorageClass
@@ -52,7 +52,7 @@ parameters:
    snap_schedule: "daily=12:00,7"
    labels: "type=replicated"
    group: "mysql-data"
-   placement_strategy: "ssd-sata-pool-placement-spread"
+   placement_strategy: "ssd-sata-pool-placement"
 allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim

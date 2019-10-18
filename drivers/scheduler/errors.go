@@ -323,5 +323,5 @@ type ErrFailedToProvision struct {
 }
 
 func (e *ErrFailedToProvision) Error() string {
-	return fmt.Sprintf("Failed to label node: %v due to err: %v", e.Node, e.Cause)
+	return fmt.Sprintf("Failed to provision volume on the desired labeled node: %v due to err: %v", e.Node, e.Cause)
 }
