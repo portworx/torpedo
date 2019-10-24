@@ -246,6 +246,9 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		if err := ap_api.AddToScheme(scheme); err != nil {
 			return nil, err
 		}
+		if err := px_api.AddToScheme(scheme); err != nil {
+			return nil, err
+		}
 
 		codecs := serializer.NewCodecFactory(scheme)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
