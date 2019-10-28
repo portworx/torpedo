@@ -71,6 +71,12 @@ var _ = Describe("{VolumeDriverDown}", func() {
 				Step("Giving few seconds for volume driver to stabilize", func() {
 					time.Sleep(20 * time.Second)
 				})
+
+				Step("validate apps", func() {
+					for _, ctx := range contexts {
+						ValidateContext(ctx)
+					}
+				})
 			}
 		})
 
@@ -116,13 +122,21 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 					Step("Giving few seconds for volume driver to stabilize", func() {
 						time.Sleep(20 * time.Second)
 					})
+
+					Step(fmt.Sprintf("validate app %s", appNode.Name), func() {
+						ValidateContext(ctx)
+					})
 				}
 			}
 		})
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
 	})
 })
 
