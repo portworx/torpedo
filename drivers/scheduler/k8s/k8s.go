@@ -14,7 +14,7 @@ import (
 	"time"
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	ap_api "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1"
+	ap_api "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
@@ -1281,8 +1281,6 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 //Destroy destroy
 func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []v1.Pod
-	var pods interface{}
-	var err error
 	for _, spec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			currPods, err := k.destroyCoreObject(spec, opts, ctx.App)
@@ -1291,9 +1289,17 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return currPods, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		pods, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
 		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
+			// in case we're not waiting for resource cleanup
+			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; !ok || !value {
+				return err
+			}
+			if pods != nil {
+				podList = append(podList, pods.([]v1.Pod)...)
+			}
+			// we're ignoring this error since we want to verify cleanup down below, so simply logging it
+			logrus.Warnf("Failed to destroy core objects. Cause: %v", err)
 		}
 	}
 	for _, spec := range ctx.App.SpecList {
@@ -1304,9 +1310,9 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
 		}
 	}
 	for _, spec := range ctx.App.SpecList {
@@ -1317,9 +1323,9 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
 		}
 	}
 
@@ -1331,21 +1337,21 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
 		}
 	}
 
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-		if err = k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
+		if err := k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err
 		}
-		if err = k.waitForCleanup(ctx, podList); err != nil {
+		if err := k.waitForCleanup(ctx, podList); err != nil {
 			return err
 		}
-	} else if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-		if err = k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
+	} else if value, ok = opts[scheduler.OptionsWaitForDestroy]; ok && value {
+		if err := k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err
 		}
 	}
@@ -2319,7 +2325,7 @@ func (k *K8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 	return podsUsingStorage
 }
 
-//PrepareNodeToDecommission Prepare the Node for decomission
+//PrepareNodeToDecommission Prepare the Node for decommission
 func (k *K8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 	k8sOps := k8s_ops.Instance()
 	pods, err := k8sOps.GetPodsByNode(n.Name, "")
@@ -2426,6 +2432,10 @@ func (k *K8s) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart ti
 			snapRestore, err = k8sOps.GetVolumeSnapshotRestore(obj.Name, obj.Namespace)
 			if err != nil {
 				return fmt.Errorf("unable to restore volumesnapshotrestore details %v", err)
+			}
+			err = k8sOps.ValidateVolumeSnapshotRestore(snapRestore.Name, snapRestore.Namespace, DefaultTimeout, DefaultRetryInterval)
+			if err != nil {
+				return err
 			}
 
 		}
