@@ -58,6 +58,13 @@ const (
 	defaultTimeout       = 2 * time.Minute
 )
 
+var (
+	pxDisabledConditions = map[string]string{
+		PXEnabledLabelKey:           "false",
+		rancherControlPlaneLabelKey: "true",
+	}
+)
+
 // errLabelPresent error type for a label being present on a node
 type errLabelPresent struct {
 	// label is the label key
@@ -717,8 +724,15 @@ func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
 
 	// get label on node where PX is Enabled
 	for _, node := range nodes.Items {
+		pxEnabled := true
+		for key, value := range pxDisabledConditions {
+			if node.Labels[key] == value {
+				pxEnabled = false
+				break
+			}
+		}
 		// worker node and px is not disabled
-		if !destClient.IsNodeMaster(node) && node.Labels[PXEnabledLabelKey] != "false" && node.Labels[rancherControlPlaneLabelKey] != "true" {
+		if !destClient.IsNodeMaster(node) && pxEnabled {
 			pxNodes = append(pxNodes, node)
 		}
 	}
