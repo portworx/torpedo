@@ -36,37 +36,35 @@ import (
 
 const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
-	defaultSpecsRoot                   = "/specs"
-	schedulerCliFlag                   = "scheduler"
-	nodeDriverCliFlag                  = "node-driver"
-	storageDriverCliFlag               = "storage-driver"
-	specDirCliFlag                     = "spec-dir"
-	appListCliFlag                     = "app-list"
-	logLocationCliFlag                 = "log-location"
-	logLevelCliFlag                    = "log-level"
-	scaleFactorCliFlag                 = "scale-factor"
-	minRunTimeMinsFlag                 = "minimun-runtime-mins"
-	chaosLevelFlag                     = "chaos-level"
-	storageDriverUpgradeVersionCliFlag = "storage-driver-upgrade-version"
-	storageDriverBaseVersionCliFlag    = "storage-driver-base-version"
-	provisionerFlag                    = "provisioner"
-	storageNodesPerAZFlag              = "max-storage-nodes-per-az"
-	configMapFlag                      = "config-map"
+	defaultSpecsRoot                     = "/specs"
+	schedulerCliFlag                     = "scheduler"
+	nodeDriverCliFlag                    = "node-driver"
+	storageDriverCliFlag                 = "storage-driver"
+	specDirCliFlag                       = "spec-dir"
+	appListCliFlag                       = "app-list"
+	logLocationCliFlag                   = "log-location"
+	logLevelCliFlag                      = "log-level"
+	scaleFactorCliFlag                   = "scale-factor"
+	minRunTimeMinsFlag                   = "minimun-runtime-mins"
+	chaosLevelFlag                       = "chaos-level"
+	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
+	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
+	provisionerFlag                      = "provisioner"
+	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
+	configMapFlag                        = "config-map"
 )
 
 const (
-	defaultScheduler      = "k8s"
-	defaultNodeDriver     = "ssh"
-	defaultStorageDriver  = "pxd"
-	defaultLogLocation    = "/mnt/torpedo_support_dir"
-	defaultLogLevel       = "debug"
-	defaultAppScaleFactor = 1
-	defaultMinRunTimeMins = 0
-	defaultChaosLevel     = 5
-	// TODO: These are Portworx specific versions and will not work with other storage drivers.
-	// Eventually we should remove the defaults and make it mandatory with documentation.
-	defaultStorageDriverUpgradeVersion    = "1.2.11.6"
-	defaultStorageDriverBaseVersion       = "1.2.11.5"
+	defaultScheduler                      = "k8s"
+	defaultNodeDriver                     = "ssh"
+	defaultStorageDriver                  = "pxd"
+	defaultLogLocation                    = "/mnt/torpedo_support_dir"
+	defaultLogLevel                       = "debug"
+	defaultAppScaleFactor                 = 1
+	defaultMinRunTimeMins                 = 0
+	defaultChaosLevel                     = 5
+	defaultStorageUpgradeEndpointURL      = "https://install.portworx.com/upgrade"
+	defaultStorageUpgradeEndpointVersion  = "2.1.1"
 	defaultStorageProvisioner             = "portworx"
 	defaultStorageNodesPerAZ              = 2
 	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
@@ -92,7 +90,16 @@ var (
 func InitInstance() {
 	var err error
 	var token string
-	schedulerInitConfig := scheduler.InitConfig{
+  if Inst().ConfigMap != "" {
+		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+		expect(err).NotTo(haveOccurred())
+		logrus.Infof("Token used for initializing: %s ", token)
+	} else {
+		token = ""
+	}
+  
+  schedulerInitConfig := scheduler.InitConfig{
 		SpecDir:        Inst().SpecDir,
 		VolDriverName:  Inst().V.String(),
 		NodeDriverName: Inst().N.String(),
@@ -104,14 +111,6 @@ func InitInstance() {
 	err = Inst().S.Init(schedulerInitConfig)
 	expect(err).NotTo(haveOccurred())
 
-	if Inst().ConfigMap != "" {
-		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
-		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-		expect(err).NotTo(haveOccurred())
-		logrus.Infof("Token used for initializing: %s ", token)
-	} else {
-		token = ""
-	}
 	initOpt := volume.InitOptions{
 		NodeDriver:         Inst().N.String(),
 		Sched:              Inst().S.String(),
@@ -258,7 +257,6 @@ func ScheduleAndValidate(testname string) []*scheduler.Context {
 		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
-			ConfigMap:          Inst().ConfigMap,
 		})
 		expect(err).NotTo(haveOccurred())
 		expect(contexts).NotTo(beEmpty())
@@ -397,8 +395,8 @@ type Torpedo struct {
 	LogLoc                         string
 	LogLevel                       string
 	ScaleFactor                    int
-	StorageDriverUpgradeVersion    string
-	StorageDriverBaseVersion       string
+	StorageDriverUpgradeEndpointURL    string
+	StorageDriverUpgradeEndpointVersion       string
 	MinRunTimeMins                 int
 	ChaosLevel                     int
 	Provisioner                    string
@@ -419,7 +417,8 @@ func ParseFlags() {
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
 	var appScaleFactor int
-	var volUpgradeVersion, volBaseVersion string
+	var volUpgradeEndpointURL string
+	var volUpgradeEndpointVersion string
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
@@ -439,12 +438,10 @@ func ParseFlags() {
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
 	flag.IntVar(&minRunTimeMins, minRunTimeMinsFlag, defaultMinRunTimeMins, "Minimum Run Time in minutes for appliation deletion tests")
 	flag.IntVar(&chaosLevel, chaosLevelFlag, defaultChaosLevel, "Application deletion frequency in minutes")
-	flag.StringVar(&volUpgradeVersion, storageDriverUpgradeVersionCliFlag, defaultStorageDriverUpgradeVersion,
-		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
-			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
-	flag.StringVar(&volBaseVersion, storageDriverBaseVersionCliFlag, defaultStorageDriverBaseVersion,
-		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
-			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
+	flag.StringVar(&volUpgradeEndpointURL, storageUpgradeEndpointURLCliFlag, defaultStorageUpgradeEndpointURL,
+		"Endpoint URL link which will be used for upgrade storage driver")
+	flag.StringVar(&volUpgradeEndpointVersion, storageUpgradeEndpointVersionCliFlag, defaultStorageUpgradeEndpointVersion,
+		"Endpoint version which will be used for checking version after upgrade storage driver")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
@@ -484,8 +481,8 @@ func ParseFlags() {
 				ScaleFactor:                    appScaleFactor,
 				MinRunTimeMins:                 minRunTimeMins,
 				ChaosLevel:                     chaosLevel,
-				StorageDriverUpgradeVersion:    volUpgradeVersion,
-				StorageDriverBaseVersion:       volBaseVersion,
+				StorageDriverUpgradeEndpointURL:    volUpgradeEndpointURL,
+				StorageDriverUpgradeEndpointVersion:       volUpgradeEndpointVersion,
 				AppList:                        appList,
 				Provisioner:                    provisionerName,
 				MaxStorageNodesPerAZ:           storageNodesPerAZ,
