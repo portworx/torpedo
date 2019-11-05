@@ -36,38 +36,38 @@ import (
 
 const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
-	defaultSpecsRoot                   = "/specs"
-	schedulerCliFlag                   = "scheduler"
-	nodeDriverCliFlag                  = "node-driver"
-	storageDriverCliFlag               = "storage-driver"
-	specDirCliFlag                     = "spec-dir"
-	appListCliFlag                     = "app-list"
-	logLocationCliFlag                 = "log-location"
-	logLevelCliFlag                    = "log-level"
-	scaleFactorCliFlag                 = "scale-factor"
-	minRunTimeMinsFlag                 = "minimun-runtime-mins"
-	chaosLevelFlag                     = "chaos-level"
-	storageDriverUpgradeVersionCliFlag = "storage-driver-upgrade-version"
-	storageDriverBaseVersionCliFlag    = "storage-driver-base-version"
-	provisionerFlag                    = "provisioner"
-	storageNodesPerAZFlag              = "max-storage-nodes-per-az"
+	defaultSpecsRoot                     = "/specs"
+	schedulerCliFlag                     = "scheduler"
+	nodeDriverCliFlag                    = "node-driver"
+	storageDriverCliFlag                 = "storage-driver"
+	specDirCliFlag                       = "spec-dir"
+	appListCliFlag                       = "app-list"
+	logLocationCliFlag                   = "log-location"
+	logLevelCliFlag                      = "log-level"
+	scaleFactorCliFlag                   = "scale-factor"
+	minRunTimeMinsFlag                   = "minimun-runtime-mins"
+	chaosLevelFlag                       = "chaos-level"
+	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
+	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
+	provisionerFlag                      = "provisioner"
+	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
+	configMapFlag                        = "config-map"
 )
 
 const (
-	defaultScheduler      = "k8s"
-	defaultNodeDriver     = "ssh"
-	defaultStorageDriver  = "pxd"
-	defaultLogLocation    = "/mnt/torpedo_support_dir"
-	defaultLogLevel       = "debug"
-	defaultAppScaleFactor = 1
-	defaultMinRunTimeMins = 0
-	defaultChaosLevel     = 5
-	// TODO: These are Portworx specific versions and will not work with other storage drivers.
-	// Eventually we should remove the defaults and make it mandatory with documentation.
-	defaultStorageDriverUpgradeVersion = "1.2.11.6"
-	defaultStorageDriverBaseVersion    = "1.2.11.5"
-	defaultStorageProvisioner          = "portworx"
-	defaultStorageNodesPerAZ           = 2
+	defaultScheduler                      = "k8s"
+	defaultNodeDriver                     = "ssh"
+	defaultStorageDriver                  = "pxd"
+	defaultLogLocation                    = "/mnt/torpedo_support_dir"
+	defaultLogLevel                       = "debug"
+	defaultAppScaleFactor                 = 1
+	defaultMinRunTimeMins                 = 0
+	defaultChaosLevel                     = 5
+	defaultStorageUpgradeEndpointURL      = "https://install.portworx.com/upgrade"
+	defaultStorageUpgradeEndpointVersion  = "2.1.1"
+	defaultStorageProvisioner             = "portworx"
+	defaultStorageNodesPerAZ              = 2
+	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
 )
 
 const (
@@ -89,10 +89,20 @@ var (
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
-	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String())
+	var token string
+	if Inst().ConfigMap != "" {
+		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+		expect(err).NotTo(haveOccurred())
+		logrus.Infof("Token used for initializing: %s ", token)
+	} else {
+		token = ""
+	}
+
+	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String(), Inst().ConfigMap)
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), Inst().Provisioner)
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init()
@@ -159,6 +169,10 @@ func ValidateVolumes(ctx *scheduler.Context) {
 		})
 
 		for vol, params := range vols {
+			if Inst().ConfigMap != "" {
+				params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+				expect(err).NotTo(haveOccurred())
+			}
 			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				expect(err).NotTo(haveOccurred())
@@ -268,16 +282,12 @@ func StopVolDriverAndWait(appNodes []node.Node) {
 			expect(err).NotTo(haveOccurred())
 		})
 
-		/* this static sleep to avoid problem when the driver takes longer to go down or oci pod not flapping when px
-		 * goes down
-		 */
-		time.Sleep(15 * time.Second)
-		//Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
-		//	for _, n := range appNodes {
-		//		err := Inst().V.WaitDriverDownOnNode(n)
-		//		expect(err).NotTo(haveOccurred())
-		//	}
-		//})
+		Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
+			for _, n := range appNodes {
+				err := Inst().V.WaitDriverDownOnNode(n)
+				expect(err).NotTo(haveOccurred())
+			}
+		})
 
 	})
 }
@@ -351,41 +361,45 @@ var once sync.Once
 
 // Torpedo is the torpedo testsuite
 type Torpedo struct {
-	InstanceID                  string
-	S                           scheduler.Driver
-	V                           volume.Driver
-	N                           node.Driver
-	SpecDir                     string
-	AppList                     []string
-	LogLoc                      string
-	LogLevel                    string
-	ScaleFactor                 int
-	StorageDriverUpgradeVersion string
-	StorageDriverBaseVersion    string
-	MinRunTimeMins              int
-	ChaosLevel                  int
-	Provisioner                 string
-	MaxStorageNodesPerAZ        int
-	DestroyAppTimeout           time.Duration
-	DriverStartTimeout          time.Duration
+	InstanceID                          string
+	S                                   scheduler.Driver
+	V                                   volume.Driver
+	N                                   node.Driver
+	SpecDir                             string
+	AppList                             []string
+	LogLoc                              string
+	LogLevel                            string
+	ScaleFactor                         int
+	StorageDriverUpgradeEndpointURL     string
+	StorageDriverUpgradeEndpointVersion string
+	MinRunTimeMins                      int
+	ChaosLevel                          int
+	Provisioner                         string
+	MaxStorageNodesPerAZ                int
+	DestroyAppTimeout                   time.Duration
+	DriverStartTimeout                  time.Duration
+	AutoStorageNodeRecoveryTimeout      time.Duration
+	ConfigMap                           string
 }
 
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, specDir, logLoc, logLevel, appListCSV, provisionerName string
+	var s, n, v, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
 	var appScaleFactor int
-	var volUpgradeVersion, volBaseVersion string
+	var volUpgradeEndpointURL string
+	var volUpgradeEndpointVersion string
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
+	var autoStorageNodeRecoveryTimeout time.Duration
 
-	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
+	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
@@ -395,17 +409,17 @@ func ParseFlags() {
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
 	flag.IntVar(&minRunTimeMins, minRunTimeMinsFlag, defaultMinRunTimeMins, "Minimum Run Time in minutes for appliation deletion tests")
 	flag.IntVar(&chaosLevel, chaosLevelFlag, defaultChaosLevel, "Application deletion frequency in minutes")
-	flag.StringVar(&volUpgradeVersion, storageDriverUpgradeVersionCliFlag, defaultStorageDriverUpgradeVersion,
-		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
-			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
-	flag.StringVar(&volBaseVersion, storageDriverBaseVersionCliFlag, defaultStorageDriverBaseVersion,
-		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
-			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
+	flag.StringVar(&volUpgradeEndpointURL, storageUpgradeEndpointURLCliFlag, defaultStorageUpgradeEndpointURL,
+		"Endpoint URL link which will be used for upgrade storage driver")
+	flag.StringVar(&volUpgradeEndpointVersion, storageUpgradeEndpointVersionCliFlag, defaultStorageUpgradeEndpointVersion,
+		"Endpoint version which will be used for checking version after upgrade storage driver")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
+	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
+	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
 
 	flag.Parse()
 
@@ -425,23 +439,25 @@ func ParseFlags() {
 	} else {
 		once.Do(func() {
 			instance = &Torpedo{
-				InstanceID:                  time.Now().Format("01-02-15h04m05s"),
-				S:                           schedulerDriver,
-				V:                           volumeDriver,
-				N:                           nodeDriver,
-				SpecDir:                     specDir,
-				LogLoc:                      logLoc,
-				LogLevel:                    logLevel,
-				ScaleFactor:                 appScaleFactor,
-				MinRunTimeMins:              minRunTimeMins,
-				ChaosLevel:                  chaosLevel,
-				StorageDriverUpgradeVersion: volUpgradeVersion,
-				StorageDriverBaseVersion:    volBaseVersion,
-				AppList:                     appList,
-				Provisioner:                 provisionerName,
-				MaxStorageNodesPerAZ:        storageNodesPerAZ,
-				DestroyAppTimeout:           destroyAppTimeout,
-				DriverStartTimeout:          driverStartTimeout,
+				InstanceID:                          time.Now().Format("01-02-15h04m05s"),
+				S:                                   schedulerDriver,
+				V:                                   volumeDriver,
+				N:                                   nodeDriver,
+				SpecDir:                             specDir,
+				LogLoc:                              logLoc,
+				LogLevel:                            logLevel,
+				ScaleFactor:                         appScaleFactor,
+				MinRunTimeMins:                      minRunTimeMins,
+				ChaosLevel:                          chaosLevel,
+				StorageDriverUpgradeEndpointURL:     volUpgradeEndpointURL,
+				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
+				AppList:                             appList,
+				Provisioner:                         provisionerName,
+				MaxStorageNodesPerAZ:                storageNodesPerAZ,
+				DestroyAppTimeout:                   destroyAppTimeout,
+				DriverStartTimeout:                  driverStartTimeout,
+				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
+				ConfigMap:                           configMapName,
 			}
 		})
 	}

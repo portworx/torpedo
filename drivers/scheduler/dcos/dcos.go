@@ -32,7 +32,7 @@ type dcos struct {
 	volDriverName string
 }
 
-func (d *dcos) Init(specDir, volDriver, nodeDriver string) error {
+func (d *dcos) Init(specDir, volDriver, nodeDriver, secretConfigMap string) error {
 	privateAgents, err := MesosClient().GetPrivateAgentNodes()
 	if err != nil {
 		return err
@@ -547,6 +547,14 @@ func (d *dcos) IsScalable(spec interface{}) bool {
 
 func (d *dcos) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart time.Time) error {
 	return fmt.Errorf("not implemenented")
+}
+
+func (d *dcos) GetTokenFromConfigMap(string) (string, error) {
+	// TODO implement this method
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetTokenFromConfigMap()",
+	}
 }
 
 func init() {
