@@ -91,7 +91,7 @@ type K8s struct {
 	NodeDriverName      string
 	VolDriverName       string
 	ExternalOpts        *scheduler.ExternalOpts
-  secretConfigMapName string
+	secretConfigMapName string
 }
 
 //IsNodeReady  Check whether the cluster node is ready
@@ -125,7 +125,7 @@ func (k *K8s) Init(config scheduler.InitConfig) error {
 	k.NodeDriverName = config.NodeDriverName
 	k.VolDriverName = config.VolDriverName
 	k.ExternalOpts = config.ExternalOpts
-  k.secretConfigMapName = config.SecretConfigMap
+	k.secretConfigMapName = config.SecretConfigMap
 
 	nodes, err := k8s_ops.Instance().GetNodes()
 	if err != nil {

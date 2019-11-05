@@ -90,7 +90,7 @@ var (
 func InitInstance() {
 	var err error
 	var token string
-  if Inst().ConfigMap != "" {
+	if Inst().ConfigMap != "" {
 		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 		expect(err).NotTo(haveOccurred())
@@ -98,11 +98,12 @@ func InitInstance() {
 	} else {
 		token = ""
 	}
-  
-  schedulerInitConfig := scheduler.InitConfig{
-		SpecDir:        Inst().SpecDir,
-		VolDriverName:  Inst().V.String(),
-		NodeDriverName: Inst().N.String(),
+
+	schedulerInitConfig := scheduler.InitConfig{
+		SpecDir:         Inst().SpecDir,
+		VolDriverName:   Inst().V.String(),
+		NodeDriverName:  Inst().N.String(),
+		SecretConfigMap: Inst().ConfigMap,
 		ExternalOpts: &scheduler.ExternalOpts{
 			PgbenchDataSize:    Inst().PgbenchDataSize,
 			PgbenchStorageSize: Inst().PgbenchStorageSize,
@@ -386,27 +387,27 @@ var once sync.Once
 
 // Torpedo is the torpedo testsuite
 type Torpedo struct {
-	InstanceID                     string
-	S                              scheduler.Driver
-	V                              volume.Driver
-	N                              node.Driver
-	SpecDir                        string
-	AppList                        []string
-	LogLoc                         string
-	LogLevel                       string
-	ScaleFactor                    int
-	StorageDriverUpgradeEndpointURL    string
-	StorageDriverUpgradeEndpointVersion       string
-	MinRunTimeMins                 int
-	ChaosLevel                     int
-	Provisioner                    string
-	MaxStorageNodesPerAZ           int
-	DestroyAppTimeout              time.Duration
-	DriverStartTimeout             time.Duration
-	AutoStorageNodeRecoveryTimeout time.Duration
-	ConfigMap                      string
-	PgbenchDataSize                int
-	PgbenchStorageSize             string
+	InstanceID                          string
+	S                                   scheduler.Driver
+	V                                   volume.Driver
+	N                                   node.Driver
+	SpecDir                             string
+	AppList                             []string
+	LogLoc                              string
+	LogLevel                            string
+	ScaleFactor                         int
+	StorageDriverUpgradeEndpointURL     string
+	StorageDriverUpgradeEndpointVersion string
+	MinRunTimeMins                      int
+	ChaosLevel                          int
+	Provisioner                         string
+	MaxStorageNodesPerAZ                int
+	DestroyAppTimeout                   time.Duration
+	DriverStartTimeout                  time.Duration
+	AutoStorageNodeRecoveryTimeout      time.Duration
+	ConfigMap                           string
+	PgbenchDataSize                     int
+	PgbenchStorageSize                  string
 }
 
 // ParseFlags parses command line flags
@@ -471,27 +472,27 @@ func ParseFlags() {
 	} else {
 		once.Do(func() {
 			instance = &Torpedo{
-				InstanceID:                     time.Now().Format("01-02-15h04m05s"),
-				S:                              schedulerDriver,
-				V:                              volumeDriver,
-				N:                              nodeDriver,
-				SpecDir:                        specDir,
-				LogLoc:                         logLoc,
-				LogLevel:                       logLevel,
-				ScaleFactor:                    appScaleFactor,
-				MinRunTimeMins:                 minRunTimeMins,
-				ChaosLevel:                     chaosLevel,
-				StorageDriverUpgradeEndpointURL:    volUpgradeEndpointURL,
-				StorageDriverUpgradeEndpointVersion:       volUpgradeEndpointVersion,
-				AppList:                        appList,
-				Provisioner:                    provisionerName,
-				MaxStorageNodesPerAZ:           storageNodesPerAZ,
-				DestroyAppTimeout:              destroyAppTimeout,
-				DriverStartTimeout:             driverStartTimeout,
-				AutoStorageNodeRecoveryTimeout: autoStorageNodeRecoveryTimeout,
-				ConfigMap:                      configMapName,
-				PgbenchStorageSize:             pgbenchStorageSize,
-				PgbenchDataSize:                pgbenchDataSize,
+				InstanceID:                          time.Now().Format("01-02-15h04m05s"),
+				S:                                   schedulerDriver,
+				V:                                   volumeDriver,
+				N:                                   nodeDriver,
+				SpecDir:                             specDir,
+				LogLoc:                              logLoc,
+				LogLevel:                            logLevel,
+				ScaleFactor:                         appScaleFactor,
+				MinRunTimeMins:                      minRunTimeMins,
+				ChaosLevel:                          chaosLevel,
+				StorageDriverUpgradeEndpointURL:     volUpgradeEndpointURL,
+				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
+				AppList:                             appList,
+				Provisioner:                         provisionerName,
+				MaxStorageNodesPerAZ:                storageNodesPerAZ,
+				DestroyAppTimeout:                   destroyAppTimeout,
+				DriverStartTimeout:                  driverStartTimeout,
+				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
+				ConfigMap:                           configMapName,
+				PgbenchStorageSize:                  pgbenchStorageSize,
+				PgbenchDataSize:                     pgbenchDataSize,
 			}
 		})
 	}

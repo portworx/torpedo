@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	ap_api "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1"
+	ap_api "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"

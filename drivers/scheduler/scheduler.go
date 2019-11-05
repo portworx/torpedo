@@ -99,6 +99,8 @@ type InitConfig struct {
 	VolDriverName string
 	// NodeDriverName node driver name
 	NodeDriverName string
+	// SecretConfigMap configmap which contains secret
+	SecretConfigMap string
 	// Opts used for CustomParameters
 	ExternalOpts *ExternalOpts
 }

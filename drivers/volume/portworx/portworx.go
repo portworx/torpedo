@@ -12,7 +12,7 @@ import (
 	"time"
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	ap_api "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1"
+	ap_api "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
@@ -1818,7 +1818,7 @@ func (d *portworx) createAutopilotPoolExpandObject(apParams *torpedovolume.Autop
 	obj.Spec.Enforcement = ap_api.EnforcementRequired
 
 	actions := &ap_api.RuleAction{
-		Name: "penstorage.io.action.storagepool/expand",
+		Name: "openstorage.io.action.storagepool/expand",
 		Params: map[string]string{
 			"scalepercentage": strconv.FormatInt(apParams.PoolScalePercentageUsage, 10),
 			"scaletype":       "resize-disk",

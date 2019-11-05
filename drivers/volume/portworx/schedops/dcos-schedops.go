@@ -1,7 +1,7 @@
 package schedops
 
 import (
-	ap_api "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1"
+	ap_api "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
