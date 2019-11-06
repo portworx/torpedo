@@ -97,14 +97,6 @@
   version = "v1.25.11"
 
 [[projects]]
-  digest = "1:c1100fc71e23b6a32b2c68a5202a848fd13811d5a10b12edb8019c3667d1cd9a"
-  name = "github.com/cenkalti/backoff"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "4b4cebaf850ec58f1bb1fec5bdebdf8501c2bc3f"
-  version = "v3.0.0"
-
-[[projects]]
   digest = "1:d64c893fc7d2c3d395f421b00d21f0adb8ceffc4d3c90299e732b3985ca16eb4"
   name = "github.com/coreos/go-oidc"
   packages = ["."]
@@ -493,14 +485,12 @@
 
 [[projects]]
   branch = "release-6.1"
-  digest = "1:ed330c1a4d20b39d55838077312297f1bdc42dcf0f7302014b6b82aa1dce7ac5"
+  digest = "1:45abb81d0be818ba32555a6713a931890dac57c7b082985ea16a63eb3ee33bd8"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
     "api/client",
     "api/client/cluster",
-    "api/client/volume",
-    "api/errors",
     "api/spec",
     "cluster",
     "objectstore",
@@ -512,7 +502,6 @@
     "pkg/units",
     "schedpolicy",
     "secrets",
-    "volume",
   ]
   pruneopts = "UT"
   revision = "57ccd4fa45843e514cd829ba1cf610c7f401c85d"
@@ -1296,6 +1285,7 @@
     "github.com/docker/docker/client",
     "github.com/fatih/color",
     "github.com/gambol99/go-marathon",
+    "github.com/golang/protobuf/ptypes/timestamp",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1",
     "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1",
     "github.com/libopenstorage/cloudops",
@@ -1303,10 +1293,8 @@
     "github.com/libopenstorage/openstorage/api",
     "github.com/libopenstorage/openstorage/api/client",
     "github.com/libopenstorage/openstorage/api/client/cluster",
-    "github.com/libopenstorage/openstorage/api/client/volume",
     "github.com/libopenstorage/openstorage/api/spec",
     "github.com/libopenstorage/openstorage/cluster",
-    "github.com/libopenstorage/openstorage/volume",
     "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1",
     "github.com/onsi/ginkgo",
     "github.com/onsi/ginkgo/reporters",
@@ -1317,7 +1305,9 @@
     "github.com/sirupsen/logrus",
     "golang.org/x/crypto/ssh",
     "golang.org/x/net/context",
+    "google.golang.org/grpc",
     "google.golang.org/grpc/codes",
+    "google.golang.org/grpc/metadata",
     "google.golang.org/grpc/status",
     "k8s.io/api/apps/v1",
     "k8s.io/api/batch/v1",
