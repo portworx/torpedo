@@ -38,7 +38,7 @@ var _ = Describe("{DriveFailure}", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i),nil)...)
 		}
 
 		Step("get nodes for all apps in test and induce drive failure on one of the nodes", func() {

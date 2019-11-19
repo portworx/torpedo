@@ -83,6 +83,12 @@ type AutopilotParameters struct {
 	AutopilotRuleParameters AutopilotRuleParameters
 }
 
+type VpsParameters struct {
+	//Contains Mapping with storagecalss and 
+	ScVpsMap map[string]string
+}
+
+
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)
@@ -95,6 +101,8 @@ type ScheduleOptions struct {
 	ConfigMap string
 	// AutopilotParameters identifies options for autopilot (Optional)
 	AutopilotParameters *AutopilotParameters
+	//VPS parameters for storage class
+	VpsParameters *VpsParameters
 }
 
 // Driver must be implemented to provide test support to various schedulers.

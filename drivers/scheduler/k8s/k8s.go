@@ -82,6 +82,9 @@ const (
 
 var (
 	namespaceRegex = regexp.MustCompile("{{NAMESPACE}}")
+	placement1Regex = regexp.MustCompile("placement-1")
+	placement2Regex = regexp.MustCompile("placement-2")
+	placement3Regex = regexp.MustCompile("placement-3")
 )
 
 //K8s  The kubernetes structure
@@ -596,7 +599,15 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	k8sOps := k8s_ops.Instance()
 
 	// Add security annotations if running with auth-enabled
+	var vps_map  map[string]string
 	configMapName := options.ConfigMap
+	if options.VpsParameters.ScVpsMap != nil {
+		vps_map = options.VpsParameters.ScVpsMap
+	} else {
+
+	    vps_map = map[string]string{"placement-1":"", "placement-2":"", "placement-3":"",}
+	}
+
 	if configMapName != "" {
 		configMap, err := k8sOps.GetConfigMap(configMapName, "default")
 		if err != nil {
@@ -618,6 +629,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
 		obj.Provisioner = volume.GetStorageProvisioner()
 
+		//VPS Name set
+		k.substituteVpsNameInStorageClass(obj, vps_map)
 		sc, err := k8sOps.CreateStorageClass(obj)
 		if errors.IsAlreadyExists(err) {
 			if sc, err = k8sOps.GetStorageClass(obj.Name); err == nil {
@@ -736,6 +749,38 @@ func (k *K8s) substituteNamespaceInPVC(pvc *v1.PersistentVolumeClaim, ns string)
 		pvc.Annotations[k] = namespaceRegex.ReplaceAllString(v, ns)
 	}
 }
+
+
+//Set or disable the placement_strategy in the storageclass 
+func (k *K8s) substituteVpsNameInStorageClass(sc *storage_api.StorageClass, vps_map map[string]string) {
+//	sc.Name = namespaceRegex.ReplaceAllString(sc.Name, ns)
+	for k, v := range sc.Parameters {
+		logrus.Infof("[%v] storaegeclass parameters: %v", k,v)
+		 newstr := placement1Regex.ReplaceAllString(v, vps_map["placement-1"])
+		 if newstr != v {
+			 sc.Parameters[k] = newstr
+			 logrus.Infof("[%v] post replace placement-1 storaegeclass parameters: %v Sub:%v", k,sc.Parameters[k],vps_map["placement-1"])
+			 break
+		 }
+		newstr = placement2Regex.ReplaceAllString(v, vps_map["placement-2"])
+		 if newstr != v {
+			 sc.Parameters[k] = newstr
+			 logrus.Infof("[%v] post replace placement-2 storaegeclass parameters: %v Sub:%v", k,sc.Parameters[k],vps_map["placement-2"])
+			 break
+		 }
+		newstr = placement3Regex.ReplaceAllString(v, vps_map["placement-3"])
+		 if newstr != v {
+			 sc.Parameters[k] = newstr
+			 logrus.Infof("[%v] post replace placement-3 storaegeclass parameters: %v Sub:%v", k,sc.Parameters[k],vps_map["placement-3"])
+			 break
+		 }
+	}
+}
+
+
+
+
+
 
 func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 	ns *v1.Namespace,

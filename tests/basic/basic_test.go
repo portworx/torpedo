@@ -32,7 +32,7 @@ var _ = Describe("{SetupTeardown}", func() {
 	It("has to setup, validate and teardown apps", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("setupteardown-%d", i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("setupteardown-%d", i), nil)...)
 		}
 
 		opts := make(map[string]bool)
@@ -49,7 +49,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 	It("has to schedule apps and stop volume driver on app nodes", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdown-%d", i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdown-%d", i),nil)...)
 		}
 
 		Step("get nodes for all apps in test and bounce volume driver", func() {
@@ -89,7 +89,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdownattachednode-%d", i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdownattachednode-%d", i),nil)...)
 		}
 
 		Step("get nodes for all apps in test and restart volume driver", func() {
@@ -121,7 +121,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 	It("has to schedule apps and crash volume driver on app nodes", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldrivercrash-%d", i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldrivercrash-%d", i),nil)...)
 		}
 
 		Step("get nodes for all apps in test and crash volume driver", func() {
@@ -150,7 +150,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverappdown-%d", i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverappdown-%d", i),nil)...)
 		}
 
 		Step("get nodes for all apps in test and bounce volume driver", func() {
@@ -195,7 +195,7 @@ var _ = Describe("{AppTasksDown}", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("apptasksdown-%d", i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("apptasksdown-%d", i),nil)...)
 		}
 
 		Step("delete all application tasks", func() {
@@ -260,7 +260,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 	It("has to scale up and scale down the app", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("applicationscaleupdown-%d", i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("applicationscaleupdown-%d", i),nil)...)
 		}
 
 		Step("Scale up and down all app", func() {
@@ -321,7 +321,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 		var contexts []*scheduler.Context
 		Step("Deploy applications", func() {
 			for i := 0; i < Inst().ScaleFactor; i++ {
-				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("cordondeploydestroy-%d", i))...)
+				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("cordondeploydestroy-%d", i), nil)...)
 			}
 		})
 		Step("Destroy apps", func() {

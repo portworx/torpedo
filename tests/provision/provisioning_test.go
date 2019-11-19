@@ -59,8 +59,9 @@ var _ = Describe("{ReplicaAffinity}", func() {
 				applyVpsSpec(vpsSpec)
 				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
 				Inst().S.RescanSpecs(Inst().SpecDir)
+
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i))...)
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i),vrule.GetScStrategyMap() )...)
 				}
 			})
 

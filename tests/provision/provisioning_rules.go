@@ -20,6 +20,9 @@ type vpsTemplate interface {
 	GetLabels() []labelDict
 	// Pvc label
 	GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string
+    // Get StorageClass placement_strategy
+	GetScStrategyMap() map[string] string
+
 	// Vps Spec
 	GetSpec() string
 	// Validate
@@ -90,6 +93,10 @@ func (v *vpscase1) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map
 	return volnodelist
 }
 
+
+
+
+
 /*
  * 1. Each rule template, will provide the expected output
  */
@@ -151,6 +158,11 @@ func (v *vpscase1) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 			}
 		}
 	}
+}
+
+//StorageClass placement_strategy mapping
+func (v *vpscase1) GetScStrategyMap() map[string]string {
+	return map[string]string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":"",}
 }
 
 func (v *vpscase1) GetSpec() string {
@@ -292,6 +304,12 @@ func (v *vpscase2) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 			}
 		}
 	}
+}
+
+
+//StorageClass placement_strategy mapping
+func (v *vpscase2) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
 }
 
 func (v *vpscase2) GetSpec() string {
@@ -440,6 +458,12 @@ func (v *vpscase3) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 	}
 }
 
+
+//StorageClass placement_strategy mapping
+func (v *vpscase3) GetScStrategyMap() map[string] string{
+	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+}
+
 func (v *vpscase3) GetSpec() string {
 
 	var vpsSpec string
@@ -478,6 +502,150 @@ func (v *vpscase3) CleanVps() {
 
 
 
+//#---- Case 4 ----T863792  Verify Replica Affinity with topology keys
+type vpscase4 struct {
+	//Case description
+	name string
+	// Enabled
+	enabled bool
+}
+
+func (v *vpscase4) GetLabels() []labelDict {
+
+	lbldata := []labelDict{}
+	node1lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	node2lbl := labelDict{"media_type": mediaSata, "vps_test": "test"}
+	node3lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	node4lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl)
+	return lbldata
+}
+
+func (v *vpscase4) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
+
+	for key, val := range lblnodes {
+		logrus.Debugf("label node: key:%v Val:%v", key, val)
+	}
+
+	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
+	volnodelist := map[string]map[string][]string{}
+	volnodelist["mysql-data"] = map[string][]string{}
+	volnodelist["mysql-data-seq"] = map[string][]string{}
+	volnodelist["mysql-data"]["rnodes"] = []string{}
+	volnodelist["mysql-data"]["nnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
+
+	for _, lnode := range lblnodes["media_typeSSD"] {
+		volnodelist["mysql-data"]["pnodes"] = append(volnodelist["mysql-data"]["pnodes"], lnode)
+		volnodelist["mysql-data-seq"]["pnodes"] = append(volnodelist["mysql-data-seq"]["pnodes"], lnode)
+	}
+
+	return volnodelist
+}
+
+/*
+ * 1. Each rule template, will provide the expected output
+ */
+
+func (v *vpscase4) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
+
+	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+		appVolumes, volscheck)
+
+	for _, appvol := range appVolumes {
+
+		for vol, vnodes := range volscheck {
+
+			if appvol.Name == vol {
+				replicas, err := Inst().V.GetReplicaSetNodes(appvol)
+				logrus.Debugf("==Replicas for vol: %s, appvol:%v Replicas:%v ", vol, appvol, replicas)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(replicas).NotTo(BeEmpty())
+
+				// Must have (required)
+				for _, mnode := range vnodes["rnodes"] {
+					found := ""
+					for _, rnode := range replicas {
+						logrus.Debugf("Expected Volume Node:%v Replica Node:%v", mnode, rnode)
+						if mnode == rnode {
+							found = rnode
+							break
+						}
+					}
+					Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Volume '%v' does not have replica on node:'%v'", appvol, mnode))
+				}
+
+				// Preferred
+				for _, mnode := range vnodes["pnodes"] {
+					found := ""
+					for _, rnode := range replicas {
+						logrus.Debugf("Preferred Volume Node:%v Replica Node:%v", mnode, rnode)
+						if mnode == rnode {
+							found = rnode
+							break
+						}
+					}
+					if found != "" {
+						logrus.Infof("Volume '%v' has replica on node:'%v'", appvol, mnode)
+					}
+				}
+
+				// NotonNode
+				for _, mnode := range vnodes["nnodes"] {
+					var found string
+					for _, rnode := range replicas {
+						logrus.Debugf("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
+						if mnode == rnode {
+							found = rnode
+							break
+						}
+					}
+					Expect(found).To(BeEmpty(), fmt.Sprintf("Volume '%v' has replica on node:'%v'", appvol, mnode))
+				}
+			}
+		}
+	}
+}
+
+
+//StorageClass placement_strategy mapping
+func (v *vpscase4) GetScStrategyMap() map[string] string{
+	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+}
+
+func (v *vpscase4) GetSpec() string {
+
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-1
+spec:
+  replicaAffinity:
+  - enforcement: required
+    topologyKey: failure-domain.beta.kubernetes.io/zone
+---
+apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+#  name: replica-topology-affinity-soft
+  name: placement-2
+spec:
+  replicaAffinity:
+  - enforcement: required
+    topologyKey: failure-domain.beta.kubernetes.io/region`
+	return vpsSpec
+}
+
+func (v *vpscase4) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
+}
+
+
+
+
+
 
 // Test case inits
 func init() {
@@ -486,12 +654,24 @@ func init() {
 }
 
 func init() {
-	v := &vpscase2{"case2", true}
+	v := &vpscase2{"case2-T863374", true}
 	Register(v.name, v)
 }
 
 
 func init() {
-	v := &vpscase3{"case3", true}
+	v := &vpscase3{"case3-T809561", true}
 	Register(v.name, v)
 }
+
+
+
+func init() {
+	v := &vpscase4{"case4-T863792", true}
+	Register(v.name, v)
+}
+
+
+
+
+

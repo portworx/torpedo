@@ -30,7 +30,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	It("upgrade volume driver and ensure everything is running fine", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradevolumedriver-%d", i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradevolumedriver-%d", i), nil)...)
 		}
 
 		Step("start the upgrade of volume driver", func() {

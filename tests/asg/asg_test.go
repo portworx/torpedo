@@ -43,7 +43,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgscaleupdown-%d", i))...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgscaleupdown-%d", i), nil)...)
 		}
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
@@ -102,7 +102,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 
 		Step("Ensure apps are deployed", func() {
 			for i := 0; i < Inst().ScaleFactor; i++ {
-				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgchaos-%d", i))...)
+				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgchaos-%d", i),nil)...)
 			}
 		})
 

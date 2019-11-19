@@ -226,9 +226,13 @@ func DeleteVolumesAndWait(ctx *scheduler.Context) {
 }
 
 // ScheduleAndValidate schedules and validates applications
-func ScheduleAndValidate(testname string) []*scheduler.Context {
+func ScheduleAndValidate(testname string,vps_map map[string]string ) []*scheduler.Context {
 	var contexts []*scheduler.Context
 	var err error
+	VpsMap := &scheduler.VpsParameters {
+			ScVpsMap: vps_map,
+	}
+
 
 	Step("schedule applications", func() {
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
@@ -236,6 +240,7 @@ func ScheduleAndValidate(testname string) []*scheduler.Context {
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
 			ConfigMap:          Inst().ConfigMap,
+			VpsParameters:	VpsMap,
 		})
 		expect(err).NotTo(haveOccurred())
 		expect(contexts).NotTo(beEmpty())
