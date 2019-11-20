@@ -473,7 +473,7 @@ metadata:
   name: placement-1
 spec:
   replicaAffinity:
-  - enforcement: preferred
+  - enforcement: required
     matchExpressions:
     - key: iops
       operator: Gt
@@ -486,7 +486,7 @@ metadata:
   name: placement-2
 spec:
   replicaAffinity:
-  - enforcement: preferred
+  - enforcement: required
     matchExpressions:
     - key: latency
       operator: Lt
@@ -513,11 +513,15 @@ type vpscase4 struct {
 func (v *vpscase4) GetLabels() []labelDict {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
-	node2lbl := labelDict{"media_type": mediaSata, "vps_test": "test"}
-	node3lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
-	node4lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl)
+	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
 	return lbldata
 }
 
@@ -531,16 +535,28 @@ func (v *vpscase4) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map
 	volnodelist := map[string]map[string][]string{}
 	volnodelist["mysql-data"] = map[string][]string{}
 	volnodelist["mysql-data-seq"] = map[string][]string{}
-	volnodelist["mysql-data"]["rnodes"] = []string{}
+	volnodelist["mysql-data-aggr"] = map[string][]string{}
+	volnodelist["mysql-data"]["pnodes"] = []string{}
 	volnodelist["mysql-data"]["nnodes"] = []string{}
-	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["pnodes"] = []string{}
 	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
+	volnodelist["mysql-data-aggr"]["pnodes"] = []string{}
+	volnodelist["mysql-data-aggr"]["nnodes"] = []string{}
+	volnodelist["mysql-data-aggr"]["rnodes1"] = []string{}
 
-	for _, lnode := range lblnodes["media_typeSSD"] {
-		volnodelist["mysql-data"]["pnodes"] = append(volnodelist["mysql-data"]["pnodes"], lnode)
-		volnodelist["mysql-data-seq"]["pnodes"] = append(volnodelist["mysql-data-seq"]["pnodes"], lnode)
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zoneeast"] {
+		volnodelist["mysql-data"]["rnodes1"] = append(volnodelist["mysql-data"]["rnodes1"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes1"] = append(volnodelist["mysql-data-seq"]["rnodes1"], lnode)
+		// Add nodes for aggr in set-2 for validation simplification
+		volnodelist["mysql-data-aggr"]["rnodes2"] = append(volnodelist["mysql-data-aggr"]["rnodes2"], lnode)
 	}
 
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonewest"] {
+		volnodelist["mysql-data"]["rnodes2"] = append(volnodelist["mysql-data"]["rnodes2"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes2"] = append(volnodelist["mysql-data-seq"]["rnodes2"], lnode)
+		// Aggr replicas are spread across all nodes
+		volnodelist["mysql-data-aggr"]["rnodes2"] = append(volnodelist["mysql-data-aggr"]["rnodes2"], lnode)
+	}
 	return volnodelist
 }
 
@@ -555,26 +571,51 @@ func (v *vpscase4) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 
 	for _, appvol := range appVolumes {
 
+		
 		for vol, vnodes := range volscheck {
 
 			if appvol.Name == vol {
 				replicas, err := Inst().V.GetReplicaSetNodes(appvol)
-				logrus.Debugf("==Replicas for vol: %s, appvol:%v Replicas:%v ", vol, appvol, replicas)
+				logrus.Debugf("==Replicas for vol: %s, Volume should have replicas on nodes:%v , Volume replicas are present on nodes :%v ", vol, vnodes, replicas)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(replicas).NotTo(BeEmpty())
 
+				foundinset := false
 				// Must have (required)
-				for _, mnode := range vnodes["rnodes"] {
+				for _, rnode := range replicas {
 					found := ""
-					for _, rnode := range replicas {
-						logrus.Debugf("Expected Volume Node:%v Replica Node:%v", mnode, rnode)
+					// Check whether replica is on the expected set of nodes
+					for _, mnode := range vnodes["rnodes1"] {
+						logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
 						if mnode == rnode {
 							found = rnode
 							break
 						}
 					}
-					Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Volume '%v' does not have replica on node:'%v'", appvol, mnode))
+				    if found == "" {
+						foundinset=false
+						break
+					} else {
+						foundinset=true
+					}
 				}
+
+				//If replicas are not present in first set of labeled nodes, check other set
+				if foundinset==false {
+					for _, rnode := range replicas  {
+						found := ""
+					    // Check whether replica is on the expected set of nodes
+						for _, mnode := range vnodes["rnodes2"] {
+						    logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
+							if mnode == rnode {
+								found = rnode
+								break
+							}
+						}
+						Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Replica (%v) of Volume '%v' is not in the list of expected nodes(%v)", rnode, appvol, vnodes["rnodes2"]))
+					}
+				}
+
 
 				// Preferred
 				for _, mnode := range vnodes["pnodes"] {
@@ -611,7 +652,7 @@ func (v *vpscase4) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 
 //StorageClass placement_strategy mapping
 func (v *vpscase4) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-1", "placement-3":"placement-3"}
 }
 
 func (v *vpscase4) GetSpec() string {
@@ -624,17 +665,16 @@ metadata:
 spec:
   replicaAffinity:
   - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/zone
+    topologyKey: failure-domain.beta.kubernetes.io/px_zone
 ---
 apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-#  name: replica-topology-affinity-soft
-  name: placement-2
+  name: placement-3
 spec:
   replicaAffinity:
   - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/region`
+    topologyKey: failure-domain.beta.kubernetes.io/px_region`
 	return vpsSpec
 }
 
