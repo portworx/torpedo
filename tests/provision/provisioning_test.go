@@ -42,13 +42,16 @@ var _ = Describe("{ReplicaAffinity}", func() {
 			var volNodes map[string]map[string][]string
 
 			var lblData []labelDict
+			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
-				lblData = getTestLabels(vrule.GetLabels)
+				lblData,setLabels = getTestLabels(vrule.GetLabels)
 				RemoveNodeLabels(lblData)
-				lblnode := SetNodeLabels(lblData)
-				logrus.Debug("Nodes containing label", lblnode)
-				Expect(lblnode).NotTo(BeEmpty())
-				volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
+				if setLabels == 1 {
+					lblnode := SetNodeLabels(lblData)
+					logrus.Debug("Nodes containing label", lblnode)
+					Expect(lblnode).NotTo(BeEmpty())
+					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
+				}
 			})
 
 			Step("rules of volume placement: "+vkey, func() {
@@ -99,7 +102,7 @@ func ValidateVpsRules(f func([]*volume.Volume, map[string]map[string][]string), 
 
 }
 
-func getTestLabels(f func() []labelDict) []labelDict {
+func getTestLabels(f func() ([]labelDict,int)) ([]labelDict,int) {
 	return f()
 }
 
