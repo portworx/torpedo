@@ -684,7 +684,7 @@ func (v *vpscase4) CleanVps() {
 
 
 
-//#---- Case 5 ----T1052921  Verify Replica Affinity with topology keys
+//#---- Case 5 ----T1052921  Verify Replica Anti-Affinity with topology keys
 type vpscase5 struct {
 	//Case description
 	name string
