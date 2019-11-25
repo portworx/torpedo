@@ -51,6 +51,18 @@ func GetVpsRules() map[string]vpsTemplate {
 	return vpsRules
 }
 
+
+
+
+
+/*
+ *  
+ *     Replica  Affinity and Anti-Affinity related test cases
+ *
+ */
+
+
+
 type vpscase1 struct {
 	//Case description
 	name string
@@ -1017,7 +1029,7 @@ func (v *vpscase6) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 				// land on any node
 				replicas, err := Inst().V.GetReplicaSetNodes(appvol)
 				logrus.Debugf("==Replicas for vol: %s, Volume should not have replicas on any nodes:%v , Volume replicas are present on nodes :%v ", vol, vnodes, replicas)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 				Expect(replicas).To(BeEmpty())
 
 				
@@ -1057,9 +1069,464 @@ func (v *vpscase6) CleanVps() {
 
 
 
+/*
+ *  
+ *     Volume  Affinity and Anti-Affinity related test cases
+ *
+ */
+
+//#---- Case 7 ---- T809548  Verify volume affinity  --operator: Exists
+type vpscase7 struct {
+	//Case description
+	name string
+	// Enabled
+	enabled bool
+}
+
+func (v *vpscase7) GetLabels() ([]labelDict,int) {
+
+	lbldata := []labelDict{}
+	return lbldata,0
+}
+
+func (v *vpscase7) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
+
+	for key, val := range lblnodes {
+		logrus.Debugf("label node: key:%v Val:%v", key, val)
+	}
+
+	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
+	volnodelist := map[string]map[string][]string{}
+	volnodelist["mysql-data"] = map[string][]string{}
+	volnodelist["mysql-data-seq"] = map[string][]string{}
+	volnodelist["mysql-data-aggr"] = map[string][]string{}
+	volnodelist["mysql-data"]["pnodes"] = []string{}
+	volnodelist["mysql-data"]["nnodes"] = []string{}
+	volnodelist["mysql-data"]["rnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["pnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+
+	return volnodelist
+}
+
+/*
+ * 1. Each rule template, will provide the expected output
+ */
+
+func (v *vpscase7) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
+
+	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+		appVolumes, volscheck)
+
+	logrus.Infof("Case 7 T809548  Verify volume affinity 'exists', mysql-data-seq volume's replica should on nodes where mysql-data volume's replicas are present ")	
+
+	var mysqlDataReplNodes []string
+	var mysqlDataSeqReplNodes []string
+
+	for _, appvol := range appVolumes {
+
+		replicas, err := Inst().V.GetReplicaSetNodes(appvol)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(replicas).NotTo(BeEmpty())
+
+		if appvol.Name == "mysql-data" {
+			mysqlDataReplNodes = replicas
+		} else if appvol.Name == "mysql-data-seq" {
+			mysqlDataSeqReplNodes = replicas
+		}
+				
+	}
+
+	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
+	for _,rnode := range mysqlDataSeqReplNodes {
+		found :=""
+		for _,mnode := range mysqlDataReplNodes {
+			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should be same as mysql-data  Replica Node:%v", mnode, rnode)
+			if rnode == mnode{
+				logrus.Debugf("Volume should have replica on :%v Replica Node:%v", mnode, rnode)
+				found = rnode
+				break
+			}
+		}
+		Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Replica (%v) of Volume '%v' is not in the list of expected nodes(%v)", rnode, "mysql-data-seq", mysqlDataReplNodes))
+
+	}
+
+}
+
+
+//StorageClass placement_strategy mapping
+func (v *vpscase7) GetScStrategyMap() map[string] string{
+	return map[string] string {"placement-1":"", "placement-2":"placement-2", "placement-3":""}
+}
+
+func (v *vpscase7) GetSpec() string {
+
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-2
+spec:
+  volumeAffinity:
+  - enforcement: required
+    matchExpressions:
+      - key: app
+        operator: Exists`
+	return vpsSpec
+}
+
+func (v *vpscase7) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
+}
+
+
+/*
+ *  
+ *     Volume  Affinity and Anti-Affinity related test cases
+ *
+ */
+
+//#---- Case 8 ---- T809548  Verify volume affinity - operator: In
+type vpscase8 struct {
+	//Case description
+	name string
+	// Enabled
+	enabled bool
+}
+
+func (v *vpscase8) GetLabels() ([]labelDict,int) {
+
+	lbldata := []labelDict{}
+	return lbldata,0
+}
+
+func (v *vpscase8) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
+
+	for key, val := range lblnodes {
+		logrus.Debugf("label node: key:%v Val:%v", key, val)
+	}
+
+	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
+	volnodelist := map[string]map[string][]string{}
+	volnodelist["mysql-data"] = map[string][]string{}
+	volnodelist["mysql-data-seq"] = map[string][]string{}
+	volnodelist["mysql-data-aggr"] = map[string][]string{}
+	volnodelist["mysql-data"]["pnodes"] = []string{}
+	volnodelist["mysql-data"]["nnodes"] = []string{}
+	volnodelist["mysql-data"]["rnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["pnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+
+	return volnodelist
+}
+
+/*
+ * 1. Each rule template, will provide the expected output
+ */
+
+func (v *vpscase8) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
+
+	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+		appVolumes, volscheck)
+
+	logrus.Infof("Case 8 T809548  Verify volume affinity 'In', mysql-data-seq volume's replica should be on nodes where mysql-data volume's replicas are present ")	
+
+	var mysqlDataReplNodes []string
+	var mysqlDataSeqReplNodes []string
+
+	for _, appvol := range appVolumes {
+
+		replicas, err := Inst().V.GetReplicaSetNodes(appvol)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(replicas).NotTo(BeEmpty())
+
+		if appvol.Name == "mysql-data" {
+			mysqlDataReplNodes = replicas
+		} else if appvol.Name == "mysql-data-seq" {
+			mysqlDataSeqReplNodes = replicas
+		}
+				
+	}
+
+	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
+	for _,rnode := range mysqlDataSeqReplNodes {
+		found :=""
+		for _,mnode := range mysqlDataReplNodes {
+			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should be same as mysql-data  Replica Node:%v", mnode, rnode)
+			if rnode == mnode{
+				logrus.Debugf("Volume should have replica on :%v Replica Node:%v", mnode, rnode)
+				found = rnode
+				break
+			}
+		}
+		Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Replica (%v) of Volume '%v' is not in the list of expected nodes(%v)", rnode, "mysql-data-seq", mysqlDataReplNodes))
+
+	}
+
+}
+
+
+//StorageClass placement_strategy mapping
+func (v *vpscase8) GetScStrategyMap() map[string] string{
+	return map[string] string {"placement-1":"", "placement-2":"placement-2", "placement-3":""}
+}
+
+func (v *vpscase8) GetSpec() string {
+
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-2
+spec:
+  volumeAffinity:
+  - enforcement: required
+    matchExpressions:
+      - key: app
+        operator: In
+		Values:
+		  - "mysql-data"`
+	return vpsSpec
+}
+
+func (v *vpscase8) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
+}
+
+
+
+//#---- Case 9 ---- T809548  Verify volume affinity - operator: DoesNotExist
+type vpscase9 struct {
+	//Case description
+	name string
+	// Enabled
+	enabled bool
+}
+
+func (v *vpscase9) GetLabels() ([]labelDict,int) {
+
+	lbldata := []labelDict{}
+	return lbldata,0
+}
+
+func (v *vpscase9) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
+
+	for key, val := range lblnodes {
+		logrus.Debugf("label node: key:%v Val:%v", key, val)
+	}
+
+	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
+	volnodelist := map[string]map[string][]string{}
+	volnodelist["mysql-data"] = map[string][]string{}
+	volnodelist["mysql-data-seq"] = map[string][]string{}
+	volnodelist["mysql-data-aggr"] = map[string][]string{}
+	volnodelist["mysql-data"]["pnodes"] = []string{}
+	volnodelist["mysql-data"]["nnodes"] = []string{}
+	volnodelist["mysql-data"]["rnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["pnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+
+	return volnodelist
+}
+
+/*
+ * 1. Each rule template, will provide the expected output
+ */
+
+func (v *vpscase9) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
+
+	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+		appVolumes, volscheck)
+
+	logrus.Infof("Case 9 T809548  Verify volume affinity 'DoesNotExist', mysql-data-seq volume's replica should not be on nodes where mysql-data volume's replicas are present ")	
+
+	var mysqlDataReplNodes []string
+	var mysqlDataSeqReplNodes []string
+
+	for _, appvol := range appVolumes {
+
+		replicas, err := Inst().V.GetReplicaSetNodes(appvol)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(replicas).NotTo(BeEmpty())
+
+		if appvol.Name == "mysql-data" {
+			mysqlDataReplNodes = replicas
+		} else if appvol.Name == "mysql-data-seq" {
+			mysqlDataSeqReplNodes = replicas
+		}
+				
+	}
+
+	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
+	for _,rnode := range mysqlDataSeqReplNodes {
+		found :=""
+		for _,mnode := range mysqlDataReplNodes {
+			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should not be same as mysql-data  Replica Node:%v", mnode, rnode)
+			if rnode == mnode{
+				logrus.Debugf("Volume shouldi not have replica on :%v Replica Node:%v", mnode, rnode)
+				found = rnode
+				break
+			}
+		}
+		Expect(found).To(BeEmpty(), fmt.Sprintf("Replica (%v) of Volume '%v' is  in the list of not expected nodes(%v)", rnode, "mysql-data-seq", mysqlDataReplNodes))
+
+	}
+
+}
+
+
+//StorageClass placement_strategy mapping
+func (v *vpscase9) GetScStrategyMap() map[string] string{
+	return map[string] string {"placement-1":"", "placement-2":"placement-2", "placement-3":""}
+}
+
+func (v *vpscase9) GetSpec() string {
+
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-2
+spec:
+  volumeAffinity:
+  - enforcement: required
+    matchExpressions:
+      - key: app
+        operator: DoesNotExist`
+	return vpsSpec
+}
+
+func (v *vpscase9) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
+}
+
+
+
+
+//#---- Case 10 ---- T809548  Verify volume affinity - operator: NotIn
+type vpscase10 struct {
+	//Case description
+	name string
+	// Enabled
+	enabled bool
+}
+
+func (v *vpscase10) GetLabels() ([]labelDict,int) {
+
+	lbldata := []labelDict{}
+	return lbldata,0
+}
+
+func (v *vpscase10) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
+
+	for key, val := range lblnodes {
+		logrus.Debugf("label node: key:%v Val:%v", key, val)
+	}
+
+	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
+	volnodelist := map[string]map[string][]string{}
+	volnodelist["mysql-data"] = map[string][]string{}
+	volnodelist["mysql-data-seq"] = map[string][]string{}
+	volnodelist["mysql-data-aggr"] = map[string][]string{}
+	volnodelist["mysql-data"]["pnodes"] = []string{}
+	volnodelist["mysql-data"]["nnodes"] = []string{}
+	volnodelist["mysql-data"]["rnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["pnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+
+	return volnodelist
+}
+
+/*
+ * 1. Each rule template, will provide the expected output
+ */
+
+func (v *vpscase10) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
+
+	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+		appVolumes, volscheck)
+
+	logrus.Infof("Case 10 T809548  Verify volume affinity 'NotIn', mysql-data-seq volume's replica should not be on nodes where mysql-data volume's replicas are present ")	
+
+	var mysqlDataReplNodes []string
+	var mysqlDataSeqReplNodes []string
+
+	for _, appvol := range appVolumes {
+
+		replicas, err := Inst().V.GetReplicaSetNodes(appvol)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(replicas).NotTo(BeEmpty())
+
+		if appvol.Name == "mysql-data" {
+			mysqlDataReplNodes = replicas
+		} else if appvol.Name == "mysql-data-seq" {
+			mysqlDataSeqReplNodes = replicas
+		}
+				
+	}
+
+	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
+	for _,rnode := range mysqlDataSeqReplNodes {
+		found :=""
+		for _,mnode := range mysqlDataReplNodes {
+				logrus.Debugf("Volume (mysql-data-seq) replica node :%v should not be same as mysql-data  Replica Node:%v", mnode, rnode)
+			if rnode == mnode{
+				logrus.Debugf("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
+				found = rnode
+				break
+			}
+		}
+		Expect(found).To(BeEmpty(), fmt.Sprintf("Replica (%v) of Volume '%v' is  in the list of not expected nodes(%v)", rnode, "mysql-data-seq", mysqlDataReplNodes))
+
+	}
+
+}
+
+
+//StorageClass placement_strategy mapping
+func (v *vpscase10) GetScStrategyMap() map[string] string{
+	return map[string] string {"placement-1":"", "placement-2":"placement-2", "placement-3":""}
+}
+
+func (v *vpscase10) GetSpec() string {
+
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-2
+spec:
+  volumeAffinity:
+  - enforcement: required
+    matchExpressions:
+      - key: app
+        operator: NotIn
+		Values:
+		  - mysql`
+	return vpsSpec
+}
+
+func (v *vpscase10) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
+}
+
 
 
 // Test case inits
+//
+
+/*
+ *  
+ *     Replica  Affinity and Anti-Affinity related test cases init
+ *
+ */
+
+
 func init() {
 	v := &vpscase1{"case1", true}
 	Register(v.name, v)
@@ -1089,9 +1556,40 @@ func init() {
 	Register(v.name, v)
 }
 
-
+/*
 func init() {
 	v := &vpscase6{"case6-T809554", true}
 	Register(v.name, v)
+}*/
+
+
+/*
+ *  
+ *     Volume  Affinity and Anti-Affinity related test cases init
+ *
+ */
+
+func init() {
+	v := &vpscase7{"case7-T809548 Affinity 'Exists'", true}
+	Register(v.name, v)
 }
+
+
+func init() {
+	v := &vpscase8{"case8-T809548 Affinity 'In'", true}
+	Register(v.name, v)
+}
+
+
+func init() {
+	v := &vpscase9{"case9-T809548 Affinity 'DoesNotExists'", true}
+	Register(v.name, v)
+}
+
+
+func init() {
+	v := &vpscase10{"case10-T809548 Affinity 'NotIn'", true}
+	Register(v.name, v)
+}
+
 

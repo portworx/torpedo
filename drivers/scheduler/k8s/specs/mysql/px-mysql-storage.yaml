@@ -61,6 +61,8 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: mysql-data
+  labels:
+    app: mysql-data
   annotations:
     px/secret-name: volume-secrets
     px/secret-namespace: "{{NAMESPACE}}"
@@ -78,6 +80,8 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
    name: mysql-data-seq
+   labels:
+     app: mysql-seq
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc-seq
 spec:
@@ -91,6 +95,8 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
    name: mysql-data-aggr
+   labels:
+     app2: mysql-aggr
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc-aggr
 spec:
