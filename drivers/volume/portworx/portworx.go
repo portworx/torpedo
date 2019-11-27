@@ -255,14 +255,18 @@ func (d *portworx) updateNode(n node.Node, pxNodes []api.StorageNode) error {
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {
-				n.VolDriverNodeID = pxNode.Id
-				n.IsStorageDriverInstalled = isPX
-				isMetadataNode, err := d.isMetadataNode(n, address)
-				if err != nil {
-					return err
+				if len(pxNode.Id) > 0 {
+					n.VolDriverNodeID = pxNode.Id
+					n.IsStorageDriverInstalled = isPX
+					isMetadataNode, err := d.isMetadataNode(n, address)
+					if err != nil {
+						return err
+					}
+					n.IsMetadataNode = isMetadataNode
+					node.UpdateNode(n)
+				} else {
+					return fmt.Errorf("StorageNodeId is empty for node %v", pxNode)
 				}
-				n.IsMetadataNode = isMetadataNode
-				node.UpdateNode(n)
 				return nil
 			}
 		}
@@ -354,7 +358,7 @@ func (d *portworx) getPxNode(n node.Node, nManager ...api.OpenStorageNodeClient)
 	logrus.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
 	nodeInspectResponse, err := d.nodeManager.Inspect(d.getContext(""), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if (err == nil && nodeInspectResponse.Node.Status == api.Status_STATUS_OFFLINE) || (err != nil && nodeInspectResponse.Node.Status == api.Status_STATUS_NONE) {
-		n, err = d.updateNodeID(n)
+		n, err = d.updateNodeID(n, d.nodeManager)
 		if err != nil {
 			return api.StorageNode{}, err
 		}
@@ -830,9 +834,15 @@ func (d *portworx) getClusterOnStart() ([]api.StorageNode, error) {
 	return d.getPxNodes()
 }
 
-func (d *portworx) getPxNodes() ([]api.StorageNode, error) {
+func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]api.StorageNode, error) {
+	var nodeManager api.OpenStorageNodeClient
+	if nManagers == nil {
+		nodeManager = d.nodeManager
+	} else {
+		nodeManager = nManagers[0]
+	}
 	nodes := make([]api.StorageNode, 0)
-	nodeEnumerateResp, err := d.nodeManager.Enumerate(d.getContext(""), &api.SdkNodeEnumerateRequest{})
+	nodeEnumerateResp, err := nodeManager.Enumerate(d.getContext(""), &api.SdkNodeEnumerateRequest{})
 	if err != nil {
 		return nodes, err
 	}
@@ -1549,14 +1559,14 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 	return pxNodes, nil
 }
 
-func (d *portworx) updateNodeID(n node.Node) (node.Node, error) {
-	nodes, err := d.getPxNodes()
+func (d *portworx) updateNodeID(n node.Node, nManager ...api.OpenStorageNodeClient) (node.Node, error) {
+	nodes, err := d.getPxNodes(nManager...)
 	if err != nil {
 		return n, err
 	}
 	for _, nd := range nodes {
 		for _, addr := range n.Addresses {
-			if nd.GetMgmtIp() == addr || nd.DataIp == addr {
+			if nd.GetMgmtIp() == addr || nd.DataIp == addr && len(nd.Id) > 0 {
 				n.VolDriverNodeID = nd.Id
 				node.UpdateNode(n)
 				return n, nil
