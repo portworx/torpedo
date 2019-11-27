@@ -129,6 +129,10 @@ type Driver interface {
 	// GetReplicaSetNodes returns the replica sets for a given volume
 	GetReplicaSetNodes(vol *Volume) ([]string, error)
 
+    //GetReplicatNodeSets returns the replica grouped per set for a given volume
+	// useful for aggregated volume
+    GetReplicatNodeSets(vol *Volume) ([][]string, error) 
+
 	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 	// given volumes
 	ValidateVolumeSnapshotRestore(vol string, snapData *snap_v1.VolumeSnapshotData, timeStart time.Time) error

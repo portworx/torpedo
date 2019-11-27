@@ -1551,6 +1551,49 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 	return pxNodes, nil
 }
 
+
+//GetReplicatNodeSets Get the replica sets along with nodes per set, useful for 
+// aggregate volumes
+func (d *portworx) GetReplicatNodeSets(torpedovol *torpedovolume.Volume) ([][]string, error) {
+	var pxNodeSet [][]string
+	volName := d.schedOps.GetVolumeName(torpedovol)
+	vols, err := d.getVolDriver("").Inspect([]string{volName})
+	if err != nil {
+		return nil, &ErrFailedToInspectVolume{
+			ID:    torpedovol.Name,
+			Cause: err.Error(),
+		}
+	}
+
+	if len(vols) == 0 {
+		return nil, &ErrFailedToInspectVolume{
+			ID:    torpedovol.ID,
+			Cause: fmt.Sprintf("unable to find volume %s [%s]", torpedovol.Name, volName),
+		}
+	}
+
+	for _, rs := range vols[0].ReplicaSets {
+	    var pxNodes []string
+		for _, n := range rs.Nodes {
+			pxNode, err := d.clusterManager.Inspect(n)
+			if err != nil {
+				return nil, &ErrFailedToInspectVolume{
+					ID:    torpedovol.Name,
+					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
+				}
+			}
+			nodeName := pxNode.SchedulerNodeName
+			if nodeName == "" {
+				nodeName = pxNode.Hostname
+			}
+			pxNodes = append(pxNodes, nodeName)
+		}
+		pxNodeSet =append(pxNodeSet, pxNodes)
+	}
+	return pxNodeSet, nil
+}
+
+
 func (d *portworx) updateNodeID(n node.Node) (node.Node, error) {
 	for _, addr := range n.Addresses {
 		nodeID, _ := d.getClusterManager("").GetNodeIdFromIp(addr)
