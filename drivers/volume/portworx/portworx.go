@@ -1427,9 +1427,14 @@ func (d *portworx) RejoinNode(n node.Node) error {
 func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
 	nodeResponse, err := d.nodeManager.Inspect(d.getContext(""), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
-		return &nodeResponse.Node.Status, &ErrFailedToGetNodeStatus{
+		st, ok := status.FromError(err)
+		if ok && st.Code() == codes.NotFound {
+			apiSt := api.Status_STATUS_NONE
+			return &apiSt, nil
+		}
+		return nil, &ErrFailedToGetNodeStatus{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to check node status: %v. Err: %v", nodeResponse.Node, err),
+			Cause: fmt.Sprintf("Failed to check node status: %v. Err: %v", n.Name, err),
 		}
 	}
 	return &nodeResponse.Node.Status, nil

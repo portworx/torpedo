@@ -75,11 +75,11 @@ var _ = Describe("{DecommissionNode}", func() {
 				Step(fmt.Sprintf("check if node %s was decommissioned", nodeToDecommission.Name), func() {
 					t := func() (interface{}, bool, error) {
 						status, err := Inst().V.GetNodeStatus(nodeToDecommission)
-						if err != nil && status != nil && *status == api.Status_STATUS_NONE {
-							return true, false, nil
-						}
 						if err != nil {
 							return false, true, err
+						}
+						if *status == api.Status_STATUS_NONE {
+							return true, false, nil
 						}
 						return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
 					}
