@@ -1958,6 +1958,506 @@ func (v *vpscase14) CleanVps() {
 
 
 
+//#---- Case 15 ---- T864665 Verify volume affinity with topology keys
+type vpscase15 struct {
+	//Case description
+	name string
+	// Enabled
+	enabled bool
+}
+
+func (v *vpscase15) GetLabels() ([]labelDict,int) {
+
+	lbldata := []labelDict{}
+	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
+	return lbldata,1
+}
+
+func (v *vpscase15) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
+
+	for key, val := range lblnodes {
+		logrus.Debugf("label node: key:%v Val:%v", key, val)
+	}
+
+	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
+	volnodelist := map[string]map[string][]string{}
+	volnodelist["mysql-data"] = map[string][]string{}
+	volnodelist["mysql-data-seq"] = map[string][]string{}
+	volnodelist["mysql-data-aggr"] = map[string][]string{}
+	volnodelist["mysql-data"]["pnodes"] = []string{}
+	volnodelist["mysql-data"]["nnodes"] = []string{}
+	volnodelist["mysql-data"]["rnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["pnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zoneeast"] {
+		volnodelist["mysql-data"]["rnodes"] = append(volnodelist["mysql-data"]["rnodes"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes"] = append(volnodelist["mysql-data-seq"]["rnodes"], lnode)
+	}
+
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_regionusa"] {
+		volnodelist["mysql-data-aggr"]["rnodes"] = append(volnodelist["mysql-data-aggr"]["rnodes"], lnode)
+	}
+
+	return volnodelist
+}
+
+/*
+ * 1. Each rule template, will provide the expected output
+ */
+
+func (v *vpscase15) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
+
+	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+		appVolumes, volscheck)
+
+	logrus.Infof("Case 15 T864665  Verify volume affinity Topologykey, mysql-data and mysql-data-seq  should come together on nodes with px_zone label east and replicas of mysql-data-aggr come on nodes within same px_region of usa")	
+
+
+	for _, appvol := range appVolumes {
+
+		for vol, vnodes := range volscheck {
+			if appvol.Name == vol {
+				replicas, err := Inst().V.GetReplicaSetNodes(appvol)
+				logrus.Debugf("==Replicas for vol: %s, Volume should have replicas on nodes:%v , Volume replicas are present on nodes :%v ", vol, vnodes, replicas)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(replicas).NotTo(BeEmpty())
+
+				// Must have (required)
+				for _, rnode := range replicas {
+					found := ""
+					// Check whether replica is on the expected set of nodes
+					for _, mnode := range vnodes["rnodes"] {
+						logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
+						if mnode == rnode {
+							found = rnode
+							break
+						}
+					}
+					Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Volume '%v' replica %v , is not in the expected list of node:'%v'", appvol, rnode,vnodes["rnodes"] ))
+				}
+
+				// Go for next volume
+				break
+			}	
+		}
+	}
+
+
+}
+
+
+//StorageClass placement_strategy mapping
+func (v *vpscase15) GetScStrategyMap() map[string] string{
+	return map[string] string {"placement-1":"placement-2", "placement-2":"placement-2", "placement-3":"placement-3"}
+}
+
+func (v *vpscase15) GetSpec() string {
+
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-2
+spec:
+  volumeAffinity:
+  - enforcement: required
+    topologyKey: failure-domain.beta.kubernetes.io/px_zone
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - "mysql"
+  - enforcement: required
+    matchExpressions:
+      - key: "failure-domain.beta.kubernetes.io/px_zone"
+        operator: In
+        values:
+          - "east"
+---
+apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-3
+spec:
+  volumeAffinity:
+  - enforcement: required
+    topologyKey: failure-domain.beta.kubernetes.io/px_region
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - "mysql"
+  - enforcement: required
+    matchExpressions:
+      - key: "failure-domain.beta.kubernetes.io/px_region"
+        operator: In
+        values:
+          - "usa"
+---
+apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-1
+spec:
+  volumeAffinity:
+  - enforcement: required
+    topologyKey: failure-domain.beta.kubernetes.io/px_zone
+    matchExpressions:
+      - key: "failure-domain.beta.kubernetes.io/px_zone"
+        operator: In
+        values:
+          - "east"`
+	return vpsSpec
+}
+
+func (v *vpscase15) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
+}
+
+
+//#---- Case 16 ---- T1053359 Verify volume anti-affinity with topology keys
+type vpscase16 struct {
+	//Case description
+	name string
+	// Enabled
+	enabled bool
+}
+
+func (v *vpscase16) GetLabels() ([]labelDict,int) {
+
+	lbldata := []labelDict{}
+	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "central", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middle", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
+	return lbldata,1
+}
+
+func (v *vpscase16) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
+
+	for key, val := range lblnodes {
+		logrus.Debugf("label node: key:%v Val:%v", key, val)
+	}
+
+	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
+	volnodelist := map[string]map[string][]string{}
+	volnodelist["mysql-data"] = map[string][]string{}
+	volnodelist["mysql-data-seq"] = map[string][]string{}
+	volnodelist["mysql-data-aggr"] = map[string][]string{}
+	volnodelist["mysql-data"]["pnodes"] = []string{}
+	volnodelist["mysql-data"]["nnodes"] = []string{}
+	volnodelist["mysql-data"]["rnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["pnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+	//Create a list of nodes in px_zone east and north,
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zoneeast"] {
+		volnodelist["mysql-data"]["rnodes"] = append(volnodelist["mysql-data"]["rnodes"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes"] = append(volnodelist["mysql-data-seq"]["rnodes"], lnode)
+	}
+
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonenorth"] {
+		volnodelist["mysql-data"]["rnodes1"] = append(volnodelist["mysql-data"]["rnodes1"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes1"] = append(volnodelist["mysql-data-seq"]["rnodes1"], lnode)
+	}
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonewest"] {
+		volnodelist["mysql-data"]["rnodes2"] = append(volnodelist["mysql-data"]["rnodes2"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes2"] = append(volnodelist["mysql-data-seq"]["rnodes2"], lnode)
+	}
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonecentral"] {
+		volnodelist["mysql-data"]["rnodes3"] = append(volnodelist["mysql-data"]["rnodes3"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes3"] = append(volnodelist["mysql-data-seq"]["rnodes3"], lnode)
+	}
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonemiddle"] {
+		volnodelist["mysql-data"]["rnodes4"] = append(volnodelist["mysql-data"]["rnodes4"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes4"] = append(volnodelist["mysql-data-seq"]["rnodes4"], lnode)
+	}
+
+	return volnodelist
+}
+
+/*
+ * 1. Each rule template, will provide the expected output
+ */
+
+func (v *vpscase16) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
+
+	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+		appVolumes, volscheck)
+
+	logrus.Infof("Case 16 T1053359  Verify volume anti-affinity Topologykey, mysql-data and mysql-data-seq should not come together on same px_zone label")	
+
+	var mysqlDataReplNodes []string
+	var mysqlDataSeqReplNodes []string
+
+	for _, appvol := range appVolumes {
+
+		replicas, err := Inst().V.GetReplicaSetNodes(appvol)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(replicas).NotTo(BeEmpty())
+
+		if appvol.Name == "mysql-data" {
+			mysqlDataReplNodes = replicas
+		} else if appvol.Name == "mysql-data-seq" {
+			mysqlDataSeqReplNodes = replicas
+		}
+				
+	}
+
+	/*
+	// Replicas should not be on same node
+	for _,rnode := range mysqlDataSeqReplNodes {
+		found :=""
+		for _,mnode := range mysqlDataReplNodes {
+				logrus.Debugf("Volume (mysql-data-seq) replica node :%v should inot be on mysql-data  Replica Node:%v", mnode, rnode)
+			if rnode == mnode{
+				logrus.Debugf("Volume is having replica :%v  on Replica Node:%v", mnode, rnode)
+				found = rnode
+				break
+			}
+		}
+		Expect(found).To(BeEmpty(), fmt.Sprintf("Replica (%v) of Volume '%v'  should not have replica in nodes(%v)", rnode, "mysql-data-seq", mysqlDataReplNodes))
+
+	}*/
+
+	//Replicas should not be in same zone
+	for _, repset:= range volscheck["mysql-data"] {
+		// for each node in the zone, check replica count should be one
+		repfound :=0
+		for _, mnode := range repset {
+			for _,rnode := range mysqlDataSeqReplNodes { 			 
+				if rnode == mnode {
+					repfound++
+				}
+			}
+
+			for _,rnode := range mysqlDataReplNodes { 			 
+				if rnode == mnode {
+					repfound++
+				}
+			}
+		}
+		Expect(repfound).Should(BeNumerically("<=", 1), fmt.Sprintf("px_zone nodes(%v) has more than one(%v) replica in Volume Anti-affinityi test case",repset,repfound ) )
+	}
+
+}
+
+
+//StorageClass placement_strategy mapping
+func (v *vpscase16) GetScStrategyMap() map[string] string{
+	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+}
+
+func (v *vpscase16) GetSpec() string {
+
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-2
+spec:
+  volumeAntiAffinity:
+  - enforcement: required
+    topologyKey: failure-domain.beta.kubernetes.io/px_zone
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - "mysql"
+---
+apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-3
+spec:
+  volumeAntiAffinity:
+  - enforcement: required
+    topologyKey: failure-domain.beta.kubernetes.io/px_region
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - "mysql"
+---
+apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-1
+spec:
+  volumeAntiAffinity:
+  - enforcement: required
+    topologyKey: failure-domain.beta.kubernetes.io/px_zone
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - "mysql"`
+	return vpsSpec
+}
+
+func (v *vpscase16) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
+}
+
+
+
+//#---- Case 17 ---- T870615 Verify volume anti-affinity multiple rules 
+type vpscase17 struct {
+	//Case description
+	name string
+	// Enabled
+	enabled bool
+}
+
+func (v *vpscase17) GetLabels() ([]labelDict,int) {
+
+	lbldata := []labelDict{}
+	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "central", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middle", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
+	return lbldata,1
+}
+
+func (v *vpscase17) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
+
+	for key, val := range lblnodes {
+		logrus.Debugf("label node: key:%v Val:%v", key, val)
+	}
+
+	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
+	volnodelist := map[string]map[string][]string{}
+	volnodelist["mysql-data"] = map[string][]string{}
+	volnodelist["mysql-data-seq"] = map[string][]string{}
+	volnodelist["mysql-data-aggr"] = map[string][]string{}
+	volnodelist["mysql-data"]["pnodes"] = []string{}
+	volnodelist["mysql-data"]["nnodes"] = []string{}
+	volnodelist["mysql-data"]["rnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["pnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
+	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+
+	return volnodelist
+}
+
+/*
+ * 1. Each rule template, will provide the expected output
+ */
+
+func (v *vpscase17) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
+
+	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
+		appVolumes, volscheck)
+
+	logrus.Infof("Case 17 T870615  Verify volume anti-affinity with multiple rules , mysql-data and mysql-data-seq should not come together on a node")	
+
+	var mysqlDataReplNodes []string
+	var mysqlDataSeqReplNodes []string
+
+	for _, appvol := range appVolumes {
+
+		replicas, err := Inst().V.GetReplicaSetNodes(appvol)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(replicas).NotTo(BeEmpty())
+
+		if appvol.Name == "mysql-data" {
+			mysqlDataReplNodes = replicas
+		} else if appvol.Name == "mysql-data-seq" {
+			mysqlDataSeqReplNodes = replicas
+		}
+				
+	}
+
+	// Replicas should not be on same node
+	for _,rnode := range mysqlDataSeqReplNodes {
+		found :=""
+		for _,mnode := range mysqlDataReplNodes {
+				logrus.Debugf("Volume (mysql-data-seq) replica node :%v should inot be on mysql-data  Replica Node:%v", mnode, rnode)
+			if rnode == mnode{
+				logrus.Debugf("Volume is having replica :%v  on Replica Node:%v", mnode, rnode)
+				found = rnode
+				break
+			}
+		}
+		Expect(found).To(BeEmpty(), fmt.Sprintf("Replica (%v) of Volume '%v'  should not have replica in nodes(%v)", rnode, "mysql-data-seq", mysqlDataReplNodes))
+
+	}
+
+}
+
+
+//StorageClass placement_strategy mapping
+func (v *vpscase17) GetScStrategyMap() map[string] string{
+	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+}
+
+func (v *vpscase17) GetSpec() string {
+
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-1
+spec:
+  volumeAntiAffinity:
+  - enforcement: required
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - "mysql"
+  - enforcement: required
+    matchExpressions:
+      - key: voltype
+        operator: In
+        values:
+         - "seq"
+---
+apiVersion: portworx.io/v1beta2
+kind: VolumePlacementStrategy
+metadata:
+  name: placement-2
+spec:
+  volumeAntiAffinity:
+  - enforcement: required
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - "mysql"
+  - enforcement: required
+    matchExpressions:
+      - key: voltype
+        operator: In
+        values:
+         - "data"`
+	return vpsSpec
+}
+
+func (v *vpscase17) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
+}
+
+
 // Test case inits
 //
 
@@ -1966,7 +2466,6 @@ func (v *vpscase14) CleanVps() {
  *     Replica  Affinity and Anti-Affinity related test cases init
  *
  */
-
 func init() {
 	v := &vpscase1{"case1", true}
 	Register(v.name, v)
@@ -2042,7 +2541,6 @@ func init() {
 	v := &vpscase12{"case12-T809549 Volume Anti-Affinity 'In'", true}
 	Register(v.name, v)
 }
-
 /*
 func init() {
 	v := &vpscase13{"case13-T809549 Volume Anti-Affinity 'DoesNotExists'", true}
@@ -2054,3 +2552,23 @@ func init() {
 	Register(v.name, v)
 }
 */
+
+
+func init() {
+	v := &vpscase15{"case15-T864665  Volume Affinity with topology key", true}
+	Register(v.name, v)
+}
+
+
+func init() {
+	v := &vpscase16{"case16-T1053359 Volume anti-affinity with topology keys", true}
+	Register(v.name, v)
+}
+
+func init() {
+	v := &vpscase17{"casee17-T870615  volume anti-affinity multiple rules", true}
+	Register(v.name, v)
+}
+
+
+

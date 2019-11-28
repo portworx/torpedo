@@ -63,6 +63,7 @@ metadata:
   name: mysql-data
   labels:
     app: mysql
+    voltype: data
   annotations:
     px/secret-name: volume-secrets
     px/secret-namespace: "{{NAMESPACE}}"
@@ -82,6 +83,7 @@ metadata:
    name: mysql-data-seq
    labels:
      app: mysql
+     voltype: seq
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc-seq
 spec:
@@ -97,6 +99,7 @@ metadata:
    name: mysql-data-aggr
    labels:
      app2: mysql-aggr
+     voltype: aggr
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc-aggr
 spec:
