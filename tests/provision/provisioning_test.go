@@ -35,7 +35,7 @@ var _ = Describe("{ReplicaAffinity}", func() {
 	It("has to schedule app and verify the replication affinity", func() {
 
 		var vpsSpec string
-		vpsRules := GetVpsRules()
+		vpsRules := GetVpsRules(1)
 
 		for vkey, vrule := range vpsRules {
 			var contexts []*scheduler.Context
@@ -88,6 +88,130 @@ var _ = Describe("{ReplicaAffinity}", func() {
 		}
 	})
 })
+
+
+// This test performs VolumePlacementStrategy's volume affinity  of application
+// volume
+var _ = Describe("{VolumeAffinity}", func() {
+	It("has to schedule app and verify the replication affinity", func() {
+
+		var vpsSpec string
+		vpsRules := GetVpsRules(2)
+
+		for vkey, vrule := range vpsRules {
+			var contexts []*scheduler.Context
+			var volNodes map[string]map[string][]string
+
+			var lblData []labelDict
+			var setLabels int
+			Step("get nodes and set labels: "+vkey, func() {
+				lblData,setLabels = getTestLabels(vrule.GetLabels)
+				RemoveNodeLabels(lblData)
+				if setLabels == 1 {
+					lblnode := SetNodeLabels(lblData)
+					logrus.Debug("Nodes containing label", lblnode)
+					Expect(lblnode).NotTo(BeEmpty())
+					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
+				}
+			})
+
+			Step("rules of volume placement: "+vkey, func() {
+				vpsSpec = getVpsSpec(vrule.GetSpec)
+			})
+
+			Step("launch application with new vps specs :"+vkey, func() {
+				applyVpsSpec(vpsSpec)
+				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
+				Inst().S.RescanSpecs(Inst().SpecDir)
+
+				for i := 0; i < Inst().ScaleFactor; i++ {
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("volumeaffinity-%d", i),vrule.GetScStrategyMap() )...)
+				}
+			})
+
+			Step("validate volumes and replica affinity: "+vkey, func() {
+				for _, ctx := range contexts {
+					ValidateVpsRules(vrule.Validate, ctx, volNodes)
+				}
+
+			})
+
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			vrule.CleanVps() //TODO: function arg for cleaning up the testcase environment
+			//Remove labes from all nodes
+			RemoveNodeLabels(lblData)
+
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		}
+	})
+})
+
+
+// This test performs VolumePlacementStrategy's replica & volume affinity  of application
+// volume
+var _ = Describe("{ReplicaVolumeAffinity}", func() {
+	It("has to schedule app and verify the replication affinity", func() {
+
+		var vpsSpec string
+		vpsRules := GetVpsRules(3)
+
+		for vkey, vrule := range vpsRules {
+			var contexts []*scheduler.Context
+			var volNodes map[string]map[string][]string
+
+			var lblData []labelDict
+			var setLabels int
+			Step("get nodes and set labels: "+vkey, func() {
+				lblData,setLabels = getTestLabels(vrule.GetLabels)
+				RemoveNodeLabels(lblData)
+				if setLabels == 1 {
+					lblnode := SetNodeLabels(lblData)
+					logrus.Debug("Nodes containing label", lblnode)
+					Expect(lblnode).NotTo(BeEmpty())
+					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
+				}
+			})
+
+			Step("rules of volume placement: "+vkey, func() {
+				vpsSpec = getVpsSpec(vrule.GetSpec)
+			})
+
+			Step("launch application with new vps specs :"+vkey, func() {
+				applyVpsSpec(vpsSpec)
+				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
+				Inst().S.RescanSpecs(Inst().SpecDir)
+
+				for i := 0; i < Inst().ScaleFactor; i++ {
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumeaffinity-%d", i),vrule.GetScStrategyMap() )...)
+				}
+			})
+
+			Step("validate volumes and replica affinity: "+vkey, func() {
+				for _, ctx := range contexts {
+					ValidateVpsRules(vrule.Validate, ctx, volNodes)
+				}
+
+			})
+
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			vrule.CleanVps() //TODO: function arg for cleaning up the testcase environment
+			//Remove labes from all nodes
+			RemoveNodeLabels(lblData)
+
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		}
+	})
+})
+
+
 
 //-- Common function
 //ValidateVpsRules checks applied vps rules on the app

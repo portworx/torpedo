@@ -32,23 +32,51 @@ type vpsTemplate interface {
 }
 
 var (
-	vpsRules = make(map[string]vpsTemplate)
+	vpsRulesReplica = make(map[string]vpsTemplate)
+	vpsRulesVolume = make(map[string]vpsTemplate)
+	vpsRulesMix = make(map[string]vpsTemplate)
 )
 
 // Register registers the given vps rule
-func Register(name string, d vpsTemplate) error {
-	if _, ok := vpsRules[name]; !ok {
-		vpsRules[name] = d
+func Register(name string, d vpsTemplate, cat int) error {
+
+	if cat == 1 { 
+		if _, ok := vpsRulesReplica[name]; !ok {
+			vpsRulesReplica[name] = d
+		} else {
+			return fmt.Errorf("vps rule: %s is already registered", name)
+		}
+	} else if cat == 2 {
+		if _, ok := vpsRulesVolume[name]; !ok {
+			vpsRulesVolume[name] = d
+		} else {
+			return fmt.Errorf("vps rule: %s is already registered", name)
+		}
+	} else if cat == 3 {
+		if _, ok := vpsRulesMix[name]; !ok {
+			vpsRulesMix[name] = d
+		} else {
+			return fmt.Errorf("vps rule: %s is already registered", name)
+		}
 	} else {
-		return fmt.Errorf("vps rule: %s is already registered", name)
+			return fmt.Errorf("vps rule category: %d, is not valid", cat)
 	}
 
 	return nil
 }
 
 // GetVpsRules return the list of vps rules
-func GetVpsRules() map[string]vpsTemplate {
-	return vpsRules
+func GetVpsRules(cat int) map[string]vpsTemplate {
+	if cat == 1 {
+		return vpsRulesReplica
+	} else if cat ==2 {
+		return vpsRulesVolume
+	} else if cat ==3 {
+		return vpsRulesMix
+	} else {
+		return nil
+	}
+
 }
 
 
@@ -3566,31 +3594,30 @@ func (v *vpscase23) CleanVps() {
 ///*
 func init() {
 	v := &vpscase1{"case1 Replica affinity to node labels", true}
-	Register(v.name, v)
+	Register(v.name, v,1)
 }
 
 func init() {
 	v := &vpscase2{"case2-T863374 Replica Affinity with enforcement=preferred", true}
-	Register(v.name, v)
+	Register(v.name, v,1)
 }
 
 
 func init() {
 	v := &vpscase3{"case3-T809561 Replica Affinity with  Lt, Gt operators using latency and iops as node labels", true}
-	Register(v.name, v)
+	Register(v.name, v,1)
 }
-
 
 
 func init() {
 	v := &vpscase4{"case4-T863792 Replica Affinity with topology keys", true}
-	Register(v.name, v)
+	Register(v.name, v,1)
 }
 
 
 func init() {
 	v := &vpscase5{"case5-T1052921 Replica Anti-Affinity with topology keys (with all nodes labeled)", true}
-	Register(v.name, v)
+	Register(v.name, v,1)
 }
 //*/
 /*
@@ -3608,67 +3635,67 @@ func init() {
 ///*
 func init() {
 	v := &vpscase7{"case7-T809548 Volume Affinity 'Exists'", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 
 
 func init() {
 	v := &vpscase8{"case8-T809548 Volume Affinity 'In'", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 
 
 func init() {
 	v := &vpscase9{"case9-T809548 Volume Affinity 'DoesNotExists'", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 
 
 func init() {
 	v := &vpscase10{"case10-T809548 Volume Affinity 'NotIn'", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 
 // Volume Anti-affinity
 func init() {
 	v := &vpscase11{"case11-T809549 Volume Anti-Affinity 'Exists'", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 
 
 
 func init() {
 	v := &vpscase12{"case12-T809549 Volume Anti-Affinity 'In'", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 //*/
 /*
 func init() {
 	v := &vpscase13{"case13-T809549 Volume Anti-Affinity 'DoesNotExists'", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 
 func init() {
 	v := &vpscase14{"case14-T809549 Volume Anti-Affinity 'NotIn'", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 */
 
 ///*
 func init() {
 	v := &vpscase15{"case15-T864665  Volume Affinity with topology key", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 
 
 func init() {
 	v := &vpscase16{"case16-T1053359 Volume anti-affinity with topology keys", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 
 func init() {
 	v := &vpscase17{"case17-T870615  volume anti-affinity multiple rules", true}
-	Register(v.name, v)
+	Register(v.name, v,2)
 }
 
 
@@ -3682,12 +3709,12 @@ func init() {
 
 func init() {
 	v := &vpscase18{"case18-T866365 Verify replica and volume affinity topology keys with volume labels", true}
-	Register(v.name, v)
+	Register(v.name, v,3)
 }
 
 func init() {
 	v := &vpscase19{"case19-T866790 replica affinity and volume anti-affinity topology keys with volume labels ", true}
-	Register(v.name, v)
+	Register(v.name, v,3)
 }
 
 
@@ -3695,13 +3722,13 @@ func init() {
 
 func init() {
 	v := &vpscase20{"case20-T867215 Verify replica anti-affinity and volume affinity topology keys with volume lables ", true}
-	Register(v.name, v)
+	Register(v.name, v,3)
 }
 
 
 func init() {
 	v := &vpscase21{"case21-T867640 Verify replica anti-affinity and volume anti-affinity topology keys with volume labels", true}
-	Register(v.name, v)
+	Register(v.name, v,3)
 }
 
 

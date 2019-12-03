@@ -34,7 +34,7 @@ parameters:
    shared: "false"
    snap_schedule: "periodic=60,5"
    labels: "type=aggregated"
-   group: "mysql-data"
+#   group: "mysql-data"
    placement_strategy: "placement-3"
 allowVolumeExpansion: true
 ---
@@ -52,7 +52,7 @@ parameters:
    shared: "false"
    snap_schedule: "daily=12:00,7"
    labels: "type=replicated"
-   group: "mysql-data"
+#   group: "mysql-data"
    placement_strategy: "placement-2"
 allowVolumeExpansion: true
 ---
