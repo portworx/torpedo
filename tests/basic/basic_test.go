@@ -378,6 +378,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
+	CollectSupport()
 	ValidateCleanup()
 })
 

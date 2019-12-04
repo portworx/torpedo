@@ -110,6 +110,7 @@ var _ = Describe("{DecommissionNode}", func() {
 
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
+	CollectSupport()
 	ValidateCleanup()
 })
 
