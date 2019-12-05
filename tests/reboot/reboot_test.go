@@ -13,6 +13,11 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
+const (
+
+	defaultVstate						  = 1
+		)
+
 func TestReboot(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -33,7 +38,7 @@ var _ = Describe("{RebootOneNode}", func() {
 		retryInterval := 5 * time.Second
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootonenode-%d", i),nil)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootonenode-%d", i),nil,defaultVstate)...)
 		}
 
 		Step("get nodes for all apps in test and reboot their nodes", func() {
@@ -110,7 +115,7 @@ var _ = Describe("{RebootAllNodes}", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootallnodes-%d", i),nil)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootallnodes-%d", i),nil,defaultVstate)...)
 		}
 
 		Step("get nodes for all apps in test and reboot their nodes", func() {

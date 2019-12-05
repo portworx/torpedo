@@ -35,6 +35,8 @@ var (
 	vpsRulesReplica = make(map[string]vpsTemplate)
 	vpsRulesVolume = make(map[string]vpsTemplate)
 	vpsRulesMix = make(map[string]vpsTemplate)
+	vpsRulesMixScale = make(map[string]vpsTemplate)
+	vpsRulesPending = make(map[string]vpsTemplate)
 )
 
 // Register registers the given vps rule
@@ -58,6 +60,18 @@ func Register(name string, d vpsTemplate, cat int) error {
 		} else {
 			return fmt.Errorf("vps rule: %s is already registered", name)
 		}
+	} else if cat == 4 {
+		if _, ok := vpsRulesMixScale[name]; !ok {
+			vpsRulesMixScale[name] = d
+		} else {
+			return fmt.Errorf("vps rule: %s is already registered", name)
+		}
+	} else if cat == 5 {
+		if _, ok := vpsRulesPending[name]; !ok {
+			vpsRulesPending[name] = d
+		} else {
+			return fmt.Errorf("vps rule: %s is already registered", name)
+		}
 	} else {
 			return fmt.Errorf("vps rule category: %d, is not valid", cat)
 	}
@@ -73,6 +87,10 @@ func GetVpsRules(cat int) map[string]vpsTemplate {
 		return vpsRulesVolume
 	} else if cat ==3 {
 		return vpsRulesMix
+	} else if cat ==4 {
+		return vpsRulesMixScale
+	} else if cat ==5 {
+		return vpsRulesPending
 	} else {
 		return nil
 	}
@@ -3279,7 +3297,7 @@ func (v *vpscase22) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 21 T867640 Verify replica anti-affinity and volume anti-affinity topology keys with volume labels ")	
+	logrus.Infof("Case 22 T871040 Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules ")	
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -3338,7 +3356,7 @@ func (v *vpscase22) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: volume-topology-affinity
+  name: placement-1
 spec:
   volumeAffinity:
   - enforcement: required
@@ -3348,6 +3366,9 @@ spec:
         operator: In
         values:
           - "mysql"
+  replicaAffinity:
+  - enforcement: required
+    topologyKey: failure-domain.beta.kubernetes.io/px_zone
 ---
 apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
@@ -3361,16 +3382,7 @@ spec:
       - key: app
         operator: In
         values:
-          - "mysql"
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: replvol-topology-affinity-first
-spec:
-  replicaAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone`
+          - "mysql"`
 	return vpsSpec
 }
 
@@ -3620,11 +3632,11 @@ func init() {
 	Register(v.name, v,1)
 }
 //*/
-/*
+
 func init() {
 	v := &vpscase6{"case6-T809554 Replica Affinity ,Volume creation should fail when VolumePlacementStrategy fails to find enough pools", true}
-	Register(v.name, v)
-}*/
+	Register(v.name, v,5)
+}
 
 
 /*
@@ -3736,7 +3748,7 @@ func init() {
 // Volume replica scaling
 func init() {
 	v := &vpscase22{"case22-T871040 Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules ", true}
-	Register(v.name, v)
+	Register(v.name, v,4)
 }
 
 

@@ -17,6 +17,7 @@ const (
 	defaultTimeout       = 1 * time.Minute
 	driveFailTimeout     = 2 * time.Minute
 	defaultRetryInterval = 5 * time.Second
+	defaultVstate						  = 1
 )
 
 func TestDriveFailure(t *testing.T) {
@@ -38,7 +39,7 @@ var _ = Describe("{DriveFailure}", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i),nil)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i),nil,defaultVstate)...)
 		}
 
 		Step("get nodes for all apps in test and induce drive failure on one of the nodes", func() {
@@ -77,7 +78,7 @@ var _ = Describe("{DriveFailure}", func() {
 					})
 
 					Step(fmt.Sprintf("check if apps are running"), func() {
-						ValidateContext(ctx)
+						ValidateContext(ctx,defaultVstate)
 					})
 
 				})

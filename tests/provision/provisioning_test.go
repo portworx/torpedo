@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -15,6 +16,11 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 )
+
+
+const (
+	defaultVstate						  = 1
+		)
 
 func TestVps(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -64,7 +70,7 @@ var _ = Describe("{ReplicaAffinity}", func() {
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i),vrule.GetScStrategyMap() )...)
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i),vrule.GetScStrategyMap(),defaultVstate )...)
 				}
 			})
 
@@ -125,7 +131,7 @@ var _ = Describe("{VolumeAffinity}", func() {
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("volumeaffinity-%d", i),vrule.GetScStrategyMap() )...)
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("volumeaffinity-%d", i),vrule.GetScStrategyMap() , defaultVstate)...)
 				}
 			})
 
@@ -186,7 +192,7 @@ var _ = Describe("{ReplicaVolumeAffinity}", func() {
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumeaffinity-%d", i),vrule.GetScStrategyMap() )...)
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumeaffinity-%d", i),vrule.GetScStrategyMap(),defaultVstate )...)
 				}
 			})
 
@@ -210,6 +216,178 @@ var _ = Describe("{ReplicaVolumeAffinity}", func() {
 		}
 	})
 })
+
+
+// This test performs VolumePlacementStrategy's replica & volume affinity
+// with app scale Up  & Down of application
+var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
+	It("has to schedule app and verify the replication affinity", func() {
+
+		var vpsSpec string
+		vpsRules := GetVpsRules(4)
+
+		for vkey, vrule := range vpsRules {
+			var contexts []*scheduler.Context
+			var volNodes map[string]map[string][]string
+
+			var lblData []labelDict
+			var setLabels int
+			Step("get nodes and set labels: "+vkey, func() {
+				lblData,setLabels = getTestLabels(vrule.GetLabels)
+				RemoveNodeLabels(lblData)
+				if setLabels == 1 {
+					lblnode := SetNodeLabels(lblData)
+					logrus.Debug("Nodes containing label", lblnode)
+					Expect(lblnode).NotTo(BeEmpty())
+					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
+				}
+			})
+
+			Step("rules of volume placement: "+vkey, func() {
+				vpsSpec = getVpsSpec(vrule.GetSpec)
+			})
+
+			Step("launch application with new vps specs :"+vkey, func() {
+				applyVpsSpec(vpsSpec)
+				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
+				Inst().S.RescanSpecs(Inst().SpecDir)
+
+				for i := 0; i < Inst().ScaleFactor; i++ {
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumeaffinityscale-%d", i),vrule.GetScStrategyMap(),defaultVstate )...)
+				}
+			})
+
+			Step("Scale up app", func() {
+				for _, ctx := range contexts {
+					Step(fmt.Sprintf("scale up app: %s by 1, Number of workernodes:%d ", ctx.App.Key, len(node.GetWorkerNodes())), func() {
+						applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+						Expect(err).NotTo(HaveOccurred())
+						for name, scale := range applicationScaleUpMap {
+							applicationScaleUpMap[name] = scale + 1 // Total app replica to be 2
+						}
+						err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					Step("Giving few seconds for scaled up applications to stabilize", func() {
+						time.Sleep(60 * time.Second)
+					})
+
+					ValidateContext(ctx,defaultVstate)
+					Step("validate volumes and replica affinity: "+vkey, func() {
+						for _, ctx := range contexts {
+							ValidateVpsRules(vrule.Validate, ctx, volNodes)
+						}
+					})
+					Step(fmt.Sprintf("scale down app %s by 1", ctx.App.Key), func() {
+						applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
+						Expect(err).NotTo(HaveOccurred())
+						for name, scale := range applicationScaleDownMap {
+							applicationScaleDownMap[name] = scale - 1
+						}
+						err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					Step("Giving few seconds for scaled down applications to stabilize", func() {
+						time.Sleep(600 * time.Second)
+					})
+
+					ValidateContext(ctx,defaultVstate)
+					Step("validate volumes and replica affinity: "+vkey, func() {
+						for _, ctx := range contexts {
+							ValidateVpsRules(vrule.Validate, ctx, volNodes)
+						}
+					})
+
+				}
+
+			})
+
+			Step("validate volumes and replica affinity: "+vkey, func() {
+				for _, ctx := range contexts {
+					ValidateVpsRules(vrule.Validate, ctx, volNodes)
+				}
+
+			})
+
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			vrule.CleanVps() //TODO: function arg for cleaning up the testcase environment
+			//Remove labes from all nodes
+			RemoveNodeLabels(lblData)
+
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		}
+	})
+})
+
+
+// This test performs VolumePlacementStrategy's replica & volume affinity  of application
+// with volumes pending state
+var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
+	It("has to schedule app and verify the replication affinity", func() {
+
+		var vpsSpec string
+		vpsRules := GetVpsRules(5)
+
+		for vkey, vrule := range vpsRules {
+			var contexts []*scheduler.Context
+			var volNodes map[string]map[string][]string
+
+			var lblData []labelDict
+			var setLabels int
+			Step("get nodes and set labels: "+vkey, func() {
+				lblData,setLabels = getTestLabels(vrule.GetLabels)
+				RemoveNodeLabels(lblData)
+				if setLabels == 1 {
+					lblnode := SetNodeLabels(lblData)
+					logrus.Debug("Nodes containing label", lblnode)
+					Expect(lblnode).NotTo(BeEmpty())
+					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
+				}
+			})
+
+			Step("rules of volume placement: "+vkey, func() {
+				vpsSpec = getVpsSpec(vrule.GetSpec)
+			})
+
+			Step("launch application with new vps specs :"+vkey, func() {
+				applyVpsSpec(vpsSpec)
+				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
+				Inst().S.RescanSpecs(Inst().SpecDir)
+
+				for i := 0; i < Inst().ScaleFactor; i++ {
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumepending-%d", i),vrule.GetScStrategyMap(), 0 )...)
+				}
+			})
+
+			Step("validate volumes and replica affinity: "+vkey, func() {
+				for _, ctx := range contexts {
+					ValidateVpsRules(vrule.Validate, ctx, volNodes)
+				}
+
+			})
+
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			vrule.CleanVps() //TODO: function arg for cleaning up the testcase environment
+			//Remove labes from all nodes
+			RemoveNodeLabels(lblData)
+
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		}
+	})
+})
+
+
+
 
 
 

@@ -14,6 +14,9 @@ import (
 	"math/rand"
 )
 
+const (
+	defaultVstate						  = 1
+	  )
 func TestStopScheduler(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -33,7 +36,7 @@ var _ = Describe("{StopScheduler}", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i),nil)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i),nil,defaultVstate)...)
 		}
 
 		Step("get nodes for all apps in test and induce scheduler service to stop on one of the nodes", func() {
@@ -55,7 +58,7 @@ var _ = Describe("{StopScheduler}", func() {
 					})
 
 					Step(fmt.Sprintf("check if apps are running"), func() {
-						ValidateContext(ctx)
+						ValidateContext(ctx,defaultVstate)
 					})
 				})
 

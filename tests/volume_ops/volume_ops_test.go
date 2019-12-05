@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+const (
+	defaultVstate						  = 1
+	  )
+
 func TestVolOps(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -35,7 +39,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 		var contexts []*scheduler.Context
 		expReplMap := make(map[*volume.Volume]int64)
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("volupdate-%d", i),nil)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("volupdate-%d", i),nil,defaultVstate)...)
 		}
 
 		Step("get volumes for all apps in test and update replication factor and size", func() {
