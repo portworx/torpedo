@@ -329,6 +329,57 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	})
 }
 
+// CollectSupport creates a support bundle
+func CollectSupport() {
+	context(fmt.Sprintf("generating support bundle..."), func() {
+		Step(fmt.Sprintf("save all useful logs on each node"), func() {
+			nodes := node.GetWorkerNodes()
+			expect(nodes).NotTo(beEmpty())
+
+			for _, n := range nodes {
+				if !n.IsStorageDriverInstalled {
+					continue
+				}
+
+				// this task may hang so we wrapped in a timeout cmd
+				dumpTasksCmd := "timeout 10s bash -c \"echo t > /proc/sysrq-trigger\""
+				logrus.Infof("dump the list of current tasks and their information on %s", n.Name)
+				runCmd(dumpTasksCmd, n)
+
+				journalCmd := fmt.Sprintf("journalctl -l > ~/all_journal_%v.log", time.Now().Format(time.RFC3339))
+				logrus.Infof("saving journal output on %s", n.Name)
+				runCmd(journalCmd, n)
+
+				logrus.Infof("saving portworx journal output on %s", n.Name)
+				runCmd("journalctl -lu portworx* > portworx.log", n)
+
+				logrus.Infof("saving kubelet journal output on %s", n.Name)
+				runCmd("journalctl -lu kubelet* > kubelet.log", n)
+
+				logrus.Infof("saving dmesg output on %s", n.Name)
+				runCmd("dmesg -T > dmesg.log", n)
+
+				logrus.Infof("saving disk list on %s", n.Name)
+				runCmd("lsblk > lsblk.log", n)
+
+				logrus.Infof("saving mount list on %s", n.Name)
+				runCmd("cat /proc/mounts > mounts.log", n)
+			}
+		})
+	})
+}
+
+func runCmd(cmd string, n node.Node) {
+	_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+		Sudo:            true,
+	})
+	if err != nil {
+		logrus.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+}
+
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
 	context(fmt.Sprintf("checking for core files..."), func() {

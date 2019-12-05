@@ -42,6 +42,11 @@ var _ = Describe("{SetupTeardown}", func() {
 			TearDownContext(ctx, opts)
 		}
 	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
+	})
 })
 
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
@@ -88,6 +93,11 @@ var _ = Describe("{VolumeDriverDown}", func() {
 			}
 		})
 
+	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
 	})
 })
 
@@ -138,6 +148,11 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
+	})
 })
 
 // Volume Driver Plugin has crashed - and the client container should not be impacted.
@@ -162,6 +177,11 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
+	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
 	})
 })
 
@@ -208,6 +228,11 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 				DeleteVolumesAndWait(ctx)
 			}
 		})
+	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
 	})
 })
 
@@ -275,6 +300,11 @@ var _ = Describe("{AppTasksDown}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
+	})
 })
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
@@ -328,6 +358,11 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 		})
 
 	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
+	})
 })
 
 var _ = Describe("{CordonDeployDestroy}", func() {
@@ -373,6 +408,11 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
+	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
 	})
 })
 

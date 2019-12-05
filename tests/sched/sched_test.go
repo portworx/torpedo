@@ -68,6 +68,11 @@ var _ = Describe("{StopScheduler}", func() {
 
 		ValidateAndDestroy(contexts, nil)
 	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
+	})
 })
 
 var _ = AfterSuite(func() {

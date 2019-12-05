@@ -103,6 +103,11 @@ var _ = Describe("{RebootOneNode}", func() {
 
 		ValidateAndDestroy(contexts, nil)
 	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
+	})
 })
 
 var _ = Describe("{RebootAllNodes}", func() {
@@ -165,6 +170,11 @@ var _ = Describe("{RebootAllNodes}", func() {
 		})
 
 		ValidateAndDestroy(contexts, nil)
+	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
 	})
 })
 

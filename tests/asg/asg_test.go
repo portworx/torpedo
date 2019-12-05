@@ -86,6 +86,11 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
 	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
+	})
 })
 
 // This test randomly kills one volume driver node and ensures cluster remains
@@ -173,6 +178,11 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 				}
 			}
 		})
+	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
 	})
 })
 

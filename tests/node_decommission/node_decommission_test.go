@@ -106,6 +106,11 @@ var _ = Describe("{DecommissionNode}", func() {
 		})
 
 	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
+	})
 })
 
 var _ = AfterSuite(func() {

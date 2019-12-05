@@ -53,6 +53,11 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+		}
+	})
 })
 
 func getImages(version string) []volume.Image {
