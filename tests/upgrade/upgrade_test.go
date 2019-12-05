@@ -27,8 +27,9 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{UpgradeVolumeDriver}", func() {
+	var contexts []*scheduler.Context
+
 	It("upgrade volume driver and ensure everything is running fine", func() {
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
@@ -56,6 +57,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			CollectSupport()
+			DescribeNamespace(contexts)
 		}
 	})
 })

@@ -337,3 +337,29 @@ type ErrFailedToGetConfigMap struct {
 func (e *ErrFailedToGetConfigMap) Error() string {
 	return fmt.Sprintf("Failed to get config map: %s due to err: %v", e.Name, e.Cause)
 }
+
+// ErrFailedToGetCustomSpec error type for failing to get config map
+type ErrFailedToGetCustomSpec struct {
+	// Name of config map
+	Name string
+	// Cause is the underlying cause of the error
+	Cause string
+	// Type is the underlying type of CRD objects
+	Type interface{}
+}
+
+func (e *ErrFailedToGetCustomSpec) Error() string {
+	return fmt.Sprintf("Failed to get custom spec: %s due to err: %v", e.Name, e.Cause)
+}
+
+//ErrFailedToGetSecret error when we are unable to get the defined secret
+type ErrFailedToGetSecret struct {
+	// App is the spec for which we want to get the secret
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetSecret) Error() string {
+	return fmt.Sprintf("Failed to get Secret : %v due to err: %v", e.App.Key, e.Cause)
+}

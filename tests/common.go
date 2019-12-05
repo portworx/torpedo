@@ -329,6 +329,17 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	})
 }
 
+// DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
+func DescribeNamespace(contexts []*scheduler.Context) {
+	context(fmt.Sprintf("generating namespace info..."), func() {
+		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
+			for _, ctx := range contexts {
+				logrus.Info(Inst().S.Describe(ctx))
+			}
+		})
+	})
+}
+
 // CollectSupport creates a support bundle
 func CollectSupport() {
 	context(fmt.Sprintf("generating support bundle..."), func() {

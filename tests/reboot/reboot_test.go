@@ -27,11 +27,12 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{RebootOneNode}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps and reboot node(s) with volumes", func() {
 		var err error
 		timeout := 60 * time.Second
 		retryInterval := 5 * time.Second
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootonenode-%d", i))...)
 		}
@@ -106,14 +107,16 @@ var _ = Describe("{RebootOneNode}", func() {
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			CollectSupport()
+			DescribeNamespace(contexts)
 		}
 	})
 })
 
 var _ = Describe("{RebootAllNodes}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to scheduler apps and reboot app node(s)", func() {
 		var err error
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootallnodes-%d", i))...)
 		}
@@ -174,6 +177,7 @@ var _ = Describe("{RebootAllNodes}", func() {
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			CollectSupport()
+			DescribeNamespace(contexts)
 		}
 	})
 })

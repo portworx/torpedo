@@ -2017,7 +2017,7 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 	var err error
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
 			var depStatus *apps_api.DeploymentStatus
 			if depStatus, err = k8sOps.DescribeDeployment(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
@@ -2031,9 +2031,9 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			for _, pod := range pods {
 				buf.WriteString(dumpPodStatusRecursively(pod))
 			}
-			buf.WriteString(insertLineBreak("END Deployment"))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
 			var ssetStatus *apps_api.StatefulSetStatus
 			if ssetStatus, err = k8sOps.DescribeStatefulSet(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
@@ -2047,9 +2047,9 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			for _, pod := range pods {
 				buf.WriteString(dumpPodStatusRecursively(pod))
 			}
-			buf.WriteString(insertLineBreak("END StatefulSet"))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
 		} else if obj, ok := spec.(*v1.Service); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
 			var svcStatus *v1.ServiceStatus
 			if svcStatus, err = k8sOps.DescribeService(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
@@ -2059,9 +2059,9 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			}
 			//Dump service status
 			buf.WriteString(fmt.Sprintf("%v\n", *svcStatus))
-			buf.WriteString(insertLineBreak("END Service"))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
 		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
 			var pvcStatus *v1.PersistentVolumeClaimStatus
 			if pvcStatus, err = k8sOps.GetPersistentVolumeClaimStatus(obj); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetStorageStatus{
@@ -2071,9 +2071,9 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			}
 			//Dump persistent volume claim status
 			buf.WriteString(fmt.Sprintf("%v\n", *pvcStatus))
-			buf.WriteString(insertLineBreak("END PersistentVolumeClaim"))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
 		} else if obj, ok := spec.(*storage_api.StorageClass); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
 			var scParams map[string]string
 			if scParams, err = k8sOps.GetStorageClassParams(obj); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetVolumeParameters{
@@ -2083,9 +2083,9 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			}
 			//Dump storage class parameters
 			buf.WriteString(fmt.Sprintf("%v\n", scParams))
-			buf.WriteString(insertLineBreak("END Storage Class"))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
 		} else if obj, ok := spec.(*v1.Pod); ok {
-			buf.WriteString(insertLineBreak(obj.Name))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
 			var podStatus *v1.PodList
 			if podStatus, err = k8sOps.GetPods(obj.Name, nil); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetPodStatus{
@@ -2094,7 +2094,138 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%v\n", podStatus))
-			buf.WriteString(insertLineBreak("END Pod"))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*stork_api.ClusterPair); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
+			var clusterPair *stork_api.ClusterPair
+			if clusterPair, err = k8sOps.GetClusterPair(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get cluster Pair: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", clusterPair))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*stork_api.Migration); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
+			var migration *stork_api.Migration
+			if migration, err = k8sOps.GetMigration(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get Migration: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", migration))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*stork_api.MigrationSchedule); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
+			var migrationSchedule *stork_api.MigrationSchedule
+			if migrationSchedule, err = k8sOps.GetMigrationSchedule(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get MigrationSchedule: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", migrationSchedule))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*stork_api.BackupLocation); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
+			var backupLocation *stork_api.BackupLocation
+			if backupLocation, err = k8sOps.GetBackupLocation(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get BackupLocation: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", backupLocation))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*stork_api.ApplicationBackup); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
+			var applicationBackup *stork_api.ApplicationBackup
+			if applicationBackup, err = k8sOps.GetApplicationBackup(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get ApplicationBackup: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", applicationBackup))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*stork_api.ApplicationRestore); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
+			var applicationRestore *stork_api.ApplicationRestore
+			if applicationRestore, err = k8sOps.GetApplicationRestore(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get ApplicationRestore: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", applicationRestore))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*stork_api.ApplicationClone); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
+			var applicationClone *stork_api.ApplicationClone
+			if applicationClone, err = k8sOps.GetApplicationClone(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get ApplicationClone: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", applicationClone))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*stork_api.VolumeSnapshotRestore); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
+			var volumeSnapshotRestore *stork_api.VolumeSnapshotRestore
+			if volumeSnapshotRestore, err = k8sOps.GetVolumeSnapshotRestore(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get VolumeSnapshotRestore: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", volumeSnapshotRestore))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Spec.SnapshotDataName)))
+			var volumeSnapshot *snap_v1.VolumeSnapshot
+			if volumeSnapshot, err = k8sOps.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Metadata.Name,
+					Cause: fmt.Sprintf("Failed to get VolumeSnapshot: %v. Err: %v", obj.Metadata.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", volumeSnapshot))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*ap_api.AutopilotRule); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
+			var autopilotRule *ap_api.AutopilotRule
+			if autopilotRule, err = k8sOps.GetAutopilotRule(obj.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get AutopilotRule: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", autopilotRule))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
+		} else if obj, ok := spec.(*v1.Secret); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("%s: %s", obj.Kind, obj.Name)))
+			var secret *v1.Secret
+			if secret, err = k8sOps.GetSecret(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetSecret{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get secret : %v. Error is : %v", obj.Name, err),
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", secret))
+			buf.WriteString(insertLineBreak(fmt.Sprintf("END %s", obj.Kind)))
 		} else {
 			logrus.Warnf("Object type unknown/not supported: %v", obj)
 		}

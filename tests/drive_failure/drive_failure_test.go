@@ -33,10 +33,11 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{DriveFailure}", func() {
+	var contexts []*scheduler.Context
+
 	testName := "drivefailure"
 	It("has to schedule apps and induce a drive failure on one of the nodes", func() {
 		var err error
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
 		}
@@ -110,6 +111,7 @@ var _ = Describe("{DriveFailure}", func() {
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			CollectSupport()
+			DescribeNamespace(contexts)
 		}
 	})
 })

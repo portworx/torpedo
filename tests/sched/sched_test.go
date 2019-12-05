@@ -28,10 +28,11 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{StopScheduler}", func() {
+	var contexts []*scheduler.Context
+
 	testName := "stopscheduler"
 	It("has to stop scheduler service and check if applications are fine", func() {
 		var err error
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
 		}
@@ -71,6 +72,7 @@ var _ = Describe("{StopScheduler}", func() {
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			CollectSupport()
+			DescribeNamespace(contexts)
 		}
 	})
 })

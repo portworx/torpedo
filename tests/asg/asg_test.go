@@ -39,9 +39,10 @@ var _ = BeforeSuite(func() {
 
 // This test performs basic test of scaling up and down the asg cluster
 var _ = Describe("{ClusterScaleUpDown}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to validate that storage nodes are not lost during asg scaledown", func() {
 
-		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgscaleupdown-%d", i))...)
 		}
@@ -89,6 +90,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			CollectSupport()
+			DescribeNamespace(contexts)
 		}
 	})
 })
