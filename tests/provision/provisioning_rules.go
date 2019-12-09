@@ -3094,7 +3094,7 @@ func (v *vpscase21) GetLabels() ([]labelDict,int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middlet", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middleast", "failure-domain.beta.kubernetes.io/px_region": "usa"}
 	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
 	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
 	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "central", "failure-domain.beta.kubernetes.io/px_region": "jp"}
@@ -3138,6 +3138,14 @@ func (v *vpscase21) GetPvcNodeLabels(lblnodes map[string][]string) map[string]ma
 		volnodelist["mysql-data-seq"]["rnodes2"] = append(volnodelist["mysql-data-seq"]["rnodes2"], lnode)
 	}
 	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonesouth"] {
+		volnodelist["mysql-data"]["rnodes3"] = append(volnodelist["mysql-data"]["rnodes3"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes3"] = append(volnodelist["mysql-data-seq"]["rnodes3"], lnode)
+	}
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonemiddleast"] {
+		volnodelist["mysql-data"]["rnodes3"] = append(volnodelist["mysql-data"]["rnodes3"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes3"] = append(volnodelist["mysql-data-seq"]["rnodes3"], lnode)
+	}
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonecentral"] {
 		volnodelist["mysql-data"]["rnodes3"] = append(volnodelist["mysql-data"]["rnodes3"], lnode)
 		volnodelist["mysql-data-seq"]["rnodes3"] = append(volnodelist["mysql-data-seq"]["rnodes3"], lnode)
 	}
@@ -3247,11 +3255,11 @@ func (v *vpscase22) GetLabels() ([]labelDict,int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middlet", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
 	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
 	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "central", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
@@ -3266,33 +3274,37 @@ func (v *vpscase22) GetPvcNodeLabels(lblnodes map[string][]string) map[string]ma
 
 	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
 	volnodelist := map[string]map[string][]string{}
-	volnodelist["mysql-data"] = map[string][]string{}
-	volnodelist["mysql-data-seq"] = map[string][]string{}
-	volnodelist["mysql-data-aggr"] = map[string][]string{}
-	volnodelist["mysql-data"]["pnodes"] = []string{}
-	volnodelist["mysql-data"]["nnodes"] = []string{}
-	volnodelist["mysql-data"]["rnodes"] = []string{}
-	volnodelist["mysql-data-seq"]["pnodes"] = []string{}
-	volnodelist["mysql-data-seq"]["nnodes"] = []string{}
-	volnodelist["mysql-data-seq"]["rnodes"] = []string{}
+	volnodelist["es-data-esnode-0"] = map[string][]string{}
+	volnodelist["es-data-esnode-1"] = map[string][]string{}
+	volnodelist["es-data-esnode-2"] = map[string][]string{}
+	volnodelist["es-data-esnode-0"]["pnodes"] = []string{}
+	volnodelist["es-data-esnode-0"]["nnodes"] = []string{}
+	volnodelist["es-data-esnode-0"]["rnodes"] = []string{}
+	volnodelist["es-data-esnode-1"]["pnodes"] = []string{}
+	volnodelist["es-data-esnode-1"]["nnodes"] = []string{}
+	volnodelist["es-data-esnode-1"]["rnodes"] = []string{}
 
 	//Create a list of nodes in px_zone east and north,
 	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zoneeast"] {
-		volnodelist["mysql-data"]["rnodes"] = append(volnodelist["mysql-data"]["rnodes"], lnode)
-		volnodelist["mysql-data-seq"]["rnodes"] = append(volnodelist["mysql-data-seq"]["rnodes"], lnode)
+		volnodelist["es-data-esnode-0"]["rnodes"] = append(volnodelist["es-data-esnode-0"]["rnodes"], lnode)
+		volnodelist["es-data-esnode-1"]["rnodes"] = append(volnodelist["es-data-esnode-1"]["rnodes"], lnode)
+		volnodelist["es-data-esnode-2"]["rnodes"] = append(volnodelist["es-data-esnode-2"]["rnodes"], lnode)
 	}
 
 	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonenorth"] {
-		volnodelist["mysql-data"]["rnodes1"] = append(volnodelist["mysql-data"]["rnodes1"], lnode)
-		volnodelist["mysql-data-seq"]["rnodes1"] = append(volnodelist["mysql-data-seq"]["rnodes1"], lnode)
+		volnodelist["es-data-esnode-0"]["rnodes1"] = append(volnodelist["es-data-esnode-0"]["rnodes1"], lnode)
+		volnodelist["es-data-esnode-1"]["rnodes1"] = append(volnodelist["es-data-esnode-1"]["rnodes1"], lnode)
+		volnodelist["es-data-esnode-2"]["rnodes1"] = append(volnodelist["es-data-esnode-2"]["rnodes1"], lnode)
 	}
 	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonewest"] {
-		volnodelist["mysql-data"]["rnodes2"] = append(volnodelist["mysql-data"]["rnodes2"], lnode)
-		volnodelist["mysql-data-seq"]["rnodes2"] = append(volnodelist["mysql-data-seq"]["rnodes2"], lnode)
+		volnodelist["es-data-esnode-0"]["rnodes2"] = append(volnodelist["es-data-esnode-0"]["rnodes2"], lnode)
+		volnodelist["es-data-esnode-1"]["rnodes2"] = append(volnodelist["es-data-esnode-1"]["rnodes2"], lnode)
+		volnodelist["es-data-esnode-2"]["rnodes2"] = append(volnodelist["es-data-esnode-2"]["rnodes2"], lnode)
 	}
-	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonesouth"] {
-		volnodelist["mysql-data"]["rnodes3"] = append(volnodelist["mysql-data"]["rnodes3"], lnode)
-		volnodelist["mysql-data-seq"]["rnodes3"] = append(volnodelist["mysql-data-seq"]["rnodes3"], lnode)
+	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonecentral"] {
+		volnodelist["es-data-esnode-0"]["rnodes3"] = append(volnodelist["es-data-esnode-0"]["rnodes3"], lnode)
+		volnodelist["es-data-esnode-1"]["rnodes3"] = append(volnodelist["es-data-esnode-1"]["rnodes3"], lnode)
+		volnodelist["es-data-esnode-2"]["rnodes3"] = append(volnodelist["es-data-esnode-2"]["rnodes3"], lnode)
 	}
 	return volnodelist
 }
@@ -3308,8 +3320,9 @@ func (v *vpscase22) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 
 	logrus.Infof("Case 22 T871040 Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules ")	
 
-	var mysqlDataReplNodes []string
-	var mysqlDataSeqReplNodes []string
+	var esData0Nodes []string
+	var esData1Nodes []string
+	var esData2Nodes []string
 
 	for _, appvol := range appVolumes {
 
@@ -3317,40 +3330,47 @@ func (v *vpscase22) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		Expect(err).NotTo(HaveOccurred())
 		Expect(replicas).NotTo(BeEmpty())
 
-		if appvol.Name == "mysql-data" {
-			mysqlDataReplNodes = replicas
-		} else if appvol.Name == "mysql-data-seq" {
-			mysqlDataSeqReplNodes = replicas
+		if appvol.Name == "es-data-esnode-0" {
+			esData0Nodes = replicas
+		} else if appvol.Name == "es-data-esnode-1" {
+			esData1Nodes = replicas
+		} else if appvol.Name == "es-data-esnode-2" {
+			esData2Nodes = replicas
 		}
 				
 	}
 
-	//Replicas should not be in same zone, replicas of different volume should 
-	//be in same zone
+	//Replicas of each volume should be in same set of zone
 	volrepinzone :=0
-	for _, repset:= range volscheck["mysql-data"] {
+	for _, repset:= range volscheck["es-data-esnode-0"] {
 		// for each node in the zone, check replica count should be one
-		repfoundseq :=0
-		repfound :=0
+		repfound0 :=0
+		repfound1 :=0
+		repfound2 :=0
 		for _, mnode := range repset {
-			for _,rnode := range mysqlDataSeqReplNodes { 			 
+			for _,rnode := range esData0Nodes { 			 
 				if rnode == mnode {
-					repfoundseq++
+					repfound0++
 				}
 			}
 
-			for _,rnode := range mysqlDataReplNodes { 			 
+			for _,rnode := range esData1Nodes { 			 
 				if rnode == mnode {
-					repfound++
+					repfound1++
+				}
+			}
+			for _,rnode := range esData2Nodes { 			 
+				if rnode == mnode {
+					repfound2++
 				}
 			}
 		}
-		if (repfound >=1  && repfoundseq >=1) || repfound > 1 || repfoundseq > 1   {
+		if (repfound0 ==3  && repfound1 ==3  && repfound2==3) {
 			volrepinzone =1
 		}
 	}
 
-	Expect(volrepinzone).To(Equal(0), fmt.Sprintf("Due to volume & replicas anti-affinity replicas of volumes mysql-data: %v &  mysql-data-seq:%v should not appear in same zone",mysqlDataReplNodes,mysqlDataSeqReplNodes ) )
+	Expect(volrepinzone).To(Equal(1), fmt.Sprintf("Due to volume replica affinity replicas of volumes es-data-esnode-0: %v ,  es-data-esnode-1:%v  & es-data-esnode2: %v should appear in same zone",esData0Nodes,esData1Nodes, esData2Nodes ) )
 }
 
 
@@ -3374,24 +3394,10 @@ spec:
       - key: app
         operator: In
         values:
-          - "mysql"
+          - "elastic"
   replicaAffinity:
   - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: volume-topology-affinity-aggr
-spec:
-  volumeAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_region
-    matchExpressions:
-      - key: app
-        operator: In
-        values:
-          - "mysql"`
+    topologyKey: failure-domain.beta.kubernetes.io/px_zone`
 	return vpsSpec
 }
 
@@ -3415,7 +3421,7 @@ func (v *vpscase23) GetLabels() ([]labelDict,int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middlet", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middleast", "failure-domain.beta.kubernetes.io/px_region": "usa"}
 	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
 	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
 	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "central", "failure-domain.beta.kubernetes.io/px_region": "jp"}
@@ -3612,12 +3618,12 @@ type vpscase24 struct {
 func (v *vpscase24) GetLabels() ([]labelDict,int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "east", "failure-domain.beta.kubernetes.io/region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "east", "failure-domain.beta.kubernetes.io/region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "west", "failure-domain.beta.kubernetes.io/region": "asia"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "west", "failure-domain.beta.kubernetes.io/region": "asia"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "south", "failure-domain.beta.kubernetes.io/region": "eu"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "south", "failure-domain.beta.kubernetes.io/region": "eu"}
+	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "east"}//, "failure-domain.beta.kubernetes.io/region": "usa"}
+	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "east"}//, "failure-domain.beta.kubernetes.io/region": "usa"}
+	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "west"}//, "failure-domain.beta.kubernetes.io/region": "asia"}
+	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "west"}//, "failure-domain.beta.kubernetes.io/region": "asia"}
+	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "south"}//, "failure-domain.beta.kubernetes.io/region": "eu"}
+	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "south"}//, "failure-domain.beta.kubernetes.io/region": "eu"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl)
 	return lbldata,1
 }
@@ -4027,14 +4033,14 @@ func init() {
 }
 
 
-/*
+
 // Volume replica scaling
 func init() {
 	v := &vpscase22{"case22-T871040 Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules ", true}
 	Register(v.name, v,4)
 }
 
-
+/*
 // Pool labeling is pending
 func init() {
 	v := &vpscase23{"case23-T871040 T955476 Replica & Volume Affinity & Anti Affinity ", true}

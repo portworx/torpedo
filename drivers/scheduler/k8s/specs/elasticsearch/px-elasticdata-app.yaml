@@ -112,6 +112,8 @@ spec:
   volumeClaimTemplates:
   - metadata:
       name: es-data
+      labels:
+        app: elastic
       annotations:
         volume.beta.kubernetes.io/storage-class: px-elasticdata-sc
     spec:

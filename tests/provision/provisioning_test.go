@@ -263,7 +263,7 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 						applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 						Expect(err).NotTo(HaveOccurred())
 						for name, scale := range applicationScaleUpMap {
-							applicationScaleUpMap[name] = scale + 1 // Total app replica to be 2
+							applicationScaleUpMap[name] = scale + 1
 						}
 						err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
 						Expect(err).NotTo(HaveOccurred())
@@ -290,7 +290,7 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 					})
 
 					Step("Giving few seconds for scaled down applications to stabilize", func() {
-						time.Sleep(600 * time.Second)
+						time.Sleep(60 * time.Second)
 					})
 
 					ValidateContext(ctx,defaultVstate)
