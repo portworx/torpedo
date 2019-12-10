@@ -68,7 +68,7 @@ var _ = Describe("{RebootOneNode}", func() {
 				Step(fmt.Sprintf("reboot app %s's node(s): %v", ctx.App.Key, nodesToReboot), func() {
 					for _, n := range nodesToReboot {
 						err = Inst().N.RebootNode(n, node.RebootNodeOpts{
-							Force: false,
+							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
 								Timeout:         1 * time.Minute,
 								TimeBeforeRetry: 5 * time.Second,
@@ -131,7 +131,7 @@ var _ = Describe("{RebootAllNodes}", func() {
 				Step(fmt.Sprintf("reboot app %s's node(s): %v", ctx.App.Key, nodesToReboot), func() {
 					for _, n := range nodesToReboot {
 						err = Inst().N.RebootNode(n, node.RebootNodeOpts{
-							Force: false,
+							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
 								Timeout:         1 * time.Minute,
 								TimeBeforeRetry: 5 * time.Second,

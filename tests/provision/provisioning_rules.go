@@ -3324,6 +3324,8 @@ func (v *vpscase22) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	var esData1Nodes []string
 	var esData2Nodes []string
 
+
+	//TODO: Consider dynamic volume listing , since app will be scaled from 3 to 4 and back to 3
 	for _, appvol := range appVolumes {
 
 		replicas, err := Inst().V.GetReplicaSetNodes(appvol)
@@ -3394,7 +3396,7 @@ spec:
       - key: app
         operator: In
         values:
-          - "elastic"
+          - "es-cluster"
   replicaAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone`

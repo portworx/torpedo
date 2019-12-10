@@ -243,14 +243,18 @@ func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {
-				n.VolDriverNodeID = pxNode.Id
-				n.IsStorageDriverInstalled = isPX
-				isMetadataNode, err := d.isMetadataNode(n, address)
-				if err != nil {
-					return err
+				if len(pxNode.Id) > 0 {
+					n.VolDriverNodeID = pxNode.Id
+					n.IsStorageDriverInstalled = isPX
+					isMetadataNode, err := d.isMetadataNode(n, address)
+					if err != nil {
+						return err
+					}
+					n.IsMetadataNode = isMetadataNode
+					node.UpdateNode(n)
+				} else {
+					return fmt.Errorf("StorageNodeId is empty for node %v", pxNode)
 				}
-				n.IsMetadataNode = isMetadataNode
-				node.UpdateNode(n)
 				return nil
 			}
 		}
@@ -341,7 +345,7 @@ func (d *portworx) getPxNode(n node.Node, cManager cluster.Cluster) (api.Node, e
 		logrus.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
 		pxNode, err := cManager.Inspect(n.VolDriverNodeID)
 		if (err == nil && pxNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && pxNode.Status == api.Status_STATUS_NONE) {
-			n, err = d.updateNodeID(n)
+			n, err = d.updateNodeID(n, cManager)
 			if err != nil {
 				return api.Node{}, true, err
 			}
@@ -937,35 +941,28 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 }
 
 func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
+	cManager, err := d.pickAlternateClusterManager(n)
+	if err != nil {
+		return &ErrFailedToWaitForPx{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+
 	t := func() (interface{}, bool, error) {
-		// Check if px is down on all node addresses. We don't want to keep track
-		// which was the actual interface px was listening on before it went down
-		for _, addr := range n.Addresses {
-			cManager, err := d.getClusterManagerByAddress(addr)
-			if err != nil {
-				return "", true, err
+		pxNode, err := cManager.Inspect(n.VolDriverNodeID)
+		if err != nil {
+			return "", true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: err.Error(),
 			}
+		}
 
-			pxNode, err := d.getPxNode(n, cManager)
-			if err != nil {
-				if regexp.MustCompile(`.+timeout|connection refused.*`).MatchString(err.Error()) {
-					logrus.Infof("px on node %s addr %s is down as inspect returned: %v",
-						n.Name, addr, err.Error())
-					continue
-				}
-
-				return "", true, &ErrFailedToWaitForPx{
-					Node:  n,
-					Cause: err.Error(),
-				}
-			}
-
-			if pxNode.Status != api.Status_STATUS_OFFLINE {
-				return "", true, &ErrFailedToWaitForPx{
-					Node: n,
-					Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
-						api.Status_STATUS_OFFLINE, pxNode.Status),
-				}
+		if pxNode.Status != api.Status_STATUS_OFFLINE {
+			return "", true, &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
+					api.Status_STATUS_OFFLINE, pxNode.Status),
 			}
 		}
 
@@ -978,6 +975,33 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	}
 
 	return nil
+}
+
+func (d *portworx) pickAlternateClusterManager(n node.Node) (cluster.Cluster, error) {
+	// Check if px is down on all node addresses. We don't want to keep track
+	// which was the actual interface px was listening on before it went down
+	for _, alternateNode := range node.GetWorkerNodes() {
+		if alternateNode.Name == n.Name {
+			continue
+		}
+
+		for _, addr := range alternateNode.Addresses {
+			cManager, err := d.getClusterManagerByAddress(addr)
+			if err != nil {
+				return nil, err
+			}
+			ns, err := cManager.Enumerate()
+			if err != nil {
+				// if not responding in this addr, continue and pick another one, log the error
+				logrus.Warnf("failed to check node %s on addr %s. Cause: %v", n.Name, addr, err)
+				continue
+			}
+			if len(ns.Nodes) != 0 {
+				return cManager, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("failed to get an alternate cluster manager for %s", n.Name)
 }
 
 func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {
@@ -1594,9 +1618,12 @@ func (d *portworx) GetReplicatNodeSets(torpedovol *torpedovolume.Volume) ([][]st
 }
 
 
-func (d *portworx) updateNodeID(n node.Node) (node.Node, error) {
+func (d *portworx) updateNodeID(n node.Node, cManager cluster.Cluster) (node.Node, error) {
+	if cManager == nil {
+		cManager = d.getClusterManager("")
+	}
 	for _, addr := range n.Addresses {
-		nodeID, _ := d.getClusterManager("").GetNodeIdFromIp(addr)
+		nodeID, _ := cManager.GetNodeIdFromIp(addr)
 		if len(nodeID) > 0 {
 			n.VolDriverNodeID = nodeID
 			node.UpdateNode(n)
@@ -1649,17 +1676,19 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_
 			" (" + snap + ")"
 	}
 
-	isSuccess := false
-	for _, alert := range alerts.GetAlert() {
-		if strings.Contains(alert.GetMessage(), grepMsg) {
-			isSuccess = true
-			break
+	t := func() (interface{}, bool, error) {
+		for _, alert := range alerts.GetAlert() {
+			if strings.Contains(alert.GetMessage(), grepMsg) {
+				return "", false, nil
+			}
 		}
+		return "", true, fmt.Errorf("alert not present, retrying")
 	}
-	if isSuccess {
-		return nil
+	_, err = task.DoRetryWithTimeout(t, getNodeTimeout, getNodeRetryInterval)
+	if err != nil {
+		return fmt.Errorf("restore failed, expected alert to be present : %v", grepMsg)
 	}
-	return fmt.Errorf("restore failed, expected alert to be present : %v", grepMsg)
+	return nil
 }
 
 func (d *portworx) getTokenForVolume(name string, params map[string]string) string {

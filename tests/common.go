@@ -92,9 +92,6 @@ var (
 func InitInstance() {
 	var err error
 	var token string
-	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String())
-	expect(err).NotTo(haveOccurred())
-
 	if Inst().ConfigMap != "" {
 		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
@@ -103,6 +100,10 @@ func InitInstance() {
 	} else {
 		token = ""
 	}
+
+	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String(), Inst().ConfigMap)
+	expect(err).NotTo(haveOccurred())
+
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
@@ -314,16 +315,12 @@ func StopVolDriverAndWait(appNodes []node.Node) {
 			expect(err).NotTo(haveOccurred())
 		})
 
-		/* this static sleep to avoid problem when the driver takes longer to go down or oci pod not flapping when px
-		 * goes down
-		 */
-		time.Sleep(15 * time.Second)
-		//Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
-		//	for _, n := range appNodes {
-		//		err := Inst().V.WaitDriverDownOnNode(n)
-		//		expect(err).NotTo(haveOccurred())
-		//	}
-		//})
+		Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
+			for _, n := range appNodes {
+				err := Inst().V.WaitDriverDownOnNode(n)
+				expect(err).NotTo(haveOccurred())
+			}
+		})
 
 	})
 }
@@ -385,65 +382,6 @@ func PerformSystemCheck() {
 			}
 		})
 	})
-}
-
-// GetNodesThatCanBeDown retrieves all nodes for given context
-func GetNodesThatCanBeDown(ctx *scheduler.Context) []node.Node {
-	var appNodes []node.Node
-	var err error
-	Step(fmt.Sprintf("get nodes for %s app", ctx.App.Key), func() {
-		appNodes, err = Inst().S.GetNodesForApp(ctx)
-		expect(err).NotTo(haveOccurred())
-		expect(appNodes).NotTo(beEmpty())
-	})
-	var appVolumes []*volume.Volume
-	Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
-		appVolumes, err = Inst().S.GetVolumes(ctx)
-		expect(err).NotTo(haveOccurred())
-		expect(appVolumes).NotTo(beEmpty())
-	})
-	// avoid dup
-	nodesThatCantBeDown := make(map[string]bool)
-	nodesToBeDown := make([]node.Node, 0)
-	Step(fmt.Sprintf("choose nodes to be down for %s app", ctx.App.Key), func() {
-		for _, vol := range appVolumes {
-			replicas, err := Inst().V.GetReplicaSetNodes(vol)
-			expect(err).NotTo(haveOccurred())
-			expect(replicas).NotTo(beEmpty())
-			// at least n-1 nodes with replica need to be up
-			maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(replicas))
-			for _, nodeName := range replicas[maxNodesToBeDown:] {
-				nodesThatCantBeDown[nodeName] = true
-			}
-		}
-
-		metadataNodes := node.GetMetadataNodes()
-		// at least 2 metadata nodes need to be up
-		maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(metadataNodes))
-		for _, n := range metadataNodes[maxNodesToBeDown:] {
-			nodesThatCantBeDown[n.Name] = true
-		}
-
-		for _, node := range appNodes {
-			if _, exists := nodesThatCantBeDown[node.Name]; !exists {
-				nodesToBeDown = append(nodesToBeDown, node)
-			}
-		}
-
-	})
-	return nodesToBeDown
-}
-
-// getMaxNodesToBeDown based on the worker nodes and volume replicas it determines the maximum nodes that can be down
-func getMaxNodesToBeDown(nodes, replicas int) int {
-	if replicas == 1 {
-		return 0
-	}
-	if nodes > 4 && replicas%2 != 0 {
-		return replicas/2 + 1
-	}
-
-	return replicas / 2
 }
 
 // Inst returns the Torpedo instances
