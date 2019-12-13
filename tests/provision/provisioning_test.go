@@ -501,6 +501,20 @@ func SetNodeLabels(labels []labelDict) map[string][]string {
 		}
 
 	}
+
+
+	//for leftover nodes, labels for zone and region will be 'default'
+
+	zonelbl := "failure-domain.beta.kubernetes.io/zonedefault"
+	regionlbl := "failure-domain.beta.kubernetes.io/regiondefault"
+	if workerCnt > nodes2lbl {
+		for i:=(workerCnt -1); i >=nodes2lbl; i-- {
+			n := workerNodes[i]
+			lblnodes[zonelbl] = append(lblnodes[zonelbl], n.Name)
+			lblnodes[regionlbl] = append(lblnodes[regionlbl], n.Name)
+		}
+	}
+
 	//TODO: Return node list with the labels attached
 	return lblnodes
 }

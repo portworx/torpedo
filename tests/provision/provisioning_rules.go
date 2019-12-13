@@ -1231,7 +1231,9 @@ spec:
   - enforcement: required
     matchExpressions:
     - key: app
-      operator: Exists`
+      operator: Exists
+      values:
+      - ""`
 	return vpsSpec
 }
 
@@ -1454,7 +1456,9 @@ spec:
   - enforcement: required
     matchExpressions:
     - key: app
-      operator: DoesNotExist`
+      operator: DoesNotExist
+      values:
+      - ""`
 	return vpsSpec
 }
 
@@ -1674,7 +1678,9 @@ spec:
   - enforcement: required
     matchExpressions:
     - key: app
-      operator: Exists`
+      operator: Exists
+      values:
+      - ""`
 	return vpsSpec
 }
 
@@ -1891,7 +1897,9 @@ spec:
   - enforcement: required
     matchExpressions:
     - key: app
-      operator: DoesNotExist`
+      operator: DoesNotExist
+      values:
+      - ""`
 	return vpsSpec
 }
 
@@ -3142,12 +3150,12 @@ func (v *vpscase21) GetPvcNodeLabels(lblnodes map[string][]string) map[string]ma
 		volnodelist["mysql-data-seq"]["rnodes3"] = append(volnodelist["mysql-data-seq"]["rnodes3"], lnode)
 	}
 	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonemiddleast"] {
-		volnodelist["mysql-data"]["rnodes3"] = append(volnodelist["mysql-data"]["rnodes3"], lnode)
-		volnodelist["mysql-data-seq"]["rnodes3"] = append(volnodelist["mysql-data-seq"]["rnodes3"], lnode)
+		volnodelist["mysql-data"]["rnodes4"] = append(volnodelist["mysql-data"]["rnodes4"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes4"] = append(volnodelist["mysql-data-seq"]["rnodes4"], lnode)
 	}
 	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonecentral"] {
-		volnodelist["mysql-data"]["rnodes3"] = append(volnodelist["mysql-data"]["rnodes3"], lnode)
-		volnodelist["mysql-data-seq"]["rnodes3"] = append(volnodelist["mysql-data-seq"]["rnodes3"], lnode)
+		volnodelist["mysql-data"]["rnodes5"] = append(volnodelist["mysql-data"]["rnodes5"], lnode)
+		volnodelist["mysql-data-seq"]["rnodes5"] = append(volnodelist["mysql-data-seq"]["rnodes5"], lnode)
 	}
 	return volnodelist
 }
@@ -3853,7 +3861,7 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 
 //StorageClass placement_strategy mapping
 func (v *vpscase24) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-1", "placement-3":"placement-3"}
+	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-1", "placement-3":""}
 }
 
 func (v *vpscase24) GetSpec() string {
@@ -3866,16 +3874,7 @@ metadata:
 spec:
   replicaAntiAffinity:
   - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/zone
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-3
-spec:
-  replicaAntiAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/region`
+    topologyKey: failure-domain.beta.kubernetes.io/zone`
 	return vpsSpec
 }
 
