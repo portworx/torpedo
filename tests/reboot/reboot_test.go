@@ -37,8 +37,8 @@ var _ = Describe("{RebootOneNode}", func() {
 		}
 
 		Step("get nodes for all apps in test and reboot their nodes", func() {
+			var nodesToReboot []node.Node
 			for _, ctx := range contexts {
-				var nodesToReboot []node.Node
 
 				Step(fmt.Sprintf("get nodes for %s app to reboot, where volumes are attached", ctx.App.Key), func() {
 					volumes, err := Inst().S.GetVolumes(ctx)
@@ -60,7 +60,10 @@ var _ = Describe("{RebootOneNode}", func() {
 					}
 				})
 
-				Step(fmt.Sprintf("reboot app %s's node(s): %v", ctx.App.Key, nodesToReboot), func() {
+			}
+
+			// Reboot node and check driver status
+				Step(fmt.Sprintf("reboot node one at a time from the node(s): %v",  nodesToReboot), func() {
 					for _, n := range nodesToReboot {
 						err = Inst().N.RebootNode(n, node.RebootNodeOpts{
 							Force: true,
@@ -98,7 +101,6 @@ var _ = Describe("{RebootOneNode}", func() {
 						})
 					}
 				})
-			}
 		})
 
 		ValidateAndDestroy(contexts, nil)
