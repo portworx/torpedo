@@ -1,3 +1,47 @@
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: endpoint-reader
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: endpoint-reader
+subjects:
+  - kind: ServiceAccount
+    name: rabbitmq
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: endpoint-reader
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rabbitmq
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: rabbitmq-internal
+  labels:
+    app: rabbitmq
+spec:
+  clusterIP: None
+  ports:
+    - name: http
+      protocol: TCP
+      port: 15672
+    - name: amqp
+      protocol: TCP
+      port: 5672
+  selector:
+    app: rabbitmq
+---
 kind: Service
 apiVersion: v1
 metadata:
@@ -6,20 +50,17 @@ metadata:
     app: rabbitmq
     type: LoadBalancer
 spec:
-  type: NodePort
+  selector:
+    app: rabbitmq
   ports:
-    - name: http
+    - name: rabbitmq-mgmt-port
       protocol: TCP
       port: 15672
       targetPort: 15672
-      nodePort: 31672
-    - name: amqp
+    - name: rabbitmq-amqp-port
       protocol: TCP
       port: 5672
       targetPort: 5672
-      nodePort: 30672
-  selector:
-    app: rabbitmq
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -52,22 +93,28 @@ data:
     loopback_users.guest = false
 
 ---
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: rabbitmq
 spec:
-  serviceName: rabbitmq
+  serviceName: rabbitmq-internal
+  updateStrategy:
+    type: RollingUpdate
   replicas: 3
+  selector:
+    matchLabels:
+      app: rabbitmq
   template:
     metadata:
       labels:
         app: rabbitmq
     spec:
+      serviceAccountName: rabbitmq
       terminationGracePeriodSeconds: 10
       containers:
         - name: rabbitmq-k8s
-          image: rabbitmq:3.7
+          image: rabbitmq
           volumeMounts:
             - name: config-volume
               mountPath: /etc/rabbitmq
@@ -117,13 +164,13 @@ spec:
                 path: rabbitmq.conf
               - key: enabled_plugins
                 path: enabled_plugins
-    volumeClaimTemplates:
-      - metadata:
+  volumeClaimTemplates:
+    - metadata:
         name: rabbitmq-data
-        spec:
-          storageClassName: rabbitmq-sc
-          accessModes:
-            - ReadWriteOnce
-          resources:
-            requests:
-              storage: 5Gi
+      spec:
+        storageClassName: rabbitmq-sc
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
