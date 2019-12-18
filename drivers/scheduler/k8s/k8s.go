@@ -25,6 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 	apps_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	rbac_v1 "k8s.io/api/rbac/v1"
 	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -304,6 +305,12 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*stork_api.VolumeSnapshotRestore); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*ap_api.AutopilotRule); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*v1.ServiceAccount); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*rbac_v1.Role); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*rbac_v1.RoleBinding); ok {
 		return specObj, nil
 	}
 
