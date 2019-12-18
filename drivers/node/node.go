@@ -35,7 +35,10 @@ type Node struct {
 	Addresses                []string
 	UsableAddr               string
 	Type                     Type
+	Zone                     string
+	Region                   string
 	IsStorageDriverInstalled bool
+	IsMetadataNode           bool
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options
@@ -43,6 +46,7 @@ type ConnectionOpts struct {
 	Timeout         time.Duration
 	TimeBeforeRetry time.Duration
 	IgnoreError     bool
+	Sudo            bool
 }
 
 // RebootNodeOpts provide additional options for reboot operation
@@ -87,6 +91,9 @@ type Driver interface {
 	// Init initializes the node driver under the given scheduler
 	Init() error
 
+	// DeleteNode deletes the given node
+	DeleteNode(node Node, timeout time.Duration) error
+
 	// String returns the string name of this driver.
 	String() string
 
@@ -117,6 +124,12 @@ type Driver interface {
 
 	// SystemCheck checks whether core files are present on the given node.
 	SystemCheck(node Node, options ConnectionOpts) (string, error)
+
+	// SetASGClusterSize sets node count for an asg cluster
+	SetASGClusterSize(count int64, timeout time.Duration) error
+
+	// GetASGClusterSize gets node count for an asg cluster
+	GetASGClusterSize() (int64, error)
 }
 
 // Register registers the given node driver
@@ -217,5 +230,26 @@ func (d *notSupportedDriver) SystemCheck(node Node, options ConnectionOpts) (str
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SystemCheck()",
+	}
+}
+
+func (d *notSupportedDriver) SetASGClusterSize(count int64, timeout time.Duration) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetASGClusterSize()",
+	}
+}
+
+func (d *notSupportedDriver) GetASGClusterSize() (int64, error) {
+	return int64(0), &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetASGClusterSize()",
+	}
+}
+
+func (d *notSupportedDriver) DeleteNode(node Node, timeout time.Duration) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
 	}
 }

@@ -2,7 +2,10 @@ package volume
 
 import (
 	"fmt"
+	"time"
 
+	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 )
@@ -35,7 +38,7 @@ type Image struct {
 // of failure scenarious that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string, nodeDriver string) error
+	Init(sched string, nodeDriver string, token string, storageProvisioner string) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -61,26 +64,26 @@ type Driver interface {
 	// ValidateVolumeSetup validates if the given volume is setup correctly in the cluster
 	ValidateVolumeSetup(vol *Volume) error
 
-	// Stop must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
+	// StopDriver must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
 	StopDriver(nodes []node.Node, force bool) error
 
-	// Start must cause the volume driver to start on a given node.
+	// StartDriver must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
 
 	// WaitDriverUpOnNode must wait till the volume driver becomes usable on a given node
-	WaitDriverUpOnNode(n node.Node) error
+	WaitDriverUpOnNode(n node.Node, timeout time.Duration) error
 
 	// WaitDriverDownOnNode must wait till the volume driver becomes unusable on a given node
 	WaitDriverDownOnNode(n node.Node) error
 
 	// GetNodeForVolume returns the node on which the volume is attached
-	GetNodeForVolume(vol *Volume) (*node.Node, error)
+	GetNodeForVolume(vol *Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error)
 
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)
 
-	// UpgradeDriver upgrades the volume driver to the given images
-	UpgradeDriver(images []Image) error
+	// UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
+	UpgradeDriver(endpointURL string, endpointVersion string) error
 
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string
@@ -90,10 +93,13 @@ type Driver interface {
 	// failure.
 	RecoverDriver(n node.Node) error
 
+	// RefreshDriverEndpoints refreshes volume driver endpoint
+	RefreshDriverEndpoints() error
+
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 
-	// GetVolumeReplicationFactor returns the current replication factor of the volume.
+	// GetReplicationFactor returns the current replication factor of the volume.
 	GetReplicationFactor(vol *Volume) (int64, error)
 
 	// SetReplicationFactor sets the volume's replication factor to the passed param rf.
@@ -111,12 +117,33 @@ type Driver interface {
 	// GetClusterPairingInfo returns cluster pairing information from remote cluster
 	GetClusterPairingInfo() (map[string]string, error)
 
+	// DecommissionNode decommissions the given node from the cluster
+	DecommissionNode(n node.Node) error
+
+	// RejoinNode rejoins a given node back to the cluster
+	RejoinNode(n node.Node) error
+
+	// GetNodeStatus returns the status of a given node
+	GetNodeStatus(n node.Node) (*api.Status, error)
+
 	// GetReplicaSetNodes returns the replica sets for a given volume
 	GetReplicaSetNodes(vol *Volume) ([]string, error)
+
+	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
+	// given volumes
+	ValidateVolumeSnapshotRestore(vol string, snapData *snap_v1.VolumeSnapshotData, timeStart time.Time) error
+
+	// Collect live diags on a node
+	CollectDiags(n node.Node) error
 }
+
+// StorageProvisionerType provisioner to be used for torpedo volumes
+type StorageProvisionerType string
 
 var (
 	volDrivers = make(map[string]Driver)
+	// StorageProvisioner to be used to store name of the storage provisioner
+	StorageProvisioner StorageProvisionerType
 )
 
 // Register registers the given volume driver
@@ -141,6 +168,11 @@ func Get(name string) (Driver, error) {
 		ID:   name,
 		Type: "VolumeDriver",
 	}
+}
+
+// GetStorageProvisioner storage provsioner name to be used with Torpedo
+func GetStorageProvisioner() string {
+	return string(StorageProvisioner)
 }
 
 func (v *Volume) String() string {

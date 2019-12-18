@@ -56,6 +56,18 @@ func (e *ErrFailedToDestroyStorage) Error() string {
 	return fmt.Sprintf("Failed to destory storage for app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
+// ErrFailedToDestroyAutopilotRule error type for failing to destroy an autopilotrule
+type ErrFailedToDestroyAutopilotRule struct {
+	// Name is the autopilot name that failed to destroy
+	Name string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToDestroyAutopilotRule) Error() string {
+	return fmt.Sprintf("Failed to destory an autopilot rule: %v due to err: %v", e.Name, e.Cause)
+}
+
 // ErrFailedToValidateStorage error type for failing to validate an app's storage
 type ErrFailedToValidateStorage struct {
 	// App is the app whose storage validation failed
@@ -300,4 +312,28 @@ type ErrFailedToValidateCustomSpec struct {
 
 func (e *ErrFailedToValidateCustomSpec) Error() string {
 	return fmt.Sprintf("Failed to validate custom spec : %v of type %v due to err: %v", e.Name, reflect.TypeOf(e.Type), e.Cause)
+}
+
+// ErrFailedToDecommissionNode error type when fail to decommission a node
+type ErrFailedToDecommissionNode struct {
+	// Node where the service is not starting
+	Node node.Node
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToDecommissionNode) Error() string {
+	return fmt.Sprintf("Failed to decommission node: %v due to err: %v", e.Node, e.Cause)
+}
+
+// ErrFailedToGetConfigMap error type for failing to get config map
+type ErrFailedToGetConfigMap struct {
+	// Name of config map
+	Name string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetConfigMap) Error() string {
+	return fmt.Sprintf("Failed to get config map: %s due to err: %v", e.Name, e.Cause)
 }

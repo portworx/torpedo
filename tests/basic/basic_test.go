@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -52,22 +52,30 @@ var _ = Describe("{VolumeDriverDown}", func() {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdown-%d", i))...)
 		}
 
-		Step("get nodes for all apps in test and bounce volume driver", func() {
-			for _, ctx := range contexts {
-				appNodes := getNodesThatCanBeDown(ctx)
+		Step("get nodes bounce volume driver", func() {
+			for _, appNode := range node.GetStorageDriverNodes() {
 				Step(
-					fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
-						Inst().V.String(), ctx.App.Key, appNodes),
+					fmt.Sprintf("stop volume driver %s on node: %s",
+						Inst().V.String(), appNode.Name),
 					func() {
-						StopVolDriverAndWait(appNodes)
+						StopVolDriverAndWait([]node.Node{appNode})
 					})
 
-				Step("starting volume driver", func() {
-					StartVolDriverAndWait(appNodes)
-				})
+				Step(
+					fmt.Sprintf("starting volume %s driver on node %s",
+						Inst().V.String(), appNode.Name),
+					func() {
+						StartVolDriverAndWait([]node.Node{appNode})
+					})
 
 				Step("Giving few seconds for volume driver to stabilize", func() {
 					time.Sleep(20 * time.Second)
+				})
+
+				Step("validate apps", func() {
+					for _, ctx := range contexts {
+						ValidateContext(ctx)
+					}
 				})
 			}
 		})
@@ -92,27 +100,43 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdownattachednode-%d", i))...)
 		}
 
-		Step("get nodes for all apps in test and restart volume driver", func() {
+		Step("get nodes where app is running and restart volume driver", func() {
 			for _, ctx := range contexts {
-				appNodes := getNodesThatCanBeDown(ctx)
-				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
-					Inst().V.String(), ctx.App.Key, appNodes), func() {
-					StopVolDriverAndWait(appNodes)
-				})
+				appNodes, err := Inst().S.GetNodesForApp(ctx)
+				Expect(err).NotTo(HaveOccurred())
+				for _, appNode := range appNodes {
+					Step(
+						fmt.Sprintf("stop volume driver %s on app %s's node: %s",
+							Inst().V.String(), ctx.App.Key, appNode.Name),
+						func() {
+							StopVolDriverAndWait([]node.Node{appNode})
+						})
 
-				Step("starting volume driver", func() {
-					StartVolDriverAndWait(appNodes)
-				})
+					Step(
+						fmt.Sprintf("starting volume %s driver on app %s's node %s",
+							Inst().V.String(), ctx.App.Key, appNode.Name),
+						func() {
+							StartVolDriverAndWait([]node.Node{appNode})
+						})
 
-				Step("Giving few seconds for volume driver to stabilize", func() {
-					time.Sleep(20 * time.Second)
-				})
+					Step("Giving few seconds for volume driver to stabilize", func() {
+						time.Sleep(20 * time.Second)
+					})
+
+					Step(fmt.Sprintf("validate app %s", appNode.Name), func() {
+						ValidateContext(ctx)
+					})
+				}
 			}
 		})
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
 	})
 })
 
@@ -124,14 +148,13 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldrivercrash-%d", i))...)
 		}
 
-		Step("get nodes for all apps in test and crash volume driver", func() {
-			for _, ctx := range contexts {
-				appNodes := getNodesThatCanBeDown(ctx)
+		Step("crash volume driver in all nodes", func() {
+			for _, appNode := range node.GetStorageDriverNodes() {
 				Step(
-					fmt.Sprintf("crash volume driver %s on app %s's nodes: %v",
-						Inst().V.String(), ctx.App.Key, appNodes),
+					fmt.Sprintf("crash volume driver %s on node: %v",
+						Inst().V.String(), appNode.Name),
 					func() {
-						CrashVolDriverAndWait(appNodes)
+						CrashVolDriverAndWait([]node.Node{appNode})
 					})
 			}
 		})
@@ -147,19 +170,21 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 // back up, we should be able to detach and delete the volume.
 var _ = Describe("{VolumeDriverAppDown}", func() {
 	It("has to schedule apps, stop volume driver on app nodes and destroy apps", func() {
-		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverappdown-%d", i))...)
 		}
 
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 		Step("get nodes for all apps in test and bounce volume driver", func() {
 			for _, ctx := range contexts {
-				nodesToBeDown := getNodesThatCanBeDown(ctx)
-
+				appNodes, err := Inst().S.GetNodesForApp(ctx)
+				Expect(err).NotTo(HaveOccurred())
+				appNode := appNodes[r.Intn(len(appNodes))]
 				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
-					Inst().V.String(), ctx.App.Key, nodesToBeDown), func() {
-					StopVolDriverAndWait(nodesToBeDown)
+					Inst().V.String(), ctx.App.Key, appNode), func() {
+					StopVolDriverAndWait([]node.Node{appNode})
 				})
 
 				Step(fmt.Sprintf("destroy app: %s", ctx.App.Key), func() {
@@ -172,11 +197,11 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 				})
 
 				Step("restarting volume driver", func() {
-					StartVolDriverAndWait(nodesToBeDown)
+					StartVolDriverAndWait([]node.Node{appNode})
 				})
 
 				Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
-					err = Inst().S.WaitForDestroy(ctx)
+					err = Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -185,45 +210,6 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 		})
 	})
 })
-
-func getNodesThatCanBeDown(ctx *scheduler.Context) []node.Node {
-	var appNodes []node.Node
-	var err error
-	Step(fmt.Sprintf("get nodes for %s app", ctx.App.Key), func() {
-		appNodes, err = Inst().S.GetNodesForApp(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(appNodes).NotTo(BeEmpty())
-	})
-	var appVolumes []*volume.Volume
-	Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
-		appVolumes, err = Inst().S.GetVolumes(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(appVolumes).NotTo(BeEmpty())
-	})
-	// avoid dup
-	nodesThatCantBeDown := make(map[string]bool)
-	nodesToBeDown := make([]node.Node, 0)
-	Step(fmt.Sprintf("choose nodes to be down for %s app", ctx.App.Key), func() {
-		for _, vol := range appVolumes {
-			replicas, err := Inst().V.GetReplicaSetNodes(vol)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(replicas).NotTo(BeEmpty())
-			// at least n-1 nodes with replica need to be up
-			maxNodesToBeDown := getMaxNodesToBeDown(len(replicas))
-			for _, nodeName := range replicas[maxNodesToBeDown:] {
-				nodesThatCantBeDown[nodeName] = true
-			}
-		}
-
-		for _, node := range appNodes {
-			if _, exists := nodesThatCantBeDown[node.Name]; !exists {
-				nodesToBeDown = append(nodesToBeDown, node)
-			}
-		}
-
-	})
-	return nodesToBeDown
-}
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
 var _ = Describe("{AppTasksDown}", func() {
@@ -235,13 +221,51 @@ var _ = Describe("{AppTasksDown}", func() {
 		}
 
 		Step("delete all application tasks", func() {
-			for _, ctx := range contexts {
-				Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
-					err = Inst().S.DeleteTasks(ctx)
-					Expect(err).NotTo(HaveOccurred())
-				})
+			// Add interval based sleep here to check what time we will exit out of this delete task loop
+			minRunTime := Inst().MinRunTimeMins
+			timeout := (minRunTime) * 60
+			// set frequency mins depending on the chaos level
+			var frequency int
+			switch Inst().ChaosLevel {
+			case 5:
+				frequency = 1
+			case 4:
+				frequency = 3
+			case 3:
+				frequency = 5
+			case 2:
+				frequency = 7
+			case 1:
+				frequency = 10
+			default:
+				frequency = 10
 
-				ValidateContext(ctx)
+			}
+			if minRunTime == 0 {
+				for _, ctx := range contexts {
+					Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
+						err = Inst().S.DeleteTasks(ctx)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					ValidateContext(ctx)
+				}
+			} else {
+				start := time.Now().Local()
+				for int(time.Since(start).Seconds()) < timeout {
+					for _, ctx := range contexts {
+						Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
+							err = Inst().S.DeleteTasks(ctx)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						ValidateContext(ctx)
+					}
+					Step(fmt.Sprintf("Sleeping for given duration %d", frequency), func() {
+						d := time.Duration(frequency)
+						time.Sleep(time.Minute * d)
+					})
+				}
 			}
 		})
 
@@ -252,16 +276,6 @@ var _ = Describe("{AppTasksDown}", func() {
 		})
 	})
 })
-
-func getMaxNodesToBeDown(replicas int) int {
-	if replicas == 1 {
-		return 0
-	}
-	if replicas%2 != 0 {
-		return replicas/2 + 1
-	}
-	return replicas / 2
-}
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
 var _ = Describe("{AppScaleUpAndDown}", func() {
@@ -316,9 +330,54 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 	})
 })
 
+var _ = Describe("{CordonDeployDestroy}", func() {
+	It("has to cordon all nodes but one, deploy and destroy app", func() {
+
+		Step("Cordon all nodes but one", func() {
+			nodes := node.GetWorkerNodes()
+			for _, node := range nodes[1:] {
+				err := Inst().S.DisableSchedulingOnNode(node)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		var contexts []*scheduler.Context
+		Step("Deploy applications", func() {
+			for i := 0; i < Inst().ScaleFactor; i++ {
+				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("cordondeploydestroy-%d", i))...)
+			}
+		})
+		Step("Destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForDestroy] = false
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = false
+			for _, ctx := range contexts {
+				err := Inst().S.Destroy(ctx, opts)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		Step("Validate destroy", func() {
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+		Step("teardown all apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+		Step("Uncordon all nodes", func() {
+			nodes := node.GetWorkerNodes()
+			for _, node := range nodes {
+				err := Inst().S.EnableSchedulingOnNode(node)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+	})
+})
+
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
-	CollectSupport()
 	ValidateCleanup()
 })
 

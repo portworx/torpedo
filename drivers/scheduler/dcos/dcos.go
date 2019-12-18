@@ -15,13 +15,15 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
 const (
 	// SchedName is the name of the dcos scheduler driver implementation
-	SchedName = "dcos"
+	SchedName      = "dcos"
+	defaultTimeout = 5 * time.Minute
 )
 
 type dcos struct {
@@ -30,7 +32,7 @@ type dcos struct {
 	volDriverName string
 }
 
-func (d *dcos) Init(specDir, volDriver, nodeDriver string) error {
+func (d *dcos) Init(specDir, volDriver, nodeDriver, secretConfigMap string) error {
 	privateAgents, err := MesosClient().GetPrivateAgentNodes()
 	if err != nil {
 		return err
@@ -244,6 +246,14 @@ func (d *dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOption
 	return nil
 }
 
+func (d *dcos) UpdateTasksID(ctx *scheduler.Context, id string) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateTasksID()",
+	}
+}
+
 func (d *dcos) randomizeVolumeNames(application *marathon.Application) error {
 	volDriver, err := volume.Get(d.volDriverName)
 	if err != nil {
@@ -294,11 +304,11 @@ func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 		// TODO: wait until all the resources have been cleaned up properly
-		if err := d.WaitForDestroy(ctx); err != nil {
+		if err := d.WaitForDestroy(ctx, defaultTimeout); err != nil {
 			return err
 		}
 	} else if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-		if err := d.WaitForDestroy(ctx); err != nil {
+		if err := d.WaitForDestroy(ctx, defaultTimeout); err != nil {
 			return err
 		}
 	}
@@ -306,7 +316,7 @@ func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	return nil
 }
 
-func (d *dcos) WaitForDestroy(ctx *scheduler.Context) error {
+func (d *dcos) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
 			if err := MarathonClient().WaitForApplicationTermination(obj.ID); err != nil {
@@ -398,17 +408,26 @@ func (d *dcos) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	// TODO: Add implementation
-	return nil, nil
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetVolumes()",
+	}
 }
 
 func (d *dcos) ResizeVolume(cxt *scheduler.Context) ([]*volume.Volume, error) {
 	//TODO implement this method
-	return nil, nil
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ResizeVolume()",
+	}
 }
 
 func (d *dcos) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 	// TODO: Add implementation
-	return nil, nil
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetSnapshots()",
+	}
 }
 
 func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string]string) error) error {
@@ -447,30 +466,76 @@ func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string
 
 func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {
 	// TODO: Implement this method
-	return "", nil
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "Describe()",
+	}
 }
 
 func (d *dcos) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
 	//TODO implement this method
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ScaleApplication()",
+	}
 }
 
 func (d *dcos) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error) {
 	//TODO implement this method
-	return nil, nil
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetScaleFactorMap()",
+	}
 }
 
 func (d *dcos) StopSchedOnNode(node node.Node) error {
 	//TODO implement this method
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StopSchedOnNode()",
+	}
 }
 
 func (d *dcos) StartSchedOnNode(node node.Node) error {
 	//TODO implement this method
-	return nil
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "StartSchedOnNode()",
+	}
+}
+func (d *dcos) RescanSpecs(specDir string) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RescanSpecs()",
+	}
 }
 
-func (d *dcos) RescanSpecs(specDir string) error {
+func (d *dcos) PrepareNodeToDecommission(n node.Node, provisioner string) error {
+	//TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "PrepareNodeToDecommission()",
+	}
+}
+
+func (d *dcos) EnableSchedulingOnNode(n node.Node) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "EnableSchedulingOnNode()",
+	}
+}
+
+func (d *dcos) DisableSchedulingOnNode(n node.Node) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DisableSchedulingOnNode()",
+	}
+}
+
+func (d *dcos) RefreshNodeRegistry() error {
 	// TODO implement this method
 	return nil
 }
@@ -478,6 +543,18 @@ func (d *dcos) RescanSpecs(specDir string) error {
 func (d *dcos) IsScalable(spec interface{}) bool {
 	// TODO implement this method
 	return false
+}
+
+func (d *dcos) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart time.Time) error {
+	return fmt.Errorf("not implemenented")
+}
+
+func (d *dcos) GetTokenFromConfigMap(string) (string, error) {
+	// TODO implement this method
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetTokenFromConfigMap()",
+	}
 }
 
 func init() {
