@@ -35,10 +35,7 @@ var _ = Describe("{RebootOneNode}", func() {
 		}
 
 		Step("get nodes for all apps in test and reboot their nodes", func() {
-			var nodesToReboot []node.Node
-			for _, n := range node.GetWorkerNodes() {
-							nodesToReboot = append(nodesToReboot, n)
-				}
+				nodesToReboot:=node.GetWorkerNodes() 
 
 			// Reboot node and check driver status
 				Step(fmt.Sprintf("reboot node one at a time from the node(s): %v",  nodesToReboot), func() {
