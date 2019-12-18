@@ -709,6 +709,60 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 
 		logrus.Infof("[%v] Created Group snapshot: %v", app.Key, snap.Name)
 		return snap, nil
+	} else if obj, ok := spec.(*v1.ServiceAccount); ok {
+		obj.Namespace = ns.Name
+		snap, err := k8sOps.CreateServiceAccount(obj)
+		if errors.IsAlreadyExists(err) {
+			if snap, err = k8sOps.GetServiceAccount(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Service Account: %v", app.Key, snap.Name)
+				return snap, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Service Account: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Service Account: %v", app.Key, snap.Name)
+		return snap, nil
+	} else if obj, ok := spec.(*rbac_v1.Role); ok {
+		obj.Namespace = ns.Name
+		snap, err := k8sOps.CreateRole(obj)
+		if errors.IsAlreadyExists(err) {
+			if snap, err = k8sOps.GetRole(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Role: %v", app.Key, snap.Name)
+				return snap, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Role: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Role: %v", app.Key, snap.Name)
+		return snap, nil
+	} else if obj, ok := spec.(*rbac_v1.RoleBinding); ok {
+		obj.Namespace = ns.Name
+		snap, err := k8sOps.CreateRoleBinding(obj)
+		if errors.IsAlreadyExists(err) {
+			if snap, err = k8sOps.GetRoleBinding(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Role Binding: %v", app.Key, snap.Name)
+				return snap, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Role Binding: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Role Binding: %v", app.Key, snap.Name)
+		return snap, nil
 	}
 
 	return nil, nil

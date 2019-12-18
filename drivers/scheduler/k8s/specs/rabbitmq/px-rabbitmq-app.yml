@@ -152,7 +152,7 @@ spec:
             - name: RABBITMQ_NODENAME
               value: "rabbit@$(MY_POD_IP)"
             - name: K8S_SERVICE_NAME
-              value: "rabbitmq"
+              value: "rabbitmq-internal"
             - name: RABBITMQ_ERLANG_COOKIE
               value: "mycookie"
       volumes:
@@ -192,11 +192,19 @@ spec:
         app: rabbitmq
     spec:
       serviceAccountName: rabbitmq
+      initContainers:
+        - name: wait-for-rabbitmq
+          image: appropriate/curl
+          command: [ "sh" ]
+          args: [ "-c", "sleep 60; until curl http://rabbitmq:15672/api/aliveness-test/%2F; do echo \"waiting for rabbitmq to become ready...\"; sleep 15;done" ]
       containers:
         - name: rabbitmq-io
           image: pivotalrabbitmq/perf-test
+
           args:
             - "--uri=amqp://rabbitmq"
             - "--consumers=10"
             - "--producers=5"
+            - "--servers-startup-timeout=60"
+            - "--slow-start"
             - "--autoack"
