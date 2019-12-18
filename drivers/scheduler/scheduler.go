@@ -20,8 +20,12 @@ const (
 
 // Context holds the execution context of a test task.
 type Context struct {
+	// UID unique object identifier
 	UID string
+	// App defines a k8s application specification
 	App *spec.AppSpec
+	// Options are options that callers to pass to influence the apps that get schduled
+	Options ScheduleOptions
 }
 
 // DeepCopy create a copy of Context
@@ -41,6 +45,52 @@ func (in *Context) GetID() string {
 	return in.App.GetID(in.UID)
 }
 
+// AutopilotRuleConditionExpressions are the conditions to check on the rule objects
+type AutopilotRuleConditionExpressions struct {
+	Key      string
+	Operator string
+	Values   []string
+}
+
+// AutopilotRuleActions are the actions to run for the rule when the conditions are met
+type AutopilotRuleActions struct {
+	Name   string
+	Params map[string]string
+}
+
+// AutopilotRuleParameters are rule parameters for Autopilot
+type AutopilotRuleParameters struct {
+	// ActionsCoolDownPeriod is the duration in seconds for which autopilot will not
+	// re-trigger any actions once they have been executed.
+	ActionsCoolDownPeriod int64
+	// MatchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+	// map is equivalent to an element of matchExpressions, whose key field is "key", the
+	// operator is "In", and the values array contains only "value". The requirements are ANDed.
+	// +optional
+	MatchLabels map[string]string
+	// RuleAction defines an action for the rule
+	RuleActions []AutopilotRuleActions
+	// RuleConditionExpressions defines the conditions for the rule
+	RuleConditionExpressions []AutopilotRuleConditionExpressions
+	// ExpectedPVCSize is the expected PVC size after resize
+	ExpectedPVCSize int64
+}
+
+// AutopilotParameters are parameters that using for Autopilot
+type AutopilotParameters struct {
+	// Enabled indicates if the Autopilot is enabled
+	Enabled bool
+	// The unique Autopilotrule name within a namespace
+	Name string
+	// Namespace is the kubernetes namespace in which Autopilot rule will be created
+	Namespace string
+	// PollInterval defined the interval in seconds at which the conditions for the
+	// rule are queried from the metrics provider
+	PollInterval int64
+	// AutopilotRuleParameters are the parameters that will be used for Autopilot rule
+	AutopilotRuleParameters AutopilotRuleParameters
+}
+
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)
@@ -49,8 +99,12 @@ type ScheduleOptions struct {
 	Nodes []node.Node
 	// StorageProvisioner identifies what storage provider should be used
 	StorageProvisioner string
-	//DeploymentReplicas specific parameter when we need change statefulset replicas
-	DeploymentReplicas int
+	//AppReplicas specific parameter when we need change app replicas
+	AppReplicas int
+	// ConfigMap  identifies what config map should be used to
+	ConfigMap string
+	// AutopilotParameters identifies options for autopilot (Optional)
+	AutopilotParameters *AutopilotParameters
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -58,7 +112,7 @@ type Driver interface {
 	spec.Parser
 
 	// Init initializes the scheduler driver
-	Init(string, string, string) error
+	Init(string, string, string, string) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -144,6 +198,9 @@ type Driver interface {
 	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 	// parent volumes
 	ValidateVolumeSnapshotRestore(*Context, time.Time) error
+
+	// Get token for a volume
+	GetTokenFromConfigMap(string) (string, error)
 }
 
 var (
