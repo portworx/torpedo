@@ -174,3 +174,29 @@ spec:
         resources:
           requests:
             storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq-io
+  labels:
+    app: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      serviceAccountName: rabbitmq
+      containers:
+        - name: rabbitmq-io
+          image: pivotalrabbitmq/perf-test
+          args:
+            - "--uri=amqp://rabbitmq"
+            - "--consumers=10"
+            - "--producers=5"
+            - "--autoack"
