@@ -357,16 +357,19 @@ func (d *portworx) getPxNode(n node.Node, nManager ...api.OpenStorageNodeClient)
 	}
 	logrus.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
 	nodeInspectResponse, err := d.nodeManager.Inspect(d.getContext(""), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
-	if (err == nil && nodeInspectResponse.Node.Status == api.Status_STATUS_OFFLINE) || (err != nil && nodeInspectResponse.Node.Status == api.Status_STATUS_NONE) {
+	storageNode := nodeInspectResponse.Node
+	if err != nil && storageNode == nil {
+		return api.StorageNode{Status: api.Status_STATUS_NONE}, err
+	} else if (err == nil && storageNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && storageNode.Status == api.Status_STATUS_NONE) {
 		n, err = d.updateNodeID(n, d.nodeManager)
 		if err != nil {
 			return api.StorageNode{}, err
 		}
 		return d.getPxNode(n, nManager[0])
 	} else if err != nil {
-		return api.StorageNode{}, err
+		return api.StorageNode{Status: api.Status_STATUS_NONE}, err
 	}
-	return *nodeInspectResponse.Node, nil
+	return *storageNode, nil
 }
 
 func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager api.OpenStorageNodeClient) (string, error) {
@@ -1426,7 +1429,8 @@ func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
 	nodeResponse, err := d.nodeManager.Inspect(d.getContext(""), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
 		st, ok := status.FromError(err)
-		if ok && st.Code() == codes.NotFound {
+		// TODO when a node is not found sometimes we get an error code internal, as workaround we check for internal error and substring
+		if ok && st.Code() == codes.NotFound || (st.Code() == codes.Internal && strings.Contains(err.Error(), "Unable to locate node")) {
 			apiSt := api.Status_STATUS_NONE
 			return &apiSt, nil
 		}
