@@ -296,13 +296,13 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 }
 
 func (d *portworx) CleanupVolume(volumeName string) error {
-	volumes, err := d.getVolDriver().Enumerate(d.getContext(""), &api.SdkVolumeEnumerateRequest{}, nil)
+	volumes, err := d.getVolDriver().Enumerate(d.getContext(), &api.SdkVolumeEnumerateRequest{}, nil)
 	if err != nil {
 		return err
 	}
 
 	for _, volumeID := range volumes.GetVolumeIds() {
-		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: volumeID})
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeID})
 		if err != nil {
 			return err
 		}
@@ -310,7 +310,7 @@ func (d *portworx) CleanupVolume(volumeName string) error {
 		if pxVolume.Locator.Name == volumeName {
 			// First unmount this volume at all mount paths...
 			for _, path := range pxVolume.AttachPath {
-				if _, err = d.mountAttachManager.Unmount(d.getContext(""), &api.SdkVolumeUnmountRequest{VolumeId: pxVolume.Id, MountPath: path}); err != nil {
+				if _, err = d.mountAttachManager.Unmount(d.getContext(), &api.SdkVolumeUnmountRequest{VolumeId: pxVolume.Id, MountPath: path}); err != nil {
 					err = fmt.Errorf(
 						"error while unmounting %v at %v because of: %v",
 						pxVolume.Id,
@@ -322,7 +322,7 @@ func (d *portworx) CleanupVolume(volumeName string) error {
 				}
 			}
 
-			if _, err = d.mountAttachManager.Detach(d.getContext(""), &api.SdkVolumeDetachRequest{VolumeId: pxVolume.Id}); err != nil {
+			if _, err = d.mountAttachManager.Detach(d.getContext(), &api.SdkVolumeDetachRequest{VolumeId: pxVolume.Id}); err != nil {
 				err = fmt.Errorf(
 					"error while detaching %v because of: %v",
 					pxVolume.Id,
@@ -332,7 +332,7 @@ func (d *portworx) CleanupVolume(volumeName string) error {
 				return err
 			}
 
-			if _, err := d.getVolDriver().Delete(d.getContext(""), &api.SdkVolumeDeleteRequest{VolumeId: pxVolume.Id}); err != nil {
+			if _, err := d.getVolDriver().Delete(d.getContext(), &api.SdkVolumeDeleteRequest{VolumeId: pxVolume.Id}); err != nil {
 				err = fmt.Errorf(
 					"error while deleting %v because of: %v",
 					pxVolume.Id,
@@ -356,16 +356,16 @@ func (d *portworx) getPxNode(n node.Node, nManager ...api.OpenStorageNodeClient)
 		nManager = []api.OpenStorageNodeClient{d.getNodeManager()}
 	}
 	logrus.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
-	nodeInspectResponse, err := d.nodeManager.Inspect(d.getContext(""), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
+	nodeInspectResponse, err := nManager[0].Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	storageNode := nodeInspectResponse.Node
 	if err != nil && storageNode == nil {
 		return api.StorageNode{Status: api.Status_STATUS_NONE}, err
 	} else if (err == nil && storageNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && storageNode.Status == api.Status_STATUS_NONE) {
-		n, err = d.updateNodeID(n, d.nodeManager)
+		n, err = d.updateNodeID(n, nManager...)
 		if err != nil {
 			return api.StorageNode{}, err
 		}
-		return d.getPxNode(n, nManager[0])
+		return d.getPxNode(n, nManager...)
 	} else if err != nil {
 		return api.StorageNode{Status: api.Status_STATUS_NONE}, err
 	}
@@ -469,7 +469,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
 	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(token), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 		if err != nil {
 			return nil, true, err
 		}
@@ -505,7 +505,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 
 	// if the volume is a clone or a snap, validate it's parent
 	if vol.Readonly || vol.Source.Parent != "" {
-		parentResp, err := d.getVolDriver().Inspect(d.getContext(token), &api.SdkVolumeInspectRequest{VolumeId: vol.Source.Parent})
+		parentResp, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: vol.Source.Parent})
 		if err != nil {
 			return &ErrFailedToInspectVolume{
 				ID:    volumeName,
@@ -525,7 +525,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	var pxNodes []api.StorageNode
 	for _, rs := range vol.ReplicaSets {
 		for _, n := range rs.Nodes {
-			nodeResponse, err := d.nodeManager.Inspect(d.getContext(token), &api.SdkNodeInspectRequest{NodeId: n})
+			nodeResponse, err := d.nodeManager.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkNodeInspectRequest{NodeId: n})
 			if err != nil {
 				return &ErrFailedToInspectVolume{
 					ID:    volumeName,
@@ -635,7 +635,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 		if err != nil {
 			return nil, true, err
 		}
@@ -671,7 +671,7 @@ func errIsNotFound(err error) bool {
 func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 		if err != nil && errIsNotFound(err) {
 			return nil, false, nil
 		} else if err != nil {
@@ -744,7 +744,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 	volumeName := d.schedOps.GetVolumeName(vol)
 	r := func() (interface{}, bool, error) {
 		t := func() (interface{}, bool, error) {
-			volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+			volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 			if err != nil {
 				logrus.Warnf("Failed to inspect volume: %s due to: %v", volumeName, err)
 				return nil, true, err
@@ -817,7 +817,7 @@ func (d *portworx) RandomizeVolumeName(params string) string {
 
 func (d *portworx) getClusterOnStart() ([]api.StorageNode, error) {
 	t := func() (interface{}, bool, error) {
-		cluster, err := d.getClusterManager().InspectCurrent(d.getContext(""), &api.SdkClusterInspectCurrentRequest{})
+		cluster, err := d.getClusterManager().InspectCurrent(d.getContext(), &api.SdkClusterInspectCurrentRequest{})
 		if err != nil {
 			return nil, true, err
 		}
@@ -845,12 +845,12 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]api.Sto
 		nodeManager = nManagers[0]
 	}
 	nodes := make([]api.StorageNode, 0)
-	nodeEnumerateResp, err := nodeManager.Enumerate(d.getContext(""), &api.SdkNodeEnumerateRequest{})
+	nodeEnumerateResp, err := nodeManager.Enumerate(d.getContext(), &api.SdkNodeEnumerateRequest{})
 	if err != nil {
 		return nodes, err
 	}
 	for _, n := range nodeEnumerateResp.GetNodeIds() {
-		nodeResp, err := d.nodeManager.Inspect(d.getContext(""), &api.SdkNodeInspectRequest{NodeId: n})
+		nodeResp, err := d.nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n})
 		if err != nil {
 			return nodes, err
 		}
@@ -921,7 +921,7 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 				Cause: err.Error(),
 			}
 		}
-		nodeInspectResponse, err := nManager.Inspect(d.getContext(""), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
+		nodeInspectResponse, err := nManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 		if err != nil {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
@@ -961,7 +961,7 @@ func (d *portworx) pickAlternateClusterManager(n node.Node) (api.OpenStorageNode
 			if err != nil {
 				return nil, err
 			}
-			ns, err := nodeManager.Enumerate(d.getContext(""), &api.SdkNodeEnumerateRequest{})
+			ns, err := nodeManager.Enumerate(d.getContext(), &api.SdkNodeEnumerateRequest{})
 			if err != nil {
 				// if not responding in this addr, continue and pick another one, log the error
 				logrus.Warnf("failed to check node %s on addr %s. Cause: %v", n.Name, addr, err)
@@ -1016,7 +1016,7 @@ func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {
 func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error) {
 	name := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := d.volDriver.Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: name})
+		volumeInspectResponse, err := d.volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: name})
 		if err != nil && errIsNotFound(err) {
 			return 0, false, err
 		} else if err != nil {
@@ -1046,7 +1046,7 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := d.volDriver.Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		volumeInspectResponse, err := d.volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 		if err != nil && errIsNotFound(err) {
 			return nil, false, err
 		} else if err != nil {
@@ -1058,7 +1058,7 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 			SnapshotIntervalOpt: &api.VolumeSpecUpdate_SnapshotInterval{SnapshotInterval: math.MaxUint32},
 			ReplicaSet:          &api.ReplicaSet{},
 		}
-		_, err = d.volDriver.Update(d.getContext(""), &api.SdkVolumeUpdateRequest{
+		_, err = d.volDriver.Update(d.getContext(), &api.SdkVolumeUpdateRequest{
 			VolumeId: volumeInspectResponse.Volume.Id,
 			Spec:     volumeSpecUpdate,
 		})
@@ -1072,7 +1072,7 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 			case <-wdt:
 				quitFlag = true
 			default:
-				volumeInspectResponse, err = d.volDriver.Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+				volumeInspectResponse, err = d.volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 				if err != nil && errIsNotFound(err) {
 					return nil, false, err
 				} else if err != nil {
@@ -1108,7 +1108,7 @@ func (d *portworx) GetMinReplicationFactor() int64 {
 func (d *portworx) GetAggregationLevel(vol *torpedovolume.Volume) (int64, error) {
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
-		volResp, err := d.volDriver.Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		volResp, err := d.volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 		if err != nil && errIsNotFound(err) {
 			return 0, false, err
 		} else if err != nil {
@@ -1195,7 +1195,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 	}
 
 	d.clusterManager = api.NewOpenStorageClusterClient(conn)
-	_, err = d.clusterManager.InspectCurrent(d.getContext(""), &api.SdkClusterInspectCurrentRequest{})
+	_, err = d.clusterManager.InspectCurrent(d.getContext(), &api.SdkClusterInspectCurrentRequest{})
 	if st, ok := status.FromError(err); ok && st.Code() == codes.Unavailable {
 		return err
 	}
@@ -1239,16 +1239,20 @@ func (d *portworx) getLegacyClusterManager(endpoint string) (cluster.Cluster, er
 	return clusterManager, nil
 }
 
-func (d *portworx) getContext(token string) context.Context {
-	if token != "" || d.token != "" {
-		ctx := context.Background()
-		md, _ := metadata.FromOutgoingContext(ctx)
-		md = metadata.Join(md, metadata.New(map[string]string{
-			"authorization": "bearer " + token,
-		}))
-		return metadata.NewOutgoingContext(ctx, md)
+func (d *portworx) getContextWithToken(ctx context.Context, token string) context.Context {
+	md, _ := metadata.FromOutgoingContext(ctx)
+	md = metadata.Join(md, metadata.New(map[string]string{
+		"authorization": "bearer " + token,
+	}))
+	return metadata.NewOutgoingContext(ctx, md)
+}
+
+func (d *portworx) getContext() context.Context {
+	ctx := context.Background()
+	if len(d.token) > 0 {
+		return d.getContextWithToken(ctx, d.token)
 	}
-	return context.Background()
+	return ctx
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
@@ -1341,7 +1345,7 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) err
 func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	pairInfo := make(map[string]string)
 
-	resp, err := d.clusterPairManager.GetToken(d.getContext(""), &api.SdkClusterPairGetTokenRequest{})
+	resp, err := d.clusterPairManager.GetToken(d.getContext(), &api.SdkClusterPairGetTokenRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -1371,7 +1375,7 @@ func (d *portworx) DecommissionNode(n node.Node) error {
 		}
 	}
 
-	nodeResp, err := d.nodeManager.Inspect(d.getContext(""), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
+	nodeResp, err := d.nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
@@ -1426,7 +1430,7 @@ func (d *portworx) RejoinNode(n node.Node) error {
 }
 
 func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
-	nodeResponse, err := d.nodeManager.Inspect(d.getContext(""), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
+	nodeResponse, err := d.nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
 		st, ok := status.FromError(err)
 		// TODO when a node is not found sometimes we get an error code internal, as workaround we check for internal error and substring
@@ -1496,7 +1500,7 @@ func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClie
 		return nil, err
 	}
 	dClient := api.NewOpenStorageNodeClient(conn)
-	_, err = dClient.Enumerate(d.getContext(""), &api.SdkNodeEnumerateRequest{})
+	_, err = dClient.Enumerate(d.getContext(), &api.SdkNodeEnumerateRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -1511,7 +1515,7 @@ func (d *portworx) getVolumeDriverByAddress(addr string) (api.OpenStorageVolumeC
 		return nil, err
 	}
 	dClient := api.NewOpenStorageVolumeClient(conn)
-	_, err = dClient.Enumerate(d.getContext(""), &api.SdkVolumeEnumerateRequest{})
+	_, err = dClient.Enumerate(d.getContext(), &api.SdkVolumeEnumerateRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -1539,7 +1543,7 @@ func (d *portworx) constructURL(ip string) string {
 func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]string, error) {
 	var pxNodes []string
 	volumeName := d.schedOps.GetVolumeName(torpedovol)
-	volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+	volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 	if err != nil {
 		return nil, &ErrFailedToInspectVolume{
 			ID:    torpedovol.Name,
@@ -1549,7 +1553,7 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 
 	for _, rs := range volumeInspectResponse.Volume.ReplicaSets {
 		for _, n := range rs.Nodes {
-			nodeInpectResponse, err := d.nodeManager.Inspect(d.getContext(""), &api.SdkNodeInspectRequest{NodeId: n})
+			nodeInpectResponse, err := d.nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n})
 			if err != nil {
 				return nil, &ErrFailedToInspectVolume{
 					ID:    torpedovol.Name,
@@ -1614,7 +1618,7 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_
 		Nanos:   int32(currentTime.UnixNano()),
 		Seconds: currentTime.Unix(),
 	}
-	alerts, err := d.alertsManager.EnumerateWithFilters(d.getContext(""), &api.SdkAlertsEnumerateWithFiltersRequest{
+	alerts, err := d.alertsManager.EnumerateWithFilters(d.getContext(), &api.SdkAlertsEnumerateWithFiltersRequest{
 		Queries: []*api.SdkAlertsQuery{
 			{
 				Query: &api.SdkAlertsQuery_ResourceTypeQuery{
@@ -1638,14 +1642,14 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_
 		return err
 	}
 	// get volume and snap info
-	pvcVol, err := d.volDriver.Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: vol})
+	pvcVol, err := d.volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: vol})
 	if err != nil {
 		return fmt.Errorf("inspect failed for %v: %v", vol, err)
 	}
 	// form alert msg for snapshot restore
 	grepMsg := "Volume " + pvcVol.Volume.GetLocator().GetName() +
 		" (" + pvcVol.Volume.GetId() + ") restored from snapshot "
-	snapVol, err := d.volDriver.Inspect(d.getContext(""), &api.SdkVolumeInspectRequest{VolumeId: snap})
+	snapVol, err := d.volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: snap})
 	if err != nil {
 		// Restore object get deleted in case of cloudsnap
 		logrus.Warnf("Snapshot volume %v not found: %v", snap, err)
@@ -1673,7 +1677,7 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_
 }
 
 func (d *portworx) getTokenForVolume(name string, params map[string]string) string {
-	var token string
+	token := d.token
 	var volSecret string
 	var volSecretNamespace string
 	if secret, ok := params[secretName]; ok {
