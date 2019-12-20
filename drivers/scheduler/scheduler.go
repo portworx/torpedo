@@ -92,10 +92,9 @@ type AutopilotParameters struct {
 }
 
 type VpsParameters struct {
-	//Contains Mapping with storagecalss and 
+	//Contains Mapping with storagecalss and
 	ScVpsMap map[string]string
 }
-
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {

@@ -19,7 +19,6 @@ import (
 const (
 	defaultTimeout       = 6 * time.Minute
 	defaultRetryInterval = 10 * time.Second
-	defaultVstate						  = 1
 )
 
 func TestDecommissionNode(t *testing.T) {
@@ -40,7 +39,7 @@ var _ = Describe("{DecommissionNode}", func() {
 	It("has to decommission a node and check if node was decommissioned successfully", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i),nil,defaultVstate)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i), nil)...)
 		}
 
 		var workerNodes []node.Node

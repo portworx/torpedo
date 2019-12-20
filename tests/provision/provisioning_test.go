@@ -17,10 +17,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-
 const (
-	defaultVstate						  = 1
-		)
+	defaultVstate = 1
+)
 
 func TestVps(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -50,7 +49,7 @@ var _ = Describe("{ReplicaAffinity}", func() {
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
-				lblData,setLabels = getTestLabels(vrule.GetLabels)
+				lblData, setLabels = getTestLabels(vrule.GetLabels)
 				RemoveNodeLabels(lblData)
 				if setLabels == 1 {
 					lblnode := SetNodeLabels(lblData)
@@ -70,7 +69,7 @@ var _ = Describe("{ReplicaAffinity}", func() {
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i),vrule.GetScStrategyMap(),defaultVstate )...)
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i), vrule.GetScStrategyMap())...)
 				}
 			})
 
@@ -94,7 +93,6 @@ var _ = Describe("{ReplicaAffinity}", func() {
 		}
 	})
 })
-
 
 // This test performs VolumePlacementStrategy's volume affinity  of application
 // volume
@@ -111,7 +109,7 @@ var _ = Describe("{VolumeAffinity}", func() {
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
-				lblData,setLabels = getTestLabels(vrule.GetLabels)
+				lblData, setLabels = getTestLabels(vrule.GetLabels)
 				RemoveNodeLabels(lblData)
 				if setLabels == 1 {
 					lblnode := SetNodeLabels(lblData)
@@ -131,7 +129,7 @@ var _ = Describe("{VolumeAffinity}", func() {
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("volumeaffinity-%d", i),vrule.GetScStrategyMap() , defaultVstate)...)
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("volumeaffinity-%d", i), vrule.GetScStrategyMap())...)
 				}
 			})
 
@@ -155,7 +153,6 @@ var _ = Describe("{VolumeAffinity}", func() {
 		}
 	})
 })
-
 
 // This test performs VolumePlacementStrategy's replica & volume affinity  of application
 // volume
@@ -172,7 +169,7 @@ var _ = Describe("{ReplicaVolumeAffinity}", func() {
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
-				lblData,setLabels = getTestLabels(vrule.GetLabels)
+				lblData, setLabels = getTestLabels(vrule.GetLabels)
 				RemoveNodeLabels(lblData)
 				if setLabels == 1 {
 					lblnode := SetNodeLabels(lblData)
@@ -192,7 +189,7 @@ var _ = Describe("{ReplicaVolumeAffinity}", func() {
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumeaffinity-%d", i),vrule.GetScStrategyMap(),defaultVstate )...)
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumeaffinity-%d", i), vrule.GetScStrategyMap())...)
 				}
 			})
 
@@ -217,7 +214,6 @@ var _ = Describe("{ReplicaVolumeAffinity}", func() {
 	})
 })
 
-
 // This test performs VolumePlacementStrategy's replica & volume affinity
 // with app scale Up  & Down of application
 var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
@@ -233,7 +229,7 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
-				lblData,setLabels = getTestLabels(vrule.GetLabels)
+				lblData, setLabels = getTestLabels(vrule.GetLabels)
 				RemoveNodeLabels(lblData)
 				if setLabels == 1 {
 					lblnode := SetNodeLabels(lblData)
@@ -253,7 +249,7 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumeaffinityscale-%d", i),vrule.GetScStrategyMap(),defaultVstate )...)
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumeaffinityscale-%d", i), vrule.GetScStrategyMap())...)
 				}
 			})
 
@@ -273,7 +269,7 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 						time.Sleep(60 * time.Second)
 					})
 
-					ValidateContext(ctx,defaultVstate)
+					ValidateContext(ctx, defaultVstate)
 					Step("validate volumes and replica affinity: "+vkey, func() {
 						for _, ctx := range contexts {
 							ValidateVpsRules(vrule.Validate, ctx, volNodes)
@@ -293,7 +289,7 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 						time.Sleep(60 * time.Second)
 					})
 
-					ValidateContext(ctx,defaultVstate)
+					ValidateContext(ctx, defaultVstate)
 					Step("validate volumes and replica affinity: "+vkey, func() {
 						for _, ctx := range contexts {
 							ValidateVpsRules(vrule.Validate, ctx, volNodes)
@@ -325,7 +321,6 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 	})
 })
 
-
 // This test performs VolumePlacementStrategy's replica & volume affinity  of application
 // with volumes pending state
 var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
@@ -341,7 +336,7 @@ var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
-				lblData,setLabels = getTestLabels(vrule.GetLabels)
+				lblData, setLabels = getTestLabels(vrule.GetLabels)
 				RemoveNodeLabels(lblData)
 				if setLabels == 1 {
 					lblnode := SetNodeLabels(lblData)
@@ -360,8 +355,24 @@ var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
 				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
+				VpsMap := &scheduler.VpsParameters{
+					ScVpsMap: vrule.GetScStrategyMap(),
+				}
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumepending-%d", i),vrule.GetScStrategyMap(), 0 )...)
+
+					ctxs, err := Inst().S.Schedule(fmt.Sprintf("replicaivolumepending-%d", i), scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Inst().Provisioner,
+						ConfigMap:          Inst().ConfigMap,
+						VpsParameters:      VpsMap,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ctxs).NotTo(BeEmpty())
+					contexts = append(contexts, ctxs...)
+				}
+
+				for _, ctx := range contexts {
+					ValidateContext(ctx, 0)
 				}
 			})
 
@@ -385,8 +396,6 @@ var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
 		}
 	})
 })
-
-
 
 var _ = Describe("{DefaultRepVolAffinity}", func() {
 	It("has to schedule app and verify the volume replica affinity", func() {
@@ -401,7 +410,7 @@ var _ = Describe("{DefaultRepVolAffinity}", func() {
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
-				lblData,setLabels = getTestLabels(vrule.GetLabels)
+				lblData, setLabels = getTestLabels(vrule.GetLabels)
 				RemoveNodeLabels(lblData)
 				if setLabels == 1 {
 					lblnode := SetNodeLabels(lblData)
@@ -421,7 +430,7 @@ var _ = Describe("{DefaultRepVolAffinity}", func() {
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i),vrule.GetScStrategyMap(),defaultVstate )...)
+					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i), vrule.GetScStrategyMap())...)
 				}
 			})
 
@@ -446,12 +455,6 @@ var _ = Describe("{DefaultRepVolAffinity}", func() {
 	})
 })
 
-
-
-
-
-
-
 //-- Common function
 //ValidateVpsRules checks applied vps rules on the app
 func ValidateVpsRules(f func([]*volume.Volume, map[string]map[string][]string), ctx *scheduler.Context, volscheck map[string]map[string][]string) {
@@ -465,7 +468,7 @@ func ValidateVpsRules(f func([]*volume.Volume, map[string]map[string][]string), 
 
 }
 
-func getTestLabels(f func() ([]labelDict,int)) ([]labelDict,int) {
+func getTestLabels(f func() ([]labelDict, int)) ([]labelDict, int) {
 	return f()
 }
 
@@ -502,13 +505,12 @@ func SetNodeLabels(labels []labelDict) map[string][]string {
 
 	}
 
-
 	//for leftover nodes, labels for zone and region will be 'default'
 
 	zonelbl := "failure-domain.beta.kubernetes.io/zonedefault"
 	regionlbl := "failure-domain.beta.kubernetes.io/regiondefault"
 	if workerCnt > nodes2lbl {
-		for i:=(workerCnt -1); i >=nodes2lbl; i-- {
+		for i := (workerCnt - 1); i >= nodes2lbl; i-- {
 			n := workerNodes[i]
 			lblnodes[zonelbl] = append(lblnodes[zonelbl], n.Name)
 			lblnodes[regionlbl] = append(lblnodes[regionlbl], n.Name)

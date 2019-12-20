@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	defaultVstate						  = 1
-		)
+	defaultVstate = 1
+)
 
 func TestUpgrade(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -34,7 +34,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	It("upgrade volume driver and ensure everything is running fine", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradevolumedriver-%d", i), nil,defaultVstate)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradevolumedriver-%d", i), nil)...)
 		}
 
 		Step("start the upgrade of volume driver", func() {
@@ -45,7 +45,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 		Step("validate all apps after upgrade", func() {
 			for _, ctx := range contexts {
-				ValidateContext(ctx,defaultVstate)
+				ValidateContext(ctx, defaultVstate)
 			}
 		})
 

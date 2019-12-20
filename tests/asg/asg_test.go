@@ -21,7 +21,7 @@ import (
 
 const (
 	scaleTimeout          = 10 * time.Minute
-	defaultVstate		  = 1
+	defaultVstate         = 1
 	nodeDeleteTimeoutMins = 7 * time.Minute
 )
 
@@ -44,7 +44,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgscaleupdown-%d", i), nil,defaultVstate)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgscaleupdown-%d", i), nil)...)
 		}
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
@@ -103,7 +103,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 
 		Step("Ensure apps are deployed", func() {
 			for i := 0; i < Inst().ScaleFactor; i++ {
-				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgchaos-%d", i),nil,defaultVstate)...)
+				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgchaos-%d", i), nil)...)
 			}
 		})
 
@@ -140,7 +140,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 
 				Step("validate applications", func() {
 					for _, ctx := range contexts {
-						ValidateContext(ctx,defaultVstate)
+						ValidateContext(ctx, defaultVstate)
 					}
 				})
 
@@ -155,7 +155,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 
 						Step("validate applications", func() {
 							for _, ctx := range contexts {
-								ValidateContext(ctx,defaultVstate)
+								ValidateContext(ctx, defaultVstate)
 							}
 						})
 					case <-stopChannel:

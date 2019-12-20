@@ -1575,8 +1575,7 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 	return pxNodes, nil
 }
 
-
-//GetReplicatNodeSets Get the replica sets along with nodes per set, useful for 
+//GetReplicatNodeSets Get the replica sets along with nodes per set, useful for
 // aggregate volumes
 func (d *portworx) GetReplicatNodeSets(torpedovol *torpedovolume.Volume) ([][]string, error) {
 	var pxNodeSet [][]string
@@ -1597,7 +1596,7 @@ func (d *portworx) GetReplicatNodeSets(torpedovol *torpedovolume.Volume) ([][]st
 	}
 
 	for _, rs := range vols[0].ReplicaSets {
-	    var pxNodes []string
+		var pxNodes []string
 		for _, n := range rs.Nodes {
 			pxNode, err := d.clusterManager.Inspect(n)
 			if err != nil {
@@ -1612,11 +1611,10 @@ func (d *portworx) GetReplicatNodeSets(torpedovol *torpedovolume.Volume) ([][]st
 			}
 			pxNodes = append(pxNodes, nodeName)
 		}
-		pxNodeSet =append(pxNodeSet, pxNodes)
+		pxNodeSet = append(pxNodeSet, pxNodes)
 	}
 	return pxNodeSet, nil
 }
-
 
 func (d *portworx) updateNodeID(n node.Node, cManager cluster.Cluster) (node.Node, error) {
 	if cManager == nil {

@@ -52,7 +52,6 @@ const (
 	provisionerFlag                      = "provisioner"
 	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
 	configMapFlag                        = "config-map"
-
 )
 
 const (
@@ -69,7 +68,7 @@ const (
 	defaultStorageProvisioner             = "portworx"
 	defaultStorageNodesPerAZ              = 2
 	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
-	defaultVstate						  = 1
+	defaultVstate                         = 1
 )
 
 const (
@@ -133,7 +132,7 @@ func ValidateContext(ctx *scheduler.Context, vState int) {
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			ValidateVolumes(ctx, vState)
 			if vState == 0 {
-				//Since volume is expected to not come up, app and other 
+				//Since volume is expected to not come up, app and other
 				//validation can be skipped
 				return
 			}
@@ -142,11 +141,11 @@ func ValidateContext(ctx *scheduler.Context, vState int) {
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
 			err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
-					if vState == 0 {
-						expect(err).To(haveOccurred())
-					} else {
-						expect(err).NotTo(haveOccurred())
-					}
+			if vState == 0 {
+				expect(err).To(haveOccurred())
+			} else {
+				expect(err).NotTo(haveOccurred())
+			}
 		})
 
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
@@ -254,13 +253,12 @@ func DeleteVolumesAndWait(ctx *scheduler.Context) {
 }
 
 // ScheduleAndValidate schedules and validates applications
-func ScheduleAndValidate(testname string,vps_map map[string]string,vState int) []*scheduler.Context {
+func ScheduleAndValidate(testname string, vps_map map[string]string) []*scheduler.Context {
 	var contexts []*scheduler.Context
 	var err error
-	VpsMap := &scheduler.VpsParameters {
-			ScVpsMap: vps_map,
+	VpsMap := &scheduler.VpsParameters{
+		ScVpsMap: vps_map,
 	}
-
 
 	Step("schedule applications", func() {
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
@@ -268,7 +266,7 @@ func ScheduleAndValidate(testname string,vps_map map[string]string,vState int) [
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
 			ConfigMap:          Inst().ConfigMap,
-			VpsParameters:	VpsMap,
+			VpsParameters:      VpsMap,
 		})
 		expect(err).NotTo(haveOccurred())
 		expect(contexts).NotTo(beEmpty())
@@ -276,7 +274,7 @@ func ScheduleAndValidate(testname string,vps_map map[string]string,vState int) [
 
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
-			ValidateContext(ctx,vState)
+			ValidateContext(ctx, defaultVstate)
 		}
 	})
 
@@ -351,7 +349,7 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	Step("validate apps", func() {
 		for _, ctx := range contexts {
-			ValidateContext(ctx,defaultVstate)
+			ValidateContext(ctx, defaultVstate)
 		}
 	})
 

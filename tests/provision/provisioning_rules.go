@@ -17,11 +17,11 @@ type labelDict map[string]interface{}
 
 type vpsTemplate interface {
 	// Node label and whether it needs to be set on node remove
-	GetLabels() ([]labelDict,int)
+	GetLabels() ([]labelDict, int)
 	// Pvc label
 	GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string
-    // Get StorageClass placement_strategy
-	GetScStrategyMap() map[string] string
+	// Get StorageClass placement_strategy
+	GetScStrategyMap() map[string]string
 
 	// Vps Spec
 	GetSpec() string
@@ -32,18 +32,18 @@ type vpsTemplate interface {
 }
 
 var (
-	vpsRulesReplica = make(map[string]vpsTemplate)
-	vpsRulesVolume = make(map[string]vpsTemplate)
-	vpsRulesMix = make(map[string]vpsTemplate)
-	vpsRulesMixScale = make(map[string]vpsTemplate)
-	vpsRulesPending = make(map[string]vpsTemplate)
+	vpsRulesReplica      = make(map[string]vpsTemplate)
+	vpsRulesVolume       = make(map[string]vpsTemplate)
+	vpsRulesMix          = make(map[string]vpsTemplate)
+	vpsRulesMixScale     = make(map[string]vpsTemplate)
+	vpsRulesPending      = make(map[string]vpsTemplate)
 	vpsRulesDefaultLabel = make(map[string]vpsTemplate)
 )
 
 // Register registers the given vps rule
 func Register(name string, d vpsTemplate, cat int) error {
 
-	if cat == 1 { 
+	if cat == 1 {
 		if _, ok := vpsRulesReplica[name]; !ok {
 			vpsRulesReplica[name] = d
 		} else {
@@ -80,7 +80,7 @@ func Register(name string, d vpsTemplate, cat int) error {
 			return fmt.Errorf("vps rule: %s is already registered", name)
 		}
 	} else {
-			return fmt.Errorf("vps rule category: %d, is not valid", cat)
+		return fmt.Errorf("vps rule category: %d, is not valid", cat)
 	}
 
 	return nil
@@ -90,15 +90,15 @@ func Register(name string, d vpsTemplate, cat int) error {
 func GetVpsRules(cat int) map[string]vpsTemplate {
 	if cat == 1 {
 		return vpsRulesReplica
-	} else if cat ==2 {
+	} else if cat == 2 {
 		return vpsRulesVolume
-	} else if cat ==3 {
+	} else if cat == 3 {
 		return vpsRulesMix
-	} else if cat ==4 {
+	} else if cat == 4 {
 		return vpsRulesMixScale
-	} else if cat ==5 {
+	} else if cat == 5 {
 		return vpsRulesPending
-	} else if cat ==6 {
+	} else if cat == 6 {
 		return vpsRulesDefaultLabel
 	} else {
 		return nil
@@ -106,17 +106,11 @@ func GetVpsRules(cat int) map[string]vpsTemplate {
 
 }
 
-
-
-
-
 /*
- *  
+ *
  *     Replica  Affinity and Anti-Affinity related test cases
  *
  */
-
-
 
 type vpscase1 struct {
 	//Case description
@@ -126,7 +120,7 @@ type vpscase1 struct {
 }
 
 //# Case-1--enforcemnt: Required
-func (v *vpscase1) GetLabels() ([]labelDict,int) {
+func (v *vpscase1) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
@@ -159,10 +153,6 @@ func (v *vpscase1) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map
 
 	return volnodelist
 }
-
-
-
-
 
 /*
  * 1. Each rule template, will provide the expected output
@@ -229,7 +219,7 @@ func (v *vpscase1) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 
 //StorageClass placement_strategy mapping
 func (v *vpscase1) GetScStrategyMap() map[string]string {
-	return map[string]string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":"",}
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase1) GetSpec() string {
@@ -275,7 +265,7 @@ type vpscase2 struct {
 	enabled bool
 }
 
-func (v *vpscase2) GetLabels() ([]labelDict,int) {
+func (v *vpscase2) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
@@ -283,7 +273,7 @@ func (v *vpscase2) GetLabels() ([]labelDict,int) {
 	node3lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
 	node4lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl)
-	return lbldata,1
+	return lbldata, 1
 }
 
 func (v *vpscase2) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -373,10 +363,9 @@ func (v *vpscase2) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 	}
 }
 
-
 //StorageClass placement_strategy mapping
 func (v *vpscase2) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase2) GetSpec() string {
@@ -414,9 +403,7 @@ func (v *vpscase2) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-//#---- Case 3 ----T809561: Verify Lt, Gt operators using latency and iops 
+//#---- Case 3 ----T809561: Verify Lt, Gt operators using latency and iops
 type vpscase3 struct {
 	//Case description
 	name string
@@ -424,7 +411,7 @@ type vpscase3 struct {
 	enabled bool
 }
 
-func (v *vpscase3) GetLabels() ([]labelDict,int) {
+func (v *vpscase3) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"iops": "90", "latency": "50"}
@@ -432,7 +419,7 @@ func (v *vpscase3) GetLabels() ([]labelDict,int) {
 	node3lbl := labelDict{"iops": "70", "latency": "30"}
 	node4lbl := labelDict{"iops": "60", "latency": "20"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl)
-	return lbldata,1
+	return lbldata, 1
 }
 
 func (v *vpscase3) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -525,10 +512,9 @@ func (v *vpscase3) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 	}
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase3) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase3) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase3) GetSpec() string {
@@ -566,9 +552,6 @@ func (v *vpscase3) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-
 //#---- Case 4 ----T863792  Verify Replica Affinity with topology keys
 type vpscase4 struct {
 	//Case description
@@ -577,7 +560,7 @@ type vpscase4 struct {
 	enabled bool
 }
 
-func (v *vpscase4) GetLabels() ([]labelDict,int) {
+func (v *vpscase4) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -588,8 +571,8 @@ func (v *vpscase4) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase4) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -638,7 +621,6 @@ func (v *vpscase4) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 
 	for _, appvol := range appVolumes {
 
-		
 		for vol, vnodes := range volscheck {
 
 			if appvol.Name == vol {
@@ -659,21 +641,21 @@ func (v *vpscase4) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 							break
 						}
 					}
-				    if found == "" {
-						foundinset=false
+					if found == "" {
+						foundinset = false
 						break
 					} else {
-						foundinset=true
+						foundinset = true
 					}
 				}
 
 				//If replicas are not present in first set of labeled nodes, check other set
-				if foundinset==false {
-					for _, rnode := range replicas  {
+				if foundinset == false {
+					for _, rnode := range replicas {
 						found := ""
-					    // Check whether replica is on the expected set of nodes
+						// Check whether replica is on the expected set of nodes
 						for _, mnode := range vnodes["rnodes2"] {
-						    logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
+							logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
 							if mnode == rnode {
 								found = rnode
 								break
@@ -682,7 +664,6 @@ func (v *vpscase4) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 						Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Replica (%v) of Volume '%v' is not in the list of expected nodes(%v)", rnode, appvol, vnodes["rnodes2"]))
 					}
 				}
-
 
 				// Preferred
 				for _, mnode := range vnodes["pnodes"] {
@@ -716,10 +697,9 @@ func (v *vpscase4) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 	}
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase4) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-1", "placement-3":"placement-3"}
+func (v *vpscase4) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": "placement-3"}
 }
 
 func (v *vpscase4) GetSpec() string {
@@ -749,8 +729,6 @@ func (v *vpscase4) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
 //#---- Case 5 ----T1052921  Verify Replica Anti-Affinity with topology keys
 type vpscase5 struct {
 	//Case description
@@ -759,7 +737,7 @@ type vpscase5 struct {
 	enabled bool
 }
 
-func (v *vpscase5) GetLabels() ([]labelDict,int) {
+func (v *vpscase5) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -770,8 +748,8 @@ func (v *vpscase5) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "eu"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase5) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -834,7 +812,6 @@ func (v *vpscase5) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 
 	for _, appvol := range appVolumes {
 
-		
 		for vol, vnodes := range volscheck {
 
 			if appvol.Name == vol {
@@ -843,22 +820,22 @@ func (v *vpscase5) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 				Expect(err).NotTo(HaveOccurred())
 				Expect(replicaset).NotTo(BeEmpty())
 
-				for _,replicas := range replicaset {
+				for _, replicas := range replicaset {
 					// Must have (required)
 					// There are  3 replicas and 4 sets to check in.
 					// In the 4 set, the replica should be place in the 3 of the sets.
 					// A set cannot containe more than 1 replica
-					
+
 					Expect(replicas).NotTo(BeEmpty())
 
-				    totalrepfound :=0
+					totalrepfound := 0
 					// Check in set 1
 					foundinset := 0
 					for _, mnode := range vnodes["rnodes1"] {
 						found := ""
-						repOnNodeCnt:=0
+						repOnNodeCnt := 0
 						// Check whether replica is on the expected set of nodes
-						for _, rnode := range  replicas {
+						for _, rnode := range replicas {
 							logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
 							if mnode == rnode {
 								found = rnode
@@ -866,14 +843,14 @@ func (v *vpscase5) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 							}
 						}
 
-						if  found != "" {	   
+						if found != "" {
 							Expect(repOnNodeCnt).Should(BeNumerically("<=", 1))
 							foundinset++
 						}
 					}
 
 					Expect(foundinset).Should(BeNumerically("<=", 1))
-					if foundinset ==1 {
+					if foundinset == 1 {
 						totalrepfound++
 					}
 
@@ -881,9 +858,9 @@ func (v *vpscase5) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 					foundinset = 0
 					for _, mnode := range vnodes["rnodes2"] {
 						found := ""
-						repOnNodeCnt:=0
+						repOnNodeCnt := 0
 						// Check whether replica is on the expected set of nodes
-						for _, rnode := range  replicas {
+						for _, rnode := range replicas {
 							logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
 							if mnode == rnode {
 								found = rnode
@@ -891,14 +868,14 @@ func (v *vpscase5) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 							}
 						}
 
-						if  found != "" {	   
+						if found != "" {
 							Expect(repOnNodeCnt).Should(BeNumerically("<=", 1))
 							foundinset++
 						}
 					}
 
 					Expect(foundinset).Should(BeNumerically("<=", 1))
-					if foundinset ==1 {
+					if foundinset == 1 {
 						totalrepfound++
 					}
 
@@ -906,9 +883,9 @@ func (v *vpscase5) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 					foundinset = 0
 					for _, mnode := range vnodes["rnodes3"] {
 						found := ""
-						repOnNodeCnt:=0
+						repOnNodeCnt := 0
 						// Check whether replica is on the expected set of nodes
-						for _, rnode := range  replicas {
+						for _, rnode := range replicas {
 							logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
 							if mnode == rnode {
 								found = rnode
@@ -916,14 +893,14 @@ func (v *vpscase5) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 							}
 						}
 
-						if  found != "" {	   
+						if found != "" {
 							Expect(repOnNodeCnt).Should(BeNumerically("<=", 1))
 							foundinset++
 						}
 					}
 
 					Expect(foundinset).Should(BeNumerically("<=", 1))
-					if foundinset ==1 {
+					if foundinset == 1 {
 						totalrepfound++
 					}
 
@@ -931,9 +908,9 @@ func (v *vpscase5) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 					foundinset = 0
 					for _, mnode := range vnodes["rnodes4"] {
 						found := ""
-						repOnNodeCnt:=0
+						repOnNodeCnt := 0
 						// Check whether replica is on the expected set of nodes
-						for _, rnode := range  replicas {
+						for _, rnode := range replicas {
 							logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
 							if mnode == rnode {
 								found = rnode
@@ -941,25 +918,24 @@ func (v *vpscase5) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 							}
 						}
 
-						if  found != "" {	   
+						if found != "" {
 							Expect(repOnNodeCnt).Should(BeNumerically("<=", 1))
 							foundinset++
 						}
 					}
 
 					Expect(foundinset).Should(BeNumerically("<=", 1))
-					if foundinset ==1 {
+					if foundinset == 1 {
 						totalrepfound++
 					}
 
-					if vol == "mysql-data-seq" || vol =="mysql-data" {
+					if vol == "mysql-data-seq" || vol == "mysql-data" {
 						// These are repl:3 vol
 						Expect(totalrepfound).Should(Equal(3))
 					} else {
 						// These are repl:2 aggr:2 volume
 						Expect(totalrepfound).Should(Equal(2))
 					}
-
 
 					// Preferred
 					for _, mnode := range vnodes["pnodes"] {
@@ -994,10 +970,9 @@ func (v *vpscase5) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 	}
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase5) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-1", "placement-3":"placement-3"}
+func (v *vpscase5) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": "placement-3"}
 }
 
 func (v *vpscase5) GetSpec() string {
@@ -1027,7 +1002,6 @@ func (v *vpscase5) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
 //
 
 //#---- Case 6 ---- T809554  Verify Replica Affinity with nodes not having the required labels
@@ -1038,10 +1012,10 @@ type vpscase6 struct {
 	enabled bool
 }
 
-func (v *vpscase6) GetLabels() ([]labelDict,int) {
+func (v *vpscase6) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	return lbldata,0
+	return lbldata, 0
 }
 
 func (v *vpscase6) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -1079,7 +1053,6 @@ func (v *vpscase6) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 
 	for _, appvol := range appVolumes {
 
-		
 		for vol, vnodes := range volscheck {
 
 			if appvol.Name == vol {
@@ -1090,16 +1063,14 @@ func (v *vpscase6) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 				Expect(err).To(HaveOccurred())
 				Expect(replicas).To(BeEmpty())
 
-				
 			}
 		}
 	}
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase6) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-1", "placement-3":"placement-1"}
+func (v *vpscase6) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": "placement-1"}
 }
 
 func (v *vpscase6) GetSpec() string {
@@ -1124,11 +1095,8 @@ func (v *vpscase6) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-
 /*
- *  
+ *
  *     Volume  Affinity and Anti-Affinity related test cases
  *
  */
@@ -1141,10 +1109,10 @@ type vpscase7 struct {
 	enabled bool
 }
 
-func (v *vpscase7) GetLabels() ([]labelDict,int) {
+func (v *vpscase7) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	return lbldata,0
+	return lbldata, 0
 }
 
 func (v *vpscase7) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -1177,7 +1145,7 @@ func (v *vpscase7) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 7 T809548  Verify volume affinity 'exists', mysql-data-seq volume's replica should on nodes where mysql-data volume's replicas are present ")	
+	logrus.Infof("Case 7 T809548  Verify volume affinity 'exists', mysql-data-seq volume's replica should on nodes where mysql-data volume's replicas are present ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -1193,15 +1161,15 @@ func (v *vpscase7) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
-	for _,rnode := range mysqlDataSeqReplNodes {
-		found :=""
-		for _,mnode := range mysqlDataReplNodes {
+	for _, rnode := range mysqlDataSeqReplNodes {
+		found := ""
+		for _, mnode := range mysqlDataReplNodes {
 			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should be same as mysql-data  Replica Node:%v", mnode, rnode)
-			if rnode == mnode{
+			if rnode == mnode {
 				logrus.Debugf("Volume should have replica on :%v Replica Node:%v", mnode, rnode)
 				found = rnode
 				break
@@ -1213,10 +1181,9 @@ func (v *vpscase7) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase7) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-2", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase7) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase7) GetSpec() string {
@@ -1241,9 +1208,8 @@ func (v *vpscase7) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
 /*
- *  
+ *
  *     Volume  Affinity and Anti-Affinity related test cases
  *
  */
@@ -1256,10 +1222,10 @@ type vpscase8 struct {
 	enabled bool
 }
 
-func (v *vpscase8) GetLabels() ([]labelDict,int) {
+func (v *vpscase8) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	return lbldata,0
+	return lbldata, 0
 }
 
 func (v *vpscase8) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -1292,7 +1258,7 @@ func (v *vpscase8) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 8 T809548  Verify volume affinity 'In', mysql-data-seq volume's replica should be on nodes where mysql-data volume's replicas are present ")	
+	logrus.Infof("Case 8 T809548  Verify volume affinity 'In', mysql-data-seq volume's replica should be on nodes where mysql-data volume's replicas are present ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -1308,15 +1274,15 @@ func (v *vpscase8) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
-	for _,rnode := range mysqlDataSeqReplNodes {
-		found :=""
-		for _,mnode := range mysqlDataReplNodes {
+	for _, rnode := range mysqlDataSeqReplNodes {
+		found := ""
+		for _, mnode := range mysqlDataReplNodes {
 			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should be same as mysql-data  Replica Node:%v", mnode, rnode)
-			if rnode == mnode{
+			if rnode == mnode {
 				logrus.Debugf("Volume should have replica on :%v Replica Node:%v", mnode, rnode)
 				found = rnode
 				break
@@ -1328,10 +1294,9 @@ func (v *vpscase8) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase8) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-2", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase8) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase8) GetSpec() string {
@@ -1356,8 +1321,6 @@ func (v *vpscase8) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
 //#---- Case 9 ---- T809548  Verify volume affinity - operator: DoesNotExist
 type vpscase9 struct {
 	//Case description
@@ -1366,10 +1329,10 @@ type vpscase9 struct {
 	enabled bool
 }
 
-func (v *vpscase9) GetLabels() ([]labelDict,int) {
+func (v *vpscase9) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	return lbldata,0
+	return lbldata, 0
 }
 
 func (v *vpscase9) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -1402,7 +1365,7 @@ func (v *vpscase9) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 9 T809548  Verify volume affinity 'DoesNotExist', mysql-data-seq volume's replica should not be on nodes where mysql-data volume's replicas are present ")	
+	logrus.Infof("Case 9 T809548  Verify volume affinity 'DoesNotExist', mysql-data-seq volume's replica should not be on nodes where mysql-data volume's replicas are present ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -1418,15 +1381,15 @@ func (v *vpscase9) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
-	for _,rnode := range mysqlDataSeqReplNodes {
-		found :=""
-		for _,mnode := range mysqlDataReplNodes {
+	for _, rnode := range mysqlDataSeqReplNodes {
+		found := ""
+		for _, mnode := range mysqlDataReplNodes {
 			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should not be same as mysql-data  Replica Node:%v", mnode, rnode)
-			if rnode == mnode{
+			if rnode == mnode {
 				logrus.Debugf("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
 				found = rnode
 				break
@@ -1438,10 +1401,9 @@ func (v *vpscase9) Validate(appVolumes []*volume.Volume, volscheck map[string]ma
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase9) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-2", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase9) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase9) GetSpec() string {
@@ -1466,9 +1428,6 @@ func (v *vpscase9) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-
 //#---- Case 10 ---- T809548  Verify volume affinity - operator: NotIn
 type vpscase10 struct {
 	//Case description
@@ -1477,10 +1436,10 @@ type vpscase10 struct {
 	enabled bool
 }
 
-func (v *vpscase10) GetLabels() ([]labelDict,int) {
+func (v *vpscase10) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	return lbldata,0
+	return lbldata, 0
 }
 
 func (v *vpscase10) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -1513,7 +1472,7 @@ func (v *vpscase10) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 10 T809548  Verify volume affinity 'NotIn', mysql-data-seq volume's replica should not be on nodes where mysql-data volume's replicas are present ")	
+	logrus.Infof("Case 10 T809548  Verify volume affinity 'NotIn', mysql-data-seq volume's replica should not be on nodes where mysql-data volume's replicas are present ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -1529,15 +1488,15 @@ func (v *vpscase10) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
-	for _,rnode := range mysqlDataSeqReplNodes {
-		found :=""
-		for _,mnode := range mysqlDataReplNodes {
-				logrus.Debugf("Volume (mysql-data-seq) replica node :%v should not be same as mysql-data  Replica Node:%v", mnode, rnode)
-			if rnode == mnode{
+	for _, rnode := range mysqlDataSeqReplNodes {
+		found := ""
+		for _, mnode := range mysqlDataReplNodes {
+			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should not be same as mysql-data  Replica Node:%v", mnode, rnode)
+			if rnode == mnode {
 				logrus.Debugf("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
 				found = rnode
 				break
@@ -1549,10 +1508,9 @@ func (v *vpscase10) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase10) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-2", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase10) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase10) GetSpec() string {
@@ -1577,8 +1535,7 @@ func (v *vpscase10) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-//T809549 Verify Volume Anti-Affinity  
-
+//T809549 Verify Volume Anti-Affinity
 
 //#---- Case 11 ---- T809549  Verify volume Anit-Affinity  --operator: Exists
 type vpscase11 struct {
@@ -1588,10 +1545,10 @@ type vpscase11 struct {
 	enabled bool
 }
 
-func (v *vpscase11) GetLabels() ([]labelDict,int) {
+func (v *vpscase11) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	return lbldata,0
+	return lbldata, 0
 }
 
 func (v *vpscase11) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -1624,7 +1581,7 @@ func (v *vpscase11) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 11 T809549  Verify volume anti-affinity 'exists', mysql-data-seq volume's replica should not on come nodes where mysql-data volume's replicas are present ")	
+	logrus.Infof("Case 11 T809549  Verify volume anti-affinity 'exists', mysql-data-seq volume's replica should not on come nodes where mysql-data volume's replicas are present ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -1640,15 +1597,15 @@ func (v *vpscase11) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
-	for _,rnode := range mysqlDataSeqReplNodes {
-		found :=""
-		for _,mnode := range mysqlDataReplNodes {
+	for _, rnode := range mysqlDataSeqReplNodes {
+		found := ""
+		for _, mnode := range mysqlDataReplNodes {
 			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should be come on mysql-data  Replica Node:%v", mnode, rnode)
-			if rnode == mnode{
+			if rnode == mnode {
 				logrus.Debugf("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
 				found = rnode
 				break
@@ -1660,10 +1617,9 @@ func (v *vpscase11) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase11) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-2", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase11) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase11) GetSpec() string {
@@ -1688,7 +1644,6 @@ func (v *vpscase11) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
 //#---- Case 12 ---- T809549  Verify volume anti-affinity - operator: In
 type vpscase12 struct {
 	//Case description
@@ -1697,10 +1652,10 @@ type vpscase12 struct {
 	enabled bool
 }
 
-func (v *vpscase12) GetLabels() ([]labelDict,int) {
+func (v *vpscase12) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	return lbldata,0
+	return lbldata, 0
 }
 
 func (v *vpscase12) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -1733,7 +1688,7 @@ func (v *vpscase12) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 12 T809549  Verify volume anti-affinity 'In', mysql-data-seq volume's replica should not be on nodes where mysql-data volume's replicas are present ")	
+	logrus.Infof("Case 12 T809549  Verify volume anti-affinity 'In', mysql-data-seq volume's replica should not be on nodes where mysql-data volume's replicas are present ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -1749,15 +1704,15 @@ func (v *vpscase12) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
-	for _,rnode := range mysqlDataSeqReplNodes {
-		found :=""
-		for _,mnode := range mysqlDataReplNodes {
+	for _, rnode := range mysqlDataSeqReplNodes {
+		found := ""
+		for _, mnode := range mysqlDataReplNodes {
 			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should not be on mysql-data  Replica Node:%v", mnode, rnode)
-			if rnode == mnode{
+			if rnode == mnode {
 				logrus.Debugf("Volume should not have replica on :%v Replica Node:%v", mnode, rnode)
 				found = rnode
 				break
@@ -1769,10 +1724,9 @@ func (v *vpscase12) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase12) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-2", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase12) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase12) GetSpec() string {
@@ -1797,8 +1751,6 @@ func (v *vpscase12) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
 //#---- Case 13 ---- T809549  Verify volume anti-affinity - operator: DoesNotExist
 type vpscase13 struct {
 	//Case description
@@ -1807,10 +1759,10 @@ type vpscase13 struct {
 	enabled bool
 }
 
-func (v *vpscase13) GetLabels() ([]labelDict,int) {
+func (v *vpscase13) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	return lbldata,0
+	return lbldata, 0
 }
 
 func (v *vpscase13) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -1843,7 +1795,7 @@ func (v *vpscase13) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 13 T809549  Verify volume anti-affinity 'DoesNotExist', mysql-data-seq volume's replica should be on nodes where mysql-data volume's replicas are present ")	
+	logrus.Infof("Case 13 T809549  Verify volume anti-affinity 'DoesNotExist', mysql-data-seq volume's replica should be on nodes where mysql-data volume's replicas are present ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -1859,15 +1811,15 @@ func (v *vpscase13) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	// mysql-data-seq replicas should land on  the nodes where mysql-data volume replicas are present
-	for _,rnode := range mysqlDataSeqReplNodes {
-		found :=""
-		for _,mnode := range mysqlDataReplNodes {
+	for _, rnode := range mysqlDataSeqReplNodes {
+		found := ""
+		for _, mnode := range mysqlDataReplNodes {
 			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should be on mysql-data  Replica Node:%v", mnode, rnode)
-			if rnode == mnode{
+			if rnode == mnode {
 				logrus.Debugf("Volume should have replica on :%v Replica Node:%v", mnode, rnode)
 				found = rnode
 				break
@@ -1879,10 +1831,9 @@ func (v *vpscase13) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase13) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-2", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase13) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase13) GetSpec() string {
@@ -1907,9 +1858,6 @@ func (v *vpscase13) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-
 //#---- Case 14 ---- T809549  Verify volume anti-affinity - operator: NotIn
 type vpscase14 struct {
 	//Case description
@@ -1918,10 +1866,10 @@ type vpscase14 struct {
 	enabled bool
 }
 
-func (v *vpscase14) GetLabels() ([]labelDict,int) {
+func (v *vpscase14) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	return lbldata,0
+	return lbldata, 0
 }
 
 func (v *vpscase14) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -1954,7 +1902,7 @@ func (v *vpscase14) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 14 T809549  Verify volume anti-affinity 'NotIn', mysql-data-seq volume's replica should be on nodes where mysql-data volume's replicas are present ")	
+	logrus.Infof("Case 14 T809549  Verify volume anti-affinity 'NotIn', mysql-data-seq volume's replica should be on nodes where mysql-data volume's replicas are present ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -1970,14 +1918,14 @@ func (v *vpscase14) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
-	for _,rnode := range mysqlDataSeqReplNodes {
-		found :=""
-		for _,mnode := range mysqlDataReplNodes {
-				logrus.Debugf("Volume (mysql-data-seq) replica node :%v should be on mysql-data  Replica Node:%v", mnode, rnode)
-			if rnode == mnode{
+	for _, rnode := range mysqlDataSeqReplNodes {
+		found := ""
+		for _, mnode := range mysqlDataReplNodes {
+			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should be on mysql-data  Replica Node:%v", mnode, rnode)
+			if rnode == mnode {
 				logrus.Debugf("Volume should have replica on :%v Replica Node:%v", mnode, rnode)
 				found = rnode
 				break
@@ -1989,10 +1937,9 @@ func (v *vpscase14) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase14) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-2", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase14) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase14) GetSpec() string {
@@ -2017,10 +1964,6 @@ func (v *vpscase14) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-
-
 //#---- Case 15 ---- T864665 Verify volume affinity with topology keys
 type vpscase15 struct {
 	//Case description
@@ -2029,7 +1972,7 @@ type vpscase15 struct {
 	enabled bool
 }
 
-func (v *vpscase15) GetLabels() ([]labelDict,int) {
+func (v *vpscase15) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -2040,8 +1983,8 @@ func (v *vpscase15) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase15) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -2082,8 +2025,7 @@ func (v *vpscase15) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 15 T864665  Verify volume affinity Topologykey, mysql-data and mysql-data-seq  should come together on nodes with px_zone label east and replicas of mysql-data-aggr come on nodes within same px_region of usa")	
-
+	logrus.Infof("Case 15 T864665  Verify volume affinity Topologykey, mysql-data and mysql-data-seq  should come together on nodes with px_zone label east and replicas of mysql-data-aggr come on nodes within same px_region of usa")
 
 	for _, appvol := range appVolumes {
 
@@ -2105,22 +2047,20 @@ func (v *vpscase15) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 							break
 						}
 					}
-					Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Volume '%v' replica %v , is not in the expected list of node:'%v'", appvol, rnode,vnodes["rnodes"] ))
+					Expect(found).NotTo(BeEmpty(), fmt.Sprintf("Volume '%v' replica %v , is not in the expected list of node:'%v'", appvol, rnode, vnodes["rnodes"]))
 				}
 
 				// Go for next volume
 				break
-			}	
+			}
 		}
 	}
 
-
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase15) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-2", "placement-2":"placement-2", "placement-3":"placement-3"}
+func (v *vpscase15) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": "placement-3"}
 }
 
 func (v *vpscase15) GetSpec() string {
@@ -2186,7 +2126,6 @@ func (v *vpscase15) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
 //#---- Case 16 ---- T1053359 Verify volume anti-affinity with topology keys
 type vpscase16 struct {
 	//Case description
@@ -2195,7 +2134,7 @@ type vpscase16 struct {
 	enabled bool
 }
 
-func (v *vpscase16) GetLabels() ([]labelDict,int) {
+func (v *vpscase16) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -2206,8 +2145,8 @@ func (v *vpscase16) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase16) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -2262,7 +2201,7 @@ func (v *vpscase16) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 16 T1053359  Verify volume anti-affinity Topologykey, mysql-data and mysql-data-seq should not come together on same px_zone label")	
+	logrus.Infof("Case 16 T1053359  Verify volume anti-affinity Topologykey, mysql-data and mysql-data-seq should not come together on same px_zone label")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -2278,56 +2217,55 @@ func (v *vpscase16) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	/*
-	// Replicas should not be on same node
-	for _,rnode := range mysqlDataSeqReplNodes {
-		found :=""
-		for _,mnode := range mysqlDataReplNodes {
-				logrus.Debugf("Volume (mysql-data-seq) replica node :%v should inot be on mysql-data  Replica Node:%v", mnode, rnode)
-			if rnode == mnode{
-				logrus.Debugf("Volume is having replica :%v  on Replica Node:%v", mnode, rnode)
-				found = rnode
-				break
+		// Replicas should not be on same node
+		for _,rnode := range mysqlDataSeqReplNodes {
+			found :=""
+			for _,mnode := range mysqlDataReplNodes {
+					logrus.Debugf("Volume (mysql-data-seq) replica node :%v should inot be on mysql-data  Replica Node:%v", mnode, rnode)
+				if rnode == mnode{
+					logrus.Debugf("Volume is having replica :%v  on Replica Node:%v", mnode, rnode)
+					found = rnode
+					break
+				}
 			}
-		}
-		Expect(found).To(BeEmpty(), fmt.Sprintf("Replica (%v) of Volume '%v'  should not have replica in nodes(%v)", rnode, "mysql-data-seq", mysqlDataReplNodes))
+			Expect(found).To(BeEmpty(), fmt.Sprintf("Replica (%v) of Volume '%v'  should not have replica in nodes(%v)", rnode, "mysql-data-seq", mysqlDataReplNodes))
 
-	}*/
+		}*/
 
 	//Replicas should not be in same zone
-	for _, repset:= range volscheck["mysql-data"] {
+	for _, repset := range volscheck["mysql-data"] {
 		// for each node in the zone, check replica count should be one
-		repfoundseq :=0
-		repfound :=0
+		repfoundseq := 0
+		repfound := 0
 		for _, mnode := range repset {
-			for _,rnode := range mysqlDataSeqReplNodes { 			 
+			for _, rnode := range mysqlDataSeqReplNodes {
 				if rnode == mnode {
 					repfoundseq++
 				}
 			}
 
-			for _,rnode := range mysqlDataReplNodes { 			 
+			for _, rnode := range mysqlDataReplNodes {
 				if rnode == mnode {
 					repfound++
 				}
 			}
 		}
-		if repfoundseq >=1 && repfound >= 1 {
+		if repfoundseq >= 1 && repfound >= 1 {
 			logrus.Debugf("Both volumes are having replicas in the same zone, nodes :%v  replica count of mysql-data:%v  replica count of mysql-data-seq:%v", repset, repfound, repfoundseq)
-			Expect(1).NotTo(Equal(2), fmt.Sprintf("px_zone nodes(%v) has more than one( mysql-data: %v & mysql-data-seq:%v) replica of the volumes in  Volume Anti-affinity test case",repset,repfound, repfoundseq ) )
+			Expect(1).NotTo(Equal(2), fmt.Sprintf("px_zone nodes(%v) has more than one( mysql-data: %v & mysql-data-seq:%v) replica of the volumes in  Volume Anti-affinity test case", repset, repfound, repfoundseq))
 
 		}
 	}
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase16) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase16) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase16) GetSpec() string {
@@ -2381,9 +2319,7 @@ func (v *vpscase16) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-//#---- Case 17 ---- T870615 Verify volume anti-affinity multiple rules 
+//#---- Case 17 ---- T870615 Verify volume anti-affinity multiple rules
 type vpscase17 struct {
 	//Case description
 	name string
@@ -2391,7 +2327,7 @@ type vpscase17 struct {
 	enabled bool
 }
 
-func (v *vpscase17) GetLabels() ([]labelDict,int) {
+func (v *vpscase17) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -2402,8 +2338,8 @@ func (v *vpscase17) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase17) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -2436,7 +2372,7 @@ func (v *vpscase17) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 17 T870615  Verify volume anti-affinity with multiple rules , mysql-data and mysql-data-seq should not come together on a node")	
+	logrus.Infof("Case 17 T870615  Verify volume anti-affinity with multiple rules , mysql-data and mysql-data-seq should not come together on a node")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -2452,15 +2388,15 @@ func (v *vpscase17) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	// Replicas should not be on same node
-	for _,rnode := range mysqlDataSeqReplNodes {
-		found :=""
-		for _,mnode := range mysqlDataReplNodes {
-				logrus.Debugf("Volume (mysql-data-seq) replica node :%v should inot be on mysql-data  Replica Node:%v", mnode, rnode)
-			if rnode == mnode{
+	for _, rnode := range mysqlDataSeqReplNodes {
+		found := ""
+		for _, mnode := range mysqlDataReplNodes {
+			logrus.Debugf("Volume (mysql-data-seq) replica node :%v should inot be on mysql-data  Replica Node:%v", mnode, rnode)
+			if rnode == mnode {
 				logrus.Debugf("Volume is having replica :%v  on Replica Node:%v", mnode, rnode)
 				found = rnode
 				break
@@ -2472,10 +2408,9 @@ func (v *vpscase17) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase17) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase17) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase17) GetSpec() string {
@@ -2525,17 +2460,14 @@ func (v *vpscase17) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
 /*
- *  
+ *
  *     Replicas & Volume  Affinity and Anti-Affinity related test cases
  *
  */
 
-
-
-//#---- Case 18 ---- T866365 Verify replica and volume affinity topology 
-// keys	 with volume labels 
+//#---- Case 18 ---- T866365 Verify replica and volume affinity topology
+// keys	 with volume labels
 type vpscase18 struct {
 	//Case description
 	name string
@@ -2543,7 +2475,7 @@ type vpscase18 struct {
 	enabled bool
 }
 
-func (v *vpscase18) GetLabels() ([]labelDict,int) {
+func (v *vpscase18) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -2554,8 +2486,8 @@ func (v *vpscase18) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase18) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -2602,7 +2534,7 @@ func (v *vpscase18) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 18 T866365 Verify replica and volume affinity topology keys with volume labels ")	
+	logrus.Infof("Case 18 T866365 Verify replica and volume affinity topology keys with volume labels ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -2618,23 +2550,23 @@ func (v *vpscase18) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	//Replicas should be in same zone
-	nodeinzone :=0
-	for _, repset:= range volscheck["mysql-data"] {
+	nodeinzone := 0
+	for _, repset := range volscheck["mysql-data"] {
 		// for each node in the zone, check replica count should be one
-		repfoundseq :=0
-		repfound :=0
+		repfoundseq := 0
+		repfound := 0
 		for _, mnode := range repset {
-			for _,rnode := range mysqlDataSeqReplNodes { 			 
+			for _, rnode := range mysqlDataSeqReplNodes {
 				if rnode == mnode {
 					repfoundseq++
 				}
 			}
 
-			for _,rnode := range mysqlDataReplNodes { 			 
+			for _, rnode := range mysqlDataReplNodes {
 				if rnode == mnode {
 					repfound++
 				}
@@ -2645,14 +2577,13 @@ func (v *vpscase18) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		}
 	}
 
-	Expect(nodeinzone).To(Equal(1), fmt.Sprintf("The replicas of volume mysql-data: %v & mysql-data-seq:%v are not in same zone",mysqlDataReplNodes ,mysqlDataSeqReplNodes ) )
+	Expect(nodeinzone).To(Equal(1), fmt.Sprintf("The replicas of volume mysql-data: %v & mysql-data-seq:%v are not in same zone", mysqlDataReplNodes, mysqlDataSeqReplNodes))
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase18) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase18) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase18) GetSpec() string {
@@ -2713,12 +2644,9 @@ func (v *vpscase18) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-
 //#---- Case 19 ---- T866790
-//Verify replica affinity and volume anti-affinity topology keys with volume labels 
-// keys	 with volume labels 
+//Verify replica affinity and volume anti-affinity topology keys with volume labels
+// keys	 with volume labels
 type vpscase19 struct {
 	//Case description
 	name string
@@ -2726,7 +2654,7 @@ type vpscase19 struct {
 	enabled bool
 }
 
-func (v *vpscase19) GetLabels() ([]labelDict,int) {
+func (v *vpscase19) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -2737,8 +2665,8 @@ func (v *vpscase19) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase19) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -2785,7 +2713,7 @@ func (v *vpscase19) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 19 T866790 Verify replica affinity and volume anti-affinity topology keys with volume labels. The 2 volumes should come in different zone, with replicas staying within the zone ")	
+	logrus.Infof("Case 19 T866790 Verify replica affinity and volume anti-affinity topology keys with volume labels. The 2 volumes should come in different zone, with replicas staying within the zone ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -2801,24 +2729,24 @@ func (v *vpscase19) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
 	//Replicas should be in same zone
-	nodeinseqzone :=0
-	nodeindatazone :=0
-	for _, repset:= range volscheck["mysql-data"] {
+	nodeinseqzone := 0
+	nodeindatazone := 0
+	for _, repset := range volscheck["mysql-data"] {
 		// for each node in the zone, check replica count should be one
-		repfoundseq :=0
-		repfound :=0
+		repfoundseq := 0
+		repfound := 0
 		for _, mnode := range repset {
-			for _,rnode := range mysqlDataSeqReplNodes { 			 
+			for _, rnode := range mysqlDataSeqReplNodes {
 				if rnode == mnode {
 					repfoundseq++
 				}
 			}
 
-			for _,rnode := range mysqlDataReplNodes { 			 
+			for _, rnode := range mysqlDataReplNodes {
 				if rnode == mnode {
 					repfound++
 				}
@@ -2831,14 +2759,13 @@ func (v *vpscase19) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		}
 	}
 
-	Expect(nodeinseqzone + nodeindatazone).To(Equal(2), fmt.Sprintf("Some or all of the replicas of volume mysql-data: %v & mysql-data-seq:%v are in same zone",mysqlDataReplNodes ,mysqlDataSeqReplNodes ) )
+	Expect(nodeinseqzone+nodeindatazone).To(Equal(2), fmt.Sprintf("Some or all of the replicas of volume mysql-data: %v & mysql-data-seq:%v are in same zone", mysqlDataReplNodes, mysqlDataSeqReplNodes))
 
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase19) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase19) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase19) GetSpec() string {
@@ -2899,7 +2826,6 @@ func (v *vpscase19) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
 //#---- Case 20 ---- T866790
 //Verify replica anti-affinity and volume affinity topology keys with volume lables
 //
@@ -2910,7 +2836,7 @@ type vpscase20 struct {
 	enabled bool
 }
 
-func (v *vpscase20) GetLabels() ([]labelDict,int) {
+func (v *vpscase20) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -2921,8 +2847,8 @@ func (v *vpscase20) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase20) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -2973,7 +2899,7 @@ func (v *vpscase20) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 20 T866790 Verify replica anti-affinity and volume affinity topology keys with volume lables. Replicas of a volume should not come together in px_zone, replicas of different volume can come together")	
+	logrus.Infof("Case 20 T866790 Verify replica anti-affinity and volume affinity topology keys with volume lables. Replicas of a volume should not come together in px_zone, replicas of different volume can come together")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -2989,43 +2915,42 @@ func (v *vpscase20) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
-	//Replicas should not be in same zone, replicas of different volume should 
+	//Replicas should not be in same zone, replicas of different volume should
 	//be in same zone
-	volrepinzone :=0
-	for _, repset:= range volscheck["mysql-data"] {
+	volrepinzone := 0
+	for _, repset := range volscheck["mysql-data"] {
 		// for each node in the zone, check replica count should be one
-		repfoundseq :=0
-		repfound :=0
+		repfoundseq := 0
+		repfound := 0
 		for _, mnode := range repset {
-			for _,rnode := range mysqlDataSeqReplNodes { 			 
+			for _, rnode := range mysqlDataSeqReplNodes {
 				if rnode == mnode {
 					repfoundseq++
 				}
 			}
 
-			for _,rnode := range mysqlDataReplNodes { 			 
+			for _, rnode := range mysqlDataReplNodes {
 				if rnode == mnode {
 					repfound++
 				}
 			}
 		}
-		Expect(repfoundseq).Should(BeNumerically("<=", 1), fmt.Sprintf("More than one replicas is found in same zone for  mysql-data-seq:%v ",mysqlDataSeqReplNodes ) )
-		Expect(repfound).Should(BeNumerically("<=", 1), fmt.Sprintf("More than one replica is found in same zone for volume mysql-data: %v", mysqlDataReplNodes ) )
-		if(repfound == 1 && repfoundseq ==0 ) || (repfound == 0 && repfoundseq ==1 ) {
-			volrepinzone =1
+		Expect(repfoundseq).Should(BeNumerically("<=", 1), fmt.Sprintf("More than one replicas is found in same zone for  mysql-data-seq:%v ", mysqlDataSeqReplNodes))
+		Expect(repfound).Should(BeNumerically("<=", 1), fmt.Sprintf("More than one replica is found in same zone for volume mysql-data: %v", mysqlDataReplNodes))
+		if (repfound == 1 && repfoundseq == 0) || (repfound == 0 && repfoundseq == 1) {
+			volrepinzone = 1
 		}
 	}
 
-	Expect(volrepinzone).To(Equal(0), fmt.Sprintf("Due to volume affinity replicas of volumes mysql-data: %v &  mysql-data-seq:%v should have been in same zone",mysqlDataReplNodes,mysqlDataSeqReplNodes ) )
+	Expect(volrepinzone).To(Equal(0), fmt.Sprintf("Due to volume affinity replicas of volumes mysql-data: %v &  mysql-data-seq:%v should have been in same zone", mysqlDataReplNodes, mysqlDataSeqReplNodes))
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase20) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-2", "placement-3":""}
+func (v *vpscase20) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase20) GetSpec() string {
@@ -3086,11 +3011,8 @@ func (v *vpscase20) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-
 //#---- Case 21 ---- T867640
-//Verify replica anti-affinity and volume anti-affinity topology keys with volume labels 
+//Verify replica anti-affinity and volume anti-affinity topology keys with volume labels
 type vpscase21 struct {
 	//Case description
 	name string
@@ -3098,7 +3020,7 @@ type vpscase21 struct {
 	enabled bool
 }
 
-func (v *vpscase21) GetLabels() ([]labelDict,int) {
+func (v *vpscase21) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -3109,8 +3031,8 @@ func (v *vpscase21) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase21) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -3169,7 +3091,7 @@ func (v *vpscase21) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 21 T867640 Verify replica anti-affinity and volume anti-affinity topology keys with volume labels ")	
+	logrus.Infof("Case 21 T867640 Verify replica anti-affinity and volume anti-affinity topology keys with volume labels ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -3185,41 +3107,40 @@ func (v *vpscase21) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
-	//Replicas should not be in same zone, replicas of different volume should 
+	//Replicas should not be in same zone, replicas of different volume should
 	//be in same zone
-	volrepinzone :=0
-	for _, repset:= range volscheck["mysql-data"] {
+	volrepinzone := 0
+	for _, repset := range volscheck["mysql-data"] {
 		// for each node in the zone, check replica count should be one
-		repfoundseq :=0
-		repfound :=0
+		repfoundseq := 0
+		repfound := 0
 		for _, mnode := range repset {
-			for _,rnode := range mysqlDataSeqReplNodes { 			 
+			for _, rnode := range mysqlDataSeqReplNodes {
 				if rnode == mnode {
 					repfoundseq++
 				}
 			}
 
-			for _,rnode := range mysqlDataReplNodes { 			 
+			for _, rnode := range mysqlDataReplNodes {
 				if rnode == mnode {
 					repfound++
 				}
 			}
 		}
-		if (repfound >=1  && repfoundseq >=1) || repfound > 1 || repfoundseq > 1   {
-			volrepinzone =1
+		if (repfound >= 1 && repfoundseq >= 1) || repfound > 1 || repfoundseq > 1 {
+			volrepinzone = 1
 		}
 	}
 
-	Expect(volrepinzone).To(Equal(0), fmt.Sprintf("Due to volume & replicas anti-affinity replicas of volumes mysql-data: %v &  mysql-data-seq:%v should not appear in same zone",mysqlDataReplNodes,mysqlDataSeqReplNodes ) )
+	Expect(volrepinzone).To(Equal(0), fmt.Sprintf("Due to volume & replicas anti-affinity replicas of volumes mysql-data: %v &  mysql-data-seq:%v should not appear in same zone", mysqlDataReplNodes, mysqlDataSeqReplNodes))
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase21) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-1", "placement-3":""}
+func (v *vpscase21) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": ""}
 }
 
 func (v *vpscase21) GetSpec() string {
@@ -3248,8 +3169,6 @@ func (v *vpscase21) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
 //#---- Case 22 ---- T871040
 // Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules
 type vpscase22 struct {
@@ -3259,7 +3178,7 @@ type vpscase22 struct {
 	enabled bool
 }
 
-func (v *vpscase22) GetLabels() ([]labelDict,int) {
+func (v *vpscase22) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -3270,8 +3189,8 @@ func (v *vpscase22) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase22) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -3326,12 +3245,9 @@ func (v *vpscase22) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 22 T871040 Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules ")	
+	logrus.Infof("Case 22 T871040 Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules ")
 
-	var esData0Nodes []string
-	var esData1Nodes []string
-	var esData2Nodes []string
-
+	esDataNodes := map[string][]string{}
 
 	//TODO: Consider dynamic volume listing , since app will be scaled from 3 to 4 and back to 3
 	for _, appvol := range appVolumes {
@@ -3340,53 +3256,47 @@ func (v *vpscase22) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		Expect(err).NotTo(HaveOccurred())
 		Expect(replicas).NotTo(BeEmpty())
 
-		if appvol.Name == "es-data-esnode-0" {
-			esData0Nodes = replicas
-		} else if appvol.Name == "es-data-esnode-1" {
-			esData1Nodes = replicas
-		} else if appvol.Name == "es-data-esnode-2" {
-			esData2Nodes = replicas
-		}
-				
+		esDataNodes[appvol.Name] = replicas
 	}
 
 	//Replicas of each volume should be in same set of zone
-	volrepinzone :=0
-	for _, repset:= range volscheck["es-data-esnode-0"] {
-		// for each node in the zone, check replica count should be one
-		repfound0 :=0
-		repfound1 :=0
-		repfound2 :=0
-		for _, mnode := range repset {
-			for _,rnode := range esData0Nodes { 			 
-				if rnode == mnode {
-					repfound0++
-				}
-			}
+	volrepinzone := 0
 
-			for _,rnode := range esData1Nodes { 			 
-				if rnode == mnode {
-					repfound1++
+	// Nodes with same label and value
+	for _, repset := range volscheck["es-data-esnode-0"] {
+		// for each node in the zone, check replica count should be one
+		repcount := map[string]int{}
+		volrepnotinzone := 0
+		for _, mnode := range repset {
+			//For each volume
+			for key, appvol := range esDataNodes {
+				//For each replica nodes of a volume, check with zone nodes
+				for _, rnode := range appvol {
+					if rnode == mnode {
+						repcount[key] += 1
+					}
 				}
-			}
-			for _,rnode := range esData2Nodes { 			 
-				if rnode == mnode {
-					repfound2++
-				}
+
 			}
 		}
-		if (repfound0 ==3  && repfound1 ==3  && repfound2==3) {
-			volrepinzone =1
+
+		for _, val := range repcount {
+			if repcount["es-data-esnode-0"] == 3 && val != 3 {
+				volrepnotinzone = 1
+				break
+			}
+		}
+		if repcount["es-data-esnode-0"] == 3 && volrepnotinzone == 0 {
+			volrepinzone = 1
 		}
 	}
 
-	Expect(volrepinzone).To(Equal(1), fmt.Sprintf("Due to volume replica affinity replicas of volumes es-data-esnode-0: %v ,  es-data-esnode-1:%v  & es-data-esnode2: %v should appear in same zone",esData0Nodes,esData1Nodes, esData2Nodes ) )
+	Expect(volrepinzone).To(Equal(1), fmt.Sprintf("Due to volume replica affinity replicas of volumes es-data-esnodes: %v , should appear in same zone", esDataNodes))
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase22) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-1", "placement-3":""}
+func (v *vpscase22) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": ""}
 }
 
 func (v *vpscase22) GetSpec() string {
@@ -3415,11 +3325,8 @@ func (v *vpscase22) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-
 //#---- Case 23 ---- T955476
-//Replica & Volume Affinity & Anti Affinity 
+//Replica & Volume Affinity & Anti Affinity
 type vpscase23 struct {
 	//Case description
 	name string
@@ -3427,7 +3334,7 @@ type vpscase23 struct {
 	enabled bool
 }
 
-func (v *vpscase23) GetLabels() ([]labelDict,int) {
+func (v *vpscase23) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
 	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
@@ -3438,8 +3345,8 @@ func (v *vpscase23) GetLabels() ([]labelDict,int) {
 	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
 	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl,node7lbl,node8lbl)
-	return lbldata,1
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase23) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -3490,7 +3397,7 @@ func (v *vpscase23) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
 		appVolumes, volscheck)
 
-	logrus.Infof("Case 21 T867640 Verify replica anti-affinity and volume anti-affinity topology keys with volume labels ")	
+	logrus.Infof("Case 21 T867640 Verify replica anti-affinity and volume anti-affinity topology keys with volume labels ")
 
 	var mysqlDataReplNodes []string
 	var mysqlDataSeqReplNodes []string
@@ -3506,41 +3413,40 @@ func (v *vpscase23) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 		} else if appvol.Name == "mysql-data-seq" {
 			mysqlDataSeqReplNodes = replicas
 		}
-				
+
 	}
 
-	//Replicas should not be in same zone, replicas of different volume should 
+	//Replicas should not be in same zone, replicas of different volume should
 	//be in same zone
-	volrepinzone :=0
-	for _, repset:= range volscheck["mysql-data"] {
+	volrepinzone := 0
+	for _, repset := range volscheck["mysql-data"] {
 		// for each node in the zone, check replica count should be one
-		repfoundseq :=0
-		repfound :=0
+		repfoundseq := 0
+		repfound := 0
 		for _, mnode := range repset {
-			for _,rnode := range mysqlDataSeqReplNodes { 			 
+			for _, rnode := range mysqlDataSeqReplNodes {
 				if rnode == mnode {
 					repfoundseq++
 				}
 			}
 
-			for _,rnode := range mysqlDataReplNodes { 			 
+			for _, rnode := range mysqlDataReplNodes {
 				if rnode == mnode {
 					repfound++
 				}
 			}
 		}
-		if (repfound >=1  && repfoundseq >=1) || repfound > 1 || repfoundseq > 1   {
-			volrepinzone =1
+		if (repfound >= 1 && repfoundseq >= 1) || repfound > 1 || repfoundseq > 1 {
+			volrepinzone = 1
 		}
 	}
 
-	Expect(volrepinzone).To(Equal(0), fmt.Sprintf("Due to volume & replicas anti-affinity replicas of volumes mysql-data: %v &  mysql-data-seq:%v should not appear in same zone",mysqlDataReplNodes,mysqlDataSeqReplNodes ) )
+	Expect(volrepinzone).To(Equal(0), fmt.Sprintf("Due to volume & replicas anti-affinity replicas of volumes mysql-data: %v &  mysql-data-seq:%v should not appear in same zone", mysqlDataReplNodes, mysqlDataSeqReplNodes))
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase23) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-1", "placement-3":""}
+func (v *vpscase23) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": ""}
 }
 
 func (v *vpscase23) GetSpec() string {
@@ -3615,9 +3521,8 @@ func (v *vpscase23) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
 //#---- Case 24 ----T864240  Verify Replica Anti-Affinity with topology keys
-// With few nodes labeled 
+// With few nodes labeled
 type vpscase24 struct {
 	//Case description
 	name string
@@ -3625,17 +3530,17 @@ type vpscase24 struct {
 	enabled bool
 }
 
-func (v *vpscase24) GetLabels() ([]labelDict,int) {
+func (v *vpscase24) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "east"}//, "failure-domain.beta.kubernetes.io/region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "east"}//, "failure-domain.beta.kubernetes.io/region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "west"}//, "failure-domain.beta.kubernetes.io/region": "asia"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "west"}//, "failure-domain.beta.kubernetes.io/region": "asia"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "south"}//, "failure-domain.beta.kubernetes.io/region": "eu"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "south"}//, "failure-domain.beta.kubernetes.io/region": "eu"}
-	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl,node5lbl, node6lbl)
-	return lbldata,1
+	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "east"}  //, "failure-domain.beta.kubernetes.io/region": "usa"}
+	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "east"}  //, "failure-domain.beta.kubernetes.io/region": "usa"}
+	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "west"}  //, "failure-domain.beta.kubernetes.io/region": "asia"}
+	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "west"}  //, "failure-domain.beta.kubernetes.io/region": "asia"}
+	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "south"} //, "failure-domain.beta.kubernetes.io/region": "eu"}
+	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "south"} //, "failure-domain.beta.kubernetes.io/region": "eu"}
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl)
+	return lbldata, 1
 }
 
 func (v *vpscase24) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
@@ -3698,7 +3603,6 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 
 	for _, appvol := range appVolumes {
 
-		
 		for vol, vnodes := range volscheck {
 
 			if appvol.Name == vol {
@@ -3707,22 +3611,22 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 				Expect(err).NotTo(HaveOccurred())
 				Expect(replicaset).NotTo(BeEmpty())
 
-				for _,replicas := range replicaset {
+				for _, replicas := range replicaset {
 					// Must have (required)
 					// There are  3 replicas and 4 sets to check in.
 					// In the 4 set, the replica should be place in the 3 of the sets.
 					// A set cannot containe more than 1 replica
-					
+
 					Expect(replicas).NotTo(BeEmpty())
 
-				    totalrepfound :=0
+					totalrepfound := 0
 					// Check in set 1
 					foundinset := 0
 					for _, mnode := range vnodes["rnodes1"] {
 						found := ""
-						repOnNodeCnt:=0
+						repOnNodeCnt := 0
 						// Check whether replica is on the expected set of nodes
-						for _, rnode := range  replicas {
+						for _, rnode := range replicas {
 							logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
 							if mnode == rnode {
 								found = rnode
@@ -3730,14 +3634,14 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 							}
 						}
 
-						if  found != "" {	   
+						if found != "" {
 							Expect(repOnNodeCnt).Should(BeNumerically("<=", 1))
 							foundinset++
 						}
 					}
 
 					Expect(foundinset).Should(BeNumerically("<=", 1))
-					if foundinset ==1 {
+					if foundinset == 1 {
 						totalrepfound++
 					}
 
@@ -3745,9 +3649,9 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 					foundinset = 0
 					for _, mnode := range vnodes["rnodes2"] {
 						found := ""
-						repOnNodeCnt:=0
+						repOnNodeCnt := 0
 						// Check whether replica is on the expected set of nodes
-						for _, rnode := range  replicas {
+						for _, rnode := range replicas {
 							logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
 							if mnode == rnode {
 								found = rnode
@@ -3755,14 +3659,14 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 							}
 						}
 
-						if  found != "" {	   
+						if found != "" {
 							Expect(repOnNodeCnt).Should(BeNumerically("<=", 1))
 							foundinset++
 						}
 					}
 
 					Expect(foundinset).Should(BeNumerically("<=", 1))
-					if foundinset ==1 {
+					if foundinset == 1 {
 						totalrepfound++
 					}
 
@@ -3770,9 +3674,9 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 					foundinset = 0
 					for _, mnode := range vnodes["rnodes3"] {
 						found := ""
-						repOnNodeCnt:=0
+						repOnNodeCnt := 0
 						// Check whether replica is on the expected set of nodes
-						for _, rnode := range  replicas {
+						for _, rnode := range replicas {
 							logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
 							if mnode == rnode {
 								found = rnode
@@ -3780,14 +3684,14 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 							}
 						}
 
-						if  found != "" {	   
+						if found != "" {
 							Expect(repOnNodeCnt).Should(BeNumerically("<=", 1))
 							foundinset++
 						}
 					}
 
 					Expect(foundinset).Should(BeNumerically("<=", 1))
-					if foundinset ==1 {
+					if foundinset == 1 {
 						totalrepfound++
 					}
 
@@ -3795,9 +3699,9 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 					foundinset = 0
 					for _, mnode := range vnodes["rnodes4"] {
 						found := ""
-						repOnNodeCnt:=0
+						repOnNodeCnt := 0
 						// Check whether replica is on the expected set of nodes
-						for _, rnode := range  replicas {
+						for _, rnode := range replicas {
 							logrus.Debugf("Expected replica to be on Node:%v Replica is on Node:%v", mnode, rnode)
 							if mnode == rnode {
 								found = rnode
@@ -3805,25 +3709,24 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 							}
 						}
 
-						if  found != "" {	   
+						if found != "" {
 							Expect(repOnNodeCnt).Should(BeNumerically("<=", 1))
 							foundinset++
 						}
 					}
 
 					Expect(foundinset).Should(BeNumerically("<=", 1))
-					if foundinset ==1 {
+					if foundinset == 1 {
 						totalrepfound++
 					}
 
-					if vol == "mysql-data-seq" || vol =="mysql-data" {
+					if vol == "mysql-data-seq" || vol == "mysql-data" {
 						// These are repl:3 vol
 						Expect(totalrepfound).Should(Equal(3))
 					} else {
 						// These are repl:2 aggr:2 volume
 						Expect(totalrepfound).Should(Equal(2))
 					}
-
 
 					// Preferred
 					for _, mnode := range vnodes["pnodes"] {
@@ -3858,10 +3761,9 @@ func (v *vpscase24) Validate(appVolumes []*volume.Volume, volscheck map[string]m
 	}
 }
 
-
 //StorageClass placement_strategy mapping
-func (v *vpscase24) GetScStrategyMap() map[string] string{
-	return map[string] string {"placement-1":"placement-1", "placement-2":"placement-1", "placement-3":""}
+func (v *vpscase24) GetScStrategyMap() map[string]string {
+	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": ""}
 }
 
 func (v *vpscase24) GetSpec() string {
@@ -3882,94 +3784,84 @@ func (v *vpscase24) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
-
-
-
 // Test case inits
 //
 
 /*
- *  
+ *
  *     Replica  Affinity and Anti-Affinity related test cases init
  *
  */
 ///*
 func init() {
 	v := &vpscase1{"case1 Replica affinity to node labels", true}
-	Register(v.name, v,1)
+	Register(v.name, v, 1)
 }
 
 func init() {
 	v := &vpscase2{"case2-T863374 Replica Affinity with enforcement=preferred", true}
-	Register(v.name, v,1)
+	Register(v.name, v, 1)
 }
-
 
 func init() {
 	v := &vpscase3{"case3-T809561 Replica Affinity with  Lt, Gt operators using latency and iops as node labels", true}
-	Register(v.name, v,1)
+	Register(v.name, v, 1)
 }
-
 
 func init() {
 	v := &vpscase4{"case4-T863792 Replica Affinity with topology keys", true}
-	Register(v.name, v,1)
+	Register(v.name, v, 1)
 }
-
 
 func init() {
 	v := &vpscase5{"case5-T1052921 Replica Anti-Affinity with topology keys (with all nodes labeled)", true}
-	Register(v.name, v,1)
+	Register(v.name, v, 1)
 }
+
 //*/
 
 func init() {
 	v := &vpscase6{"case6-T809554 Replica Affinity ,Volume creation should fail when VolumePlacementStrategy fails to find enough pools", true}
-	Register(v.name, v,5)
+	Register(v.name, v, 5)
 }
 
-
 /*
- *  
+ *
  *     Volume  Affinity and Anti-Affinity related test cases init
  *
  */
 ///*
 func init() {
 	v := &vpscase7{"case7-T809548 Volume Affinity 'Exists'", true}
-	Register(v.name, v,2)
+	Register(v.name, v, 2)
 }
-
 
 func init() {
 	v := &vpscase8{"case8-T809548 Volume Affinity 'In'", true}
-	Register(v.name, v,2)
+	Register(v.name, v, 2)
 }
-
 
 func init() {
 	v := &vpscase9{"case9-T809548 Volume Affinity 'DoesNotExists'", true}
-	Register(v.name, v,2)
+	Register(v.name, v, 2)
 }
-
 
 func init() {
 	v := &vpscase10{"case10-T809548 Volume Affinity 'NotIn'", true}
-	Register(v.name, v,2)
+	Register(v.name, v, 2)
 }
 
 // Volume Anti-affinity
 func init() {
 	v := &vpscase11{"case11-T809549 Volume Anti-Affinity 'Exists'", true}
-	Register(v.name, v,2)
+	Register(v.name, v, 2)
 }
-
-
 
 func init() {
 	v := &vpscase12{"case12-T809549 Volume Anti-Affinity 'In'", true}
-	Register(v.name, v,2)
+	Register(v.name, v, 2)
 }
+
 //*/
 /*
 func init() {
@@ -3986,59 +3878,51 @@ func init() {
 ///*
 func init() {
 	v := &vpscase15{"case15-T864665  Volume Affinity with topology key", true}
-	Register(v.name, v,2)
+	Register(v.name, v, 2)
 }
-
 
 func init() {
 	v := &vpscase16{"case16-T1053359 Volume anti-affinity with topology keys", true}
-	Register(v.name, v,2)
+	Register(v.name, v, 2)
 }
 
 func init() {
 	v := &vpscase17{"case17-T870615  volume anti-affinity multiple rules", true}
-	Register(v.name, v,2)
+	Register(v.name, v, 2)
 }
 
-
-
 /*
- *  
+ *
  *     Replicas & Volume  Affinity and Anti-Affinity related test cases init
  *
  */
 
-
 func init() {
 	v := &vpscase18{"case18-T866365 Verify replica and volume affinity topology keys with volume labels", true}
-	Register(v.name, v,3)
+	Register(v.name, v, 3)
 }
 
 func init() {
 	v := &vpscase19{"case19-T866790 replica affinity and volume anti-affinity topology keys with volume labels ", true}
-	Register(v.name, v,3)
+	Register(v.name, v, 3)
 }
-
 
 //*/
 
 func init() {
 	v := &vpscase20{"case20-T867215 Verify replica anti-affinity and volume affinity topology keys with volume lables ", true}
-	Register(v.name, v,3)
+	Register(v.name, v, 3)
 }
-
 
 func init() {
 	v := &vpscase21{"case21-T867640 Verify replica anti-affinity and volume anti-affinity topology keys with volume labels", true}
-	Register(v.name, v,3)
+	Register(v.name, v, 3)
 }
-
-
 
 // Volume replica scaling
 func init() {
 	v := &vpscase22{"case22-T871040 Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules ", true}
-	Register(v.name, v,4)
+	Register(v.name, v, 4)
 }
 
 /*
@@ -4049,15 +3933,11 @@ func init() {
 }
 
 
- */
-
+*/
 
 /*Default node labels*/
 
-
 func init() {
 	v := &vpscase24{"case24-T864240  Verify Replica Anti-Affinity with topology keys (with few nodes not set)", true}
-	Register(v.name, v,6)
+	Register(v.name, v, 6)
 }
-
-

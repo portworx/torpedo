@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	defaultVstate						  = 1
-	  )
+	defaultVstate = 1
+)
 
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -36,7 +36,7 @@ var _ = Describe("{SetupTeardown}", func() {
 	It("has to setup, validate and teardown apps", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("setupteardown-%d", i), nil,defaultVstate)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("setupteardown-%d", i), nil)...)
 		}
 
 		opts := make(map[string]bool)
@@ -53,7 +53,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 	It("has to schedule apps and stop volume driver on app nodes", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdown-%d", i),nil,defaultVstate)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdown-%d", i), nil)...)
 		}
 
 		Step("get nodes bounce volume driver", func() {
@@ -78,7 +78,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 
 				Step("validate apps", func() {
 					for _, ctx := range contexts {
-						ValidateContext(ctx,defaultVstate)
+						ValidateContext(ctx, defaultVstate)
 					}
 				})
 			}
@@ -101,7 +101,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdownattachednode-%d", i),nil,defaultVstate)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdownattachednode-%d", i), nil)...)
 		}
 
 		Step("get nodes where app is running and restart volume driver", func() {
@@ -128,7 +128,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 					})
 
 					Step(fmt.Sprintf("validate app %s", appNode.Name), func() {
-						ValidateContext(ctx,defaultVstate)
+						ValidateContext(ctx, defaultVstate)
 					})
 				}
 			}
@@ -149,7 +149,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 	It("has to schedule apps and crash volume driver on app nodes", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldrivercrash-%d", i),nil,defaultVstate)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldrivercrash-%d", i), nil)...)
 		}
 
 		Step("crash volume driver in all nodes", func() {
@@ -176,7 +176,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 	It("has to schedule apps, stop volume driver on app nodes and destroy apps", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverappdown-%d", i),nil,defaultVstate)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverappdown-%d", i), nil)...)
 		}
 
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -221,7 +221,7 @@ var _ = Describe("{AppTasksDown}", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("apptasksdown-%d", i),nil,defaultVstate)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("apptasksdown-%d", i), nil)...)
 		}
 
 		Step("delete all application tasks", func() {
@@ -252,7 +252,7 @@ var _ = Describe("{AppTasksDown}", func() {
 						Expect(err).NotTo(HaveOccurred())
 					})
 
-					ValidateContext(ctx,defaultVstate)
+					ValidateContext(ctx, defaultVstate)
 				}
 			} else {
 				start := time.Now().Local()
@@ -263,7 +263,7 @@ var _ = Describe("{AppTasksDown}", func() {
 							Expect(err).NotTo(HaveOccurred())
 						})
 
-						ValidateContext(ctx,defaultVstate)
+						ValidateContext(ctx, defaultVstate)
 					}
 					Step(fmt.Sprintf("Sleeping for given duration %d", frequency), func() {
 						d := time.Duration(frequency)
@@ -286,7 +286,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 	It("has to scale up and scale down the app", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("applicationscaleupdown-%d", i),nil,defaultVstate)...)
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("applicationscaleupdown-%d", i), nil)...)
 		}
 
 		Step("Scale up and down all app", func() {
@@ -305,7 +305,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 					time.Sleep(10 * time.Second)
 				})
 
-				ValidateContext(ctx,defaultVstate)
+				ValidateContext(ctx, defaultVstate)
 
 				Step(fmt.Sprintf("scale down app %s by 1", ctx.App.Key), func() {
 					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
@@ -321,7 +321,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 					time.Sleep(10 * time.Second)
 				})
 
-				ValidateContext(ctx,defaultVstate)
+				ValidateContext(ctx, defaultVstate)
 			}
 		})
 
@@ -347,7 +347,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 		var contexts []*scheduler.Context
 		Step("Deploy applications", func() {
 			for i := 0; i < Inst().ScaleFactor; i++ {
-				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("cordondeploydestroy-%d", i), nil,defaultVstate)...)
+				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("cordondeploydestroy-%d", i), nil)...)
 			}
 		})
 		Step("Destroy apps", func() {
