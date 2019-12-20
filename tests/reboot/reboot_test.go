@@ -72,10 +72,6 @@ var _ = Describe("{RebootOneNode}", func() {
 						Expect(err).NotTo(HaveOccurred())
 
 						err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-						if err != nil {
-							diagsErr := Inst().V.CollectDiags(n)
-							Expect(diagsErr).NotTo(HaveOccurred())
-						}
 						Expect(err).NotTo(HaveOccurred())
 					})
 				}
@@ -143,10 +139,6 @@ var _ = Describe("{RebootAllNodes}", func() {
 							Expect(err).NotTo(HaveOccurred())
 
 							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-							if err != nil {
-								diagsErr := Inst().V.CollectDiags(n)
-								Expect(diagsErr).NotTo(HaveOccurred())
-							}
 							Expect(err).NotTo(HaveOccurred())
 						})
 					}

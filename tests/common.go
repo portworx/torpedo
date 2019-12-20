@@ -290,10 +290,6 @@ func StartVolDriverAndWait(appNodes []node.Node) {
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-				if err != nil {
-					diagsErr := Inst().V.CollectDiags(n)
-					expect(diagsErr).NotTo(haveOccurred())
-				}
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -330,10 +326,6 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-				if err != nil {
-					diagsErr := Inst().V.CollectDiags(n)
-					expect(diagsErr).NotTo(haveOccurred())
-				}
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -379,29 +371,27 @@ func CollectSupport() {
 					continue
 				}
 
-				// this task may hang so we wrapped in a timeout cmd
-				dumpTasksCmd := "timeout 10s bash -c \"echo t > /proc/sysrq-trigger\""
-				logrus.Infof("dump the list of current tasks and their information on %s", n.Name)
-				runCmd(dumpTasksCmd, n)
+				logrus.Infof("colleting diags from %s", n.Name)
+				Inst().V.CollectDiags(n)
 
-				journalCmd := fmt.Sprintf("journalctl -l > ~/all_journal_%v.log", time.Now().Format(time.RFC3339))
+				journalCmd := fmt.Sprintf("journalctl -l > /var/core/all_journal_%v.log", time.Now().Format(time.RFC3339))
 				logrus.Infof("saving journal output on %s", n.Name)
 				runCmd(journalCmd, n)
 
 				logrus.Infof("saving portworx journal output on %s", n.Name)
-				runCmd("journalctl -lu portworx* > portworx.log", n)
+				runCmd("journalctl -lu portworx* > /var/core/portworx.log", n)
 
 				logrus.Infof("saving kubelet journal output on %s", n.Name)
-				runCmd("journalctl -lu kubelet* > kubelet.log", n)
+				runCmd("journalctl -lu kubelet* > /var/core/kubelet.log", n)
 
 				logrus.Infof("saving dmesg output on %s", n.Name)
-				runCmd("dmesg -T > dmesg.log", n)
+				runCmd("dmesg -T > /var/core/dmesg.log", n)
 
 				logrus.Infof("saving disk list on %s", n.Name)
-				runCmd("lsblk > lsblk.log", n)
+				runCmd("lsblk > /var/core/lsblk.log", n)
 
 				logrus.Infof("saving mount list on %s", n.Name)
-				runCmd("cat /proc/mounts > mounts.log", n)
+				runCmd("cat /proc/mounts > /var/core/mounts.log", n)
 			}
 		})
 	})
