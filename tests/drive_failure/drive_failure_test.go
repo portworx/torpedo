@@ -39,8 +39,10 @@ var _ = Describe("{DriveFailure}", func() {
 	It("has to schedule apps and induce a drive failure on one of the nodes", func() {
 		var err error
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}
+
+		ValidateApplications(contexts)
 
 		Step("get nodes for all apps in test and induce drive failure on one of the nodes", func() {
 			for _, ctx := range contexts {

@@ -44,8 +44,10 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 	It("has to validate that storage nodes are not lost during asg scaledown", func() {
 
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgscaleupdown-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("asgscaleupdown-%d", i))...)
 		}
+
+		ValidateApplications(contexts)
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
 		Expect(err).NotTo(HaveOccurred())
@@ -109,9 +111,11 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 
 		Step("Ensure apps are deployed", func() {
 			for i := 0; i < Inst().ScaleFactor; i++ {
-				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgchaos-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("asgchaos-%d", i))...)
 			}
 		})
+
+		ValidateApplications(contexts)
 
 		Step("Randomly kill one storage node", func() {
 
