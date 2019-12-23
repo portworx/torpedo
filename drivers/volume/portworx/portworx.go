@@ -1540,8 +1540,7 @@ func (d *portworx) constructURL(ip string) string {
 	return fmt.Sprintf("%s:%d", ip, defaultPxServicePort)
 }
 
-func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]string, error) {
-	var pxNodes []string
+func (d *portworx) GetReplicaSets(torpedovol *torpedovolume.Volume) ([]*api.ReplicaSet, error) {
 	volumeName := d.schedOps.GetVolumeName(torpedovol)
 	volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 	if err != nil {
@@ -1551,23 +1550,7 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 		}
 	}
 
-	for _, rs := range volumeInspectResponse.Volume.ReplicaSets {
-		for _, n := range rs.Nodes {
-			nodeInpectResponse, err := d.nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n})
-			if err != nil {
-				return nil, &ErrFailedToInspectVolume{
-					ID:    torpedovol.Name,
-					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
-				}
-			}
-			nodeName := nodeInpectResponse.Node.SchedulerNodeName
-			if nodeName == "" {
-				nodeName = nodeInpectResponse.Node.Hostname
-			}
-			pxNodes = append(pxNodes, nodeName)
-		}
-	}
-	return pxNodes, nil
+	return volumeInspectResponse.Volume.ReplicaSets, nil
 }
 
 func (d *portworx) updateNodeID(n node.Node, nManager ...api.OpenStorageNodeClient) (node.Node, error) {
