@@ -632,10 +632,12 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	return nil
 }
 
-func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume) error {
+func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[string]string) error {
+	var token string
 	volumeName := d.schedOps.GetVolumeName(vol)
+	token = d.getTokenForVolume(volumeName, params)
 	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 		if err != nil {
 			return nil, true, err
 		}
