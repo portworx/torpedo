@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -131,9 +131,9 @@ type Driver interface {
 
 	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 	// given volumes
-	ValidateVolumeSnapshotRestore(vol string, snapData *snap_v1.VolumeSnapshotData, timeStart time.Time) error
+	ValidateVolumeSnapshotRestore(vol string, snapData *snapv1.VolumeSnapshotData, timeStart time.Time) error
 
-	// Collect live diags on a node
+	// CollectDiags collects live diags on a node
 	CollectDiags(n node.Node) error
 }
 

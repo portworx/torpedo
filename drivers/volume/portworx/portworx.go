@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
-	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
@@ -34,34 +34,30 @@ import (
 
 const (
 	//PortworxStorage portworx storage name
-	PortworxStorage torpedovolume.StorageProvisionerType = "portworx"
+	portworxStorage torpedovolume.StorageProvisionerType = "portworx"
 	//CsiStorage csi storage name
-	CsiStorage torpedovolume.StorageProvisionerType = "csi"
+	csiStorage torpedovolume.StorageProvisionerType = "csi"
 )
 
 var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	PortworxStorage: "kubernetes.io/portworx-volume",
-	CsiStorage:      "pxd.portworx.com",
+	portworxStorage: "kubernetes.io/portworx-volume",
+	csiStorage:      "pxd.portworx.com",
 }
 
 const (
 	// DriverName is the name of the portworx driver implementation
-	DriverName              = "pxd"
-	pxdClientSchedUserAgent = "pxd-sched"
-	pxdRestPort             = 9001
-	pxDiagPort              = 9014
-	defaultPxServicePort    = 9020
-	pxDiagPath              = "/remotediags"
-	pxVersionLabel          = "PX Version"
-	maintenanceOpRetries    = 3
-	enterMaintenancePath    = "/entermaintenance"
-	exitMaintenancePath     = "/exitmaintenance"
-	pxSystemdServiceName    = "portworx.service"
-	storageStatusUp         = "Up"
-	tokenKey                = "token"
-	clusterIP               = "ip"
-	clusterPort             = "port"
-	remoteKubeConfigPath    = "/tmp/kubeconfig"
+	DriverName           = "pxd"
+	pxdRestPort          = 9001
+	pxDiagPort           = 9014
+	defaultPxServicePort = 9020
+	pxDiagPath           = "/remotediags"
+	pxVersionLabel       = "PX Version"
+	enterMaintenancePath = "/entermaintenance"
+	exitMaintenancePath  = "/exitmaintenance"
+	pxSystemdServiceName = "portworx.service"
+	tokenKey             = "token"
+	clusterIP            = "ip"
+	clusterPort          = "port"
 )
 
 const (
@@ -74,10 +70,7 @@ const (
 	validateDeleteVolumeTimeout      = 3 * time.Minute
 	validateReplicationUpdateTimeout = 10 * time.Minute
 	validateClusterStartTimeout      = 2 * time.Minute
-	validateNodeStartTimeout         = 3 * time.Minute
 	validatePXStartTimeout           = 5 * time.Minute
-	validateVolumeAttachedTimeout    = 30 * time.Second
-	validateVolumeAttachedInterval   = 5 * time.Second
 	validateNodeStopTimeout          = 5 * time.Minute
 	getNodeTimeout                   = 3 * time.Minute
 	getNodeRetryInterval             = 5 * time.Second
@@ -174,7 +167,7 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 		return err
 	}
 
-	nodes, err := d.getClusterOnStart()
+	nodes, err := d.getStorageNodesOnStart()
 	if err != nil {
 		return err
 	}
@@ -189,7 +182,7 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 	}
 
 	for _, n := range node.GetStorageDriverNodes() {
-		if err := d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
+		if err = d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
 			return err
 		}
 	}
@@ -209,13 +202,13 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 			torpedovolume.StorageProvisioner = p
 		}
 	} else {
-		torpedovolume.StorageProvisioner = provisioners[PortworxStorage]
+		torpedovolume.StorageProvisioner = provisioners[portworxStorage]
 	}
 	return nil
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
-	cluster, err := d.getClusterOnStart()
+	cluster, err := d.getStorageNodesOnStart()
 	if err != nil {
 		return err
 	}
@@ -279,10 +272,10 @@ func (d *portworx) updateNode(n node.Node, pxNodes []api.StorageNode) error {
 func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) {
 	members, err := d.getKvdbMembers(node)
 	if err != nil {
-		return false, fmt.Errorf("Failed to get metadata nodes. Cause: %v", err)
+		return false, fmt.Errorf("failed to get metadata nodes. Cause: %v", err)
 	}
 
-	ipRegex := regexp.MustCompile(`http:\/\/(?P<address>.*)\:\d+`)
+	ipRegex := regexp.MustCompile(`http://(?P<address>.*):d+`)
 	for _, value := range members {
 		for _, url := range value.ClientUrls {
 			result := getGroupMatches(ipRegex, url)
@@ -357,19 +350,21 @@ func (d *portworx) getPxNode(n node.Node, nManager ...api.OpenStorageNodeClient)
 	}
 	logrus.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
 	nodeInspectResponse, err := nManager[0].Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
-	storageNode := nodeInspectResponse.Node
-	if err != nil && storageNode == nil {
-		return api.StorageNode{Status: api.Status_STATUS_NONE}, err
-	} else if (err == nil && storageNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && storageNode.Status == api.Status_STATUS_NONE) {
+	if isNodeNotFound(err) {
+		logrus.Warnf("node %s with ID %s not found, trying to update node ID...", n.Name, n.VolDriverNodeID)
 		n, err = d.updateNodeID(n, nManager...)
 		if err != nil {
-			return api.StorageNode{}, err
+			return api.StorageNode{Status: api.Status_STATUS_NONE}, err
 		}
 		return d.getPxNode(n, nManager...)
-	} else if err != nil {
-		return api.StorageNode{Status: api.Status_STATUS_NONE}, err
 	}
-	return *storageNode, nil
+	return *nodeInspectResponse.Node, nil
+}
+
+func isNodeNotFound(err error) bool {
+	st, _ := status.FromError(err)
+	// TODO when a node is not found sometimes we get an error code internal, as workaround we check for internal error and substring
+	return err != nil && (st.Code() == codes.NotFound || (st.Code() == codes.Internal && strings.Contains(err.Error(), "Unable to locate node")))
 }
 
 func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager api.OpenStorageNodeClient) (string, error) {
@@ -504,7 +499,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 
 	// if the volume is a clone or a snap, validate it's parent
-	if vol.Readonly || vol.Source.Parent != "" {
+	if vol.IsSnapshot() || vol.IsClone() {
 		parentResp, err := d.getVolDriver().Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: vol.Source.Parent})
 		if err != nil {
 			return &ErrFailedToInspectVolume{
@@ -817,7 +812,7 @@ func (d *portworx) RandomizeVolumeName(params string) string {
 	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New()+"${3}")
 }
 
-func (d *portworx) getClusterOnStart() ([]api.StorageNode, error) {
+func (d *portworx) getStorageNodesOnStart() ([]api.StorageNode, error) {
 	t := func() (interface{}, bool, error) {
 		cluster, err := d.getClusterManager().InspectCurrent(d.getContext(), &api.SdkClusterInspectCurrentRequest{})
 		if err != nil {
@@ -876,6 +871,11 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		logrus.Debugf("checking PX status on node: %s", n.Name)
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION, api.Status_STATUS_OK: // do nothing
+		case api.Status_STATUS_OFFLINE:
+			// in case node is offline and it is a storageless node, the id might have changed so update it
+			if len(pxNode.Pools) == 0 {
+				d.updateNodeID(n, d.getNodeManager())
+			}
 		default:
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
@@ -1332,7 +1332,7 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) err
 	if err != nil {
 		return fmt.Errorf("error: %+v", err)
 	}
-	logrus.Infof("Portworx cluster upgraded succesfully")
+	logrus.Infof("Portworx cluster upgraded successfully")
 
 	for _, n := range node.GetStorageDriverNodes() {
 		if err := d.WaitForUpgrade(n, endpointVersion); err != nil {
@@ -1434,9 +1434,7 @@ func (d *portworx) RejoinNode(n node.Node) error {
 func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
 	nodeResponse, err := d.nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
-		st, ok := status.FromError(err)
-		// TODO when a node is not found sometimes we get an error code internal, as workaround we check for internal error and substring
-		if ok && st.Code() == codes.NotFound || (st.Code() == codes.Internal && strings.Contains(err.Error(), "Unable to locate node")) {
+		if isNodeNotFound(err) {
 			apiSt := api.Status_STATUS_NONE
 			return &apiSt, nil
 		}
@@ -1560,14 +1558,8 @@ func (d *portworx) updateNodeID(n node.Node, nManager ...api.OpenStorageNodeClie
 	if err != nil {
 		return n, err
 	}
-	for _, nd := range nodes {
-		for _, addr := range n.Addresses {
-			if nd.GetMgmtIp() == addr || nd.DataIp == addr && len(nd.Id) > 0 {
-				n.VolDriverNodeID = nd.Id
-				node.UpdateNode(n)
-				return n, nil
-			}
-		}
+	if err = d.updateNode(n, nodes); err != nil {
+		return node.Node{}, fmt.Errorf("failed to update node ID for node %s. Cause: %v", n.Name, err)
 	}
 	return n, fmt.Errorf("node %v not found in cluster", n)
 }
@@ -1588,9 +1580,9 @@ func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
 // ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 // given volumes
 // TODO: additionally check for restore objects in case of cloudsnap
-func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_v1.VolumeSnapshotData, timeStart time.Time) error {
+func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snapv1.VolumeSnapshotData, timeStart time.Time) error {
 	snap := snapshotData.Spec.PortworxSnapshot.SnapshotID
-	if snapshotData.Spec.PortworxSnapshot.SnapshotType == snap_v1.PortworxSnapshotTypeCloud {
+	if snapshotData.Spec.PortworxSnapshot.SnapshotType == snapv1.PortworxSnapshotTypeCloud {
 		snap = "in-place-restore-" + vol
 	}
 
@@ -1736,7 +1728,7 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		// Only way to collect diags when PX is offline is using pxctl
 		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f", opts)
 		if err != nil {
-			return fmt.Errorf("Failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
 		logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
 		return nil
@@ -1764,7 +1756,7 @@ func (d *portworx) CollectDiags(n node.Node) error {
 	req := c.Post().Resource(pxDiagPath).Body(r)
 	resp := req.Do()
 	if resp.Error() != nil {
-		return fmt.Errorf("Failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
+		return fmt.Errorf("failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
 	}
 	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
 	return nil
