@@ -21,7 +21,7 @@ import (
 
 const (
 	scaleTimeout          = 10 * time.Minute
-	nodeDeleteTimeoutMins = 5 * time.Minute
+	nodeDeleteTimeoutMins = 7 * time.Minute
 )
 
 func TestASG(t *testing.T) {
@@ -43,8 +43,10 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgscaleupdown-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("asgscaleupdown-%d", i))...)
 		}
+
+		ValidateApplications(contexts)
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
 		Expect(err).NotTo(HaveOccurred())
@@ -102,9 +104,11 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 
 		Step("Ensure apps are deployed", func() {
 			for i := 0; i < Inst().ScaleFactor; i++ {
-				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgchaos-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("asgchaos-%d", i))...)
 			}
 		})
+
+		ValidateApplications(contexts)
 
 		Step("Randomly kill one storage node", func() {
 
@@ -200,7 +204,10 @@ func ValidateClusterSize(count int64) {
 	// Validate total node count
 	currentNodeCount, err := Inst().N.GetASGClusterSize()
 	Expect(err).NotTo(HaveOccurred())
-	Expect(currentNodeCount).Should(Equal(perZoneCount * 3))
+	Expect(perZoneCount*3).Should(Equal(currentNodeCount),
+		"ASG cluster size is not as expected."+
+			" Current size is [%d]. Expected ASG size is [%d]",
+		currentNodeCount, perZoneCount*3)
 
 	// Validate storage node count
 	var expectedStorageNodesPerZone int
@@ -211,7 +218,10 @@ func ValidateClusterSize(count int64) {
 	}
 	storageNodes, err := getStorageNodes()
 	Expect(err).NotTo(HaveOccurred())
-	Expect(len(storageNodes)).Should(Equal(expectedStorageNodesPerZone * 3))
+	Expect(len(storageNodes)).Should(Equal(expectedStorageNodesPerZone*3),
+		"Current number of storeage nodes [%d] does not match expected number of storage nodes [%d]",
+		len(storageNodes), expectedStorageNodesPerZone*3)
+
 	logrus.Infof("Validated successfully that [%d] storage nodes are present", len(storageNodes))
 }
 
