@@ -374,24 +374,24 @@ func CollectSupport() {
 				logrus.Infof("colleting diags from %s", n.Name)
 				Inst().V.CollectDiags(n)
 
-				journalCmd := fmt.Sprintf("journalctl -l > /var/core/all_journal_%v.log", time.Now().Format(time.RFC3339))
+				journalCmd := fmt.Sprintf("journalctl -l > /var/cores/all_journal_%v.log", time.Now().Format(time.RFC3339))
 				logrus.Infof("saving journal output on %s", n.Name)
 				runCmd(journalCmd, n)
 
 				logrus.Infof("saving portworx journal output on %s", n.Name)
-				runCmd("journalctl -lu portworx* > /var/core/portworx.log", n)
+				runCmd("journalctl -lu portworx* > /var/cores/portworx.log", n)
 
 				logrus.Infof("saving kubelet journal output on %s", n.Name)
-				runCmd("journalctl -lu kubelet* > /var/core/kubelet.log", n)
+				runCmd("journalctl -lu kubelet* > /var/cores/kubelet.log", n)
 
 				logrus.Infof("saving dmesg output on %s", n.Name)
-				runCmd("dmesg -T > /var/core/dmesg.log", n)
+				runCmd("dmesg -T > /var/cores/dmesg.log", n)
 
 				logrus.Infof("saving disk list on %s", n.Name)
-				runCmd("lsblk > /var/core/lsblk.log", n)
+				runCmd("lsblk > /var/cores/lsblk.log", n)
 
 				logrus.Infof("saving mount list on %s", n.Name)
-				runCmd("cat /proc/mounts > /var/core/mounts.log", n)
+				runCmd("cat /proc/mounts > /var/cores/mounts.log", n)
 			}
 		})
 	})
