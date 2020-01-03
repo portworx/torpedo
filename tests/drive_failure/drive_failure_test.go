@@ -38,6 +38,8 @@ var _ = Describe("{DriveFailure}", func() {
 	testName := "drivefailure"
 	It("has to schedule apps and induce a drive failure on one of the nodes", func() {
 		var err error
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}

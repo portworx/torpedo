@@ -31,6 +31,7 @@ var _ = Describe("{RebootOneNode}", func() {
 
 	It("has to schedule apps and reboot node(s) with volumes", func() {
 		var err error
+		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootonenode-%d", i))...)
@@ -93,6 +94,8 @@ var _ = Describe("{RebootAllNodes}", func() {
 
 	It("has to scheduler apps and reboot app node(s)", func() {
 		var err error
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootallnodes-%d", i))...)
 		}

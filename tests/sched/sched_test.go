@@ -33,6 +33,8 @@ var _ = Describe("{StopScheduler}", func() {
 	testName := "stopscheduler"
 	It("has to stop scheduler service and check if applications are fine", func() {
 		var err error
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}

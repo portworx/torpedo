@@ -39,6 +39,8 @@ var _ = Describe("{DecommissionNode}", func() {
 
 	testName := "decommissionnode"
 	It("has to decommission a node and check if node was decommissioned successfully", func() {
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}

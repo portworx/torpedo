@@ -204,6 +204,8 @@ var _ = Describe(fmt.Sprintf("{%sDoesNotWaitForWorkload}", testNameSuite), func(
 		testName := strings.ToLower(fmt.Sprintf("%sDoesNotWaitForWorkload", testNameSuite))
 
 		for _, apRule := range autopilotruleScaleTestCases {
+			contexts = make([]*scheduler.Context, 0)
+
 			apParameters := &scheduler.AutopilotParameters{
 				Enabled:                 true,
 				Name:                    testName,
@@ -270,6 +272,8 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testNameSuite), func() {
 		testName := strings.ToLower(fmt.Sprintf("%sVolumeDriverDown", testNameSuite))
 
 		for _, apRule := range autopilotruleBasicTestCases {
+			contexts = make([]*scheduler.Context, 0)
+
 			apParameters := &scheduler.AutopilotParameters{
 				Enabled:                 true,
 				Name:                    testName,

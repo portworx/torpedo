@@ -32,6 +32,8 @@ var _ = Describe("{SetupTeardown}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to setup, validate and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-%d", i))...)
 		}
@@ -58,6 +60,8 @@ var _ = Describe("{VolumeDriverDown}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and stop volume driver on app nodes", func() {
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldriverdown-%d", i))...)
 		}
@@ -114,6 +118,8 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldriverdownattachednode-%d", i))...)
 		}
@@ -171,6 +177,8 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps and crash volume driver on app nodes", func() {
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldrivercrash-%d", i))...)
 		}
@@ -207,6 +215,8 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to schedule apps, stop volume driver on app nodes and destroy apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldriverappdown-%d", i))...)
 		}
@@ -261,6 +271,8 @@ var _ = Describe("{AppTasksDown}", func() {
 
 	It("has to schedule app and delete app tasks", func() {
 		var err error
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("apptasksdown-%d", i))...)
 		}
@@ -335,6 +347,8 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to scale up and scale down the app", func() {
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("applicationscaleupdown-%d", i))...)
 		}
@@ -405,6 +419,8 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 			}
 		})
 		Step("Deploy applications", func() {
+			contexts = make([]*scheduler.Context, 0)
+
 			for i := 0; i < Inst().ScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cordondeploydestroy-%d", i))...)
 			}

@@ -42,6 +42,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to validate that storage nodes are not lost during asg scaledown", func() {
+		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("asgscaleupdown-%d", i))...)
@@ -100,10 +101,12 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 // This test randomly kills one volume driver node and ensures cluster remains
 // intact by ASG
 var _ = Describe("{ASGKillRandomNodes}", func() {
+	var contexts []*scheduler.Context
+
 	It("keeps killing worker nodes", func() {
 
-		var contexts []*scheduler.Context
 		var err error
+		contexts = make([]*scheduler.Context, 0)
 
 		// Get list of nodes where storage driver is installed
 		storageDriverNodes := node.GetStorageDriverNodes()
@@ -188,6 +191,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			CollectSupport()
+			DescribeNamespace(contexts)
 		}
 	})
 })
