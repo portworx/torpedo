@@ -363,3 +363,17 @@ type ErrFailedToGetSecret struct {
 func (e *ErrFailedToGetSecret) Error() string {
 	return fmt.Sprintf("Failed to get Secret : %v due to err: %v", e.App.Key, e.Cause)
 }
+
+// ErrFailedToGetEvents error when we are unable to get events
+type ErrFailedToGetEvents struct {
+	// Type is the resource type which we want to get the events
+	Type string
+	// Name of object
+	Name string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetEvents) Error() string {
+	return fmt.Sprintf("Failed to get Events for: [%v]%v due to err: %v", e.Type, e.Name, e.Cause)
+}
