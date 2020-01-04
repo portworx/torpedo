@@ -59,6 +59,7 @@ const (
 	defaultNodeDriver                     = "ssh"
 	defaultStorageDriver                  = "pxd"
 	defaultLogLocation                    = "/mnt/torpedo_support_dir"
+	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
 	defaultAppScaleFactor                 = 1
 	defaultMinRunTimeMins                 = 0
@@ -371,27 +372,27 @@ func CollectSupport() {
 					continue
 				}
 
-				logrus.Infof("colleting diags from %s", n.Name)
+				logrus.Infof("collecting diags from %s", n.Name)
 				Inst().V.CollectDiags(n)
 
-				journalCmd := fmt.Sprintf("journalctl -l > /var/cores/all_journal_%v.log", time.Now().Format(time.RFC3339))
+				journalCmd := fmt.Sprintf("journalctl -l > %s/all_journal_%v.log", Inst().BundleLocation, time.Now().Format(time.RFC3339))
 				logrus.Infof("saving journal output on %s", n.Name)
 				runCmd(journalCmd, n)
 
 				logrus.Infof("saving portworx journal output on %s", n.Name)
-				runCmd("journalctl -lu portworx* > /var/cores/portworx.log", n)
+				runCmd(fmt.Sprintf("journalctl -lu portworx* > %s/portworx.log", Inst().BundleLocation), n)
 
 				logrus.Infof("saving kubelet journal output on %s", n.Name)
-				runCmd("journalctl -lu kubelet* > /var/cores/kubelet.log", n)
+				runCmd(fmt.Sprintf("journalctl -lu kubelet* > %s/kubelet.log", Inst().BundleLocation), n)
 
 				logrus.Infof("saving dmesg output on %s", n.Name)
-				runCmd("dmesg -T > /var/cores/dmesg.log", n)
+				runCmd(fmt.Sprintf("dmesg -T > %s/dmesg.log", Inst().BundleLocation), n)
 
 				logrus.Infof("saving disk list on %s", n.Name)
-				runCmd("lsblk > /var/cores/lsblk.log", n)
+				runCmd(fmt.Sprintf("lsblk > %s/lsblk.log", Inst().BundleLocation), n)
 
 				logrus.Infof("saving mount list on %s", n.Name)
-				runCmd("cat /proc/mounts > /var/cores/mounts.log", n)
+				runCmd(fmt.Sprintf("cat /proc/mounts > %s/mounts.log", Inst().BundleLocation), n)
 			}
 		})
 	})
@@ -430,6 +431,16 @@ func PerformSystemCheck() {
 	})
 }
 
+// AfterEachTest runs collect support bungle after each test when it fails
+func AfterEachTest(contexts []*scheduler.Context) bool {
+	return ginkgo.JustAfterEach(func() {
+		if ginkgo.CurrentGinkgoTestDescription().Failed {
+			CollectSupport()
+			DescribeNamespace(contexts)
+		}
+	})
+}
+
 // Inst returns the Torpedo instances
 func Inst() *Torpedo {
 	return instance
@@ -459,6 +470,7 @@ type Torpedo struct {
 	DriverStartTimeout                  time.Duration
 	AutoStorageNodeRecoveryTimeout      time.Duration
 	ConfigMap                           string
+	BundleLocation                      string
 }
 
 // ParseFlags parses command line flags
@@ -477,6 +489,7 @@ func ParseFlags() {
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
+	var bundleLocation string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -499,6 +512,7 @@ func ParseFlags() {
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
+	flag.StringVar(&bundleLocation, "bundle-output", defaultBundleLocation, "Path to support bundle output files")
 
 	flag.Parse()
 
@@ -537,6 +551,7 @@ func ParseFlags() {
 				DriverStartTimeout:                  driverStartTimeout,
 				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
 				ConfigMap:                           configMapName,
+				BundleLocation:                      bundleLocation,
 			}
 		})
 	}

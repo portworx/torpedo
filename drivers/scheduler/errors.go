@@ -352,7 +352,7 @@ func (e *ErrFailedToGetCustomSpec) Error() string {
 	return fmt.Sprintf("Failed to get custom spec: %s due to err: %v", e.Name, e.Cause)
 }
 
-//ErrFailedToGetSecret error when we are unable to get the defined secret
+// ErrFailedToGetSecret error when we are unable to get the defined secret
 type ErrFailedToGetSecret struct {
 	// App is the spec for which we want to get the secret
 	App *spec.AppSpec

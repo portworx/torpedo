@@ -112,12 +112,7 @@ var _ = Describe("{DriveFailure}", func() {
 
 		ValidateAndDestroy(contexts, nil)
 	})
-	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			CollectSupport()
-			DescribeNamespace(contexts)
-		}
-	})
+	AfterEachTest(contexts)
 })
 
 var _ = AfterSuite(func() {

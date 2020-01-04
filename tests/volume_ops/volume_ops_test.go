@@ -157,12 +157,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 		})
 
 	})
-	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			CollectSupport()
-			DescribeNamespace(contexts)
-		}
-	})
+	AfterEachTest(contexts)
 })
 
 var _ = AfterSuite(func() {

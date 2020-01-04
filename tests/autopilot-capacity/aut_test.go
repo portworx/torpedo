@@ -185,12 +185,7 @@ var _ = Describe(fmt.Sprintf("{%sWaitForWorkload}", testNameSuite), func() {
 			})
 		}
 	})
-	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			CollectSupport()
-			DescribeNamespace(contexts)
-		}
-	})
+	AfterEachTest(contexts)
 })
 
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
@@ -253,12 +248,7 @@ var _ = Describe(fmt.Sprintf("{%sDoesNotWaitForWorkload}", testNameSuite), func(
 			})
 		}
 	})
-	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			CollectSupport()
-			DescribeNamespace(contexts)
-		}
-	})
+	AfterEachTest(contexts)
 })
 
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
@@ -350,12 +340,7 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testNameSuite), func() {
 			})
 		}
 	})
-	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			CollectSupport()
-			DescribeNamespace(contexts)
-		}
-	})
+	AfterEachTest(contexts)
 })
 
 var _ = AfterSuite(func() {

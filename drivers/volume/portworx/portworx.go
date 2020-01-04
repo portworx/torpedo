@@ -1706,7 +1706,7 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
-		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f -l", opts)
+		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f", opts)
 		if err != nil {
 			return fmt.Errorf("Failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
