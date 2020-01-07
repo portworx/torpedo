@@ -72,7 +72,7 @@ var _ = Describe("{DecommissionNode}", func() {
 			Step(fmt.Sprintf("decommission node %s", nodeToDecommission.Name), func() {
 				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
 				Expect(err).NotTo(HaveOccurred())
-				err = Inst().V.DecommissionNode(nodeToDecommission)
+				err = Inst().V.DecommissionNode(&nodeToDecommission)
 				Expect(err).NotTo(HaveOccurred())
 				Step(fmt.Sprintf("check if node %s was decommissioned", nodeToDecommission.Name), func() {
 					t := func() (interface{}, bool, error) {
@@ -91,7 +91,7 @@ var _ = Describe("{DecommissionNode}", func() {
 				})
 			})
 			Step(fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name), func() {
-				err := Inst().V.RejoinNode(nodeToDecommission)
+				err := Inst().V.RejoinNode(&nodeToDecommission)
 				Expect(err).NotTo(HaveOccurred())
 				err = Inst().V.WaitDriverUpOnNode(nodeToDecommission, Inst().DriverStartTimeout)
 				Expect(err).NotTo(HaveOccurred())

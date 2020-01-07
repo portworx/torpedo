@@ -118,10 +118,10 @@ type Driver interface {
 	GetClusterPairingInfo() (map[string]string, error)
 
 	// DecommissionNode decommissions the given node from the cluster
-	DecommissionNode(n node.Node) error
+	DecommissionNode(n *node.Node) error
 
 	// RejoinNode rejoins a given node back to the cluster
-	RejoinNode(n node.Node) error
+	RejoinNode(n *node.Node) error
 
 	// GetNodeStatus returns the status of a given node
 	GetNodeStatus(n node.Node) (*api.Status, error)
