@@ -431,14 +431,13 @@ func PerformSystemCheck() {
 	})
 }
 
-// AfterEachTest runs collect support bungle after each test when it fails
-func AfterEachTest(contexts []*scheduler.Context) bool {
-	return ginkgo.JustAfterEach(func() {
-		if ginkgo.CurrentGinkgoTestDescription().Failed {
-			CollectSupport()
-			DescribeNamespace(contexts)
-		}
-	})
+// AfterEachTest runs collect support bundle after each test when it fails
+func AfterEachTest(contexts []*scheduler.Context) {
+	logrus.Debugf("contexts: %v", contexts)
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		CollectSupport()
+		DescribeNamespace(contexts)
+	}
 }
 
 // Inst returns the Torpedo instances
@@ -512,7 +511,7 @@ func ParseFlags() {
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
-	flag.StringVar(&bundleLocation, "bundle-output", defaultBundleLocation, "Path to support bundle output files")
+	flag.StringVar(&bundleLocation, "bundle-location", defaultBundleLocation, "Path to support bundle output files")
 
 	flag.Parse()
 

@@ -58,7 +58,9 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			}
 		})
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 func getImages(version string) []volume.Image {

@@ -90,7 +90,9 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This test randomly kills one volume driver node and ensures cluster remains
@@ -183,7 +185,9 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 			}
 		})
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = AfterSuite(func() {

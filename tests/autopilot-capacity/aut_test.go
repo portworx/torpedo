@@ -185,7 +185,9 @@ var _ = Describe(fmt.Sprintf("{%sWaitForWorkload}", testNameSuite), func() {
 			})
 		}
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
@@ -248,7 +250,9 @@ var _ = Describe(fmt.Sprintf("{%sDoesNotWaitForWorkload}", testNameSuite), func(
 			})
 		}
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
@@ -340,7 +344,9 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testNameSuite), func() {
 			})
 		}
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = AfterSuite(func() {

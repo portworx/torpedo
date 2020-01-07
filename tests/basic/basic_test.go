@@ -47,7 +47,9 @@ var _ = Describe("{SetupTeardown}", func() {
 			TearDownContext(ctx, opts)
 		}
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
@@ -99,7 +101,9 @@ var _ = Describe("{VolumeDriverDown}", func() {
 			}
 		})
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // Volume Driver Plugin is down, unavailable on the nodes where the volumes are
@@ -154,7 +158,9 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 			}
 		})
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // Volume Driver Plugin has crashed - and the client container should not be impacted.
@@ -185,7 +191,9 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // Volume driver plugin is down and the client container gets terminated.
@@ -237,7 +245,9 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 			}
 		})
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
@@ -309,7 +319,9 @@ var _ = Describe("{AppTasksDown}", func() {
 			}
 		})
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
@@ -368,7 +380,9 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 		})
 
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = Describe("{CordonDeployDestroy}", func() {
@@ -420,7 +434,9 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 			}
 		})
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = AfterSuite(func() {

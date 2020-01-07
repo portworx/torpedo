@@ -112,7 +112,9 @@ var _ = Describe("{DriveFailure}", func() {
 
 		ValidateAndDestroy(contexts, nil)
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = AfterSuite(func() {

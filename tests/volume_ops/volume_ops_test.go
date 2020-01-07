@@ -157,7 +157,9 @@ var _ = Describe("{VolumeUpdate}", func() {
 		})
 
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = AfterSuite(func() {

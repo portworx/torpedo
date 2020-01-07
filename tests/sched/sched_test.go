@@ -73,7 +73,9 @@ var _ = Describe("{StopScheduler}", func() {
 
 		ValidateAndDestroy(contexts, nil)
 	})
-	AfterEachTest(contexts)
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = AfterSuite(func() {
