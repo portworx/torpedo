@@ -168,8 +168,9 @@ spec:
   volumeClaimTemplates:
     - metadata:
         name: rabbitmq-data
+        annotations:
+          volume.beta.kubernetes.io/storage-class: px-rabbitmq-sc
       spec:
-        storageClassName: rabbitmq-sc
         accessModes:
           - ReadWriteOnce
         resources:

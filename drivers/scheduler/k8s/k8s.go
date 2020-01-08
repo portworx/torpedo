@@ -799,7 +799,7 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 }
 
 func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *v1.ConfigMap) error {
-	logrus.Infof("Config Map details:\n %v:", configMap.Data)
+	logrus.Infof("Config Map details: %v", configMap.Data)
 	if _, ok := configMap.Data[secretNameKey]; !ok {
 		return fmt.Errorf("failed to get secret name from config map")
 	}
