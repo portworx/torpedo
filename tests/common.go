@@ -207,20 +207,20 @@ func ValidateVolumes(ctx *scheduler.Context, vState int) {
 			}
 		})
 
-		for vol, params := range vols {
-			if Inst().ConfigMap != "" {
-				params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-				expect(err).NotTo(haveOccurred())
-			}
-			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateVolume(vol, params)
-				if vState == 0 {
-					expect(err).To(haveOccurred())
-				} else {
-					expect(err).NotTo(haveOccurred())
-				}
-			})
+		var appToken string
+		if Inst().ConfigMap != "" {
+			appToken, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+			expect(err).NotTo(haveOccurred())
 		}
+
+
+		err = Inst().V.ValidateCreateVolume(vols, vState, ctx.App.Key,appToken )
+		if vState == 0 {
+			expect(err).To(haveOccurred())
+		} else {
+			expect(err).NotTo(haveOccurred())
+		}
+
 	})
 }
 

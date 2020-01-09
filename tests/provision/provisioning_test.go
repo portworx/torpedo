@@ -44,7 +44,6 @@ var _ = Describe("{ReplicaAffinity}", func() {
 
 		for vkey, vrule := range vpsRules {
 			var contexts []*scheduler.Context
-			var volNodes map[string]map[string][]string
 
 			var lblData []labelDict
 			var setLabels int
@@ -55,7 +54,6 @@ var _ = Describe("{ReplicaAffinity}", func() {
 					lblnode := SetNodeLabels(lblData)
 					logrus.Debug("Nodes containing label", lblnode)
 					Expect(lblnode).NotTo(BeEmpty())
-					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
 				}
 			})
 
@@ -73,12 +71,6 @@ var _ = Describe("{ReplicaAffinity}", func() {
 				}
 			})
 
-			Step("validate volumes and replica affinity: "+vkey, func() {
-				for _, ctx := range contexts {
-					ValidateVpsRules(vrule.Validate, ctx, volNodes)
-				}
-
-			})
 
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -104,7 +96,6 @@ var _ = Describe("{VolumeAffinity}", func() {
 
 		for vkey, vrule := range vpsRules {
 			var contexts []*scheduler.Context
-			var volNodes map[string]map[string][]string
 
 			var lblData []labelDict
 			var setLabels int
@@ -115,7 +106,6 @@ var _ = Describe("{VolumeAffinity}", func() {
 					lblnode := SetNodeLabels(lblData)
 					logrus.Debug("Nodes containing label", lblnode)
 					Expect(lblnode).NotTo(BeEmpty())
-					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
 				}
 			})
 
@@ -133,12 +123,6 @@ var _ = Describe("{VolumeAffinity}", func() {
 				}
 			})
 
-			Step("validate volumes and replica affinity: "+vkey, func() {
-				for _, ctx := range contexts {
-					ValidateVpsRules(vrule.Validate, ctx, volNodes)
-				}
-
-			})
 
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -164,7 +148,6 @@ var _ = Describe("{ReplicaVolumeAffinity}", func() {
 
 		for vkey, vrule := range vpsRules {
 			var contexts []*scheduler.Context
-			var volNodes map[string]map[string][]string
 
 			var lblData []labelDict
 			var setLabels int
@@ -175,7 +158,6 @@ var _ = Describe("{ReplicaVolumeAffinity}", func() {
 					lblnode := SetNodeLabels(lblData)
 					logrus.Debug("Nodes containing label", lblnode)
 					Expect(lblnode).NotTo(BeEmpty())
-					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
 				}
 			})
 
@@ -193,12 +175,6 @@ var _ = Describe("{ReplicaVolumeAffinity}", func() {
 				}
 			})
 
-			Step("validate volumes and replica affinity: "+vkey, func() {
-				for _, ctx := range contexts {
-					ValidateVpsRules(vrule.Validate, ctx, volNodes)
-				}
-
-			})
 
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -224,7 +200,6 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 
 		for vkey, vrule := range vpsRules {
 			var contexts []*scheduler.Context
-			var volNodes map[string]map[string][]string
 
 			var lblData []labelDict
 			var setLabels int
@@ -235,7 +210,6 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 					lblnode := SetNodeLabels(lblData)
 					logrus.Debug("Nodes containing label", lblnode)
 					Expect(lblnode).NotTo(BeEmpty())
-					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
 				}
 			})
 
@@ -270,11 +244,6 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 					})
 
 					ValidateContext(ctx, defaultVstate)
-					Step("validate volumes and replica affinity: "+vkey, func() {
-						for _, ctx := range contexts {
-							ValidateVpsRules(vrule.Validate, ctx, volNodes)
-						}
-					})
 					Step(fmt.Sprintf("scale down app %s by 1", ctx.App.Key), func() {
 						applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
 						Expect(err).NotTo(HaveOccurred())
@@ -290,19 +259,7 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 					})
 
 					ValidateContext(ctx, defaultVstate)
-					Step("validate volumes and replica affinity: "+vkey, func() {
-						for _, ctx := range contexts {
-							ValidateVpsRules(vrule.Validate, ctx, volNodes)
-						}
-					})
 
-				}
-
-			})
-
-			Step("validate volumes and replica affinity: "+vkey, func() {
-				for _, ctx := range contexts {
-					ValidateVpsRules(vrule.Validate, ctx, volNodes)
 				}
 
 			})
@@ -331,7 +288,6 @@ var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
 
 		for vkey, vrule := range vpsRules {
 			var contexts []*scheduler.Context
-			var volNodes map[string]map[string][]string
 
 			var lblData []labelDict
 			var setLabels int
@@ -342,7 +298,6 @@ var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
 					lblnode := SetNodeLabels(lblData)
 					logrus.Debug("Nodes containing label", lblnode)
 					Expect(lblnode).NotTo(BeEmpty())
-					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
 				}
 			})
 
@@ -376,12 +331,6 @@ var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
 				}
 			})
 
-			Step("validate volumes and replica affinity: "+vkey, func() {
-				for _, ctx := range contexts {
-					ValidateVpsRules(vrule.Validate, ctx, volNodes)
-				}
-
-			})
 
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -405,7 +354,6 @@ var _ = Describe("{DefaultRepVolAffinity}", func() {
 
 		for vkey, vrule := range vpsRules {
 			var contexts []*scheduler.Context
-			var volNodes map[string]map[string][]string
 
 			var lblData []labelDict
 			var setLabels int
@@ -416,7 +364,6 @@ var _ = Describe("{DefaultRepVolAffinity}", func() {
 					lblnode := SetNodeLabels(lblData)
 					logrus.Debug("Nodes containing label", lblnode)
 					Expect(lblnode).NotTo(BeEmpty())
-					volNodes = pvcNodeMap(vrule.GetPvcNodeLabels, lblnode)
 				}
 			})
 
@@ -434,12 +381,6 @@ var _ = Describe("{DefaultRepVolAffinity}", func() {
 				}
 			})
 
-			Step("validate volumes and replica affinity: "+vkey, func() {
-				for _, ctx := range contexts {
-					ValidateVpsRules(vrule.Validate, ctx, volNodes)
-				}
-
-			})
 
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true

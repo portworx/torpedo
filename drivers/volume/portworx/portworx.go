@@ -530,7 +530,14 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		}
 	}
 
-	vol := out.(*api.Volume)
+		var token string
+		params["auth-token"] = appToken
+		token = d.getTokenForVolume(appVol, params)
+		t := func() (interface{}, bool, error) {
+			vols, err := d.getVolDriver(token).Inspect([]string{appVol})
+			if err != nil {
+				return nil, true, err
+			}
 
 	// Status
 	if vol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
@@ -547,7 +554,6 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			ID:    volumeName,
 			Cause: fmt.Sprintf("Volume has invalid state. Actual:%v", vol.State),
 		}
-	}
 
 	// if the volume is a clone or a snap, validate it's parent
 	if vol.IsSnapshot() || vol.IsClone() {
@@ -564,8 +570,6 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				Cause: fmt.Sprintf("Snapshot/Clone validation failed. %v", err),
 			}
 		}
-		return nil
-	}
 
 	// Labels
 	var pxNodes []api.StorageNode
@@ -578,10 +582,12 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
 				}
 			}
+			// Continue to investigate next volume
+			continue
+		}
 
 			pxNodes = append(pxNodes, *nodeResponse.Node)
 		}
-	}
 
 	// Spec
 	requestedSpec, requestedLocator, _, err := spec.NewSpecHandler().SpecFromOpts(params)
@@ -590,10 +596,9 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			ID:    volumeName,
 			Cause: fmt.Sprintf("failed to parse requested spec of volume. Err: %v", err),
 		}
-	}
 
-	delete(vol.Locator.VolumeLabels, "pvc") // special handling for the new pvc label added in k8s
-	deleteLabelsFromRequestedSpec(requestedLocator)
+		delete(vol.Locator.VolumeLabels, "pvc") // special handling for the new pvc label added in k8s
+		deleteLabelsFromRequestedSpec(requestedLocator)
 
 	// Params/Options
 	for k, v := range params {
@@ -661,6 +666,75 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey]; !exists || requestedLabelValue != labelValue {
 					return errFailedToInspectVolume(volumeName, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
 				}
+			case api.SpecParent:
+				if v != vol.Source.Parent {
+					return errFailedToInspectVolume(appVol, k, v, vol.Source.Parent)
+				}
+			case api.SpecEphemeral:
+				if requestedSpec.Ephemeral != vol.Spec.Ephemeral {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Ephemeral, vol.Spec.Ephemeral)
+				}
+			case api.SpecFilesystem:
+				if requestedSpec.Format != vol.Spec.Format {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Format, vol.Spec.Format)
+				}
+			case api.SpecBlockSize:
+				if requestedSpec.BlockSize != vol.Spec.BlockSize {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.BlockSize, vol.Spec.BlockSize)
+				}
+			case api.SpecHaLevel:
+				if requestedSpec.HaLevel != vol.Spec.HaLevel {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.HaLevel, vol.Spec.HaLevel)
+				}
+			case api.SpecPriorityAlias:
+				// Since IO priority isn't guaranteed, we aren't validating it here.
+			case api.SpecSnapshotInterval:
+				if requestedSpec.SnapshotInterval != vol.Spec.SnapshotInterval {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.SnapshotInterval, vol.Spec.SnapshotInterval)
+				}
+			case api.SpecSnapshotSchedule:
+				// TODO currently volume spec has a different format than request
+				// i.e request "daily=12:00,7" turns into "- freq: daily\n  hour: 12\n  retain: 7\n" in volume spec
+				//if requestedSpec.SnapshotSchedule != vol.Spec.SnapshotSchedule {
+				//	return errFailedToInspectVolume(vol, k, requestedSpec.SnapshotSchedule, vol.Spec.SnapshotSchedule)
+				//}
+			case api.SpecAggregationLevel:
+				if requestedSpec.AggregationLevel != vol.Spec.AggregationLevel {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
+				}
+			case api.SpecShared:
+				if requestedSpec.Shared != vol.Spec.Shared {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Shared, vol.Spec.Shared)
+				}
+			case api.SpecSticky:
+				if requestedSpec.Sticky != vol.Spec.Sticky {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Sticky, vol.Spec.Sticky)
+				}
+			case api.SpecGroup:
+				if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group) {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Group, vol.Spec.Group)
+				}
+			case api.SpecGroupEnforce:
+				if requestedSpec.GroupEnforced != vol.Spec.GroupEnforced {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.GroupEnforced, vol.Spec.GroupEnforced)
+				}
+			// portworx injects pvc vol and volspace labels so response object won't be equal to request
+			case api.SpecLabels:
+				for requestedLabelKey, requestedLabelValue := range requestedLocator.VolumeLabels {
+					// check requested label is not in 'ignore' list
+					if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey]; !exists || requestedLabelValue != labelValue {
+						return errFailedToInspectVolume(appVol, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+					}
+				}
+			case api.SpecIoProfile:
+				if requestedSpec.IoProfile != vol.Spec.IoProfile {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
+				}
+			case api.SpecSize:
+				if requestedSpec.Size != vol.Spec.Size {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Size, vol.Spec.Size)
+				}
+			default:
 			}
 		case api.SpecIoProfile:
 			if requestedSpec.IoProfile != vol.Spec.IoProfile {
@@ -672,9 +746,50 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			}
 		default:
 		}
+
+		err = d.ValidateVps(vol, appVols)
+		logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
+
 	}
 
-	logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
+	return nil
+}
+
+// Validate the volume replicas as per VolumePlacementStrategy rule applied to the volume
+func (d *portworx) ValidateVps(vol *api.Volume, appVols map[string]map[string]string) error {
+
+	logrus.Infof("Volume details: %v ===\n (%v)", vol, appVols)
+	logrus.Infof("====Volume details-1: %v ===\n (%v)", vol.Id, vol.Spec.GetPlacementStrategy())
+	logrus.Infof("====Volume details-2: %v ===\n (%v)", vol.Id, vol.Spec)
+
+	if vpsrule := vol.Spec.GetPlacementStrategy(); vpsrule != nil {
+
+		// Get Volume Labels
+		volLabels := vol.Spec.GetVolumeLabels()
+		logrus.Infof("====Volume details-3: %v ===\n labels (%v)", vol.Id, volLabels)
+		logrus.Infof("====Volume details-4: %v ===\n Placement strategy (%v)", vol.Id, volLabels["placement_strategy"])
+
+		//Get vps spec from k8s
+		volVpsRule, err := k8s.Instance().GetVolumePlacementStrategy(volLabels["placement_strategy"])
+		logrus.Infof("====Volume details-5: %v ===\n Placement strategy (%v)", vol.Id, volVpsRule)
+
+		if err != nil {
+			return err
+		}
+
+		logrus.Infof("====Volume details-6: %v === RA: %v,\n RAA: %v,\n VA: %v, \n VAA: %v ", vol.Id, volVpsRule.Spec.ReplicaAffinity, volVpsRule.Spec.ReplicaAntiAffinity, volVpsRule.Spec.VolumeAffinity, volVpsRule.Spec.VolumeAntiAffinity)
+		logrus.Infof("====Volume details-6-1: %v === RA: Spec %v", vol.Id, volVpsRule.Spec.ReplicaAffinity[0].CommonPlacementSpec)
+		logrus.Infof("====Volume details-6-2: %v === RA: Match %v", vol.Id, volVpsRule.Spec.ReplicaAffinity[0].CommonPlacementSpec.MatchExpressions[0])
+		logrus.Infof("====Volume details-6-3: %v === RA: Topology %v", vol.Id, volVpsRule.Spec.ReplicaAffinity[0].CommonPlacementSpec.TopologyKey)
+		logrus.Infof("====Volume details-6-3: %v === RA: Enforcement %v", vol.Id, volVpsRule.Spec.ReplicaAffinity[0].CommonPlacementSpec.Enforcement)
+
+		//Get node labels
+		logrus.Infof("====Volume details-7: %v ===  %v", vol.Id)
+
+	} else {
+		logrus.Infof("====Volume details-0: Doesnot have any VPS rule applied to it:  %v ===", vol.Id)
+	}
+
 	return nil
 }
 
