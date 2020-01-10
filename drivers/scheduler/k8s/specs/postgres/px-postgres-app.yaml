@@ -37,12 +37,12 @@ spec:
           name: postgredb
         readinessProbe:
           exec:
-            command: ["psql", "-U", "pgbench", "-d", "pgbench", "-c", "SELECT 1"]
+            command: ["touch", "/var/lib/postgresql/data/pgdata/PG_VERSION"]
           initialDelaySeconds: 15
           timeoutSeconds: 2
         livenessProbe:
           exec:
-            command: ["psql", "-U", "pgbench", "-d", "pgbench", "-c", "SELECT 1"]
+            command: ["touch", "/var/lib/postgresql/data/pgdata/PG_VERSION"]
           initialDelaySeconds: 45
           timeoutSeconds: 2
       volumes:
