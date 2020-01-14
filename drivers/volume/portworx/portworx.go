@@ -582,6 +582,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
 				}
 			}
+			//TODO: IS validation for snapshot or clone needs to be done of VPS
 			// Continue to investigate next volume
 			continue
 		}
@@ -758,20 +759,17 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 // Validate the volume replicas as per VolumePlacementStrategy rule applied to the volume
 func (d *portworx) ValidateVps(vol *api.Volume, appVols map[string]map[string]string) error {
 
-	logrus.Infof("Volume details: %v ===\n (%v)", vol, appVols)
-	logrus.Infof("====Volume details-1: %v ===\n (%v)", vol.Id, vol.Spec.GetPlacementStrategy())
-	logrus.Infof("====Volume details-2: %v ===\n (%v)", vol.Id, vol.Spec)
+	logrus.Debugf("Volume details: %v ===\n (%v)", vol, appVols)
+	logrus.Infof("Validate VPS  for Volume:%v ,  VPS Rule :(%v)", vol.Id, vol.Spec.GetPlacementStrategy())
 
 	if vpsrule := vol.Spec.GetPlacementStrategy(); vpsrule != nil {
 
 		// Get Volume Labels
 		volLabels := vol.Spec.GetVolumeLabels()
-		logrus.Infof("====Volume details-3: %v ===\n labels (%v)", vol.Id, volLabels)
-		logrus.Infof("====Volume details-4: %v ===\n Placement strategy (%v)", vol.Id, volLabels["placement_strategy"])
 
 		//Get vps spec from k8s
 		volVpsRule, err := k8s.Instance().GetVolumePlacementStrategy(volLabels["placement_strategy"])
-		logrus.Infof("====Volume details-5: %v ===\n Placement strategy (%v)", vol.Id, volVpsRule)
+		logrus.Debugf("====Volume details-5: %v ===\n Placement strategy (%v)", vol.Id, volVpsRule)
 
 		if err != nil {
 			return err
@@ -787,7 +785,7 @@ func (d *portworx) ValidateVps(vol *api.Volume, appVols map[string]map[string]st
 		logrus.Infof("====Volume details-7: %v ===  %v", vol.Id)
 
 	} else {
-		logrus.Infof("====Volume details-0: Doesnot have any VPS rule applied to it:  %v ===", vol.Id)
+		logrus.Infof("Validate VolumePlacementStrategy,  Volume (%v) doesnot have any VPS rule applied to it", vol.Id)
 	}
 
 	return nil
