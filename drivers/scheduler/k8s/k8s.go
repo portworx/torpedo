@@ -92,7 +92,7 @@ type K8s struct {
 	NodeDriverName      string
 	VolDriverName       string
 	secretConfigMapName string
-	customConfig        map[string]*scheduler.AppConfig
+	customConfig        map[string]scheduler.AppConfig
 }
 
 //IsNodeReady  Check whether the cluster node is ready
@@ -122,6 +122,11 @@ func (k *K8s) String() string {
 
 //Init Initialize the driver
 func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
+	k.NodeDriverName = schedOpts.NodeDriverName
+	k.VolDriverName = schedOpts.VolDriverName
+	k.secretConfigMapName = schedOpts.SecretConfigMapName
+	k.customConfig = schedOpts.CustomAppConfig
+
 	nodes, err := k8sops.Instance().GetNodes()
 	if err != nil {
 		return err
@@ -137,12 +142,6 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	if err != nil {
 		return err
 	}
-
-	k.NodeDriverName = schedOpts.NodeDriverName
-	k.VolDriverName = schedOpts.VolDriverName
-
-	k.secretConfigMapName = schedOpts.SecretConfigMapName
-	k.customConfig = schedOpts.CustomAppConfig
 	return nil
 }
 
@@ -188,8 +187,7 @@ func (k *K8s) RefreshNodeRegistry() error {
 	return nil
 }
 
-//ParseSpecs Parse the application spec file
-//
+//ParseSpecs parses the application spec file
 func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 	fileList := make([]string, 0)
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
@@ -205,10 +203,7 @@ func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 	var specs []interface{}
 
 	splitPath := strings.Split(specDir, "/")
-	appName := ""
-	if len(splitPath) > 0 {
-		appName = splitPath[len(splitPath)-1]
-	}
+	appName := splitPath[len(splitPath)-1]
 
 	for _, fileName := range fileList {
 		file, err := ioutil.ReadFile(fileName)
@@ -216,11 +211,11 @@ func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 			return nil, err
 		}
 
-		var customConfig *scheduler.AppConfig
+		var customConfig scheduler.AppConfig
 		var ok bool
 
 		if customConfig, ok = k.customConfig[appName]; !ok {
-			customConfig = &scheduler.AppConfig{}
+			customConfig = scheduler.AppConfig{}
 		}
 
 		tmpl, err := template.New("customConfig").Parse(string(file))

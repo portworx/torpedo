@@ -479,7 +479,7 @@ type Torpedo struct {
 	AutoStorageNodeRecoveryTimeout      time.Duration
 	ConfigMap                           string
 	BundleLocation                      string
-	CustomAppConfig                     map[string]*scheduler.AppConfig
+	CustomAppConfig                     map[string]scheduler.AppConfig
 }
 
 // ParseFlags parses command line flags
@@ -500,6 +500,7 @@ func ParseFlags() {
 	var autoStorageNodeRecoveryTimeout time.Duration
 	var bundleLocation string
 	var customConfigPath string
+	var customAppConfig map[string]scheduler.AppConfig
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -541,17 +542,19 @@ func ParseFlags() {
 	} else if err = os.MkdirAll(logLoc, os.ModeDir); err != nil {
 		logrus.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 	} else {
-		configs := make(map[string]*scheduler.AppConfig)
 		if _, err = os.Stat(customConfigPath); err == nil {
 			var data []byte
+
+			logrus.Infof("Using custom app config file %s", customConfigPath)
 			data, err = ioutil.ReadFile(customConfigPath)
 			if err != nil {
 				logrus.Fatalf("Cannot read file %s. Error: %v", customConfigPath, err)
 			}
-			err = yaml.Unmarshal(data, &configs)
+			err = yaml.Unmarshal(data, &customAppConfig)
 			if err != nil {
 				logrus.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
 			}
+			logrus.Infof("Parsed custom app config file: %+v", customAppConfig)
 		}
 		once.Do(func() {
 			instance = &Torpedo{
@@ -575,7 +578,7 @@ func ParseFlags() {
 				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
 				ConfigMap:                           configMapName,
 				BundleLocation:                      bundleLocation,
-				CustomAppConfig:                     configs,
+				CustomAppConfig:                     customAppConfig,
 			}
 		})
 	}
