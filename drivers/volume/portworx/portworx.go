@@ -759,7 +759,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 // Validate the volume replicas as per VolumePlacementStrategy rule applied to the volume
 func (d *portworx) ValidateVps(vol *api.Volume, appVols map[string]map[string]string) error {
 
-	logrus.Debugf("Volume details: %v ===\n (%v)", vol, appVols)
+	logrus.Debugf("Volume details: %v ===\n (%v) Volumes per Node List:%v, all nodes of the App's Volumes: %v ", vol, appVols, nodeReplMap, appVolNodes)
 	logrus.Infof("Validate VPS  for Volume:%v ,  VPS Rule :(%v)", vol.Id, vol.Spec.GetPlacementStrategy())
 
 	if vpsrule := vol.Spec.GetPlacementStrategy(); vpsrule != nil {
