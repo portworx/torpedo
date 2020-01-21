@@ -14,10 +14,6 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-const (
-	defaultVstate = 1
-)
-
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -296,7 +292,7 @@ var _ = Describe("{AppTasksDown}", func() {
 						Expect(err).NotTo(HaveOccurred())
 					})
 
-					ValidateContext(ctx, defaultVstate)
+					ValidateContext(ctx)
 				}
 			} else {
 				start := time.Now().Local()
@@ -307,7 +303,7 @@ var _ = Describe("{AppTasksDown}", func() {
 							Expect(err).NotTo(HaveOccurred())
 						})
 
-						ValidateContext(ctx, defaultVstate)
+						ValidateContext(ctx)
 					}
 					Step(fmt.Sprintf("Sleeping for given duration %d", frequency), func() {
 						d := time.Duration(frequency)
@@ -357,7 +353,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 					time.Sleep(10 * time.Second)
 				})
 
-				ValidateContext(ctx, defaultVstate)
+				ValidateContext(ctx)
 
 				Step(fmt.Sprintf("scale down app %s by 1", ctx.App.Key), func() {
 					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
@@ -373,7 +369,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 					time.Sleep(10 * time.Second)
 				})
 
-				ValidateContext(ctx, defaultVstate)
+				ValidateContext(ctx)
 			}
 		})
 

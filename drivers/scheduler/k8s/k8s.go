@@ -852,29 +852,18 @@ func (k *K8s) substituteNamespaceInPVC(pvc *v1.PersistentVolumeClaim, ns string)
 	}
 }
 
+func (k *K8s) addVpsVolumeLabel(pvc *v1.PersistentVolumeClaim, vlabel string) {
+	//pvc.Metadatas.Labels["appvps"] = vlabel
+	logrus.Infof("PVC label update label:%v  pvc:%v", vlabel, pvc)
+}
+
 //Set or disable the placement_strategy in the storageclass
 func (k *K8s) substituteVpsNameInStorageClass(sc *storage_api.StorageClass, vps_map map[string]string) {
 	//	sc.Name = namespaceRegex.ReplaceAllString(sc.Name, ns)
-	for k, v := range sc.Parameters {
-		logrus.Infof("[%v] storaegeclass parameters: %v", k, v)
-		newstr := placement1Regex.ReplaceAllString(v, vps_map["placement-1"])
-		if newstr != v {
-			sc.Parameters[k] = newstr
-			logrus.Infof("[%v] post replace placement-1 storaegeclass parameters: %v Sub:%v", k, sc.Parameters[k], vps_map["placement-1"])
-			break
-		}
-		newstr = placement2Regex.ReplaceAllString(v, vps_map["placement-2"])
-		if newstr != v {
-			sc.Parameters[k] = newstr
-			logrus.Infof("[%v] post replace placement-2 storaegeclass parameters: %v Sub:%v", k, sc.Parameters[k], vps_map["placement-2"])
-			break
-		}
-		newstr = placement3Regex.ReplaceAllString(v, vps_map["placement-3"])
-		if newstr != v {
-			sc.Parameters[k] = newstr
-			logrus.Infof("[%v] post replace placement-3 storaegeclass parameters: %v Sub:%v", k, sc.Parameters[k], vps_map["placement-3"])
-			break
-		}
+	if sc.Parameters["aggregation_level"] == "2" || sc.Parameters["aggregation_level"] == "3" {
+		sc.Parameters["placement_strategy"] = ""
+	} else {
+		sc.Parameters["placement_strategy"] = vpsname
 	}
 }
 
@@ -1711,7 +1700,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 //GetVolumeParameters Get the volume parameters
 func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string]string, error) {
 	result := make(map[string]map[string]string)
-
+	logrus.Infof("GetVolumeParameters: started")
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
 			params, err := k8sCore.GetPersistentVolumeClaimParams(obj)

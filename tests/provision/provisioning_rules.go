@@ -2,99 +2,54 @@ package tests
 
 import (
 	"fmt"
+
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	mediaSsd  = "SSD"
-	mediaSata = "SATA"
+	mediaSsd       = "SSD"
+	mediaSata      = "SATA"
+	mediaType      = "media_type"
+	liops          = "iops"
+	llatency       = "latency"
+	pxZone         = "failure-domain.beta.kubernetes.io/px_zone"
+	pxRegion       = "failure-domain.beta.kubernetes.io/px_region"
+	kubeZone       = "failure-domain.beta.kubernetes.io/zone"
+	ruleCategories = 6
 )
 
 type labelDict map[string]interface{}
 
-type vpsTemplate interface {
+//VpsTemplate provides interface for running individual testcases
+type VpsTemplate interface {
 	// Node label and whether it needs to be set on node remove
 	GetLabels() ([]labelDict, int)
-	// Get StorageClass placement_strategy
-	GetScStrategyMap() map[string]string
 	// Vps Spec
 	GetSpec() string
 	// Clean up
 	CleanVps()
 }
 
-var (
-	vpsRulesReplica      = make(map[string]vpsTemplate)
-	vpsRulesVolume       = make(map[string]vpsTemplate)
-	vpsRulesMix          = make(map[string]vpsTemplate)
-	vpsRulesMixScale     = make(map[string]vpsTemplate)
-	vpsRulesPending      = make(map[string]vpsTemplate)
-	vpsRulesDefaultLabel = make(map[string]vpsTemplate)
-)
+//VpsRules contains list of all rules for VolumePlacementStrategy
+var VpsRules = []map[string]VpsTemplate{}
 
 // Register registers the given vps rule
-func Register(name string, d vpsTemplate, cat int) error {
+func Register(name string, d VpsTemplate, cat int) error {
 
-	if cat == 1 {
-		if _, ok := vpsRulesReplica[name]; !ok {
-			vpsRulesReplica[name] = d
-		} else {
-			return fmt.Errorf("vps rule: %s is already registered", name)
-		}
-	} else if cat == 2 {
-		if _, ok := vpsRulesVolume[name]; !ok {
-			vpsRulesVolume[name] = d
-		} else {
-			return fmt.Errorf("vps rule: %s is already registered", name)
-		}
-	} else if cat == 3 {
-		if _, ok := vpsRulesMix[name]; !ok {
-			vpsRulesMix[name] = d
-		} else {
-			return fmt.Errorf("vps rule: %s is already registered", name)
-		}
-	} else if cat == 4 {
-		if _, ok := vpsRulesMixScale[name]; !ok {
-			vpsRulesMixScale[name] = d
-		} else {
-			return fmt.Errorf("vps rule: %s is already registered", name)
-		}
-	} else if cat == 5 {
-		if _, ok := vpsRulesPending[name]; !ok {
-			vpsRulesPending[name] = d
-		} else {
-			return fmt.Errorf("vps rule: %s is already registered", name)
-		}
-	} else if cat == 6 {
-		if _, ok := vpsRulesDefaultLabel[name]; !ok {
-			vpsRulesDefaultLabel[name] = d
-		} else {
-			return fmt.Errorf("vps rule: %s is already registered", name)
-		}
+	if _, ok := VpsRules[cat][name]; !ok {
+		VpsRules[cat][name] = d
 	} else {
-		return fmt.Errorf("vps rule category: %d, is not valid", cat)
+		return fmt.Errorf("vps rule: %s is already registered", name)
 	}
-
 	return nil
 }
 
 // GetVpsRules return the list of vps rules
-func GetVpsRules(cat int) map[string]vpsTemplate {
-	if cat == 1 {
-		return vpsRulesReplica
-	} else if cat == 2 {
-		return vpsRulesVolume
-	} else if cat == 3 {
-		return vpsRulesMix
-	} else if cat == 4 {
-		return vpsRulesMixScale
-	} else if cat == 5 {
-		return vpsRulesPending
-	} else if cat == 6 {
-		return vpsRulesDefaultLabel
-	} else {
-		return nil
+func GetVpsRules(cat int) map[string]VpsTemplate {
+	if cat >= 0 && cat <= ruleCategories {
+		return VpsRules[cat]
 	}
+	return nil
 
 }
 
@@ -115,16 +70,12 @@ type vpscase1 struct {
 func (v *vpscase1) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
-	node2lbl := labelDict{"media_type": mediaSata, "vps_test": "test"}
-	node3lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
-	node4lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	node1lbl := labelDict{mediaType: mediaSsd}
+	node2lbl := labelDict{mediaType: mediaSata}
+	node3lbl := labelDict{mediaType: mediaSsd}
+	node4lbl := labelDict{mediaType: mediaSsd}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl)
 	return lbldata, 1
-}
-
-func (v *vpscase1) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase1) GetSpec() string {
@@ -133,20 +84,7 @@ func (v *vpscase1) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-1
-spec:
-  replicaAffinity:
-  - enforcement: required
-    matchExpressions:
-    - key: media_type
-      operator: In
-      values:
-      - "SSD"
----
-apiVersion: portworx.io/v1beta2 
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   replicaAffinity:
   - enforcement: required
@@ -173,17 +111,12 @@ type vpscase2 struct {
 func (v *vpscase2) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
-	node2lbl := labelDict{"media_type": mediaSata, "vps_test": "test"}
-	node3lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
-	node4lbl := labelDict{"media_type": mediaSsd, "vps_test": "test"}
+	node1lbl := labelDict{mediaType: mediaSsd}
+	node2lbl := labelDict{mediaType: mediaSata}
+	node3lbl := labelDict{mediaType: mediaSsd}
+	node4lbl := labelDict{mediaType: mediaSsd}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase2) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase2) GetSpec() string {
@@ -192,20 +125,7 @@ func (v *vpscase2) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-1
-spec:
-  replicaAffinity:
-  - enforcement: preferred
-    matchExpressions:
-    - key: media_type
-      operator: In
-      values:
-      - "SSD"
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   replicaAffinity:
   - enforcement: preferred
@@ -232,17 +152,12 @@ type vpscase3 struct {
 func (v *vpscase3) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"iops": "90", "latency": "50"}
-	node2lbl := labelDict{"iops": "80", "latency": "40"}
-	node3lbl := labelDict{"iops": "70", "latency": "30"}
-	node4lbl := labelDict{"iops": "60", "latency": "20"}
+	node1lbl := labelDict{liops: "90", llatency: "50"}
+	node2lbl := labelDict{liops: "80", llatency: "40"}
+	node3lbl := labelDict{liops: "70", llatency: "30"}
+	node4lbl := labelDict{liops: "60", llatency: "20"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase3) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase3) GetSpec() string {
@@ -251,7 +166,7 @@ func (v *vpscase3) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-1
+  name: {VPS_NAME}
 spec:
   replicaAffinity:
   - enforcement: required
@@ -259,12 +174,40 @@ spec:
     - key: iops
       operator: Gt
       values:
-      - "60"
----
-apiVersion: portworx.io/v1beta2
+      - "60"`
+	return vpsSpec
+}
+
+func (v *vpscase3) CleanVps() {
+	logrus.Infof("Cleanup test case context for: %v", v.name)
+}
+
+//#---- Case 3.1 ----T809561: Verify Lt, Gt operators using latency and iops
+type vpscase3_1 struct {
+	//Case description
+	name string
+	// Enabled
+	enabled bool
+}
+
+func (v *vpscase3_1) GetLabels() ([]labelDict, int) {
+
+	lbldata := []labelDict{}
+	node1lbl := labelDict{liops: "90", llatency: "50"}
+	node2lbl := labelDict{liops: "80", llatency: "40"}
+	node3lbl := labelDict{liops: "70", llatency: "30"}
+	node4lbl := labelDict{liops: "60", llatency: "20"}
+	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl)
+	return lbldata, 1
+}
+
+func (v *vpscase3_1) GetSpec() string {
+
+	var vpsSpec string
+	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   replicaAffinity:
   - enforcement: required
@@ -276,7 +219,7 @@ spec:
 	return vpsSpec
 }
 
-func (v *vpscase3) CleanVps() {
+func (v *vpscase3_1) CleanVps() {
 	logrus.Infof("Cleanup test case context for: %v", v.name)
 }
 
@@ -291,21 +234,16 @@ type vpscase4 struct {
 func (v *vpscase4) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node4lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node5lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node6lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node7lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node8lbl := labelDict{pxZone: "west", pxRegion: "usa"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase4) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": "placement-3"}
 }
 
 func (v *vpscase4) GetSpec() string {
@@ -314,20 +252,11 @@ func (v *vpscase4) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-1
+  name: {VPS_NAME}
 spec:
   replicaAffinity:
   - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-3
-spec:
-  replicaAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_region`
+    topologyKey: failure-domain.beta.kubernetes.io/px_zone`
 	return vpsSpec
 }
 
@@ -346,21 +275,16 @@ type vpscase5 struct {
 func (v *vpscase5) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "asia"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "asia"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "eu"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "eu"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "west", pxRegion: "asia"}
+	node4lbl := labelDict{pxZone: "west", pxRegion: "asia"}
+	node5lbl := labelDict{pxZone: "south", pxRegion: "eu"}
+	node6lbl := labelDict{pxZone: "south", pxRegion: "eu"}
+	node7lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node8lbl := labelDict{pxZone: "north", pxRegion: "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase5) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": "placement-3"}
 }
 
 func (v *vpscase5) GetSpec() string {
@@ -369,20 +293,11 @@ func (v *vpscase5) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-1
+  name: {VPS_NAME}
 spec:
   replicaAntiAffinity:
   - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-3
-spec:
-  replicaAntiAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_region`
+    topologyKey: failure-domain.beta.kubernetes.io/px_zone`
 	return vpsSpec
 }
 
@@ -406,18 +321,13 @@ func (v *vpscase6) GetLabels() ([]labelDict, int) {
 	return lbldata, 0
 }
 
-//StorageClass placement_strategy mapping
-func (v *vpscase6) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": "placement-1"}
-}
-
 func (v *vpscase6) GetSpec() string {
 
 	var vpsSpec string
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-1
+  name: {VPS_NAME}
 spec:
   replicaAffinity:
   - enforcement: required
@@ -453,23 +363,18 @@ func (v *vpscase7) GetLabels() ([]labelDict, int) {
 	return lbldata, 0
 }
 
-//StorageClass placement_strategy mapping
-func (v *vpscase7) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
-}
-
 func (v *vpscase7) GetSpec() string {
 
 	var vpsSpec string
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAffinity:
   - enforcement: required
     matchExpressions:
-    - key: app
+    - key: appvps-{VOL_KEY}
       operator: Exists
       values:
       - ""`
@@ -500,27 +405,21 @@ func (v *vpscase8) GetLabels() ([]labelDict, int) {
 	return lbldata, 0
 }
 
-//StorageClass placement_strategy mapping
-func (v *vpscase8) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
-}
-
-
 func (v *vpscase8) GetSpec() string {
 
 	var vpsSpec string
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAffinity:
   - enforcement: required
     matchExpressions:
-    - key: app
+    - key: appvps-{VOL_KEY}
       operator: In
       values:
-      - "mysql"`
+      - "{VOL_LABEL}"`
 	return vpsSpec
 }
 
@@ -542,24 +441,18 @@ func (v *vpscase9) GetLabels() ([]labelDict, int) {
 	return lbldata, 0
 }
 
-//StorageClass placement_strategy mapping
-func (v *vpscase9) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
-}
-
-
 func (v *vpscase9) GetSpec() string {
 
 	var vpsSpec string
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAffinity:
   - enforcement: required
     matchExpressions:
-    - key: app
+    - key: appvps-{VOL_KEY}
       operator: DoesNotExist
       values:
       - ""`
@@ -584,26 +477,21 @@ func (v *vpscase10) GetLabels() ([]labelDict, int) {
 	return lbldata, 0
 }
 
-//StorageClass placement_strategy mapping
-func (v *vpscase10) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
-}
-
 func (v *vpscase10) GetSpec() string {
 
 	var vpsSpec string
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAffinity:
   - enforcement: required
     matchExpressions:
-    - key: app
+    - key: appvps-{VOL_KEY}
       operator: NotIn
       values:
-      - "mysql"`
+      - "{VOL_LABEL}"`
 	return vpsSpec
 }
 
@@ -627,23 +515,18 @@ func (v *vpscase11) GetLabels() ([]labelDict, int) {
 	return lbldata, 0
 }
 
-//StorageClass placement_strategy mapping
-func (v *vpscase11) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
-}
-
 func (v *vpscase11) GetSpec() string {
 
 	var vpsSpec string
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAntiAffinity:
   - enforcement: required
     matchExpressions:
-    - key: app
+    - key: appvps-{VOL_KEY}
       operator: Exists
       values:
       - ""`
@@ -668,26 +551,21 @@ func (v *vpscase12) GetLabels() ([]labelDict, int) {
 	return lbldata, 0
 }
 
-//StorageClass placement_strategy mapping
-func (v *vpscase12) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
-}
-
 func (v *vpscase12) GetSpec() string {
 
 	var vpsSpec string
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAntiAffinity:
   - enforcement: required
     matchExpressions:
-    - key: app
+    - key: appvps-{VOL_KEY}
       operator: In
       values:
-      - "mysql"`
+      - "{VOL_LABEL}"`
 	return vpsSpec
 }
 
@@ -709,23 +587,18 @@ func (v *vpscase13) GetLabels() ([]labelDict, int) {
 	return lbldata, 0
 }
 
-
-//StorageClass placement_strategy mapping
-func (v *vpscase13) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
-}
 func (v *vpscase13) GetSpec() string {
 
 	var vpsSpec string
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAntiAffinity:
   - enforcement: required
     matchExpressions:
-    - key: app
+    - key: appvps-{VOL_KEY}
       operator: DoesNotExist
       values:
       - ""`
@@ -750,26 +623,21 @@ func (v *vpscase14) GetLabels() ([]labelDict, int) {
 	return lbldata, 0
 }
 
-//StorageClass placement_strategy mapping
-func (v *vpscase14) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": ""}
-}
-
 func (v *vpscase14) GetSpec() string {
 
 	var vpsSpec string
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAntiAffinity:
   - enforcement: required
     matchExpressions:
-    - key: app
+    - key: appvps-{VOL_KEY}
       operator: NotIn
       values:
-      - "mysql"`
+      - "{VOL_LABEL}"`
 	return vpsSpec
 }
 
@@ -788,21 +656,16 @@ type vpscase15 struct {
 func (v *vpscase15) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node4lbl := labelDict{pxZone: "south", pxRegion: "usa"}
+	node5lbl := labelDict{pxZone: "south", pxRegion: "jp"}
+	node6lbl := labelDict{pxZone: "south", pxRegion: "jp"}
+	node7lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node8lbl := labelDict{pxZone: "north", pxRegion: "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase15) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-2", "placement-2": "placement-2", "placement-3": "placement-3"}
 }
 
 func (v *vpscase15) GetSpec() string {
@@ -811,51 +674,17 @@ func (v *vpscase15) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone
     matchExpressions:
-      - key: app
+      - key: appvps-{VOL_KEY}
         operator: In
         values:
-          - "mysql"
+          - "{VOL_LABEL}"
   - enforcement: required
-    matchExpressions:
-      - key: "failure-domain.beta.kubernetes.io/px_zone"
-        operator: In
-        values:
-          - "east"
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-3
-spec:
-  volumeAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_region
-    matchExpressions:
-      - key: app
-        operator: In
-        values:
-          - "mysql"
-  - enforcement: required
-    matchExpressions:
-      - key: "failure-domain.beta.kubernetes.io/px_region"
-        operator: In
-        values:
-          - "usa"
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-1
-spec:
-  volumeAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
     matchExpressions:
       - key: "failure-domain.beta.kubernetes.io/px_zone"
         operator: In
@@ -879,21 +708,16 @@ type vpscase16 struct {
 func (v *vpscase16) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "central", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middle", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node4lbl := labelDict{pxZone: "central", pxRegion: "usa"}
+	node5lbl := labelDict{pxZone: "middle", pxRegion: "jp"}
+	node6lbl := labelDict{pxZone: "south", pxRegion: "jp"}
+	node7lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node8lbl := labelDict{pxZone: "north", pxRegion: "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase16) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase16) GetSpec() string {
@@ -902,44 +726,16 @@ func (v *vpscase16) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAntiAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone
     matchExpressions:
-      - key: app
+      - key: appvps-{VOL_KEY}
         operator: In
         values:
-          - "mysql"
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-3
-spec:
-  volumeAntiAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_region
-    matchExpressions:
-      - key: app
-        operator: In
-        values:
-          - "mysql"
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-1
-spec:
-  volumeAntiAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
-    matchExpressions:
-      - key: app
-        operator: In
-        values:
-          - "mysql"`
+          - "{VOL_LABEL}"`
 	return vpsSpec
 }
 
@@ -958,21 +754,16 @@ type vpscase17 struct {
 func (v *vpscase17) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "central", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middle", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node4lbl := labelDict{pxZone: "central", pxRegion: "usa"}
+	node5lbl := labelDict{pxZone: "middle", pxRegion: "jp"}
+	node6lbl := labelDict{pxZone: "south", pxRegion: "jp"}
+	node7lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node8lbl := labelDict{pxZone: "north", pxRegion: "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase17) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase17) GetSpec() string {
@@ -986,7 +777,7 @@ spec:
   volumeAntiAffinity:
   - enforcement: required
     matchExpressions:
-      - key: app
+      - key: appvps-{VOL_KEY}
         operator: In
         values:
           - "mysql"
@@ -1040,21 +831,16 @@ type vpscase18 struct {
 func (v *vpscase18) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node4lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node5lbl := labelDict{pxZone: "west", pxRegion: "jp"}
+	node6lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node7lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node8lbl := labelDict{pxZone: "north", pxRegion: "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase18) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase18) GetSpec() string {
@@ -1064,47 +850,16 @@ func (v *vpscase18) GetSpec() string {
 apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone
     matchExpressions:
-      - key: app
+      - key: appvps-{VOL_KEY}
         operator: In
         values:
-          - "mysql"
-  replicaAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-3
-spec:
-  volumeAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_region
-    matchExpressions:
-      - key: app
-        operator: In
-        values:
-          - "mysql"
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-1
-spec:
-  volumeAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
-    matchExpressions:
-      - key: app
-        operator: In
-        values:
-          - "mysql"
+          - "{VOL_LABEL}"
   replicaAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone`
@@ -1128,23 +883,17 @@ type vpscase19 struct {
 func (v *vpscase19) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node4lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node5lbl := labelDict{pxZone: "west", pxRegion: "jp"}
+	node6lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node7lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node8lbl := labelDict{pxZone: "north", pxRegion: "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
 }
-
-//StorageClass placement_strategy mapping
-func (v *vpscase19) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
-}
-
 
 func (v *vpscase19) GetSpec() string {
 
@@ -1153,47 +902,16 @@ func (v *vpscase19) GetSpec() string {
 apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAntiAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone
     matchExpressions:
-      - key: app
+      - key: appvps-{VOL_KEY}
         operator: In
         values:
-          - "mysql"
-  replicaAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-3
-spec:
-  volumeAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_region
-    matchExpressions:
-      - key: app
-        operator: In
-        values:
-          - "mysql"
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-1
-spec:
-  volumeAntiAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
-    matchExpressions:
-      - key: app
-        operator: In
-        values:
-          - "mysql"
+          - "{VOL_LABEL}"
   replicaAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone`
@@ -1217,21 +935,16 @@ type vpscase20 struct {
 func (v *vpscase20) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node4lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node5lbl := labelDict{pxZone: "south", pxRegion: "jp"}
+	node6lbl := labelDict{pxZone: "south", pxRegion: "jp"}
+	node7lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node8lbl := labelDict{pxZone: "north", pxRegion: "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase20) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-2", "placement-3": ""}
 }
 
 func (v *vpscase20) GetSpec() string {
@@ -1241,47 +954,16 @@ func (v *vpscase20) GetSpec() string {
 apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-2
+  name: {VPS_NAME}
 spec:
   volumeAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone
     matchExpressions:
-      - key: app
+      - key: appvps-{VOL_KEY}
         operator: In
         values:
-          - "mysql"
-  replicaAntiAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-3
-spec:
-  volumeAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_region
-    matchExpressions:
-      - key: app
-        operator: In
-        values:
-          - "mysql"
----
-apiVersion: portworx.io/v1beta2
-kind: VolumePlacementStrategy
-metadata:
-  name: placement-1
-spec:
-  volumeAffinity:
-  - enforcement: required
-    topologyKey: failure-domain.beta.kubernetes.io/px_zone
-    matchExpressions:
-      - key: app
-        operator: In
-        values:
-          - "mysql"
+          - "{VOL_LABEL}"
   replicaAntiAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone`
@@ -1304,21 +986,16 @@ type vpscase21 struct {
 func (v *vpscase21) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middleast", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "central", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "middleast", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node4lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node5lbl := labelDict{pxZone: "central", pxRegion: "jp"}
+	node6lbl := labelDict{pxZone: "south", pxRegion: "jp"}
+	node7lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node8lbl := labelDict{pxZone: "north", pxRegion: "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase21) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": ""}
 }
 
 func (v *vpscase21) GetSpec() string {
@@ -1327,16 +1004,16 @@ func (v *vpscase21) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-1
+  name: {VPS_NAME}
 spec:
   volumeAntiAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone
     matchExpressions:
-      - key: app
+      - key: appvps-{VOL_KEY}
         operator: In
         values:
-          - "mysql"
+          - "{VOL_LABEL}"
   replicaAntiAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone`
@@ -1359,14 +1036,14 @@ type vpscase22 struct {
 func (v *vpscase22) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "central", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node4lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node5lbl := labelDict{pxZone: "central", pxRegion: "jp"}
+	node6lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node7lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node8lbl := labelDict{pxZone: "north", pxRegion: "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
 }
@@ -1480,13 +1157,13 @@ func (v *vpscase22) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-1
+  name: {VPS_NAME}
 spec:
   volumeAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone
     matchExpressions:
-      - key: app
+      - key: appvps-{VOL_KEY}
         operator: In
         values:
           - "elastic"
@@ -1512,23 +1189,17 @@ type vpscase23 struct {
 func (v *vpscase23) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "east", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "middleast", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "west", "failure-domain.beta.kubernetes.io/px_region": "usa"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "central", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "south", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node7lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
-	node8lbl := labelDict{"failure-domain.beta.kubernetes.io/px_zone": "north", "failure-domain.beta.kubernetes.io/px_region": "jp"}
+	node1lbl := labelDict{pxZone: "east", pxRegion: "usa"}
+	node2lbl := labelDict{pxZone: "middleast", pxRegion: "usa"}
+	node3lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node4lbl := labelDict{pxZone: "west", pxRegion: "usa"}
+	node5lbl := labelDict{pxZone: "central", pxRegion: "jp"}
+	node6lbl := labelDict{pxZone: "south", pxRegion: "jp"}
+	node7lbl := labelDict{pxZone: "north", pxRegion: "jp"}
+	node8lbl := labelDict{pxZone: "north", pxRegion: "jp"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl, node7lbl, node8lbl)
 	return lbldata, 1
 }
-
-//StorageClass placement_strategy mapping
-func (v *vpscase23) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": ""}
-}
-
 
 func (v *vpscase23) GetSpec() string {
 
@@ -1614,19 +1285,14 @@ type vpscase24 struct {
 func (v *vpscase24) GetLabels() ([]labelDict, int) {
 
 	lbldata := []labelDict{}
-	node1lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "east"}  //, "failure-domain.beta.kubernetes.io/region": "usa"}
-	node2lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "east"}  //, "failure-domain.beta.kubernetes.io/region": "usa"}
-	node3lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "west"}  //, "failure-domain.beta.kubernetes.io/region": "asia"}
-	node4lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "west"}  //, "failure-domain.beta.kubernetes.io/region": "asia"}
-	node5lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "south"} //, "failure-domain.beta.kubernetes.io/region": "eu"}
-	node6lbl := labelDict{"failure-domain.beta.kubernetes.io/zone": "south"} //, "failure-domain.beta.kubernetes.io/region": "eu"}
+	node1lbl := labelDict{kubeZone: "east"}  //, "failure-domain.beta.kubernetes.io/region": "usa"}
+	node2lbl := labelDict{kubeZone: "east"}  //, "failure-domain.beta.kubernetes.io/region": "usa"}
+	node3lbl := labelDict{kubeZone: "west"}  //, "failure-domain.beta.kubernetes.io/region": "asia"}
+	node4lbl := labelDict{kubeZone: "west"}  //, "failure-domain.beta.kubernetes.io/region": "asia"}
+	node5lbl := labelDict{kubeZone: "south"} //, "failure-domain.beta.kubernetes.io/region": "eu"}
+	node6lbl := labelDict{kubeZone: "south"} //, "failure-domain.beta.kubernetes.io/region": "eu"}
 	lbldata = append(lbldata, node1lbl, node2lbl, node3lbl, node4lbl, node5lbl, node6lbl)
 	return lbldata, 1
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase24) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": ""}
 }
 
 func (v *vpscase24) GetSpec() string {
@@ -1635,7 +1301,7 @@ func (v *vpscase24) GetSpec() string {
 	vpsSpec = `apiVersion: portworx.io/v1beta2
 kind: VolumePlacementStrategy
 metadata:
-  name: placement-1
+  name: {VPS_NAME}
 spec:
   replicaAntiAffinity:
   - enforcement: required
@@ -1656,151 +1322,116 @@ func (v *vpscase24) CleanVps() {
  *
  */
 ///*
+
+// Initialize the VpsRule
 func init() {
-	v := &vpscase1{"case1 Replica affinity to node labels", true}
-	Register(v.name, v, 1)
-}
 
-func init() {
-	v := &vpscase2{"case2-T863374 Replica Affinity with enforcement=preferred", true}
-	Register(v.name, v, 1)
-}
+	// Initialize all category to empty list
+	for i := 0; i <= ruleCategories; i++ {
+		vpsRule := map[string]VpsTemplate{}
+		VpsRules = append(VpsRules, vpsRule)
+	}
 
-func init() {
-	v := &vpscase3{"case3-T809561 Replica Affinity with  Lt, Gt operators using latency and iops as node labels", true}
-	Register(v.name, v, 1)
-}
+	v1 := &vpscase1{"case1 Replica affinity to node labels", true}
+	Register(v1.name, v1, 1)
 
-func init() {
-	v := &vpscase4{"case4-T863792 Replica Affinity with topology keys", true}
-	Register(v.name, v, 1)
-}
+	v2 := &vpscase2{"case2-T863374 Replica Affinity with enforcement=preferred", true}
+	Register(v2.name, v2, 1)
 
-func init() {
-	v := &vpscase5{"case5-T1052921 Replica Anti-Affinity with topology keys (with all nodes labeled)", true}
-	Register(v.name, v, 1)
-}
+	v3 := &vpscase3{"case3-T809561 Replica Affinity with  Lt, Gt operators using latency and iops as node labels", true}
+	Register(v3.name, v3, 1)
 
-//*/
+	v3_1 := &vpscase3_1{"case3_1-T809561 Replica Affinity with  Lt, Gt operators using latency and iops as node labels", true}
+	Register(v3_1.name, v3_1, 1)
+	v4 := &vpscase4{"case4-T863792 Replica Affinity with topology keys", true}
+	Register(v4.name, v4, 1)
 
-func init() {
-	v := &vpscase6{"case6-T809554 Replica Affinity ,Volume creation should fail when VolumePlacementStrategy fails to find enough pools", true}
-	Register(v.name, v, 5)
-}
+	v5 := &vpscase5{"case5-T1052921 Replica Anti-Affinity with topology keys (with all nodes labeled)", true}
+	Register(v5.name, v5, 1)
 
-/*
- *
- *     Volume  Affinity and Anti-Affinity related test cases init
- *
- */
-///*
-func init() {
-	v := &vpscase7{"case7-T809548 Volume Affinity 'Exists'", true}
-	Register(v.name, v, 2)
-}
+	//*/
 
-func init() {
-	v := &vpscase8{"case8-T809548 Volume Affinity 'In'", true}
-	Register(v.name, v, 2)
-}
+	v6 := &vpscase6{"case6-T809554 Replica Affinity ,Volume creation should fail when VolumePlacementStrategy fails to find enough pools", true}
+	Register(v6.name, v6, 5)
 
-func init() {
-	v := &vpscase9{"case9-T809548 Volume Affinity 'DoesNotExists'", true}
-	Register(v.name, v, 2)
-}
+	/*
+	 *
+	 *     Volume  Affinity and Anti-Affinity related test cases init
+	 *
+	 */
+	///*
+	v7 := &vpscase7{"case7-T809548 Volume Affinity 'Exists'", true}
+	Register(v7.name, v7, 2)
 
-func init() {
-	v := &vpscase10{"case10-T809548 Volume Affinity 'NotIn'", true}
-	Register(v.name, v, 2)
-}
+	v8 := &vpscase8{"case8-T809548 Volume Affinity 'In'", true}
+	Register(v8.name, v8, 2)
 
-// Volume Anti-affinity
-func init() {
-	v := &vpscase11{"case11-T809549 Volume Anti-Affinity 'Exists'", true}
-	Register(v.name, v, 2)
-}
+	v9 := &vpscase9{"case9-T809548 Volume Affinity 'DoesNotExists'", true}
+	Register(v9.name, v9, 2)
+	v10 := &vpscase10{"case10-T809548 Volume Affinity 'NotIn'", true}
+	Register(v10.name, v10, 2)
 
-func init() {
-	v := &vpscase12{"case12-T809549 Volume Anti-Affinity 'In'", true}
-	Register(v.name, v, 2)
-}
+	// Volume Anti-affinity
+	v11 := &vpscase11{"case11-T809549 Volume Anti-Affinity 'Exists'", true}
+	Register(v11.name, v11, 2)
 
-//*/
-/*
-func init() {
-	v := &vpscase13{"case13-T809549 Volume Anti-Affinity 'DoesNotExists'", true}
-	Register(v.name, v,2)
-}
+	v12 := &vpscase12{"case12-T809549 Volume Anti-Affinity 'In'", true}
+	Register(v12.name, v12, 2)
 
-func init() {
-	v := &vpscase14{"case14-T809549 Volume Anti-Affinity 'NotIn'", true}
-	Register(v.name, v,2)
-}
-*/
+	//*/
+	/*
+		v13 := &vpscase13{"case13-T809549 Volume Anti-Affinity 'DoesNotExists'", true}
+			Register(v13.name, v13,2)
 
-///*
-func init() {
-	v := &vpscase15{"case15-T864665  Volume Affinity with topology key", true}
-	Register(v.name, v, 2)
-}
+			v14 := &vpscase14{"case14-T809549 Volume Anti-Affinity 'NotIn'", true}
+			Register(v14.name, v14,2)
+	*/
 
-func init() {
-	v := &vpscase16{"case16-T1053359 Volume anti-affinity with topology keys", true}
-	Register(v.name, v, 2)
-}
+	///*
+	v15 := &vpscase15{"case15-T864665  Volume Affinity with topology key", true}
+	Register(v15.name, v15, 2)
+	v16 := &vpscase16{"case16-T1053359 Volume anti-affinity with topology keys", true}
+	Register(v16.name, v16, 2)
 
-func init() {
-	v := &vpscase17{"case17-T870615  volume anti-affinity multiple rules", true}
-	Register(v.name, v, 2)
-}
+	/*  This case is valid for apps having multiple volumes with different label
+	v17 := &vpscase17{"case17-T870615  volume anti-affinity multiple rules", true}
+	Register(v17.name, v17, 2)
+	*/
 
-/*
- *
- *     Replicas & Volume  Affinity and Anti-Affinity related test cases init
- *
- */
+	/*
+	 *
+	 *     Replicas & Volume  Affinity and Anti-Affinity related test cases init
+	 *
+	 */
 
-func init() {
-	v := &vpscase18{"case18-T866365 Verify replica and volume affinity topology keys with volume labels", true}
-	Register(v.name, v, 3)
-}
+	v18 := &vpscase18{"case18-T866365 Verify replica and volume affinity topology keys with volume labels", true}
+	Register(v18.name, v18, 3)
 
-func init() {
-	v := &vpscase19{"case19-T866790 replica affinity and volume anti-affinity topology keys with volume labels ", true}
-	Register(v.name, v, 3)
-}
+	v19 := &vpscase19{"case19-T866790 replica affinity and volume anti-affinity topology keys with volume labels ", true}
+	Register(v19.name, v19, 3)
 
-//*/
+	//*/
 
-func init() {
-	v := &vpscase20{"case20-T867215 Verify replica anti-affinity and volume affinity topology keys with volume lables ", true}
-	Register(v.name, v, 3)
-}
+	v20 := &vpscase20{"case20-T867215 Verify replica anti-affinity and volume affinity topology keys with volume lables ", true}
+	Register(v20.name, v20, 3)
 
-func init() {
-	v := &vpscase21{"case21-T867640 Verify replica anti-affinity and volume anti-affinity topology keys with volume labels", true}
-	Register(v.name, v, 3)
-}
+	v21 := &vpscase21{"case21-T867640 Verify replica anti-affinity and volume anti-affinity topology keys with volume labels", true}
+	Register(v21.name, v21, 3)
 
-// Volume replica scaling
-func init() {
-	v := &vpscase22{"case22-T871040 Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules ", true}
-	Register(v.name, v, 4)
-}
+	// Volume replica scaling
+	v22 := &vpscase22{"case22-T871040 Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules ", true}
+	Register(v22.name, v22, 4)
 
-/*
-// Pool labeling is pending
-func init() {
-	v := &vpscase23{"case23-T871040 T955476 Replica & Volume Affinity & Anti Affinity ", true}
-	Register(v.name, v)
-}
+	/*
+	   // Pool labeling is pending
+	   v23 := &vpscase23{"case23-T871040 T955476 Replica & Volume Affinity & Anti Affinity ", true}
+	   	Register(v23.name, v23)
 
 
-*/
+	*/
 
-/*Default node labels*/
+	/*Default node labels*/
 
-func init() {
-	v := &vpscase24{"case24-T864240  Verify Replica Anti-Affinity with topology keys (with few nodes not set)", true}
-	Register(v.name, v, 6)
+	v24 := &vpscase24{"case24-T864240  Verify Replica Anti-Affinity with topology keys (with few nodes not set)", true}
+	Register(v24.name, v24, 6)
 }

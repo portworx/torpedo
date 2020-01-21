@@ -54,7 +54,7 @@ type Driver interface {
 
 	// ValidateCreateVolume validates whether a volume has been created properly.
 	// params are the custom volume options passed when creating the volume.
-	ValidateCreateVolume(appVols map[string]map[string]string, vState int, appName string, appToken string) error
+	ValidateCreateVolume(appVols map[string]map[string]string, appName string, appToken string) error
 
 	// ValidateUpdateVolume validates if volume changes has been applied
 	ValidateUpdateVolume(vol *Volume, params map[string]string) error

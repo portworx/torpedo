@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -30,6 +31,12 @@ func TestVps(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Provisioning", specReporters)
 }
 
+var (
+	specNameRegex = regexp.MustCompile("{VPS_NAME}")
+	volKeyRegex   = regexp.MustCompile("{VOL_KEY}")
+	volLabelRegex = regexp.MustCompile("{VOL_LABEL}")
+)
+
 var _ = BeforeSuite(func() {
 	InitInstance()
 })
@@ -37,14 +44,14 @@ var _ = BeforeSuite(func() {
 // This test performs VolumePlacementStrategy's replica affinity  of application
 // volume
 var _ = Describe("{ReplicaAffinity}", func() {
+	var contexts []*scheduler.Context
 	It("has to schedule app and verify the volume replica affinity", func() {
 
 		var vpsSpec string
 		vpsRules := GetVpsRules(1)
 
 		for vkey, vrule := range vpsRules {
-			var contexts []*scheduler.Context
-
+			contexts = make([]*scheduler.Context, 0)
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
@@ -66,11 +73,29 @@ var _ = Describe("{ReplicaAffinity}", func() {
 				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
-				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i), vrule.GetScStrategyMap())...)
+				// Set VPS enabled flag
+				VpsMap := &scheduler.VpsParameters{
+					Enabled: true,
+					Vstate:  defaultVstate,
 				}
-			})
+				for i := 0; i < Inst().ScaleFactor; i++ {
 
+					ctxs, err := Inst().S.Schedule(fmt.Sprintf("replicaaffinity-%d", i), scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Inst().Provisioner,
+						ConfigMap:          Inst().ConfigMap,
+						VpsParameters:      VpsMap,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ctxs).NotTo(BeEmpty())
+					contexts = append(contexts, ctxs...)
+				}
+
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
+				}
+
+			})
 
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -82,21 +107,25 @@ var _ = Describe("{ReplicaAffinity}", func() {
 			for _, ctx := range contexts {
 				TearDownContext(ctx, opts)
 			}
+
 		}
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 
 // This test performs VolumePlacementStrategy's volume affinity  of application
 // volume
 var _ = Describe("{VolumeAffinity}", func() {
+	var contexts []*scheduler.Context
 	It("has to schedule app and verify the volume replica affinity", func() {
 
 		var vpsSpec string
 		vpsRules := GetVpsRules(2)
 
 		for vkey, vrule := range vpsRules {
-			var contexts []*scheduler.Context
-
+			contexts = make([]*scheduler.Context, 0)
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
@@ -118,11 +147,29 @@ var _ = Describe("{VolumeAffinity}", func() {
 				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
-				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("volumeaffinity-%d", i), vrule.GetScStrategyMap())...)
+				// Set VPS enabled flag
+				VpsMap := &scheduler.VpsParameters{
+					Enabled: true,
+					Vstate:  defaultVstate,
 				}
-			})
+				for i := 0; i < Inst().ScaleFactor; i++ {
 
+					ctxs, err := Inst().S.Schedule(fmt.Sprintf("volumeaffinity-%d", i), scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Inst().Provisioner,
+						ConfigMap:          Inst().ConfigMap,
+						VpsParameters:      VpsMap,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ctxs).NotTo(BeEmpty())
+					contexts = append(contexts, ctxs...)
+				}
+
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
+				}
+
+			})
 
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -135,20 +182,23 @@ var _ = Describe("{VolumeAffinity}", func() {
 				TearDownContext(ctx, opts)
 			}
 		}
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 
 // This test performs VolumePlacementStrategy's replica & volume affinity  of application
 // volume
 var _ = Describe("{ReplicaVolumeAffinity}", func() {
+	var contexts []*scheduler.Context
 	It("has to schedule app and verify the volume replica affinity", func() {
 
 		var vpsSpec string
 		vpsRules := GetVpsRules(3)
 
 		for vkey, vrule := range vpsRules {
-			var contexts []*scheduler.Context
-
+			contexts = make([]*scheduler.Context, 0)
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
@@ -170,11 +220,29 @@ var _ = Describe("{ReplicaVolumeAffinity}", func() {
 				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
-				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumeaffinity-%d", i), vrule.GetScStrategyMap())...)
+				// Set VPS enabled flag
+				VpsMap := &scheduler.VpsParameters{
+					Enabled: true,
+					Vstate:  defaultVstate,
 				}
-			})
+				for i := 0; i < Inst().ScaleFactor; i++ {
 
+					ctxs, err := Inst().S.Schedule(fmt.Sprintf("replicavolumeaffinity-%d", i), scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Inst().Provisioner,
+						ConfigMap:          Inst().ConfigMap,
+						VpsParameters:      VpsMap,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ctxs).NotTo(BeEmpty())
+					contexts = append(contexts, ctxs...)
+				}
+
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
+				}
+
+			})
 
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -188,19 +256,22 @@ var _ = Describe("{ReplicaVolumeAffinity}", func() {
 			}
 		}
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This test performs VolumePlacementStrategy's replica & volume affinity
 // with app scale Up  & Down of application
 var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
+	var contexts []*scheduler.Context
 	It("has to schedule app and verify the volume replica affinity", func() {
 
 		var vpsSpec string
 		vpsRules := GetVpsRules(4)
 
 		for vkey, vrule := range vpsRules {
-			var contexts []*scheduler.Context
-
+			contexts = make([]*scheduler.Context, 0)
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
@@ -222,13 +293,32 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
+				// Set VPS enabled flag
+				VpsMap := &scheduler.VpsParameters{
+					Enabled: true,
+					Vstate:  defaultVstate,
+				}
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaivolumeaffinityscale-%d", i), vrule.GetScStrategyMap())...)
+
+					ctxs, err := Inst().S.Schedule(fmt.Sprintf("replicavolumeaffinityscale-%d", i), scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Inst().Provisioner,
+						ConfigMap:          Inst().ConfigMap,
+						VpsParameters:      VpsMap,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ctxs).NotTo(BeEmpty())
+					contexts = append(contexts, ctxs...)
+				}
+
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
 				}
 			})
 
 			Step("Scale up app", func() {
 				for _, ctx := range contexts {
+
 					Step(fmt.Sprintf("scale up app: %s by 1, Number of workernodes:%d ", ctx.App.Key, len(node.GetWorkerNodes())), func() {
 						applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 						Expect(err).NotTo(HaveOccurred())
@@ -243,7 +333,7 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 						time.Sleep(60 * time.Second)
 					})
 
-					ValidateContext(ctx, defaultVstate)
+					ValidateContext(ctx)
 					Step(fmt.Sprintf("scale down app %s by 1", ctx.App.Key), func() {
 						applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
 						Expect(err).NotTo(HaveOccurred())
@@ -258,7 +348,7 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 						time.Sleep(60 * time.Second)
 					})
 
-					ValidateContext(ctx, defaultVstate)
+					ValidateContext(ctx)
 
 				}
 
@@ -276,19 +366,22 @@ var _ = Describe("{ReplicaVolumeAffinityScale}", func() {
 			}
 		}
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This test performs VolumePlacementStrategy's replica & volume affinity  of application
 // with volumes pending state
 var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
+	var contexts []*scheduler.Context
 	It("has to schedule app and verify the volume replica affinity", func() {
 
 		var vpsSpec string
 		vpsRules := GetVpsRules(5)
 
 		for vkey, vrule := range vpsRules {
-			var contexts []*scheduler.Context
-
+			contexts = make([]*scheduler.Context, 0)
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
@@ -311,11 +404,12 @@ var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
 				VpsMap := &scheduler.VpsParameters{
-					ScVpsMap: vrule.GetScStrategyMap(),
+					Enabled: true,
+					Vstate:  0,
 				}
 				for i := 0; i < Inst().ScaleFactor; i++ {
 
-					ctxs, err := Inst().S.Schedule(fmt.Sprintf("replicaivolumepending-%d", i), scheduler.ScheduleOptions{
+					ctxs, err := Inst().S.Schedule(fmt.Sprintf("replicavolumepending-%d", i), scheduler.ScheduleOptions{
 						AppKeys:            Inst().AppList,
 						StorageProvisioner: Inst().Provisioner,
 						ConfigMap:          Inst().ConfigMap,
@@ -327,10 +421,9 @@ var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
 				}
 
 				for _, ctx := range contexts {
-					ValidateContext(ctx, 0)
+					ValidateContext(ctx)
 				}
 			})
-
 
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -344,17 +437,20 @@ var _ = Describe("{ReplicaVolumeAffinityPending}", func() {
 			}
 		}
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = Describe("{DefaultRepVolAffinity}", func() {
+	var contexts []*scheduler.Context
 	It("has to schedule app and verify the volume replica affinity", func() {
 
 		var vpsSpec string
 		vpsRules := GetVpsRules(6)
 
 		for vkey, vrule := range vpsRules {
-			var contexts []*scheduler.Context
-
+			contexts = make([]*scheduler.Context, 0)
 			var lblData []labelDict
 			var setLabels int
 			Step("get nodes and set labels: "+vkey, func() {
@@ -376,11 +472,28 @@ var _ = Describe("{DefaultRepVolAffinity}", func() {
 				logrus.Debugf("Spec Dir to rescan: %v", Inst().SpecDir)
 				Inst().S.RescanSpecs(Inst().SpecDir)
 
+				// Set VPS enabled flag
+				VpsMap := &scheduler.VpsParameters{
+					Enabled: true,
+					Vstate:  defaultVstate,
+				}
 				for i := 0; i < Inst().ScaleFactor; i++ {
-					contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("replicaaffinity-%d", i), vrule.GetScStrategyMap())...)
+
+					ctxs, err := Inst().S.Schedule(fmt.Sprintf("replicaaffinity-%d", i), scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Inst().Provisioner,
+						ConfigMap:          Inst().ConfigMap,
+						VpsParameters:      VpsMap,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(ctxs).NotTo(BeEmpty())
+					contexts = append(contexts, ctxs...)
+				}
+
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
 				}
 			})
-
 
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -393,6 +506,9 @@ var _ = Describe("{DefaultRepVolAffinity}", func() {
 				TearDownContext(ctx, opts)
 			}
 		}
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 
@@ -486,24 +602,29 @@ func getVpsSpec(f func() string) string {
 }
 
 func applyVpsSpec(vpsSpec string) error {
-	logrus.Debugf("vpsSpec:%v, ---SpecDir:%v--- App: %v ", vpsSpec, Inst().SpecDir, Inst().AppList[0])
+	logrus.Debugf("vpsSpec:%v, ---SpecDir:%v--- App: %v ", vpsSpec, Inst().SpecDir, Inst().AppList)
 
-	appDir := Inst().AppList[0]
-	f, err := os.Create(Inst().SpecDir + "/" + appDir + "/vps.yaml")
-	if err != nil {
-		logrus.Errorf("Failed to create VPS spec: %v ", Inst().SpecDir+"/"+appDir+"/vps.yaml")
-		return err
-	}
-	defer f.Close()
+	for _, app := range Inst().AppList {
+		f, err := os.Create(Inst().SpecDir + "/" + app + "/vps.yaml")
+		if err != nil {
+			logrus.Errorf("Failed to create VPS spec: %v ", Inst().SpecDir+"/"+app+"/vps.yaml")
+			return err
+		}
+		defer f.Close()
+		// Chaneg Spec Name
+		// Change Volume Label
+		vpsSpec = specNameRegex.ReplaceAllString(vpsSpec, app)
+		vpsSpec = volLabelRegex.ReplaceAllString(vpsSpec, app)
 
-	nsize, err := f.WriteString(vpsSpec)
-	if err != nil {
-		logrus.Errorf("Failed to write VPS spec: %v ", Inst().SpecDir+"/"+appDir+"/vps.yaml")
-		return err
+		nsize, err := f.WriteString(vpsSpec)
+		if err != nil {
+			logrus.Errorf("Failed to write VPS spec: %v ", Inst().SpecDir+"/"+app+"/vps.yaml")
+			return err
+		}
+		f.Sync()
+		logrus.Debugf("Created VPS spec: %v size: %v", Inst().SpecDir+"/"+app+"/vps.yaml", nsize)
 	}
-	f.Sync()
-	logrus.Debugf("Created VPS spec: %v size: %v", Inst().SpecDir+"/"+appDir+"/vps.yaml", nsize)
-	return err
+	return nil
 }
 
 func cleanVps() {

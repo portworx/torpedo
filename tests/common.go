@@ -144,10 +144,16 @@ func ValidateCleanup() {
 }
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
-func ValidateContext(ctx *scheduler.Context, vState int) {
+func ValidateContext(ctx *scheduler.Context) {
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		var vState int
+		if ctx.ScheduleOptions.VpsParameters != nil {
+			vState = ctx.ScheduleOptions.VpsParameters.Vstate
+		} else {
+			vState = 1
+		}
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
-			ValidateVolumes(ctx, vState)
+			ValidateVolumes(ctx)
 			if vState == 0 {
 				//Since volume is expected to not come up, app and other
 				//validation can be skipped
@@ -184,9 +190,15 @@ func ValidateContext(ctx *scheduler.Context, vState int) {
 }
 
 // ValidateVolumes is the ginkgo spec for validating volumes of a context
-func ValidateVolumes(ctx *scheduler.Context, vState int) {
+func ValidateVolumes(ctx *scheduler.Context) {
 	context("For validation of an app's volumes", func() {
 		var err error
+		var vState int
+		if ctx.ScheduleOptions.VpsParameters != nil {
+			vState = ctx.ScheduleOptions.VpsParameters.Vstate
+		} else {
+			vState = 1
+		}
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
 			err = Inst().S.InspectVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
@@ -200,10 +212,12 @@ func ValidateVolumes(ctx *scheduler.Context, vState int) {
 		var vols map[string]map[string]string
 		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
 			vols, err = Inst().S.GetVolumeParameters(ctx)
-			if vState == 0 {
-				expect(err).To(haveOccurred())
-			} else {
-				expect(err).NotTo(haveOccurred())
+			if err != nil {
+				if vState == 0 {
+					expect(err).To(haveOccurred())
+				} else {
+					expect(err).NotTo(haveOccurred())
+				}
 			}
 		})
 
@@ -212,13 +226,13 @@ func ValidateVolumes(ctx *scheduler.Context, vState int) {
 			appToken, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 			expect(err).NotTo(haveOccurred())
 		}
-
-
-		err = Inst().V.ValidateCreateVolume(vols, vState, ctx.App.Key,appToken )
-		if vState == 0 {
-			expect(err).To(haveOccurred())
-		} else {
-			expect(err).NotTo(haveOccurred())
+		err = Inst().V.ValidateCreateVolume(vols, ctx.App.Key, appToken)
+		if err != nil {
+			if vState == 0 {
+				expect(err).To(haveOccurred())
+			} else {
+				expect(err).NotTo(haveOccurred())
+			}
 		}
 
 	})
@@ -270,12 +284,9 @@ func DeleteVolumesAndWait(ctx *scheduler.Context) {
 }
 
 // ScheduleAndValidate schedules and validates applications
-func ScheduleAndValidate(testname string, vps_map map[string]string) []*scheduler.Context {
+func ScheduleAndValidate(testname string) []*scheduler.Context {
 	var contexts []*scheduler.Context
 	var err error
-	VpsMap := &scheduler.VpsParameters{
-		ScVpsMap: vps_map,
-	}
 
 	Step("schedule applications", func() {
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
@@ -289,7 +300,7 @@ func ScheduleAndValidate(testname string, vps_map map[string]string) []*schedule
 
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
-			ValidateContext(ctx, defaultVstate)
+			ValidateContext(ctx)
 		}
 	})
 
@@ -383,7 +394,7 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	Step("validate apps", func() {
 		for _, ctx := range contexts {
-			ValidateContext(ctx, defaultVstate)
+			ValidateContext(ctx)
 		}
 	})
 

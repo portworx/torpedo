@@ -27,7 +27,7 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
    fs: "ext4"
    block_size: "512b"
-   repl: "2"
+   repl: "1"
    aggregation_level: "2"
    io_profile: "random"
    priority_io: "high"
@@ -63,6 +63,7 @@ metadata:
   name: mysql-data
   labels:
     app: mysql
+    appvps-mysql: mysql
     voltype: data
   annotations:
     px/secret-name: volume-secrets
@@ -83,6 +84,7 @@ metadata:
    name: mysql-data-seq
    labels:
      app: mysql
+     appvps-mysql: mysql
      voltype: seq
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc-seq
@@ -99,6 +101,7 @@ metadata:
    name: mysql-data-aggr
    labels:
      app2: mysql-aggr
+     appvps-mysql2: mysql-aggr
      voltype: aggr
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc-aggr

@@ -5,17 +5,14 @@ import (
 	"testing"
 	"time"
 
+	"math/rand"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
-	"math/rand"
-)
-
-const (
-	defaultVstate = 1
 )
 
 func TestStopScheduler(t *testing.T) {
@@ -64,7 +61,7 @@ var _ = Describe("{StopScheduler}", func() {
 					})
 
 					Step(fmt.Sprintf("check if apps are running"), func() {
-						ValidateContext(ctx, defaultVstate)
+						ValidateContext(ctx)
 					})
 				})
 
