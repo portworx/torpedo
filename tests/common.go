@@ -446,7 +446,15 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 	context(fmt.Sprintf("generating namespace info..."), func() {
 		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
 			for _, ctx := range contexts {
-				logrus.Info(Inst().S.Describe(ctx))
+				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
+				var err error
+				var namespaceDescription string
+				if namespaceDescription, err = Inst().S.Describe(ctx); err != nil {
+					logrus.Errorf("failed to describe namespace for [%s] %s", ctx.UID, ctx.App.Key)
+				}
+				if err = ioutil.WriteFile(filename, []byte(namespaceDescription), 0755); err != nil {
+					logrus.Errorf("failed to save file %s. Cause: %v", filename, err)
+				}
 			}
 		})
 	})
