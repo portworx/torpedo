@@ -450,7 +450,7 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 				var err error
 				var namespaceDescription string
 				if namespaceDescription, err = Inst().S.Describe(ctx); err != nil {
-					logrus.Errorf("failed to describe namespace for [%s] %s", ctx.UID, ctx.App.Key)
+					logrus.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
 				}
 				if err = ioutil.WriteFile(filename, []byte(namespaceDescription), 0755); err != nil {
 					logrus.Errorf("failed to save file %s. Cause: %v", filename, err)
