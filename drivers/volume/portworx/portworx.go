@@ -1860,8 +1860,16 @@ func hasIgnorePrefix(str string) bool {
 
 func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) {
 	kvdbMembers := make(map[string]metadataNode)
+	endpoint, err := d.schedOps.GetServiceEndpoint()
+	var url string
+	if err != nil {
+		logrus.Warnf("unable to get service endpoint falling back to node addr %v", err)
+		url = fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+	} else {
+		url = fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
+	}
 	// TODO replace by sdk call whenever it is available
-	url := fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+	logrus.Infof("Url to call %v", url)
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
 		return nil, err
