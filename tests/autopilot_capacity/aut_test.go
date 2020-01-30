@@ -141,7 +141,7 @@ var ruleResizeBy300IfPvcUsageMoreThan50 = apapi.AutopilotRule{
 		Conditions: apapi.RuleConditions{
 			Expressions: []*apapi.LabelSelectorRequirement{
 				{
-					Key:      portworx.PxVolumeUsagePercentMetric,
+					Key:      aututils.PxVolumeUsagePercentMetric,
 					Operator: apapi.LabelSelectorOpGt,
 					Values:   []string{"50"},
 				},
@@ -149,9 +149,9 @@ var ruleResizeBy300IfPvcUsageMoreThan50 = apapi.AutopilotRule{
 		},
 		Actions: []*apapi.RuleAction{
 			{
-				Name: portworx.VolumeSpecAction,
+				Name: aututils.VolumeSpecAction,
 				Params: map[string]string{
-					portworx.RuleActionsScalePercentage: "300",
+					aututils.RuleActionsScalePercentage: "300",
 				},
 			},
 		},
