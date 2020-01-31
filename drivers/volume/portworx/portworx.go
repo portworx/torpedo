@@ -1007,11 +1007,11 @@ func (d *portworx) ValidateStoragePools() error {
 								n.Name, pool.Uuid, pool.TotalSize, expectedSize)
 							logrus.Errorf(err.Error())
 							return "", false, err
-						} else {
-							logrus.Infof("node: %s, pool: %s, size is not as expected. Expected: %v, Actual: %v",
-								n.Name, pool.Uuid, expectedSize, pool.TotalSize)
-							allDone = false
 						}
+
+						logrus.Infof("node: %s, pool: %s, size is not as expected. Expected: %v, Actual: %v",
+							n.Name, pool.Uuid, expectedSize, pool.TotalSize)
+						allDone = false
 					} else {
 						logrus.Infof("node: %s, pool: %s, size is as expected. Expected: %v",
 							n.Name, pool.Uuid, expectedSize)
@@ -1321,18 +1321,17 @@ func (d *portworx) setDriver() error {
 	var err error
 	var endpoint string
 
-	/*
-		// Try portworx-service first
-		endpoint, err = d.schedOps.GetServiceEndpoint()
-		if err == nil && endpoint != "" {
-			if err = d.testAndSetEndpoint(endpoint); err == nil {
-				d.refreshEndpoint = false
-				return nil
-			}
-			logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
-		} else if err != nil && len(node.GetWorkerNodes()) == 0 {
-			return err
-		}*/
+	// Try portworx-service first
+	endpoint, err = d.schedOps.GetServiceEndpoint()
+	if err == nil && endpoint != "" {
+		if err = d.testAndSetEndpoint(endpoint); err == nil {
+			d.refreshEndpoint = false
+			return nil
+		}
+		logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
+	} else if err != nil && len(node.GetWorkerNodes()) == 0 {
+		return err
+	}
 
 	// Try direct address of cluster nodes
 	// Set refresh endpoint to true so that we try and get the new
