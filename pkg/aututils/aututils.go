@@ -2,6 +2,7 @@ package aututils
 
 import (
 	"fmt"
+	"strings"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,8 +33,46 @@ const (
 	StorageSpecAction = "openstorage.io.action.storagepool/expand"
 )
 
+// PvcRuleByUsageCapacity returns an autopilot pvc expand rule that uses usage of pvc size
+func PvcRuleByUsageCapacity(usage, scalePercentage int, maxSize string) apapi.AutopilotRule {
+	apRuleName := fmt.Sprintf("pvc-usage-%d-scale-%d", usage, scalePercentage)
+	apRuleSpecActions := []*apapi.RuleAction{
+		{
+			Name: VolumeSpecAction,
+			Params: map[string]string{
+				RuleActionsScalePercentage: fmt.Sprintf("%d", scalePercentage),
+			},
+		},
+	}
+	if maxSize != "" {
+		apRuleName = fmt.Sprintf("%s-maxsize-%s", apRuleName, maxSize)
+		for _, specAction := range apRuleSpecActions {
+			specAction.Params[RuleMaxSize] = maxSize
+		}
+	}
+	apRuleObject := apapi.AutopilotRule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: strings.ToLower(apRuleName),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						Key:      PxVolumeUsagePercentMetric,
+						Operator: apapi.LabelSelectorOpGt,
+						Values:   []string{fmt.Sprintf("%d", usage)},
+					},
+				},
+			},
+			Actions: apRuleSpecActions,
+		},
+	}
+
+	return apRuleObject
+}
+
 // PoolRuleByTotalSize returns an autopilot pool expand rule that uses total pool size
-func PoolRuleByTotalSize(total, scalePercentage int, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
+func PoolRuleByTotalSize(total, scalePercentage uint64, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
 	return apapi.AutopilotRule{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: fmt.Sprintf("pool-%s-total-%d", expandType, total),
@@ -67,7 +106,7 @@ func PoolRuleByTotalSize(total, scalePercentage int, expandType string, labelSel
 }
 
 // PoolRuleByAvailableCapacity is a helper method to get the pool expand autopilot spec object using configuration params
-func PoolRuleByAvailableCapacity(usage, scalePercentage int, expandType string) apapi.AutopilotRule {
+func PoolRuleByAvailableCapacity(usage, scalePercentage uint64, expandType string) apapi.AutopilotRule {
 	return apapi.AutopilotRule{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: fmt.Sprintf("pool-%s-available-%d", expandType, usage),
