@@ -51,8 +51,6 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 const (
 	// DriverName is the name of the portworx driver implementation
 	DriverName           = "pxd"
-	pxdRestPort          = 9001
-	defaultPxServicePort = 9020
 	pxDiagPath           = "/remotediags"
 	pxVersionLabel       = "PX Version"
 	enterMaintenancePath = "/entermaintenance"
@@ -979,12 +977,11 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 }
 
 func (d *portworx) ValidateStoragePools() error {
-	// check if the sizes of pools match the expected sizes after storage expand
-	var listApRules *apapi.AutopilotRuleList
-	var err error
-	if listApRules, err = d.schedOps.ListAutopilotRules(); err != nil {
+	listApRules, err := d.schedOps.ListAutopilotRules()
+	if err != nil {
 		return err
 	}
+
 	if len(listApRules.Items) != 0 {
 		expectedPoolSizes, err := d.getExpectedPoolSizes(listApRules)
 		if err != nil {
@@ -999,15 +996,23 @@ func (d *portworx) ValidateStoragePools() error {
 			}
 
 			for _, n := range node.GetWorkerNodes() {
-				for _, sPool := range n.StoragePools {
-					ePoolSize := expectedPoolSizes[sPool.Uuid]
-					if ePoolSize != sPool.TotalSize {
+				for _, pool := range n.StoragePools {
+					expectedSize := expectedPoolSizes[pool.Uuid]
+					if expectedSize != pool.TotalSize {
+						if pool.TotalSize > expectedSize {
+							// no need to retry with this state as pool is already at larger size than expected
+							err := fmt.Errorf("node: %s pool: %s was expanded to size: %d larger than expected: %d",
+								n.Name, pool.Uuid, pool.TotalSize, expectedSize)
+							logrus.Errorf(err.Error())
+							return "", false, err
+						}
+
 						logrus.Infof("node: %s, pool: %s, size is not as expected. Expected: %v, Actual: %v",
-							n.Name, sPool.Uuid, ePoolSize, sPool.TotalSize)
+							n.Name, pool.Uuid, expectedSize, pool.TotalSize)
 						allDone = false
 					} else {
 						logrus.Infof("node: %s, pool: %s, size is as expected. Expected: %v",
-							n.Name, sPool.Uuid, ePoolSize)
+							n.Name, pool.Uuid, expectedSize)
 					}
 				}
 			}
@@ -1092,7 +1097,7 @@ func (d *portworx) CreateAutopilotRules(apRules []apapi.AutopilotRule) error {
 		if err != nil {
 			return err
 		}
-		logrus.Infof("Created Autopilot rule: %v", autopilotRule)
+		logrus.Infof("Created Autopilot rule: %+v", autopilotRule)
 	}
 	return nil
 }
@@ -1317,7 +1322,7 @@ func (d *portworx) setDriver() error {
 	// Try portworx-service first
 	endpoint, err = d.schedOps.GetServiceEndpoint()
 	if err == nil && endpoint != "" {
-		if err = d.testAndSetEndpoint(endpoint); err == nil {
+		if err = d.testAndSetEndpointUsingService(endpoint); err == nil {
 			d.refreshEndpoint = false
 			return nil
 		}
@@ -1334,7 +1339,7 @@ func (d *portworx) setDriver() error {
 	logrus.Infof("Getting new driver.")
 	for _, n := range node.GetWorkerNodes() {
 		for _, addr := range n.Addresses {
-			if err = d.testAndSetEndpoint(addr); err == nil {
+			if err = d.testAndSetEndpointUsingNodeIP(addr); err == nil {
 				return nil
 			}
 			logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
@@ -1344,8 +1349,36 @@ func (d *portworx) setDriver() error {
 	return fmt.Errorf("failed to get endpoint for portworx volume driver")
 }
 
-func (d *portworx) testAndSetEndpoint(endpoint string) error {
-	pxEndpoint := d.constructURL(endpoint)
+func (d *portworx) testAndSetEndpointUsingService(endpoint string) error {
+	sdkPort, err := getSDKPort()
+	if err != nil {
+		return err
+	}
+
+	restPort, err := getRestPort()
+	if err != nil {
+		return err
+	}
+
+	return d.testAndSetEndpoint(endpoint, sdkPort, restPort)
+}
+
+func (d *portworx) testAndSetEndpointUsingNodeIP(ip string) error {
+	sdkPort, err := getSDKContainerPort()
+	if err != nil {
+		return err
+	}
+
+	restPort, err := getRestContainerPort()
+	if err != nil {
+		return err
+	}
+
+	return d.testAndSetEndpoint(ip, sdkPort, restPort)
+}
+
+func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) error {
+	pxEndpoint := fmt.Sprintf("%s:%d", endpoint, sdkport)
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		return err
@@ -1362,7 +1395,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 	d.mountAttachManager = api.NewOpenStorageMountAttachClient(conn)
 	d.clusterPairManager = api.NewOpenStorageClusterPairClient(conn)
 	d.alertsManager = api.NewOpenStorageAlertsClient(conn)
-	if legacyClusterManager, err := d.getLegacyClusterManager(endpoint); err == nil {
+	if legacyClusterManager, err := d.getLegacyClusterManager(endpoint, apiport); err == nil {
 		d.legacyClusterManager = legacyClusterManager
 	} else {
 		return err
@@ -1372,7 +1405,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 	return nil
 }
 
-func (d *portworx) getLegacyClusterManager(endpoint string) (cluster.Cluster, error) {
+func (d *portworx) getLegacyClusterManager(endpoint string, pxdRestPort int32) (cluster.Cluster, error) {
 	pxEndpoint := fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
 	var cClient *client.Client
 	var err error
@@ -1509,9 +1542,17 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	logrus.Infof("Response for token: %v", resp.Result.Token)
 
 	// file up cluster pair info
-	pairInfo[clusterIP] = node.GetStorageDriverNodes()[0].Addresses[0]
+	clusterIPAddress, err := d.schedOps.GetServiceEndpoint()
+	if err != nil {
+		return pairInfo, err
+	}
+	pairInfo[clusterIP] = clusterIPAddress
 	pairInfo[tokenKey] = resp.Result.Token
-	pairInfo[clusterPort] = strconv.Itoa(defaultPxServicePort)
+	pwxServicePort, err := getSDKPort()
+	if err != nil {
+		return nil, err
+	}
+	pairInfo[clusterPort] = fmt.Sprintf("%d", pwxServicePort)
 
 	return pairInfo, nil
 }
@@ -1657,7 +1698,11 @@ func (d *portworx) getAlertsManager() api.OpenStorageAlertsClient {
 }
 
 func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClient, error) {
-	pxEndpoint := d.constructURL(addr)
+	pxPort, err := getSDKContainerPort()
+	if err != nil {
+		return nil, err
+	}
+	pxEndpoint := fmt.Sprintf("%s:%d", addr, pxPort)
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
@@ -1671,25 +1716,24 @@ func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClie
 	return dClient, nil
 }
 
-func (d *portworx) getVolumeDriverByAddress(addr string) (api.OpenStorageVolumeClient, error) {
-	pxEndpoint := d.constructURL(addr)
-	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
-	if err != nil {
-		return nil, err
-	}
-	dClient := api.NewOpenStorageVolumeClient(conn)
-	_, err = dClient.Enumerate(d.getContext(), &api.SdkVolumeEnumerateRequest{})
-	if err != nil {
-		return nil, err
-	}
-
-	return dClient, nil
-}
-
-//
 func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	// TODO replace by sdk call whenever it is available
-	url := fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+	pxdRestPort, err := getRestPort()
+	if err != nil {
+		return err
+	}
+	endpoint, err := d.schedOps.GetServiceEndpoint()
+	var url string
+	if err != nil {
+		logrus.Warnf("unable to get service endpoint falling back to node addr %v", err)
+		pxdRestPort, err = getRestContainerPort()
+		if err != nil {
+			return err
+		}
+		url = fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+	} else {
+		url = fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
+	}
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
 		return err
@@ -1697,10 +1741,6 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	req := c.Get().Resource(op)
 	resp := req.Do()
 	return resp.Error()
-}
-
-func (d *portworx) constructURL(ip string) string {
-	return fmt.Sprintf("%s:%d", ip, defaultPxServicePort)
 }
 
 func (d *portworx) GetReplicaSets(torpedovol *torpedovolume.Volume) ([]*api.ReplicaSet, error) {
@@ -1854,8 +1894,24 @@ func hasIgnorePrefix(str string) bool {
 
 func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) {
 	kvdbMembers := make(map[string]metadataNode)
+	pxdRestPort, err := getRestPort()
+	if err != nil {
+		return kvdbMembers, err
+	}
+	endpoint, err := d.schedOps.GetServiceEndpoint()
+	var url string
+	if err != nil {
+		logrus.Warnf("unable to get service endpoint falling back to node addr %v", err)
+		pxdRestPort, err = getRestContainerPort()
+		if err != nil {
+			return kvdbMembers, err
+		}
+		url = fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+	} else {
+		url = fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
+	}
 	// TODO replace by sdk call whenever it is available
-	url := fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+	logrus.Infof("Url to call %v", url)
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
 		return nil, err
@@ -2095,6 +2151,62 @@ func doesConditionMatch(metricValue float64, conditionExpression *apapi.LabelSel
 	return metricValue < condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpLt ||
 		metricValue > condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpGt
 
+}
+
+// getRestPort gets the service port for rest api, required when using service endpoint
+func getRestPort() (int32, error) {
+	svc, err := k8s.Instance().GetService(schedops.PXServiceName, schedops.PXNamespace)
+	if err != nil {
+		return 0, err
+	}
+	for _, port := range svc.Spec.Ports {
+		if port.Name == "px-api" {
+			return port.Port, nil
+		}
+	}
+	return 0, fmt.Errorf("px-api port not found in service")
+}
+
+// getRestContainerPort gets the rest api container port exposed in the node, required when using node ip
+func getRestContainerPort() (int32, error) {
+	svc, err := k8s.Instance().GetService(schedops.PXServiceName, schedops.PXNamespace)
+	if err != nil {
+		return 0, err
+	}
+	for _, port := range svc.Spec.Ports {
+		if port.Name == "px-api" {
+			return port.TargetPort.IntVal, nil
+		}
+	}
+	return 0, fmt.Errorf("px-api target port not found in service")
+}
+
+// getSDKPort gets sdk service port, required when using service endpoint
+func getSDKPort() (int32, error) {
+	svc, err := k8s.Instance().GetService(schedops.PXServiceName, schedops.PXNamespace)
+	if err != nil {
+		return 0, err
+	}
+	for _, port := range svc.Spec.Ports {
+		if port.Name == "px-sdk" {
+			return port.Port, nil
+		}
+	}
+	return 0, fmt.Errorf("px-sdk port not found in service")
+}
+
+// getSDKContainerPort gets the sdk container port in the node, required when using node ip
+func getSDKContainerPort() (int32, error) {
+	svc, err := k8s.Instance().GetService(schedops.PXServiceName, schedops.PXNamespace)
+	if err != nil {
+		return 0, err
+	}
+	for _, port := range svc.Spec.Ports {
+		if port.Name == "px-sdk" {
+			return port.TargetPort.IntVal, nil
+		}
+	}
+	return 0, fmt.Errorf("px-sdk target port not found in service")
 }
 
 func init() {

@@ -693,7 +693,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 				if err != nil {
 					return nil, err
 				}
-				logrus.Infof("[%v] Created Autopilot rule: %v", app.Key, aRule)
+				logrus.Infof("[%v] Created Autopilot rule: %+v", app.Key, aRule)
 			}
 		}
 
@@ -1588,7 +1588,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 			return triggered, false, nil // done
 		}
 
-		return false, true, nil // not yet triggered
+		return false, true, fmt.Errorf("%s: trigger check hasn't been met yet", fn)
 	}
 
 	_, err := task.DoRetryWithTimeout(t, opts.TriggerCheckTimeout, opts.TriggerCheckInterval)

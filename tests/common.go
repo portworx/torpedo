@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/task"
@@ -450,7 +451,7 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
 			for _, ctx := range contexts {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
-				namespaceDescription, err := Inst().S.Describe(ctx);
+				namespaceDescription, err := Inst().S.Describe(ctx)
 				if err != nil {
 					logrus.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
 				}
@@ -625,6 +626,8 @@ func ParseFlags() {
 	if err != nil {
 		logrus.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
 	}
+
+	sched.Init(time.Second)
 
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
 		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
