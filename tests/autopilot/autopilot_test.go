@@ -7,8 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/portworx/sched-ops/k8s/core"
+
+	"github.com/libopenstorage/openstorage/pkg/sched"
+	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,7 +37,7 @@ const (
 	autDeploymentNamespace   = "kube-system"
 )
 
-var autopilotruleBasicTestCases = []apapi.AutopilotRule{
+var autopilotPVCBasicTestCases = []apapi.AutopilotRule{
 	aututils.PvcRuleByUsageCapacity(50, 50, ""),
 	aututils.PvcRuleByUsageCapacity(90, 50, ""),
 	aututils.PvcRuleByUsageCapacity(50, 50, "21474836480"),
@@ -67,7 +69,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 
 		Step("schedule applications", func() {
 			for i := 0; i < Inst().ScaleFactor; i++ {
-				for id, apRule := range autopilotruleBasicTestCases {
+				for id, apRule := range autopilotPVCBasicTestCases {
 					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
 					apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
 					labels := map[string]string{
@@ -88,7 +90,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 		})
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err = Inst().S.ValidateContext(ctx, workloadTimeout, retryInterval)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -123,76 +125,53 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 // schedules apps and wait until workload is completed on the volumes. Restarts volume
 // driver and validates PVC sizes of the volumes
 var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
-
 	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
-		var err error
-		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sVolumeDriverDown", testSuiteName))
 
-		Step("schedule applications", func() {
-			for i := 0; i < Inst().ScaleFactor; i++ {
-				for id, apRule := range autopilotruleBasicTestCases {
-					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
-					apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
-					labels := map[string]string{
-						"autopilot": apRule.Name,
-					}
-					apRule.Spec.ActionsCoolDownPeriod = int64(60)
-					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-						AppKeys:            Inst().AppList,
-						StorageProvisioner: Inst().Provisioner,
-						AutopilotRule:      apRule,
-						Labels:             labels,
-					})
-					Expect(err).NotTo(HaveOccurred())
-					Expect(context).NotTo(BeEmpty())
-					contexts = append(contexts, context...)
-				}
+		// find the smallest pool and create a rule with size cap above that
+		_, smallestPoolSize := GetPoolsWithSmallestSize()
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleByTotalSize((smallestPoolSize/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, nil),
+		}
+
+		contexts := scheduleAppsWithAutopilot(testName, apRules)
+
+		// setup task that will wait for autopilot actions to go in progress and restart volume driver on the node
+		for _, ctx := range contexts {
+			poolUUIDs, err := GetAutopilotReplicaPoolsForContext(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			if len(poolUUIDs) == 0 {
+				continue // autopilot isn't enabled for this context
 			}
-		})
-		Step("wait until workload completes on volume", func() {
-			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+
+			for _, pool := range poolUUIDs {
+				poolNode, err := node.LookupNodeByPool(pool)
+				Expect(err).NotTo(HaveOccurred())
+
+				fmt.Printf("[debug] %s: scheduling restart task for pool: %s node: %s for app: %s\n", testName, pool, poolNode.Name, ctx.App.Key)
+				err = Inst().V.RestartDriver(poolNode, &api.TriggerOptions{
+					TriggerCb:            getInProgressTriggerFunction(apRules, pool),
+					TriggerCheckInterval: triggerCheckInterval,
+					TriggerCheckTimeout:  triggerCheckTimeout,
+				})
 				Expect(err).NotTo(HaveOccurred())
 			}
+		}
+
+		Step("wait until workload/applications complete", func() {
+			ValidateApplications(contexts)
 		})
 
-		Step("get nodes bounce volume driver", func() {
-			for _, appNode := range node.GetStorageDriverNodes() {
-				Step(
-					fmt.Sprintf("stop volume driver %s on node: %s",
-						Inst().V.String(), appNode.Name),
-					func() {
-						StopVolDriverAndWait([]node.Node{appNode})
-					})
-
-				Step(
-					fmt.Sprintf("starting volume %s driver on node %s",
-						Inst().V.String(), appNode.Name),
-					func() {
-						StartVolDriverAndWait([]node.Node{appNode})
-					})
-
-				Step("Giving few seconds for volume driver to stabilize", func() {
-					time.Sleep(20 * time.Second)
-				})
-			}
+		Step("validating and verifying size of storage pools", func() {
+			ValidateStoragePools(contexts)
 		})
 
-		Step("validating volumes and verifying size of volumes", func() {
-			for _, ctx := range contexts {
-				ValidateVolumes(ctx)
-			}
-		})
-
-		Step(fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout), func() {
+		Step(fmt.Sprintf("wait (%s) for unscheduled pool expansions", unscheduledResizeTimeout), func() {
 			time.Sleep(unscheduledResizeTimeout)
 		})
 
-		Step("validating volumes and verifying size of volumes", func() {
-			for _, ctx := range contexts {
-				ValidateVolumes(ctx)
-			}
+		Step("validating and verifying size of storage pools", func() {
+			ValidateStoragePools(contexts)
 		})
 
 		Step("destroy apps", func() {
@@ -210,50 +189,20 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 		testName := strings.ToLower(fmt.Sprintf("%sRestartAutopilot", testSuiteName))
 
 		// find the smallest pool and create a rule with size cap above that
-		var smallestPoolSize uint64
-		for _, node := range node.GetWorkerNodes() {
-			for _, p := range node.StoragePools {
-				if smallestPoolSize == 0 {
-					smallestPoolSize = p.TotalSize
-				} else {
-					if p.TotalSize < smallestPoolSize {
-						smallestPoolSize = p.TotalSize
-					}
-				}
-			}
-		}
-
+		_, smallestPoolSize := GetPoolsWithSmallestSize()
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByTotalSize((smallestPoolSize/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, nil),
 		}
 
-		// setup task to delete autopilot pods as soon as it starts doing expansions
-		eventCheck := func() (bool, error) {
-			for _, apRule := range apRules {
-				ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
-					FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
-				})
-				Expect(err).NotTo(HaveOccurred())
-
-				for _, ruleEvent := range ruleEvents.Items {
-					if strings.Contains(ruleEvent.Message, string(apapi.RuleStateActiveActionsInProgress)) {
-						return true, nil
-					}
-				}
+		restartAutopilotTask := func(interval sched.Interval) {
+			deleteTasksOpts := &scheduler.DeleteTasksOptions{
+				TriggerOptions: api.TriggerOptions{
+					TriggerCb:            getInProgressTriggerFunction(apRules, ""),
+					TriggerCheckInterval: triggerCheckInterval,
+					TriggerCheckTimeout:  triggerCheckTimeout,
+				},
 			}
 
-			return false, nil
-		}
-
-		deleteOpts := &scheduler.DeleteTasksOptions{
-			TriggerOptions: scheduler.TriggerOptions{
-				TriggerCb:            eventCheck,
-				TriggerCheckInterval: triggerCheckInterval,
-				TriggerCheckTimeout:  triggerCheckTimeout,
-			},
-		}
-
-		t := func(interval sched.Interval) {
 			err := Inst().S.DeleteTasks(&scheduler.Context{
 				App: &spec.AppSpec{
 					SpecList: []interface{}{
@@ -265,11 +214,11 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 						},
 					},
 				},
-			}, deleteOpts)
+			}, deleteTasksOpts)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		id, err := sched.Instance().Schedule(t, sched.Periodic(time.Second), time.Now(), true)
+		id, err := sched.Instance().Schedule(restartAutopilotTask, sched.Periodic(time.Second), time.Now(), true)
 		Expect(err).NotTo(HaveOccurred())
 
 		defer sched.Instance().Cancel(id)
@@ -279,7 +228,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 		// schedule deletion of autopilot once the pool expansion starts
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.ValidateContext(ctx, workloadTimeout, retryInterval)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -312,7 +261,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandAddDisk}", testSuiteName), func() {
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err = Inst().S.ValidateContext(ctx, workloadTimeout, retryInterval)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -354,7 +303,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandResizeDisk}", testSuiteName), func() 
 		contexts := scheduleAppsWithAutopilot(testName, apRules)
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err = Inst().S.ValidateContext(ctx, workloadTimeout, retryInterval)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -437,7 +386,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.ValidateContext(ctx, workloadTimeout, retryInterval)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -476,6 +425,8 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 	})
 })
 
+// scheduleAppsWithAutopilot will schedule applications in the test app list, label the nodes per test name and create
+// an autopilot rule that matches those labels
 func scheduleAppsWithAutopilot(testName string, apRules []apapi.AutopilotRule) []*scheduler.Context {
 	var contexts []*scheduler.Context
 	labels := map[string]string{
@@ -519,6 +470,27 @@ func scheduleAppsWithAutopilot(testName string, apRules []apapi.AutopilotRule) [
 	})
 
 	return contexts
+}
+
+func getInProgressTriggerFunction(apRules []apapi.AutopilotRule, objectName string) api.TriggerCallbackFunc {
+	f := func() (bool, error) {
+		for _, apRule := range apRules {
+			ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+				FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			for _, ruleEvent := range ruleEvents.Items {
+				if strings.Contains(ruleEvent.Message, string(apapi.RuleStateActiveActionsInProgress)) &&
+					strings.Contains(ruleEvent.Message, objectName) {
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	}
+
+	return f
 }
 
 var _ = AfterSuite(func() {

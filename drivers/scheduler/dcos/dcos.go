@@ -270,7 +270,7 @@ func (d *dcos) randomizeVolumeNames(application *marathon.Application) error {
 	return nil
 }
 
-func (d *dcos) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+func (d *dcos) ValidateContext(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
 			if err := MarathonClient().WaitForApplicationStart(obj.ID); err != nil {
@@ -281,7 +281,7 @@ func (d *dcos) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval tim
 			}
 			logrus.Infof("[%v] Validated application: %v", ctx.App.Key, obj.ID)
 		} else {
-			logrus.Warnf("Invalid spec received for app %v in WaitForRunning", ctx.App.Key)
+			logrus.Warnf("Invalid spec received for app %v in ValidateContext", ctx.App.Key)
 		}
 	}
 	return nil

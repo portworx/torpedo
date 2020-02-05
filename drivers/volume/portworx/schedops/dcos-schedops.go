@@ -10,6 +10,13 @@ import (
 
 type dcosSchedOps struct{}
 
+func (d *dcosSchedOps) RestartPxOnNode(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Portworx DCOS operation",
+		Operation: "RestartPxOnNode",
+	}
+}
+
 func (d *dcosSchedOps) StartPxOnNode(n node.Node) error {
 	return nil
 }

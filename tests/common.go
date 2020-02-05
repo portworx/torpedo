@@ -152,7 +152,7 @@ func ValidateContext(ctx *scheduler.Context) {
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
-			err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
+			err := Inst().S.ValidateContext(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
 			expect(err).NotTo(haveOccurred())
 		})
 
@@ -342,16 +342,6 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	})
 }
 
-// AddLabelsOnNode adds labels on the node
-func AddLabelsOnNode(n node.Node, labels map[string]string) error {
-	for labelKey, labelValue := range labels {
-		if err := Inst().S.AddLabelOnNode(n, labelKey, labelValue); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // ValidateStoragePools is the ginkgo spec for validating storage pools
 func ValidateStoragePools(contexts []*scheduler.Context) {
 	var err error
@@ -403,6 +393,38 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 	err = Inst().V.ValidateStoragePools()
 	expect(err).NotTo(haveOccurred())
 
+}
+
+// GetAutopilotReplicaSetsForContext returns the replica pool UUIDs for volumes for which autopilot is enabled in the
+// given context
+func GetAutopilotReplicaPoolsForContext(context *scheduler.Context) ([]string, error) {
+	appVolumes, err := Inst().S.GetVolumes(context)
+	expect(err).NotTo(haveOccurred())
+
+	if len(appVolumes) == 0 {
+		return []string{}, nil
+	}
+
+	set := make(map[string]string, 0)
+	for _, vol := range appVolumes {
+		if Inst().S.IsAutopilotEnabledForVolume(vol) {
+			volReplicas, err := Inst().V.GetReplicaSets(vol)
+			expect(err).NotTo(haveOccurred())
+			expect(volReplicas).NotTo(beEmpty())
+
+			for _, replSet := range volReplicas {
+				for _, replPool := range replSet.PoolUuids {
+					set[replPool] = ""
+				}
+			}
+		}
+	}
+
+	response := make([]string, 0)
+	for k := range set {
+		response = append(response, k)
+	}
+	return response, nil
 }
 
 func getWorkloadSizeFromAppSpec(context *scheduler.Context) (uint64, error) {
@@ -474,39 +496,6 @@ func CollectSupport() {
 
 				logrus.Infof("saving mount list on %s", n.Name)
 				runCmd(fmt.Sprintf("cat /proc/mounts > %s/mounts.log", Inst().BundleLocation), n)
-			}
-		})
-	})
-}
-
-func runCmd(cmd string, n node.Node) {
-	_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
-		Timeout:         defaultTimeout,
-		TimeBeforeRetry: defaultRetryInterval,
-		Sudo:            true,
-	})
-	if err != nil {
-		logrus.Warnf("failed to run cmd: %s. err: %v", cmd, err)
-	}
-}
-
-// PerformSystemCheck check if core files are present on each node
-func PerformSystemCheck() {
-	context(fmt.Sprintf("checking for core files..."), func() {
-		Step(fmt.Sprintf("verifying if core files are present on each node"), func() {
-			nodes := node.GetWorkerNodes()
-			expect(nodes).NotTo(beEmpty())
-			for _, n := range nodes {
-				if !n.IsStorageDriverInstalled {
-					continue
-				}
-				logrus.Infof("looking for core files on node %s", n.Name)
-				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
-					Timeout:         2 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
-				})
-				expect(err).NotTo(haveOccurred())
-				expect(file).To(beEmpty())
 			}
 		})
 	})

@@ -14,6 +14,8 @@ import (
 type Driver interface {
 	// StartPxOnNode enables portworx service on given node
 	StartPxOnNode(n node.Node) error
+	// RestartPxOnNode restarts portworx service on given node
+	RestartPxOnNode(n node.Node) error
 	// StopPxOnNode disables portworx service  on given node
 	StopPxOnNode(n node.Node) error
 	// ValidateOnNode validates portworx on given node (from scheduler perspective)

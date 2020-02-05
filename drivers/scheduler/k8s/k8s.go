@@ -15,6 +15,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/portworx/torpedo/drivers/api"
+
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -32,7 +34,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
-	tp_errors "github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -80,8 +81,6 @@ const (
 	//DefaultTimeout default timeout
 	DefaultTimeout = 2 * time.Minute
 
-	defaultTriggerCheckInterval          = 5 * time.Second
-	defaultTriggerCheckTimeout           = 5 * time.Minute
 	resizeSupportedAnnotationKey         = "torpedo.io/resize-supported"
 	autopilotEnabledAnnotationKey        = "torpedo.io/autopilot-enabled"
 	deploymentAppEnvEnabledAnnotationKey = "torpedo.io/appenv-enabled"
@@ -1238,9 +1237,7 @@ func (k *K8s) substituteNamespaceInVolumes(volumes []v1.Volume, ns string) []v1.
 	return updatedVolumes
 }
 
-//WaitForRunning   wait for running
-//
-func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+func (k *K8s) ValidateContext(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
 			if err := k8sApps.ValidateDeployment(obj, timeout, retryInterval); err != nil {
@@ -1589,7 +1586,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 		for _, pod := range pods {
 			err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
 			if err != nil {
-				logrus.Errorf("k8s DeleteTasks failed to wait for pod: [%s] %s to terminate. err: %v", pod.Namespace, pod.Name, err)
+				logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
 				return err
 			}
 		}
@@ -1597,54 +1594,11 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 		return nil
 	}
 
-	if opts == nil || opts.TriggerCb == nil { // caller hasn't provided any trigger checks
+	if opts == nil {
 		return deleteTasks()
 	}
 
-	if opts.TriggerCheckTimeout == time.Duration(0) {
-		opts.TriggerCheckTimeout = defaultTriggerCheckTimeout
-	}
-
-	if opts.TriggerCheckInterval == time.Duration(0) {
-		opts.TriggerCheckInterval = defaultTriggerCheckInterval
-	}
-
-	// perform trigger checks and then perform the actual deletion
-	t := func() (interface{}, bool, error) {
-		triggered, err := opts.TriggerCb()
-		if err != nil {
-			logrus.Warnf("failed to invoke trigger callback function due to: %v", err)
-			return false, false, err
-		}
-
-		if triggered {
-			return triggered, false, nil // done
-		}
-
-		return false, true, fmt.Errorf("%s: trigger check hasn't been met yet", fn)
-	}
-
-	_, err := task.DoRetryWithTimeout(t, opts.TriggerCheckTimeout, opts.TriggerCheckInterval)
-	if err != nil {
-		// timeout error is expected if the trigger conditions don't meet within above timeouts. For any other error,
-		// return the error
-		_, timedOut := err.(*task.ErrTimedOut)
-		if timedOut {
-			err = &tp_errors.ErrOperationNotPerformed{
-				Operation: fn,
-				Reason:    fmt.Sprintf("Trigger checks did not pass"),
-			}
-		} else {
-			err = &tp_errors.ErrOperationNotPerformed{
-				Operation: fn,
-				Reason:    fmt.Sprintf("Trigger checks could not be performed: %v", err),
-			}
-		}
-		return err
-	}
-
-	// perform the actual delete tasks logic
-	return deleteTasks()
+	return api.PerformTask(deleteTasks, &opts.TriggerOptions)
 }
 
 //GetVolumeParameters Get the volume parameters
@@ -2128,8 +2082,7 @@ func (k *K8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 	return snaps, nil
 }
 
-//GetNodesForApp get the node for the app
-//
+// GetNodesForApp get the node for the app
 func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	t := func() (interface{}, bool, error) {
 		pods, err := k.getPodsForApp(ctx)

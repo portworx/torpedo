@@ -5,6 +5,7 @@ import (
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -105,8 +106,9 @@ type Driver interface {
 	// Schedule starts applications and returns a context for each one of them
 	Schedule(instanceID string, opts ScheduleOptions) ([]*Context, error)
 
-	// WaitForRunning waits for application to start running.
-	WaitForRunning(cc *Context, timeout, retryInterval time.Duration) error
+	// ValidateContext validates the specs in the given context with given timeouts. It does not validate volumes if present
+	// in the context. To validate volumes, please invoke ValidateVolumes
+	ValidateContext(cc *Context, timeout, retryInterval time.Duration) error
 
 	// AddTasks adds tasks to an existing context
 	AddTasks(*Context, ScheduleOptions) error
@@ -197,22 +199,8 @@ var (
 
 // DeleteTasksOptions are options supplied to the DeleteTasks API
 type DeleteTasksOptions struct {
-	TriggerOptions
+	api.TriggerOptions
 }
-
-// TriggerOptions are common options used to check if any action is okay to be triggered/performed
-type TriggerOptions struct {
-	// TriggerCb is the callback function to invoke to check trigger condition
-	TriggerCb TriggerCallbackFunc
-	// TriggerCheckInterval is the interval at which to check the trigger conditions
-	TriggerCheckInterval time.Duration
-	// TriggerCheckTimeout is the duration at which the trigger checks should timeout. If the trigger
-	TriggerCheckTimeout time.Duration
-}
-
-// TriggerCallbackFunc is a callback function that are used by scheduler APIs to decide when to trigger/perform actions.
-// the function should return true, when it is the right time to perform the respective action
-type TriggerCallbackFunc func() (bool, error)
 
 // Register registers the given scheduler driver
 func Register(name string, d Driver) error {

@@ -36,7 +36,8 @@ const (
 	// PXServiceLabelKey is the label key used for px systemd service control
 	PXServiceLabelKey = "px/service"
 	// k8sServiceOperationStart is label value for starting Portworx service
-	k8sServiceOperationStart = "start"
+	k8sServiceOperationStart   = "start"
+	k8sServiceOperationRestart = "restart"
 	// k8sServiceOperationStop is label value for stopping Portworx service
 	k8sServiceOperationStop = "stop"
 	// k8sPodsRootDir is the directory under which k8s keeps all pods data
@@ -103,6 +104,10 @@ func (e *errLabelAbsent) Error() string {
 }
 
 type k8sSchedOps struct{}
+
+func (k *k8sSchedOps) RestartPxOnNode(n node.Node) error {
+	return k8s.Instance().AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationRestart)
+}
 
 func (k *k8sSchedOps) StopPxOnNode(n node.Node) error {
 	return k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStop)

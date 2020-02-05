@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/portworx/torpedo/pkg/errors"
+
 	"github.com/pborman/uuid"
 )
 
@@ -85,6 +87,22 @@ func GetNodesByName() map[string]Node {
 		nodeMap[n.Name] = n
 	}
 	return nodeMap
+}
+
+// LookupNodeByPool looks up a node in the registry which has the given pool
+func LookupNodeByPool(poolUUID string) (Node, error) {
+	for _, n := range nodeRegistry {
+		for _, pool := range n.StoragePools {
+			if pool.GetUuid() == poolUUID {
+				return n, nil
+			}
+		}
+	}
+
+	return Node{}, &errors.ErrNotFound{
+		ID:   poolUUID,
+		Type: "Node with StoragePool",
+	}
 }
 
 // Contains checks if the node is present in the given list of nodes

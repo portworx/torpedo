@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	driver_api "github.com/portworx/torpedo/drivers/api"
+
 	"github.com/golang/protobuf/ptypes/timestamp"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -1483,6 +1485,14 @@ func (d *portworx) StartDriver(n node.Node) error {
 			Timeout:         startDriverTimeout,
 			TimeBeforeRetry: defaultRetryInterval,
 		}})
+}
+
+func (d *portworx) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	return driver_api.PerformTask(
+		func() error {
+			return d.schedOps.RestartPxOnNode(n)
+		},
+		triggerOpts)
 }
 
 func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) error {

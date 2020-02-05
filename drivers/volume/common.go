@@ -8,6 +8,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/pborman/uuid"
+	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 )
@@ -312,5 +313,12 @@ func (d *DefaultDriver) EstimateVolumeExpandSize(apRule apapi.AutopilotRule, ini
 	return 0, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "EstimateVolumeExpandSize()",
+	}
+}
+
+func (d *DefaultDriver) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RestartDriver()",
 	}
 }
