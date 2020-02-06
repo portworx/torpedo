@@ -18,6 +18,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/autopilot"
 	k8sCommon "github.com/portworx/sched-ops/k8s/common"
@@ -26,6 +27,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
+	talisman "github.com/portworx/sched-ops/k8s/talisman"
 
 	"github.com/portworx/sched-ops/task"
 	pxapi "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
@@ -104,6 +106,7 @@ var (
 	defaultTorpedoLabel = map[string]string{
 		"creator": "torpedo",
 	}
+	k8sTalisman        = talisman.Instance()
 	k8sCore            = core.Instance()
 	k8sApps            = apps.Instance()
 	k8sStork           = stork.Instance()
@@ -671,14 +674,6 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options sched
 
 func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec,
 	options scheduler.ScheduleOptions) (interface{}, error) {
-
-	var vpsmap string
-	if options.VpsParameters != nil && options.VpsParameters.Enabled {
-		vpsmap = app.Key
-	} else {
-
-		vpsmap = ""
-	}
 
 	var vpsmap string
 	if options.VpsParameters != nil && options.VpsParameters.Enabled {
@@ -2997,7 +2992,7 @@ func (k *K8s) createVpsObjects(
 	ns *v1.Namespace,
 	app *spec.AppSpec,
 ) (interface{}, error) {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8sTalisman
 	if obj, ok := specObj.(*pxapi.VolumePlacementStrategy); ok {
 		obj.Namespace = ns.Name
 		backupLocation, err := k8sOps.CreateVolumePlacementStrategy(obj)
@@ -3017,7 +3012,7 @@ func (k *K8s) destroyVpsObjects(
 	specObj interface{},
 	app *spec.AppSpec,
 ) error {
-	k8sOps := k8sops.Instance()
+	k8sOps := k8sTalisman
 	if obj, ok := specObj.(*pxapi.VolumePlacementStrategy); ok {
 		err := k8sOps.DeleteVolumePlacementStrategy(obj.Name)
 		if err != nil {

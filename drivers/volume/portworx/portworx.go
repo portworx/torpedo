@@ -22,6 +22,7 @@ import (
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/core"
+	talisman "github.com/portworx/sched-ops/k8s/talisman"
 	"github.com/portworx/sched-ops/task"
 	talisman_v1beta1 "github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
 	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
@@ -118,6 +119,7 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 
 var deleteVolumeLabelList = []string{"auth-token", "pv.kubernetes.io", "volume.beta.kubernetes.io", "kubectl.kubernetes.io", "volume.kubernetes.io"}
 var k8sCore = core.Instance()
+var k8sTalisman = talisman.Instance()
 
 type portworx struct {
 	legacyClusterManager cluster.Cluster
@@ -736,7 +738,7 @@ func (d *portworx) ValidateVps(vol *api.Volume, appVols map[string]map[string]st
 		volLabels := vol.Spec.GetVolumeLabels()
 
 		//Get vps spec from k8s
-		volVpsRule, err := k8s.Instance().GetVolumePlacementStrategy(volLabels["placement_strategy"])
+		volVpsRule, err := k8sTalisman.GetVolumePlacementStrategy(volLabels["placement_strategy"])
 		logrus.Debugf("====Volume details-5: %v ===\n Placement strategy (%v)", vol.Id, volVpsRule)
 
 		if err != nil {

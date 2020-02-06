@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -35,6 +35,7 @@ var (
 	specNameRegex = regexp.MustCompile("{VPS_NAME}")
 	volKeyRegex   = regexp.MustCompile("{VOL_KEY}")
 	volLabelRegex = regexp.MustCompile("{VOL_LABEL}")
+	k8sCore       = core.Instance()
 )
 
 var _ = BeforeSuite(func() {
@@ -553,7 +554,7 @@ func SetNodeLabels(labels []labelDict) map[string][]string {
 		//TODO: Randomize node selection
 		n := workerNodes[key]
 		for lkey, lval := range nlbl {
-			if err := k8s.Instance().AddLabelOnNode(n.Name, lkey, lval.(string)); err != nil {
+			if err := k8sCore.AddLabelOnNode(n.Name, lkey, lval.(string)); err != nil {
 				logrus.Errorf("Failed to set node label %v: %v Err: %v", lkey, nlbl, err)
 				return lblnodes
 			}
@@ -587,7 +588,7 @@ func RemoveNodeLabels(labels []labelDict) {
 	for _, n := range workerNodes {
 		for _, nlbl := range labels {
 			for lkey, lval := range nlbl {
-				if err := k8s.Instance().RemoveLabelOnNode(n.Name, lkey); err != nil {
+				if err := k8sCore.RemoveLabelOnNode(n.Name, lkey); err != nil {
 					logrus.Errorf("Failed to remove node label %v=%v: %v Err: %v", lkey, lval, nlbl, err)
 					//return lblnodes
 				}
