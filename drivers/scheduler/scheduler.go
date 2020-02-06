@@ -46,6 +46,16 @@ func (in *Context) GetID() string {
 	return in.App.GetID(in.UID)
 }
 
+// VpsParameters , volume placement strategy parameters
+type VpsParameters struct {
+	// Enabled indicates if vps spec needs to be applied
+	Enabled bool
+	//Contains Mapping with storagecalss and
+	ScVpsMap map[string]string
+	//Expected Volume state 0-Volume is expected to be down, 1-volume is expected to be up
+	Vstate int
+}
+
 // AppConfig custom settings
 type AppConfig struct {
 	Replicas     int    `yaml:"replicas"`
@@ -78,6 +88,8 @@ type ScheduleOptions struct {
 	StorageProvisioner string
 	// ConfigMap  identifies what config map should be used to
 	ConfigMap string
+	//VPS parameters for storage class
+	VpsParameters *VpsParameters
 	// AutopilotRule identifies options for autopilot (Optional)
 	AutopilotRule apapi.AutopilotRule
 	// Labels is a map of {key,value} pairs for labeling spec objects

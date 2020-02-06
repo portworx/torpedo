@@ -111,7 +111,8 @@ if [ -z "$TEST_SUITE" ]; then
             "bin/drive_failure.test",
             "bin/volume_ops.test",
             "bin/sched.test",
-            "bin/node_decommission.test",'
+            "bin/node_decommission.test",
+            "bin/provision.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
 fi

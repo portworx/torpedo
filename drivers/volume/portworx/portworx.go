@@ -23,6 +23,8 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
+	talisman_v1beta1 "github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
+	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -509,173 +511,1519 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 	return nil
 }
 
-func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
-	var token string
-	token = d.getTokenForVolume(volumeName, params)
-	volDriver := d.getVolDriver()
-	t := func() (interface{}, bool, error) {
-		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
-		if err != nil {
-			return nil, true, err
+func (d *portworx) ValidateCreateVolume(appVols map[string]map[string]string, appName string, appToken string) error {
+
+	/*Volume affinity/Anti Affinity  related data creation : START*/
+	var appVolList = map[string]*api.Volume{}
+
+	// Loop over all volumes of the app
+	for appVol, params := range appVols {
+
+		logrus.Infof("get %s app's volume: %s inspected by the volume driver", appName, appVol)
+		var token string
+		params["auth-token"] = appToken
+		token = d.getTokenForVolume(appVol, params)
+		volDriver := d.getVolDriver()
+		t := func() (interface{}, bool, error) {
+			volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: appVol})
+			if err != nil {
+				return nil, true, err
+			}
+			return volumeInspectResponse.Volume, false, nil
 		}
-		return volumeInspectResponse.Volume, false, nil
+
+		out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+		if err != nil {
+			return &ErrFailedToInspectVolume{
+				ID:    appVol,
+				Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
+			}
+		}
+
+		appVolList[appVol] = out.(*api.Volume)
+
 	}
 
-	out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	//Get list of volumes and its replica per each node of the App
+	nodeReplMap := d.getReplicaNodeMap(appVolList)
+	//Get all nodes having app's volume
+	appVolNodes, err := d.getAppVolNodes(appVols, appToken)
+	/*Volume affinity/Anti Affinity  related data : END*/
 	if err != nil {
 		return &ErrFailedToInspectVolume{
-			ID:    volumeName,
-			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
+			Cause: fmt.Sprintf("failed to generate node list having all volumes of the App. Err: %v", err),
 		}
 	}
 
-	vol := out.(*api.Volume)
+	for appVol, params := range appVols {
+		var token string
+		params["auth-token"] = appToken
+		token = d.getTokenForVolume(appVol, params)
+		volDriver := d.getVolDriver()
 
-	// Status
-	if vol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
-		return &ErrFailedToInspectVolume{
-			ID: volumeName,
-			Cause: fmt.Sprintf("Volume has invalid status. Expected:%v Actual:%v",
-				api.VolumeStatus_VOLUME_STATUS_UP, vol.Status),
-		}
-	}
-
-	// State
-	if vol.State == api.VolumeState_VOLUME_STATE_ERROR || vol.State == api.VolumeState_VOLUME_STATE_DELETED {
-		return &ErrFailedToInspectVolume{
-			ID:    volumeName,
-			Cause: fmt.Sprintf("Volume has invalid state. Actual:%v", vol.State),
-		}
-	}
-
-	// if the volume is a clone or a snap, validate it's parent
-	if vol.IsSnapshot() || vol.IsClone() {
-		parentResp, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: vol.Source.Parent})
-		if err != nil {
+		vol := appVolList[appVol]
+		// Status
+		if vol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
 			return &ErrFailedToInspectVolume{
-				ID:    volumeName,
-				Cause: fmt.Sprintf("Could not get parent with ID [%s]", vol.Source.Parent),
+				ID: appVol,
+				Cause: fmt.Sprintf("Volume has invalid status. Expected:%v Actual:%v",
+					api.VolumeStatus_VOLUME_STATUS_UP, vol.Status),
 			}
 		}
-		if err := d.schedOps.ValidateSnapshot(params, parentResp.Volume); err != nil {
+
+		// State
+		if vol.State == api.VolumeState_VOLUME_STATE_ERROR || vol.State == api.VolumeState_VOLUME_STATE_DELETED {
 			return &ErrFailedToInspectVolume{
-				ID:    volumeName,
-				Cause: fmt.Sprintf("Snapshot/Clone validation failed. %v", err),
+				ID:    appVol,
+				Cause: fmt.Sprintf("Volume has invalid state. Actual:%v", vol.State),
 			}
 		}
-		return nil
-	}
 
-	// Labels
-	var pxNodes []api.StorageNode
-	for _, rs := range vol.ReplicaSets {
-		for _, n := range rs.Nodes {
-			nodeResponse, err := d.getNodeManager().Inspect(d.getContextWithToken(context.Background(), token), &api.SdkNodeInspectRequest{NodeId: n})
+		// if the volume is a clone or a snap, validate it's parent
+		if vol.IsSnapshot() || vol.IsClone() {
+			parentResp, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: vol.Source.Parent})
 			if err != nil {
 				return &ErrFailedToInspectVolume{
-					ID:    volumeName,
-					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
+					ID:    appVol,
+					Cause: fmt.Sprintf("Could not get parent with ID [%s]", vol.Source.Parent),
+				}
+
+			}
+
+			if err := d.schedOps.ValidateSnapshot(params, parentResp.Volume); err != nil {
+				return &ErrFailedToInspectVolume{
+					ID:    appVol,
+					Cause: fmt.Sprintf("Snapshot/Clone validation failed. %v", err),
 				}
 			}
-
-			pxNodes = append(pxNodes, *nodeResponse.Node)
+			//TODO: IS validation for snapshot or clone needs to be done of VPS
+			// Continue to investigate next volume
+			continue
 		}
-	}
+		// Labels
+		var pxNodes []api.StorageNode
 
-	// Spec
-	requestedSpec, requestedLocator, _, err := spec.NewSpecHandler().SpecFromOpts(params)
-	if err != nil {
-		return &ErrFailedToInspectVolume{
-			ID:    volumeName,
-			Cause: fmt.Sprintf("failed to parse requested spec of volume. Err: %v", err),
-		}
-	}
-
-	delete(vol.Locator.VolumeLabels, "pvc") // special handling for the new pvc label added in k8s
-	deleteLabelsFromRequestedSpec(requestedLocator)
-
-	// Params/Options
-	for k, v := range params {
-		switch k {
-		case api.SpecNodes:
-			if !reflect.DeepEqual(v, vol.Spec.ReplicaSet.Nodes) {
-				return errFailedToInspectVolume(volumeName, k, v, vol.Spec.ReplicaSet.Nodes)
-			}
-		case api.SpecParent:
-			if v != vol.Source.Parent {
-				return errFailedToInspectVolume(volumeName, k, v, vol.Source.Parent)
-			}
-		case api.SpecEphemeral:
-			if requestedSpec.Ephemeral != vol.Spec.Ephemeral {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Ephemeral, vol.Spec.Ephemeral)
-			}
-		case api.SpecFilesystem:
-			if requestedSpec.Format != vol.Spec.Format {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Format, vol.Spec.Format)
-			}
-		case api.SpecBlockSize:
-			if requestedSpec.BlockSize != vol.Spec.BlockSize {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.BlockSize, vol.Spec.BlockSize)
-			}
-		case api.SpecHaLevel:
-			if requestedSpec.HaLevel != vol.Spec.HaLevel {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.HaLevel, vol.Spec.HaLevel)
-			}
-		case api.SpecPriorityAlias:
-			// Since IO priority isn't guaranteed, we aren't validating it here.
-		case api.SpecSnapshotInterval:
-			if requestedSpec.SnapshotInterval != vol.Spec.SnapshotInterval {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.SnapshotInterval, vol.Spec.SnapshotInterval)
-			}
-		case api.SpecSnapshotSchedule:
-			// TODO currently volume spec has a different format than request
-			// i.e request "daily=12:00,7" turns into "- freq: daily\n  hour: 12\n  retain: 7\n" in volume spec
-			//if requestedSpec.SnapshotSchedule != vol.Spec.SnapshotSchedule {
-			//	return errFailedToInspectVolume(name, k, requestedSpec.SnapshotSchedule, vol.Spec.SnapshotSchedule)
-			//}
-		case api.SpecAggregationLevel:
-			if requestedSpec.AggregationLevel != vol.Spec.AggregationLevel {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
-			}
-		case api.SpecShared:
-			if requestedSpec.Shared != vol.Spec.Shared {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Shared, vol.Spec.Shared)
-			}
-		case api.SpecSticky:
-			if requestedSpec.Sticky != vol.Spec.Sticky {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Sticky, vol.Spec.Sticky)
-			}
-		case api.SpecGroup:
-			if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group) {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Group, vol.Spec.Group)
-			}
-		case api.SpecGroupEnforce:
-			if requestedSpec.GroupEnforced != vol.Spec.GroupEnforced {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.GroupEnforced, vol.Spec.GroupEnforced)
-			}
-		// portworx injects pvc name and namespace labels so response object won't be equal to request
-		case api.SpecLabels:
-			for requestedLabelKey, requestedLabelValue := range requestedLocator.VolumeLabels {
-				// check requested label is not in 'ignore' list
-				if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey]; !exists || requestedLabelValue != labelValue {
-					return errFailedToInspectVolume(volumeName, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+		for _, rs := range vol.ReplicaSets {
+			for _, n := range rs.Nodes {
+				nodeResponse, err := d.getNodeManager().Inspect(d.getContextWithToken(context.Background(), token), &api.SdkNodeInspectRequest{NodeId: n})
+				if err != nil {
+					return &ErrFailedToInspectVolume{
+						ID:    appVol,
+						Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
+					}
 				}
+
+				pxNodes = append(pxNodes, *nodeResponse.Node)
 			}
-		case api.SpecIoProfile:
-			if requestedSpec.IoProfile != vol.Spec.IoProfile {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
-			}
-		case api.SpecSize:
-			if requestedSpec.Size != vol.Spec.Size {
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.Size, vol.Spec.Size)
-			}
-		default:
 		}
+
+		//logrus.Infof("Volume Replicas: %v (%v) VolumeNodes %v", vol.Id, vol.ReplicaSets, pxNodes)
+
+		// Spec
+		requestedSpec, requestedLocator, _, err := spec.NewSpecHandler().SpecFromOpts(params)
+		if err != nil {
+			return &ErrFailedToInspectVolume{
+				ID:    appVol,
+				Cause: fmt.Sprintf("failed to parse requested spec of volume. Err: %v", err),
+			}
+		}
+
+		delete(vol.Locator.VolumeLabels, "pvc") // special handling for the new pvc label added in k8s
+		deleteLabelsFromRequestedSpec(requestedLocator)
+
+		// Params/Options
+		for k, v := range params {
+			switch k {
+			case api.SpecNodes:
+				if !reflect.DeepEqual(v, vol.Spec.ReplicaSet.Nodes) {
+					return errFailedToInspectVolume(appVol, k, v, vol.Spec.ReplicaSet.Nodes)
+				}
+			case api.SpecParent:
+				if v != vol.Source.Parent {
+					return errFailedToInspectVolume(appVol, k, v, vol.Source.Parent)
+				}
+			case api.SpecEphemeral:
+				if requestedSpec.Ephemeral != vol.Spec.Ephemeral {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Ephemeral, vol.Spec.Ephemeral)
+				}
+			case api.SpecFilesystem:
+				if requestedSpec.Format != vol.Spec.Format {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Format, vol.Spec.Format)
+				}
+			case api.SpecBlockSize:
+				if requestedSpec.BlockSize != vol.Spec.BlockSize {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.BlockSize, vol.Spec.BlockSize)
+				}
+			case api.SpecHaLevel:
+				if requestedSpec.HaLevel != vol.Spec.HaLevel {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.HaLevel, vol.Spec.HaLevel)
+				}
+			case api.SpecPriorityAlias:
+				// Since IO priority isn't guaranteed, we aren't validating it here.
+			case api.SpecSnapshotInterval:
+				if requestedSpec.SnapshotInterval != vol.Spec.SnapshotInterval {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.SnapshotInterval, vol.Spec.SnapshotInterval)
+				}
+			case api.SpecSnapshotSchedule:
+				// TODO currently volume spec has a different format than request
+				// i.e request "daily=12:00,7" turns into "- freq: daily\n  hour: 12\n  retain: 7\n" in volume spec
+				//if requestedSpec.SnapshotSchedule != vol.Spec.SnapshotSchedule {
+				//	return errFailedToInspectVolume(name, k, requestedSpec.SnapshotSchedule, vol.Spec.SnapshotSchedule)
+				//}
+			case api.SpecAggregationLevel:
+				if requestedSpec.AggregationLevel != vol.Spec.AggregationLevel {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
+				}
+			case api.SpecShared:
+				if requestedSpec.Shared != vol.Spec.Shared {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Shared, vol.Spec.Shared)
+				}
+			case api.SpecSticky:
+				if requestedSpec.Sticky != vol.Spec.Sticky {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Sticky, vol.Spec.Sticky)
+				}
+			case api.SpecGroup:
+				if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group) {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Group, vol.Spec.Group)
+				}
+			case api.SpecGroupEnforce:
+				if requestedSpec.GroupEnforced != vol.Spec.GroupEnforced {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.GroupEnforced, vol.Spec.GroupEnforced)
+				}
+			// portworx injects pvc name and namespace labels so response object won't be equal to request
+			case api.SpecLabels:
+				for requestedLabelKey, requestedLabelValue := range requestedLocator.VolumeLabels {
+					// check requested label is not in 'ignore' list
+					if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey]; !exists || requestedLabelValue != labelValue {
+						return errFailedToInspectVolume(appVol, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+					}
+				}
+			case api.SpecIoProfile:
+				if requestedSpec.IoProfile != vol.Spec.IoProfile {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
+				}
+			case api.SpecSize:
+				if requestedSpec.Size != vol.Spec.Size {
+					return errFailedToInspectVolume(appVol, k, requestedSpec.Size, vol.Spec.Size)
+				}
+			default:
+			}
+		}
+		err = d.ValidateVps(vol, appVols, pxNodes, nodeReplMap, appVolNodes)
+		if err != nil {
+			return &ErrFailedToInspectVolume{
+				ID:    appVol,
+				Cause: fmt.Sprintf("failed to validate VolumePlacementStratergy. Err: %v", err),
+			}
+		}
+		logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
+
 	}
 
-	logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
 	return nil
 }
+
+// Validate the volume replicas as per VolumePlacementStrategy rule applied to the volume
+func (d *portworx) ValidateVps(vol *api.Volume, appVols map[string]map[string]string, volNodes []api.StorageNode, nodeReplMap map[string][]*api.Volume, appVolNodes map[string]api.StorageNode) error {
+
+	logrus.Debugf("Volume details: %v ===\n (%v) Volumes per Node List:%v, all nodes of the App's Volumes: %v ", vol, appVols, nodeReplMap, appVolNodes)
+	logrus.Infof("Validate VPS  for Volume:%v ,  VPS Rule :(%v)", vol.Id, vol.Spec.GetPlacementStrategy())
+
+	if vpsrule := vol.Spec.GetPlacementStrategy(); vpsrule != nil {
+
+		// Get Volume Labels
+		volLabels := vol.Spec.GetVolumeLabels()
+
+		//Get vps spec from k8s
+		volVpsRule, err := k8s.Instance().GetVolumePlacementStrategy(volLabels["placement_strategy"])
+		logrus.Debugf("====Volume details-5: %v ===\n Placement strategy (%v)", vol.Id, volVpsRule)
+
+		if err != nil {
+			return err
+		}
+
+		// For each VPS  group rules
+		// Group1 -Replica Affinity Group
+		if volVpsRule.Spec.ReplicaAffinity != nil {
+			for _, rRule := range volVpsRule.Spec.ReplicaAffinity {
+
+				logrus.Infof("Validate Replica Affinity Rule Vol:%v === RA: Spec %v", vol.Id, rRule.CommonPlacementSpec)
+				err = d.ValidateReplicaAffinity(vol, rRule, volNodes)
+				if err != nil {
+					return &ErrFailedToInspectVolume{
+						ID:    vol.Id,
+						Cause: fmt.Sprintf("failed to validate ReplicaAffinity. Err: %v", err),
+					}
+				}
+			}
+		}
+		// Group2 -Replica Anti Affinity Group
+		if volVpsRule.Spec.ReplicaAntiAffinity != nil {
+			for _, raRule := range volVpsRule.Spec.ReplicaAntiAffinity {
+
+				logrus.Infof("Validate Replica Anti Affinity Rule Vol:%v === RAA: Spec %v", vol.Id, raRule.CommonPlacementSpec)
+				err = d.ValidateReplicaAntiAffinity(vol, raRule, volNodes)
+				if err != nil {
+					return &ErrFailedToInspectVolume{
+						ID:    vol.Id,
+						Cause: fmt.Sprintf("failed to validate ReplicaAntiAffinity. Err: %v", err),
+					}
+				}
+			}
+		}
+		// Group3 -Volume Affinity Group
+		if volVpsRule.Spec.VolumeAffinity != nil {
+			for _, vRule := range volVpsRule.Spec.VolumeAffinity {
+
+				logrus.Infof("Validate Volume Affinity Rule Vol:%v === VA: Spec %v", vol.Id, vRule)
+				err = d.ValidateVolumeAffinity(vol, vRule, volNodes, nodeReplMap, appVolNodes)
+				if err != nil {
+					return &ErrFailedToInspectVolume{
+						ID:    vol.Id,
+						Cause: fmt.Sprintf("failed to validate VolumeAffinity. Err: %v", err),
+					}
+				}
+			}
+		}
+		// Group4 -Volume Anti Affinity Group
+		if volVpsRule.Spec.VolumeAntiAffinity != nil {
+			for _, vaRule := range volVpsRule.Spec.VolumeAntiAffinity {
+
+				logrus.Infof("Validate Volume Anti Affinity Rule Vol:%v === VAA: Spec %v", vol.Id, vaRule)
+				err = d.ValidateVolumeAntiAffinity(vol, vaRule, volNodes, nodeReplMap, appVolNodes)
+				if err != nil {
+					return &ErrFailedToInspectVolume{
+						ID:    vol.Id,
+						Cause: fmt.Sprintf("failed to validate VolumeAntiAffinity. Err: %v", err),
+					}
+				}
+			}
+		}
+
+	} else {
+		logrus.Infof("Validate VolumePlacementStrategy,  Volume (%v) doesnot have any VPS rule applied to it", vol.Id)
+	}
+
+	return nil
+}
+
+/* VolumePlacementStrategy validate rule function */
+
+// Get poolid on which the volume replica is placed
+func (d *portworx) getReplicaPoolMap(vol *api.Volume) []map[string]string {
+
+	var replPoolMapList = []map[string]string{}
+	if vol != nil {
+		for rinx, replicaset := range vol.ReplicaSets {
+			var replPoolMap = map[string]string{}
+			logrus.Infof("getReplicaPoolMap  vol:%v replicaset:%v", vol.Id, replicaset)
+			for inx, node := range replicaset.Nodes {
+				replPoolMap[node] = vol.ReplicaSets[rinx].PoolUuids[inx]
+			}
+			replPoolMapList = append(replPoolMapList, replPoolMap)
+		}
+
+	}
+	return replPoolMapList
+}
+
+// Get node with the list of all volume replicas
+func (d *portworx) getReplicaNodeMap(appVolList map[string]*api.Volume) map[string][]*api.Volume {
+
+	var replNodeMap = map[string][]*api.Volume{}
+	if appVolList != nil {
+
+		for _, vol := range appVolList {
+			if vol != nil {
+				for _, replicaset := range vol.ReplicaSets {
+					logrus.Infof("getReplicaPoolMap  vol:%v replicaset:%v", vol.Id, replicaset)
+					for _, node := range replicaset.Nodes {
+						replNodeMap[node] = append(replNodeMap[node], vol)
+					}
+				}
+
+			}
+		}
+	}
+	return replNodeMap
+}
+
+//Get all nodes having app's volume
+func (d *portworx) getAppVolNodes(appVols map[string]map[string]string, appToken string) (map[string]api.StorageNode, error) {
+	logrus.Infof("getAppVolNodes  get all nodes having app's volume: %v", appVols)
+
+	var pxNodes = map[string]api.StorageNode{}
+	for appVol, params := range appVols {
+		var token string
+		params["auth-token"] = appToken
+		token = d.getTokenForVolume(appVol, params)
+		volDriver := d.getVolDriver()
+		t := func() (interface{}, bool, error) {
+			volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: appVol})
+			if err != nil {
+				return nil, true, err
+			}
+			return volumeInspectResponse.Volume, false, nil
+		}
+
+		out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+		if err != nil {
+			return nil, &ErrFailedToInspectVolume{
+				ID:    appVol,
+				Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
+			}
+		}
+
+		vol := out.(*api.Volume)
+		for _, rs := range vol.ReplicaSets {
+			for _, n := range rs.Nodes {
+				if _, ok := pxNodes[n]; ok {
+					continue
+				} else {
+					nodeResponse, err := d.getNodeManager().Inspect(d.getContextWithToken(context.Background(), token), &api.SdkNodeInspectRequest{NodeId: n})
+					if err != nil {
+						return nil, &ErrFailedToInspectVolume{
+							ID:    appVol,
+							Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
+						}
+					}
+
+					pxNodes[n] = *nodeResponse.Node
+				}
+			}
+		}
+	}
+	return pxNodes, nil
+}
+
+// Create nodes list group based on the topology key
+// { "value":["node1", node2] , "value1" : ["node3", "node4"] }
+func (d *portworx) GroupTopologyNodes(topologykey string, volNodes []api.StorageNode) map[string]map[string]api.StorageNode {
+	logrus.Infof("GroupTopologyNodes  Group nodes on values of the topology key: %v", topologykey)
+	var nodelist = map[string]map[string]api.StorageNode{}
+
+	if topologykey != "" {
+		//Group Volume nodes based on the topology key value
+		for _, vnode := range volNodes {
+			//Get topology key value of the volume node
+			for _, nodePool := range vnode.Pools {
+				tkval := nodePool.Labels[topologykey]
+				logrus.Debugf("GroupTopologyNodes grouping nodes together on value :%v for key:%v for node:%v  NodeLabels:%v", tkval, topologykey, vnode.Id, vnode.NodeLabels)
+				if nodelist[tkval] == nil {
+					nodelist[tkval] = map[string]api.StorageNode{}
+				}
+
+				nodelist[tkval][vnode.Id] = vnode
+			}
+		}
+	} else {
+		//Group all volume nodes into one set
+		nodelist["all"] = map[string]api.StorageNode{}
+		for _, vnode := range volNodes {
+
+			nodelist["all"][vnode.Id] = vnode
+		}
+	}
+
+	return nodelist
+}
+
+func (d *portworx) GroupTopologyAppNodes(topologykey string, volNodes map[string]api.StorageNode) map[string]map[string]api.StorageNode {
+	logrus.Infof("GroupTopologyAppNodes  Group nodes on values of the topology key: %v", topologykey)
+	var nodelist = map[string]map[string]api.StorageNode{}
+
+	if topologykey != "" {
+		//Group Volume nodes based on the topology key value
+		for _, vnode := range volNodes {
+			//Get topology key value of the volume node
+			for _, nodePool := range vnode.Pools {
+				tkval := nodePool.Labels[topologykey]
+				logrus.Debugf("GroupTopologyNodes grouping nodes together on value :%v for key:%v for node:%v  NodeLabels:%v", tkval, topologykey, vnode.Id, vnode.NodeLabels)
+				if nodelist[tkval] == nil {
+					nodelist[tkval] = map[string]api.StorageNode{}
+				}
+
+				nodelist[tkval][vnode.Id] = vnode
+			}
+		}
+	} else {
+		//Group all volume nodes into one set
+		for inx, vnode := range volNodes {
+			nodelist[inx] = map[string]api.StorageNode{}
+
+			nodelist[inx][vnode.Id] = vnode
+		}
+	}
+
+	return nodelist
+}
+
+// ReplicaMatchExpression
+func (d *portworx) ReplicaMatchExpression(node api.StorageNode, matchExp *talisman_v1beta1.LabelSelectorRequirement, poolUUID string) (bool, error) {
+	logrus.Infof("ReplicaMatchExpression started nodeId: %v matchExpression:%v ", node.Id, matchExp)
+
+	logrus.Debugf("ReplicaMatchExpression rule:%v  mkey:%v mOperator:%v mValues:%v", node, matchExp.Key, matchExp.Operator, matchExp.Values)
+	if node.Pools != nil {
+		// each storage  pool on the node  check  for pool lables
+		for _, spool := range node.Pools {
+
+			//Check the nodes storagepool on which this replica is residing
+			if spool.Uuid == poolUUID {
+
+				//Check whether the pool's label contain the key
+				if tval, ok := spool.Labels[matchExp.Key]; ok {
+
+					// Check for Operators: In, Exists, NotIn, DoesNotExist
+					logrus.Infof("ReplicaMatchExpression key found, check for  rule:%v  mkey:%v mOperator:%v mValues:%v tval:%v", node, matchExp.Key, matchExp.Operator, matchExp.Values, tval)
+					switch matchExp.Operator {
+					case "NotIn":
+						for _, mValue := range matchExp.Values {
+							if mValue == tval {
+								//The node should not have the label value, hence return error
+								return false, &ErrFailedToInspectVolume{
+									Cause: fmt.Sprintf("ReplicaAffinity with matchExpression 'NotIn' with values %v is placed on node:%v having label value:(%v:%v)", matchExp.Values, node.Id, matchExp.Key, tval),
+								}
+							}
+						}
+					case "In":
+						for _, mValue := range matchExp.Values {
+							if mValue == tval {
+								//The node should have the label value, hence return true
+								logrus.Infof("ReplicaMatchExpression  mkey:%v mOperator:%v is placed on the node: %v having label key:(%v:%v)", matchExp.Key, matchExp.Operator, node.Id, matchExp.Key, tval)
+								return true, nil
+							}
+						}
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'%v' is placed on node:%v not having label key value:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+						}
+					case "Exists":
+						logrus.Infof("ReplicaMatchExpression  mkey:%v mOperator:%v exist on the node: %v", matchExp.Key, matchExp.Operator, node.Id)
+						return true, nil
+					case "DoesNotExist":
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'%v' is placed on node:%v having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+						}
+					case "Gt":
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is greater than spec value
+						if itval <= mValue {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'%v', is placed on node:%v having node value(%v) not greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, itval, mValue, node.Id, matchExp.Key, tval),
+							}
+						}
+						logrus.Infof("ReplicaAffinity with matchExpression Operator:'%v', is placed on node:%v having node value(%v) greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, itval, mValue, node.Id, matchExp.Key, tval)
+						return true, nil
+
+					case "Lt":
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is less than spec value
+						if itval >= mValue {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'%v', is placed on node:%v having node value(%v) not less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, itval, mValue, node.Id, matchExp.Key, tval),
+							}
+						}
+						logrus.Infof("ReplicaAffinity with matchExpression Operator:'%v', is placed on node:%v having node value(%v) less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, itval, mValue, node.Id, matchExp.Key, tval)
+						return true, nil
+
+					default:
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAffinity with UNKNOWN matchExpression Operator:'%v' is placed on node:%v having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+						}
+					}
+
+				} else {
+					logrus.Infof("ReplicaMatchExpression key not found, check for  rule:%v  mkey:%v mOperator:%v mValues:%v tval:%v", node, matchExp.Key, matchExp.Operator, matchExp.Values, tval)
+					switch matchExp.Operator {
+					case "DoesNotExist":
+						logrus.Infof("ReplicaMatchExpression  mkey:%v mOperator:%v does not exist on the node: %v", matchExp.Key, matchExp.Operator, node.Id)
+						return true, nil
+					case "Exists":
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'Exists' is placed on node:%v not having label key:(%v:%v)", node.Id, matchExp.Key, tval),
+						}
+					default:
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'%v' is placed on node:%v not having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+						}
+					}
+
+				}
+			}
+		}
+	}
+
+	return false, &ErrFailedToInspectVolume{
+		Cause: fmt.Sprintf("ReplicaAffinity with matchExpression Operator:'%v' could not be validated for node:%v  having label key:(%v)", matchExp.Key, node.Id, matchExp.Key),
+	}
+}
+
+// ReplicaAntiAffinityMatchExpression
+func (d *portworx) ReplicaAntiMatchExpression(node api.StorageNode, matchExp *talisman_v1beta1.LabelSelectorRequirement, poolUUID string) (bool, error) {
+	logrus.Infof("ReplicaAntiMatchExpression started nodeId: %v matchExpression:%v ", node.Id, matchExp)
+
+	logrus.Debugf("ReplicaAntiMatchExpression rule:%v  mkey:%v mOperator:%v mValues:%v", node, matchExp.Key, matchExp.Operator, matchExp.Values)
+	if node.Pools != nil {
+		// each storage  pool on the node  check  for pool lables
+		for _, spool := range node.Pools {
+
+			//Check the nodes storagepool on which this replica is residing
+			if spool.Uuid == poolUUID {
+
+				//Check whether the pool's label contain the key
+				if tval, ok := spool.Labels[matchExp.Key]; ok {
+
+					// Check for Operators: In, Exists, NotIn, DoesNotExist
+					logrus.Infof("ReplicaAntiMatchExpression key found, check for  rule:%v  mkey:%v mOperator:%v mValues:%v tval:%v", node, matchExp.Key, matchExp.Operator, matchExp.Values, tval)
+					switch matchExp.Operator {
+					case "NotIn":
+						for _, mValue := range matchExp.Values {
+							if mValue == tval {
+								//The node should not have the label value, hence return error
+								return true, nil
+							}
+						}
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression 'NotIn' with values %v is placed on node:%v not having label value:(%v:%v)", matchExp.Values, node.Id, matchExp.Key, tval),
+						}
+					case "In":
+						for _, mValue := range matchExp.Values {
+							if mValue == tval {
+								//The node should not have the label value, hence return false
+								return false, &ErrFailedToInspectVolume{
+									Cause: fmt.Sprintf("ReplicaAntiMatchExpression  mkey:%v mOperator:%v is placed on the node: %v having label key:(%v:%v)", matchExp.Key, matchExp.Operator, node.Id, matchExp.Key, tval)}
+							}
+						}
+						return true, nil
+					case "Exists":
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression Operator:'%v' is placed on node:%v having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+						}
+					case "DoesNotExist":
+						logrus.Infof("ReplicaAntiMatchExpression  mkey:%v mOperator:%v exist on the node: %v", matchExp.Key, matchExp.Operator, node.Id)
+						return true, nil
+					case "Gt":
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is greater than spec value
+						if itval <= mValue {
+							logrus.Infof("ReplicaAntiAffinity with matchExpression Operator:'%v', is placed on node:%v having node value(%v) less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, itval, mValue, node.Id, matchExp.Key, tval)
+							return true, nil
+						}
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression Operator:'%v', is placed on node:%v having node value(%v)  greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, itval, mValue, node.Id, matchExp.Key, tval),
+						}
+
+					case "Lt":
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is less than spec value
+						if itval >= mValue {
+							logrus.Infof("ReplicaAntiAffinity with matchExpression Operator:'%v', is placed on node:%v having node value(%v) greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, itval, mValue, node.Id, matchExp.Key, tval)
+							return true, nil
+						}
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression Operator:'%v', is placed on node:%v having node value(%v)  less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, itval, mValue, node.Id, matchExp.Key, tval),
+						}
+
+					default:
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAntiAffinity with UNKNOWN matchExpression Operator:'%v' is placed on node:%v having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+						}
+					}
+
+				} else {
+					logrus.Infof("ReplicaAntiMatchExpression key not found, check for  rule:%v  mkey:%v mOperator:%v mValues:%v tval:%v", node, matchExp.Key, matchExp.Operator, matchExp.Values, tval)
+					switch matchExp.Operator {
+					case "DoesNotExist":
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression Operator:'%v' is placed on node:%v not having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+						}
+					case "Exists":
+						logrus.Infof("ReplicaAntiMatchExpression  mkey:%v mOperator:%v does not exist on the node: %v", matchExp.Key, matchExp.Operator, node.Id)
+						return true, nil
+					default:
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression Operator:'%v' is placed on node:%v not having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+						}
+					}
+
+				}
+			}
+		}
+	}
+
+	return false, &ErrFailedToInspectVolume{
+		Cause: fmt.Sprintf("ReplicaAntiAffinity with matchExpression Operator:'%v' could not be validated for node:%v  having label key:(%v)", matchExp.Key, node.Id, matchExp.Key),
+	}
+}
+
+// VolumeMatchExpression
+func (d *portworx) VolumeMatchExpression(vol *api.Volume, matchExp *talisman_v1beta1.LabelSelectorRequirement, nodeReplList map[string][]*api.Volume, nodeGrp map[string]api.StorageNode) (bool, error) {
+	logrus.Infof("VolumeMatchExpression started nodeId: %v matchExpression:%v ", vol.Id, matchExp)
+
+	logrus.Debugf("VolumeMatchExpression rule:%v  mkey:%v mOperator:%v mValues:%v nodeReplList:%v, nodeGrp:%v", vol, matchExp.Key, matchExp.Operator, matchExp.Values, nodeReplList, nodeGrp)
+	if vol != nil {
+		// Check for Operators: In, Exists, NotIn, DoesNotExist
+		switch matchExp.Operator {
+		case "NotIn":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						continue
+					}
+					if tval, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+						for _, mValue := range matchExp.Values {
+							// For local snapshots, the snap and clone will be placed on the same node as the volume itself,
+							// hence skip these volumes even if value is matched
+							// TODO: Find a better way to find whether the volumes are related
+							if mValue == tval {
+								//The node should not have the label value, hence return error
+								return false, &ErrFailedToInspectVolume{
+									Cause: fmt.Sprintf("VolumeAffinity with matchExpression 'NotIn' with values %v is placed on node:%v having volume(%v) with label value:(%v:%v)", matchExp.Values, node.Id, nodeVol.Id, matchExp.Key, tval),
+								}
+							}
+						}
+					}
+				}
+
+				//Check for node labels being used in matchExpression
+				for _, spool := range node.Pools {
+					if tval, ok := spool.Labels[matchExp.Key]; ok {
+						for _, mValue := range matchExp.Values {
+							if mValue == tval {
+								//The node should not have the label value, hence return error
+								return false, &ErrFailedToInspectVolume{
+									Cause: fmt.Sprintf("VolumeAffinity with matchExpression 'NotIn' with values %v is placed on node:%v having label value:(%v:%v)", matchExp.Values, node.Id, matchExp.Key, tval),
+								}
+							}
+						}
+					}
+				}
+
+			}
+			return true, nil
+		case "In":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						logrus.Infof("VolumeMatchExpression  mkey:%v mOperator:%v  for volume %v with volume %v having source %v", matchExp.Key, matchExp.Operator, vol.Id, nodeVol.Id, nodeVol.Source)
+						continue
+					}
+					logrus.Debugf("VolumeMatchExpression: mkey:%v, matchExp.Values:%v , VolumeLabels:%v", matchExp.Key, matchExp.Values, nodeVol.Spec.VolumeLabels)
+					if tval, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+						logrus.Debugf("VolumeMatchExpression: Found key mkey:%v:%v, matchExp.Values:%v , VolumeLabels:%v", matchExp.Key, tval, matchExp.Values, nodeVol.Spec.VolumeLabels)
+
+						for _, mValue := range matchExp.Values {
+							logrus.Debugf("VolumeMatchExpression:  mkey:%v:%v, mValue:%v, matchExp.Values:%v , VolumeLabels:%v", matchExp.Key, tval, mValue, matchExp.Values, nodeVol.Spec.VolumeLabels)
+							if mValue == tval {
+								//The node should have the label value, hence return true
+								logrus.Infof("VolumeMatchExpression  mkey:%v mOperator:%v is placed on the node: %v having volume (%v) volume label key:(%v:%v)", matchExp.Key, matchExp.Operator, node.Id, nodeVol.Id, matchExp.Key, tval)
+								return true, nil
+							}
+						}
+					}
+				}
+
+				//Check for node labels being used in matchExpression
+				for _, spool := range node.Pools {
+					if tval, ok := spool.Labels[matchExp.Key]; ok {
+						for _, mValue := range matchExp.Values {
+							if mValue == tval {
+								//The node should have the label value, hence return error
+								logrus.Infof("VolumeMatchExpression  mkey:%v mOperator:%v is placed on the node: %v having label key:(%v:%v)", matchExp.Key, matchExp.Operator, node.Id, matchExp.Key, tval)
+								return true, nil
+							}
+						}
+					}
+				}
+			}
+			return false, &ErrFailedToInspectVolume{
+				Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v' could not find another volume having volume label key:(%v)", matchExp.Operator, matchExp.Key),
+			}
+		case "Exists":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						logrus.Infof("VolumeMatchExpression  mkey:%v mOperator:%v  for volume %v with volume %v having source %v", matchExp.Key, matchExp.Operator, vol.Id, nodeVol.Id, nodeVol.Source)
+						continue
+					}
+					if _, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+						logrus.Infof("VolumeMatchExpression  mkey:%v mOperator:%v exist on the node: %v for volume %v", matchExp.Key, matchExp.Operator, node.Id, nodeVol.Id)
+						return true, nil
+					}
+				}
+
+				//Check for node labels being used in matchExpression
+				for _, spool := range node.Pools {
+					if _, ok := spool.Labels[matchExp.Key]; ok {
+						//The node should have the key, hence return true
+						logrus.Infof("VolumeMatchExpression  mkey:%v mOperator:%v exist on the node: %v ", matchExp.Key, matchExp.Operator, node.Id)
+						return true, nil
+					}
+				}
+
+			}
+			return false, &ErrFailedToInspectVolume{
+				Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v' could not find other another volume with key:%v", matchExp.Operator, matchExp.Key),
+			}
+		case "DoesNotExist":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						continue
+					}
+					if tval, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v' is placed on node:%v having volume(%v) with volume label key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, matchExp.Key, tval),
+						}
+					}
+				}
+
+				//Check for node labels being used in matchExpression
+				for _, spool := range node.Pools {
+					if _, ok := spool.Labels[matchExp.Key]; ok {
+						//The node should not have the key, hence return error
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v' is placed on node:%v having key:(%v)", matchExp.Operator, node.Id, matchExp.Key),
+						}
+					}
+				}
+			}
+			return true, nil
+		case "Gt":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						continue
+					}
+					if tval, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v for volume(%v), having label key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v for volume(%v), having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, nodeVol.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is greater than spec value
+						if itval <= mValue {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', is placed on node:%v for volume %v, having node value(%v) not greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, itval, mValue, matchExp.Key, tval),
+							}
+						}
+						logrus.Infof("VolumeAffinity with matchExpression Operator:'%v', is placed on node:%v having volume(%v) label value(%v) greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, itval, mValue, matchExp.Key, tval)
+						return true, nil
+
+					}
+				}
+
+				//Check for node labels being used in matchExpression
+				for _, spool := range node.Pools {
+					if tval, ok := spool.Labels[matchExp.Key]; ok {
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v , having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v, having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is greater than spec value
+						if itval <= mValue {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', is placed on node:%v having node value(%v) not greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, itval, mValue, matchExp.Key, tval),
+							}
+						}
+						logrus.Infof("VolumeAffinity with matchExpression Operator:'%v', is placed on node:%v having label value(%v) greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, itval, mValue, matchExp.Key, tval)
+						return true, nil
+
+					}
+				}
+			}
+			return false, &ErrFailedToInspectVolume{
+				Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v' could not find another volume with key:%v", matchExp.Operator, matchExp.Key),
+			}
+
+		case "Lt":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						continue
+					}
+					if tval, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v for volume(%v), having label key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v for volume(%v),having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, nodeVol.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is less than spec value
+						if itval >= mValue {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', is placed on node:%v for volume(%v), having node value(%v) not less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, itval, mValue, matchExp.Key, tval),
+							}
+						}
+						logrus.Infof("VolumeAffinity with matchExpression Operator:'%v', is placed on node:%v for volume(%v), having node value(%v) less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, itval, mValue, matchExp.Key, tval)
+						return true, nil
+
+					}
+				}
+
+				for _, spool := range node.Pools {
+					if tval, ok := spool.Labels[matchExp.Key]; ok {
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v, having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v,having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is less than spec value
+						if itval >= mValue {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v', is placed on node:%v , having node value(%v) not less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, itval, mValue, matchExp.Key, tval),
+							}
+						}
+						logrus.Infof("VolumeAffinity with matchExpression Operator:'%v', is placed on node:%v, having node value(%v) less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, itval, mValue, matchExp.Key, tval)
+						return true, nil
+
+					}
+				}
+
+			}
+			return false, &ErrFailedToInspectVolume{
+				Cause: fmt.Sprintf("VolumeAffinity with matchExpression Operator:'%v' could not find another volume with key:%v", matchExp.Operator, matchExp.Key),
+			}
+
+		default:
+			return false, &ErrFailedToInspectVolume{
+				Cause: fmt.Sprintf("VolumeAffinity with UNKNOWN matchExpression Operator:'%v'  having  key:%v", matchExp.Operator, matchExp.Key),
+			}
+		}
+
+	}
+	return false, &ErrFailedToInspectVolume{
+		Cause: fmt.Sprintf("VolumeAffinity could not be validated for volume:%v", vol.Id),
+	}
+}
+
+// VolumeAntiMatchExpression
+// matching label volumes should not co-exists on same node or same topology group
+func (d *portworx) VolumeAntiMatchExpression(vol *api.Volume, matchExp *talisman_v1beta1.LabelSelectorRequirement, nodeReplList map[string][]*api.Volume, nodeGrp map[string]api.StorageNode) (bool, error) {
+	logrus.Infof("VolumeAntiMatchExpression started nodeId: %v matchExpression:%v ", vol.Id, matchExp)
+
+	logrus.Debugf("VolumeAntiMatchExpression rule:%v  mkey:%v mOperator:%v mValues:%v", vol, matchExp.Key, matchExp.Operator, matchExp.Values)
+	if vol != nil {
+		// Check for Operators: In, Exists, NotIn, DoesNotExist
+		switch matchExp.Operator {
+		case "NotIn":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						continue
+					}
+					if tval, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+						for _, mValue := range matchExp.Values {
+							if mValue != tval {
+								//The node should  have the label value, hence return error
+								return false, &ErrFailedToInspectVolume{
+									Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression 'NotIn' with values %v is placed on node:%v having volume(%v) with label key value:(%v:%v)", matchExp.Values, node.Id, nodeVol.Id, matchExp.Key, tval),
+								}
+							}
+						}
+					}
+				}
+
+				//Check for node labels being used in matchExpression
+				for _, spool := range node.Pools {
+					if tval, ok := spool.Labels[matchExp.Key]; ok {
+						for _, mValue := range matchExp.Values {
+							if mValue != tval {
+								//The node should not have the label value, hence return error
+								return false, &ErrFailedToInspectVolume{
+									Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression 'NotIn' with values %v is placed on node:%v having label value:(%v:%v)", matchExp.Values, node.Id, matchExp.Key, tval),
+								}
+							}
+						}
+					}
+				}
+
+			}
+			return true, nil
+		case "In":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						continue
+					}
+					if tval, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+						for _, mValue := range matchExp.Values {
+							if mValue == tval {
+								//The node should have the label value, hence return true
+								return false, &ErrFailedToInspectVolume{
+									Cause: fmt.Sprintf("VolumeMatchExpression  mkey:%v mOperator:%v is placed on the node: %v having volume (%v) volume label key:(%v:%v)", matchExp.Key, matchExp.Operator, node.Id, nodeVol.Id, matchExp.Key, tval),
+								}
+							}
+						}
+					}
+				}
+
+				//Check for node labels being used in matchExpression
+				for _, spool := range node.Pools {
+					if tval, ok := spool.Labels[matchExp.Key]; ok {
+						for _, mValue := range matchExp.Values {
+							if mValue == tval {
+								//The node should not have the label value, hence return error
+								return false, &ErrFailedToInspectVolume{
+									Cause: fmt.Sprintf("VolumeAntiMatchExpression  mkey:%v mOperator:%v is placed on the node: %v having label key:(%v:%v)", matchExp.Key, matchExp.Operator, node.Id, matchExp.Key, tval),
+								}
+							}
+						}
+					}
+				}
+			}
+			return true, nil
+		case "Exists":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						continue
+					}
+					if _, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+
+						//TODO: check whether the volume is parent or child of the current volume
+						// Assuming if the volume source is not equal to nil, then they are related to each other
+
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("VolumeAntiMatchExpression  mkey:%v mOperator:%v exist on the node: %v for volume %v", matchExp.Key, matchExp.Operator, node.Id, nodeVol.Id),
+						}
+					}
+				}
+
+				//Check for node labels being used in matchExpression
+				for _, spool := range node.Pools {
+					if _, ok := spool.Labels[matchExp.Key]; ok {
+						//The node should have the key, hence return true
+						return false, &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("VolumeAntiMatchExpression  mkey:%v mOperator:%v exist on the node: %v ", matchExp.Key, matchExp.Operator, node.Id),
+						}
+					}
+				}
+
+			}
+			return true, nil
+		case "DoesNotExist":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						continue
+					}
+					if tval, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+						logrus.Infof("VolumeAntiAffinity with matchExpression Operator:'%v' is placed on node:%v having volume(%v) with volume label key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, matchExp.Key, tval)
+						return true, nil
+					}
+				}
+
+				//Check for node labels being used in matchExpression
+				for _, spool := range node.Pools {
+					if _, ok := spool.Labels[matchExp.Key]; ok {
+						//The node should not have the key, hence return error
+						logrus.Infof("VolumeAntiAffinity with matchExpression Operator:'%v' is placed on node:%v having key:(%v)", matchExp.Operator, node.Id, matchExp.Key)
+						return true, nil
+					}
+				}
+			}
+			return false, &ErrFailedToInspectVolume{
+				Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v' for volume :%v with volume key:(%v) could not find another node/volume have the key", matchExp.Operator, vol.Id, matchExp.Key),
+			}
+		case "Gt":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						continue
+					}
+					if tval, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v for volume(%v), having label key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v for volume(%v), having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, nodeVol.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is greater than spec value
+						if itval >= mValue {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', is placed on node:%v for volume %v, having node value(%v)  greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, itval, mValue, matchExp.Key, tval),
+							}
+						}
+						logrus.Infof("VolumeAntiAffinity with matchExpression Operator:'%v', is placed on node:%v having volume(%v) label value(%v) less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, itval, mValue, matchExp.Key, tval)
+						return true, nil
+
+					}
+				}
+
+				//Check for node labels being used in matchExpression
+				for _, spool := range node.Pools {
+					if tval, ok := spool.Labels[matchExp.Key]; ok {
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v , having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v, having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is greater than spec value
+						if itval >= mValue {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', is placed on node:%v having node value(%v) greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, itval, mValue, matchExp.Key, tval),
+							}
+						}
+						logrus.Infof("VolumeAntiAffinity with matchExpression Operator:'%v', is placed on node:%v having label value(%v) not greater than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, itval, mValue, matchExp.Key, tval)
+						return true, nil
+
+					}
+				}
+			}
+			return false, &ErrFailedToInspectVolume{
+				Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v' could not find another volume with key:%v", matchExp.Operator, matchExp.Key),
+			}
+
+		case "Lt":
+			//for each node in the node group
+			for _, node := range nodeGrp {
+				logrus.Debugf("VolumeMatchExpression: volume replicas on node %v: %v", node.Id, nodeReplList[node.Id])
+
+				// for each volume on the node
+				for _, nodeVol := range nodeReplList[node.Id] {
+					// Check whether node is having the same volume or clone
+					if nodeVol.Id == vol.Id || nodeVol.Source.Parent != "" {
+						continue
+					}
+					if tval, ok := nodeVol.Spec.VolumeLabels[matchExp.Key]; ok {
+
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v for volume(%v), having label key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v for volume(%v),having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, nodeVol.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is less than spec value
+						if itval <= mValue {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', is placed on node:%v for volume(%v), having node value(%v) less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, itval, mValue, matchExp.Key, tval),
+							}
+						}
+						logrus.Infof("VolumeAntiAffinity with matchExpression Operator:'%v', is placed on node:%v for volume(%v), having node value(%v) notless than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, nodeVol.Id, itval, mValue, matchExp.Key, tval)
+						return true, nil
+
+					}
+				}
+
+				for _, spool := range node.Pools {
+					if tval, ok := spool.Labels[matchExp.Key]; ok {
+						itval, err := strconv.ParseInt(tval, 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', unable to convert node value to integer, placed on node:%v, having label key:(%v:%v)", matchExp.Operator, node.Id, matchExp.Key, tval),
+							}
+						}
+						mValue, err := strconv.ParseInt(matchExp.Values[0], 10, 64)
+						if err != nil {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', unable to convert key value(%v) to integer, placed on node:%v,having label key:(%v:%v)", matchExp.Operator, matchExp.Values[0], node.Id, matchExp.Key, tval),
+							}
+						}
+
+						// Check node value is less than spec value
+						if itval <= mValue {
+							return false, &ErrFailedToInspectVolume{
+								Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v', is placed on node:%v , having node value(%v) less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, itval, mValue, matchExp.Key, tval),
+							}
+						}
+						logrus.Infof("VolumeAntiAffinity with matchExpression Operator:'%v', is placed on node:%v, having node value(%v) not less than Spec value (%v)  for key:(%v:%v)", matchExp.Operator, node.Id, itval, mValue, matchExp.Key, tval)
+						return true, nil
+
+					}
+				}
+
+			}
+			return false, &ErrFailedToInspectVolume{
+				Cause: fmt.Sprintf("VolumeAntiAffinity with matchExpression Operator:'%v' could not find another volume with key:%v", matchExp.Operator, matchExp.Key),
+			}
+
+		default:
+			return false, &ErrFailedToInspectVolume{
+				Cause: fmt.Sprintf("VolumeAntiAffinity with UNKNOWN matchExpression Operator:'%v'  having  key:%v", matchExp.Operator, matchExp.Key),
+			}
+		}
+
+	}
+	return false, &ErrFailedToInspectVolume{
+		Cause: fmt.Sprintf("VolumeAntiAffinity could not be validated for volume:%v", vol.Id),
+	}
+}
+
+// ReplicaAffinity Validate  module
+func (d *portworx) ValidateReplicaAffinity(vol *api.Volume, vpsRule *talisman_v1beta2.ReplicaPlacementSpec, volNodes []api.StorageNode) error {
+	logrus.Infof("ValidateReplicaAffinity for vol: %v:%v and rule:%v ", vol.Id, vol, vpsRule)
+
+	if vpsRule != nil {
+		//Create node group list base on topology Key set
+		nodeGrpList := d.GroupTopologyNodes(vpsRule.CommonPlacementSpec.TopologyKey, volNodes)
+
+		//logrus.Infof("GroupTopologyNodes returned nodes for topology key: %v  nodelist: %v", vpsRule.CommonPlacementSpec.TopologyKey, nodeGrpList)
+		replPoolList := d.getReplicaPoolMap(vol)
+
+		// For each node group check volume replica exists
+		for _, nodes := range nodeGrpList {
+
+			// Does the rule have MatchExpression ,
+			if vpsRule.CommonPlacementSpec.MatchExpressions != nil {
+				for _, node := range nodes {
+
+					for _, matchExp := range vpsRule.CommonPlacementSpec.MatchExpressions {
+						for _, replPool := range replPoolList {
+							if _, ok := replPool[node.Id]; ok {
+								logrus.Infof("ValidateReplicaAffinity for vol:%v and rule:%v MatchExpression %v", vol.Id, vpsRule, matchExp)
+								status, err := d.ReplicaMatchExpression(node, matchExp, replPool[node.Id])
+								logrus.Infof("ValidateReplicaAffinity for vol:%v and rule:%v MatchExpression %v Status:%v err: %v", vol.Id, vpsRule, matchExp, status, err)
+								//EnforcementType_preferred EnforcementType = 1
+								if (err != nil) && (vpsRule.CommonPlacementSpec.Enforcement != talisman_v1beta1.EnforcementPreferred) {
+									return err
+								}
+							}
+						}
+
+					}
+				}
+			}
+
+			//Does  the rule have topology key set
+			if vpsRule.CommonPlacementSpec.TopologyKey != "" {
+
+				for _, replPool := range replPoolList {
+					//All replicas should be either present or none should present in the node group
+					found := 0
+					for nodeid := range replPool {
+						if _, ok := nodes[nodeid]; ok {
+
+							found++
+						}
+					}
+					if found != 0 && found != len(replPool) && vpsRule.CommonPlacementSpec.Enforcement != talisman_v1beta1.EnforcementPreferred {
+						return &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ValidateReplicaAffinity for volume (%v) does not have all replicas (%v/%v) in the same topologykey(%v) group", vol.Id, found, len(replPool), vpsRule.CommonPlacementSpec.TopologyKey),
+						}
+					}
+				}
+			}
+
+		}
+
+	} else {
+		logrus.Infof("ValidateReplicaAffinity for vol:%v and rule:%v is empty", vol.Id, vpsRule)
+	}
+
+	return nil
+}
+
+// ReplicaAntiAffinity Validate  module
+func (d *portworx) ValidateReplicaAntiAffinity(vol *api.Volume, vpsRule *talisman_v1beta2.ReplicaPlacementSpec, volNodes []api.StorageNode) error {
+	logrus.Infof("ValidateReplicaAntiAffinity for vol:%v and rule:%v ", vol, vpsRule)
+
+	if vpsRule != nil {
+		//Create node group list base on topology Key set
+		nodeGrpList := d.GroupTopologyNodes(vpsRule.CommonPlacementSpec.TopologyKey, volNodes)
+
+		//logrus.Infof("GroupTopologyNodes returned nodes for topology key: %v  nodelist: %v", vpsRule.CommonPlacementSpec.TopologyKey, nodeGrpList)
+		replPoolList := d.getReplicaPoolMap(vol)
+
+		//Total replicas found across all node group list
+		volReplFound := 0
+
+		// For each node group check volume replica exists
+		for tpname, nodes := range nodeGrpList {
+
+			// Does the rule have MatchExpression ,
+			if vpsRule.CommonPlacementSpec.MatchExpressions != nil {
+				for _, node := range nodes {
+
+					for _, matchExp := range vpsRule.CommonPlacementSpec.MatchExpressions {
+						for _, replPool := range replPoolList {
+							if _, ok := replPool[node.Id]; ok {
+								logrus.Infof("ValidateReplicaAntiAffinity for vol:%v and rule:%v MatchExpression %v", vol.Id, vpsRule, matchExp)
+								status, err := d.ReplicaAntiMatchExpression(node, matchExp, replPool[node.Id])
+								logrus.Infof("ValidateReplicaAntiAffinity for vol:%v and rule:%v MatchExpression %v Status:%v err: %v", vol.Id, vpsRule, matchExp, status, err)
+								//EnforcementType_preferred EnforcementType = 1
+								if (err != nil) && (vpsRule.CommonPlacementSpec.Enforcement != talisman_v1beta1.EnforcementPreferred) {
+									return err
+								}
+							}
+						}
+
+					}
+				}
+			}
+
+			//Does  the rule have topology key set
+			if vpsRule.CommonPlacementSpec.TopologyKey != "" {
+				//All replicas should be either present or none should present in the node group
+				for _, replPool := range replPoolList {
+					found := 0
+					logrus.Debugf("ValidateReplicaAntiAffinity topologykey check: replPool:%v, nodes:%v group(%v), found:%v,volReplFound:%v", replPool, nodes, tpname, found, volReplFound)
+					for nodeid := range replPool {
+						if _, ok := nodes[nodeid]; ok {
+
+							volReplFound++
+							found++
+						}
+					}
+					//There should be only one replica in a zone
+					if found != 0 && found != 1 && vpsRule.CommonPlacementSpec.Enforcement != talisman_v1beta1.EnforcementPreferred {
+						return &ErrFailedToInspectVolume{
+							Cause: fmt.Sprintf("ValidateReplicaAntiAffinity for volume (%v) has more than one replica (%v/%v) (Total replicas found:%v) in the same topologykey(%v:%v) group", vol.Id, found, len(replPool), volReplFound, vpsRule.CommonPlacementSpec.TopologyKey, tpname),
+						}
+					}
+				}
+			}
+
+		}
+
+	} else {
+		logrus.Infof("ValidateReplicaAntiAffinity for vol:%v and rule:%v is empty", vol.Id, vpsRule)
+	}
+
+	return nil
+}
+
+// VolumeAffinity Validate  module
+func (d *portworx) ValidateVolumeAffinity(vol *api.Volume, vpsRule *talisman_v1beta2.CommonPlacementSpec, volNodes []api.StorageNode, nodeReplList map[string][]*api.Volume, appVolNodes map[string]api.StorageNode) error {
+	logrus.Infof("ValidateVolumeAffinity for vol:%v and rule:%v ", vol, vpsRule)
+
+	if vpsRule != nil {
+		//Create node group list based on topology Key set
+		nodeGrpList := d.GroupTopologyAppNodes(vpsRule.TopologyKey, appVolNodes)
+		replPoolList := d.getReplicaPoolMap(vol)
+
+		if vpsRule.MatchExpressions != nil {
+
+			// for each replicaset
+			for _, replPool := range replPoolList {
+				// for each node of the replicaset
+				for nodeid := range replPool {
+					//Check to which nodegroup does this node belong to
+					for _, nodes := range nodeGrpList {
+						if _, ok := nodes[nodeid]; ok {
+							//Volume Affinity will always have atleast one MatchExpression
+							for _, matchExp := range vpsRule.MatchExpressions {
+								//MatchExpression check
+								logrus.Infof("ValidateVolumeAffinity for vol:%v and rule:%v MatchExpression %v", vol.Id, vpsRule, matchExp)
+								status, err := d.VolumeMatchExpression(vol, matchExp, nodeReplList, nodes)
+								logrus.Infof("ValidateVolumeAffinity for vol:%v and rule:%v MatchExpression %v Status:%v err:%v", vol.Id, vpsRule, matchExp, status, err)
+								//EnforcementType_preferred EnforcementType = 1
+								if (err != nil) && (vpsRule.Enforcement != talisman_v1beta1.EnforcementPreferred) {
+									return err
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+	} else {
+		logrus.Infof("ValidateVolumeAffinity for vol:%v and rule:%v is empty", vol.Id, vpsRule)
+	}
+
+	return nil
+}
+
+// VolumeAntiAffinity Validate  module
+func (d *portworx) ValidateVolumeAntiAffinity(vol *api.Volume, vpsRule *talisman_v1beta2.CommonPlacementSpec, volNodes []api.StorageNode, nodeReplList map[string][]*api.Volume, appVolNodes map[string]api.StorageNode) error {
+	logrus.Infof("ValidateVolumeAntiAffinity for vol:%v and rule:%v ", vol, vpsRule)
+
+	if vpsRule != nil {
+		//Create node group list base on topology Key set
+		nodeGrpList := d.GroupTopologyAppNodes(vpsRule.TopologyKey, appVolNodes)
+		replPoolList := d.getReplicaPoolMap(vol)
+
+		if vpsRule.MatchExpressions != nil {
+
+			// for each replicaset
+			for _, replPool := range replPoolList {
+				// for each node of the replicaset
+				for nodeid := range replPool {
+					//Check whether the node belongs to the nodegroup
+					for _, nodes := range nodeGrpList {
+						if _, ok := nodes[nodeid]; ok {
+							//Volume AntiAffinity will have atleast one MatchExpression
+							for _, matchExp := range vpsRule.MatchExpressions {
+								//MatchExpression check
+								logrus.Infof("ValidateVolumeAntiAffinity for vol:%v and rule:%v MatchExpression %v", vol.Id, vpsRule, matchExp)
+								status, err := d.VolumeAntiMatchExpression(vol, matchExp, nodeReplList, nodes)
+								logrus.Infof("ValidateVolumeAntiAffinity for vol:%v and rule:%v MatchExpression %v Status:%v err:%v", vol.Id, vpsRule, matchExp, status, err)
+								//EnforcementType_preferred EnforcementType = 1
+								if (err != nil) && (vpsRule.Enforcement != talisman_v1beta1.EnforcementPreferred) {
+									return err
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+	} else {
+		logrus.Infof("ValidateVolumeAntiAffinity for vol:%v and rule:%v is empty", vol.Id, vpsRule)
+	}
+
+	return nil
+}
+
+/*VolumePlacementStrategy  END*/
 
 func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[string]string) error {
 	var token string
