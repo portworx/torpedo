@@ -680,6 +680,14 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		vpsmap = ""
 	}
 
+	var vpsmap string
+	if options.VpsParameters != nil && options.VpsParameters.Enabled {
+		vpsmap = app.Key
+	} else {
+
+		vpsmap = ""
+	}
+
 	// Add security annotations if running with auth-enabled
 	configMapName := k.secretConfigMapName
 	if configMapName != "" {
