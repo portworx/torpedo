@@ -28,6 +28,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 
 	"github.com/portworx/sched-ops/task"
+	pxapi "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -96,6 +97,8 @@ const (
 )
 
 var (
+	// replace VPS name with the app name
+	placement1Regex = regexp.MustCompile("{VPS_NAME}")
 	// use underscore to avoid conflicts to text/template from golang
 	namespaceRegex      = regexp.MustCompile("_NAMESPACE_")
 	defaultTorpedoLabel = map[string]string{
@@ -311,6 +314,9 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		if err := apapi.AddToScheme(schemeObj); err != nil {
 			return nil, err
 		}
+		if err := pxapi.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
 
 		codecs := serializer.NewCodecFactory(schemeObj)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
@@ -363,6 +369,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*storkapi.ApplicationClone); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*storkapi.VolumeSnapshotRestore); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*pxapi.VolumePlacementStrategy); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*apapi.AutopilotRule); ok {
 		return specObj, nil
@@ -561,6 +569,22 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 		}
 	}
 
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createVpsObjects(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
 	return specObjects, nil
 }
 
@@ -648,6 +672,14 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options sched
 func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec,
 	options scheduler.ScheduleOptions) (interface{}, error) {
 
+	var vpsmap string
+	if options.VpsParameters != nil && options.VpsParameters.Enabled {
+		vpsmap = app.Key
+	} else {
+
+		vpsmap = ""
+	}
+
 	// Add security annotations if running with auth-enabled
 	configMapName := k.secretConfigMapName
 	if configMapName != "" {
@@ -672,6 +704,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		obj.Provisioner = volume.GetStorageProvisioner()
 
 		sc, err := k8sStorage.CreateStorageClass(obj)
+		//VPS Name set
+		k.substituteVpsNameInStorageClass(obj, vpsmap)
 		if errors.IsAlreadyExists(err) {
 			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
 				logrus.Infof("[%v] Found existing storage class: %v", app.Key, sc.Name)
@@ -691,6 +725,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		obj.Namespace = ns.Name
 		k.substituteNamespaceInPVC(obj, ns.Name)
+		//Append Volume Label app:<app-name>
+		k.addVpsVolumeLabel(obj, app.Key)
 		if len(options.Labels) > 0 {
 			k.addLabelsToPVC(obj, options.Labels)
 		}
@@ -827,6 +863,21 @@ func (k *K8s) substituteNamespaceInPVC(pvc *v1.PersistentVolumeClaim, ns string)
 	pvc.Name = namespaceRegex.ReplaceAllString(pvc.Name, ns)
 	for k, v := range pvc.Annotations {
 		pvc.Annotations[k] = namespaceRegex.ReplaceAllString(v, ns)
+	}
+}
+
+func (k *K8s) addVpsVolumeLabel(pvc *v1.PersistentVolumeClaim, vlabel string) {
+	//pvc.Metadatas.Labels["appvps"] = vlabel
+	logrus.Infof("PVC label update label:%v  pvc:%v", vlabel, pvc)
+}
+
+//Set or disable the placement_strategy in the storageclass
+func (k *K8s) substituteVpsNameInStorageClass(sc *storageapi.StorageClass, vpsname string) {
+	//	sc.Name = namespaceRegex.ReplaceAllString(sc.Name, ns)
+	if sc.Parameters["aggregation_level"] == "2" || sc.Parameters["aggregation_level"] == "3" {
+		sc.Parameters["placement_strategy"] = ""
+	} else {
+		sc.Parameters["placement_strategy"] = vpsname
 	}
 }
 
@@ -1452,6 +1503,19 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		}
 	}
 
+	for _, spec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyVpsObjects(spec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+		pods, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
+		}
+	}
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 		if err := k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err
@@ -2916,6 +2980,45 @@ func (k *K8s) destroyBackupObjects(
 			}
 		}
 		logrus.Infof("[%v] Destroyed ApplicationClone: %v", app.Key, obj.Name)
+	}
+	return nil
+}
+
+func (k *K8s) createVpsObjects(
+	specObj interface{},
+	ns *v1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	k8sOps := k8sops.Instance()
+	if obj, ok := specObj.(*pxapi.VolumePlacementStrategy); ok {
+		obj.Namespace = ns.Name
+		backupLocation, err := k8sOps.CreateVolumePlacementStrategy(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create VolumePlacementStrategy: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created VolumePlacementStrategy: %v", app.Key, backupLocation.Name)
+		return backupLocation, nil
+	}
+	return nil, nil
+}
+
+func (k *K8s) destroyVpsObjects(
+	specObj interface{},
+	app *spec.AppSpec,
+) error {
+	k8sOps := k8sops.Instance()
+	if obj, ok := specObj.(*pxapi.VolumePlacementStrategy); ok {
+		err := k8sOps.DeleteVolumePlacementStrategy(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete VolumePlacementStrategy: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed VolumePlacementStrategy: %v", app.Key, obj.Name)
 	}
 	return nil
 }
