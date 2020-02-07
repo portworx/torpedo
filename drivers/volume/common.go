@@ -66,9 +66,12 @@ func (d *DefaultDriver) RecoverDriver(n node.Node) error {
 	}
 }
 
-// ValidateCreateVolume validates whether a volume has been created properly.
+// ValidateCreateVolume validates whether volumes of the app has been created properly.
+// appVols: dictionary of all volumes of the app
+// appName: The app name whose volumes needs to be validated
+// appToken: The token used to get volume details
 // params are the custom volume options passed when creating the volume.
-func (d *DefaultDriver) ValidateCreateVolume(name string, params map[string]string) error {
+func (d *DefaultDriver) ValidateCreateVolume(appVols map[string]map[string]string, appName string, appToken string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateCreateVolume()",
