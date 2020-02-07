@@ -18,8 +18,11 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/sirupsen/logrus"
 
+	"github.com/portworx/torpedo/drivers/backup"
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
+	// import backup driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
 	// import gke driver to invoke it's init
@@ -50,6 +53,7 @@ const (
 	schedulerCliFlag                     = "scheduler"
 	nodeDriverCliFlag                    = "node-driver"
 	storageDriverCliFlag                 = "storage-driver"
+	backupCliFlag                        = "backup-driver"
 	specDirCliFlag                       = "spec-dir"
 	appListCliFlag                       = "app-list"
 	logLocationCliFlag                   = "log-location"
@@ -68,6 +72,7 @@ const (
 	defaultScheduler                      = "k8s"
 	defaultNodeDriver                     = "ssh"
 	defaultStorageDriver                  = "pxd"
+	defaultBackupDriver                   = "pxb"
 	defaultLogLocation                    = "/mnt/torpedo_support_dir"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
@@ -124,6 +129,9 @@ func InitInstance() {
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
+	expect(err).NotTo(haveOccurred())
+
+	err = Inst().B.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 	expect(err).NotTo(haveOccurred())
 }
 
@@ -547,6 +555,7 @@ type Torpedo struct {
 	S                                   scheduler.Driver
 	V                                   volume.Driver
 	N                                   node.Driver
+	B                                   backup.Driver
 	SpecDir                             string
 	AppList                             []string
 	LogLoc                              string
@@ -569,10 +578,11 @@ type Torpedo struct {
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+	var s, n, v, b, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
+	var backupDriver backup.Driver
 	var appScaleFactor int
 	var volUpgradeEndpointURL string
 	var volUpgradeEndpointVersion string
@@ -589,6 +599,7 @@ func ParseFlags() {
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
+	flag.StringVar(&b, backupCliFlag, defaultBackupDriver, "Name of the backup driver to use")
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
@@ -625,6 +636,8 @@ func ParseFlags() {
 		logrus.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
 	} else if nodeDriver, err = node.Get(n); err != nil {
 		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
+	} else if backupDriver, err = backup.Get(b); err != nil {
+		logrus.Fatal("cannot find backup driver for %v. Err: %v\n", b, err)
 	} else if err = os.MkdirAll(logLoc, os.ModeDir); err != nil {
 		logrus.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 	} else {
@@ -648,6 +661,7 @@ func ParseFlags() {
 				S:                                   schedulerDriver,
 				V:                                   volumeDriver,
 				N:                                   nodeDriver,
+				B:                                   backupDriver,
 				SpecDir:                             specDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
