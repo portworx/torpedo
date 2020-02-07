@@ -284,7 +284,16 @@ github.com/portworx/sched-ops/k8s/openshift
 github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
+github.com/portworx/sched-ops/k8s/talisman
 github.com/portworx/sched-ops/task
+# github.com/portworx/talisman v0.0.0-20191007232806-837747f38224
+github.com/portworx/talisman/pkg/apis/portworx
+github.com/portworx/talisman/pkg/apis/portworx/v1beta1
+github.com/portworx/talisman/pkg/apis/portworx/v1beta2
+github.com/portworx/talisman/pkg/client/clientset/versioned
+github.com/portworx/talisman/pkg/client/clientset/versioned/scheme
+github.com/portworx/talisman/pkg/client/clientset/versioned/typed/portworx/v1beta1
+github.com/portworx/talisman/pkg/client/clientset/versioned/typed/portworx/v1beta2
 # github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35
 github.com/pquerna/cachecontrol
 github.com/pquerna/cachecontrol/cacheobject

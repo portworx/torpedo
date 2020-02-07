@@ -5,13 +5,14 @@ import (
 	"testing"
 	"time"
 
+	"math/rand"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
-	"math/rand"
 )
 
 func TestStopScheduler(t *testing.T) {

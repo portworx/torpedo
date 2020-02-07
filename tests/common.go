@@ -146,14 +146,29 @@ func ValidateCleanup() {
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context) {
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		var vState int
+		if ctx.ScheduleOptions.VpsParameters != nil {
+			vState = ctx.ScheduleOptions.VpsParameters.Vstate
+		} else {
+			vState = 1
+		}
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			ValidateVolumes(ctx)
+			if vState == 0 {
+				//Since volume is expected to not come up, app and other
+				//validation can be skipped
+				return
+			}
 		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
 			err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
-			expect(err).NotTo(haveOccurred())
+			if vState == 0 {
+				expect(err).To(haveOccurred())
+			} else {
+				expect(err).NotTo(haveOccurred())
+			}
 		})
 
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
@@ -163,7 +178,11 @@ func ValidateContext(ctx *scheduler.Context) {
 			for _, vol := range vols {
 				Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
 					err := Inst().V.ValidateVolumeSetup(vol)
-					expect(err).NotTo(haveOccurred())
+					if vState == 0 {
+						expect(err).To(haveOccurred())
+					} else {
+						expect(err).NotTo(haveOccurred())
+					}
 				})
 			}
 		})
@@ -174,28 +193,48 @@ func ValidateContext(ctx *scheduler.Context) {
 func ValidateVolumes(ctx *scheduler.Context) {
 	context("For validation of an app's volumes", func() {
 		var err error
+		var vState int
+		if ctx.ScheduleOptions.VpsParameters != nil {
+			vState = ctx.ScheduleOptions.VpsParameters.Vstate
+		} else {
+			vState = 1
+		}
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
 			err = Inst().S.InspectVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
-			expect(err).NotTo(haveOccurred())
+			if vState == 0 {
+				expect(err).To(haveOccurred())
+			} else {
+				expect(err).NotTo(haveOccurred())
+			}
 		})
 
 		var vols map[string]map[string]string
 		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
 			vols, err = Inst().S.GetVolumeParameters(ctx)
-			expect(err).NotTo(haveOccurred())
+			if err != nil {
+				if vState == 0 {
+					expect(err).To(haveOccurred())
+				} else {
+					expect(err).NotTo(haveOccurred())
+				}
+			}
 		})
 
-		for vol, params := range vols {
-			if Inst().ConfigMap != "" {
-				params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+		var appToken string
+		if Inst().ConfigMap != "" {
+			appToken, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+			expect(err).NotTo(haveOccurred())
+		}
+		err = Inst().V.ValidateCreateVolume(vols, ctx.App.Key, appToken)
+		if err != nil {
+			if vState == 0 {
+				expect(err).To(haveOccurred())
+			} else {
 				expect(err).NotTo(haveOccurred())
 			}
-			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateVolume(vol, params)
-				expect(err).NotTo(haveOccurred())
-			})
 		}
+
 	})
 }
 

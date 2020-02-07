@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -12,7 +14,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
-	"time"
 )
 
 func TestVolOps(t *testing.T) {

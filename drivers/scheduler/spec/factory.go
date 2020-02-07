@@ -22,6 +22,9 @@ func (f *Factory) register(id string, app *AppSpec) {
 	if _, ok := appSpecFactory[id]; !ok {
 		logrus.Infof("Registering app: %v", id)
 		appSpecFactory[id] = app
+	} else {
+		logrus.Infof("Updating app spec: %v", id)
+		appSpecFactory[id] = app
 	}
 }
 
