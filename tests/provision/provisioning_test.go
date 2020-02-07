@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -35,6 +35,7 @@ var (
 	specNameRegex = regexp.MustCompile("{VPS_NAME}")
 	volKeyRegex   = regexp.MustCompile("{VOL_KEY}")
 	volLabelRegex = regexp.MustCompile("{VOL_LABEL}")
+	k8sCore       = core.Instance()
 )
 
 var _ = BeforeSuite(func() {
@@ -553,7 +554,7 @@ func SetNodeLabels(labels []labelDict) map[string][]string {
 		//TODO: Randomize node selection
 		n := workerNodes[key]
 		for lkey, lval := range nlbl {
-			if err := k8s.Instance().AddLabelOnNode(n.Name, lkey, lval.(string)); err != nil {
+			if err := k8sCore.AddLabelOnNode(n.Name, lkey, lval.(string)); err != nil {
 				logrus.Errorf("Failed to set node label %v: %v Err: %v", lkey, nlbl, err)
 				return lblnodes
 			}
@@ -587,7 +588,7 @@ func RemoveNodeLabels(labels []labelDict) {
 	for _, n := range workerNodes {
 		for _, nlbl := range labels {
 			for lkey, lval := range nlbl {
-				if err := k8s.Instance().RemoveLabelOnNode(n.Name, lkey); err != nil {
+				if err := k8sCore.RemoveLabelOnNode(n.Name, lkey); err != nil {
 					logrus.Errorf("Failed to remove node label %v=%v: %v Err: %v", lkey, lval, nlbl, err)
 					//return lblnodes
 				}
@@ -604,25 +605,28 @@ func getVpsSpec(f func() string) string {
 func applyVpsSpec(vpsSpec string) error {
 	logrus.Debugf("vpsSpec:%v, ---SpecDir:%v--- App: %v ", vpsSpec, Inst().SpecDir, Inst().AppList)
 
+	var appVpsSpec string
 	for _, app := range Inst().AppList {
 		f, err := os.Create(Inst().SpecDir + "/" + app + "/vps.yaml")
 		if err != nil {
 			logrus.Errorf("Failed to create VPS spec: %v ", Inst().SpecDir+"/"+app+"/vps.yaml")
 			return err
 		}
-		defer f.Close()
+		//defer f.Close()
 		// Chaneg Spec Name
 		// Change Volume Label
-		vpsSpec = specNameRegex.ReplaceAllString(vpsSpec, app)
-		vpsSpec = volLabelRegex.ReplaceAllString(vpsSpec, app)
+		appVpsSpec = specNameRegex.ReplaceAllString(vpsSpec, app)
+		appVpsSpec = volLabelRegex.ReplaceAllString(appVpsSpec, app)
+		appVpsSpec = volKeyRegex.ReplaceAllString(appVpsSpec, app)
 
-		nsize, err := f.WriteString(vpsSpec)
+		nsize, err := f.WriteString(appVpsSpec)
 		if err != nil {
 			logrus.Errorf("Failed to write VPS spec: %v ", Inst().SpecDir+"/"+app+"/vps.yaml")
 			return err
 		}
 		f.Sync()
 		logrus.Debugf("Created VPS spec: %v size: %v", Inst().SpecDir+"/"+app+"/vps.yaml", nsize)
+		f.Close()
 	}
 	return nil
 }

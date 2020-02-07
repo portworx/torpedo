@@ -1048,109 +1048,6 @@ func (v *vpscase22) GetLabels() ([]labelDict, int) {
 	return lbldata, 1
 }
 
-func (v *vpscase22) GetPvcNodeLabels(lblnodes map[string][]string) map[string]map[string][]string {
-
-	for key, val := range lblnodes {
-		logrus.Debugf("label node: key:%v Val:%v", key, val)
-	}
-
-	//Create 3 node lists (requiredNodes, prefNodes, notOnNodes)
-	volnodelist := map[string]map[string][]string{}
-	volnodelist["es-data-esnode-0"] = map[string][]string{}
-	volnodelist["es-data-esnode-1"] = map[string][]string{}
-	volnodelist["es-data-esnode-2"] = map[string][]string{}
-	volnodelist["es-data-esnode-0"]["pnodes"] = []string{}
-	volnodelist["es-data-esnode-0"]["nnodes"] = []string{}
-	volnodelist["es-data-esnode-0"]["rnodes"] = []string{}
-	volnodelist["es-data-esnode-1"]["pnodes"] = []string{}
-	volnodelist["es-data-esnode-1"]["nnodes"] = []string{}
-	volnodelist["es-data-esnode-1"]["rnodes"] = []string{}
-
-	//Create a list of nodes in px_zone east and north,
-	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zoneeast"] {
-		volnodelist["es-data-esnode-0"]["rnodes"] = append(volnodelist["es-data-esnode-0"]["rnodes"], lnode)
-		volnodelist["es-data-esnode-1"]["rnodes"] = append(volnodelist["es-data-esnode-1"]["rnodes"], lnode)
-		volnodelist["es-data-esnode-2"]["rnodes"] = append(volnodelist["es-data-esnode-2"]["rnodes"], lnode)
-	}
-
-	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonenorth"] {
-		volnodelist["es-data-esnode-0"]["rnodes1"] = append(volnodelist["es-data-esnode-0"]["rnodes1"], lnode)
-		volnodelist["es-data-esnode-1"]["rnodes1"] = append(volnodelist["es-data-esnode-1"]["rnodes1"], lnode)
-		volnodelist["es-data-esnode-2"]["rnodes1"] = append(volnodelist["es-data-esnode-2"]["rnodes1"], lnode)
-	}
-	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonewest"] {
-		volnodelist["es-data-esnode-0"]["rnodes2"] = append(volnodelist["es-data-esnode-0"]["rnodes2"], lnode)
-		volnodelist["es-data-esnode-1"]["rnodes2"] = append(volnodelist["es-data-esnode-1"]["rnodes2"], lnode)
-		volnodelist["es-data-esnode-2"]["rnodes2"] = append(volnodelist["es-data-esnode-2"]["rnodes2"], lnode)
-	}
-	for _, lnode := range lblnodes["failure-domain.beta.kubernetes.io/px_zonecentral"] {
-		volnodelist["es-data-esnode-0"]["rnodes3"] = append(volnodelist["es-data-esnode-0"]["rnodes3"], lnode)
-		volnodelist["es-data-esnode-1"]["rnodes3"] = append(volnodelist["es-data-esnode-1"]["rnodes3"], lnode)
-		volnodelist["es-data-esnode-2"]["rnodes3"] = append(volnodelist["es-data-esnode-2"]["rnodes3"], lnode)
-	}
-	return volnodelist
-}
-
-/*
- * 1. Each rule template, will provide the expected output
- */
-
-func (v *vpscase22) Validate(appVolumes []*volume.Volume, volscheck map[string]map[string][]string) {
-
-	logrus.Debugf("Deployed volumes:%v,  volumes to check for nodes placement %v ",
-		appVolumes, volscheck)
-
-	logrus.Infof("Case 22 T871040 Verify statefulset/deployment scale up/down w.r.t replica and volume affinity rules ")
-
-	for _, appvol := range appVolumes {
-
-		replicas, err := Inst().V.GetReplicaSetNodes(appvol)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(replicas).NotTo(BeEmpty())
-
-		esDataNodes[appvol.Name] = replicas
-	}
-
-	//Replicas of each volume should be in same set of zone
-	volrepinzone := 0
-
-	// Nodes with same label and value
-	for _, repset := range volscheck["es-data-esnode-0"] {
-		// for each node in the zone, check replica count should be one
-		repcount := map[string]int{}
-		volrepnotinzone := 0
-		for _, mnode := range repset {
-			//For each volume
-			for key, appvol := range esDataNodes {
-				//For each replica nodes of a volume, check with zone nodes
-				for _, rnode := range appvol {
-					if rnode == mnode {
-						repcount[key] += 1
-					}
-				}
-
-			}
-		}
-
-		for _, val := range repcount {
-			if repcount["es-data-esnode-0"] == 3 && val != 3 {
-				volrepnotinzone = 1
-				break
-			}
-		}
-		if repcount["es-data-esnode-0"] == 3 && volrepnotinzone == 0 {
-			volrepinzone = 1
-		}
-	}
-
-	Expect(volrepinzone).To(Equal(1), fmt.Sprintf("Due to volume replica affinity replicas of volumes es-data-esnodes: %v , should appear in same zone", esDataNodes))
-}
-
-//StorageClass placement_strategy mapping
-func (v *vpscase22) GetScStrategyMap() map[string]string {
-	return map[string]string{"placement-1": "placement-1", "placement-2": "placement-1", "placement-3": ""}
-}
-
 func (v *vpscase22) GetSpec() string {
 
 	var vpsSpec string
@@ -1166,7 +1063,7 @@ spec:
       - key: appvps-{VOL_KEY}
         operator: In
         values:
-          - "elastic"
+          - "{VOL_LABEL}"
   replicaAffinity:
   - enforcement: required
     topologyKey: failure-domain.beta.kubernetes.io/px_zone`
