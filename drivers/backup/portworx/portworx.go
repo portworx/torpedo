@@ -473,6 +473,5 @@ func (d *pxbackup) DeleteBackup(orgID string, name string) (*api.BackupDeleteRes
 }
 
 func init() {
-	fmt.Printf("BackupDriver init called\n")
 	backup.Register(driverName, &pxbackup{})
 }

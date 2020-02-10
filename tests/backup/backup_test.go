@@ -20,24 +20,20 @@ func TestBackup(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	fmt.Printf("In BeforeSuite")
 	InitInstance()
 })
 
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{BackupSetup}", func() {
-	fmt.Printf("In TestBackup")
 	It("has to connect and check the backup setup", func() {
 	})
 })
 
 var _ = AfterSuite(func() {
-	fmt.Printf("In AfterSuite")
 	//PerformSystemCheck()
 	//ValidateCleanup()
 })
 
 func init() {
-	fmt.Printf("In test init")
 	ParseFlags()
 }
