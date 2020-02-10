@@ -422,21 +422,20 @@ func (d *pxbackup) CreateBackup(orgID string, name string, backupLocation string
 	backup := d.getBackupManager()
 	req := &api.BackupCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
-			Name:  name,
-			OrgId: orgID,
-			Owner: owner,
+			Name:   name,
+			OrgId:  orgID,
+			Owner:  owner,
 			Labels: labels,
 		},
 		BackupLocation: backupLocation,
-		Cluster: clusterName,
-		Namespaces: nameSpaces, 
+		Cluster:        clusterName,
+		Namespaces:     nameSpaces,
 	}
 
 	resp, err := backup.Create(context.Background(), req)
 
 	return resp, err
 }
-
 
 func (d *pxbackup) EnumerateBackup(orgID string) (*api.BackupEnumerateResponse, error) {
 	backup := d.getBackupManager()
@@ -455,7 +454,7 @@ func (d *pxbackup) InspectBackup(orgID string, name string) (*api.BackupInspectR
 		context.Background(),
 		&api.BackupInspectRequest{
 			OrgId: orgID,
-			Name: name,
+			Name:  name,
 		},
 	)
 	return resp, err
@@ -467,7 +466,7 @@ func (d *pxbackup) DeleteBackup(orgID string, name string) (*api.BackupDeleteRes
 		context.Background(),
 		&api.BackupDeleteRequest{
 			OrgId: orgID,
-			Name: name,
+			Name:  name,
 		},
 	)
 	return resp, err
