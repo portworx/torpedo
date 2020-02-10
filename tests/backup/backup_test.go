@@ -28,11 +28,6 @@ var _ = BeforeSuite(func() {
 var _ = Describe("{BackupSetup}", func() {
 	fmt.Printf("In TestBackup")
 	It("has to connect and check the backup setup", func() {
-		Inst().B.CreateOrganization("test-org2")
-		Inst().B.GetOrganization()
-		Inst().B.CreateCloudCredential("test-org2", "testcc")
-		Inst().B.DeleteCloudCredential("test-org2", "testcc")
-
 	})
 })
 

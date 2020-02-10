@@ -92,9 +92,7 @@ func (d *pxbackup) constructURL(ip string) string {
 }
 
 func (d *pxbackup) testAndSetEndpoint(endpoint string) error {
-	//	pxEndpoint := d.constructURL("10.233.105.67")
 	pxEndpoint := d.constructURL(endpoint)
-	fmt.Printf("testAndSetEndpoint-1: pxEndpoint = %v\n", pxEndpoint)
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		fmt.Printf("unable to get grpc connection\n")
@@ -103,12 +101,10 @@ func (d *pxbackup) testAndSetEndpoint(endpoint string) error {
 
 	d.healthManager = api.NewHealthClient(conn)
 	_, err = d.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
-	fmt.Printf("HealthManager status %v\n", err)
-	/*
-		if err != nil {
-			fmt.Printf("HealthManager API error\n")
-			return err
-		}*/
+	if err != nil {
+		fmt.Printf("HealthManager API error %v\n", err)
+		return err
+	}
 
 	d.clusterManager = api.NewClusterClient(conn)
 	d.backupLocationManager = api.NewBackupLocationClient(conn)
@@ -126,9 +122,7 @@ func (d *pxbackup) testAndSetEndpoint(endpoint string) error {
 
 func (d *pxbackup) GetServiceEndpoint(serviceName string, nameSpace string) (string, error) {
 	svc, err := core.Instance().GetService(serviceName, nameSpace)
-	fmt.Printf("GetServiceEndpoint-1: %v\n", err)
 	if err == nil {
-		fmt.Printf("GetServiceEndpoint-2: %v\n", svc.Spec.ClusterIP)
 		return svc.Spec.ClusterIP, nil
 	}
 	return "", err
@@ -138,13 +132,10 @@ func (d *pxbackup) setDriver(serviceName string, nameSpace string) error {
 	var err error
 	var endpoint string
 
-	fmt.Printf("SetDriver-1\n")
 	endpoint, err = d.GetServiceEndpoint(serviceName, nameSpace)
-	fmt.Printf("setDriver-2: endpoint = %v err = %v\n", endpoint, err)
 	if err == nil && endpoint != "" {
 		if err = d.testAndSetEndpoint(endpoint); err == nil {
 			d.refreshEndpoint = false
-			fmt.Printf("seDriver-3: return")
 			return nil
 		}
 	} else if err != nil && len(node.GetWorkerNodes()) == 0 {
@@ -155,7 +146,6 @@ func (d *pxbackup) setDriver(serviceName string, nameSpace string) error {
 	logrus.Infof("Getting new backup driver")
 	for _, n := range node.GetWorkerNodes() {
 		for _, addr := range n.Addresses {
-			fmt.Printf("setDriver-4: addr %v\n", addr)
 			if err = d.testAndSetEndpoint(addr); err == nil {
 				return nil
 			}
@@ -163,7 +153,6 @@ func (d *pxbackup) setDriver(serviceName string, nameSpace string) error {
 	}
 
 	return fmt.Errorf("failed to get endpoint for portworx backup driver")
-
 }
 
 func (d *pxbackup) getOrganizationManager() api.OrganizationClient {
@@ -223,7 +212,6 @@ func (d *pxbackup) getSchedulePolicyManager() api.SchedulePolicyClient {
 }
 
 func (d *pxbackup) CreateOrganization(orgName string) error {
-	fmt.Printf("In CreateOrganization\n")
 	org := d.getOrganizationManager()
 	req := &api.OrganizationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -231,7 +219,6 @@ func (d *pxbackup) CreateOrganization(orgName string) error {
 		},
 	}
 
-	fmt.Printf("calling create organization\n")
 	_, err := org.Create(context.Background(), req)
 	if err != nil {
 		fmt.Printf("Unable to create organization %v\n", err)
@@ -251,7 +238,6 @@ func (d *pxbackup) GetOrganization() error {
 }
 
 func (d *pxbackup) CreateCloudCredential(orgID string, name string) error {
-	fmt.Printf("In CreateCloudCredential\n")
 	cc := d.getCloudCredentialManager()
 	req := &api.CloudCredentialCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -276,8 +262,26 @@ func (d *pxbackup) CreateCloudCredential(orgID string, name string) error {
 	return err
 }
 
+func (d *pxbackup) InspectCloudCredential(orgID string, name string) (*api.CloudCredentialInspectResponse, error) {
+	cc := d.getCloudCredentialManager()
+	resp, err := cc.Inspect(
+		context.Background(),
+		&api.CloudCredentialInspectRequest{Name: name, OrgId: orgID},
+	)
+	return resp, err
+}
+
+func (d *pxbackup) EnumerateCloudCredential(orgID string) (*api.CloudCredentialEnumerateResponse, error) {
+	cc := d.getCloudCredentialManager()
+	resp, err := cc.Enumerate(
+		context.Background(),
+		&api.CloudCredentialEnumerateRequest{OrgId: orgID},
+	)
+
+	return resp, err
+}
+
 func (d *pxbackup) DeleteCloudCredential(orgID string, name string) error {
-	fmt.Printf("In CreateCloudCredential\n")
 	cc := d.getCloudCredentialManager()
 	req := &api.CloudCredentialDeleteRequest{
 		Name:  name,
@@ -291,73 +295,183 @@ func (d *pxbackup) DeleteCloudCredential(orgID string, name string) error {
 	return nil
 }
 
-func (d *pxbackup) CreateCluster(orgID string, name string, cloudCredntial string) error {
-	return nil
-}
-
-func (d *pxbackup) GetCluster(OrgID string) error {
-	return nil
-}
-
-func (d *pxbackup) DeleteCluster(orgID string, name string) error {
-	return nil
-}
-
-func (d *pxbackup) CreateBackupLocation(orgID string, name string, cloudCredential string, path string) error {
-	return nil
-}
-
-func (d *pxbackup) GetBackupLocation(orgID string, name string) error {
-	return nil
-}
-
-func (d *pxbackup) DeleteBackupLocation(orgID string, name string) error {
-	return nil
-}
-
-func (d *pxbackup) CreateBackup(orgID string, name string, backupLocation string, cluster string) error {
-	return nil
-}
-
-func (d *pxbackup) GetBackupList(orgID string) error {
-	return nil
-}
-
-func (d *pxbackup) InspectBackup(orgID string, name string) error {
-	return nil
-}
-
-func (d *pxbackup) DeleteBackup(orgID string, name string) error {
-	return nil
-}
-
-/*
-func (d *pxbackup) CreateCluster(name string, orgID string, labels map[string]string) {
-	fmt.Printf("In CreateCluster\n")
-	cc := d.getCloudCredentialManager()
-	req := &api.CloudCredentialCreateRequest{
+func (d *pxbackup) CreateCluster(name string, orgID string, labels map[string]string, cloudCredential string, pxToken string, config string) (*api.ClusterCreateResponse, error) {
+	cluster := d.getClusterManager()
+	req := &api.ClusterCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
-			Name:  "abc",
-			OrgId: "abc123",
+			Name:   name,
+			OrgId:  orgID,
+			Labels: labels,
 		},
-		CloudCredential: &api.CloudCredentialInfo{},
+		Cluster: &api.ClusterInfo{
+			PxConfig: &api.PXConfig{
+				AccessToken: pxToken,
+			},
+			Kubeconfig:      config,
+			CloudCredential: cloudCredential,
+		},
+	}
+	resp, err := cluster.Create(context.Background(), req)
+	if err != nil {
+		fmt.Printf("Unable to create cluster %v\n", err)
+	}
+	return resp, err
+}
+
+func (d *pxbackup) InspectCluster(orgID string, name string) (*api.ClusterInspectResponse, error) {
+	cluster := d.getClusterManager()
+	resp, err := cluster.Inspect(
+		context.Background(),
+		&api.ClusterInspectRequest{OrgId: orgID, Name: name},
+	)
+	return resp, err
+}
+
+func (d *pxbackup) EnumerateCluster(orgID string) (*api.ClusterEnumerateResponse, error) {
+	cluster := d.getClusterManager()
+	resp, err := cluster.Enumerate(
+		context.Background(),
+		&api.ClusterEnumerateRequest{OrgId: orgID},
+	)
+	return resp, err
+}
+
+func (d *pxbackup) DeleteCluster(orgID string, name string) (*api.ClusterDeleteResponse, error) {
+	cluster := d.getClusterManager()
+	resp, err := cluster.Delete(
+		context.Background(),
+		&api.ClusterDeleteRequest{OrgId: orgID, Name: name},
+	)
+	return resp, err
+}
+
+func (d *pxbackup) CreateBackupLocation(orgID string, name string, cloudCredential string,
+	path string, encKey string, provider string, s3Endpoint string,
+	s3Region string, disableSsl bool, disablePathStyle bool) (*api.BackupLocationCreateResponse, error) {
+	bl := d.getBackupLocationManager()
+	req := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          path,
+			EncryptionKey: encKey,
+		},
 	}
 
-	req.CloudCredential.Type = api.CloudCredentialInfo_AWS
-	req.CloudCredential.Config = &api.CloudCredentialInfo_AwsConfig{
-		AwsConfig: &api.AWSConfig{
-			AccessKey: awsAccessKey,
-			SecretKey: awsSecretKey,
-		},
+	switch provider {
+	case "s3":
+		req.BackupLocation.Config = &api.BackupLocationInfo_S3Config{
+			S3Config: &api.S3Config{
+				Endpoint:         s3Endpoint,
+				Region:           s3Region,
+				DisableSsl:       disableSsl,
+				DisablePathStyle: disablePathStyle,
+			},
+		}
+		req.BackupLocation.Type = api.BackupLocationInfo_S3
+	case "azure":
+		req.BackupLocation.Type = api.BackupLocationInfo_Azure
+	case "google":
+		req.BackupLocation.Type = api.BackupLocationInfo_Google
+	default:
+		fmt.Printf("provider needs to be either azure, google or s3")
 	}
-	fmt.Printf("calling create cloud credential\n")
-	_, err := cc.Create(context.Background(), req)
-	if err != nil {
-		fmt.Printf("Unable to create credential %v\n", err)
-	}
-	return
+	req.BackupLocation.CloudCredential = cloudCredential
+	status, err := bl.Create(context.Background(), req)
+	return status, err
 }
-*/
+
+func (d *pxbackup) EnumerateBackupLocation(orgID string) (*api.BackupLocationEnumerateResponse, error) {
+	bl := d.getBackupLocationManager()
+	resp, err := bl.Enumerate(
+		context.Background(),
+		&api.BackupLocationEnumerateRequest{
+			OrgId: orgID,
+		},
+	)
+	return resp, err
+}
+
+func (d *pxbackup) InspectBackupLocation(orgID string, name string) (*api.BackupLocationInspectResponse, error) {
+	bl := d.getBackupLocationManager()
+	resp, err := bl.Inspect(
+		context.Background(),
+		&api.BackupLocationInspectRequest{
+			Name:  name,
+			OrgId: orgID,
+		},
+	)
+	return resp, err
+}
+
+func (d *pxbackup) DeleteBackupLocation(orgID string, name string) (*api.BackupLocationDeleteResponse, error) {
+	bl := d.getBackupLocationManager()
+	status, err := bl.Delete(
+		context.Background(),
+		&api.BackupLocationDeleteRequest{
+			Name:  name,
+			OrgId: orgID,
+		},
+	)
+	return status, err
+}
+
+func (d *pxbackup) CreateBackup(orgID string, name string, backupLocation string, clusterName string, owner string, nameSpaces []string, labels map[string]string) (*api.BackupCreateResponse, error) {
+	backup := d.getBackupManager()
+	req := &api.BackupCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Owner: owner,
+			Labels: labels,
+		},
+		BackupLocation: backupLocation,
+		Cluster: clusterName,
+		Namespaces: nameSpaces, 
+	}
+
+	resp, err := backup.Create(context.Background(), req)
+
+	return resp, err
+}
+
+
+func (d *pxbackup) EnumerateBackup(orgID string) (*api.BackupEnumerateResponse, error) {
+	backup := d.getBackupManager()
+	resp, err := backup.Enumerate(
+		context.Background(),
+		&api.BackupEnumerateRequest{
+			OrgId: orgID,
+		},
+	)
+	return resp, err
+}
+
+func (d *pxbackup) InspectBackup(orgID string, name string) (*api.BackupInspectResponse, error) {
+	backup := d.getBackupManager()
+	resp, err := backup.Inspect(
+		context.Background(),
+		&api.BackupInspectRequest{
+			OrgId: orgID,
+			Name: name,
+		},
+	)
+	return resp, err
+}
+
+func (d *pxbackup) DeleteBackup(orgID string, name string) (*api.BackupDeleteResponse, error) {
+	backup := d.getBackupManager()
+	resp, err := backup.Delete(
+		context.Background(),
+		&api.BackupDeleteRequest{
+			OrgId: orgID,
+			Name: name,
+		},
+	)
+	return resp, err
+}
 
 func init() {
 	fmt.Printf("BackupDriver init called\n")

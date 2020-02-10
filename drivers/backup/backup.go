@@ -3,6 +3,7 @@ package backup
 import (
 	"fmt"
 
+	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -29,38 +30,51 @@ type Driver interface {
 	// CreateCloudCredential creates cloud credential objects
 	CreateCloudCredential(orgID string, name string) error
 
+	// InspectCloudCredential describes the cloud credential
+	InspectCloudCredential(orgID string, name string) (*api.CloudCredentialInspectResponse, error)
+
+	// EnumerateCloudCredential lists the cloud credentials for given Org
+	EnumerateCloudCredential(orgID string) (*api.CloudCredentialEnumerateResponse, error)
+
 	// DeletrCloudCredential deletes a cloud credential object
 	DeleteCloudCredential(orgID string, name string) error
 
 	// CreateCluster creates a cluste object
-	CreateCluster(orgID string, name string, cloudCredntial string) error
+	CreateCluster(name string, orgID string, labels map[string]string, cloudCredential string, pxToken string, config string) (*api.ClusterCreateResponse, error)
 
-	// GetCluster enumerates the cluster objects
-	GetCluster(OrgID string) error
+	// EnumerateCluster enumerates the cluster objects
+	EnumerateCluster(OrgID string) (*api.ClusterEnumerateResponse, error)
+
+	// InsepctCluster describes a cluster
+	InspectCluster(OrgID string, name string) (*api.ClusterInspectResponse, error)
 
 	// DeleteCluster deletes a cluster object
-	DeleteCluster(orgID string, name string) error
+	DeleteCluster(orgID string, name string) (*api.ClusterDeleteResponse, error)
 
 	// CreateBackupLocation creates backup location object
-	CreateBackupLocation(orgID string, name string, cloudCredential string, path string) error
+	CreateBackupLocation(orgID string, name string, cloudCredential string, path string, encKey string,
+		provider string, s3Endpoint string, s3Region string, disableSsl bool, disablePathStyle bool) (*api.BackupLocationCreateResponse, error)
 
-	// GetBackupLocation enumerates backup location objects
-	GetBackupLocation(orgID string, name string) error
+	// EnumerateBackupLocation lists backup locations for an org
+	EnumerateBackupLocation(orgID string) (*api.BackupLocationEnumerateResponse, error)
+
+	// InspectBackupLocation enumerates backup location objects
+	InspectBackupLocation(orgID string, name string) (*api.BackupLocationInspectResponse, error)
 
 	// DeleteBackupLocation deletes backup location objects
-	DeleteBackupLocation(orgID string, name string) error
+	DeleteBackupLocation(orgID string, name string) (*api.BackupLocationDeleteResponse, error)
 
 	// CreateBackup creates backup
-	CreateBackup(orgID string, name string, backupLocation string, cluster string) error
+	CreateBackup(orgID string, name string, backupLocation string, clusterName string, owner string, nameSpaces []string, labels map[string]string) (*api.BackupCreateResponse, error)
 
-	// GetBackupList enumerates backup objects
-	GetBackupList(orgID string) error
+	// EnumerateBackup enumerates backup objects
+	EnumerateBackup(orgID string) (*api.BackupEnumerateResponse, error)
 
 	// InspectBackup inspects a backup object
-	InspectBackup(orgID string, name string) error
+	InspectBackup(orgID string, name string) (*api.BackupInspectResponse, error)
 
 	// DeleteBackup deletes backup
-	DeleteBackup(orgID string, name string) error
+	DeleteBackup(orgID string, name string) (*api.BackupDeleteResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)
