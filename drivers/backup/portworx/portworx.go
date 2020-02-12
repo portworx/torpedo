@@ -14,11 +14,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	// import ssh to invoke init
-	_ "github.com/portworx/torpedo/drivers/node/ssh"
+	//_ "github.com/portworx/torpedo/drivers/node/ssh"
 	// import scheduler k8s
-	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	//_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	// import portworx volume
-	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	//_ "github.com/portworx/torpedo/drivers/volume/portworx"
 )
 
 const (
@@ -30,11 +30,9 @@ const (
 	schedulerDriverName   = "k8s"
 	nodeDriverName        = "ssh"
 	volumeDriverName      = "pxd"
-	awsAccessKey          = "CT6R80D3ST0VW9NY6HYP"
-	awsSecretKey          = "a0V6dPqu8C26KbAsa9qsIrfhsbvyGjjPPmZN2qD4"
 )
 
-type pxbackup struct {
+type portworx struct {
 	clusterManager         api.ClusterClient
 	backupLocationManager  api.BackupLocationClient
 	cloudCredentialManager api.CloudCredentialClient
@@ -53,74 +51,73 @@ type pxbackup struct {
 	token           string
 }
 
-func (d *pxbackup) String() string {
+func (p *portworx) String() string {
 	return driverName
 }
 
-func (d *pxbackup) Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error {
+func (p *portworx) Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error {
 	var err error
 
 	logrus.Infof("using portworx px-backup driver under scheduler: %v", schedulerDriverName)
 
-	d.nodeDriver, err = node.Get(nodeDriverName)
-	d.token = token
-
+	p.nodeDriver, err = node.Get(nodeDriverName)
 	if err != nil {
 		return err
 	}
+	p.token = token
 
-	d.schedulerDriver, err = scheduler.Get(schedulerDriverName)
+	p.schedulerDriver, err = scheduler.Get(schedulerDriverName)
 	if err != nil {
 		return fmt.Errorf("Error getting scheduler driver %v: %v", schedulerDriverName, err)
 	}
 
-	d.volumeDriver, err = volume.Get(volumeDriverName)
+	p.volumeDriver, err = volume.Get(volumeDriverName)
 	if err != nil {
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 
-	if err = d.setDriver(pxbServiceName, pxbNameSpace); err != nil {
-		return fmt.Errorf("Error setting px-backup endpoint")
+	if err = p.setDriver(pxbServiceName, pxbNameSpace); err != nil {
+		return fmt.Errorf("Error setting px-backup endpoint: %v", err)
 	}
 
-	return nil
+	return err
 
 }
 
-func (d *pxbackup) constructURL(ip string) string {
+func (p *portworx) constructURL(ip string) string {
 	return fmt.Sprintf("%s:%d", ip, defaultPxbServicePort)
 }
 
-func (d *pxbackup) testAndSetEndpoint(endpoint string) error {
-	pxEndpoint := d.constructURL(endpoint)
+func (p *portworx) testAndSetEndpoint(endpoint string) error {
+	pxEndpoint := p.constructURL(endpoint)
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
-		fmt.Printf("unable to get grpc connection\n")
+		logrus.Errorf("unable to get grpc connection: %v", err)
 		return err
 	}
 
-	d.healthManager = api.NewHealthClient(conn)
-	_, err = d.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
+	p.healthManager = api.NewHealthClient(conn)
+	_, err = p.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
 	if err != nil {
-		fmt.Printf("HealthManager API error %v\n", err)
+		logrus.Errorf("HealthManager API error: %v", err)
 		return err
 	}
 
-	d.clusterManager = api.NewClusterClient(conn)
-	d.backupLocationManager = api.NewBackupLocationClient(conn)
-	d.cloudCredentialManager = api.NewCloudCredentialClient(conn)
-	d.backupManger = api.NewBackupClient(conn)
-	d.restoreManager = api.NewRestoreClient(conn)
-	d.backupScheduleManager = api.NewBackupScheduleClient(conn)
-	d.schedulePolicyManager = api.NewSchedulePolicyClient(conn)
-	d.organizationManager = api.NewOrganizationClient(conn)
+	p.clusterManager = api.NewClusterClient(conn)
+	p.backupLocationManager = api.NewBackupLocationClient(conn)
+	p.cloudCredentialManager = api.NewCloudCredentialClient(conn)
+	p.backupManger = api.NewBackupClient(conn)
+	p.restoreManager = api.NewRestoreClient(conn)
+	p.backupScheduleManager = api.NewBackupScheduleClient(conn)
+	p.schedulePolicyManager = api.NewSchedulePolicyClient(conn)
+	p.organizationManager = api.NewOrganizationClient(conn)
 
-	fmt.Printf("Using %v as endpoint for portworx backup driver", pxEndpoint)
+	logrus.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
-	return nil
+	return err
 }
 
-func (d *pxbackup) GetServiceEndpoint(serviceName string, nameSpace string) (string, error) {
+func (p *portworx) GetServiceEndpoint(serviceName string, nameSpace string) (string, error) {
 	svc, err := core.Instance().GetService(serviceName, nameSpace)
 	if err == nil {
 		return svc.Spec.ClusterIP, nil
@@ -128,121 +125,238 @@ func (d *pxbackup) GetServiceEndpoint(serviceName string, nameSpace string) (str
 	return "", err
 }
 
-func (d *pxbackup) setDriver(serviceName string, nameSpace string) error {
+func (p *portworx) setDriver(serviceName string, nameSpace string) error {
 	var err error
 	var endpoint string
 
-	endpoint, err = d.GetServiceEndpoint(serviceName, nameSpace)
+	endpoint, err = p.GetServiceEndpoint(serviceName, nameSpace)
 	if err == nil && endpoint != "" {
-		if err = d.testAndSetEndpoint(endpoint); err == nil {
-			d.refreshEndpoint = false
+		if err = p.testAndSetEndpoint(endpoint); err == nil {
+			p.refreshEndpoint = false
 			return nil
 		}
 	} else if err != nil && len(node.GetWorkerNodes()) == 0 {
 		return err
 	}
 
-	d.refreshEndpoint = true
-	logrus.Infof("Getting new backup driver")
+	p.refreshEndpoint = true
 	for _, n := range node.GetWorkerNodes() {
 		for _, addr := range n.Addresses {
-			if err = d.testAndSetEndpoint(addr); err == nil {
+			if err = p.testAndSetEndpoint(addr); err == nil {
 				return nil
 			}
 		}
 	}
 
-	return fmt.Errorf("failed to get endpoint for portworx backup driver")
+	return fmt.Errorf("failed to get endpoint for portworx backup driver: %v", err)
 }
 
-func (d *pxbackup) getOrganizationManager() api.OrganizationClient {
-	if d.refreshEndpoint {
-		d.setDriver(pxbServiceName, pxbNameSpace)
+func (p *portworx) getOrganizationManager() api.OrganizationClient {
+	if p.refreshEndpoint {
+		p.setDriver(pxbServiceName, pxbNameSpace)
 	}
-	return d.organizationManager
+	return p.organizationManager
 }
 
-func (d *pxbackup) getClusterManager() api.ClusterClient {
-	if d.refreshEndpoint {
-		d.setDriver(pxbServiceName, pxbNameSpace)
+func (p *portworx) getClusterManager() api.ClusterClient {
+	if p.refreshEndpoint {
+		p.setDriver(pxbServiceName, pxbNameSpace)
 	}
-	return d.clusterManager
+	return p.clusterManager
 }
 
-func (d *pxbackup) getBackupLocationManager() api.BackupLocationClient {
-	if d.refreshEndpoint {
-		d.setDriver(pxbServiceName, pxbNameSpace)
+func (p *portworx) getBackupLocationManager() api.BackupLocationClient {
+	if p.refreshEndpoint {
+		p.setDriver(pxbServiceName, pxbNameSpace)
 	}
-	return d.backupLocationManager
+	return p.backupLocationManager
 }
 
-func (d *pxbackup) getCloudCredentialManager() api.CloudCredentialClient {
-	if d.refreshEndpoint {
-		d.setDriver(pxbServiceName, pxbNameSpace)
+func (p *portworx) getCloudCredentialManager() api.CloudCredentialClient {
+	if p.refreshEndpoint {
+		p.setDriver(pxbServiceName, pxbNameSpace)
 	}
-	return d.cloudCredentialManager
+	return p.cloudCredentialManager
 }
 
-func (d *pxbackup) getBackupManager() api.BackupClient {
-	if d.refreshEndpoint {
-		d.setDriver(pxbServiceName, pxbNameSpace)
+func (p *portworx) getBackupManager() api.BackupClient {
+	if p.refreshEndpoint {
+		p.setDriver(pxbServiceName, pxbNameSpace)
 	}
-	return d.backupManger
+	return p.backupManger
 }
 
-func (d *pxbackup) getRestoreManager() api.RestoreClient {
-	if d.refreshEndpoint {
-		d.setDriver(pxbServiceName, pxbNameSpace)
+func (p *portworx) getRestoreManager() api.RestoreClient {
+	if p.refreshEndpoint {
+		p.setDriver(pxbServiceName, pxbNameSpace)
 	}
-	return d.restoreManager
+	return p.restoreManager
 }
 
-func (d *pxbackup) getBackupScheduleManager() api.BackupScheduleClient {
-	if d.refreshEndpoint {
-		d.setDriver(pxbServiceName, pxbNameSpace)
+func (p *portworx) getBackupScheduleManager() api.BackupScheduleClient {
+	if p.refreshEndpoint {
+		p.setDriver(pxbServiceName, pxbNameSpace)
 	}
-	return d.backupScheduleManager
+	return p.backupScheduleManager
 }
 
-func (d *pxbackup) getSchedulePolicyManager() api.SchedulePolicyClient {
-	if d.refreshEndpoint {
-		d.setDriver(pxbServiceName, pxbNameSpace)
+func (p *portworx) getSchedulePolicyManager() api.SchedulePolicyClient {
+	if p.refreshEndpoint {
+		p.setDriver(pxbServiceName, pxbNameSpace)
 	}
-	return d.schedulePolicyManager
+	return p.schedulePolicyManager
 }
 
-func (d *pxbackup) CreateOrganization(orgName string) error {
-	org := d.getOrganizationManager()
+func (p *portworx) getOrgID(params *backup.Request) string {
+	if params != nil && params.OrgID != "" {
+		return params.OrgID
+	}
+	return ""
+}
+
+func (p *portworx) getCloudCredentialName(params *backup.Request) string {
+	if params != nil && params.CloudCredentialName != "" {
+		return params.CloudCredentialName
+	}
+	return ""
+}
+
+func (p *portworx) getBackupLocationName(params *backup.Request) string {
+	if params != nil && params.BackupLocationName != "" {
+		return params.BackupLocationName
+	}
+	return ""
+}
+
+func (p *portworx) getClusterName(params *backup.Request) string {
+	if params != nil && params.ClusterName != "" {
+		return params.ClusterName
+	}
+	return ""
+}
+
+func (p *portworx) getBackupName(params *backup.Request) string {
+	if params != nil && params.BackupName != "" {
+		return params.BackupName
+	}
+	return ""
+}
+
+func (p *portworx) getNameSpaces(params *backup.Request) []string {
+	return params.NameSpaces
+}
+
+func (p *portworx) getLabels(params *backup.Request) map[string]string {
+	return params.Labels
+}
+
+func (p *portworx) getToken(params *backup.Request) string {
+	if params != nil && params.Token != "" {
+		return params.Token
+	}
+	return ""
+}
+
+func (p *portworx) getKubeconfig(params *backup.Request) string {
+	if params != nil && params.Kubeconfig != "" {
+		return params.Kubeconfig
+	}
+	return ""
+}
+
+func (p *portworx) getBackupLocationPath(params *backup.Request) string {
+	if params != nil && params.BackupLocationPath != "" {
+		return params.BackupLocationPath
+	}
+	return ""
+}
+
+func (p *portworx) getEncKey(params *backup.Request) string {
+	if params != nil && params.EncKey != "" {
+		return params.EncKey
+	}
+	return ""
+}
+
+func (p *portworx) getProvider(params *backup.Request) string {
+	if params != nil && params.Provider != "" {
+		return params.Provider
+	}
+	return ""
+}
+
+func (p *portworx) getS3Endpoint(params *backup.Request) string {
+	if params != nil && params.S3Endpoint != "" {
+		return params.S3Endpoint
+	}
+	return ""
+}
+
+func (p *portworx) getS3Region(params *backup.Request) string {
+	if params != nil && params.S3Region != "" {
+		return params.S3Region
+	}
+	return ""
+}
+
+func (p *portworx) getOwner(params *backup.Request) string {
+	if params != nil && params.Owner != "" {
+		return params.Owner
+	}
+	return ""
+}
+
+func (p *portworx) getDisableSsl(params *backup.Request) bool {
+	if params != nil {
+		return params.DisableSsl
+	}
+	return true
+}
+
+func (p *portworx) getDisablePathStyle(params *backup.Request) bool {
+	if params != nil {
+		return params.DisablePathStyle
+	}
+	return true
+}
+
+func (p *portworx) getAccessKey(params *backup.Request) string {
+	if params != nil && params.AccessKey != "" {
+		return params.AccessKey
+	}
+	return ""
+}
+
+func (p *portworx) getSecretKey(params *backup.Request) string {
+	if params != nil && params.SecretKey != "" {
+		return params.SecretKey
+	}
+	return ""
+}
+
+func (p *portworx) CreateOrganization(params *backup.Request) (*api.OrganizationCreateResponse, error) {
+	org := p.getOrganizationManager()
 	req := &api.OrganizationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
-			Name: orgName,
+			Name: p.getOrgID(params),
 		},
 	}
-
-	_, err := org.Create(context.Background(), req)
-	if err != nil {
-		fmt.Printf("Unable to create organization %v\n", err)
-	}
-	return nil
+	return org.Create(context.Background(), req)
 }
 
-func (d *pxbackup) GetOrganization() error {
-	org := d.getOrganizationManager()
+func (p *portworx) EnumerateOrganization() (*api.OrganizationEnumerateResponse, error) {
+	org := p.getOrganizationManager()
 	req := &api.OrganizationEnumerateRequest{}
 
-	_, err := org.Enumerate(context.Background(), req)
-	if err != nil {
-		fmt.Printf("unable to get org %v\n", err)
-	}
-	return nil
+	return org.Enumerate(context.Background(), req)
 }
 
-func (d *pxbackup) CreateCloudCredential(orgID string, name string) error {
-	cc := d.getCloudCredentialManager()
+func (p *portworx) CreateCloudCredential(params *backup.Request) (*api.CloudCredentialCreateResponse, error) {
+	cc := p.getCloudCredentialManager()
 	req := &api.CloudCredentialCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
-			Name:  name,
-			OrgId: orgID,
+			Name:  p.getCloudCredentialName(params),
+			OrgId: p.getOrgID(params),
 		},
 		CloudCredential: &api.CloudCredentialInfo{},
 	}
@@ -250,124 +364,113 @@ func (d *pxbackup) CreateCloudCredential(orgID string, name string) error {
 	req.CloudCredential.Type = api.CloudCredentialInfo_AWS
 	req.CloudCredential.Config = &api.CloudCredentialInfo_AwsConfig{
 		AwsConfig: &api.AWSConfig{
-			AccessKey: awsAccessKey,
-			SecretKey: awsSecretKey,
+			AccessKey: p.getAccessKey(params),
+			SecretKey: p.getSecretKey(params),
 		},
 	}
-
-	_, err := cc.Create(context.Background(), req)
-	if err != nil {
-		fmt.Printf("Unable to create credential %v\n", err)
-	}
-	return err
+	return cc.Create(context.Background(), req)
 }
 
-func (d *pxbackup) InspectCloudCredential(orgID string, name string) (*api.CloudCredentialInspectResponse, error) {
-	cc := d.getCloudCredentialManager()
+func (p *portworx) InspectCloudCredential(params *backup.Request) (*api.CloudCredentialInspectResponse, error) {
+	cc := p.getCloudCredentialManager()
 	resp, err := cc.Inspect(
 		context.Background(),
-		&api.CloudCredentialInspectRequest{Name: name, OrgId: orgID},
+		&api.CloudCredentialInspectRequest{
+			Name:  p.getCloudCredentialName(params),
+			OrgId: p.getOrgID(params),
+		},
 	)
 	return resp, err
 }
 
-func (d *pxbackup) EnumerateCloudCredential(orgID string) (*api.CloudCredentialEnumerateResponse, error) {
-	cc := d.getCloudCredentialManager()
+func (p *portworx) EnumerateCloudCredential(params *backup.Request) (*api.CloudCredentialEnumerateResponse, error) {
+	cc := p.getCloudCredentialManager()
 	resp, err := cc.Enumerate(
 		context.Background(),
-		&api.CloudCredentialEnumerateRequest{OrgId: orgID},
+		&api.CloudCredentialEnumerateRequest{OrgId: p.getOrgID(params)},
 	)
-
 	return resp, err
 }
 
-func (d *pxbackup) DeleteCloudCredential(orgID string, name string) error {
-	cc := d.getCloudCredentialManager()
+func (p *portworx) DeleteCloudCredential(params *backup.Request) (*api.CloudCredentialDeleteResponse, error) {
+	cc := p.getCloudCredentialManager()
 	req := &api.CloudCredentialDeleteRequest{
-		Name:  name,
-		OrgId: orgID,
+		Name:  p.getCloudCredentialName(params),
+		OrgId: p.getOrgID(params),
 	}
-
-	_, err := cc.Delete(context.Background(), req)
-	if err != nil {
-		fmt.Printf("Unable to delete credential %v\n", err)
-	}
-	return nil
+	return cc.Delete(context.Background(), req)
 }
 
-func (d *pxbackup) CreateCluster(name string, orgID string, labels map[string]string, cloudCredential string, pxToken string, config string) (*api.ClusterCreateResponse, error) {
-	cluster := d.getClusterManager()
+func (p *portworx) CreateCluster(params *backup.Request) (*api.ClusterCreateResponse, error) {
+	cluster := p.getClusterManager()
 	req := &api.ClusterCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
-			Name:   name,
-			OrgId:  orgID,
-			Labels: labels,
+			Name:   p.getClusterName(params),
+			OrgId:  p.getOrgID(params),
+			Labels: p.getLabels(params),
 		},
 		Cluster: &api.ClusterInfo{
 			PxConfig: &api.PXConfig{
-				AccessToken: pxToken,
+				AccessToken: p.getToken(params),
 			},
-			Kubeconfig:      config,
-			CloudCredential: cloudCredential,
+			Kubeconfig:      p.getKubeconfig(params),
+			CloudCredential: p.getCloudCredentialName(params),
 		},
 	}
-	resp, err := cluster.Create(context.Background(), req)
-	if err != nil {
-		fmt.Printf("Unable to create cluster %v\n", err)
-	}
-	return resp, err
+	return cluster.Create(context.Background(), req)
 }
 
-func (d *pxbackup) InspectCluster(orgID string, name string) (*api.ClusterInspectResponse, error) {
-	cluster := d.getClusterManager()
-	resp, err := cluster.Inspect(
+func (p *portworx) InspectCluster(params *backup.Request) (*api.ClusterInspectResponse, error) {
+	cluster := p.getClusterManager()
+	return cluster.Inspect(
 		context.Background(),
-		&api.ClusterInspectRequest{OrgId: orgID, Name: name},
+		&api.ClusterInspectRequest{
+			OrgId: p.getOrgID(params),
+			Name:  p.getClusterName(params),
+		},
 	)
-	return resp, err
 }
 
-func (d *pxbackup) EnumerateCluster(orgID string) (*api.ClusterEnumerateResponse, error) {
-	cluster := d.getClusterManager()
-	resp, err := cluster.Enumerate(
+func (p *portworx) EnumerateCluster(params *backup.Request) (*api.ClusterEnumerateResponse, error) {
+	cluster := p.getClusterManager()
+	return cluster.Enumerate(
 		context.Background(),
-		&api.ClusterEnumerateRequest{OrgId: orgID},
+		&api.ClusterEnumerateRequest{OrgId: p.getOrgID(params)},
 	)
-	return resp, err
 }
 
-func (d *pxbackup) DeleteCluster(orgID string, name string) (*api.ClusterDeleteResponse, error) {
-	cluster := d.getClusterManager()
-	resp, err := cluster.Delete(
+func (p *portworx) DeleteCluster(params *backup.Request) (*api.ClusterDeleteResponse, error) {
+	cluster := p.getClusterManager()
+	return cluster.Delete(
 		context.Background(),
-		&api.ClusterDeleteRequest{OrgId: orgID, Name: name},
+		&api.ClusterDeleteRequest{
+			OrgId: p.getOrgID(params),
+			Name:  p.getClusterName(params),
+		},
 	)
-	return resp, err
 }
 
-func (d *pxbackup) CreateBackupLocation(orgID string, name string, cloudCredential string,
-	path string, encKey string, provider string, s3Endpoint string,
-	s3Region string, disableSsl bool, disablePathStyle bool) (*api.BackupLocationCreateResponse, error) {
-	bl := d.getBackupLocationManager()
+func (p *portworx) CreateBackupLocation(params *backup.Request) (*api.BackupLocationCreateResponse, error) {
+	bl := p.getBackupLocationManager()
 	req := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
-			Name:  name,
-			OrgId: orgID,
+			Name:  p.getBackupLocationName(params),
+			OrgId: p.getOrgID(params),
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          path,
-			EncryptionKey: encKey,
+			Path:          p.getBackupLocationPath(params),
+			EncryptionKey: p.getEncKey(params),
 		},
 	}
 
-	switch provider {
+	switch p.getProvider(params) {
 	case "s3":
 		req.BackupLocation.Config = &api.BackupLocationInfo_S3Config{
 			S3Config: &api.S3Config{
-				Endpoint:         s3Endpoint,
-				Region:           s3Region,
-				DisableSsl:       disableSsl,
-				DisablePathStyle: disablePathStyle,
+				Endpoint:         p.getS3Endpoint(params),
+				Region:           p.getS3Region(params),
+				DisableSsl:       p.getDisableSsl(params),
+				DisablePathStyle: p.getDisablePathStyle(params),
 			},
 		}
 		req.BackupLocation.Type = api.BackupLocationInfo_S3
@@ -376,102 +479,93 @@ func (d *pxbackup) CreateBackupLocation(orgID string, name string, cloudCredenti
 	case "google":
 		req.BackupLocation.Type = api.BackupLocationInfo_Google
 	default:
-		fmt.Printf("provider needs to be either azure, google or s3")
+		logrus.Errorf("provider needs to be either azure, google or s3")
 	}
-	req.BackupLocation.CloudCredential = cloudCredential
-	status, err := bl.Create(context.Background(), req)
-	return status, err
+	req.BackupLocation.CloudCredential = p.getCloudCredentialName(params)
+	return bl.Create(context.Background(), req)
 }
 
-func (d *pxbackup) EnumerateBackupLocation(orgID string) (*api.BackupLocationEnumerateResponse, error) {
-	bl := d.getBackupLocationManager()
-	resp, err := bl.Enumerate(
+func (p *portworx) EnumerateBackupLocation(params *backup.Request) (*api.BackupLocationEnumerateResponse, error) {
+	bl := p.getBackupLocationManager()
+	return bl.Enumerate(
 		context.Background(),
 		&api.BackupLocationEnumerateRequest{
-			OrgId: orgID,
+			OrgId: p.getOrgID(params),
 		},
 	)
-	return resp, err
 }
 
-func (d *pxbackup) InspectBackupLocation(orgID string, name string) (*api.BackupLocationInspectResponse, error) {
-	bl := d.getBackupLocationManager()
-	resp, err := bl.Inspect(
+func (p *portworx) InspectBackupLocation(params *backup.Request) (*api.BackupLocationInspectResponse, error) {
+	bl := p.getBackupLocationManager()
+	return bl.Inspect(
 		context.Background(),
 		&api.BackupLocationInspectRequest{
-			Name:  name,
-			OrgId: orgID,
+			Name:  p.getBackupLocationName(params),
+			OrgId: p.getOrgID(params),
 		},
 	)
-	return resp, err
 }
 
-func (d *pxbackup) DeleteBackupLocation(orgID string, name string) (*api.BackupLocationDeleteResponse, error) {
-	bl := d.getBackupLocationManager()
-	status, err := bl.Delete(
+func (p *portworx) DeleteBackupLocation(params *backup.Request) (*api.BackupLocationDeleteResponse, error) {
+	bl := p.getBackupLocationManager()
+	return bl.Delete(
 		context.Background(),
 		&api.BackupLocationDeleteRequest{
-			Name:  name,
-			OrgId: orgID,
+			Name:  p.getBackupLocationName(params),
+			OrgId: p.getOrgID(params),
 		},
 	)
-	return status, err
 }
 
-func (d *pxbackup) CreateBackup(orgID string, name string, backupLocation string, clusterName string, owner string, nameSpaces []string, labels map[string]string) (*api.BackupCreateResponse, error) {
-	backup := d.getBackupManager()
+func (p *portworx) CreateBackup(params *backup.Request) (*api.BackupCreateResponse, error) {
+	backup := p.getBackupManager()
 	req := &api.BackupCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
-			Name:   name,
-			OrgId:  orgID,
-			Owner:  owner,
-			Labels: labels,
+			Name:   p.getBackupName(params),
+			OrgId:  p.getOrgID(params),
+			Owner:  p.getOwner(params),
+			Labels: p.getLabels(params),
 		},
-		BackupLocation: backupLocation,
-		Cluster:        clusterName,
-		Namespaces:     nameSpaces,
+		BackupLocation: p.getBackupLocationName(params),
+		Cluster:        p.getClusterName(params),
+		Namespaces:     p.getNameSpaces(params),
 	}
 
-	resp, err := backup.Create(context.Background(), req)
-
-	return resp, err
+	return backup.Create(context.Background(), req)
 }
 
-func (d *pxbackup) EnumerateBackup(orgID string) (*api.BackupEnumerateResponse, error) {
-	backup := d.getBackupManager()
-	resp, err := backup.Enumerate(
+func (p *portworx) EnumerateBackup(params *backup.Request) (*api.BackupEnumerateResponse, error) {
+	backup := p.getBackupManager()
+	return backup.Enumerate(
 		context.Background(),
 		&api.BackupEnumerateRequest{
-			OrgId: orgID,
+			OrgId: p.getOrgID(params),
 		},
 	)
-	return resp, err
 }
 
-func (d *pxbackup) InspectBackup(orgID string, name string) (*api.BackupInspectResponse, error) {
-	backup := d.getBackupManager()
-	resp, err := backup.Inspect(
+func (p *portworx) InspectBackup(params *backup.Request) (*api.BackupInspectResponse, error) {
+	backup := p.getBackupManager()
+	return backup.Inspect(
 		context.Background(),
 		&api.BackupInspectRequest{
-			OrgId: orgID,
-			Name:  name,
+			OrgId: p.getOrgID(params),
+			Name:  p.getBackupName(params),
 		},
 	)
-	return resp, err
 }
 
-func (d *pxbackup) DeleteBackup(orgID string, name string) (*api.BackupDeleteResponse, error) {
-	backup := d.getBackupManager()
-	resp, err := backup.Delete(
+func (p *portworx) DeleteBackup(params *backup.Request) (*api.BackupDeleteResponse, error) {
+	backup := p.getBackupManager()
+	return backup.Delete(
 		context.Background(),
 		&api.BackupDeleteRequest{
-			OrgId: orgID,
-			Name:  name,
+			OrgId: p.getOrgID(params),
+			Name:  p.getBackupName(params),
 		},
 	)
-	return resp, err
 }
 
 func init() {
-	backup.Register(driverName, &pxbackup{})
+	backup.Register(driverName, &portworx{})
 }
