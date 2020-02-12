@@ -13,6 +13,7 @@ type Image struct {
 	Version string
 }
 
+// Request struct for Backup parameters
 type Request struct {
 	// Organization ID
 	OrgID string
@@ -102,8 +103,8 @@ type Cluster interface {
 	DeleteCluster(req *Request) (*api.ClusterDeleteResponse, error)
 }
 
-// BackupLocation obj interface
-type BackupLocation interface {
+// BLocation obj interface
+type BLocation interface {
 	// CreateBackupLocation creates backup location object
 	CreateBackupLocation(req *Request) (*api.BackupLocationCreateResponse, error)
 
