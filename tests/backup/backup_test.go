@@ -2,6 +2,8 @@ package tests
 
 import (
 	"testing"
+	"fmt"
+	"os"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -19,20 +21,31 @@ func TestBackup(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	fmt.Printf("calling init instance\n")
 	InitInstance()
 })
 
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{BackupSetup}", func() {
 	It("has to connect and check the backup setup", func() {
+		fmt.Printf("Create an org\n")
+		CreateOrg("sample-org")
 	})
 })
+
+func CreateOrg(orgName string){
+	fmt.Printf("creating sample org\n")
+	backupDriver := Inst().Backup
+	fmt.Printf("backupDriver = %v\n", backupDriver)
+}
 
 var _ = AfterSuite(func() {
 	//PerformSystemCheck()
 	//ValidateCleanup()
 })
 
-func init() {
+func TestMain(m *testing.M) {
+	// call flag.Parse() here if TestMain uses flags
 	ParseFlags()
+	os.Exit(m.Run())
 }

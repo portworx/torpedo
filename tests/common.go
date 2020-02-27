@@ -133,10 +133,13 @@ func InitInstance() {
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
+	fmt.Printf("InitInstance() --> invoke Backup Init\n")
 	if Inst().Backup != nil {
+		fmt.Printf("InitInstance() --> calling Backup.Init\n")
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		expect(err).NotTo(haveOccurred())
 	}
+	fmt.Printf("InitInstance() --> Init complete\n")
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run

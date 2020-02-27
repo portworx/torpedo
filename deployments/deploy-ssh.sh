@@ -114,15 +114,17 @@ esac
 done
 
 if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
-    TEST_SUITE='"bin/asg.test",
-            "bin/autopilot.test",
-            "bin/basic.test",
-            "bin/reboot.test",
-            "bin/upgrade.test",
-            "bin/drive_failure.test",
-            "bin/volume_ops.test",
-            "bin/sched.test",
-            "bin/node_decommission.test",'
+    TEST_SUITE='"bin/backup.test",'
+#            "bin/asg.test",
+#            "bin/autopilot.test",
+#            "bin/basic.test",
+#	    "bin/backup.test",
+#            "bin/reboot.test",
+#            "bin/upgrade.test",
+#            "bin/drive_failure.test",
+#            "bin/volume_ops.test",
+#            "bin/sched.test",
+#            "bin/node_decommission.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
 fi
