@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -37,6 +38,13 @@ func CreateOrg(orgName string){
 	fmt.Printf("creating sample org\n")
 	backupDriver := Inst().Backup
 	fmt.Printf("backupDriver = %v\n", backupDriver)
+	req := &api.OrganizationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name: orgName,
+		},
+	}
+	_, err := backupDriver.CreateOrganization(req)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 var _ = AfterSuite(func() {
