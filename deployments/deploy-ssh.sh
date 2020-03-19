@@ -121,7 +121,7 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
     TEST_SUITE='"bin/asg.test",
             "bin/autopilot.test",
             "bin/basic.test",
-            "bin/backup.test",
+	        "bin/backup.test",
             "bin/reboot.test",
             "bin/upgrade.test",
             "bin/drive_failure.test",
@@ -147,6 +147,22 @@ done
 if [ $timeout -gt 600 ]; then
   echo "Torpedo is taking too long to terminate. Operation timeout."
   describe_pod_then_exit
+fi
+
+# List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
+FROM_FILE=""
+CLUSTER_CONFIGS=""
+echo "Create kubeconfig configmap",${KUBECONFIGS}
+if [ -n "${KUBECONFIGS}" ]; then
+  for i in ${KUBECONFIGS//,/ };do
+    FROM_FILE="${FROM_FILE} --from-file=${i}"
+    if [[ -z ${CLUSTER_CONFIGS} ]]; then
+      CLUSTER_CONFIGS="`basename ${i}`"
+    else
+      CLUSTER_CONFIGS="${CLUSTER_CONFIGS},`basename ${i}`"
+    fi
+  done
+  kubectl create configmap kubeconfigs ${FROM_FILE}
 fi
 
 TORPEDO_CUSTOM_PARAM_VOLUME=""
@@ -190,22 +206,6 @@ if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
 fi
 
-# List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
-FROM_FILE=""
-CLUSTER_CONFIGS=""
-echo "Create kubeconfig configmap",${KUBECONFIGS}
-if [ -n "${KUBECONFIGS}" ]; then
-  for i in ${KUBECONFIGS//,/ };do
-     FROM_FILE="${FROM_FILE} --from-file=${i}"
-     if [[ -z ${CLUSTER_CONFIGS} ]]; then
-       CLUSTER_CONFIGS="`basename ${i}`"
-     else
-       CLUSTER_CONFIGS="${CLUSTER_CONFIGS},`basename ${i}`"
-     fi
-  done
-  kubectl create configmap kubeconfigs ${FROM_FILE}
-fi
-
 K8S_VENDOR_KEY=""
 K8S_VENDOR_VALUE=""
 K8S_VENDOR_OPERATOR="Exists"
@@ -243,6 +243,16 @@ if [ -n "${K8S_VENDOR}" ]; then
     esac
 else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
+fi
+
+# TODO: Mount this secret as ENV var to torpedo pod if created
+if [[ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]]; then
+echo "Creating AWS secret..."
+kubectl create secret generic aws-access \
+        --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+        --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+        --from-literal=AWS_REGION=$AWS_REGION
+        --from-literal=PROVIDER=aws
 fi
 
 echo "Deploying torpedo pod..."

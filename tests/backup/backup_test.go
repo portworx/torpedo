@@ -10,6 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libopenstorage/openstorage/pkg/sched"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	appsapi "k8s.io/api/apps/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -26,21 +31,28 @@ const (
 	CredName                          = "tp-backup-cred"
 	BackupName                        = "tp-backup"
 	RestoreName                       = "tp-restore"
+	BackupRestoreCompletionTimeoutMin = 3
+	RetrySeconds                      = 30
 	ConfigMapName                     = "kubeconfigs"
 	KubeconfigDirectory               = "/tmp"
 	SourceClusterName                 = "source-cluster"
 	DestinationClusterName            = "destination-cluster"
-	BackupRestoreCompletionTimeoutMin = 3
-	RetrySeconds                      = 30
+
+	storkDeploymentName      = "stork"
+	storkDeploymentNamespace = "kube-system"
 
 	providerAws   = "aws"
 	providerAzure = "azure"
+	providerGke   = "gke"
+
+	triggerCheckInterval = 2 * time.Second
+	triggerCheckTimeout  = 30 * time.Minute
 
 	defaultTimeout       = 5 * time.Minute
 	defaultRetryInterval = 10 * time.Second
 )
 
-var orgID string
+var orgID string = "tp-org"
 
 func TestBackup(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -53,6 +65,150 @@ func TestBackup(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	InitInstance()
+
+	provider := discoverProvider()
+
+	if provider == "" {
+		return
+	}
+
+	CreateOrganization(orgID)
+	CreateCloudCredential(provider, CredName, orgID)
+	CreateBackupLocation(provider, BLocationName, CredName, orgID)
+	CreateSourceAndDestClusters(provider, CredName, orgID)
+})
+
+// This test performs basic test of starting an application, backing it up and killing stork while
+// performing backup.
+var _ = Describe("{BackupCreateKillStoreRestore}", func() {
+	var contexts []*scheduler.Context
+	var bkpNamespaces []string
+
+	namespaceMapping := make(map[string]string)
+	labelSelectores := make(map[string]string)
+
+	It("has to connect and check the backup setup", func() {
+		Step("Deploy applications", func() {
+			contexts = make([]*scheduler.Context, 0)
+			bkpNamespaces = make([]string, 0)
+			for i := 0; i < Inst().ScaleFactor; i++ {
+				taskName := fmt.Sprintf("backupcreaterestore-%d", i)
+				appContexts := ScheduleApplications(taskName)
+				contexts = append(contexts, appContexts...)
+				for _, ctx := range appContexts {
+					namespace := GetAppNamespace(ctx, taskName)
+					bkpNamespaces = append(bkpNamespaces, namespace)
+					namespaceMapping[namespace] = fmt.Sprintf("%s-restore", namespace)
+				}
+			}
+			ValidateApplications(contexts)
+		})
+
+		// Wait for IO to run
+		time.Sleep(time.Minute * 20)
+
+		Step(fmt.Sprintf("Create Backup [%s]", BackupName), func() {
+			// TODO(stgleb): Add multi-namespace backup when ready in px-backup
+			for _, namespace := range bkpNamespaces {
+				CreateBackup(fmt.Sprintf("%s-%s", BackupName, namespace),
+					SourceClusterName, BLocationName,
+					[]string{namespace}, labelSelectores, orgID)
+			}
+		})
+
+		Step("Kill stork", func() {
+			// setup task to delete stork pods as soon as it starts doing backup
+			eventCheck := func() (bool, error) {
+				for _, namespace := range bkpNamespaces {
+					req := &api.BackupInspectRequest{
+						Name:  fmt.Sprintf("%s-%s", BackupName, namespace),
+						OrgId: orgID,
+					}
+
+					err := Inst().Backup.WaitForRunning(req, time.Millisecond, time.Millisecond)
+
+					if err != nil {
+						continue
+					} else {
+						return true, nil
+					}
+				}
+				return false, nil
+			}
+
+			deleteOpts := &scheduler.DeleteTasksOptions{
+				TriggerOptions: scheduler.TriggerOptions{
+					TriggerCb:            eventCheck,
+					TriggerCheckInterval: triggerCheckInterval,
+					TriggerCheckTimeout:  triggerCheckTimeout,
+				},
+			}
+
+			t := func(interval sched.Interval) {
+				ctx := &scheduler.Context{
+					App: &spec.AppSpec{
+						SpecList: []interface{}{
+							&appsapi.Deployment{
+								ObjectMeta: meta_v1.ObjectMeta{
+									Name:      storkDeploymentName,
+									Namespace: storkDeploymentNamespace,
+								},
+							},
+						},
+					},
+				}
+
+				err := Inst().S.DeleteTasks(ctx, deleteOpts)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			taskID, err := sched.Instance().Schedule(t,
+				sched.Periodic(time.Second),
+				time.Now(), true)
+			Expect(err).NotTo(HaveOccurred())
+			defer sched.Instance().Cancel(taskID)
+		})
+
+		Step(fmt.Sprintf("Wait for Backup [%s] to complete", BackupName), func() {
+			for _, namespace := range bkpNamespaces {
+				err := Inst().Backup.WaitForBackupCompletion(
+					fmt.Sprintf("%s-%s", BackupName, namespace), orgID,
+					BackupRestoreCompletionTimeoutMin*time.Minute,
+					RetrySeconds*time.Second)
+				Expect(err).NotTo(HaveOccurred(),
+					fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]",
+						BackupName, err))
+			}
+		})
+
+		Step(fmt.Sprintf("Create Restore [%s]", RestoreName), func() {
+			for _, namespace := range bkpNamespaces {
+				CreateRestore(fmt.Sprintf("%s-%s", RestoreName, namespace),
+					fmt.Sprintf("%s-%s", BackupName, namespace),
+					namespaceMapping, DestinationClusterName, orgID)
+			}
+		})
+
+		// Change namespaces to restored apps only after backed up apps are cleaned up
+		// to avoid switching back namespaces to backup namespaces
+		Step(fmt.Sprintf("Validate Restore [%s]", RestoreName), func() {
+			destClusterConfigPath, err := getDestinationClusterConfigPath()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+
+			err = Inst().S.SetConfig(destClusterConfigPath)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to switch to context to destination cluster. Error: [%v]", err))
+
+			ValidateApplications(contexts)
+		})
+
+		Step("teardown all restored apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+	})
 })
 
 // This test performs basic test of starting an application and destroying it (along with storage)
@@ -600,7 +756,6 @@ func DeleteRestore(restoreName string, orgID string) {
 	})
 }
 
-// TODO(stgleb): We need to provide separate env variable to discover cloud provider
 func discoverProvider() string {
 	if os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
 		return providerAws
