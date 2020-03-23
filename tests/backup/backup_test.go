@@ -23,7 +23,6 @@ import (
 const (
 	orgID                             = "tp-org"
 	BLocationName                     = "tp-blocation"
-	ClusterName                       = "tp-cluster"
 	CredName                          = "tp-backup-cred"
 	BackupName                        = "tp-backup"
 	RestoreName                       = "tp-restore"
@@ -46,10 +45,6 @@ func TestBackup(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	InitInstance()
-	CreateOrganization(orgID)
-	CreateCloudCredential(CredName, orgID)
-	CreateBackupLocation(BLocationName, CredName, api.BackupLocationInfo_S3, orgID)
-	CreateSourceAndDestClusters(CredName, orgID)
 })
 
 // This test performs basic test of starting an application and destroying it (along with storage)
@@ -58,7 +53,13 @@ var _ = Describe("{BackupCreateRestore}", func() {
 	var bkpNamespaces []string
 	var namespaceMapping map[string]string
 	labelSelectores := make(map[string]string)
-	It("has to connect and check the backup setup", func() {
+
+	CreateOrganization(orgID)
+	CreateCloudCredential(CredName, orgID)
+	CreateBackupLocation(BLocationName, CredName, api.BackupLocationInfo_S3, orgID)
+	CreateSourceAndDestClusters(CredName, orgID)
+
+	It("has to create backup and restore it on different cluster", func() {
 
 		Step("Deploy applications", func() {
 			contexts = make([]*scheduler.Context, 0)
@@ -129,19 +130,21 @@ var _ = Describe("{BackupCreateRestore}", func() {
 		})
 
 	})
+	BackupCleanup()
 })
 
 func BackupCleanup() {
-	DeleteBackup(BackupName, ClusterName, orgID)
-	DeleteCluster(ClusterName, orgID)
+	DeleteRestore(RestoreName, orgID)
+	DeleteBackup(BackupName, SourceClusterName, orgID)
+	DeleteCluster(DestinationClusterName, orgID)
+	DeleteCluster(SourceClusterName, orgID)
 	DeleteBackupLocation(BLocationName, orgID)
 	DeleteCloudCredential(CredName, orgID)
 }
 
 var _ = AfterSuite(func() {
-	//PerformSystemCheck()
-	//ValidateCleanup()
-	//	BackupCleanup()
+	PerformSystemCheck()
+	ValidateCleanup()
 })
 
 func TestMain(m *testing.M) {
@@ -154,6 +157,8 @@ func TestMain(m *testing.M) {
 func CreateOrganization(orgID string) {
 	Step(fmt.Sprintf("Create organization [%s]", orgID), func() {
 		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
 		req := &api.OrganizationCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
 				Name: orgID,
@@ -169,6 +174,8 @@ func CreateOrganization(orgID string) {
 /*func DeleteOrganization(orgID string) {
 	Step(fmt.Sprintf("Delete organization [%s]", orgID), func() {
 		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
 		req := &api.Delete{
 			CreateMetadata: &api.CreateMetadata{
 				Name: orgID,
@@ -183,6 +190,8 @@ func CreateOrganization(orgID string) {
 func DeleteCloudCredential(name string, orgID string) {
 	Step(fmt.Sprintf("Delete cloud credential [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
 
 		credDeleteRequest := &api.CloudCredentialDeleteRequest{
 			Name:  name,
@@ -202,6 +211,8 @@ func CreateCloudCredential(name string, orgID string) {
 
 	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
 
 		// TODO: add separate function to return cred object based on type
 		id := os.Getenv("AWS_ACCESS_KEY_ID")
@@ -256,6 +267,8 @@ func CreateBackupLocation(name string, cloudCred string,
 // CreateS3BackupLocation creates backuplocation for S3
 func CreateS3BackupLocation(name string, cloudCred string, orgID string) {
 	backupDriver := Inst().Backup
+	Expect(backupDriver).NotTo(BeNil(),
+		"Backup driver is not initialized")
 	path := os.Getenv("BUCKET_NAME")
 	Expect(path).NotTo(Equal(""),
 		"BUCKET_NAME Environment variable should not be empty")
@@ -304,6 +317,8 @@ func CreateS3BackupLocation(name string, cloudCred string, orgID string) {
 func DeleteBackupLocation(name string, orgID string) {
 	Step(fmt.Sprintf("Delete backup location [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
 		bLocationDeleteReq := &api.BackupLocationDeleteRequest{
 			Name:  name,
 			OrgId: orgID,
@@ -406,6 +421,8 @@ func DeleteCluster(name string, orgID string) {
 
 	Step(fmt.Sprintf("Delete cluster [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
 		clusterDeleteReq := &api.ClusterDeleteRequest{
 			OrgId: orgID,
 			Name:  name,
@@ -451,6 +468,8 @@ func CreateBackup(backupName string, clusterName string, bLocation string,
 		backupName, orgID, clusterName), func() {
 
 		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
 		bkpCreateRequest := &api.BackupCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
 				Name:  backupName,
@@ -477,6 +496,8 @@ func CreateRestore(restoreName string, backupName string,
 		restoreName, orgID, clusterName), func() {
 
 		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
 		createRestoreReq := &api.RestoreCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
 				Name:  restoreName,
@@ -501,6 +522,8 @@ func DeleteBackup(backupName string, clusterName string, orgID string) {
 		backupName, orgID, clusterName), func() {
 
 		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
 		bkpDeleteRequest := &api.BackupDeleteRequest{
 			Name:  backupName,
 			OrgId: orgID,
@@ -509,6 +532,28 @@ func DeleteBackup(backupName string, clusterName string, orgID string) {
 		// Best effort cleanup, dont fail test, if deletion fails
 		//Expect(err).NotTo(HaveOccurred(),
 		//	fmt.Sprintf("Failed to delete backup [%s] in org [%s]", backupName, orgID))
+		// TODO: validate createClusterResponse also
+	})
+}
+
+// DeleteRestore creates restore
+func DeleteRestore(restoreName string, orgID string) {
+
+	Step(fmt.Sprintf("Delete restore [%s] in org [%s]",
+		restoreName, orgID), func() {
+
+		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
+
+		deleteRestoreReq := &api.RestoreDeleteRequest{
+			OrgId: orgID,
+			Name:  restoreName,
+		}
+		_, err := backupDriver.DeleteRestore(deleteRestoreReq)
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Failed to delete restore [%s] in org [%s]",
+				restoreName, orgID))
 		// TODO: validate createClusterResponse also
 	})
 }
