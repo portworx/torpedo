@@ -545,6 +545,14 @@ func (d *dcos) EnableSchedulingOnNode(n node.Node) error {
 	}
 }
 
+func (d *dcos) SetConfig(configPath string) error {
+	// TODO: Implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetConfig()",
+	}
+}
+
 func (d *dcos) DisableSchedulingOnNode(n node.Node) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{

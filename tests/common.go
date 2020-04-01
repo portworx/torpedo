@@ -266,6 +266,11 @@ func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.DeleteVolum
 	ValidateVolumesDeleted(ctx.App.Key, vols)
 }
 
+// GetAppNamespace returns namespace in which context is created
+func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
+	return ctx.App.GetID(fmt.Sprintf("%s-%s", taskname, Inst().InstanceID))
+}
+
 // ScheduleApplications schedules but does not wait for applications
 func ScheduleApplications(testname string) []*scheduler.Context {
 	var contexts []*scheduler.Context

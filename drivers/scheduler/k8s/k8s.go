@@ -403,6 +403,33 @@ func (k *K8s) getAddressesForNode(n v1.Node) []string {
 	return addrs
 }
 
+// SetConfig sets kubeconfig. If kubeconfigPath == "" then
+// sets it to inClusterConfig
+func (k *K8s) SetConfig(kubeconfigPath string) error {
+	var config *rest.Config
+	var err error
+
+	if kubeconfigPath == "" {
+		config = nil
+	} else {
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return err
+		}
+	}
+	k8sCore.SetConfig(config)
+	k8sApps.SetConfig(config)
+	k8sCore.SetConfig(config)
+	k8sApps.SetConfig(config)
+	k8sStork.SetConfig(config)
+	k8sStorage.SetConfig(config)
+	k8sExternalStorage.SetConfig(config)
+	k8sAutopilot.SetConfig(config)
+	k8sRbac.SetConfig(config)
+
+	return nil
+}
+
 // parseK8SNode Parse the kubernetes clsuter nodes
 //
 func (k *K8s) parseK8SNode(n v1.Node) node.Node {
