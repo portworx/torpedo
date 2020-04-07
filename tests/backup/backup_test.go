@@ -242,7 +242,8 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
 
-			err = Inst().S.SetConfig(destClusterConfigPath)
+			SetClusterContext(destClusterConfigPath)
+
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to switch to context to destination cluster. Error: [%v]", err))
 
