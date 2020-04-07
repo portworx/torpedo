@@ -63,12 +63,13 @@ func TestBackup(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
 }
 
-var _ = BeforeSuite(func() {
-	InitInstance()
+func SetupBackup() {
+	orgID = Inst().InstanceID
 
-	provider := discoverProvider()
+	provider := os.Getenv("PROVIDER")
 
 	if provider == "" {
+		logrus.Warnf("Empty provider")
 		return
 	}
 
@@ -76,7 +77,40 @@ var _ = BeforeSuite(func() {
 	CreateCloudCredential(provider, CredName, orgID)
 	CreateBackupLocation(provider, BLocationName, CredName, orgID)
 	CreateSourceAndDestClusters(provider, CredName, orgID)
+}
+
+func BackupCleanup() {
+	DeleteRestore(RestoreName, orgID)
+	DeleteBackup(BackupName, SourceClusterName, orgID)
+	DeleteCluster(DestinationClusterName, orgID)
+	DeleteCluster(SourceClusterName, orgID)
+	DeleteBackupLocation(BLocationName, orgID)
+	DeleteCloudCredential(CredName, orgID)
+}
+
+var _ = AfterSuite(func() {
+	//PerformSystemCheck()
+	//ValidateCleanup()
+	//	BackupCleanup()
 })
+
+func TestMain(m *testing.M) {
+	// call flag.Parse() here if TestMain uses flags
+	ParseFlags()
+	os.Exit(m.Run())
+}
+
+func SetClusterContext(clusterConfigPath string) {
+	err := Inst().S.SetConfig(clusterConfigPath)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to switch to context. Error: [%v]", err))
+
+	err = Inst().S.RefreshNodeRegistry()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = Inst().V.RefreshDriverEndpoints()
+	Expect(err).NotTo(HaveOccurred())
+}
 
 // This test performs basic test of starting an application, backing it up and killing stork while
 // performing backup.
@@ -88,6 +122,14 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 	labelSelectores := make(map[string]string)
 
 	It("has to connect and check the backup setup", func() {
+		SetupBackup()
+
+		sourceClusterConfigPath, err := getSourceClusterConfigPath()
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
+
+		SetClusterContext(sourceClusterConfigPath)
+
 		Step("Deploy applications", func() {
 			contexts = make([]*scheduler.Context, 0)
 			bkpNamespaces = make([]string, 0)
@@ -208,6 +250,10 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 				TearDownContext(ctx, nil)
 			}
 		})
+
+		Step("teardown backup objects", func() {
+			BackupCleanup()
+		})
 	})
 })
 
@@ -309,52 +355,6 @@ var _ = Describe("{BackupCreateRestore}", func() {
 	})
 })
 
-func SetupBackup() {
-	orgID = Inst().InstanceID
-	provider := discoverProvider()
-	if provider == "" {
-		return
-	}
-
-	CreateOrganization(orgID)
-	CreateCloudCredential(provider, CredName, orgID)
-	CreateBackupLocation(provider, BLocationName, CredName, orgID)
-	CreateSourceAndDestClusters(provider, CredName, orgID)
-}
-
-func BackupCleanup() {
-	DeleteRestore(RestoreName, orgID)
-	DeleteBackup(BackupName, SourceClusterName, orgID)
-	DeleteCluster(DestinationClusterName, orgID)
-	DeleteCluster(SourceClusterName, orgID)
-	DeleteBackupLocation(BLocationName, orgID)
-	DeleteCloudCredential(CredName, orgID)
-}
-
-var _ = AfterSuite(func() {
-	//PerformSystemCheck()
-	//ValidateCleanup()
-	//	BackupCleanup()
-})
-
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
-
-func SetClusterContext(clusterConfigPath string) {
-	err := Inst().S.SetConfig(clusterConfigPath)
-	Expect(err).NotTo(HaveOccurred(),
-		fmt.Sprintf("Failed to switch to context. Error: [%v]", err))
-
-	err = Inst().S.RefreshNodeRegistry()
-	Expect(err).NotTo(HaveOccurred())
-
-	err = Inst().V.RefreshDriverEndpoints()
-	Expect(err).NotTo(HaveOccurred())
-}
-
 // CreateOrganization creates org on px-backup
 func CreateOrganization(orgID string) {
 	Step(fmt.Sprintf("Create organization [%s]", orgID), func() {
@@ -402,7 +402,7 @@ func DeleteCloudCredential(name string, orgID string) {
 
 }
 
-// CreateCloudCredential creates cloud credetials
+// CreateCloudCredential creates cloud credentials
 func CreateCloudCredential(provider, name string, orgID string) {
 
 	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
@@ -754,18 +754,4 @@ func DeleteRestore(restoreName string, orgID string) {
 				restoreName, orgID))
 		// TODO: validate createClusterResponse also
 	})
-}
-
-func discoverProvider() string {
-	if os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
-		return providerAws
-	}
-
-	if os.Getenv("AZURE_TENANT_ID") != "" &&
-		os.Getenv("AZURE_CLIENT_ID") != "" &&
-		os.Getenv("AZURE_CLIENT_SECRET") != "" {
-		return providerAzure
-	}
-
-	return ""
 }
