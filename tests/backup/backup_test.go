@@ -54,6 +54,10 @@ const (
 
 var orgID string = "tp-org"
 
+var _ = BeforeSuite(func() {
+	InitInstance()
+})
+
 func TestBackup(t *testing.T) {
 	RegisterFailHandler(Fail)
 
