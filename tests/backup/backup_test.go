@@ -55,7 +55,9 @@ const (
 var orgID string = "tp-org"
 
 var _ = BeforeSuite(func() {
+	logrus.Infof("Init instance")
 	InitInstance()
+	logrus.Infof("Backup instance %v", Inst().Backup)
 })
 
 func TestBackup(t *testing.T) {
@@ -69,18 +71,20 @@ func TestBackup(t *testing.T) {
 
 func SetupBackup() {
 	orgID = Inst().InstanceID
-
-	provider := os.Getenv("PROVIDER")
+	logrus.Infof("Backup instance %v", Inst().Backup)
+	provider := os.Getenv("K8S_VENDOR")
 
 	if provider == "" {
-		logrus.Warnf("Empty provider")
+		logrus.Infof("Empty provider")
 		return
 	}
+
+	logrus.Infof("Run Setup backup with provider: %s", provider)
 
 	CreateOrganization(orgID)
 	CreateCloudCredential(provider, CredName, orgID)
 	CreateBackupLocation(provider, BLocationName, CredName, orgID)
-	CreateSourceAndDestClusters(provider, CredName, orgID)
+	CreateSourceAndDestClusters(CredName, orgID)
 }
 
 func BackupCleanup() {
@@ -126,6 +130,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 	labelSelectores := make(map[string]string)
 
 	It("has to connect and check the backup setup", func() {
+		logrus.Infof("Setup backup")
 		SetupBackup()
 
 		sourceClusterConfigPath, err := getSourceClusterConfigPath()
@@ -541,11 +546,7 @@ func DeleteBackupLocation(name string, orgID string) {
 // CreateSourceAndDestClusters creates source and destination cluster
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
-func CreateSourceAndDestClusters(provider, cloudCred, orgID string) {
-	if provider == "" {
-		return
-	}
-
+func CreateSourceAndDestClusters(cloudCred, orgID string) {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
@@ -566,6 +567,7 @@ func CreateSourceAndDestClusters(provider, cloudCred, orgID string) {
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
 
+		logrus.Debugf("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
 		CreateCluster(SourceClusterName, cloudCred, srcClusterConfigPath, orgID)
 	})
 
@@ -574,6 +576,7 @@ func CreateSourceAndDestClusters(provider, cloudCred, orgID string) {
 		dstClusterConfigPath, err := getDestinationClusterConfigPath()
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+		logrus.Debugf("Save cluster %s kubeconfig to %s", DestinationClusterName, dstClusterConfigPath)
 		CreateCluster(DestinationClusterName, cloudCred, dstClusterConfigPath, orgID)
 	})
 }

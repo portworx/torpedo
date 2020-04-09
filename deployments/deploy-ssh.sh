@@ -252,7 +252,6 @@ kubectl create secret generic aws-access \
         --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
         --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
         --from-literal=AWS_REGION=$AWS_REGION
-        --from-literal=PROVIDER=aws
 fi
 
 echo "Deploying torpedo pod..."
@@ -343,6 +342,7 @@ spec:
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
             "--scheduler", "$SCHEDULER",
+            "--backup-driver", "$BACKUP_DRIVER",
             "--log-level", "$LOGLEVEL",
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
@@ -357,12 +357,13 @@ spec:
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
-            "$APP_DESTROY_TIMEOUT_ARG",
-            "--backup-driver", "$BACKUP_DRIVER"
+            "$APP_DESTROY_TIMEOUT_ARG"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
+    - name: K8S_VENDOR
+      value: "${K8S_VENDOR}"
     - name: TORPEDO_SSH_USER
       value: "${TORPEDO_SSH_USER}"
     - name: TORPEDO_SSH_PASSWORD
