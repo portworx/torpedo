@@ -15,6 +15,12 @@ import (
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -33,6 +39,7 @@ const (
 	RestoreName                       = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 3
 	RetrySeconds                      = 30
+	BucketNamePrefix                  = "tp-backup-bucket"
 	ConfigMapName                     = "kubeconfigs"
 	KubeconfigDirectory               = "/tmp"
 	SourceClusterName                 = "source-cluster"
@@ -52,7 +59,10 @@ const (
 	defaultRetryInterval = 10 * time.Second
 )
 
-var orgID string = "tp-org"
+var (
+	orgID      string
+	bucketName string
+)
 
 var _ = BeforeSuite(func() {
 	logrus.Infof("Init instance")
@@ -69,7 +79,6 @@ func TestBackup(t *testing.T) {
 }
 
 func SetupBackup() {
-	orgID = Inst().InstanceID
 	logrus.Infof("Backup instance %v", Inst().Backup)
 	provider := os.Getenv("K8S_VENDOR")
 
@@ -79,20 +88,31 @@ func SetupBackup() {
 	}
 
 	logrus.Infof("Run Setup backup with provider: %s", provider)
+	orgID = Inst().InstanceID
+	bucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
 
+	CreateBucket(provider, bucketName)
 	CreateOrganization(orgID)
 	CreateCloudCredential(provider, CredName, orgID)
-	CreateBackupLocation(provider, BLocationName, CredName, orgID)
-	CreateSourceAndDestClusters(CredName, orgID)
+	CreateBackupLocation(provider, BLocationName, CredName, bucketName, orgID)
+	CreateSourceAndDestClusters(provider, CredName, orgID)
 }
 
 func BackupCleanup() {
+	provider := os.Getenv("K8S_VENDOR")
+
+	if provider == "" {
+		logrus.Infof("Backup cleanup Empty provider")
+		return
+	}
+
 	DeleteRestore(RestoreName, orgID)
 	DeleteBackup(BackupName, SourceClusterName, orgID)
 	DeleteCluster(DestinationClusterName, orgID)
 	DeleteCluster(SourceClusterName, orgID)
 	DeleteBackupLocation(BLocationName, orgID)
 	DeleteCloudCredential(CredName, orgID)
+	DeleteBucket(provider, bucketName)
 }
 
 var _ = AfterSuite(func() {
@@ -294,7 +314,6 @@ var _ = Describe("{BackupCreateRestore}", func() {
 					bkpNamespaces = append(bkpNamespaces, GetAppNamespace(ctx, taskName))
 				}
 			}
-
 			ValidateApplications(contexts)
 		})
 
@@ -411,7 +430,84 @@ func DeleteCloudCredential(name string, orgID string) {
 
 }
 
-// CreateCloudCredential creates cloud credentials
+
+func CreateBucket(provider string, bucketName string) {
+	Step(fmt.Sprintf("Create bucket [%s]", bucketName), func() {
+		switch provider {
+		case providerAws:
+			CreateS3Bucket(bucketName)
+		}
+	})
+}
+
+func CreateS3Bucket(bucketName string) {
+	id, secret, endpoint, s3Region, disableSSLBool := getAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+
+	S3Client := s3.New(sess)
+
+	_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to create bucket [%v]. Error: [%v]", bucketName, err))
+
+	err = S3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to wait for bucket [%v] to get created. Error: [%v]", bucketName, err))
+}
+
+func DeleteBucket(provider string, bucketName string) {
+	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
+		switch provider {
+		case providerAws:
+			DeleteS3Bucket(bucketName)
+		}
+	})
+}
+
+func DeleteS3Bucket(bucketName string) {
+	id, secret, endpoint, s3Region, disableSSLBool := getAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+
+	S3Client := s3.New(sess)
+
+	iter := s3manager.NewDeleteListIterator(S3Client, &s3.ListObjectsInput{
+		Bucket: aws.String(bucketName),
+	})
+
+	err = s3manager.NewBatchDeleteWithClient(S3Client).Delete(aws.BackgroundContext(), iter)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Unable to delete objects from bucket %q, %v", bucketName, err))
+
+	_, err = S3Client.DeleteBucket(&s3.DeleteBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to delete bucket [%v]. Error: [%v]", bucketName, err))
+}
+
+// CreateCloudCredential creates cloud credetials
 func CreateCloudCredential(provider, name string, orgID string) {
 
 	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
@@ -451,17 +547,48 @@ func CreateCloudCredential(provider, name string, orgID string) {
 
 }
 
-func CreateBackupLocation(provider, name, credName, orgID string) {
+func getAWSDetailsFromEnv() (id string, secret string, endpoint string,
+	s3Region string, disableSSLBool bool) {
+
+	// TODO: add separate function to return cred object based on type
+	id = os.Getenv("AWS_ACCESS_KEY_ID")
+	Expect(id).NotTo(Equal(""),
+		"AWS_ACCESS_KEY_ID Environment variable should not be empty")
+
+	secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	Expect(secret).NotTo(Equal(""),
+		"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+
+	endpoint = os.Getenv("S3_ENDPOINT")
+	Expect(secret).NotTo(Equal(""),
+		"S3_ENDPOINT Environment variable should not be empty")
+
+	s3Region = os.Getenv("S3_REGION")
+	Expect(secret).NotTo(Equal(""),
+		"S3_REGION Environment variable should not be empty")
+
+	disableSSL := os.Getenv("S3_DISABLE_SSL")
+	Expect(secret).NotTo(Equal(""),
+		"S3_DISABLE_SSL Environment variable should not be empty")
+
+	disableSSLBool, err := strconv.ParseBool(disableSSL)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("S3_DISABLE_SSL=%s is not a valid boolean value", disableSSL))
+
+	return id, secret, endpoint, s3Region, disableSSLBool
+}
+
+func CreateBackupLocation(provider, name, credName, bucketName, orgID string) {
 	switch provider {
 	case providerAws:
-		createS3BackupLocation(name, credName, orgID)
+		createS3BackupLocation(name, credName, bucketName, orgID)
 	}
 }
 
 // createS3BackupLocation creates backup location
-func createS3BackupLocation(name string, cloudCred string, orgID string) {
+func createS3BackupLocation(name string, cloudCred string, bucketName string, orgID string) {
 	Step(fmt.Sprintf("Create S3 backup location [%s] in org [%s]", name, orgID), func() {
-		CreateS3BackupLocation(name, cloudCred, orgID)
+		CreateS3BackupLocation(name, cloudCred, bucketName, orgID)
 	})
 }
 
@@ -480,27 +607,9 @@ func createGkeBackupLocation(name string, cloudCred string, orgID string) {
 }
 
 // CreateS3BackupLocation creates backuplocation for S3
-func CreateS3BackupLocation(name string, cloudCred string, orgID string) {
+func CreateS3BackupLocation(name string, cloudCred string, bucketName string, orgID string) {
 	backupDriver := Inst().Backup
-	path := os.Getenv("BUCKET_NAME")
-	Expect(path).NotTo(Equal(""),
-		"BUCKET_NAME Environment variable should not be empty")
-
-	endpoint := os.Getenv("S3_ENDPOINT")
-	Expect(endpoint).NotTo(Equal(""),
-		"S3_ENDPOINT Environment variable should not be empty")
-
-	region := os.Getenv("S3_REGION")
-	Expect(endpoint).NotTo(Equal(""),
-		"S3_REGION Environment variable should not be empty")
-
-	disableSSL := os.Getenv("S3_DISABLE_SSL")
-	Expect(endpoint).NotTo(Equal(""),
-		"S3_DISABLE_SSL Environment variable should not be empty")
-	disableSSLBool, err := strconv.ParseBool(disableSSL)
-	Expect(err).NotTo(HaveOccurred(),
-		fmt.Sprintf("S3_DISABLE_SSL=%s is not a valid boolean value", disableSSL))
-
+	_, _, endpoint, region, disableSSLBool := getAWSDetailsFromEnv()
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -508,7 +617,7 @@ func CreateS3BackupLocation(name string, cloudCred string, orgID string) {
 			OrgId: orgID,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:            path,
+			Path:            bucketName,
 			EncryptionKey:   encryptionKey,
 			CloudCredential: cloudCred,
 			Type:            api.BackupLocationInfo_S3,
@@ -521,7 +630,7 @@ func CreateS3BackupLocation(name string, cloudCred string, orgID string) {
 			},
 		},
 	}
-	_, err = backupDriver.CreateBackupLocation(bLocationCreateReq)
+	_, err := backupDriver.CreateBackupLocation(bLocationCreateReq)
 	Expect(err).NotTo(HaveOccurred(),
 		fmt.Sprintf("Failed to create backuplocation [%s] in org [%s]", name, orgID))
 }
