@@ -57,7 +57,6 @@ var orgID string = "tp-org"
 var _ = BeforeSuite(func() {
 	logrus.Infof("Init instance")
 	InitInstance()
-	logrus.Infof("Backup instance %v", Inst().Backup)
 })
 
 func TestBackup(t *testing.T) {
