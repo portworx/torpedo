@@ -95,7 +95,7 @@ func SetupBackup() {
 	CreateOrganization(orgID)
 	CreateCloudCredential(provider, CredName, orgID)
 	CreateBackupLocation(provider, BLocationName, CredName, bucketName, orgID)
-	CreateSourceAndDestClusters(provider, CredName, orgID)
+	CreateSourceAndDestClusters(CredName, orgID)
 }
 
 func BackupCleanup() {
