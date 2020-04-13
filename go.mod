@@ -3,8 +3,9 @@ module github.com/portworx/torpedo
 go 1.12
 
 require (
+	cloud.google.com/go v0.38.0 // indirect
 	github.com/Azure/azure-sdk-for-go v38.2.0+incompatible // indirect
-	github.com/Azure/go-autorest v13.3.1+incompatible // indirect
+	github.com/Azure/azure-storage-blob-go v0.0.0-20181022225951-5152f14ace1c
 	github.com/Azure/go-autorest/autorest v0.9.4 // indirect
 	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2 // indirect
 	github.com/Azure/go-autorest/autorest/to v0.3.0 // indirect
@@ -21,6 +22,7 @@ require (
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
 	github.com/golang/protobuf v1.3.2
+	github.com/google/uuid v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.1.0
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000
 	github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283
@@ -29,7 +31,6 @@ require (
 	github.com/libopenstorage/openstorage v8.0.1-0.20200129213931-ba5ed2ee0f18+incompatible
 	github.com/libopenstorage/stork v1.3.0-beta1.0.20191009210244-6a3497c42b2a
 	github.com/mattn/go-isatty v0.0.10 // indirect
-	github.com/minio/minio-go/v6 v6.0.52 // indirect
 	github.com/onsi/ginkgo v1.10.2
 	github.com/onsi/gomega v1.7.0
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
@@ -48,11 +49,8 @@ require (
 	gopkg.in/yaml.v2 v2.2.4
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
-	k8s.io/apiserver v0.0.0-20190820063401-c43cd040845a // indirect
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
-	k8s.io/cloud-provider v0.17.2 // indirect
-	k8s.io/csi-translation-lib v0.0.0-20190913091657-9745ba0e69cf // indirect
-	k8s.io/kubernetes v1.14.6 // indirect
+	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f // indirect
 )
 
 replace (
