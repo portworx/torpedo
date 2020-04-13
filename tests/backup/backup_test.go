@@ -433,7 +433,6 @@ func DeleteCloudCredential(name string, orgID string) {
 
 }
 
-
 func CreateBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Create bucket [%s]", bucketName), func() {
 		switch provider {
@@ -544,10 +543,43 @@ func CreateCloudCredential(provider, name string, orgID string) {
 			_, err := backupDriver.CreateCloudCredential(credCreateRequest)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
+		// TODO: validate CreateCloudCredentialResponse also
+		case providerAzure:
+			// TODO: add separate function to return cred object based on type
+			tenantId := os.Getenv("AZURE_TENANT_ID")
+			Expect(tenantId).NotTo(Equal(""),
+				"AZURE_TENANT_ID Environment variable should not be empty")
+
+			clientId := os.Getenv("AZURE_CLIENT_ID")
+			Expect(clientId).NotTo(Equal(""),
+				"AZURE_CLIENT_ID Environment variable should not be empty")
+
+			clientSecret := os.Getenv("AZURE_CLIENT_SECRET")
+			Expect(clientSecret).NotTo(Equal(""),
+				"AZURE_CLIENT_SECRET Environment variable should not be empty")
+
+			credCreateRequest := &api.CloudCredentialCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					OrgId: orgID,
+				},
+				CloudCredential: &api.CloudCredentialInfo{
+					Type: api.CloudCredentialInfo_Azure,
+					Config: &api.CloudCredentialInfo_AzureConfig{
+						AzureConfig: &api.AzureConfig{
+							TenantId:     tenantId,
+							ClientId:     clientId,
+							ClientSecret: clientId,
+						},
+					},
+				},
+			}
+			_, err := backupDriver.CreateCloudCredential(credCreateRequest)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
 			// TODO: validate CreateCloudCredentialResponse also
 		}
 	})
-
 }
 
 func getAWSDetailsFromEnv() (id string, secret string, endpoint string,
