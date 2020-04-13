@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -15,6 +17,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/Azure/azure-storage-blob-go/azblob"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -438,6 +442,8 @@ func CreateBucket(provider string, bucketName string) {
 		switch provider {
 		case providerAws:
 			CreateS3Bucket(bucketName)
+		case providerAzure:
+			CreateAzureBucket(bucketName)
 		}
 	})
 }
@@ -468,6 +474,26 @@ func CreateS3Bucket(bucketName string) {
 	})
 	Expect(err).NotTo(HaveOccurred(),
 		fmt.Sprintf("Failed to wait for bucket [%v] to get created. Error: [%v]", bucketName, err))
+}
+
+func CreateAzureBucket(bucketName string) {
+	// From the Azure portal, get your Storage account blob service URL endpoint.
+	accountName, accountKey := getAzureAccountInfoFromEnv()
+
+	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
+	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName))
+	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+
+	ctx := context.Background() // This example uses a never-expiring context
+
+	_, err = containerURL.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
+
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to create container. Error: [%v]", err))
 }
 
 func DeleteBucket(provider string, bucketName string) {
@@ -611,6 +637,18 @@ func getAWSDetailsFromEnv() (id string, secret string, endpoint string,
 		fmt.Sprintf("S3_DISABLE_SSL=%s is not a valid boolean value", disableSSL))
 
 	return id, secret, endpoint, s3Region, disableSSLBool
+}
+
+func getAzureAccountInfoFromEnv() (accountName, accountKey string) {
+	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
+	Expect(accountName).NotTo(Equal(""),
+		"AZURE_ACCOUNT_NAME Environment variable should not be empty")
+
+	accountKey = os.Getenv("AZURE_ACCOUNT_KEY")
+	Expect(accountKey).NotTo(Equal(""),
+		"AZURE_ACCOUNT_KEY Environment variable should not be empty")
+
+	return accountName, accountKey
 }
 
 func CreateBackupLocation(provider, name, credName, bucketName, orgID string) {
