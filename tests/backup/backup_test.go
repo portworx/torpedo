@@ -196,7 +196,8 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 						OrgId: orgID,
 					}
 
-					err := Inst().Backup.WaitForRunning(req, time.Millisecond, time.Millisecond)
+					err := Inst().Backup.WaitForRunning(context.Background(),
+						req, time.Millisecond, time.Millisecond)
 
 					if err != nil {
 						continue
@@ -243,6 +244,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 		Step(fmt.Sprintf("Wait for Backup [%s] to complete", BackupName), func() {
 			for _, namespace := range bkpNamespaces {
 				err := Inst().Backup.WaitForBackupCompletion(
+					context.Background(),
 					fmt.Sprintf("%s-%s", BackupName, namespace), orgID,
 					BackupRestoreCompletionTimeoutMin*time.Minute,
 					RetrySeconds*time.Second)
