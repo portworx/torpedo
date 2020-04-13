@@ -537,12 +537,11 @@ func DeleteS3Bucket(bucketName string) {
 
 // CreateCloudCredential creates cloud credetials
 func CreateCloudCredential(provider, name string, orgID string) {
-
 	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
 		switch provider {
 		case providerAws:
-			// TODO: add separate function to return cred object based on type
+			log.Printf("Create creds for aws")
 			id := os.Getenv("AWS_ACCESS_KEY_ID")
 			Expect(id).NotTo(Equal(""),
 				"AWS_ACCESS_KEY_ID Environment variable should not be empty")
@@ -571,7 +570,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
 		// TODO: validate CreateCloudCredentialResponse also
 		case providerAzure:
-			// TODO: add separate function to return cred object based on type
+			log.Printf("Create creds for azure")
 			tenantId := os.Getenv("AZURE_TENANT_ID")
 			Expect(tenantId).NotTo(Equal(""),
 				"AZURE_TENANT_ID Environment variable should not be empty")
