@@ -53,9 +53,9 @@ const (
 	storkDeploymentName      = "stork"
 	storkDeploymentNamespace = "kube-system"
 
-	providerAws   = "aws"
-	providerAzure = "azure"
-	providerGke   = "gke"
+	providerEks = "eks"
+	providerAks = "azure"
+	providerGke = "gke"
 
 	triggerCheckInterval = 2 * time.Second
 	triggerCheckTimeout  = 30 * time.Minute
@@ -440,9 +440,9 @@ func DeleteCloudCredential(name string, orgID string) {
 func CreateBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Create bucket [%s]", bucketName), func() {
 		switch provider {
-		case providerAws:
+		case providerEks:
 			CreateS3Bucket(bucketName)
-		case providerAzure:
+		case providerAks:
 			CreateAzureBucket(bucketName)
 		}
 	})
@@ -499,7 +499,7 @@ func CreateAzureBucket(bucketName string) {
 func DeleteBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
 		switch provider {
-		case providerAws:
+		case providerEks:
 			DeleteS3Bucket(bucketName)
 		}
 	})
@@ -538,9 +538,10 @@ func DeleteS3Bucket(bucketName string) {
 // CreateCloudCredential creates cloud credetials
 func CreateCloudCredential(provider, name string, orgID string) {
 	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
+		logrus.Printf("Create credential name %s for org %s provider %s", name, orgID, provider)
 		backupDriver := Inst().Backup
 		switch provider {
-		case providerAws:
+		case providerEks:
 			log.Printf("Create creds for aws")
 			id := os.Getenv("AWS_ACCESS_KEY_ID")
 			Expect(id).NotTo(Equal(""),
@@ -569,7 +570,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
 		// TODO: validate CreateCloudCredentialResponse also
-		case providerAzure:
+		case providerAks:
 			log.Printf("Create creds for azure")
 			tenantId := os.Getenv("AZURE_TENANT_ID")
 			Expect(tenantId).NotTo(Equal(""),
@@ -652,7 +653,7 @@ func getAzureAccountInfoFromEnv() (accountName, accountKey string) {
 
 func CreateBackupLocation(provider, name, credName, bucketName, orgID string) {
 	switch provider {
-	case providerAws:
+	case providerEks:
 		createS3BackupLocation(name, credName, bucketName, orgID)
 	}
 }
