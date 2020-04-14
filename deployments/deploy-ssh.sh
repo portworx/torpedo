@@ -376,6 +376,10 @@ spec:
       value: "${AZURE_CLIENTID}"
     - name: AZURE_CLIENT_SECRET
       value: "${AZURE_CLIENTSECRET}"
+    - name: AZURE_ACCOUNT_NAME
+      value: "${AZURE_ACCOUNT_NAME}"
+    - name: AZURE_ACCOUNT_KEY
+      value: "${AZURE_ACCOUNT_KEY}"
     - name: AWS_ACCESS_KEY_ID
       value: "${AWS_ACCESS_KEY_ID}"
     - name: AWS_SECRET_ACCESS_KEY

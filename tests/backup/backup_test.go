@@ -154,8 +154,9 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 	labelSelectores := make(map[string]string)
 
 	It("has to connect and check the backup setup", func() {
-		logrus.Infof("Setup backup")
-		SetupBackup()
+		Step("Setup backup", func() {
+			SetupBackup()
+		})
 
 		sourceClusterConfigPath, err := getSourceClusterConfigPath()
 		Expect(err).NotTo(HaveOccurred(),
