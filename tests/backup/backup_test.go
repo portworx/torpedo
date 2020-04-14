@@ -790,13 +790,14 @@ func getDestinationClusterConfigPath() (string, error) {
 }
 
 func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
+	logrus.Infof("dump kubeconfigs to file system")
 	cm, err := core.Instance().GetConfigMap(configObject, "default")
 	if err != nil {
 		logrus.Errorf("Error reading config map: %v", err)
 		return err
 	}
+	logrus.Infof("Get over kubeconfig list %v", kubeconfigList)
 	for _, kubeconfig := range kubeconfigList {
-
 		config := cm.Data[kubeconfig]
 		if len(config) == 0 {
 			configErr := fmt.Sprintf("Error reading kubeconfig: found empty %s in config map %s",
@@ -804,6 +805,7 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 			return fmt.Errorf(configErr)
 		}
 		filePath := fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfig)
+		logrus.Infof("Save kubeconfig to %s", filePath)
 		err := ioutil.WriteFile(filePath, []byte(config), 0644)
 		if err != nil {
 			return err
