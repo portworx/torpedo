@@ -54,7 +54,7 @@ const (
 	storkDeploymentNamespace = "kube-system"
 
 	providerEks = "eks"
-	providerAks = "azure"
+	providerAks = "aks"
 	providerGke = "gke"
 
 	triggerCheckInterval = 2 * time.Second
