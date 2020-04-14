@@ -572,19 +572,8 @@ func CreateCloudCredential(provider, name string, orgID string) {
 				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
 		// TODO: validate CreateCloudCredentialResponse also
 		case providerAks:
-			log.Printf("Create creds for azure")
-			tenantId := os.Getenv("AZURE_TENANT_ID")
-			Expect(tenantId).NotTo(Equal(""),
-				"AZURE_TENANT_ID Environment variable should not be empty")
-
-			clientId := os.Getenv("AZURE_CLIENT_ID")
-			Expect(clientId).NotTo(Equal(""),
-				"AZURE_CLIENT_ID Environment variable should not be empty")
-
-			clientSecret := os.Getenv("AZURE_CLIENT_SECRET")
-			Expect(clientSecret).NotTo(Equal(""),
-				"AZURE_CLIENT_SECRET Environment variable should not be empty")
-
+			logrus.Infof("Create creds for azure")
+			tenantId, clientId, clientSecret := getAzureCredsFromEnv()
 			credCreateRequest := &api.CloudCredentialCreateRequest{
 				CreateMetadata: &api.CreateMetadata{
 					Name:  name,
@@ -596,7 +585,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 						AzureConfig: &api.AzureConfig{
 							TenantId:     tenantId,
 							ClientId:     clientId,
-							ClientSecret: clientId,
+							ClientSecret: clientSecret,
 						},
 					},
 				},
@@ -652,10 +641,29 @@ func getAzureAccountInfoFromEnv() (accountName, accountKey string) {
 	return accountName, accountKey
 }
 
+func getAzureCredsFromEnv() (tenantId, clientId, clientSecret string) {
+	log.Printf("Create creds for azure")
+	tenantId = os.Getenv("AZURE_TENANT_ID")
+	Expect(tenantId).NotTo(Equal(""),
+		"AZURE_TENANT_ID Environment variable should not be empty")
+
+	clientId = os.Getenv("AZURE_CLIENT_ID")
+	Expect(clientId).NotTo(Equal(""),
+		"AZURE_CLIENT_ID Environment variable should not be empty")
+
+	clientSecret = os.Getenv("AZURE_CLIENT_SECRET")
+	Expect(clientSecret).NotTo(Equal(""),
+		"AZURE_CLIENT_SECRET Environment variable should not be empty")
+
+	return tenantId, clientId, clientSecret
+}
+
 func CreateBackupLocation(provider, name, credName, bucketName, orgID string) {
 	switch provider {
 	case providerEks:
 		createS3BackupLocation(name, credName, bucketName, orgID)
+	case providerAks:
+		createAzureBackupLocation(name, credName, bucketName, orgID)
 	}
 }
 
@@ -667,9 +675,9 @@ func createS3BackupLocation(name string, cloudCred string, bucketName string, or
 }
 
 // createS3BackupLocation creates backup location
-func createAzureBackupLocation(name string, cloudCred string, orgID string) {
+func createAzureBackupLocation(name, cloudCred, bucketName, orgID string) {
 	Step(fmt.Sprintf("Create Azure backup location [%s] in org [%s]", name, orgID), func() {
-		// TODO(stgleb): Implement this
+		CreateAzureBackupLocation(name, cloudCred, bucketName, orgID)
 	})
 }
 
@@ -700,6 +708,38 @@ func CreateS3BackupLocation(name string, cloudCred string, bucketName string, or
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
+				},
+			},
+		},
+	}
+	_, err := backupDriver.CreateBackupLocation(bLocationCreateReq)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to create backuplocation [%s] in org [%s]", name, orgID))
+}
+
+// CreateAzureBackupLocation creates backuplocation for Azure
+func CreateAzureBackupLocation(name string, cloudCred string, bucketName string, orgID string) {
+	backupDriver := Inst().Backup
+	accountName, accountKey := getAzureAccountInfoFromEnv()
+	tenantId, clientId, clientSecret := getAzureCredsFromEnv()
+	encryptionKey := "torpedo"
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:            bucketName,
+			EncryptionKey:   encryptionKey,
+			CloudCredential: cloudCred,
+			Type:            api.BackupLocationInfo_Azure,
+			Config: &api.BackupLocationInfo_AzureConfig{
+				AzureConfig: &api.AzureConfig{
+					AccountName:  accountName,
+					AccountKey:   accountKey,
+					TenantId:     tenantId,
+					ClientId:     clientId,
+					ClientSecret: clientSecret,
 				},
 			},
 		},
