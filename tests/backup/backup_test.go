@@ -479,16 +479,17 @@ func CreateS3Bucket(bucketName string) {
 
 func CreateAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
-	accountName, accountKey := getAzureAccountInfoFromEnv()
+	_, _, _, accountName, accountKey := getAzureCredsFromEnv()
 
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	logrus.Infof("Create container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
-	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName))
+	u, _ := url.Parse(urlStr)
 	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to create shared key credential [%v]", err))
 
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
 	ctx := context.Background() // This example uses a never-expiring context
 
 	_, err = containerURL.Create(ctx, azblob.Metadata{}, azblob.PublicAccessNone)
@@ -573,7 +574,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 		// TODO: validate CreateCloudCredentialResponse also
 		case providerAks:
 			logrus.Infof("Create creds for azure")
-			tenantId, clientId, clientSecret := getAzureCredsFromEnv()
+			tenantId, clientId, clientSecret, accountName, accountKey := getAzureCredsFromEnv()
 			credCreateRequest := &api.CloudCredentialCreateRequest{
 				CreateMetadata: &api.CreateMetadata{
 					Name:  name,
@@ -586,6 +587,8 @@ func CreateCloudCredential(provider, name string, orgID string) {
 							TenantId:     tenantId,
 							ClientId:     clientId,
 							ClientSecret: clientSecret,
+							AccountName:  accountName,
+							AccountKey:   accountKey,
 						},
 					},
 				},
@@ -629,7 +632,7 @@ func getAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
-func getAzureAccountInfoFromEnv() (accountName, accountKey string) {
+func getAzureCredsFromEnv() (tenantId, clientId, clientSecret, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
 	Expect(accountName).NotTo(Equal(""),
 		"AZURE_ACCOUNT_NAME Environment variable should not be empty")
@@ -638,10 +641,6 @@ func getAzureAccountInfoFromEnv() (accountName, accountKey string) {
 	Expect(accountKey).NotTo(Equal(""),
 		"AZURE_ACCOUNT_KEY Environment variable should not be empty")
 
-	return accountName, accountKey
-}
-
-func getAzureCredsFromEnv() (tenantId, clientId, clientSecret string) {
 	log.Printf("Create creds for azure")
 	tenantId = os.Getenv("AZURE_TENANT_ID")
 	Expect(tenantId).NotTo(Equal(""),
@@ -655,7 +654,7 @@ func getAzureCredsFromEnv() (tenantId, clientId, clientSecret string) {
 	Expect(clientSecret).NotTo(Equal(""),
 		"AZURE_CLIENT_SECRET Environment variable should not be empty")
 
-	return tenantId, clientId, clientSecret
+	return tenantId, clientId, clientSecret, accountName, accountKey
 }
 
 func CreateBackupLocation(provider, name, credName, bucketName, orgID string) {
@@ -720,8 +719,6 @@ func CreateS3BackupLocation(name string, cloudCred string, bucketName string, or
 // CreateAzureBackupLocation creates backuplocation for Azure
 func CreateAzureBackupLocation(name string, cloudCred string, bucketName string, orgID string) {
 	backupDriver := Inst().Backup
-	accountName, accountKey := getAzureAccountInfoFromEnv()
-	tenantId, clientId, clientSecret := getAzureCredsFromEnv()
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -733,15 +730,6 @@ func CreateAzureBackupLocation(name string, cloudCred string, bucketName string,
 			EncryptionKey:   encryptionKey,
 			CloudCredential: cloudCred,
 			Type:            api.BackupLocationInfo_Azure,
-			Config: &api.BackupLocationInfo_AzureConfig{
-				AzureConfig: &api.AzureConfig{
-					AccountName:  accountName,
-					AccountKey:   accountKey,
-					TenantId:     tenantId,
-					ClientId:     clientId,
-					ClientSecret: clientSecret,
-				},
-			},
 		},
 	}
 	_, err := backupDriver.CreateBackupLocation(bLocationCreateReq)
