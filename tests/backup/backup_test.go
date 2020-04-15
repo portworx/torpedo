@@ -53,9 +53,9 @@ const (
 	storkDeploymentName      = "stork"
 	storkDeploymentNamespace = "kube-system"
 
-	providerEks = "eks"
-	providerAks = "aks"
-	providerGke = "gke"
+	providerAws   = "aws"
+	providerAzure = "azure"
+	providerGke   = "gke"
 
 	triggerCheckInterval = 2 * time.Second
 	triggerCheckTimeout  = 30 * time.Minute
@@ -85,7 +85,7 @@ func TestBackup(t *testing.T) {
 
 func SetupBackup() {
 	logrus.Infof("Backup instance %v", Inst().Backup)
-	provider := os.Getenv("K8S_VENDOR")
+	provider := os.Getenv("PROVIDER")
 
 	if provider == "" {
 		logrus.Infof("Empty provider")
@@ -94,6 +94,7 @@ func SetupBackup() {
 
 	logrus.Infof("Run Setup backup with provider: %s", provider)
 	orgID = Inst().InstanceID
+	logrus.Infof("Instance id %s\n", Inst().InstanceID)
 	bucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
 
 	CreateBucket(provider, bucketName)
@@ -104,7 +105,7 @@ func SetupBackup() {
 }
 
 func BackupCleanup() {
-	provider := os.Getenv("K8S_VENDOR")
+	provider := os.Getenv("PROVIDER")
 
 	if provider == "" {
 		logrus.Infof("Backup cleanup Empty provider")
@@ -169,12 +170,15 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			bkpNamespaces = make([]string, 0)
 			for i := 0; i < Inst().ScaleFactor; i++ {
 				taskName := fmt.Sprintf("backupcreaterestore-%d", i)
+				logrus.Infof("Task name %s\n", taskName)
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
 					namespace := GetAppNamespace(ctx, taskName)
 					bkpNamespaces = append(bkpNamespaces, namespace)
 					namespaceMapping[namespace] = fmt.Sprintf("%s-restore", namespace)
+					logrus.Infof("namespace mapping  key %s -> value %s",
+						namespace, namespaceMapping[namespace])
 				}
 			}
 			ValidateApplications(contexts)
@@ -186,7 +190,9 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 		Step(fmt.Sprintf("Create Backup [%s]", BackupName), func() {
 			// TODO(stgleb): Add multi-namespace backup when ready in px-backup
 			for _, namespace := range bkpNamespaces {
-				CreateBackup(fmt.Sprintf("%s-%s", BackupName, namespace),
+				backupName := fmt.Sprintf("%s-%s", BackupName, namespace)
+				logrus.Infof("Create backup full name %s", backupName)
+				CreateBackup(backupName,
 					SourceClusterName, BLocationName,
 					[]string{namespace}, labelSelectores, orgID)
 			}
@@ -196,17 +202,23 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			// setup task to delete stork pods as soon as it starts doing backup
 			eventCheck := func() (bool, error) {
 				for _, namespace := range bkpNamespaces {
+					backupName := fmt.Sprintf("%s-%s", BackupName, namespace)
 					req := &api.BackupInspectRequest{
-						Name:  fmt.Sprintf("%s-%s", BackupName, namespace),
+						Name:  backupName,
 						OrgId: orgID,
 					}
 
+					logrus.Infof("backup %s wait for running", backupName)
 					err := Inst().Backup.WaitForRunning(context.Background(),
 						req, time.Millisecond, time.Millisecond)
 
 					if err != nil {
+						logrus.Infof("backup %s wait for running err %v",
+							backupName, err)
+
 						continue
 					} else {
+						logrus.Infof("backup %s is running", backupName)
 						return true, nil
 					}
 				}
@@ -248,9 +260,11 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 
 		Step(fmt.Sprintf("Wait for Backup [%s] to complete", BackupName), func() {
 			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupName, namespace)
+				logrus.Infof("Wait for backup %s to complete", backupName)
 				err := Inst().Backup.WaitForBackupCompletion(
 					context.Background(),
-					fmt.Sprintf("%s-%s", BackupName, namespace), orgID,
+					backupName, orgID,
 					BackupRestoreCompletionTimeoutMin*time.Minute,
 					RetrySeconds*time.Second)
 				Expect(err).NotTo(HaveOccurred(),
@@ -441,9 +455,9 @@ func DeleteCloudCredential(name string, orgID string) {
 func CreateBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Create bucket [%s]", bucketName), func() {
 		switch provider {
-		case providerEks:
+		case providerAws:
 			CreateS3Bucket(bucketName)
-		case providerAks:
+		case providerAzure:
 			CreateAzureBucket(bucketName)
 		}
 	})
@@ -501,7 +515,7 @@ func CreateAzureBucket(bucketName string) {
 func DeleteBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
 		switch provider {
-		case providerEks:
+		case providerAws:
 			DeleteS3Bucket(bucketName)
 		}
 	})
@@ -543,7 +557,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 		logrus.Printf("Create credential name %s for org %s provider %s", name, orgID, provider)
 		backupDriver := Inst().Backup
 		switch provider {
-		case providerEks:
+		case providerAws:
 			log.Printf("Create creds for aws")
 			id := os.Getenv("AWS_ACCESS_KEY_ID")
 			Expect(id).NotTo(Equal(""),
@@ -572,7 +586,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
 		// TODO: validate CreateCloudCredentialResponse also
-		case providerAks:
+		case providerAzure:
 			logrus.Infof("Create creds for azure")
 			tenantId, clientId, clientSecret, accountName, accountKey := getAzureCredsFromEnv()
 			credCreateRequest := &api.CloudCredentialCreateRequest{
@@ -659,9 +673,9 @@ func getAzureCredsFromEnv() (tenantId, clientId, clientSecret, accountName, acco
 
 func CreateBackupLocation(provider, name, credName, bucketName, orgID string) {
 	switch provider {
-	case providerEks:
+	case providerAws:
 		createS3BackupLocation(name, credName, bucketName, orgID)
-	case providerAks:
+	case providerAzure:
 		createAzureBackupLocation(name, credName, bucketName, orgID)
 	}
 }
@@ -888,8 +902,8 @@ func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID s
 func CreateBackup(backupName string, clusterName string, bLocation string,
 	namespaces []string, labelSelectores map[string]string, orgID string) {
 
-	Step(fmt.Sprintf("Create backup [%s] in org [%s] from cluster [%s]",
-		backupName, orgID, clusterName), func() {
+	Step(fmt.Sprintf("Create backup [%s] in org [%s] from cluster [%s] namespaces [%s]",
+		backupName, orgID, clusterName, namespaces), func() {
 
 		backupDriver := Inst().Backup
 		bkpCreateRequest := &api.BackupCreateRequest{

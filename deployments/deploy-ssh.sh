@@ -8,6 +8,10 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+if [ -z "${PROVIDER}" ]; then
+    PROVIDER="none"
+fi
+
 if [ -z "${SCHEDULER}" ]; then
     SCHEDULER="k8s"
 fi
@@ -372,6 +376,8 @@ spec:
       value: "${TORPEDO_SSH_KEY}"
     - name: AZURE_TENANT_ID
       value: "${AZURE_TENANTID}"
+    - name: PROVIDER
+      value: "${PROVIDER}"
     - name: AZURE_CLIENT_ID
       value: "${AZURE_CLIENTID}"
     - name: AZURE_CLIENT_SECRET
