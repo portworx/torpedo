@@ -273,19 +273,37 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			}
 		})
 
+		Step(fmt.Sprintf("Create Restore [%s]", RestoreName), func() {
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupName, namespace)
+				restoreName := fmt.Sprintf("%s-%s", BackupName, namespace)
+				logrus.Infof("Create restore %s:%s from backup %s:%s",
+					namespaceMapping[namespace], restoreName, namespace, backupName)
+				CreateRestore(restoreName, backupName, namespaceMapping,
+					DestinationClusterName, orgID)
+			}
+		})
+
+		Step(fmt.Sprintf("Wait for Restore [%s] to complete", RestoreName), func() {
+			for _, namespace := range bkpNamespaces {
+				restoreName := fmt.Sprintf("%s-%s", BackupName, namespace)
+				logrus.Infof("Wait for restore %s:%s to complete",
+					namespaceMapping[namespace], restoreName)
+
+				err := Inst().Backup.WaitForRestoreCompletion(context.Background(), restoreName, orgID,
+					BackupRestoreCompletionTimeoutMin*time.Minute,
+					RetrySeconds*time.Second)
+				Expect(err).NotTo(HaveOccurred(),
+					fmt.Sprintf("Failed to wait for restore [%s] to complete. Error: [%v]",
+						restoreName, err))
+			}
+		})
+
 		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
 			for _, ctx := range contexts {
 				TearDownContext(ctx, map[string]bool{
 					SkipClusterScopedObjects: true,
 				})
-			}
-		})
-
-		Step(fmt.Sprintf("Create Restore [%s]", RestoreName), func() {
-			for _, namespace := range bkpNamespaces {
-				CreateRestore(fmt.Sprintf("%s-%s", RestoreName, namespace),
-					fmt.Sprintf("%s-%s", BackupName, namespace),
-					namespaceMapping, DestinationClusterName, orgID)
 			}
 		})
 
