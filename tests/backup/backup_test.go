@@ -298,8 +298,11 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 
 			SetClusterContext(destClusterConfigPath)
 
-			Expect(err).NotTo(HaveOccurred(),
-				fmt.Sprintf("Failed to switch to context to destination cluster. Error: [%v]", err))
+			// Populate contexts
+			for _, ctx := range contexts {
+				err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			}
 
 			// TODO(stgleb): Uncomment it in future when problem with StorageClasses is resolved
 			// ValidateApplications(contexts)
