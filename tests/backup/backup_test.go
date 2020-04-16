@@ -303,7 +303,45 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 		})
 
 		Step("teardown backup objects", func() {
-			BackupCleanup()
+			provider := os.Getenv("PROVIDER")
+
+			if provider == "" {
+				logrus.Infof("Backup cleanup Empty provider")
+				return
+			}
+
+			for _, namespace := range bkpNamespaces {
+				restoreName := fmt.Sprintf("%s-%s", RestoreName, namespace)
+				backupName := fmt.Sprintf("%s-%s", BackupName, namespace)
+
+				logrus.Infof("Delete restore %s", restoreName)
+				DeleteRestore(restoreName, orgID)
+				logrus.Infof("Restore %s has been deleted", restoreName)
+
+				logrus.Infof("Delete backup %s", backupName)
+				DeleteBackup(backupName, SourceClusterName, orgID)
+				logrus.Infof("Backup %s has been deleted", backupName)
+			}
+
+			logrus.Infof("Delete destination cluster %s", DestinationClusterName)
+			DeleteCluster(DestinationClusterName, orgID)
+			logrus.Infof("Destination cluster %s has been deleted", DestinationClusterName)
+
+			logrus.Infof("Delete source cluster %s", SourceClusterName)
+			DeleteCluster(SourceClusterName, orgID)
+			logrus.Infof("Source cluster %s has been deleted", SourceClusterName)
+
+			logrus.Infof("Delete backup location %s", BLocationName)
+			DeleteBackupLocation(BLocationName, orgID)
+			logrus.Infof("Backup location %s has been deleted", BLocationName)
+
+			logrus.Infof("Delete cloud credential %s", CredName)
+			DeleteCloudCredential(CredName, orgID)
+			logrus.Infof("Cloud credential %s has been deleted", CredName)
+
+			logrus.Infof("Delete bucket %s", bucketName)
+			DeleteBucket(provider, bucketName)
+			logrus.Infof("Bucket %s has been deleted", bucketName)
 		})
 	})
 })
@@ -900,10 +938,10 @@ func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID s
 
 // CreateBackup creates backup
 func CreateBackup(backupName string, clusterName string, bLocation string,
-	namespaces []string, labelSelectores map[string]string, orgID string) {
+	namespaces []string, labelSelectors map[string]string, orgID string) {
 
-	Step(fmt.Sprintf("Create backup [%s] in org [%s] from cluster [%s] namespaces [%s]",
-		backupName, orgID, clusterName, namespaces), func() {
+	Step(fmt.Sprintf("Create backup [%s] in org [%s] from cluster [%s] namespaces [%s] to location [%s]",
+		backupName, orgID, clusterName, namespaces, bLocation), func() {
 
 		backupDriver := Inst().Backup
 		bkpCreateRequest := &api.BackupCreateRequest{
@@ -914,7 +952,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string,
 			BackupLocation: bLocation,
 			Cluster:        clusterName,
 			Namespaces:     namespaces,
-			LabelSelectors: labelSelectores,
+			LabelSelectors: labelSelectors,
 		}
 		_, err := backupDriver.CreateBackup(bkpCreateRequest)
 		Expect(err).NotTo(HaveOccurred(),
