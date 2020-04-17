@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/pkg/sched"
+	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -224,7 +225,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			}
 
 			deleteOpts := &scheduler.DeleteTasksOptions{
-				TriggerOptions: scheduler.TriggerOptions{
+				TriggerOptions: driver_api.TriggerOptions{
 					TriggerCb:            eventCheck,
 					TriggerCheckInterval: triggerCheckInterval,
 					TriggerCheckTimeout:  triggerCheckTimeout,

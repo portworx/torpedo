@@ -37,13 +37,16 @@ require (
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pborman/uuid v0.0.0-20180906182336-adf5a7427709
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
-	github.com/portworx/px-backup-api v0.0.0-20200402112707-c49de5730ac1
+	github.com/portworx/px-backup-api v0.0.0-20200406122257-9f46d747b02a
 	// github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f
 	github.com/portworx/sched-ops v0.0.0-20200221004841-9205a51a1fee
 	github.com/sirupsen/logrus v1.5.0
 	github.com/stretchr/testify v1.5.1
 	go.opencensus.io v0.22.1 // indirect
 	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413
+	golang.org/x/exp v0.0.0-20200331195152-e8c3332aa8e5 // indirect
+	golang.org/x/image v0.0.0-20200119044424-58c23975cae1 // indirect
+	golang.org/x/mobile v0.0.0-20200329125638-4c31acba0007 // indirect
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	google.golang.org/grpc v1.24.0
 	gopkg.in/yaml.v2 v2.2.4
