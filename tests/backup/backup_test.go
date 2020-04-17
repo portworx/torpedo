@@ -656,7 +656,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 		// TODO: validate CreateCloudCredentialResponse also
 		case providerAzure:
 			logrus.Infof("Create creds for azure")
-			tenantId, clientId, clientSecret, accountName, accountKey := getAzureCredsFromEnv()
+			tenantID, clientID, clientSecret, accountName, accountKey := getAzureCredsFromEnv()
 			credCreateRequest := &api.CloudCredentialCreateRequest{
 				CreateMetadata: &api.CreateMetadata{
 					Name:  name,
@@ -666,8 +666,8 @@ func CreateCloudCredential(provider, name string, orgID string) {
 					Type: api.CloudCredentialInfo_Azure,
 					Config: &api.CloudCredentialInfo_AzureConfig{
 						AzureConfig: &api.AzureConfig{
-							TenantId:     tenantId,
-							ClientId:     clientId,
+							TenantId:     tenantID,
+							ClientId:     clientID,
 							ClientSecret: clientSecret,
 							AccountName:  accountName,
 							AccountKey:   accountKey,
