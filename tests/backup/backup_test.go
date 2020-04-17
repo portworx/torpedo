@@ -714,7 +714,7 @@ func getAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
-func getAzureCredsFromEnv() (tenantId, clientId, clientSecret, accountName, accountKey string) {
+func getAzureCredsFromEnv() (tenantID, clientID, clientSecret, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
 	Expect(accountName).NotTo(Equal(""),
 		"AZURE_ACCOUNT_NAME Environment variable should not be empty")
@@ -724,19 +724,19 @@ func getAzureCredsFromEnv() (tenantId, clientId, clientSecret, accountName, acco
 		"AZURE_ACCOUNT_KEY Environment variable should not be empty")
 
 	log.Printf("Create creds for azure")
-	tenantId = os.Getenv("AZURE_TENANT_ID")
-	Expect(tenantId).NotTo(Equal(""),
+	tenantID = os.Getenv("AZURE_TENANT_ID")
+	Expect(tenantID).NotTo(Equal(""),
 		"AZURE_TENANT_ID Environment variable should not be empty")
 
-	clientId = os.Getenv("AZURE_CLIENT_ID")
-	Expect(clientId).NotTo(Equal(""),
+	clientID = os.Getenv("AZURE_CLIENT_ID")
+	Expect(clientID).NotTo(Equal(""),
 		"AZURE_CLIENT_ID Environment variable should not be empty")
 
 	clientSecret = os.Getenv("AZURE_CLIENT_SECRET")
 	Expect(clientSecret).NotTo(Equal(""),
 		"AZURE_CLIENT_SECRET Environment variable should not be empty")
 
-	return tenantId, clientId, clientSecret, accountName, accountKey
+	return tenantID, clientID, clientSecret, accountName, accountKey
 }
 
 func CreateBackupLocation(provider, name, credName, bucketName, orgID string) {
