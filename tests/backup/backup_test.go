@@ -150,8 +150,8 @@ func SetClusterContext(clusterConfigPath string) {
 var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 	var contexts []*scheduler.Context
 	var bkpNamespaces []string
+	var namespaceMapping map[string]string
 
-	namespaceMapping := make(map[string]string)
 	labelSelectores := make(map[string]string)
 
 	It("has to connect and check the backup setup", func() {
@@ -176,9 +176,6 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 				for _, ctx := range appContexts {
 					namespace := GetAppNamespace(ctx, taskName)
 					bkpNamespaces = append(bkpNamespaces, namespace)
-					namespaceMapping[namespace] = fmt.Sprintf("%s-restore", namespace)
-					logrus.Infof("namespace mapping  key %s -> value %s",
-						namespace, namespaceMapping[namespace])
 				}
 			}
 			ValidateApplications(contexts)
@@ -191,7 +188,8 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			// TODO(stgleb): Add multi-namespace backup when ready in px-backup
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupName, namespace)
-				logrus.Infof("Create backup full name %s", backupName)
+				logrus.Infof("Create backup full name %s:%s:%s",
+					SourceClusterName, namespace, backupName)
 				CreateBackup(backupName,
 					SourceClusterName, BLocationName,
 					[]string{namespace}, labelSelectores, orgID)
@@ -276,9 +274,10 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 		Step(fmt.Sprintf("Create Restore [%s]", RestoreName), func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupName, namespace)
-				restoreName := fmt.Sprintf("%s-%s", BackupName, namespace)
-				logrus.Infof("Create restore %s:%s from backup %s:%s",
-					namespaceMapping[namespace], restoreName, namespace, backupName)
+				restoreName := fmt.Sprintf("%s-%s", RestoreName, namespace)
+				logrus.Infof("Create restore %s:%s:%s from backup %s:%s:%s",
+					DestinationClusterName, namespace, restoreName,
+					SourceClusterName, namespace, backupName)
 				CreateRestore(restoreName, backupName, namespaceMapping,
 					DestinationClusterName, orgID)
 			}
@@ -286,9 +285,9 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 
 		Step(fmt.Sprintf("Wait for Restore [%s] to complete", RestoreName), func() {
 			for _, namespace := range bkpNamespaces {
-				restoreName := fmt.Sprintf("%s-%s", BackupName, namespace)
+				restoreName := fmt.Sprintf("%s-%s", RestoreName, namespace)
 				logrus.Infof("Wait for restore %s:%s to complete",
-					namespaceMapping[namespace], restoreName)
+					namespace, restoreName)
 
 				err := Inst().Backup.WaitForRestoreCompletion(context.Background(), restoreName, orgID,
 					BackupRestoreCompletionTimeoutMin*time.Minute,
