@@ -179,7 +179,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 					bkpNamespaces = append(bkpNamespaces, namespace)
 				}
 			}
-			ValidateApplications(contexts)
+			// ValidateApplications(contexts)
 		})
 
 		// Wait for IO to run
