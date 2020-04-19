@@ -561,7 +561,7 @@ func CreateS3Bucket(bucketName string) {
 
 func CreateAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
-	_, _, _, accountName, accountKey := getAzureCredsFromEnv()
+	_, _, _, _, accountName, accountKey := getAzureCredsFromEnv()
 
 	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
 	logrus.Infof("Create container url %s", urlStr)
@@ -656,7 +656,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 		// TODO: validate CreateCloudCredentialResponse also
 		case providerAzure:
 			logrus.Infof("Create creds for azure")
-			tenantID, clientID, clientSecret, accountName, accountKey := getAzureCredsFromEnv()
+			tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := getAzureCredsFromEnv()
 			credCreateRequest := &api.CloudCredentialCreateRequest{
 				CreateMetadata: &api.CreateMetadata{
 					Name:  name,
@@ -666,11 +666,12 @@ func CreateCloudCredential(provider, name string, orgID string) {
 					Type: api.CloudCredentialInfo_Azure,
 					Config: &api.CloudCredentialInfo_AzureConfig{
 						AzureConfig: &api.AzureConfig{
-							TenantId:     tenantID,
-							ClientId:     clientID,
-							ClientSecret: clientSecret,
-							AccountName:  accountName,
-							AccountKey:   accountKey,
+							TenantId:       tenantID,
+							ClientId:       clientID,
+							ClientSecret:   clientSecret,
+							AccountName:    accountName,
+							AccountKey:     accountKey,
+							SubscriptionId: subscriptionID,
 						},
 					},
 				},
@@ -714,7 +715,7 @@ func getAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
-func getAzureCredsFromEnv() (tenantID, clientID, clientSecret, accountName, accountKey string) {
+func getAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
 	Expect(accountName).NotTo(Equal(""),
 		"AZURE_ACCOUNT_NAME Environment variable should not be empty")
@@ -736,7 +737,11 @@ func getAzureCredsFromEnv() (tenantID, clientID, clientSecret, accountName, acco
 	Expect(clientSecret).NotTo(Equal(""),
 		"AZURE_CLIENT_SECRET Environment variable should not be empty")
 
-	return tenantID, clientID, clientSecret, accountName, accountKey
+	subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
+	Expect(clientSecret).NotTo(Equal(""),
+		"AZURE_SUBSCRIPTION_ID Environment variable should not be empty")
+
+	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
 }
 
 func CreateBackupLocation(provider, name, credName, bucketName, orgID string) {
