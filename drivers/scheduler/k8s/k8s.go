@@ -56,8 +56,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-
-	"github.com/portworx/torpedo/drivers"
 )
 
 const (
@@ -82,6 +80,8 @@ const (
 	AwsStorageClassKey = "aws-storage-class"
 	// GkeStorageClassKey key for storing gke storage class
 	GkeStorageClassKey = "gke-storage-class"
+	// PortworxStorageClassKey key for storing portworx storage class
+	PortworxStorageClassKey = "portworx-storage-class"
 )
 
 const (
@@ -135,7 +135,6 @@ type K8s struct {
 	SpecFactory         *spec.Factory
 	NodeDriverName      string
 	VolDriverName       string
-	ProviderName        string
 	secretConfigMapName string
 	customConfig        map[string]scheduler.AppConfig
 	eventsStorage       map[string][]scheduler.Event
@@ -170,7 +169,6 @@ func (k *K8s) String() string {
 func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.NodeDriverName = schedOpts.NodeDriverName
 	k.VolDriverName = schedOpts.VolDriverName
-	k.ProviderName = schedOpts.ProviderName
 	k.secretConfigMapName = schedOpts.SecretConfigMapName
 	k.customConfig = schedOpts.CustomAppConfig
 	k.eventsStorage = make(map[string][]scheduler.Event)
@@ -186,7 +184,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 		}
 	}
 
-	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolDriverName, k)
+	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.StorageProvisioner, k)
 	if err != nil {
 		return err
 	}
@@ -273,13 +271,10 @@ func (k *K8s) RefreshNodeRegistry() error {
 func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
 	fileList := make([]string, 0)
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
-		if !f.IsDir() {
-			if !isValidProvider(path) {
+		if f != nil && !f.IsDir() {
+			if isValidProvider(path, storageProvisioner) {
+				logrus.Infof("	add filepath: %s", path)
 				fileList = append(fileList, path)
-			} else { // specs from cloud provider directory
-				if strings.Contains(path, "/"+storageProvisioner+"/") {
-					fileList = append(fileList, path)
-				}
 			}
 		}
 
@@ -345,13 +340,16 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 	return specs, nil
 }
 
-func isValidProvider(specPath string) bool {
-	for _, driver := range volume.GetVolumeDrivers() {
-		if strings.Contains(specPath, "/"+driver+"/") { // Check for directories for cloud providers, ignore files
-			return true
+func isValidProvider(specPath, storageProvisioner string) bool {
+	// Skip all storage provisioner specific spec except storageProvisioner
+	for _, driver := range volume.GetVolumeProvisioners() {
+		if driver != storageProvisioner &&
+			strings.Contains(specPath, "/"+driver+"/") {
+			return false
 		}
 	}
-	return false
+	// Get the rest of specs
+	return true
 }
 
 func decodeSpec(specContents []byte) (runtime.Object, error) {
@@ -822,9 +820,6 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		if len(options.Labels) > 0 {
 			k.addLabelsToPVC(obj, options.Labels)
 		}
-
-		k.substitutePvcWithStorageClass(obj)
-
 		pvc, err := k8sCore.CreatePersistentVolumeClaim(obj)
 		if errors.IsAlreadyExists(err) {
 			if pvc, err = k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace); err == nil {
@@ -1058,7 +1053,6 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 				pvc.Annotations = make(map[string]string)
 			}
 
-			k.substitutePvcWithStorageClass(&pvc)
 			pvcList = append(pvcList, pvc)
 		}
 		obj.Spec.VolumeClaimTemplates = pvcList
@@ -1784,6 +1778,10 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 	var err error
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
+			if ctx.SkipClusterScopedObject {
+				logrus.Infof("Skip storage class %s validation", obj.Name)
+				continue
+			}
 			if _, err := k8sStorage.GetStorageClass(obj.Name); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
@@ -3445,28 +3443,6 @@ func (k *K8s) UpdateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 // ListAutopilotRules lists AutopilotRules
 func (k *K8s) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	return k8sAutopilot.ListAutopilotRules()
-}
-
-// Update pvc with appropriate storage class
-func (k *K8s) substitutePvcWithStorageClass(pvc *v1.PersistentVolumeClaim) {
-	var storageClassKey string
-
-	switch k.ProviderName {
-	case drivers.ProviderAzure:
-		storageClassKey = AzureStorageClassKey
-	case drivers.ProviderAws:
-		storageClassKey = AwsStorageClassKey
-	case drivers.ProviderGke:
-		storageClassKey = GkeStorageClassKey
-	default:
-		return
-	}
-
-	if scName, ok := pvc.Annotations[storageClassKey]; ok {
-		logrus.Infof("Substitute original pvc storage class with %s", scName)
-		pvc.Annotations[storageClassKey] = scName
-		pvc.Spec.StorageClassName = &scName
-	}
 }
 
 func insertLineBreak(note string) string {

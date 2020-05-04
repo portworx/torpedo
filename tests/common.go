@@ -139,7 +139,7 @@ func InitInstance() {
 		NodeDriverName:      Inst().N.String(),
 		SecretConfigMapName: Inst().ConfigMap,
 		CustomAppConfig:     Inst().CustomAppConfig,
-		ProviderName:        Inst().Provider,
+		StorageProvisioner:  Inst().Provisioner,
 	})
 	expect(err).NotTo(haveOccurred())
 
@@ -196,6 +196,10 @@ func ValidateContext(ctx *scheduler.Context) {
 		})
 
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
+			if ctx.SkipVolumeValidation {
+				return
+			}
+
 			vols, err := Inst().S.GetVolumes(ctx)
 			expect(err).NotTo(haveOccurred())
 
@@ -213,6 +217,11 @@ func ValidateContext(ctx *scheduler.Context) {
 func ValidateVolumes(ctx *scheduler.Context) {
 	context("For validation of an app's volumes", func() {
 		var err error
+
+		if ctx.SkipVolumeValidation {
+			return
+		}
+
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
@@ -251,8 +260,10 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 			expect(err).NotTo(haveOccurred())
 		})
 
+		if ctx.SkipVolumeValidation {
+			return
+		}
 		ValidateVolumesDeleted(ctx.App.Key, vols)
-
 	})
 }
 
@@ -689,7 +700,6 @@ var once sync.Once
 // Torpedo is the torpedo testsuite
 type Torpedo struct {
 	InstanceID                          string
-	Provider                            string
 	S                                   scheduler.Driver
 	V                                   volume.Driver
 	N                                   node.Driver
@@ -802,13 +812,10 @@ func ParseFlags() {
 				logrus.Infof("Backup driver found %v", backupDriver)
 			}
 		}
-		provider, _ := os.LookupEnv("VOLUME_PROVIDER")
-		logrus.Infof("use provider %s", provider)
 
 		once.Do(func() {
 			instance = &Torpedo{
 				InstanceID:                          time.Now().Format("01-02-15h04m05s"),
-				Provider:                            provider,
 				S:                                   schedulerDriver,
 				V:                                   volumeDriver,
 				N:                                   nodeDriver,
