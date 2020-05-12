@@ -205,6 +205,5 @@ spec:
             - "--uri=amqp://rabbitmq"
             - "--consumers=10"
             - "--producers=5"
-            - "--servers-startup-timeout=60"
             - "--slow-start"
             - "--autoack"
