@@ -3437,6 +3437,147 @@ func (k *K8s) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	return k8sAutopilot.ListAutopilotRules()
 }
 
+// SubstituteNamespaceInSpec substituts original namespaces according to namespace mapping
+func (k *K8s) SubstituteNamespaceInSpec(ctx *scheduler.Context, namespaceMapping map[string]string) error {
+	for _, in := range ctx.App.SpecList {
+		if specObj, ok := in.(*appsapi.Deployment); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*appsapi.StatefulSet); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*appsapi.DaemonSet); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*v1.Service); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*v1.PersistentVolumeClaim); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.GroupVolumeSnapshot); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*v1.Secret); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*v1.ConfigMap); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.Rule); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*v1.Pod); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.ClusterPair); ok {
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.Migration); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.MigrationSchedule); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.BackupLocation); ok {
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.ApplicationBackup); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.SchedulePolicy); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.ApplicationRestore); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.ApplicationClone); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*storkapi.VolumeSnapshotRestore); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*apapi.AutopilotRule); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*v1.ServiceAccount); ok {
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*rbacv1.ClusterRole); ok {
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*rbacv1.ClusterRoleBinding); ok {
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*rbacv1.Role); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*rbacv1.RoleBinding); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*batchv1beta1.CronJob); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*v1.LimitRange); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else if specObj, ok := in.(*networkingv1beta1.Ingress); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else {
+			logrus.Errorf("unsupported type %v object: %v", reflect.TypeOf(in), in)
+		}
+	}
+
+	return nil
+}
+
 func insertLineBreak(note string) string {
 	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
 }
