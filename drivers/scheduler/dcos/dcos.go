@@ -639,6 +639,14 @@ func (d *dcos) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	}
 }
 
+func (d *dcos) SubstituteNamespaceInSpec(_ *scheduler.Context, _ map[string]string) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SubstituteNamespaceInSpec()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

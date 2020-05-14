@@ -189,6 +189,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 					// Override default App readiness time out of 5 mins with 10 mins
 					ctx.ReadinessTimeout = appReadinessTimeout
 					namespace := GetAppNamespace(ctx, taskName)
+					namespaceMapping[namespace] = fmt.Sprintf("%s-restore", namespace)
 					bkpNamespaces = append(bkpNamespaces, namespace)
 				}
 			}
@@ -286,7 +287,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 			restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, namespace)
 			Step(fmt.Sprintf("Create restore %s:%s:%s from backup %s:%s:%s",
-				DestinationClusterName, namespace, restoreName,
+				DestinationClusterName, namespaceMapping[namespace], restoreName,
 				SourceClusterName, namespace, backupName), func() {
 				CreateRestore(restoreName, backupName, namespaceMapping,
 					DestinationClusterName, orgID)
@@ -318,6 +319,11 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 
 			// Populate contexts
 			for _, ctx := range contexts {
+				logrus.Infof("Substitute namespaces according to %v", namespaceMapping)
+				if err := Inst().S.SubstituteNamespaceInSpec(ctx, namespaceMapping); err != nil {
+					logrus.Warnf("Error when substituting namespace\n")
+				}
+
 				if Inst().V.String() != drivers.ProviderPortworx {
 					ctx.SkipClusterScopedObject = true
 					ctx.SkipVolumeValidation = true

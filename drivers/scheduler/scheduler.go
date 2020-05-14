@@ -218,8 +218,11 @@ type Driver interface {
 	// GetWorkloadSizeFromAppSpec gets workload size from an application spec
 	GetWorkloadSizeFromAppSpec(ctx *Context) (uint64, error)
 
-	// SetConfig sets connnection config (e.g. kubeconfig in case of k8s) for scheduler driver
+	// SetConfig sets connection config (e.g. kubeconfig in case of k8s) for scheduler driver
 	SetConfig(configPath string) error
+
+	// SubstituteNamespaceInSpec substitutes namespaces in object according to namespace mapping
+	SubstituteNamespaceInSpec(ctx *Context, namespaceMapping map[string]string) error
 }
 
 var (

@@ -3445,6 +3445,22 @@ func (k *K8s) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	return k8sAutopilot.ListAutopilotRules()
 }
 
+// SubstituteNamespaceInSpec substituts original namespaces according to namespace mapping
+func (k *K8s) SubstituteNamespaceInSpec(ctx *scheduler.Context, namespaceMapping map[string]string) error {
+	for _, in := range ctx.App.SpecList {
+		if specObj, ok := in.(*metav1.ObjectMeta); ok {
+			logrus.Debugf("Substitute object %v namespace %s to %s\n",
+				specObj.Name, specObj.Namespace, namespaceMapping[specObj.Namespace])
+			namespace, _ := namespaceMapping[specObj.Namespace]
+			specObj.Namespace = namespace
+		} else {
+			logrus.Errorf("unsupported type %v object: %v", reflect.TypeOf(in), in)
+		}
+	}
+
+	return nil
+}
+
 func insertLineBreak(note string) string {
 	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
 }
