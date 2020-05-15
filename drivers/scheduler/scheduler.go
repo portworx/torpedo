@@ -88,6 +88,8 @@ type ScheduleOptions struct {
 	Scheduler string
 	// Labels is a map of {key,value} pairs for labeling spec objects
 	Labels map[string]string
+	// CustomAppName  use this custom name to deploy app, if specified
+	CustomAppName string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
