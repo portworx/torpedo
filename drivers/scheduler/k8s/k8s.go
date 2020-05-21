@@ -184,7 +184,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 		}
 	}
 
-	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.StorageProvisioner, k)
+	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolDriverName, k)
 	if err != nil {
 		return err
 	}
@@ -342,7 +342,7 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 
 func isValidProvider(specPath, storageProvisioner string) bool {
 	// Skip all storage provisioner specific spec except storageProvisioner
-	for _, driver := range volume.GetVolumeProvisioners() {
+	for _, driver := range volume.GetVolumeDrivers() {
 		if driver != storageProvisioner &&
 			strings.Contains(specPath, "/"+driver+"/") {
 			return false
