@@ -58,7 +58,7 @@ const (
 	defaultTimeout       = 5 * time.Minute
 	defaultRetryInterval = 5 * time.Second
 
-	appReadinessTimeout = 10 * time.Minute
+	appReadinessTimeout = 20 * time.Minute
 )
 
 var (
