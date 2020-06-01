@@ -1937,7 +1937,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVol
 			}
 		} else if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
 			vols = append(vols, &volume.Volume{
-				ID:        string(obj.UID),
+				ID:        string(obj.Spec.VolumeName),
 				Name:      obj.Name,
 				Namespace: obj.Namespace,
 				Shared:    k.isPVCShared(obj),
@@ -1986,7 +1986,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVol
 
 			for _, pvc := range pvcList.Items {
 				vols = append(vols, &volume.Volume{
-					ID:        string(pvc.UID),
+					ID:        string(pvc.Spec.VolumeName),
 					Name:      pvc.Name,
 					Namespace: pvc.Namespace,
 					Shared:    k.isPVCShared(&pvc),
@@ -2145,7 +2145,7 @@ func (k *K8s) resizePVCBy1GB(ctx *scheduler.Context, pvc *v1.PersistentVolumeCla
 	}
 	sizeInt64, _ := storageSize.AsInt64()
 	vol := &volume.Volume{
-		ID:            string(pvc.UID),
+		ID:            string(pvc.Spec.VolumeName),
 		Name:          pvc.Name,
 		Namespace:     pvc.Namespace,
 		RequestedSize: uint64(sizeInt64),
