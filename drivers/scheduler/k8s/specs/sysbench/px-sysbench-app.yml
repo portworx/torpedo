@@ -52,6 +52,8 @@ spec:
               value: 127.0.0.1
             - name: MYSQL_ROOT_PASSWORD
               value: password
+            - name: SIZE
+              value: "10"
       volumes:
         - name: mysql-persistent-storage
           persistentVolumeClaim:
