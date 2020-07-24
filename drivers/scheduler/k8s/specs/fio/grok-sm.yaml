@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    name: grok
+  name: grok
+spec:
+  endpoints:
+  - port: grok-port
+    targetPort: 9144
+  namespaceSelector:
+    any: true
+  selector:
+    matchLabels:
+      app: fio
