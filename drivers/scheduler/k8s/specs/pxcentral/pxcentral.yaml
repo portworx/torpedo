@@ -1,0 +1,4 @@
+url: "http://charts.portworx.io/"
+reponame: "portworx"
+chartname: "px-backup"
+releasename: "px-backup"

@@ -39,6 +39,8 @@ type Context struct {
 	RefreshStorageEndpoint bool
 	// ReadinessTimeout time within which context is expected to be up
 	ReadinessTimeout time.Duration
+	// HelmRepo info for helm chart schedules
+	HelmRepo *HelmRepo
 }
 
 // DeepCopy create a copy of Context
@@ -76,6 +78,8 @@ type InitOptions struct {
 	NodeDriverName string
 	// ConfigMap  identifies what config map should be used to
 	SecretConfigMapName string
+	// HelmValuesConfigMapName custom values for helm charts
+	HelmValuesConfigMapName string
 	// CustomAppConfig custom settings for apps
 	CustomAppConfig map[string]AppConfig
 	// StorageProvisioner name
@@ -294,6 +298,15 @@ type Event struct {
 	LastSeen  v1.Time
 	Kind      string
 	Type      string
+}
+
+// HelmRepo has the related info about the repo
+type HelmRepo struct {
+	URL         string `yaml:"url"`
+	RepoName    string `yaml:"reponame"`
+	ChartName   string `yaml:"chartname"`
+	ReleaseName string `yaml:"releasename"`
+	Namespace   string
 }
 
 // Register registers the given scheduler driver

@@ -9,6 +9,7 @@ require (
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/fatih/color v1.9.0
 	github.com/gambol99/go-marathon v0.7.1
+	github.com/gofrs/flock v0.7.1
 	github.com/golang/protobuf v1.4.3
 	github.com/hashicorp/go-version v1.2.1
 	github.com/hashicorp/vault/api v1.0.5-0.20200317185738-82f498082f02
@@ -20,6 +21,7 @@ require (
 	github.com/onsi/ginkgo v1.15.0
 	github.com/onsi/gomega v1.10.5
 	github.com/pborman/uuid v1.2.0
+	github.com/pkg/errors v0.9.1
 	github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20210401031424-429c07e70276
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
@@ -31,6 +33,7 @@ require (
 	golang.org/x/net v0.0.0-20201224014010-6772e930b67b
 	google.golang.org/grpc v1.33.2
 	gopkg.in/yaml.v2 v2.4.0
+	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
 	k8s.io/api v0.20.4
 	k8s.io/apimachinery v0.20.4
 	k8s.io/client-go v12.0.0+incompatible

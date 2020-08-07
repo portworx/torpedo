@@ -82,6 +82,12 @@ if [ -n "${CONFIG_MAP}" ]; then
     CONFIGMAP="${CONFIG_MAP}"
 fi
 
+HELMVALUES_CONFIG_MAP=""
+if [ -n "${HELMVALUES_CONFIGMAP}" ]; then
+    HELMVALUES_CONFIG_MAP="${HELMVALUES_CONFIGMAP}"
+    echo "Using helmvalues configmap: ${HELMVALUES_CONFIG_MAP}"
+fi
+
 if [ -z "${TORPEDO_IMG}" ]; then
     TORPEDO_IMG="portworx/torpedo:latest"
     echo "Using default torpedo image: ${TORPEDO_IMG}"
@@ -164,7 +170,8 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/volume_ops.test",
             "bin/sched.test",
             "bin/scheduler_upgrade.test",
-            "bin/node_decommission.test",'
+            "bin/node_decommission.test",
+            "bin/pxcentral.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
 fi
@@ -411,6 +418,7 @@ spec:
             "--storage-driver", "$STORAGE_DRIVER",
             "--config-map", "$CONFIGMAP",
             "--custom-config", "$CUSTOM_APP_CONFIG_PATH",
+            "--helmvalues-configmap", "$HELMVALUES_CONFIG_MAP",
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",

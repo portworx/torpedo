@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	yaml2 "gopkg.in/yaml.v2"
 	"io"
 	"io/ioutil"
 	"os"
@@ -153,15 +154,16 @@ var (
 
 // K8s  The kubernetes structure
 type K8s struct {
-	SpecFactory         *spec.Factory
-	NodeDriverName      string
-	VolDriverName       string
-	secretConfigMapName string
-	customConfig        map[string]scheduler.AppConfig
-	eventsStorage       map[string][]scheduler.Event
-	SecretType          string
-	VaultAddress        string
-	VaultToken          string
+	SpecFactory             *spec.Factory
+	NodeDriverName          string
+	VolDriverName           string
+	secretConfigMapName     string
+	helmValuesConfigMapName string
+	customConfig            map[string]scheduler.AppConfig
+	eventsStorage           map[string][]scheduler.Event
+	SecretType              string
+	VaultAddress            string
+	VaultToken              string
 }
 
 // IsNodeReady  Check whether the cluster node is ready
@@ -193,6 +195,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.NodeDriverName = schedOpts.NodeDriverName
 	k.VolDriverName = schedOpts.VolDriverName
 	k.secretConfigMapName = schedOpts.SecretConfigMapName
+	k.helmValuesConfigMapName = schedOpts.HelmValuesConfigMapName
 	k.customConfig = schedOpts.CustomAppConfig
 	k.SecretType = schedOpts.SecretType
 	k.VaultAddress = schedOpts.VaultAddress
@@ -308,57 +311,131 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 		return nil, err
 	}
 
+	logrus.Infof("fileList: %v", fileList)
 	var specs []interface{}
 
 	splitPath := strings.Split(specDir, "/")
 	appName := splitPath[len(splitPath)-1]
 
 	for _, fileName := range fileList {
-		file, err := ioutil.ReadFile(fileName)
+		isHelmChart, err := k.IsAppHelmChartType(fileName)
 		if err != nil {
 			return nil, err
 		}
-
-		var customConfig scheduler.AppConfig
-		var ok bool
-
-		if customConfig, ok = k.customConfig[appName]; !ok {
-			customConfig = scheduler.AppConfig{}
-		}
-
-		tmpl, err := template.New("customConfig").Parse(string(file))
-		if err != nil {
-			return nil, err
-		}
-		var processedFile bytes.Buffer
-		err = tmpl.Execute(&processedFile, customConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		reader := bufio.NewReader(&processedFile)
-		specReader := yaml.NewYAMLReader(reader)
-
-		for {
-			specContents, err := specReader.Read()
-			if err == io.EOF {
-				break
+		if !isHelmChart {
+			file, err := ioutil.ReadFile(fileName)
+			if err != nil {
+				return nil, err
 			}
-			if len(bytes.TrimSpace(specContents)) > 0 {
-				obj, err := decodeSpec(specContents)
-				if err != nil {
-					logrus.Warnf("Error decoding spec from %v: %v", fileName, err)
-					return nil, err
-				}
 
-				specObj, err := validateSpec(obj)
-				if err != nil {
-					logrus.Warnf("Error parsing spec from %v: %v", fileName, err)
-					return nil, err
-				}
-				substituteImageWithInternalRegistry(specObj)
-				specs = append(specs, specObj)
+			var customConfig scheduler.AppConfig
+			var ok bool
+
+			if customConfig, ok = k.customConfig[appName]; !ok {
+				customConfig = scheduler.AppConfig{}
 			}
+
+			tmpl, err := template.New("customConfig").Parse(string(file))
+			if err != nil {
+				return nil, err
+			}
+			var processedFile bytes.Buffer
+			err = tmpl.Execute(&processedFile, customConfig)
+			if err != nil {
+				return nil, err
+			}
+
+			reader := bufio.NewReader(&processedFile)
+			specReader := yaml.NewYAMLReader(reader)
+
+			for {
+				specContents, err := specReader.Read()
+				if err == io.EOF {
+					break
+				}
+				if len(bytes.TrimSpace(specContents)) > 0 {
+					obj, err := decodeSpec(specContents)
+					if err != nil {
+						logrus.Warnf("Error decoding spec from %v: %v", fileName, err)
+						return nil, err
+					}
+
+				    specObj, err := validateSpec(obj)
+				    if err != nil {
+					    logrus.Warnf("Error parsing spec from %v: %v", fileName, err)
+					    return nil, err
+				    }
+				    substituteImageWithInternalRegistry(specObj)
+				    specs = append(specs, specObj)
+				}
+			}
+		} else {
+			repoInfo, err := k.ParseCharts(fileName)
+			if err != nil {
+				return nil, err
+			}
+			specs = append(specs, repoInfo)
+		}
+	}
+	return specs, nil
+}
+
+// IsAppHelmChartType will return true if the specDir has only one file and it has helm repo infos
+// else will return false
+func (k *K8s) IsAppHelmChartType(fileName string) (bool, error) {
+
+	// Parse the files and check for certain keys for helmRepo info
+
+	logrus.Infof("Reading file: %s", fileName)
+	file, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return false, err
+	}
+
+	repoInfo := scheduler.HelmRepo{}
+	err = yaml2.Unmarshal(file, &repoInfo)
+	if err != nil {
+		// Ignoring if unmarshalling fails as some app specs (like fio) failed to unmarshall
+		logrus.Errorf("Ignoring the yaml unmarshalling failure , err: %v", err)
+		return false, nil
+	}
+
+	if repoInfo.URL != "" && repoInfo.RepoName != "" && repoInfo.ChartName != "" && repoInfo.ReleaseName != "" {
+		// If the yaml file with helmRepo info for the app is found, exit here.
+		logrus.Infof("Helm chart was found in file: [%s]", fileName)
+		return true, nil
+	}
+
+	return false, nil
+
+}
+
+// ParseSpecsFromYamlBuf parses the yaml buf content
+func (k *K8s) ParseSpecsFromYamlBuf(yamlBuf *bytes.Buffer) ([]interface{}, error) {
+
+	var specs []interface{}
+
+	reader := bufio.NewReader(yamlBuf)
+	specReader := yaml.NewYAMLReader(reader)
+
+	for {
+		specContents, err := specReader.Read()
+		if err == io.EOF {
+			break
+		}
+		if len(bytes.TrimSpace(specContents)) > 0 {
+			obj, err := decodeSpec(specContents)
+			if err != nil {
+				logrus.Warnf("Error decoding spec from : %v", err)
+				return nil, err
+			}
+			specObj, err := validateSpec(obj)
+			if err != nil {
+				logrus.Warnf("Error parsing spec from : %v", err)
+				return nil, err
+			}
+
+			specs = append(specs, specObj)
 		}
 	}
 
@@ -459,6 +536,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*batchv1beta1.CronJob); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*batchv1.Job); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*corev1.LimitRange); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*networkingv1beta1.Ingress); ok {
@@ -547,6 +626,12 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 			},
 			ScheduleOptions: options,
 		}
+
+		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
+		if err != nil {
+			return nil, err
+		}
+		ctx.App.SpecList = append(ctx.App.SpecList, helmSpecObjects...)
 
 		contexts = append(contexts, ctx)
 	}
@@ -1628,6 +1713,15 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated CronJob: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*batchv1.Job); ok {
+			if err := k8sBatch.ValidateJob(obj.Name, obj.ObjectMeta.Namespace, timeout); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate Job: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated Job: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -1637,6 +1731,16 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 // Destroy destroy
 func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []corev1.Pod
+
+	for _, appSpec := range ctx.App.SpecList {
+		if repoInfo, ok := appSpec.(*scheduler.HelmRepo); ok {
+			err := k.UnInstallHelmChart(repoInfo)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	k8sOps := k8sAutopilot
 	apRule := ctx.ScheduleOptions.AutopilotRule
 	if apRule.Name != "" {

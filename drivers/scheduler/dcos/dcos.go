@@ -719,6 +719,14 @@ func (d *dcos) ListActionApprovals(namespace string) (*apapi.ActionApprovalList,
 	}
 }
 
+func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ParseCharts()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)
