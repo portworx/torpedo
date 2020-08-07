@@ -57,6 +57,16 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	// justifying
+	_ "helm.sh/helm/v3/pkg/action"       // justifying
+	_ "helm.sh/helm/v3/pkg/chart"        // justifying
+	_ "helm.sh/helm/v3/pkg/chart/loader" // justifying
+	_ "helm.sh/helm/v3/pkg/cli"          // justifying
+	_ "helm.sh/helm/v3/pkg/cli/values"   // justifying
+	_ "helm.sh/helm/v3/pkg/downloader"   // justifying
+	_ "helm.sh/helm/v3/pkg/getter"       // justifying
+	_ "helm.sh/helm/v3/pkg/repo"         // justifying
+	_ "helm.sh/helm/v3/pkg/strvals"      // justifying
 )
 
 const (
