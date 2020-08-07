@@ -57,6 +57,15 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	_ "helm.sh/helm/v3/pkg/action"
+	_ "helm.sh/helm/v3/pkg/chart"
+	_ "helm.sh/helm/v3/pkg/chart/loader"
+	_ "helm.sh/helm/v3/pkg/cli"
+	_ "helm.sh/helm/v3/pkg/cli/values"
+	_ "helm.sh/helm/v3/pkg/downloader"
+	_ "helm.sh/helm/v3/pkg/getter"
+	_ "helm.sh/helm/v3/pkg/repo"
+	_ "helm.sh/helm/v3/pkg/strvals"
 )
 
 const (
