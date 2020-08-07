@@ -70,6 +70,8 @@ type InitOptions struct {
 
 	// SpecDir app spec directory
 	SpecDir string
+	// ChartDir helmchart spec directory
+	ChartDir string
 	// VolDriverName volume driver name
 	VolDriverName string
 	// NodeDriverName node driver name
@@ -128,6 +130,9 @@ type Driver interface {
 	// WaitForRunning waits for application to start running.
 	WaitForRunning(cc *Context, timeout, retryInterval time.Duration) error
 
+	// HelmSchedule installs the application using helm
+	HelmSchedule(instanceID string, opts ScheduleOptions) ([]*Context, *HelmRepo, error)
+
 	// AddTasks adds tasks to an existing context
 	AddTasks(*Context, ScheduleOptions) error
 
@@ -139,6 +144,9 @@ type Driver interface {
 
 	// WaitForDestroy waits for application to destroy.
 	WaitForDestroy(*Context, time.Duration) error
+
+	//UnInstallHelmChart removes an application using helm. It does not delete the volumes of the task.
+	UnInstallHelmChart(*HelmRepo) error
 
 	// DeleteTasks deletes all tasks of the application (not the application). DeleteTasksOptions is optional.
 	DeleteTasks(*Context, *DeleteTasksOptions) error
@@ -263,6 +271,15 @@ type Event struct {
 	LastSeen  v1.Time
 	Kind      string
 	Type      string
+}
+
+// HelmRepo has the related info about the repo
+type HelmRepo struct {
+	URL         string `yaml:"url"`
+	RepoName    string `yaml:"reponame"`
+	ChartName   string `yaml:"chartname"`
+	ReleaseName string `yaml:"releasename"`
+	Namespace   string
 }
 
 // Register registers the given scheduler driver

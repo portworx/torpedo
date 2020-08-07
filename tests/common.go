@@ -68,12 +68,15 @@ const (
 
 const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
-	defaultSpecsRoot                     = "/specs"
+	defaultSpecsRoot = "/specs"
+	// defaultHelmChartsRoot specifies the default location of the base helm chart directory in the Torpedo container
+	defaultHelmChartsRoot                = "/helmCharts"
 	schedulerCliFlag                     = "scheduler"
 	nodeDriverCliFlag                    = "node-driver"
 	storageDriverCliFlag                 = "storage-driver"
 	backupCliFlag                        = "backup-driver"
 	specDirCliFlag                       = "spec-dir"
+	helmchartDirCliFlag                  = "helmchart-dir"
 	appListCliFlag                       = "app-list"
 	logLocationCliFlag                   = "log-location"
 	logLevelCliFlag                      = "log-level"
@@ -141,6 +144,7 @@ func InitInstance() {
 
 	err = Inst().S.Init(scheduler.InitOptions{
 		SpecDir:             Inst().SpecDir,
+		ChartDir:            Inst().ChartDir,
 		VolDriverName:       Inst().V.String(),
 		NodeDriverName:      Inst().N.String(),
 		SecretConfigMapName: Inst().ConfigMap,
@@ -422,6 +426,35 @@ func ScheduleApplications(testname string) []*scheduler.Context {
 	})
 
 	return contexts
+}
+
+// ScheduleHelmApplications installs the helmcharts
+func ScheduleHelmApplications(testname string) ([]*scheduler.Context, *scheduler.HelmRepo) {
+	var contexts []*scheduler.Context
+	var helmRepo *scheduler.HelmRepo
+	var err error
+
+	Step("schedule applications with helm", func() {
+		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		contexts, helmRepo, err = Inst().S.HelmSchedule(taskName, scheduler.ScheduleOptions{
+			AppKeys: Inst().AppList,
+		})
+		expect(err).NotTo(haveOccurred())
+		expect(contexts).NotTo(beEmpty())
+	})
+
+	return contexts, helmRepo
+}
+
+// DeleteHelmApplications uninstalls the app using helm
+func DeleteHelmApplications(repoInfo *scheduler.HelmRepo) []*scheduler.Context {
+	var err error
+	Step("Remove applications with helm", func() {
+		//taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		err = Inst().S.UnInstallHelmChart(repoInfo)
+		expect(err).NotTo(haveOccurred())
+	})
+	return nil
 }
 
 // ValidateApplications validates applications
@@ -853,6 +886,7 @@ type Torpedo struct {
 	V                                   volume.Driver
 	N                                   node.Driver
 	SpecDir                             string
+	ChartDir                            string
 	AppList                             []string
 	LogLoc                              string
 	LogLevel                            string
@@ -881,7 +915,7 @@ type Torpedo struct {
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+	var s, n, v, backupDriverName, specDir, chartDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -910,6 +944,7 @@ func ParseFlags() {
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
 	flag.StringVar(&backupDriverName, backupCliFlag, "", "Name of the backup driver to use")
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
+	flag.StringVar(&chartDir, helmchartDirCliFlag, defaultHelmChartsRoot, "Root directory containing the helm chart files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
 	flag.StringVar(&logLevel, logLevelCliFlag, defaultLogLevel, "Log level")
@@ -983,6 +1018,7 @@ func ParseFlags() {
 				V:                                   volumeDriver,
 				N:                                   nodeDriver,
 				SpecDir:                             specDir,
+				ChartDir:                            chartDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
 				ScaleFactor:                         appScaleFactor,

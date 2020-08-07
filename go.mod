@@ -15,6 +15,7 @@ require (
 	github.com/fatih/color v1.7.0
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gogo/googleapis v1.4.0 // indirect
+	github.com/gofrs/flock v0.7.1
 	github.com/golang/protobuf v1.4.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6 // indirect
@@ -32,6 +33,7 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240 // indirect
 	github.com/pborman/uuid v1.2.0
+	github.com/pkg/errors v0.9.1
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
 	github.com/portworx/px-backup-api v1.0.1-0.20200821003202-b927067c1043
 	github.com/portworx/sched-ops v0.0.0-20200723032629-257aba0944dc

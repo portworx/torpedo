@@ -648,6 +648,30 @@ func (d *dcos) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	}
 }
 
+func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ParseCharts()",
+	}
+}
+
+func (d *dcos) HelmSchedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, *scheduler.HelmRepo, error) {
+	// TODO implement this method
+	return nil, nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "HelmSchedule()",
+	}
+}
+
+func (d *dcos) UnInstallHelmChart(*scheduler.HelmRepo) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UnInstallHelmChart()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)
