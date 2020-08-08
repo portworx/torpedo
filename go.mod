@@ -10,22 +10,29 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.3.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.2.0 // indirect
 	github.com/LINBIT/golinstor v0.27.0
-	github.com/Microsoft/go-winio v0.4.14 // indirect
+	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
 	github.com/aws/aws-sdk-go v1.30.6
 	github.com/coreos/go-oidc v2.2.1+incompatible // indirect
-	github.com/docker/docker v1.4.2-0.20170731201938-4f3616fb1c11
+	github.com/deckarep/golang-set v1.7.1 // indirect
+	github.com/docker/docker v17.12.0-ce-rc1.0.20200806062025-1370072eb7e9+incompatible
 	github.com/docker/go-connections v0.4.0 // indirect
+	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
 	github.com/docker/go-units v0.4.0 // indirect
+	github.com/docker/libkv v0.2.1 // indirect
+	github.com/docker/libnetwork v0.8.0-dev.2.0.20200612180813-9e99af28df21 // indirect
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
+	github.com/docker/swarmkit v1.12.1-0.20200728174709-d6592ddefd8a // indirect
 	github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b // indirect
 	github.com/fatih/color v1.7.0
 	github.com/gambol99/go-marathon v0.7.1
-	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
+	github.com/godbus/dbus/v5 v5.0.3 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6 // indirect
+	github.com/hashicorp/go-memdb v1.2.1 // indirect
 	github.com/hashicorp/go-version v1.1.0
 	github.com/hashicorp/vault/api v1.0.4
+	github.com/ishidawataru/sctp v0.0.0-20191218070446-00ab2ac2db07 // indirect
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000
 	github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283
 	github.com/libopenstorage/cloudops v0.0.0-20200604165016-9cc0977d745e
@@ -33,8 +40,10 @@ require (
 	github.com/libopenstorage/openstorage v8.0.1-0.20200129213931-ba5ed2ee0f18+incompatible
 	github.com/libopenstorage/stork v1.3.0-beta1.0.20200630005842-9255e7a98775
 	github.com/mattn/go-isatty v0.0.10 // indirect
+	github.com/moby/ipvs v1.0.1 // indirect
 	github.com/onsi/ginkgo v1.10.2
 	github.com/onsi/gomega v1.7.0
+	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240 // indirect
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
 	github.com/portworx/px-backup-api v1.0.1-0.20200714061107-e88917fc5196
@@ -51,6 +60,7 @@ require (
 	google.golang.org/grpc v1.29.1
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.2.8
+	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
@@ -58,28 +68,31 @@ require (
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
-	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000 => github.com/libopenstorage/external-storage v5.1.1-0.20190919185747-9394ee8dd536+incompatible
+	github.com/docker/docker => github.com/docker/docker v1.4.2-0.20170731201938-4f3616fb1c11
+	github.com/docker/swarmkit => github.com/docker/swarmkit v1.12.1-0.20200728174709-d6592ddefd8a
+	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000 => github.com/libopenstorage/external-storage v5.3.0-alpha.1.0.20200130041458-d2b33d4448ea+incompatible
 	github.com/prometheus/prometheus => github.com/prometheus/prometheus v1.8.2-0.20190424153033-d3245f150225
-	k8s.io/api => k8s.io/api v0.15.11
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.15.11
-	k8s.io/apimachinery => k8s.io/apimachinery v0.15.11
-	k8s.io/apiserver => k8s.io/apiserver v0.15.11
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.15.11
-	k8s.io/client-go => k8s.io/client-go v0.15.11
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.15.11
-	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.15.11
-	k8s.io/code-generator => k8s.io/code-generator v0.15.11
-	k8s.io/component-base => k8s.io/component-base v0.15.11
-	k8s.io/cri-api => k8s.io/cri-api v0.15.11
-	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.15.11
-	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.15.11
-	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.15.11
-	k8s.io/kube-proxy => k8s.io/kube-proxy v0.15.11
-	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.15.11
-	k8s.io/kubectl => k8s.io/kubectl v0.15.11
-	k8s.io/kubelet => k8s.io/kubelet v0.15.11
+	helm.sh/helm/v3 => helm.sh/helm/v3 v3.0.0
+	k8s.io/api => k8s.io/api v0.16.4
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.16.4
+	k8s.io/apimachinery => k8s.io/apimachinery v0.16.4
+	k8s.io/apiserver => k8s.io/apiserver v0.16.4
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.16.4
+	k8s.io/client-go => k8s.io/client-go v0.16.4
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.16.4
+	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.16.4
+	k8s.io/code-generator => k8s.io/code-generator v0.16.4
+	k8s.io/component-base => k8s.io/component-base v0.16.4
+	k8s.io/cri-api => k8s.io/cri-api v0.16.4
+	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.16.4
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.16.4
+	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.16.4
+	k8s.io/kube-proxy => k8s.io/kube-proxy v0.16.4
+	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.16.4
+	k8s.io/kubectl => k8s.io/kubectl v0.16.4
+	k8s.io/kubelet => k8s.io/kubelet v0.16.4
 	k8s.io/kubernetes => k8s.io/kubernetes v1.16.0
-	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.15.11
-	k8s.io/metrics => k8s.io/metrics v0.15.11
-	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.15.11
+	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.16.4
+	k8s.io/metrics => k8s.io/metrics v0.16.4
+	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.16.4
 )
