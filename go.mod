@@ -10,37 +10,25 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.3.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.2.0 // indirect
 	github.com/LINBIT/golinstor v0.27.0
-	github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 // indirect
 	github.com/aws/aws-sdk-go v1.30.6
 	github.com/coreos/go-oidc v2.2.1+incompatible // indirect
-	github.com/deckarep/golang-set v1.7.1 // indirect
-	github.com/docker/docker v17.12.0-ce-rc1.0.20200806062025-1370072eb7e9+incompatible
-	github.com/docker/go-connections v0.4.0 // indirect
-	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
-	github.com/docker/go-units v0.4.0 // indirect
-	github.com/docker/libkv v0.2.1 // indirect
-	github.com/docker/libnetwork v0.8.0-dev.2.0.20200612180813-9e99af28df21 // indirect
-	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
-	github.com/docker/swarmkit v1.12.1-0.20200728174709-d6592ddefd8a // indirect
+	github.com/docker/docker v1.4.2-0.20181221150755-2cb26cfe9cbf
 	github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b // indirect
 	github.com/fatih/color v1.7.0
 	github.com/gambol99/go-marathon v0.7.1
-	github.com/godbus/dbus/v5 v5.0.3 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6 // indirect
-	github.com/hashicorp/go-memdb v1.2.1 // indirect
 	github.com/hashicorp/go-version v1.1.0
+	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/vault/api v1.0.4
-	github.com/ishidawataru/sctp v0.0.0-20191218070446-00ab2ac2db07 // indirect
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000
-	github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283
+	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20200604165016-9cc0977d745e
 	github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952 // indirect
 	github.com/libopenstorage/openstorage v8.0.1-0.20200129213931-ba5ed2ee0f18+incompatible
 	github.com/libopenstorage/stork v1.3.0-beta1.0.20200630005842-9255e7a98775
 	github.com/mattn/go-isatty v0.0.10 // indirect
-	github.com/moby/ipvs v1.0.1 // indirect
 	github.com/onsi/ginkgo v1.10.2
 	github.com/onsi/gomega v1.7.0
 	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240 // indirect
@@ -68,8 +56,7 @@ require (
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
-	github.com/docker/docker => github.com/docker/docker v1.4.2-0.20170731201938-4f3616fb1c11
-	github.com/docker/swarmkit => github.com/docker/swarmkit v1.12.1-0.20200728174709-d6592ddefd8a
+	github.com/docker/docker => github.com/docker/docker v17.12.0-ce-rc1.0.20190717161051-705d9623b7c1+incompatible
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000 => github.com/libopenstorage/external-storage v5.3.0-alpha.1.0.20200130041458-d2b33d4448ea+incompatible
 	github.com/prometheus/prometheus => github.com/prometheus/prometheus v1.8.2-0.20190424153033-d3245f150225
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.0.0
