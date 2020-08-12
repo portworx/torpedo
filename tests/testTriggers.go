@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
+
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/sirupsen/logrus"
 )
@@ -32,6 +33,9 @@ const (
 	DefaultEmailRecipient = "test@portworx.com"
 	// SendGridEmailAPIKeyField is field in config map which stores the SendGrid Email API key
 	SendGridEmailAPIKeyField = "sendGridAPIKey"
+)
+const (
+	validateReplicationUpdateTimeout = 2 * time.Hour
 )
 
 // EmailRecipients list of email IDs to send email to
@@ -121,6 +125,9 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 				UpdateOutcome(event, err)
 				expect(appVolumes).NotTo(beEmpty())
 			})
+			opts := volume.Options{
+				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+			}
 			for _, v := range appVolumes {
 				MaxRF := Inst().V.GetMaxReplicationFactor()
 				MinRF := Inst().V.GetMinReplicationFactor()
@@ -138,7 +145,8 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 							errExpected = true
 						}
 						expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
-						err = Inst().V.SetReplicationFactor(v, currRep-1)
+
+						err = Inst().V.SetReplicationFactor(v, currRep-1, opts)
 						if !errExpected {
 							UpdateOutcome(event, err)
 							expect(err).NotTo(haveOccurred())
@@ -180,7 +188,7 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 							errExpected = true
 						}
 						expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
-						err = Inst().V.SetReplicationFactor(v, currRep+1)
+						err = Inst().V.SetReplicationFactor(v, currRep+1, opts)
 						if !errExpected {
 							UpdateOutcome(event, err)
 							expect(err).NotTo(haveOccurred())
