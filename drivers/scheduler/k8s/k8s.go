@@ -35,11 +35,13 @@ import (
 	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/helmchart"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
@@ -57,16 +59,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	// justifying
-	_ "helm.sh/helm/v3/pkg/action"       // justifying
-	_ "helm.sh/helm/v3/pkg/chart"        // justifying
-	_ "helm.sh/helm/v3/pkg/chart/loader" // justifying
-	_ "helm.sh/helm/v3/pkg/cli"          // justifying
-	_ "helm.sh/helm/v3/pkg/cli/values"   // justifying
-	_ "helm.sh/helm/v3/pkg/downloader"   // justifying
-	_ "helm.sh/helm/v3/pkg/getter"       // justifying
-	_ "helm.sh/helm/v3/pkg/repo"         // justifying
-	_ "helm.sh/helm/v3/pkg/strvals"      // justifying
 )
 
 const (
@@ -138,6 +130,7 @@ var (
 // K8s  The kubernetes structure
 type K8s struct {
 	SpecFactory         *spec.Factory
+	ChartFactory        *helmchart.Factory
 	NodeDriverName      string
 	VolDriverName       string
 	secretConfigMapName string
@@ -196,6 +189,11 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	}
 
 	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolDriverName, k)
+	if err != nil {
+		return err
+	}
+
+	k.ChartFactory, err = helmchart.NewFactory(schedOpts.ChartDir, schedOpts.VolDriverName, k)
 	if err != nil {
 		return err
 	}
@@ -350,6 +348,38 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 	return specs, nil
 }
 
+// ParseSpecsFromYamlBuf parses the yaml buf content
+func (k *K8s) ParseSpecsFromYamlBuf(yamlBuf *bytes.Buffer) ([]interface{}, error) {
+
+	var specs []interface{}
+
+	reader := bufio.NewReader(yamlBuf)
+	specReader := yaml.NewYAMLReader(reader)
+
+	for {
+		specContents, err := specReader.Read()
+		if err == io.EOF {
+			break
+		}
+		if len(bytes.TrimSpace(specContents)) > 0 {
+			obj, err := decodeSpec(specContents)
+			if err != nil {
+				logrus.Warnf("Error decoding spec from : %v", err)
+				return nil, err
+			}
+			specObj, err := validateSpec(obj)
+			if err != nil {
+				logrus.Warnf("Error parsing spec from : %v", err)
+				return nil, err
+			}
+
+			specs = append(specs, specObj)
+		}
+	}
+
+	return specs, nil
+}
+
 func isValidProvider(specPath, storageProvisioner string) bool {
 	// Skip all storage provisioner specific spec except storageProvisioner
 	for _, driver := range volume.GetVolumeDrivers() {
@@ -443,6 +473,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*rbacv1.RoleBinding); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*batchv1beta1.CronJob); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*batchv1.Job); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*corev1.LimitRange); ok {
 		return specObj, nil
@@ -1524,6 +1556,15 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated CronJob: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*batchv1.Job); ok {
+			if err := k8sBatch.ValidateJob(obj.Name, obj.ObjectMeta.Namespace, timeout); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate Job: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated Job: %v", ctx.App.Key, obj.Name)
 		}
 	}
 

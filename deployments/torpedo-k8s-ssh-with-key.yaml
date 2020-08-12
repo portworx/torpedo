@@ -54,7 +54,8 @@ spec:
                "-v",
                "bin/basic.test",
                "--",
-               "--spec-dir", "../drivers/scheduler/k8s/specs"]
+               "--spec-dir", "../drivers/scheduler/k8s/specs",
+               "--helmchart-dir", "../drivers/scheduler/k8s/helmCharts"]
                # "../drivers/scheduler/k8s/specs" is the default k8s specs checked-in with torpedo. If you have custom
                # specs, mount them into the pod using a hostPath volume and specify the target mount path here
     tty: true

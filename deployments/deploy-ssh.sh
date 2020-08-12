@@ -20,6 +20,10 @@ if [ -z "${SPEC_DIR}" ]; then
     SPEC_DIR="../drivers/scheduler/k8s/specs"
 fi
 
+if [ -z "${CHART_DIR}" ]; then
+    CHART_DIR="../drivers/scheduler/k8s/helmCharts"
+fi
+
 if [ -z "${SCHEDULER}" ]; then
     SCHEDULER="k8s"
 fi
@@ -159,7 +163,8 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/volume_ops.test",
             "bin/sched.test",
             "bin/scheduler_upgrade.test",
-            "bin/node_decommission.test",'
+            "bin/node_decommission.test",
+            "bin/pxcentral.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
 fi
@@ -383,6 +388,7 @@ spec:
             $TEST_SUITE
             "--",
             "--spec-dir", $SPEC_DIR,
+            "-helmchart-dir", $CHART_DIR,
             "--app-list", "$APP_LIST",
             "--scheduler", "$SCHEDULER",
             "--backup-driver", "$BACKUP_DRIVER",

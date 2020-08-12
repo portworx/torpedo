@@ -1,0 +1,4 @@
+url: "https://raw.githubusercontent.com/portworx/helm/chart-automation/stable/"
+reponame: "portworx"
+chartname: "px-backup"
+releasename: "px-backup"
