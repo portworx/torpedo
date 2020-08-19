@@ -1667,6 +1667,15 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
+	//volume driver is about to go down, need to refresh the endpoint
+	d.refreshEndpoint = true
+	if err := d.WaitDriverDownOnNode(*n); err != nil {
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to wait driver to stop on node: %v. Err: %v", n.Name, err),
+		}
+	}
+
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
 		return &ErrFailedToDecommissionNode{
