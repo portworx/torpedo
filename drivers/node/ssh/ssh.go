@@ -210,7 +210,6 @@ func (s *SSH) TestConnection(n node.Node, options node.ConnectionOpts) error {
 			Cause: err.Error(),
 		}
 	}
-
 	return nil
 }
 
@@ -488,9 +487,7 @@ func (s *SSH) getConnection(n node.Node, options node.ConnectionOpts) (*ssh_pkg.
 	if n.Addresses == nil || len(n.Addresses) == 0 {
 		return nil, fmt.Errorf("no address available to connect")
 	}
-
-	addr, err := s.getConnectionOnUsableAddr(n, options)
-	return addr, err
+	return s.getConnectionOnUsableAddr(n, options)
 }
 
 func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {

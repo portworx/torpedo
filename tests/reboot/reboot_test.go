@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	defaultWaitRebootTimeout     = 5 * time.Minute
+	defaultWaitRebootTimeout     = 10 * time.Minute
 	defaultWaitRebootRetry       = 10 * time.Second
 	defaultCommandRetry          = 5 * time.Second
-	defaultCommandTimeout        = 1 * time.Minute
+	defaultCommandTimeout        = 20 * time.Second
 	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
@@ -139,8 +139,6 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 						err = Inst().S.DisableSchedulingOnNode(*n)
 						Expect(err).NotTo(HaveOccurred())
 						StopVolDriverAndWait([]node.Node{*n})
-						err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
-						Expect(err).NotTo(HaveOccurred())
 						err = Inst().N.RebootNode(*n, node.RebootNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
