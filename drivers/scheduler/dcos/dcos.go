@@ -656,9 +656,9 @@ func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
 	}
 }
 
-func (d *dcos) HelmSchedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, *scheduler.HelmRepo, error) {
+func (d *dcos) HelmSchedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	// TODO implement this method
-	return nil, nil, &errors.ErrNotSupported{
+	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "HelmSchedule()",
 	}

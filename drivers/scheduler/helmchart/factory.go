@@ -33,7 +33,7 @@ func (f *Factory) register(id string, app *AppChart) {
 func (f *Factory) Get(id string) (*AppChart, error) {
 	if d, ok := appChartFactory[id]; ok && d.Enabled {
 		if copy := d.DeepCopy(); copy != nil {
-			return d.DeepCopy(), nil
+			return copy, nil
 		}
 		return nil, fmt.Errorf("error creating copy of app: %v", d)
 	}

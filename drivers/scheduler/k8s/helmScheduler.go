@@ -15,6 +15,7 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/helmchart"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/sirupsen/logrus"
 
@@ -32,9 +33,9 @@ import (
 var settings *cli.EnvSettings
 
 // HelmSchedule will install the application with helm
-func (k *K8s) HelmSchedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, *scheduler.HelmRepo, error) {
+func (k *K8s) HelmSchedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var err error
-
+	var apps []*helmchart.AppChart
 	// For supporting multiple values to override, will read from a configmap
 	// TODO: Need to change the following hardcoded value for sc too.
 	args := map[string]string{
@@ -43,73 +44,83 @@ func (k *K8s) HelmSchedule(instanceID string, options scheduler.ScheduleOptions)
 	}
 
 	// Currently the installation supports for one app in one shot
-	app, err := k.ChartFactory.Get(options.AppKeys[0])
-	if err != nil {
-		return nil, nil, err
+	if len(options.AppKeys) > 0 {
+		for _, key := range options.AppKeys {
+			appChart, err := k.ChartFactory.Get(key)
+			if err != nil {
+				return nil, err
+			}
+			apps = append(apps, appChart)
+		}
+	} else {
+		apps = k.ChartFactory.GetAll()
 	}
 
 	var contexts []*scheduler.Context
 	var yamlBuf bytes.Buffer
-	repoInfo := app.ChartList[0]
+	for _, app := range apps {
+		repoInfo := app.ChartList[0]
 
-	settings = cli.New()
+		settings = cli.New()
 
-	// Add helm repo
-	err = k.RepoAdd(repoInfo)
-	if err != nil {
-		return nil, nil, err
-	}
-	// Update charts from the helm repo
-	err = k.RepoUpdate()
-	if err != nil {
-		return nil, nil, err
-	}
+		// Add helm repo
+		err = k.RepoAdd(repoInfo)
+		if err != nil {
+			return nil, err
+		}
+		// Update charts from the helm repo
+		err = k.RepoUpdate()
+		if err != nil {
+			return nil, err
+		}
 
-	// Install charts
-	appNamespace := app.GetID(instanceID)
-	// tempApp as type AppSpec for creating the namespace
-	tempApp := &spec.AppSpec{
-		Key:      app.Key,
-		SpecList: nil,
-		Enabled:  app.Enabled,
-	}
-	_, err = k.createNamespace(tempApp, appNamespace, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Install the chart through helm
-	repoInfo.Namespace = appNamespace
-	manifest, err := k.InstallChart(repoInfo, args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Parse the manifest which is a yaml to get the k8s spec objects
-	yamlBuf.WriteString(manifest)
-	specObjects, err := k.ParseSpecsFromYamlBuf(&yamlBuf)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ctx := &scheduler.Context{
-		UID: instanceID,
-		App: &spec.AppSpec{
+		// Install charts
+		appNamespace := app.GetID(instanceID)
+		// tempApp as type AppSpec for creating the namespace
+		tempApp := &spec.AppSpec{
 			Key:      app.Key,
-			SpecList: specObjects,
+			SpecList: nil,
 			Enabled:  app.Enabled,
-		},
-		ScheduleOptions: options,
+		}
+		_, err = k.createNamespace(tempApp, appNamespace, options)
+		if err != nil {
+			return nil, err
+		}
+
+		// Install the chart through helm
+		repoInfo.Namespace = appNamespace
+		manifest, err := k.InstallChart(repoInfo, args)
+		if err != nil {
+			return nil, err
+		}
+
+		// Parse the manifest which is a yaml to get the k8s spec objects
+		yamlBuf.WriteString(manifest)
+		specObjects, err := k.ParseSpecsFromYamlBuf(&yamlBuf)
+		if err != nil {
+			return nil, err
+		}
+
+		ctx := &scheduler.Context{
+			UID: instanceID,
+			App: &spec.AppSpec{
+				Key:      app.Key,
+				SpecList: specObjects,
+				Enabled:  app.Enabled,
+			},
+			ScheduleOptions: options,
+			HelmRepo:        repoInfo,
+		}
+
+		// Set the namespace for the specObjects
+		err = k.UpdateTasksID(ctx, repoInfo.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		contexts = append(contexts, ctx)
 	}
 
-	// Set the namespace for the specObjects
-	err = k.UpdateTasksID(ctx, repoInfo.Namespace)
-	if err != nil {
-		return nil, nil, err
-	}
-	contexts = append(contexts, ctx)
-
-	return contexts, repoInfo, nil
+	return contexts, nil
 }
 
 // ParseCharts parses the application spec file having helm repo info
@@ -200,7 +211,7 @@ func (k *K8s) RepoAdd(repoInfo *scheduler.HelmRepo) error {
 	if err := f.WriteFile(repoFile, 0644); err != nil {
 		return err
 	}
-	logrus.Printf("%q has been added to your repositories\n", name)
+	logrus.Infof("%q has been added to the repositories", name)
 	return nil
 }
 
@@ -221,21 +232,21 @@ func (k *K8s) RepoUpdate() error {
 		repos = append(repos, r)
 	}
 
-	logrus.Printf("Getting the latest from the chart repositories\n")
+	logrus.Debugf("Getting the latest from the chart repositories")
 	var wg sync.WaitGroup
 	for _, re := range repos {
 		wg.Add(1)
 		go func(re *repo.ChartRepository) {
 			defer wg.Done()
 			if _, err := re.DownloadIndexFile(); err != nil {
-				logrus.Printf("Unable to get an update from the %q chart repository (%s):\n\t%s\n", re.Config.Name, re.Config.URL, err)
+				logrus.Warnf("Unable to get an update from the %q chart repository (%s):\t%s", re.Config.Name, re.Config.URL, err)
 			} else {
-				logrus.Printf("Successfully got an update from the %q chart repository\n", re.Config.Name)
+				logrus.Debugf("Successfully got an update from the %q chart repository", re.Config.Name)
 			}
 		}(re)
 	}
 	wg.Wait()
-	logrus.Printf("RepoUpdate Completed successfully.\n")
+	logrus.Debugf("RepoUpdate Completed successfully.")
 	return nil
 }
 
@@ -256,7 +267,7 @@ func (k *K8s) InstallChart(repoInfo *scheduler.HelmRepo, args map[string]string)
 		return "", err
 	}
 
-	logrus.Printf("chart path: %s\n", cp)
+	logrus.Debugf("chart path: %s", cp)
 
 	p := getter.All(settings)
 	valueOpts := &values.Options{}
@@ -340,5 +351,5 @@ func (k *K8s) UnInstallHelmChart(repoInfo *scheduler.HelmRepo) error {
 
 func debug(format string, v ...interface{}) {
 	format = fmt.Sprintf(" %s\n", format)
-	logrus.Printf(fmt.Sprintf(format, v...))
+	logrus.Debugf(fmt.Sprintf(format, v...))
 }

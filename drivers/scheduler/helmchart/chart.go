@@ -26,7 +26,7 @@ func (in *AppChart) GetID(instanceID string) string {
 	return fmt.Sprintf("%s-%s", in.Key, instanceID)
 }
 
-// DeepCopy Creates a copy of the AppSpec
+// DeepCopy Creates a copy of the AppChart
 func (in *AppChart) DeepCopy() *AppChart {
 	if in == nil {
 		return nil

@@ -39,6 +39,8 @@ type Context struct {
 	RefreshStorageEndpoint bool
 	// ReadinessTimeout time within which context is expected to be up
 	ReadinessTimeout time.Duration
+	// HelmRepo info for helm chart schedules
+	HelmRepo *HelmRepo
 }
 
 // DeepCopy create a copy of Context
@@ -131,7 +133,7 @@ type Driver interface {
 	WaitForRunning(cc *Context, timeout, retryInterval time.Duration) error
 
 	// HelmSchedule installs the application using helm
-	HelmSchedule(instanceID string, opts ScheduleOptions) ([]*Context, *HelmRepo, error)
+	HelmSchedule(instanceID string, opts ScheduleOptions) ([]*Context, error)
 
 	// AddTasks adds tasks to an existing context
 	AddTasks(*Context, ScheduleOptions) error

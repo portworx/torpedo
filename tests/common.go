@@ -429,21 +429,20 @@ func ScheduleApplications(testname string) []*scheduler.Context {
 }
 
 // ScheduleHelmApplications installs the helmcharts
-func ScheduleHelmApplications(testname string) ([]*scheduler.Context, *scheduler.HelmRepo) {
+func ScheduleHelmApplications(testname string) []*scheduler.Context {
 	var contexts []*scheduler.Context
-	var helmRepo *scheduler.HelmRepo
 	var err error
 
 	Step("schedule applications with helm", func() {
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		contexts, helmRepo, err = Inst().S.HelmSchedule(taskName, scheduler.ScheduleOptions{
+		contexts, err = Inst().S.HelmSchedule(taskName, scheduler.ScheduleOptions{
 			AppKeys: Inst().AppList,
 		})
 		expect(err).NotTo(haveOccurred())
 		expect(contexts).NotTo(beEmpty())
 	})
 
-	return contexts, helmRepo
+	return contexts
 }
 
 // DeleteHelmApplications uninstalls the app using helm

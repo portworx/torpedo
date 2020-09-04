@@ -37,11 +37,12 @@ var _ = Describe("{Installpxcentral}", func() {
 	It("has to setup, validate and teardown apps", func() {
 
 		// Install the storage class
-		contexts := ScheduleApplications("pxcentral")
+		appName := "pxcentral"
+		contexts := ScheduleApplications(appName)
 		ValidateApplications(contexts)
 
 		// Install px-central through helm
-		helmcontexts, helmRepo := ScheduleHelmApplications("pxcentral")
+		helmcontexts := ScheduleHelmApplications(appName)
 
 		// Skipping volume validation until other volume providers are implemented.
 		// Also change the app readinessTimeout to 20mins
@@ -52,7 +53,7 @@ var _ = Describe("{Installpxcentral}", func() {
 
 		ValidateApplications(helmcontexts)
 
-		DeleteHelmApplications(helmRepo)
+		DeleteHelmApplications(helmcontexts[0].HelmRepo)
 
 	})
 })
