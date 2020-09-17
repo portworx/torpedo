@@ -8,9 +8,12 @@ option go_package = "api";
 
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
-import "google/protobuf/wrappers.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "pkg/apis/v1/common.proto";
+
+option (gogoproto.populate_all) = true;
+option (gogoproto.equal_all) = true;
+option (gogoproto.testgen_all) = true;
 
 message OrganizationObject {
     Metadata metadata = 1 [ (gogoproto.embed) = true ];
@@ -122,10 +125,14 @@ message CloudCredentialInfo {
 message CloudCredentialObject {
     Metadata metadata = 1
         [ (gogoproto.jsontag) = "metadata", (gogoproto.embed) = true ];
-    CloudCredentialInfo cloud_credential_info = 2 [ (gogoproto.embed) = true ];
+    CloudCredentialInfo cloud_credential_info = 2;
 }
 
 message SchedulePolicyInfo {
+    message IncrementalCount {
+        uint64 count = 1 [ (gogoproto.jsontag) = "count" ];
+    }
+
     message IntervalPolicy {
         // Interval in minutes at which an action should be triggered.
         int64 minutes = 1;
@@ -133,7 +140,7 @@ message SchedulePolicyInfo {
         int64 retain = 2;
         // Number of incremental snapshots to take before taking a full
         // snapshot.
-        google.protobuf.UInt32Value incremental_count = 3;
+        IncrementalCount incremental_count = 3;
     }
 
     message DailyPolicy {
@@ -144,7 +151,7 @@ message SchedulePolicyInfo {
         int64 retain = 2;
         // Number of incremental snapshots to take before taking a full
         // snapshot.
-        google.protobuf.UInt32Value incremental_count = 3;
+        IncrementalCount incremental_count = 3;
     }
 
     message WeeklyPolicy {
@@ -158,7 +165,7 @@ message SchedulePolicyInfo {
         int64 retain = 3;
         // Number of incremental snapshots to take before taking a full
         // snapshot.
-        google.protobuf.UInt32Value incremental_count = 4;
+        IncrementalCount incremental_count = 4;
     }
 
     message MonthlyPolicy {
@@ -177,8 +184,9 @@ message SchedulePolicyInfo {
         int64 retain = 3;
         // Number of incremental snapshots to take before taking a full
         // snapshot.
-        google.protobuf.UInt32Value incremental_count = 4;
+        IncrementalCount incremental_count = 4;
     }
+
     IntervalPolicy interval = 1;
     DailyPolicy daily = 2;
     WeeklyPolicy weekly = 3;
@@ -211,6 +219,7 @@ message BackupScheduleInfo {
     bool delete_backups = 11;
     StatusInfo status = 12;
     SuspendedBy suspended_by = 13;
+    repeated ResourceInfo include_resources = 14;
 
     message SuspendedBy {
         Source source = 1;
@@ -272,6 +281,7 @@ message BackupLocationInfo {
     string cloud_credential = 4;
     StatusInfo status = 5;
     bool delete_backups = 6;
+    bool validate_cloud_credential = 7;
     oneof config { S3Config s3_config = 100; }
     // Message for maintaing status of the object.
     message StatusInfo {
@@ -289,7 +299,7 @@ message BackupLocationInfo {
 message BackupLocationObject {
     Metadata metadata = 1
         [ (gogoproto.jsontag) = "metadata", (gogoproto.embed) = true ];
-    BackupLocationInfo backup_location_info = 2 [ (gogoproto.embed) = true ];
+    BackupLocationInfo backup_location_info = 2;
 }
 
 message ResourceInfo {
@@ -321,7 +331,10 @@ message BackupInfo {
     // Otherwise it will be empty.
     BackupSchedule backup_schedule = 12;
     string cr_name = 13;
-    uint64 size = 14;
+    uint64 total_size = 14;
+    // Reference to cloud credential object used for backup
+    string cloud_credential = 15;
+    repeated ResourceInfo include_resources = 16;
 
     enum Stage {
         Invalid = 0;
@@ -347,7 +360,10 @@ message BackupInfo {
         string driver_name = 6;
         repeated string zones = 7;
         map<string, string> options = 8;
-        uint64 size = 9;
+        uint64 total_size = 9;
+        // actual size of the backup
+        // incase of invremental, it's the incremental backup size
+        uint64 actual_size = 10;
     }
 
     // Message for maintaing status of the object.
@@ -386,6 +402,7 @@ message RulesInfo {
             [ (gogoproto.moretags) = "yaml:\"podSelector\"" ];
         repeated Action actions = 2
             [ (gogoproto.moretags) = "yaml:\"actions\"" ];
+        string container = 3;
     }
 
     message Action {
@@ -428,7 +445,7 @@ message RestoreInfo {
     // Name of the cluster
     string cluster = 9;
     repeated string include_optional_resource_types = 10;
-    uint64 size = 11;
+    uint64 total_size = 11;
     repeated ResourceInfo include_resources = 12;
 
     message RestoredResource {
@@ -449,7 +466,7 @@ message RestoreInfo {
         string driver_name = 6;
         repeated string zones = 7;
         map<string, string> options = 8;
-        uint64 size = 9;
+        uint64 total_size = 9;
     }
 
     // Message for maintaing status of the object.
@@ -498,17 +515,16 @@ message EnumerateOptions {
     // label selectors for the object for filtering
     map<string, string> labels = 1;
     // max objects to fetch
-    int64 page_size = 2;
-    // continuation token
-    string continuation_token = 3;
+    uint64 max_objects = 2;
     // Time range for which to return objects
-    TimeRange time_range = 4;
+    TimeRange time_range = 3;
     // Filter to use for name of objects. Any object that contains the filter
     // will be returned
-    string name_filter = 5;
+    string name_filter = 4;
     // Filter to use for cluster name of objects. Any object that contains the
     // filter will be returned
-    string cluster_name_filter = 6;
+    string cluster_name_filter = 5;
+    uint64 object_index = 6;
 }
 
 service SchedulePolicy {
@@ -655,6 +671,8 @@ message BackupScheduleCreateRequest {
     map<string, string> label_selectors = 7;
     string pre_exec_rule = 8;
     string post_exec_rule = 9;
+    // List of resources to backup (optional)
+    repeated ResourceInfo include_resources = 10;
 }
 
 // Define BackupScheduleCreateResponse struct
@@ -676,6 +694,8 @@ message BackupScheduleUpdateRequest {
     string pre_exec_rule = 8;
     string post_exec_rule = 9;
     bool suspend = 10;
+    // List of resources to backup (optional)
+    repeated ResourceInfo include_resources = 11;
 }
 
 // Define BackupScheduleUpdateResponse struct
@@ -955,6 +975,15 @@ service BackupLocation {
             delete : "/v1/backuplocation/{org_id}/{name}"
         };
     }
+
+    // Verify if a backup location is valid
+    rpc Validate(BackupLocationValidateRequest)
+        returns (BackupLocationValidateResponse) {
+        option (google.api.http) = {
+            post : "/v1/backuplocation/validate"
+            body : "*"
+        };
+    }
 }
 
 // Define BackupLocationCreateRequest struct
@@ -1007,8 +1036,37 @@ message BackupLocationDeleteRequest {
     bool delete_backups = 3;
 }
 
-// Define BackupLocationInspectResponse struct
+// Define BackupLocationDeleteResponse struct
 message BackupLocationDeleteResponse {}
+
+// Define BackupLocationValidateRequest struct
+message BackupLocationValidateRequest {
+    string org_id = 1;
+    string name = 2;
+}
+
+// Define BackupLocationValidateResponse struct
+message BackupLocationValidateResponse {}
+
+service Metrics {
+    rpc Inspect(MetricsInspectRequest) returns (MetricsInspectResponse) {
+        option (google.api.http) = {
+            get : "/v1/metrics/{org_id}"
+        };
+    }
+}
+
+message MetricsInspectRequest { string org_id = 1; }
+
+message MetricsInspectResponse {
+    repeated Stats stats = 1;
+    message Stats {
+        string cluster = 1;
+        uint64 num_namespaces = 2;
+        uint64 total_backup_size = 3;
+        uint64 num_schedules = 4;
+    }
+}
 
 service Backup {
     // Create creates a new backup object
@@ -1064,6 +1122,8 @@ message BackupCreateRequest {
     string pre_exec_rule = 6;
     // Post check rule to run after backup is completed
     string post_exec_rule = 7;
+    // List of resources to backup (optional)
+    repeated ResourceInfo include_resources = 8;
 }
 
 // Response message structure for backup create
@@ -1072,6 +1132,8 @@ message BackupCreateResponse {}
 // Define BackupUpdateRequest struct
 message BackupUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    // Reference to cloud credential object used for backup
+    string cloud_credential = 2;
 }
 
 // Define BackupUpdateResponse struct
@@ -1088,8 +1150,8 @@ message BackupEnumerateRequest {
 //  Response message structure for enumerate create
 message BackupEnumerateResponse {
     repeated BackupObject backups = 1;
-    // continuation token
-    string continuation_token = 2;
+    uint64 total_count = 2;
+    bool complete = 3;
 }
 
 // Request message strcuture for object inspect
@@ -1189,8 +1251,8 @@ message RestoreEnumerateRequest {
 // Define RestoreEnumerateResponse struct
 message RestoreEnumerateResponse {
     repeated RestoreObject restores = 1;
-    // continuation token
-    string continuation_token = 2;
+    uint64 total_count = 2;
+    bool complete = 3;
 }
 
 // Define RestoreInspectRequest struct
