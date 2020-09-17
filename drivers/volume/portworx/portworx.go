@@ -998,7 +998,7 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 
 		for _, addr := range n.Addresses {
 			err := d.testAndSetEndpointUsingNodeIP(addr)
-			if !strings.Contains(err.Error(), "connect: connection refused") {
+			if err != nil && !strings.Contains(err.Error(), "connect: connection refused") {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
 					Cause: fmt.Sprintf("px is not yet down on node"),
@@ -1668,15 +1668,6 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	if err := d.StopDriver([]node.Node{*n}, false, nil); err != nil {
-		return &ErrFailedToDecommissionNode{
-			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to stop driver on node: %v. Err: %v", n.Name, err),
-		}
-	}
-
-	//volume driver is about to go down, need to refresh the endpoint
-	d.refreshEndpoint = true
 	if err := d.WaitDriverDownOnNode(*n); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
@@ -1684,6 +1675,11 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
+	logrus.Infof("sleeping for 2 minutes to let node down to propagate to SDK")
+	time.Sleep(2 * time.Minute)
+
+	//force refresh the endpoint to not pick the node which is down
+	d.refreshEndpoint = true
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
 		return &ErrFailedToDecommissionNode{
