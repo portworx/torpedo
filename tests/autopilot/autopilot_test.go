@@ -266,7 +266,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 
 		defer sched.Instance().Cancel(id)
 
-		contexts := scheduleAppsWithAutopilot(testName, apRules)
+		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduler.ScheduleOptions{})
 
 		// schedule deletion of autopilot once the pool expansion starts
 		Step("wait until workload completes on volume", func() {
@@ -344,7 +344,7 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
 
 		defer sched.Instance().Cancel(id)
 
-		contexts := scheduleAppsWithAutopilot(testName, apRules)
+		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduler.ScheduleOptions{})
 
 		// schedule deletion of autopilot once the pool expansion starts
 		Step("wait until workload completes on volume", func() {
@@ -378,7 +378,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandAddDisk}", testSuiteName), func() {
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByAvailableCapacity(70, 50, aututils.RuleScaleTypeAddDisk),
 		}
-		contexts := scheduleAppsWithAutopilot(testName, apRules)
+		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduler.ScheduleOptions{})
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
@@ -420,7 +420,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandFixedSizeAddDisk}", testSuiteName), f
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleFixedScaleSizeByAvailableCapacity(70, "32Gi", aututils.RuleScaleTypeAddDisk),
 		}
-		contexts := scheduleAppsWithAutopilot(testName, apRules)
+		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduler.ScheduleOptions{})
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
@@ -462,7 +462,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandResizeDisk}", testSuiteName), func() 
 			aututils.PoolRuleByAvailableCapacity(70, 50, aututils.RuleScaleTypeResizeDisk),
 		}
 
-		contexts := scheduleAppsWithAutopilot(testName, apRules)
+		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduler.ScheduleOptions{})
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
 				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
@@ -503,7 +503,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandFixedSizeResizeDisk}", testSuiteName)
 			aututils.PoolRuleFixedScaleSizeByAvailableCapacity(70, "16Gi", aututils.RuleScaleTypeResizeDisk),
 		}
 
-		contexts := scheduleAppsWithAutopilot(testName, apRules)
+		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduler.ScheduleOptions{})
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
 				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
@@ -688,7 +688,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
 			aututils.PoolRuleByTotalSize((getTheSmallestPoolSize()/units.GiB)+1, 100*16, aututils.RuleScaleTypeAddDisk, nil),
 		}
 
-		contexts := scheduleAppsWithAutopilot(testName, apRules)
+		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduler.ScheduleOptions{})
 
 		err := waitForAutopilotFailedEvent(apRules, "")
 		Expect(err).NotTo(HaveOccurred())
@@ -721,7 +721,46 @@ var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
 	})
 })
 
-func scheduleAppsWithAutopilot(testName string, apRules []apapi.AutopilotRule) []*scheduler.Context {
+var _ = Describe(fmt.Sprintf("{%sRebalance}", testSuiteName), func() {
+	It("has to create couple volumes on the same pool, run rebalance, validate rebalance and teardown apps", func() {
+		testName := strings.ToLower(fmt.Sprintf("%sRebalance", testSuiteName))
+
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-20", "20"}),
+		}
+		for i := range apRules {
+			apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
+		}
+		workerNodes := node.GetWorkerNodes()
+		scheduleOptions := scheduler.ScheduleOptions{PvcNodesAnnotation: workerNodes[0].Id}
+		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduleOptions)
+
+		for _, apRule := range apRules {
+			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateNormal),
+				string(apapi.RuleStateTriggered)})
+
+			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsPending),
+				string(apapi.RuleStateActiveActionsInProgress)})
+
+			err := Inst().V.ValidateRebalanceJobs()
+			Expect(err).NotTo(HaveOccurred())
+
+			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsTaken),
+				string(apapi.RuleStateNormal)})
+		}
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+
+	})
+})
+
+func scheduleAppsWithAutopilot(testName string, apRules []apapi.AutopilotRule, options scheduler.ScheduleOptions) []*scheduler.Context {
 	var contexts []*scheduler.Context
 	labels := map[string]string{
 		"autopilot": testName,
@@ -745,6 +784,7 @@ func scheduleAppsWithAutopilot(testName string, apRules []apapi.AutopilotRule) [
 			context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 				AppKeys:            Inst().AppList,
 				StorageProvisioner: Inst().Provisioner,
+				PvcNodesAnnotation: options.PvcNodesAnnotation,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(context).NotTo(BeEmpty())
@@ -783,6 +823,49 @@ func getTheSmallestPoolSize() uint64 {
 		}
 	}
 	return smallestPoolSize
+}
+
+func waitForAutopilotEvent(apRule apapi.AutopilotRule, reason string, messages []string) error {
+	t := func() (interface{}, bool, error) {
+		ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+			FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
+		})
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		ruleReasonFound := false
+		ruleMessageFound := false
+
+		for _, ruleEvent := range ruleEvents.Items {
+			if reason != "" {
+				if strings.Contains(ruleEvent.Reason, reason) {
+					ruleReasonFound = true
+				}
+			} else {
+				ruleReasonFound = true
+			}
+			for _, message := range messages {
+				if !strings.Contains(ruleEvent.Message, message) {
+					ruleMessageFound = false
+					break
+				} else {
+					ruleMessageFound = true
+				}
+			}
+		}
+
+		if ruleReasonFound && ruleMessageFound {
+			return nil, false, fmt.Errorf("autopilot rule has event with %s reason and %v messages", reason, messages)
+		}
+
+		return nil, true, fmt.Errorf("autopilot rule has no event with %s reason and %v message", reason, messages)
+	}
+	if _, err := task.DoRetryWithTimeout(t, eventCheckTimeout, eventCheckInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 func waitForAutopilotFailedEvent(apRules []apapi.AutopilotRule, objectName string) error {

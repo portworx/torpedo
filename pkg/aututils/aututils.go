@@ -27,13 +27,16 @@ const (
 	RuleActionsScalePercentage = "scalepercentage"
 	// RuleActionsScaleSize is name for scale size rule action
 	RuleActionsScaleSize = "scalesize"
-
 	// RuleScaleType is name for scale type
 	RuleScaleType = "scaletype"
+	// RulePoolProvDeviationPercKeyAlias is the key alias for pool provision deviation percentage
+	RulePoolProvDeviationPercKeyAlias = "PoolProvDeviationPerc"
 	// VolumeSpecAction is name for volume spec action
 	VolumeSpecAction = "openstorage.io.action.volume/resize"
 	// StorageSpecAction is name for storage spec action
 	StorageSpecAction = "openstorage.io.action.storagepool/expand"
+	// RebalanceSpecAction is name for rebalance spec action
+	RebalanceSpecAction = "openstorage.io.action.storagepool/rebalance"
 )
 
 // PoolRuleByTotalSize returns an autopilot pool expand rule that uses total pool size
@@ -162,6 +165,33 @@ func PoolRuleFixedScaleSizeByAvailableCapacity(usage int, scaleSize, expandType 
 			},
 		},
 	}
+}
+
+// PoolRuleRebalanceByProvisionedMean returns an autopilot pool rebalance rule that
+// uses provision deviation percantage alias key
+func PoolRuleRebalanceByProvisionedMean(values []string) apapi.AutopilotRule {
+	apRuleObject := apapi.AutopilotRule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: fmt.Sprintf("pvc-rebalance-provisioned-mean-%s", strings.Join(values, "-")),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						KeyAlias: RulePoolProvDeviationPercKeyAlias,
+						Operator: apapi.LabelSelectorOpNotInRange,
+						Values:   values,
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: RebalanceSpecAction,
+				},
+			},
+		},
+	}
+	return apRuleObject
 }
 
 // PVCRuleByTotalSize resizes volume by its total size

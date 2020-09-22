@@ -93,6 +93,7 @@ const (
 
 	resizeSupportedAnnotationKey  = "torpedo.io/resize-supported"
 	autopilotEnabledAnnotationKey = "torpedo.io/autopilot-enabled"
+	pvcNodesAnnotationKey         = "torpedo.io/pvcnodes-enabled"
 	deleteStrategyAnnotationKey   = "torpedo.io/delete-strategy"
 	specObjAppWorkloadSizeEnvVar  = "SIZE"
 )
@@ -828,6 +829,16 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if len(options.Labels) > 0 {
 			k.addLabelsToPVC(obj, options.Labels)
 		}
+
+		if pvcNodesAnnotationValue, ok := obj.Annotations[pvcNodesAnnotationKey]; ok {
+			pvcNodesEnabled, _ := strconv.ParseBool(pvcNodesAnnotationValue)
+			if pvcNodesEnabled {
+				if len(options.PvcNodesAnnotation) > 0 {
+					k.addAnnotationsToPVC(obj, map[string]string{"nodes": options.PvcNodesAnnotation})
+				}
+			}
+		}
+
 		pvc, err := k8sCore.CreatePersistentVolumeClaim(obj)
 		if errors.IsAlreadyExists(err) {
 			if pvc, err = k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace); err == nil {
@@ -856,14 +867,12 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				labelSelector := metav1.LabelSelector{MatchLabels: labels}
 				apRule.Spec.Selector = apapi.RuleObjectSelector{LabelSelector: labelSelector}
 				apRule.Spec.NamespaceSelector = apapi.RuleObjectSelector{LabelSelector: labelSelector}
-				aRule, err := k.CreateAutopilotRule(apRule)
+				_, err := k.CreateAutopilotRule(apRule)
 				if err != nil {
 					return nil, err
 				}
-				logrus.Infof("[%v] Created Autopilot rule: %+v", app.Key, aRule)
 			}
 		}
-
 		return pvc, nil
 
 	} else if obj, ok := spec.(*snapv1.VolumeSnapshot); ok {
@@ -3544,6 +3553,15 @@ func (k *K8s) addLabelsToPVC(pvc *corev1.PersistentVolumeClaim, labels map[strin
 	}
 	for k, v := range labels {
 		pvc.Labels[k] = v
+	}
+}
+
+func (k *K8s) addAnnotationsToPVC(pvc *corev1.PersistentVolumeClaim, annotations map[string]string) {
+	if len(pvc.Annotations) == 0 {
+		pvc.Annotations = map[string]string{}
+	}
+	for k, v := range annotations {
+		pvc.Annotations[k] = v
 	}
 }
 

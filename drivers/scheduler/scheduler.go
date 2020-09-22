@@ -104,6 +104,8 @@ type ScheduleOptions struct {
 	Scheduler string
 	// Labels is a map of {key,value} pairs for labeling spec objects
 	Labels map[string]string
+	// PvcNodesAnnotation is a map of {key,value} pairs for pvc annotations
+	PvcNodesAnnotation string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
