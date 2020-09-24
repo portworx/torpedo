@@ -358,13 +358,27 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 	context("For tearing down of an app context", func() {
 		var err error
 
+		// Save original value for SkipClusterScopedObjects
+		originalSkipClusterScopedObjects := opts[SkipClusterScopedObjects]
+
+		opts[SkipClusterScopedObjects] = true // Skip tearing down cluster scope objects
 		options := mapToVolumeOptions(opts)
+
+		// Tear down storage objects
 		vols := DeleteVolumes(ctx, options)
 
+		// Delete Appliction Objects
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
 			err = Inst().S.Destroy(ctx, opts)
 			expect(err).NotTo(haveOccurred())
 		})
+
+		// Delete Cluster Scope objects
+		if !originalSkipClusterScopedObjects {
+			opts[SkipClusterScopedObjects] = false // Tearing down cluster scope objects
+			options := mapToVolumeOptions(opts)
+			_ = DeleteVolumes(ctx, options)
+		}
 
 		if ctx.SkipVolumeValidation {
 			return
