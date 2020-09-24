@@ -2071,11 +2071,13 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
 			if options != nil && !options.SkipClusterScopedObjects {
 				if err := k8sStorage.DeleteStorageClass(obj.Name); err != nil {
-					if !errors.IsNotFound(err) {
-						return nil, &scheduler.ErrFailedToDestroyStorage{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
-						}
+					if errors.IsNotFound(err) {
+						logrus.Infof("[%v] Storage class is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+						continue
+					}
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
 					}
 				}
 
@@ -2084,8 +2086,16 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 		} else if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
-				return nil, err
+				if errors.IsNotFound(err) {
+					logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("[%s] Failed to get PVC: %v. Err: %v", ctx.App.Key, obj.Name, err),
+				}
 			}
+
 			vols = append(vols, &volume.Volume{
 				ID:        string(pvcObj.Spec.VolumeName),
 				Name:      obj.Name,
@@ -2094,33 +2104,39 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			})
 
 			if err := k8sCore.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
-				if !errors.IsNotFound(err) {
-					return nil, &scheduler.ErrFailedToDestroyStorage{
-						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", obj.Name, err),
-					}
+				if errors.IsNotFound(err) {
+					logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("[%s] Failed to destroy PVC: %v. Err: %v", ctx.App.Key, obj.Name, err),
 				}
 			}
 
 			logrus.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
-				if !errors.IsNotFound(err) {
-					return nil, &scheduler.ErrFailedToDestroyStorage{
-						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to destroy Snapshot: %v. Err: %v", obj.Metadata.Name, err),
-					}
+				if errors.IsNotFound(err) {
+					logrus.Infof("[%v] Snapshot is not found: %v, skipping deletion", ctx.App.Key, obj.Metadata.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to destroy snapshot: %v. Err: %v", obj.Metadata.Name, err),
 				}
 			}
 
-			logrus.Infof("[%v] Destroyed snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+			logrus.Infof("[%v] Destroyed Snapshot: %v", ctx.App.Key, obj.Metadata.Name)
 		} else if obj, ok := specObj.(*storkapi.GroupVolumeSnapshot); ok {
 			if err := k8sStork.DeleteGroupSnapshot(obj.Name, obj.Namespace); err != nil {
-				if !errors.IsNotFound(err) {
-					return nil, &scheduler.ErrFailedToDestroyStorage{
-						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to destroy group snapshot: %v. Err: %v", obj.Name, err),
-					}
+				if errors.IsNotFound(err) {
+					logrus.Infof("[%v] Group snapshot is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to destroy group snapshot: %v. Err: %v", obj.Name, err),
 				}
 			}
 
@@ -2128,6 +2144,10 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			pvcList, err := k8sApps.GetPVCsForStatefulSet(obj)
 			if err != nil || pvcList == nil {
+				if errors.IsNotFound(err) {
+					logrus.Infof("[%v] PVCs for StatefulSet not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
 				return nil, &scheduler.ErrFailedToDestroyStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get PVCs for StatefulSet: %v. Err: %v", obj.Name, err),
@@ -2137,7 +2157,14 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			for _, pvc := range pvcList.Items {
 				pvcObj, err := k8sCore.GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
 				if err != nil {
-					return nil, err
+					if errors.IsNotFound(err) {
+						logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+						continue
+					}
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to get PVC: %v. Err: %v", pvc.Name, err),
+					}
 				}
 				vols = append(vols, &volume.Volume{
 					ID:        string(pvcObj.Spec.VolumeName),
@@ -2147,11 +2174,13 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 				})
 
 				if err := k8sCore.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
-					if !errors.IsNotFound(err) {
-						return nil, &scheduler.ErrFailedToDestroyStorage{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", pvc.Name, err),
-						}
+					if errors.IsNotFound(err) {
+						logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+						continue
+					}
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", pvc.Name, err),
 					}
 				}
 			}
