@@ -357,9 +357,16 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 	context("For tearing down of an app context", func() {
 		var err error
+		var originalSkipClusterScopedObjects bool
 
-		// Save original value for SkipClusterScopedObjects
-		originalSkipClusterScopedObjects := opts[SkipClusterScopedObjects]
+		if opts != nil {
+			// Save original value of SkipClusterScopedObjects, if it exists
+			if val, ok := opts[SkipClusterScopedObjects]; ok {
+				originalSkipClusterScopedObjects = val
+			}
+		} else {
+			opts = make(map[string]bool) // If opts was passed as nil make it
+		}
 
 		opts[SkipClusterScopedObjects] = true // Skip tearing down cluster scope objects
 		options := mapToVolumeOptions(opts)
@@ -373,17 +380,17 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 			expect(err).NotTo(haveOccurred())
 		})
 
+		if !ctx.SkipVolumeValidation {
+			ValidateVolumesDeleted(ctx.App.Key, vols)
+		}
+
 		// Delete Cluster Scope objects
 		if !originalSkipClusterScopedObjects {
 			opts[SkipClusterScopedObjects] = false // Tearing down cluster scope objects
 			options := mapToVolumeOptions(opts)
-			_ = DeleteVolumes(ctx, options)
+			DeleteVolumes(ctx, options)
 		}
 
-		if ctx.SkipVolumeValidation {
-			return
-		}
-		ValidateVolumesDeleted(ctx.App.Key, vols)
 	})
 }
 
