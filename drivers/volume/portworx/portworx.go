@@ -925,18 +925,12 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	logrus.Debugf("waiting for PX node to be up: %s", n.Name)
 	t := func() (interface{}, bool, error) {
 		logrus.Debugf("Getting node info: %s", n.Name)
-		for _, addr := range n.Addresses {
-			err := d.testAndSetEndpointUsingNodeIP(addr)
-			if err != nil {
-				return "", true, &ErrFailedToWaitForPx{
-					Node:  n,
-					Cause: fmt.Sprintf("failed to get node info [%s]. Err: %v", n.Name, err),
-				}
-			}
-		}
 		nodeInspectResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 
 		if err != nil {
+			if isNodeNotFound(err) {
+				d.updateNodeID(&n, d.getNodeManager())
+			}
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: fmt.Sprintf("failed to get node info [%s]. Err: %v", n.Name, err),
@@ -1684,15 +1678,16 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 	if err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to inspect node: %v. Err: %v", nodeResp.Node, err),
+			Cause: fmt.Sprintf("Failed to inspect node: %v. Err: %v", nodeResp.Node.SchedulerNodeName, err),
 		}
 	}
 
 	// TODO replace when sdk supports node removal
-	if err = d.legacyClusterManager.Remove([]api.Node{{Id: nodeResp.Node.Id}}, false); err != nil {
+	err = d.legacyClusterManager.Remove([]api.Node{{Id: nodeResp.Node.Id}}, false)
+	if err != nil && !strings.Contains(err.Error(), "Node remove is pending") {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
-			Cause: err.Error(),
+			Cause: fmt.Sprintf("Failed to remove node: %v. Err: %v", nodeResp.Node.SchedulerNodeName, err),
 		}
 	}
 
