@@ -68,15 +68,12 @@ const (
 
 const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
-	defaultSpecsRoot = "/specs"
-	// defaultHelmChartsRoot specifies the default location of the base helm chart directory in the Torpedo container
-	defaultHelmChartsRoot                = "/helmCharts"
+	defaultSpecsRoot                     = "/specs"
 	schedulerCliFlag                     = "scheduler"
 	nodeDriverCliFlag                    = "node-driver"
 	storageDriverCliFlag                 = "storage-driver"
 	backupCliFlag                        = "backup-driver"
 	specDirCliFlag                       = "spec-dir"
-	helmchartDirCliFlag                  = "helmchart-dir"
 	appListCliFlag                       = "app-list"
 	logLocationCliFlag                   = "log-location"
 	logLevelCliFlag                      = "log-level"
@@ -88,6 +85,7 @@ const (
 	provisionerFlag                      = "provisioner"
 	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
 	configMapFlag                        = "config-map"
+	helmValuesConfigMapFlag              = "helmvalues-configmap"
 	enableStorkUpgradeFlag               = "enable-stork-upgrade"
 	autopilotUpgradeImageCliFlag         = "autopilot-upgrade-version"
 )
@@ -143,16 +141,16 @@ func InitInstance() {
 	}
 
 	err = Inst().S.Init(scheduler.InitOptions{
-		SpecDir:             Inst().SpecDir,
-		ChartDir:            Inst().ChartDir,
-		VolDriverName:       Inst().V.String(),
-		NodeDriverName:      Inst().N.String(),
-		SecretConfigMapName: Inst().ConfigMap,
-		CustomAppConfig:     Inst().CustomAppConfig,
-		StorageProvisioner:  Inst().Provisioner,
-		SecretType:          Inst().SecretType,
-		VaultAddress:        Inst().VaultAddress,
-		VaultToken:          Inst().VaultToken,
+		SpecDir:                 Inst().SpecDir,
+		VolDriverName:           Inst().V.String(),
+		NodeDriverName:          Inst().N.String(),
+		SecretConfigMapName:     Inst().ConfigMap,
+		HelmValuesConfigMapName: Inst().HelmValuesConfigMap,
+		CustomAppConfig:         Inst().CustomAppConfig,
+		StorageProvisioner:      Inst().Provisioner,
+		SecretType:              Inst().SecretType,
+		VaultAddress:            Inst().VaultAddress,
+		VaultToken:              Inst().VaultToken,
 	})
 	expect(err).NotTo(haveOccurred())
 
@@ -426,34 +424,6 @@ func ScheduleApplications(testname string) []*scheduler.Context {
 	})
 
 	return contexts
-}
-
-// ScheduleHelmApplications installs the helmcharts
-func ScheduleHelmApplications(testname string) []*scheduler.Context {
-	var contexts []*scheduler.Context
-	var err error
-
-	Step("schedule applications with helm", func() {
-		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		contexts, err = Inst().S.HelmSchedule(taskName, scheduler.ScheduleOptions{
-			AppKeys: Inst().AppList,
-		})
-		expect(err).NotTo(haveOccurred())
-		expect(contexts).NotTo(beEmpty())
-	})
-
-	return contexts
-}
-
-// DeleteHelmApplications uninstalls the app using helm
-func DeleteHelmApplications(repoInfo *scheduler.HelmRepo) []*scheduler.Context {
-	var err error
-	Step("Remove applications with helm", func() {
-		//taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		err = Inst().S.UnInstallHelmChart(repoInfo)
-		expect(err).NotTo(haveOccurred())
-	})
-	return nil
 }
 
 // ValidateApplications validates applications
@@ -885,7 +855,6 @@ type Torpedo struct {
 	V                                   volume.Driver
 	N                                   node.Driver
 	SpecDir                             string
-	ChartDir                            string
 	AppList                             []string
 	LogLoc                              string
 	LogLevel                            string
@@ -901,6 +870,7 @@ type Torpedo struct {
 	DriverStartTimeout                  time.Duration
 	AutoStorageNodeRecoveryTimeout      time.Duration
 	ConfigMap                           string
+	HelmValuesConfigMap                 string
 	BundleLocation                      string
 	CustomAppConfig                     map[string]scheduler.AppConfig
 	Backup                              backup.Driver
@@ -914,7 +884,7 @@ type Torpedo struct {
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, backupDriverName, specDir, chartDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+	var s, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName, helmValuesConfigMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -943,7 +913,6 @@ func ParseFlags() {
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
 	flag.StringVar(&backupDriverName, backupCliFlag, "", "Name of the backup driver to use")
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
-	flag.StringVar(&chartDir, helmchartDirCliFlag, defaultHelmChartsRoot, "Root directory containing the helm chart files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
 	flag.StringVar(&logLevel, logLevelCliFlag, defaultLogLevel, "Log level")
@@ -962,6 +931,7 @@ func ParseFlags() {
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
+	flag.StringVar(&helmValuesConfigMapName, helmValuesConfigMapFlag, "", "Name of the config map to be used for helm custom values for apps.")
 	flag.StringVar(&bundleLocation, "bundle-location", defaultBundleLocation, "Path to support bundle output files")
 	flag.StringVar(&customConfigPath, "custom-config", "", "Path to custom configuration files")
 	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
@@ -1017,7 +987,6 @@ func ParseFlags() {
 				V:                                   volumeDriver,
 				N:                                   nodeDriver,
 				SpecDir:                             specDir,
-				ChartDir:                            chartDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
 				ScaleFactor:                         appScaleFactor,
@@ -1033,6 +1002,7 @@ func ParseFlags() {
 				DriverStartTimeout:                  driverStartTimeout,
 				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
 				ConfigMap:                           configMapName,
+				HelmValuesConfigMap:                 helmValuesConfigMapName,
 				BundleLocation:                      bundleLocation,
 				CustomAppConfig:                     customAppConfig,
 				Backup:                              backupDriver,

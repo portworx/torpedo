@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 )
@@ -39,22 +40,25 @@ var _ = Describe("{Installpxcentral}", func() {
 		// Install the storage class
 		appName := "pxcentral"
 		contexts := ScheduleApplications(appName)
-		ValidateApplications(contexts)
-
-		// Install px-central through helm
-		helmcontexts := ScheduleHelmApplications(appName)
 
 		// Skipping volume validation until other volume providers are implemented.
 		// Also change the app readinessTimeout to 20mins
-		for _, ctx := range helmcontexts {
+		for _, ctx := range contexts {
 			ctx.SkipVolumeValidation = true
 			ctx.ReadinessTimeout = appReadinessTimeout
 		}
 
-		ValidateApplications(helmcontexts)
+		ValidateApplications(contexts)
+		logrus.Infof("Successfully validated specs for pxcentral app")
 
-		DeleteHelmApplications(helmcontexts[0].HelmRepo)
-
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+		logrus.Infof("Successfully destroyed pxcentral app")
 	})
 })
 

@@ -72,14 +72,14 @@ type InitOptions struct {
 
 	// SpecDir app spec directory
 	SpecDir string
-	// ChartDir helmchart spec directory
-	ChartDir string
 	// VolDriverName volume driver name
 	VolDriverName string
 	// NodeDriverName node driver name
 	NodeDriverName string
 	// ConfigMap  identifies what config map should be used to
 	SecretConfigMapName string
+	// HelmValuesConfigMapName custom values for helm charts
+	HelmValuesConfigMapName string
 	// CustomAppConfig custom settings for apps
 	CustomAppConfig map[string]AppConfig
 	// StorageProvisioner name
@@ -132,9 +132,6 @@ type Driver interface {
 	// WaitForRunning waits for application to start running.
 	WaitForRunning(cc *Context, timeout, retryInterval time.Duration) error
 
-	// HelmSchedule installs the application using helm
-	HelmSchedule(instanceID string, opts ScheduleOptions) ([]*Context, error)
-
 	// AddTasks adds tasks to an existing context
 	AddTasks(*Context, ScheduleOptions) error
 
@@ -146,9 +143,6 @@ type Driver interface {
 
 	// WaitForDestroy waits for application to destroy.
 	WaitForDestroy(*Context, time.Duration) error
-
-	//UnInstallHelmChart removes an application using helm. It does not delete the volumes of the task.
-	UnInstallHelmChart(*HelmRepo) error
 
 	// DeleteTasks deletes all tasks of the application (not the application). DeleteTasksOptions is optional.
 	DeleteTasks(*Context, *DeleteTasksOptions) error

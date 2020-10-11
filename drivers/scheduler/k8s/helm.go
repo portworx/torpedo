@@ -15,7 +15,6 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/helmchart"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/sirupsen/logrus"
 
@@ -33,111 +32,77 @@ import (
 var settings *cli.EnvSettings
 
 // HelmSchedule will install the application with helm
-func (k *K8s) HelmSchedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+func (k *K8s) HelmSchedule(app *spec.AppSpec, appNamespace string, options scheduler.ScheduleOptions) ([]interface{}, error) {
+	var specObjects []interface{}
 	var err error
-	var apps []*helmchart.AppChart
-	// For supporting multiple values to override, will read from a configmap
-	// TODO: Need to change the following hardcoded value for sc too.
-	args := map[string]string{
-		// comma seperated values to set
-		"set": "persistentStorage.storageClassName=central-sc,persistentStorage.enabled=true",
-	}
 
-	// Currently the installation supports for one app in one shot
-	if len(options.AppKeys) > 0 {
-		for _, key := range options.AppKeys {
-			appChart, err := k.ChartFactory.Get(key)
+	for _, appspec := range app.SpecList {
+		if repoInfo, ok := appspec.(*scheduler.HelmRepo); ok {
+			args := map[string]string{}
+			if k.helmValuesConfigMapName != "" {
+				customValues, err := k.GetHelmParamsValues(app.Key)
+				if err != nil {
+					logrus.Warnf("Error in getting custom values for parameters for the app %s, Err: %v", app.Key, err)
+				} else {
+					args["set"] = customValues
+				}
+			}
+
+			var yamlBuf bytes.Buffer
+			settings = cli.New()
+
+			// Add helm repo
+			err = k.RepoAdd(repoInfo)
 			if err != nil {
 				return nil, err
 			}
-			apps = append(apps, appChart)
+
+			// Update charts from the helm repo
+			err = k.RepoUpdate()
+			if err != nil {
+				return nil, err
+			}
+
+			// Install charts
+			_, err = k.createNamespace(app, appNamespace, options)
+			if err != nil {
+				return nil, err
+			}
+
+			// Install the chart through helm
+			repoInfo.Namespace = appNamespace
+			manifest, err := k.InstallChart(repoInfo, args)
+			if err != nil {
+				return nil, err
+			}
+
+			// Parse the manifest which is a yaml to get the k8s spec objects
+			yamlBuf.WriteString(manifest)
+			specs, err := k.ParseSpecsFromYamlBuf(&yamlBuf)
+			if err != nil {
+				return nil, err
+			}
+
+			specObjects = append(specObjects, specs...)
 		}
-	} else {
-		apps = k.ChartFactory.GetAll()
 	}
+	return specObjects, nil
+}
 
-	var contexts []*scheduler.Context
-	var yamlBuf bytes.Buffer
-	for _, app := range apps {
-		repoInfo := app.ChartList[0]
-
-		settings = cli.New()
-
-		// Add helm repo
-		err = k.RepoAdd(repoInfo)
-		if err != nil {
-			return nil, err
-		}
-		// Update charts from the helm repo
-		err = k.RepoUpdate()
-		if err != nil {
-			return nil, err
-		}
-
-		// Install charts
-		appNamespace := app.GetID(instanceID)
-		// tempApp as type AppSpec for creating the namespace
-		tempApp := &spec.AppSpec{
-			Key:      app.Key,
-			SpecList: nil,
-			Enabled:  app.Enabled,
-		}
-		_, err = k.createNamespace(tempApp, appNamespace, options)
-		if err != nil {
-			return nil, err
-		}
-
-		// Install the chart through helm
-		repoInfo.Namespace = appNamespace
-		manifest, err := k.InstallChart(repoInfo, args)
-		if err != nil {
-			return nil, err
-		}
-
-		// Parse the manifest which is a yaml to get the k8s spec objects
-		yamlBuf.WriteString(manifest)
-		specObjects, err := k.ParseSpecsFromYamlBuf(&yamlBuf)
-		if err != nil {
-			return nil, err
-		}
-
-		ctx := &scheduler.Context{
-			UID: instanceID,
-			App: &spec.AppSpec{
-				Key:      app.Key,
-				SpecList: specObjects,
-				Enabled:  app.Enabled,
-			},
-			ScheduleOptions: options,
-			HelmRepo:        repoInfo,
-		}
-
-		// Set the namespace for the specObjects
-		err = k.UpdateTasksID(ctx, repoInfo.Namespace)
-		if err != nil {
-			return nil, err
-		}
-		contexts = append(contexts, ctx)
+// GetHelmParamsValues will get the custom values of the app which need to be set during helm install of the app
+func (k *K8s) GetHelmParamsValues(appName string) (string, error) {
+	configMap, err := k8sCore.GetConfigMap(k.helmValuesConfigMapName, "default")
+	if err != nil {
+		return "", fmt.Errorf("Failed to get config map: Err: %v", err)
 	}
-
-	return contexts, nil
+	if _, ok := configMap.Data[appName]; !ok {
+		return "", fmt.Errorf("Helm custom values for app %s are not set in the configmap %s", appName, k.helmValuesConfigMapName)
+	}
+	return configMap.Data[appName], nil
 }
 
 // ParseCharts parses the application spec file having helm repo info
-func (k *K8s) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
-	fileList := make([]string, 0)
-	if err := filepath.Walk(chartDir, func(path string, f os.FileInfo, err error) error {
-		if f != nil && !f.IsDir() {
-			fileList = append(fileList, path)
-		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	// There should be one custom file describing the helm repo info
-	fileName := fileList[0]
-
+func (k *K8s) ParseCharts(fileName string) (interface{}, error) {
 	file, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return nil, err
