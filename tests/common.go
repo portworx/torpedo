@@ -354,6 +354,9 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 }
 
 // TearDownContext is the ginkgo spec for tearing down a scheduled context
+// In the tear down flow we first want to delete volumes, then applications and only then we want to delete StorageClasses
+// StorageClass has to be deleted last because it has information that is required for when deleting PVC, if StorageClass objects are deleted before
+// deleting PVCs, especially with CSI + Auth enabled, PVC deletion will fail as Auth params are stored inside StorageClass objects
 func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 	context("For tearing down of an app context", func() {
 		var err error
@@ -361,9 +364,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 
 		if opts != nil {
 			// Save original value of SkipClusterScopedObjects, if it exists
-			if val, ok := opts[SkipClusterScopedObjects]; ok {
-				originalSkipClusterScopedObjects = val
-			}
+			originalSkipClusterScopedObjects = opts[SkipClusterScopedObjects]
 		} else {
 			opts = make(map[string]bool) // If opts was passed as nil make it
 		}
@@ -374,7 +375,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		// Tear down storage objects
 		vols := DeleteVolumes(ctx, options)
 
-		// Delete Appliction Objects
+		// Tear down application
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
 			err = Inst().S.Destroy(ctx, opts)
 			expect(err).NotTo(haveOccurred())
