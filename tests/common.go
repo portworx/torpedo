@@ -83,6 +83,7 @@ const (
 	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
 	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
 	provisionerFlag                      = "provisioner"
+	pxNamespaceFlag                      = "px-namespace"
 	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
 	configMapFlag                        = "config-map"
 	enableStorkUpgradeFlag               = "enable-stork-upgrade"
@@ -102,6 +103,7 @@ const (
 	defaultStorageUpgradeEndpointURL      = "https://install.portworx.com/upgrade"
 	defaultStorageUpgradeEndpointVersion  = "2.1.1"
 	defaultStorageProvisioner             = "portworx"
+	defaultPxNamespace                    = "kube-system"
 	defaultStorageNodesPerAZ              = 2
 	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
 	specObjAppWorkloadSizeEnvVar          = "SIZE"
@@ -146,16 +148,17 @@ func InitInstance() {
 		SecretConfigMapName: Inst().ConfigMap,
 		CustomAppConfig:     Inst().CustomAppConfig,
 		StorageProvisioner:  Inst().Provisioner,
+		PxNamespace:         Inst().PxNamespace,
 		SecretType:          Inst().SecretType,
 		VaultAddress:        Inst().VaultAddress,
 		VaultToken:          Inst().VaultToken,
 	})
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().N.Init()
+	err = Inst().N.Init(Inst().PxNamespace)
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().PxNamespace)
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().Backup != nil {
@@ -862,6 +865,7 @@ type Torpedo struct {
 	MinRunTimeMins                      int
 	ChaosLevel                          int
 	Provisioner                         string
+	PxNamespace                         string
 	MaxStorageNodesPerAZ                int
 	DestroyAppTimeout                   time.Duration
 	DriverStartTimeout                  time.Duration
@@ -882,6 +886,7 @@ func ParseFlags() {
 	var err error
 	var s, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
+	var pxNamespace string
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
 	var backupDriver backup.Driver
@@ -922,6 +927,7 @@ func ParseFlags() {
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
+	flag.StringVar(&pxNamespace, pxNamespaceFlag, defaultPxNamespace, "Namespace where Portworx is deployed.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
@@ -992,6 +998,7 @@ func ParseFlags() {
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
 				Provisioner:                         provisionerName,
+				PxNamespace:                         pxNamespace,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
 				DriverStartTimeout:                  driverStartTimeout,

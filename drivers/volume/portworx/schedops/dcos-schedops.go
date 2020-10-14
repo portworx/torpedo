@@ -66,18 +66,18 @@ func (d *dcosSchedOps) ValidateSnapshot(volParams map[string]string, parent *api
 	return nil
 }
 
-func (d *dcosSchedOps) GetServiceEndpoint() (string, error) {
+func (d *dcosSchedOps) GetServiceEndpoint(pxNamespace string) (string, error) {
 	// PX driver is accessed directly on agent nodes. There is no DC/OS level
 	// service endpoint which can be used to redirect the calls to PX driver
 	return "", nil
 }
 
-func (d *dcosSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error {
+func (d *dcosSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, pxNamespace string) error {
 	// TOOD: Implement this method
 	return nil
 }
 
-func (d *dcosSchedOps) IsPXReadyOnNode(n node.Node) bool {
+func (d *dcosSchedOps) IsPXReadyOnNode(n node.Node, pxNamespace string) bool {
 	// TODO: Implement this method
 	return true
 }

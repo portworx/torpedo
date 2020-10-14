@@ -34,9 +34,8 @@ const (
 )
 
 const (
-	execPodDaemonSetLabel   = "debug"
-	execPodDefaultNamespace = "kube-system"
-	defaultSpecsRoot        = "../drivers/scheduler/k8s/specs"
+	execPodDaemonSetLabel = "debug"
+	defaultSpecsRoot      = "../drivers/scheduler/k8s/specs"
 )
 
 const (
@@ -47,10 +46,11 @@ const (
 // SSH ssh node driver
 type SSH struct {
 	node.Driver
-	username  string
-	password  string
-	keyPath   string
-	sshConfig *ssh_pkg.ClientConfig
+	username    string
+	password    string
+	keyPath     string
+	sshConfig   *ssh_pkg.ClientConfig
+	pxNamespace string
 	// TODO keyPath-based ssh
 }
 
@@ -87,7 +87,8 @@ func useSSH() bool {
 }
 
 // Init initializes SSH node driver
-func (s *SSH) Init() error {
+func (s *SSH) Init(pxNamespace string) error {
+	s.pxNamespace = pxNamespace
 
 	nodes := node.GetWorkerNodes()
 	var err error
@@ -122,9 +123,9 @@ func (s *SSH) Init() error {
 func (s *SSH) initExecPod() error {
 	var ds *appsv1_api.DaemonSet
 	var err error
-	if ds, err = k8sApps.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
-		s, err := scheduler.Get(k8s_driver.SchedName)
-		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), s)
+	if ds, err = k8sApps.GetDaemonSet(execPodDaemonSetLabel, s.pxNamespace); ds == nil {
+		driver, err := scheduler.Get(k8s_driver.SchedName)
+		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), driver)
 		if err != nil {
 			return fmt.Errorf("Error while loading debug daemonset spec file. Err: %s", err)
 		}
@@ -132,7 +133,10 @@ func (s *SSH) initExecPod() error {
 		if err != nil {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
-		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet))
+
+		debugPodSpec := dsSpec.SpecList[0].(*appsv1_api.DaemonSet)
+		debugPodSpec.Namespace = s.pxNamespace
+		ds, err = k8sApps.CreateDaemonSet(debugPodSpec)
 		if err != nil {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
 		}
@@ -389,7 +393,7 @@ func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignore
 func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
 
-	allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, execPodDefaultNamespace)
+	allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, s.pxNamespace)
 	if err != nil {
 		logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 		return "", err

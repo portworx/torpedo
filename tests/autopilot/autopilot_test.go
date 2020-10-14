@@ -38,7 +38,6 @@ const (
 	eventCheckInterval       = 2 * time.Second
 	eventCheckTimeout        = 30 * time.Minute
 	autDeploymentName        = "autopilot"
-	autDeploymentNamespace   = "kube-system"
 )
 
 var autopilotruleBasicTestCases = []apapi.AutopilotRule{
@@ -252,7 +251,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 						&appsapi.Deployment{
 							ObjectMeta: meta_v1.ObjectMeta{
 								Name:      autDeploymentName,
-								Namespace: autDeploymentNamespace,
+								Namespace: Inst().PxNamespace,
 							},
 						},
 					},
@@ -817,7 +816,7 @@ func upgradeAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) err
 		k8sApps := apps.Instance()
 
 		logrus.Infof("Upgrading autopilot with new image %s", image)
-		autopilotObj, err := k8sApps.GetDeployment(autDeploymentName, autDeploymentNamespace)
+		autopilotObj, err := k8sApps.GetDeployment(autDeploymentName, Inst().PxNamespace)
 
 		if err != nil {
 			return fmt.Errorf("failed to get autopilot deployment object. Err: %v", err)

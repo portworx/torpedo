@@ -35,7 +35,7 @@ func (a *aws) String() string {
 	return DriverName
 }
 
-func (a *aws) Init() error {
+func (a *aws) Init(pxNamespace string) error {
 	var err error
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,

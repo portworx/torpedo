@@ -28,8 +28,8 @@ func (a *aks) String() string {
 	return DriverName
 }
 
-func (a *aks) Init() error {
-	a.SSH.Init()
+func (a *aks) Init(pxNamespace string) error {
+	a.SSH.Init(pxNamespace)
 
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {

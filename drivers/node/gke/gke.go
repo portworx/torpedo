@@ -27,8 +27,8 @@ func (g *gke) String() string {
 	return DriverName
 }
 
-func (g *gke) Init() error {
-	g.SSH.Init()
+func (g *gke) Init(pxNamespace string) error {
+	g.SSH.Init(pxNamespace)
 
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {

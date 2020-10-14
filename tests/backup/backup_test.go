@@ -51,8 +51,7 @@ const (
 	backupRestoreCompletionTimeoutMin = 20
 	retrySeconds                      = 10
 
-	storkDeploymentName      = "stork"
-	storkDeploymentNamespace = "kube-system"
+	storkDeploymentName = "stork"
 
 	defaultTimeout       = 5 * time.Minute
 	defaultRetryInterval = 5 * time.Second
@@ -249,7 +248,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 						&appsapi.Deployment{
 							ObjectMeta: meta_v1.ObjectMeta{
 								Name:      storkDeploymentName,
-								Namespace: storkDeploymentNamespace,
+								Namespace: Inst().PxNamespace,
 							},
 						},
 					},
@@ -836,7 +835,7 @@ func killStork() {
 				&appsapi.Deployment{
 					ObjectMeta: meta_v1.ObjectMeta{
 						Name:      storkDeploymentName,
-						Namespace: storkDeploymentNamespace,
+						Namespace: Inst().PxNamespace,
 					},
 				},
 			},
