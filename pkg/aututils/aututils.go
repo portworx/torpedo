@@ -31,6 +31,8 @@ const (
 	RuleScaleType = "scaletype"
 	// RulePoolProvDeviationPercKeyAlias is the key alias for pool provision deviation percentage
 	RulePoolProvDeviationPercKeyAlias = "PoolProvDeviationPerc"
+	// PoolUsageDeviationPerc is the key alias for pool usage deviation percentage
+	RulePoolUsageDeviationPercKeyAlias = "PoolUsageDeviationPerc"
 	// VolumeSpecAction is name for volume spec action
 	VolumeSpecAction = "openstorage.io.action.volume/resize"
 	// StorageSpecAction is name for storage spec action
@@ -168,7 +170,7 @@ func PoolRuleFixedScaleSizeByAvailableCapacity(usage int, scaleSize, expandType 
 }
 
 // PoolRuleRebalanceByProvisionedMean returns an autopilot pool rebalance rule that
-// uses provision deviation percantage alias key
+// uses provision deviation percentage alias key
 func PoolRuleRebalanceByProvisionedMean(values []string) apapi.AutopilotRule {
 	apRuleObject := apapi.AutopilotRule{
 		ObjectMeta: meta_v1.ObjectMeta{
@@ -179,6 +181,33 @@ func PoolRuleRebalanceByProvisionedMean(values []string) apapi.AutopilotRule {
 				Expressions: []*apapi.LabelSelectorRequirement{
 					{
 						KeyAlias: RulePoolProvDeviationPercKeyAlias,
+						Operator: apapi.LabelSelectorOpNotInRange,
+						Values:   values,
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: RebalanceSpecAction,
+				},
+			},
+		},
+	}
+	return apRuleObject
+}
+
+// PoolRuleRebalanceByUsageMean returns an autopilot pool rebalance rule that
+// uses usage deviation percentage alias key
+func PoolRuleRebalanceByUsageMean(values []string) apapi.AutopilotRule {
+	apRuleObject := apapi.AutopilotRule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: fmt.Sprintf("pvc-rebalance-usage-mean-%s", strings.Join(values, "-")),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						KeyAlias: RulePoolUsageDeviationPercKeyAlias,
 						Operator: apapi.LabelSelectorOpNotInRange,
 						Values:   values,
 					},

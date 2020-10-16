@@ -721,12 +721,51 @@ var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
 	})
 })
 
-var _ = Describe(fmt.Sprintf("{%sRebalance}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
 	It("has to create couple volumes on the same pool, run rebalance, validate rebalance and teardown apps", func() {
-		testName := strings.ToLower(fmt.Sprintf("%sRebalance", testSuiteName))
+		testName := strings.ToLower(fmt.Sprintf("%sRebalanceProvMean", testSuiteName))
 
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-20", "20"}),
+		}
+		for i := range apRules {
+			apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
+		}
+		workerNodes := node.GetWorkerNodes()
+		scheduleOptions := scheduler.ScheduleOptions{PvcNodesAnnotation: workerNodes[0].Id}
+		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduleOptions)
+
+		for _, apRule := range apRules {
+			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateNormal),
+				string(apapi.RuleStateTriggered)})
+
+			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsPending),
+				string(apapi.RuleStateActiveActionsInProgress)})
+
+			err := Inst().V.ValidateRebalanceJobs()
+			Expect(err).NotTo(HaveOccurred())
+
+			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsTaken),
+				string(apapi.RuleStateNormal)})
+		}
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+
+	})
+})
+
+var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
+	It("has to create couple volumes on the same pool, run rebalance, validate rebalance and teardown apps", func() {
+		testName := strings.ToLower(fmt.Sprintf("%sRebalanceUsageMean", testSuiteName))
+
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleRebalanceByUsageMean([]string{"-20", "20"}),
 		}
 		for i := range apRules {
 			apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
