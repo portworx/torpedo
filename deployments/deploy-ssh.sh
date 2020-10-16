@@ -77,10 +77,6 @@ if [ -z "${PROVISIONER}" ]; then
     PROVISIONER="portworx"
 fi
 
-if [ -z "${PX_NAMESPACE}" ]; then
-    PX_NAMESPACE="kube-system"
-fi
-
 CONFIGMAP=""
 if [ -n "${CONFIG_MAP}" ]; then
     CONFIGMAP="${CONFIG_MAP}"
@@ -398,7 +394,6 @@ spec:
             "--chaos-level", "$CHAOS_LEVEL",
             "--storagenode-recovery-timeout", "$STORAGENODE_RECOVERY_TIMEOUT",
             "--provisioner", "$PROVISIONER",
-            "--px-namespace", "$PX_NAMESPACE",
             "--storage-driver", "$STORAGE_DRIVER",
             "--config-map", "$CONFIGMAP",
             "--custom-config", "$CUSTOM_APP_CONFIG_PATH",

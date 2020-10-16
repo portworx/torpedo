@@ -132,7 +132,7 @@ type K8s struct {
 	NodeDriverName      string
 	VolDriverName       string
 	secretConfigMapName string
-	PxNamespace         string
+	DriverNamespace     string
 	customConfig        map[string]scheduler.AppConfig
 	eventsStorage       map[string][]scheduler.Event
 	SecretType          string
@@ -169,7 +169,7 @@ func (k *K8s) String() string {
 func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.NodeDriverName = schedOpts.NodeDriverName
 	k.VolDriverName = schedOpts.VolDriverName
-	k.PxNamespace = schedOpts.PxNamespace
+	k.DriverNamespace = schedOpts.DriverNamespace
 	k.secretConfigMapName = schedOpts.SecretConfigMapName
 	k.customConfig = schedOpts.CustomAppConfig
 	k.SecretType = schedOpts.SecretType
@@ -1158,7 +1158,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		logrus.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
 		return secret, nil
 	} else if obj, ok := spec.(*storkapi.Rule); ok {
-		if obj.Namespace != k.PxNamespace {
+		if obj.Namespace != k.DriverNamespace {
 			obj.Namespace = ns.Name
 		}
 		rule, err := k8sStork.CreateRule(obj)

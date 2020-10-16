@@ -248,7 +248,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 						&appsapi.Deployment{
 							ObjectMeta: meta_v1.ObjectMeta{
 								Name:      storkDeploymentName,
-								Namespace: Inst().PxNamespace,
+								Namespace: Inst().DriverNamespace,
 							},
 						},
 					},
@@ -835,7 +835,7 @@ func killStork() {
 				&appsapi.Deployment{
 					ObjectMeta: meta_v1.ObjectMeta{
 						Name:      storkDeploymentName,
-						Namespace: Inst().PxNamespace,
+						Namespace: Inst().DriverNamespace,
 					},
 				},
 			},

@@ -38,9 +38,9 @@ type Driver interface {
 	// GetServiceEndpoint returns the hostname of portworx service if it is present
 	GetServiceEndpoint(string) (string, error)
 	// UpgradePortworx upgrades portworx to the given docker image and tag
-	UpgradePortworx(ociImage, ociTag, pxImage, pxTag, pxNamespace string) error
+	UpgradePortworx(ociImage, ociTag, pxImage, pxTag, driverNamespace string) error
 	// IsPXReadyOnNode returns true if PX pod is up on that node, else returns false
-	IsPXReadyOnNode(n node.Node, pxNamespace string) bool
+	IsPXReadyOnNode(n node.Node, driverNamespace string) bool
 	// IsPXEnabled returns true if portworx is enabled on given node
 	IsPXEnabled(n node.Node) (bool, error)
 	// GetRemotePXNodes returns list of PX node found on destination k8s cluster

@@ -524,11 +524,11 @@ func isDirEmpty(path string, n node.Node, d node.Driver) bool {
 }
 
 // GetServiceEndpoint get IP addr of portworx-service, preferable external IP
-func (k *k8sSchedOps) GetServiceEndpoint(pxNamespace string) (string, error) {
-	return k8sCore.GetServiceEndpoint(PXServiceName, pxNamespace)
+func (k *k8sSchedOps) GetServiceEndpoint(driverNamespace string) (string, error) {
+	return k8sCore.GetServiceEndpoint(PXServiceName, driverNamespace)
 }
 
-func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, pxNamespace string) error {
+func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, driverNamespace string) error {
 
 	binding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -537,7 +537,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, pxNamesp
 		Subjects: []rbacv1.Subject{{
 			Kind:      "ServiceAccount",
 			Name:      talismanServiceAccount,
-			Namespace: pxNamespace,
+			Namespace: driverNamespace,
 		}},
 		RoleRef: rbacv1.RoleRef{
 			Kind: "ClusterRole",
@@ -552,7 +552,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, pxNamesp
 	account := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      talismanServiceAccount,
-			Namespace: pxNamespace,
+			Namespace: driverNamespace,
 		},
 	}
 	account, err = k8sCore.CreateServiceAccount(account)
@@ -577,7 +577,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, pxNamesp
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "talisman",
-			Namespace: pxNamespace,
+			Namespace: driverNamespace,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &valOne,
@@ -634,8 +634,8 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, pxNamesp
 }
 
 // IsPXReadyOnNode validates if Portworx pod is up and running
-func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node, pxNamespace string) bool {
-	pxPods, err := k8sCore.GetPodsByNode(n.Name, pxNamespace)
+func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node, driverNamespace string) bool {
+	pxPods, err := k8sCore.GetPodsByNode(n.Name, driverNamespace)
 	if err != nil {
 		logrus.Errorf("Failed to get apps on node %s", n.Name)
 		return false

@@ -37,7 +37,7 @@ func (d *azure) RefreshDriverEndpoints() error {
 	return nil
 }
 
-func (d *azure) Init(sched string, nodeDriver string, token string, storageProvisioner string, pxNamespace string) error {
+func (d *azure) Init(sched string, nodeDriver string, token string, storageProvisioner string, driverNamespace string) error {
 	logrus.Infof("Using the Azure volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo

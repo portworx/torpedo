@@ -251,7 +251,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 						&appsapi.Deployment{
 							ObjectMeta: meta_v1.ObjectMeta{
 								Name:      autDeploymentName,
-								Namespace: Inst().PxNamespace,
+								Namespace: Inst().DriverNamespace,
 							},
 						},
 					},
@@ -816,7 +816,7 @@ func upgradeAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) err
 		k8sApps := apps.Instance()
 
 		logrus.Infof("Upgrading autopilot with new image %s", image)
-		autopilotObj, err := k8sApps.GetDeployment(autDeploymentName, Inst().PxNamespace)
+		autopilotObj, err := k8sApps.GetDeployment(autDeploymentName, Inst().DriverNamespace)
 
 		if err != nil {
 			return fmt.Errorf("failed to get autopilot deployment object. Err: %v", err)

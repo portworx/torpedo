@@ -80,8 +80,8 @@ type InitOptions struct {
 	CustomAppConfig map[string]AppConfig
 	// StorageProvisioner name
 	StorageProvisioner string
-	// Portworx namesapce
-	PxNamespace string
+	// Driver namespace
+	DriverNamespace string
 	// SecretType secret used for encryption keys
 	SecretType string
 	// VaultAddress vault api address
@@ -98,8 +98,8 @@ type ScheduleOptions struct {
 	Nodes []node.Node
 	// StorageProvisioner identifies what storage provider should be used
 	StorageProvisioner string
-	// Portworx namesapce
-	PxNamespace string
+	// Driver namespace
+	DriverNamespace string
 	// ConfigMap  identifies what config map should be used to
 	ConfigMap string
 	// AutopilotRule identifies options for autopilot (Optional)

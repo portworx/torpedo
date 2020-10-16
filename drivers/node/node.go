@@ -102,7 +102,7 @@ var (
 // Driver provides the node driver interface
 type Driver interface {
 	// Init initializes the node driver under the given scheduler
-	Init(pxNamespace string) error
+	Init(driverNamespace string) error
 
 	// DeleteNode deletes the given node
 	DeleteNode(node Node, timeout time.Duration) error
@@ -181,7 +181,7 @@ type notSupportedDriver struct{}
 // NotSupportedDriver provides the default driver with none of the operations supported
 var NotSupportedDriver = &notSupportedDriver{}
 
-func (d *notSupportedDriver) Init(pxNamespace string) error {
+func (d *notSupportedDriver) Init(driverNamespace string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "Init()",
