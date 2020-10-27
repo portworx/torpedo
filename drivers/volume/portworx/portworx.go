@@ -161,11 +161,17 @@ func (d *portworx) String() string {
 	return DriverName
 }
 
-func (d *portworx) Init(sched string, nodeDriver string, token string, storageProvisioner string, driverNamespace string) error {
+func (d *portworx) Init(sched string, nodeDriver string, token string, storageProvisioner string) error {
 	logrus.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
 
 	d.token = token
+
+	// Set driver namespace
+	driverNamespace, err := schedops.GetDriverNamespace()
+	if err != nil {
+		return err
+	}
 	d.driverNamespace = driverNamespace
 
 	if d.nodeDriver, err = node.Get(nodeDriver); err != nil {

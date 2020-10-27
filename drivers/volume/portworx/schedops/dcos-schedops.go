@@ -73,7 +73,7 @@ func (d *dcosSchedOps) GetServiceEndpoint(driverNamespace string) (string, error
 }
 
 func (d *dcosSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, driverNamespace string) error {
-	// TOOD: Implement this method
+	// TODO: Implement this method
 	return nil
 }
 

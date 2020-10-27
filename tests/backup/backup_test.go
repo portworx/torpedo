@@ -30,6 +30,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
@@ -242,20 +243,25 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 				}
 			}
 
+			// Set driver namespace
+			driverNamespace, err := schedops.GetDriverNamespace()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get driver namespace. Error: [%v]", err))
+
 			ctx := &scheduler.Context{
 				App: &spec.AppSpec{
 					SpecList: []interface{}{
 						&appsapi.Deployment{
 							ObjectMeta: meta_v1.ObjectMeta{
 								Name:      storkDeploymentName,
-								Namespace: Inst().DriverNamespace,
+								Namespace: driverNamespace,
 							},
 						},
 					},
 				},
 			}
 			logrus.Infof("Execute task for killing stork")
-			err := Inst().S.DeleteTasks(ctx, nil)
+			err = Inst().S.DeleteTasks(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -829,20 +835,25 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 })
 
 func killStork() {
+	// Set driver namespace
+	driverNamespace, err := schedops.GetDriverNamespace()
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to get driver namespace. Error: [%v]", err))
+
 	ctx := &scheduler.Context{
 		App: &spec.AppSpec{
 			SpecList: []interface{}{
 				&appsapi.Deployment{
 					ObjectMeta: meta_v1.ObjectMeta{
 						Name:      storkDeploymentName,
-						Namespace: Inst().DriverNamespace,
+						Namespace: driverNamespace,
 					},
 				},
 			},
 		},
 	}
 	logrus.Infof("Execute task for killing stork")
-	err := Inst().S.DeleteTasks(ctx, nil)
+	err = Inst().S.DeleteTasks(ctx, nil)
 	Expect(err).NotTo(HaveOccurred())
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
@@ -212,6 +213,7 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 
 var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 	It("has to start IO workloads, create rules that resize pools based on capacity, restart autopilot and validate pools have been resized once", func() {
+
 		testName := strings.ToLower(fmt.Sprintf("%sRestartAutopilot", testSuiteName))
 
 		apRules := []apapi.AutopilotRule{
@@ -244,6 +246,11 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 			},
 		}
 
+		// Set driver namespace
+		driverNamespace, err := schedops.GetDriverNamespace()
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Failed to get driver namespace. Error: [%v]", err))
+
 		t := func(interval sched.Interval) {
 			err := Inst().S.DeleteTasks(&scheduler.Context{
 				App: &spec.AppSpec{
@@ -251,7 +258,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 						&appsapi.Deployment{
 							ObjectMeta: meta_v1.ObjectMeta{
 								Name:      autDeploymentName,
-								Namespace: Inst().DriverNamespace,
+								Namespace: driverNamespace,
 							},
 						},
 					},
@@ -811,12 +818,17 @@ func waitForAutopilotFailedEvent(apRules []apapi.AutopilotRule, objectName strin
 }
 
 func upgradeAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) error {
+	// Set driver namespace
+	driverNamespace, err := schedops.GetDriverNamespace()
+	if err != nil {
+		return err
+	}
 
 	upgradeAutopilot := func() error {
 		k8sApps := apps.Instance()
 
 		logrus.Infof("Upgrading autopilot with new image %s", image)
-		autopilotObj, err := k8sApps.GetDeployment(autDeploymentName, Inst().DriverNamespace)
+		autopilotObj, err := k8sApps.GetDeployment(autDeploymentName, driverNamespace)
 
 		if err != nil {
 			return fmt.Errorf("failed to get autopilot deployment object. Err: %v", err)

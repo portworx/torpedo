@@ -16,6 +16,7 @@ import (
 	k8s_driver "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	volumedriver "github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/sirupsen/logrus"
 	ssh_pkg "golang.org/x/crypto/ssh"
 	appsv1_api "k8s.io/api/apps/v1"
@@ -87,11 +88,17 @@ func useSSH() bool {
 }
 
 // Init initializes SSH node driver
-func (s *SSH) Init(driverNamespace string) error {
+func (s *SSH) Init() error {
+	var err error
+
+	// Set driver namespace
+	driverNamespace, err := schedops.GetDriverNamespace()
+	if err != nil {
+		return err
+	}
 	s.driverNamespace = driverNamespace
 
 	nodes := node.GetWorkerNodes()
-	var err error
 	if useSSH() {
 		err = s.initSSH()
 	} else {

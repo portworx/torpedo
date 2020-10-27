@@ -17,7 +17,6 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/sirupsen/logrus"
@@ -25,7 +24,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/portworx/torpedo/drivers/backup"
 	// import aks driver to invoke it's init
@@ -104,7 +102,6 @@ const (
 	defaultStorageUpgradeEndpointURL      = "https://install.portworx.com/upgrade"
 	defaultStorageUpgradeEndpointVersion  = "2.1.1"
 	defaultStorageProvisioner             = "portworx"
-	defaultDriverNamespace                = "kube-system"
 	defaultStorageNodesPerAZ              = 2
 	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
 	specObjAppWorkloadSizeEnvVar          = "SIZE"
@@ -150,17 +147,16 @@ func InitInstance() {
 		SecretConfigMapName: Inst().ConfigMap,
 		CustomAppConfig:     Inst().CustomAppConfig,
 		StorageProvisioner:  Inst().Provisioner,
-		DriverNamespace:     Inst().DriverNamespace,
 		SecretType:          Inst().SecretType,
 		VaultAddress:        Inst().VaultAddress,
 		VaultToken:          Inst().VaultToken,
 	})
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().N.Init(Inst().DriverNamespace)
+	err = Inst().N.Init()
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().DriverNamespace)
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().Backup != nil {
@@ -867,7 +863,6 @@ type Torpedo struct {
 	MinRunTimeMins                      int
 	ChaosLevel                          int
 	Provisioner                         string
-	DriverNamespace                     string
 	MaxStorageNodesPerAZ                int
 	DestroyAppTimeout                   time.Duration
 	DriverStartTimeout                  time.Duration
@@ -888,7 +883,6 @@ func ParseFlags() {
 	var err error
 	var s, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
-	var driverNamespace string
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
 	var backupDriver backup.Driver
@@ -982,22 +976,6 @@ func ParseFlags() {
 			}
 		}
 
-		// List all services
-		k8sCore := core.Instance()
-		allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
-		if err != nil {
-			logrus.Fatalf("cannot list services. Err: %v\n", err)
-		}
-
-		// Set namespace for driverNamesapce same as portworx-service
-		// if portworx-service is not found, defaultDriverNamespace will be used
-		driverNamespace = defaultDriverNamespace
-		for _, svc := range allServices.Items {
-			if svc.Name == "portworx-service" {
-				driverNamespace = svc.Namespace
-			}
-		}
-
 		once.Do(func() {
 			instance = &Torpedo{
 				InstanceID:                          time.Now().Format("01-02-15h04m05s"),
@@ -1015,7 +993,6 @@ func ParseFlags() {
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
 				Provisioner:                         provisionerName,
-				DriverNamespace:                     driverNamespace,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
 				DriverStartTimeout:                  driverStartTimeout,
