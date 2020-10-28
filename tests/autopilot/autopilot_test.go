@@ -799,6 +799,87 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
 	})
 })
 
+var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), func() {
+	It("has to start IO workloads, create rules that rebalance pools, restart autopilot and validate pools have been rebalanced", func() {
+		testName := strings.ToLower(fmt.Sprintf("%sRestartAutopilotRebalance", testSuiteName))
+
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-20", "20"}),
+		}
+		for i := range apRules {
+			apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
+		}
+
+		// setup task to delete autopilot pods as soon as an action in progress
+		eventCheck := func() (bool, error) {
+			for _, apRule := range apRules {
+				ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+					FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, ruleEvent := range ruleEvents.Items {
+					if strings.Contains(ruleEvent.Message, string(apapi.RuleStateActiveActionsInProgress)) {
+						return true, nil
+					}
+				}
+			}
+
+			return false, nil
+		}
+
+		deleteOpts := &scheduler.DeleteTasksOptions{
+			TriggerOptions: api.TriggerOptions{
+				TriggerCb:            eventCheck,
+				TriggerCheckInterval: triggerCheckInterval,
+				TriggerCheckTimeout:  triggerCheckTimeout,
+			},
+		}
+
+		t := func(interval sched.Interval) {
+			err := Inst().S.DeleteTasks(&scheduler.Context{
+				App: &spec.AppSpec{
+					SpecList: []interface{}{
+						&appsapi.Deployment{
+							ObjectMeta: meta_v1.ObjectMeta{
+								Name:      autDeploymentName,
+								Namespace: autDeploymentNamespace,
+							},
+						},
+					},
+				},
+			}, deleteOpts)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		id, err := sched.Instance().Schedule(t, sched.Periodic(time.Second), time.Now(), true)
+		Expect(err).NotTo(HaveOccurred())
+
+		defer sched.Instance().Cancel(id)
+
+		workerNodes := node.GetWorkerNodes()
+		scheduleOptions := scheduler.ScheduleOptions{PvcNodesAnnotation: workerNodes[0].Id}
+		contexts := scheduleAppsWithAutopilot(testName, apRules, scheduleOptions)
+
+		for _, apRule := range apRules {
+
+			err := Inst().V.ValidateRebalanceJobs()
+			Expect(err).NotTo(HaveOccurred())
+
+			waitForAutopilotEvent(apRule, "", []string{string(apapi.RuleStateActiveActionsTaken),
+				string(apapi.RuleStateNormal)})
+		}
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+})
+
 func scheduleAppsWithAutopilot(testName string, apRules []apapi.AutopilotRule, options scheduler.ScheduleOptions) []*scheduler.Context {
 	var contexts []*scheduler.Context
 	labels := map[string]string{
