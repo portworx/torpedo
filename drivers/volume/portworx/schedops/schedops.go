@@ -78,6 +78,7 @@ func GetDriverNamespace() (string, error) {
 	for _, svc := range allServices.Items {
 		if svc.Name == defaultPortworxServiceName {
 			driverNamespace = svc.Namespace
+			break
 		}
 	}
 	return driverNamespace, nil

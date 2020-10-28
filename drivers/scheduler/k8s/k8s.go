@@ -169,7 +169,7 @@ func (k *K8s) String() string {
 func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.NodeDriverName = schedOpts.NodeDriverName
 	k.VolDriverName = schedOpts.VolDriverName
-	k.DriverNamespace = schedOpts.DriverNamespace
+	k.DriverNamespace = schedOpts.VolDriverNamespace
 	k.secretConfigMapName = schedOpts.SecretConfigMapName
 	k.customConfig = schedOpts.CustomAppConfig
 	k.SecretType = schedOpts.SecretType
