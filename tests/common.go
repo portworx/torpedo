@@ -19,6 +19,7 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -140,7 +141,12 @@ func InitInstance() {
 		token = ""
 	}
 
+	// Set driver namespace
+	driverNamespace, err := schedops.GetDriverNamespace()
+	expect(err).NotTo(haveOccurred())
+
 	err = Inst().S.Init(scheduler.InitOptions{
+		DriverNamespace:     driverNamespace,
 		SpecDir:             Inst().SpecDir,
 		VolDriverName:       Inst().V.String(),
 		NodeDriverName:      Inst().N.String(),

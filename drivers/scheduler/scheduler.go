@@ -67,7 +67,6 @@ type AppConfig struct {
 
 // InitOptions initialization options
 type InitOptions struct {
-
 	// SpecDir app spec directory
 	SpecDir string
 	// VolDriverName volume driver name
@@ -98,8 +97,6 @@ type ScheduleOptions struct {
 	Nodes []node.Node
 	// StorageProvisioner identifies what storage provider should be used
 	StorageProvisioner string
-	// Driver namespace
-	DriverNamespace string
 	// ConfigMap  identifies what config map should be used to
 	ConfigMap string
 	// AutopilotRule identifies options for autopilot (Optional)
