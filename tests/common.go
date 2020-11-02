@@ -146,7 +146,7 @@ func InitInstance() {
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().S.Init(scheduler.InitOptions{
-		DriverNamespace:     driverNamespace,
+		VolDriverNamespace:  driverNamespace,
 		SpecDir:             Inst().SpecDir,
 		VolDriverName:       Inst().V.String(),
 		NodeDriverName:      Inst().N.String(),
