@@ -256,7 +256,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 				},
 			}
 			logrus.Infof("Execute task for killing stork")
-			err = Inst().S.DeleteTasks(ctx, nil)
+			err := Inst().S.DeleteTasks(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
