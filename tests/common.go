@@ -141,12 +141,12 @@ func InitInstance() {
 		token = ""
 	}
 
-	// Set driver namespace
-	driverNamespace, err := schedops.GetDriverNamespace()
+	// Get volume driver namespace
+	volumeDriverNamespace, err := schedops.GetVolumeDriverNamespace()
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().S.Init(scheduler.InitOptions{
-		VolDriverNamespace:  driverNamespace,
+		VolDriverNamespace:  volumeDriverNamespace,
 		SpecDir:             Inst().SpecDir,
 		VolDriverName:       Inst().V.String(),
 		NodeDriverName:      Inst().N.String(),

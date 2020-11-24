@@ -38,11 +38,11 @@ type Driver interface {
 	// GetVolumeName returns the volume name based on the volume object received
 	GetVolumeName(v *volume.Volume) string
 	// GetServiceEndpoint returns the hostname of portworx service if it is present
-	GetServiceEndpoint(string) (string, error)
+	GetServiceEndpoint(volumeDriverNamespace string) (string, error)
 	// UpgradePortworx upgrades portworx to the given docker image and tag
-	UpgradePortworx(ociImage, ociTag, pxImage, pxTag, driverNamespace string) error
+	UpgradePortworx(ociImage, ociTag, pxImage, pxTag, volumeDriverNamespace string) error
 	// IsPXReadyOnNode returns true if PX pod is up on that node, else returns false
-	IsPXReadyOnNode(n node.Node, driverNamespace string) bool
+	IsPXReadyOnNode(n node.Node, volumeDriverNamespace string) bool
 	// IsPXEnabled returns true if portworx is enabled on given node
 	IsPXEnabled(n node.Node) (bool, error)
 	// GetRemotePXNodes returns list of PX node found on destination k8s cluster
@@ -59,12 +59,12 @@ var (
 )
 
 const (
-	defaultDriverNamespace     = "kube-system"
-	defaultPortworxServiceName = "portworx-service"
+	defaultVolumeDriverNamespace = "kube-system"
+	defaultPortworxServiceName   = "portworx-service"
 )
 
-// GetDriverNamespace returns volume driver namespace
-func GetDriverNamespace() (string, error) {
+// GetVolumeDriverNamespace returns volume driver namespace
+func GetVolumeDriverNamespace() (string, error) {
 	// List all services
 	k8sCore := k8score.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
@@ -74,14 +74,14 @@ func GetDriverNamespace() (string, error) {
 
 	// Set namespace for driverNamesapce same as portworx-service
 	// if portworx-service is not found, defaultDriverNamespace will be used
-	driverNamespace := defaultDriverNamespace
+	volumeDriverNamespace := defaultVolumeDriverNamespace
 	for _, svc := range allServices.Items {
 		if svc.Name == defaultPortworxServiceName {
-			driverNamespace = svc.Namespace
+			volumeDriverNamespace = svc.Namespace
 			break
 		}
 	}
-	return driverNamespace, nil
+	return volumeDriverNamespace, nil
 }
 
 // Register registers the given portworx scheduler operator

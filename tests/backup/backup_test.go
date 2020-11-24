@@ -30,7 +30,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
@@ -52,7 +51,8 @@ const (
 	backupRestoreCompletionTimeoutMin = 20
 	retrySeconds                      = 10
 
-	storkDeploymentName = "stork"
+	storkDeploymentName      = "stork"
+	storkDeploymentNamespace = "kube-system" // TODO This won't work for stork deployed in custom namespace
 
 	defaultTimeout       = 5 * time.Minute
 	defaultRetryInterval = 5 * time.Second
@@ -243,18 +243,13 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 				}
 			}
 
-			// Set driver namespace
-			driverNamespace, err := schedops.GetDriverNamespace()
-			Expect(err).NotTo(HaveOccurred(),
-				fmt.Sprintf("Failed to get driver namespace. Error: [%v]", err))
-
 			ctx := &scheduler.Context{
 				App: &spec.AppSpec{
 					SpecList: []interface{}{
 						&appsapi.Deployment{
 							ObjectMeta: meta_v1.ObjectMeta{
 								Name:      storkDeploymentName,
-								Namespace: driverNamespace,
+								Namespace: storkDeploymentNamespace,
 							},
 						},
 					},
@@ -835,25 +830,20 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 })
 
 func killStork() {
-	// Set driver namespace
-	driverNamespace, err := schedops.GetDriverNamespace()
-	Expect(err).NotTo(HaveOccurred(),
-		fmt.Sprintf("Failed to get driver namespace. Error: [%v]", err))
-
 	ctx := &scheduler.Context{
 		App: &spec.AppSpec{
 			SpecList: []interface{}{
 				&appsapi.Deployment{
 					ObjectMeta: meta_v1.ObjectMeta{
 						Name:      storkDeploymentName,
-						Namespace: driverNamespace,
+						Namespace: storkDeploymentNamespace,
 					},
 				},
 			},
 		},
 	}
 	logrus.Infof("Execute task for killing stork")
-	err = Inst().S.DeleteTasks(ctx, nil)
+	err := Inst().S.DeleteTasks(ctx, nil)
 	Expect(err).NotTo(HaveOccurred())
 }
 
