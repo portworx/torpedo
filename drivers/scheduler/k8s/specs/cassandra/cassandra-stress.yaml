@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cassandra-stress
+  labels:
+    app: cassandra-stress
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cassandra-stress
+  template:
+    metadata:
+      labels:
+        app: cassandra-stress
+    spec:
+      containers:
+      - name: cassandra-stress
+        image: scylladb/scylla:4.1.11
+        command:
+          - /bin/bash
+          - -c
+          - "cassandra-stress write no-warmup n=1000000 cl=ONE -mode native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node cassandra -port native=9042 -rate auto -log file=/cassandra-stress.load.data -schema \"replication(factor=1)\" -errors ignore; cat /cassandra-stress.load.data"
+      restartPolicy: Always
