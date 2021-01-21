@@ -6,6 +6,4 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "2"
   priority_io: "high"
-  group: "cassandra_vg"
-  fg: "true"
   snap_schedule: "periodic=60,5"
