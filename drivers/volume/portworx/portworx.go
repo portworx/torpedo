@@ -612,14 +612,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	for k, v := range params {
 		switch k {
 		case api.SpecNodes:
-			contains := false
-			for _, sn := range vol.Spec.ReplicaSet.Nodes {
-				if sn == v {
-					contains = true
-					break
-				}
-			}
-			if !contains {
+			if v != strings.Join(vol.Spec.ReplicaSet.Nodes, ",") {
 				return errFailedToInspectVolume(volumeName, k, v, vol.Spec.ReplicaSet.Nodes)
 			}
 		case api.SpecParent:
@@ -2263,7 +2256,7 @@ func (d *portworx) EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.
 						requiredNewDisks := uint64(math.Ceil(requiredScaleSize / float64(baseDiskSize)))
 						calculatedTotalSize += requiredNewDisks * baseDiskSize
 					} else {
-						calculatedTotalSize += uint64(requiredScaleSize)
+						calculatedTotalSize += uint64(requiredScaleSize) * uint64(len(node.Disks))
 					}
 				}
 			} else {
