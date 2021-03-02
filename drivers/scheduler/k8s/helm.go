@@ -152,7 +152,7 @@ func (k *K8s) RepoAdd(repoInfo *scheduler.HelmRepo) error {
 	}
 
 	if f.Has(name) {
-		logrus.Errorf("repository name (%s) already exists\n", name)
+		logrus.Warnf("repository name (%s) already exists\n", name)
 		return nil
 	}
 
@@ -298,20 +298,29 @@ func isChartInstallable(ch *chart.Chart) (bool, error) {
 }
 
 // UnInstallHelmChart will uninstall the release
-func (k *K8s) UnInstallHelmChart(repoInfo *scheduler.HelmRepo) error {
+func (k *K8s) UnInstallHelmChart(repoInfo *scheduler.HelmRepo) ([]interface{}, error) {
 	var err error
 	actionConfig := new(action.Configuration)
 	if err = actionConfig.Init(settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
-		return err
+		return nil, err
 	}
 
 	client := action.NewUninstall(actionConfig)
-	_, err = client.Run(repoInfo.ReleaseName)
+	client.Timeout = deleteTasksWaitTimeout
+	response, err := client.Run(repoInfo.ReleaseName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	// Parse the manifest which is a yaml to get the k8s spec objects
+	var yamlBuf bytes.Buffer
+	yamlBuf.WriteString(response.Release.Manifest)
+	specs, err := k.ParseSpecsFromYamlBuf(&yamlBuf)
+	if err != nil {
+		return nil, err
+	}
+
+	return specs, nil
 }
 
 func debug(format string, v ...interface{}) {

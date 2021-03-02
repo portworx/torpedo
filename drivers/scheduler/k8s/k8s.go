@@ -43,6 +43,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -344,31 +345,13 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 			if err != nil {
 				return nil, err
 			}
-
-			reader := bufio.NewReader(&processedFile)
-			specReader := yaml.NewYAMLReader(reader)
-
-			for {
-				specContents, err := specReader.Read()
-				if err == io.EOF {
-					break
-				}
-				if len(bytes.TrimSpace(specContents)) > 0 {
-					obj, err := decodeSpec(specContents)
-					if err != nil {
-						logrus.Warnf("Error decoding spec from %v: %v", fileName, err)
-						return nil, err
-					}
-
-				    specObj, err := validateSpec(obj)
-				    if err != nil {
-					    logrus.Warnf("Error parsing spec from %v: %v", fileName, err)
-					    return nil, err
-				    }
-				    substituteImageWithInternalRegistry(specObj)
-				    specs = append(specs, specObj)
-				}
+			parsedSpecs, err := k.ParseSpecsFromYamlBuf(&processedFile)
+			if err != nil {
+				logrus.Warnf("Error parsing spec from %v: %v", fileName, err)
+				return nil, err
 			}
+
+			specs = append(specs, parsedSpecs...)
 		} else {
 			repoInfo, err := k.ParseCharts(fileName)
 			if err != nil {
@@ -426,18 +409,20 @@ func (k *K8s) ParseSpecsFromYamlBuf(yamlBuf *bytes.Buffer) ([]interface{}, error
 		if len(bytes.TrimSpace(specContents)) > 0 {
 			obj, err := decodeSpec(specContents)
 			if err != nil {
-				logrus.Warnf("Error decoding spec from : %v", err)
-				return nil, err
-			}
-			specObj, err := validateSpec(obj)
-			if err != nil {
-				logrus.Warnf("Error parsing spec from : %v", err)
+				logrus.Warnf("Error decoding spec: %v", err)
 				return nil, err
 			}
 
+			specObj, err := validateSpec(obj)
+			if err != nil {
+				logrus.Warnf("Error validating spec: %v", err)
+				return nil, err
+			}
+
+			substituteImageWithInternalRegistry(specObj)
 			specs = append(specs, specObj)
-		}
-	}
+        }
+    }
 
 	return specs, nil
 }
@@ -467,6 +452,10 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		}
 
 		if err := apapi.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
+
+		if err := monitoringv1.AddToScheme(schemeObj); err != nil {
 			return nil, err
 		}
 
@@ -541,6 +530,12 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*corev1.LimitRange); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*networkingv1beta1.Ingress); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*monitoringv1.Prometheus); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*monitoringv1.PrometheusRule); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*monitoringv1.ServiceMonitor); ok {
 		return specObj, nil
 	}
 
@@ -617,6 +612,12 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 			return nil, err
 		}
 
+		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
+		if err != nil {
+			return nil, err
+		}
+
+		specObjects = append(specObjects, helmSpecObjects...)
 		ctx := &scheduler.Context{
 			UID: instanceID,
 			App: &spec.AppSpec{
@@ -626,12 +627,6 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 			},
 			ScheduleOptions: options,
 		}
-
-		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
-		if err != nil {
-			return nil, err
-		}
-		ctx.App.SpecList = append(ctx.App.SpecList, helmSpecObjects...)
 
 		contexts = append(contexts, ctx)
 	}
@@ -822,9 +817,93 @@ func (k *K8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 			return err
 		}
 		specObjects = append(specObjects, objects...)
+
+		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
+		if err != nil {
+			return err
+		}
+		specObjects = append(specObjects, helmSpecObjects...)
 	}
 	ctx.App.SpecList = specObjects
 	return nil
+}
+
+// ScheduleUninstall uninstalls tasks from an existing context
+func(k *K8s) ScheduleUninstall(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
+	if ctx == nil {
+		return fmt.Errorf("context to remove tasks to cannot be nil")
+	}
+	if len(options.AppKeys) == 0 {
+		return fmt.Errorf("need to specify list of applications to remove to context")
+	}
+
+	var apps []*spec.AppSpec
+	for _, key := range options.AppKeys {
+		appSpec, err := k.SpecFactory.Get(key)
+		if err != nil {
+			return err
+		}
+		apps = append(apps, appSpec)
+	}
+
+	var removeSpecs []interface{}
+	for _, app := range apps {
+		for _, appSpec := range app.SpecList {
+			if repoInfo, ok := appSpec.(*scheduler.HelmRepo); ok {
+				specs, err := k.UnInstallHelmChart(repoInfo)
+				if err != nil {
+					return err
+				}
+				removeSpecs = append(removeSpecs, specs...)
+			}
+		}
+	}
+	ctx.App.SpecList = k.removeExistingSpecs(ctx.App.SpecList, removeSpecs)
+	return nil
+}
+
+// removeSpecs removes uninstalled spec objects from an app's spec list
+// so those objects will not be accessed during context validation and app destroy
+func(k *K8s) removeExistingSpecs(specs, removeSpecs []interface{}) []interface{} {
+	var remainSpecs []interface{}
+	SPECS:
+	for _, spec := range specs {
+		for  _, removeSpec := range removeSpecs {
+			if specObj, ok := spec.(*appsapi.Deployment); ok {
+				if removeObj, ok := removeSpec.(*appsapi.Deployment); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*appsapi.StatefulSet); ok {
+				if removeObj, ok := removeSpec.(*appsapi.StatefulSet); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*batchv1.Job); ok {
+				if removeObj, ok := removeSpec.(*batchv1.Job); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*corev1.Service); ok {
+				if removeObj, ok := removeSpec.(*corev1.Service); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*corev1.ConfigMap); ok {
+				if removeObj, ok := removeSpec.(*corev1.ConfigMap); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			}
+		}
+		remainSpecs = append(remainSpecs, spec)
+	}
+	return remainSpecs
 }
 
 // UpdateTasksID updates task IDs in the given context
@@ -1734,7 +1813,7 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 
 	for _, appSpec := range ctx.App.SpecList {
 		if repoInfo, ok := appSpec.(*scheduler.HelmRepo); ok {
-			err := k.UnInstallHelmChart(repoInfo)
+			_, err := k.UnInstallHelmChart(repoInfo)
 			if err != nil {
 				return err
 			}

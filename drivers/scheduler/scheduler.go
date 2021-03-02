@@ -139,6 +139,9 @@ type Driver interface {
 	// AddTasks adds tasks to an existing context
 	AddTasks(*Context, ScheduleOptions) error
 
+	// ScheduleUninstall uninstalls tasks from an existing context
+	ScheduleUninstall(*Context, ScheduleOptions) error
+
 	// UpdateTasksID updates task IDs in the given context
 	UpdateTasksID(*Context, string) error
 

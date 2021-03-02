@@ -92,6 +92,12 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 			return nil, err
 		}
 
+		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
+		if err != nil  {
+			return nil, err
+		}
+
+		specObjects = append(specObjects, helmSpecObjects...)
 		ctx := &scheduler.Context{
 			UID: instanceID,
 			App: &spec.AppSpec{
@@ -99,6 +105,7 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 				SpecList: specObjects,
 				Enabled:  app.Enabled,
 			},
+			ScheduleOptions: options,
 		}
 
 		contexts = append(contexts, ctx)

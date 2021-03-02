@@ -267,6 +267,15 @@ func (d *dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOption
 	return nil
 }
 
+// ScheduleUninstall uninstalls tasks from an existing context
+func(d *dcos) ScheduleUninstall(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ScheduleUninstall()",
+	}
+}
+
 func (d *dcos) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
