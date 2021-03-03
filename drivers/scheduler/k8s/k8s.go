@@ -3,6 +3,7 @@ package k8s
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -3526,7 +3527,7 @@ func (k *K8s) collectEvents() error {
 		return err
 	}
 
-	iface, err := clientset.CoreV1().Events(namespace).Watch(metav1.ListOptions{})
+	iface, err := clientset.CoreV1().Events(namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
