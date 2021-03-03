@@ -38,7 +38,7 @@ const (
 	eventCheckInterval       = 2 * time.Second
 	eventCheckTimeout        = 30 * time.Minute
 	autDeploymentName        = "autopilot"
-	autDeploymentNamespace   = "kube-system"
+	autDeploymentNamespace   = "kube-system" // TODO This won't work for autopilot deployed in custom namespace
 )
 
 var autopilotruleBasicTestCases = []apapi.AutopilotRule{
@@ -213,6 +213,7 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 
 var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 	It("has to start IO workloads, create rules that resize pools based on capacity, restart autopilot and validate pools have been resized once", func() {
+
 		testName := strings.ToLower(fmt.Sprintf("%sRestartAutopilot", testSuiteName))
 
 		apRules := []apapi.AutopilotRule{
@@ -812,7 +813,6 @@ func waitForAutopilotFailedEvent(apRules []apapi.AutopilotRule, objectName strin
 }
 
 func upgradeAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) error {
-
 	upgradeAutopilot := func() error {
 		k8sApps := apps.Instance()
 

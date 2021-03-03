@@ -52,7 +52,7 @@ const (
 	retrySeconds                      = 10
 
 	storkDeploymentName      = "stork"
-	storkDeploymentNamespace = "kube-system"
+	storkDeploymentNamespace = "kube-system" // TODO This won't work for stork deployed in custom namespace
 
 	defaultTimeout       = 5 * time.Minute
 	defaultRetryInterval = 5 * time.Second
