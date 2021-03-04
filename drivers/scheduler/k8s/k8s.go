@@ -1074,6 +1074,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 	if obj, ok := spec.(*appsapi.Deployment); ok {
 		obj.Namespace = ns.Name
 		obj.Spec.Template.Spec.Volumes = k.substituteNamespaceInVolumes(obj.Spec.Template.Spec.Volumes, ns.Name)
+		if options.CustomAppName != "" {
+			obj.Name = options.CustomAppName
+		}
 		if options.Scheduler != "" {
 			obj.Spec.Template.Spec.SchedulerName = options.Scheduler
 		}
