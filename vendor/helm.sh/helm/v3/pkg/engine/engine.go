@@ -27,18 +27,21 @@ import (
 	"text/template"
 
 	"github.com/pkg/errors"
+	"k8s.io/client-go/rest"
 
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chartutil"
 )
 
-// Engine is an implementation of 'cmd/tiller/environment'.Engine that uses Go templates.
+// Engine is an implementation of the Helm rendering implementation for templates.
 type Engine struct {
 	// If strict is enabled, template rendering will fail if a template references
 	// a value that was not passed in.
 	Strict bool
 	// In LintMode, some 'required' template values may be missing, so don't fail
 	LintMode bool
+	// the rest config to connect to the kubernetes api
+	config *rest.Config
 }
 
 // Render takes a chart, optional values, and value overrides, and attempts to render the Go templates.
@@ -71,6 +74,15 @@ func Render(chrt *chart.Chart, values chartutil.Values) (map[string]string, erro
 	return new(Engine).Render(chrt, values)
 }
 
+// RenderWithClient takes a chart, optional values, and value overrides, and attempts to
+// render the Go templates using the default options. This engine is client aware and so can have template
+// functions that interact with the client
+func RenderWithClient(chrt *chart.Chart, values chartutil.Values, config *rest.Config) (map[string]string, error) {
+	return Engine{
+		config: config,
+	}.Render(chrt, values)
+}
+
 // renderable is an object that can be rendered.
 type renderable struct {
 	// tpl is the current template.
@@ -83,6 +95,7 @@ type renderable struct {
 
 const warnStartDelim = "HELM_ERR_START"
 const warnEndDelim = "HELM_ERR_END"
+const recursionMaxNums = 1000
 
 var warnRegex = regexp.MustCompile(warnStartDelim + `(.*)` + warnEndDelim)
 
@@ -93,11 +106,21 @@ func warnWrap(warn string) string {
 // initFunMap creates the Engine's FuncMap and adds context-specific functions.
 func (e Engine) initFunMap(t *template.Template, referenceTpls map[string]renderable) {
 	funcMap := funcMap()
+	includedNames := make(map[string]int)
 
 	// Add the 'include' function here so we can close over t.
 	funcMap["include"] = func(name string, data interface{}) (string, error) {
 		var buf strings.Builder
+		if v, ok := includedNames[name]; ok {
+			if v > recursionMaxNums {
+				return "", errors.Wrapf(fmt.Errorf("unable to execute template"), "rendering template has a nested reference name: %s", name)
+			}
+			includedNames[name]++
+		} else {
+			includedNames[name] = 1
+		}
 		err := t.ExecuteTemplate(&buf, name, data)
+		includedNames[name]--
 		return buf.String(), err
 	}
 
@@ -150,6 +173,12 @@ func (e Engine) initFunMap(t *template.Template, referenceTpls map[string]render
 		return val, nil
 	}
 
+	// If we are not linting and have a cluster connection, provide a Kubernetes-backed
+	// implementation.
+	if !e.LintMode && e.config != nil {
+		funcMap["lookup"] = NewLookupFunction(e.config)
+	}
+
 	t.Funcs(funcMap)
 }
 
@@ -187,6 +216,7 @@ func (e Engine) renderWithReferences(tpls, referenceTpls map[string]renderable) 
 	// We want to parse the templates in a predictable order. The order favors
 	// higher-level (in file system) templates over deeply nested templates.
 	keys := sortTemplates(tpls)
+	referenceKeys := sortTemplates(referenceTpls)
 
 	for _, filename := range keys {
 		r := tpls[filename]
@@ -197,8 +227,9 @@ func (e Engine) renderWithReferences(tpls, referenceTpls map[string]renderable) 
 
 	// Adding the reference templates to the template context
 	// so they can be referenced in the tpl function
-	for filename, r := range referenceTpls {
+	for _, filename := range referenceKeys {
 		if t.Lookup(filename) == nil {
+			r := referenceTpls[filename]
 			if _, err := t.New(filename).Parse(r.tpl); err != nil {
 				return map[string]string{}, cleanupParseError(filename, err)
 			}

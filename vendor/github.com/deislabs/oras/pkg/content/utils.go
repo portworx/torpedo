@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -22,7 +23,7 @@ func ResolveName(desc ocispec.Descriptor) (string, bool) {
 
 // tarDirectory walks the directory specified by path, and tar those files with a new
 // path prefix.
-func tarDirectory(root, prefix string, w io.Writer) error {
+func tarDirectory(root, prefix string, w io.Writer, stripTimes bool) error {
 	tw := tar.NewWriter(w)
 	defer tw.Close()
 	if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -55,6 +56,12 @@ func tarDirectory(root, prefix string, w io.Writer) error {
 		header.Gid = 0
 		header.Uname = ""
 		header.Gname = ""
+
+		if stripTimes {
+			header.ModTime = time.Time{}
+			header.AccessTime = time.Time{}
+			header.ChangeTime = time.Time{}
+		}
 
 		// Write file
 		if err := tw.WriteHeader(header); err != nil {
@@ -94,14 +101,23 @@ func extractTarDirectory(root, prefix string, r io.Reader) error {
 
 		// Name check
 		name := header.Name
-		path, err := filepath.Rel(prefix, name)
+		path, err := ensureBasePath(root, prefix, name)
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(path, "../") {
-			return fmt.Errorf("%q does not have prefix %q", name, prefix)
-		}
 		path = filepath.Join(root, path)
+
+		// Link check
+		switch header.Typeflag {
+		case tar.TypeLink, tar.TypeSymlink:
+			link := header.Linkname
+			if !filepath.IsAbs(link) {
+				link = filepath.Join(filepath.Dir(name), link)
+			}
+			if _, err := ensureBasePath(root, prefix, link); err != nil {
+				return err
+			}
+		}
 
 		// Create content
 		switch header.Typeflag {
@@ -123,6 +139,34 @@ func extractTarDirectory(root, prefix string, r io.Reader) error {
 		// Change access time and modification time if possible (error ignored)
 		os.Chtimes(path, header.AccessTime, header.ModTime)
 	}
+}
+
+// ensureBasePath ensures the target path is in the base path,
+// returning its relative path to the base path.
+func ensureBasePath(root, base, target string) (string, error) {
+	path, err := filepath.Rel(base, target)
+	if err != nil {
+		return "", err
+	}
+	cleanPath := filepath.ToSlash(filepath.Clean(path))
+	if cleanPath == ".." || strings.HasPrefix(cleanPath, "../") {
+		return "", fmt.Errorf("%q is outside of %q", target, base)
+	}
+
+	// No symbolic link allowed in the relative path
+	dir := filepath.Dir(path)
+	for dir != "." {
+		if info, err := os.Lstat(filepath.Join(root, dir)); err != nil {
+			if !os.IsNotExist(err) {
+				return "", err
+			}
+		} else if info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("no symbolic link allowed between %q and %q", base, target)
+		}
+		dir = filepath.Dir(dir)
+	}
+
+	return path, nil
 }
 
 func writeFile(path string, r io.Reader, perm os.FileMode) error {

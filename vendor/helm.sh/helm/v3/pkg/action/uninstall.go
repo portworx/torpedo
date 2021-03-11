@@ -22,6 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/releaseutil"
 	helmtime "helm.sh/helm/v3/pkg/time"
@@ -37,6 +38,7 @@ type Uninstall struct {
 	DryRun       bool
 	KeepHistory  bool
 	Timeout      time.Duration
+	Description  string
 }
 
 // NewUninstall creates a new Uninstall object with the given configuration.
@@ -61,7 +63,7 @@ func (u *Uninstall) Run(name string) (*release.UninstallReleaseResponse, error) 
 		return &release.UninstallReleaseResponse{Release: r}, nil
 	}
 
-	if err := validateReleaseName(name); err != nil {
+	if err := chartutil.ValidateReleaseName(name); err != nil {
 		return nil, errors.Errorf("uninstall: Release name is invalid: %s", name)
 	}
 
@@ -118,7 +120,11 @@ func (u *Uninstall) Run(name string) (*release.UninstallReleaseResponse, error) 
 	}
 
 	rel.Info.Status = release.StatusUninstalled
-	rel.Info.Description = "Uninstallation complete"
+	if len(u.Description) > 0 {
+		rel.Info.Description = u.Description
+	} else {
+		rel.Info.Description = "Uninstallation complete"
+	}
 
 	if !u.KeepHistory {
 		u.cfg.Log("purge requested for %s", name)
@@ -164,6 +170,7 @@ func joinErrors(errs []error) string {
 
 // deleteRelease deletes the release and returns manifests that were kept in the deletion process
 func (u *Uninstall) deleteRelease(rel *release.Release) (string, []error) {
+	var errs []error
 	caps, err := u.cfg.getCapabilities()
 	if err != nil {
 		return rel.Manifest, []error{errors.Wrap(err, "could not get apiVersions from Kubernetes")}
@@ -189,11 +196,13 @@ func (u *Uninstall) deleteRelease(rel *release.Release) (string, []error) {
 	for _, file := range filesToDelete {
 		builder.WriteString("\n---\n" + file.Content)
 	}
+
 	resources, err := u.cfg.KubeClient.Build(strings.NewReader(builder.String()), false)
 	if err != nil {
 		return "", []error{errors.Wrap(err, "unable to build kubernetes objects for delete")}
 	}
-
-	_, errs := u.cfg.KubeClient.Delete(resources)
+	if len(resources) > 0 {
+		_, errs = u.cfg.KubeClient.Delete(resources)
+	}
 	return kept, errs
 }

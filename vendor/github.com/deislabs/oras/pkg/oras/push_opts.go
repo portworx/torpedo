@@ -1,8 +1,12 @@
 package oras
 
 import (
+	"context"
+	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/containerd/containerd/images"
 	orascontent "github.com/deislabs/oras/pkg/content"
@@ -15,6 +19,7 @@ type pushOpts struct {
 	config              *ocispec.Descriptor
 	configMediaType     string
 	configAnnotations   map[string]string
+	manifest            *ocispec.Descriptor
 	manifestAnnotations map[string]string
 	validateName        func(desc ocispec.Descriptor) error
 	baseHandlers        []images.Handler
@@ -29,7 +34,7 @@ func pushOptsDefaults() *pushOpts {
 // PushOpt allows callers to set options on the oras push
 type PushOpt func(o *pushOpts) error
 
-// WithConfig overrides the config
+// WithConfig overrides the config - setting this will ignore WithConfigMediaType and WithConfigAnnotations
 func WithConfig(config ocispec.Descriptor) PushOpt {
 	return func(o *pushOpts) error {
 		o.config = &config
@@ -49,6 +54,14 @@ func WithConfigMediaType(mediaType string) PushOpt {
 func WithConfigAnnotations(annotations map[string]string) PushOpt {
 	return func(o *pushOpts) error {
 		o.configAnnotations = annotations
+		return nil
+	}
+}
+
+// WithManifest overrides the manifest - setting this will ignore WithManifestConfigAnnotations
+func WithManifest(manifest ocispec.Descriptor) PushOpt {
+	return func(o *pushOpts) error {
+		o.manifest = &manifest
 		return nil
 	}
 }
@@ -117,4 +130,21 @@ func WithPushBaseHandler(handlers ...images.Handler) PushOpt {
 		o.baseHandlers = append(o.baseHandlers, handlers...)
 		return nil
 	}
+}
+
+// WithPushStatusTrack report results to a provided writer
+func WithPushStatusTrack(writer io.Writer) PushOpt {
+	return WithPushBaseHandler(pushStatusTrack(writer))
+}
+
+func pushStatusTrack(writer io.Writer) images.Handler {
+	var printLock sync.Mutex
+	return images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+		if name, ok := orascontent.ResolveName(desc); ok {
+			printLock.Lock()
+			defer printLock.Unlock()
+			fmt.Fprintln(writer, "Uploading", desc.Digest.Encoded()[:12], name)
+		}
+		return nil, nil
+	})
 }

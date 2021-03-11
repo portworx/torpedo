@@ -9,7 +9,7 @@ require (
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/fatih/color v1.9.0
 	github.com/gambol99/go-marathon v0.7.1
-	github.com/gofrs/flock v0.7.1
+	github.com/gofrs/flock v0.8.0
 	github.com/golang/protobuf v1.4.3
 	github.com/hashicorp/go-version v1.2.1
 	github.com/hashicorp/vault/api v1.0.5-0.20200317185738-82f498082f02
@@ -24,16 +24,17 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20210401031424-429c07e70276
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.7.0
 	github.com/stretchr/testify v1.7.0
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
-	golang.org/x/crypto v0.0.0-20201208171446-5f87f3452ae9
+	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 	golang.org/x/net v0.0.0-20201224014010-6772e930b67b
 	google.golang.org/grpc v1.33.2
 	gopkg.in/yaml.v2 v2.4.0
-	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
+	helm.sh/helm/v3 v3.5.2
 	k8s.io/api v0.20.4
 	k8s.io/apimachinery v0.20.4
 	k8s.io/client-go v12.0.0+incompatible
@@ -41,13 +42,13 @@ require (
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible
+	github.com/docker/distribution => github.com/docker/distribution v0.0.0-20191216044856-a8371794149d
 	github.com/docker/docker => github.com/docker/docker v17.12.0-ce-rc1.0.20190717161051-705d9623b7c1+incompatible
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000 => github.com/libopenstorage/external-storage v5.3.0-alpha.1.0.20200130041458-d2b33d4448ea+incompatible
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/prometheus/prometheus => github.com/prometheus/prometheus v1.8.2-0.20190424153033-d3245f150225
-	helm.sh/helm/v3 => helm.sh/helm/v3 v3.0.0
-
+	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.2
 	k8s.io/api => k8s.io/api v0.20.4
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.20.4
 	k8s.io/apimachinery => k8s.io/apimachinery v0.20.4

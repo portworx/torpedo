@@ -17,6 +17,7 @@ limitations under the License.
 package kube // import "helm.sh/helm/v3/pkg/kube"
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -45,9 +47,9 @@ type waiter struct {
 	log     func(string, ...interface{})
 }
 
-// waitForResources polls to get the current status of all pods, PVCs, and Services
-// until all are ready or a timeout is reached
-func (w *waiter) waitForResources(created ResourceList) error {
+// waitForResources polls to get the current status of all pods, PVCs, Services and
+// Jobs(optional) until all are ready or a timeout is reached
+func (w *waiter) waitForResources(created ResourceList, waitForJobsEnabled bool) error {
 	w.log("beginning wait for %d resources with timeout of %v", len(created), w.timeout)
 
 	return wait.Poll(2*time.Second, w.timeout, func() (bool, error) {
@@ -61,12 +63,19 @@ func (w *waiter) waitForResources(created ResourceList) error {
 			)
 			switch value := AsVersioned(v).(type) {
 			case *corev1.Pod:
-				pod, err := w.c.CoreV1().Pods(v.Namespace).Get(v.Name, metav1.GetOptions{})
+				pod, err := w.c.CoreV1().Pods(v.Namespace).Get(context.Background(), v.Name, metav1.GetOptions{})
 				if err != nil || !w.isPodReady(pod) {
 					return false, err
 				}
+			case *batchv1.Job:
+				if waitForJobsEnabled {
+					job, err := w.c.BatchV1().Jobs(v.Namespace).Get(context.Background(), v.Name, metav1.GetOptions{})
+					if err != nil || !w.jobReady(job) {
+						return false, err
+					}
+				}
 			case *appsv1.Deployment, *appsv1beta1.Deployment, *appsv1beta2.Deployment, *extensionsv1beta1.Deployment:
-				currentDeployment, err := w.c.AppsV1().Deployments(v.Namespace).Get(v.Name, metav1.GetOptions{})
+				currentDeployment, err := w.c.AppsV1().Deployments(v.Namespace).Get(context.Background(), v.Name, metav1.GetOptions{})
 				if err != nil {
 					return false, err
 				}
@@ -83,7 +92,7 @@ func (w *waiter) waitForResources(created ResourceList) error {
 					return false, nil
 				}
 			case *corev1.PersistentVolumeClaim:
-				claim, err := w.c.CoreV1().PersistentVolumeClaims(v.Namespace).Get(v.Name, metav1.GetOptions{})
+				claim, err := w.c.CoreV1().PersistentVolumeClaims(v.Namespace).Get(context.Background(), v.Name, metav1.GetOptions{})
 				if err != nil {
 					return false, err
 				}
@@ -91,7 +100,7 @@ func (w *waiter) waitForResources(created ResourceList) error {
 					return false, nil
 				}
 			case *corev1.Service:
-				svc, err := w.c.CoreV1().Services(v.Namespace).Get(v.Name, metav1.GetOptions{})
+				svc, err := w.c.CoreV1().Services(v.Namespace).Get(context.Background(), v.Name, metav1.GetOptions{})
 				if err != nil {
 					return false, err
 				}
@@ -99,7 +108,7 @@ func (w *waiter) waitForResources(created ResourceList) error {
 					return false, nil
 				}
 			case *extensionsv1beta1.DaemonSet, *appsv1.DaemonSet, *appsv1beta2.DaemonSet:
-				ds, err := w.c.AppsV1().DaemonSets(v.Namespace).Get(v.Name, metav1.GetOptions{})
+				ds, err := w.c.AppsV1().DaemonSets(v.Namespace).Get(context.Background(), v.Name, metav1.GetOptions{})
 				if err != nil {
 					return false, err
 				}
@@ -114,11 +123,22 @@ func (w *waiter) waitForResources(created ResourceList) error {
 				if err := scheme.Scheme.Convert(v.Object, crd, nil); err != nil {
 					return false, err
 				}
+				if !w.crdBetaReady(*crd) {
+					return false, nil
+				}
+			case *apiextv1.CustomResourceDefinition:
+				if err := v.Get(); err != nil {
+					return false, err
+				}
+				crd := &apiextv1.CustomResourceDefinition{}
+				if err := scheme.Scheme.Convert(v.Object, crd, nil); err != nil {
+					return false, err
+				}
 				if !w.crdReady(*crd) {
 					return false, nil
 				}
 			case *appsv1.StatefulSet, *appsv1beta1.StatefulSet, *appsv1beta2.StatefulSet:
-				sts, err := w.c.AppsV1().StatefulSets(v.Namespace).Get(v.Name, metav1.GetOptions{})
+				sts, err := w.c.AppsV1().StatefulSets(v.Namespace).Get(context.Background(), v.Name, metav1.GetOptions{})
 				if err != nil {
 					return false, err
 				}
@@ -169,19 +189,44 @@ func (w *waiter) isPodReady(pod *corev1.Pod) bool {
 	return false
 }
 
+func (w *waiter) jobReady(job *batchv1.Job) bool {
+	if job.Status.Failed >= *job.Spec.BackoffLimit {
+		w.log("Job is failed: %s/%s", job.GetNamespace(), job.GetName())
+		return false
+	}
+	if job.Status.Succeeded < *job.Spec.Completions {
+		w.log("Job is not completed: %s/%s", job.GetNamespace(), job.GetName())
+		return false
+	}
+	return true
+}
+
 func (w *waiter) serviceReady(s *corev1.Service) bool {
 	// ExternalName Services are external to cluster so helm shouldn't be checking to see if they're 'ready' (i.e. have an IP Set)
 	if s.Spec.Type == corev1.ServiceTypeExternalName {
 		return true
 	}
 
-	// Make sure the service is not explicitly set to "None" before checking the IP
-	if (s.Spec.ClusterIP != corev1.ClusterIPNone && s.Spec.ClusterIP == "") ||
-		// This checks if the service has a LoadBalancer and that balancer has an Ingress defined
-		(s.Spec.Type == corev1.ServiceTypeLoadBalancer && s.Status.LoadBalancer.Ingress == nil) {
-		w.log("Service does not have IP address: %s/%s", s.GetNamespace(), s.GetName())
+	// Ensure that the service cluster IP is not empty
+	if s.Spec.ClusterIP == "" {
+		w.log("Service does not have cluster IP address: %s/%s", s.GetNamespace(), s.GetName())
 		return false
 	}
+
+	// This checks if the service has a LoadBalancer and that balancer has an Ingress defined
+	if s.Spec.Type == corev1.ServiceTypeLoadBalancer {
+		// do not wait when at least 1 external IP is set
+		if len(s.Spec.ExternalIPs) > 0 {
+			w.log("Service %s/%s has external IP addresses (%v), marking as ready", s.GetNamespace(), s.GetName(), s.Spec.ExternalIPs)
+			return true
+		}
+
+		if s.Status.LoadBalancer.Ingress == nil {
+			w.log("Service does not have load balancer ingress IP address: %s/%s", s.GetNamespace(), s.GetName())
+			return false
+		}
+	}
+
 	return true
 }
 
@@ -229,7 +274,10 @@ func (w *waiter) daemonSetReady(ds *appsv1.DaemonSet) bool {
 	return true
 }
 
-func (w *waiter) crdReady(crd apiextv1beta1.CustomResourceDefinition) bool {
+// Because the v1 extensions API is not available on all supported k8s versions
+// yet and because Go doesn't support generics, we need to have a duplicate
+// function to support the v1beta1 types
+func (w *waiter) crdBetaReady(crd apiextv1beta1.CustomResourceDefinition) bool {
 	for _, cond := range crd.Status.Conditions {
 		switch cond.Type {
 		case apiextv1beta1.Established:
@@ -238,6 +286,26 @@ func (w *waiter) crdReady(crd apiextv1beta1.CustomResourceDefinition) bool {
 			}
 		case apiextv1beta1.NamesAccepted:
 			if cond.Status == apiextv1beta1.ConditionFalse {
+				// This indicates a naming conflict, but it's probably not the
+				// job of this function to fail because of that. Instead,
+				// we treat it as a success, since the process should be able to
+				// continue.
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (w *waiter) crdReady(crd apiextv1.CustomResourceDefinition) bool {
+	for _, cond := range crd.Status.Conditions {
+		switch cond.Type {
+		case apiextv1.Established:
+			if cond.Status == apiextv1.ConditionTrue {
+				return true
+			}
+		case apiextv1.NamesAccepted:
+			if cond.Status == apiextv1.ConditionFalse {
 				// This indicates a naming conflict, but it's probably not the
 				// job of this function to fail because of that. Instead,
 				// we treat it as a success, since the process should be able to
@@ -289,7 +357,7 @@ func (w *waiter) statefulSetReady(sts *appsv1.StatefulSet) bool {
 }
 
 func getPods(client kubernetes.Interface, namespace, selector string) ([]corev1.Pod, error) {
-	list, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{
+	list, err := client.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
 		LabelSelector: selector,
 	})
 	return list.Items, err

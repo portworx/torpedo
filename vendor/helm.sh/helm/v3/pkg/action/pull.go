@@ -45,11 +45,30 @@ type Pull struct {
 	VerifyLater bool
 	UntarDir    string
 	DestDir     string
+	cfg         *Configuration
 }
 
-// NewPull creates a new Pull object with the given configuration.
+type PullOpt func(*Pull)
+
+func WithConfig(cfg *Configuration) PullOpt {
+	return func(p *Pull) {
+		p.cfg = cfg
+	}
+}
+
+// NewPull creates a new Pull object.
 func NewPull() *Pull {
-	return &Pull{}
+	return NewPullWithOpts()
+}
+
+// NewPull creates a new pull, with configuration options.
+func NewPullWithOpts(opts ...PullOpt) *Pull {
+	p := &Pull{}
+	for _, fn := range opts {
+		fn(p)
+	}
+
+	return p
 }
 
 // Run executes 'helm pull' against the given release.
@@ -63,9 +82,21 @@ func (p *Pull) Run(chartRef string) (string, error) {
 		Getters: getter.All(p.Settings),
 		Options: []getter.Option{
 			getter.WithBasicAuth(p.Username, p.Password),
+			getter.WithTLSClientConfig(p.CertFile, p.KeyFile, p.CaFile),
+			getter.WithInsecureSkipVerifyTLS(p.InsecureSkipTLSverify),
 		},
 		RepositoryConfig: p.Settings.RepositoryConfig,
 		RepositoryCache:  p.Settings.RepositoryCache,
+	}
+
+	if strings.HasPrefix(chartRef, "oci://") {
+		if p.Version == "" {
+			return out.String(), errors.Errorf("--version flag is explicitly required for OCI registries")
+		}
+
+		c.Options = append(c.Options,
+			getter.WithRegistryClient(p.cfg.RegistryClient),
+			getter.WithTagName(p.Version))
 	}
 
 	if p.Verify {
@@ -87,7 +118,7 @@ func (p *Pull) Run(chartRef string) (string, error) {
 	}
 
 	if p.RepoURL != "" {
-		chartURL, err := repo.FindChartInAuthRepoURL(p.RepoURL, p.Username, p.Password, chartRef, p.Version, p.CertFile, p.KeyFile, p.CaFile, getter.All(p.Settings))
+		chartURL, err := repo.FindChartInAuthAndTLSRepoURL(p.RepoURL, p.Username, p.Password, chartRef, p.Version, p.CertFile, p.KeyFile, p.CaFile, p.InsecureSkipTLSverify, getter.All(p.Settings))
 		if err != nil {
 			return out.String(), err
 		}
@@ -100,7 +131,11 @@ func (p *Pull) Run(chartRef string) (string, error) {
 	}
 
 	if p.Verify {
-		fmt.Fprintf(&out, "Verification: %v\n", v)
+		for name := range v.SignedBy.Identities {
+			fmt.Fprintf(&out, "Signed by: %v\n", name)
+		}
+		fmt.Fprintf(&out, "Using Key With Fingerprint: %X\n", v.SignedBy.PrimaryKey.Fingerprint)
+		fmt.Fprintf(&out, "Chart Hash Verified: %s\n", v.FileHash)
 	}
 
 	// After verification, untar the chart into the requested directory.
@@ -109,13 +144,22 @@ func (p *Pull) Run(chartRef string) (string, error) {
 		if !filepath.IsAbs(ud) {
 			ud = filepath.Join(p.DestDir, ud)
 		}
-		if fi, err := os.Stat(ud); err != nil {
-			if err := os.MkdirAll(ud, 0755); err != nil {
+		// Let udCheck to check conflict file/dir without replacing ud when untarDir is the current directory(.).
+		udCheck := ud
+		if udCheck == "." {
+			_, udCheck = filepath.Split(chartRef)
+		} else {
+			_, chartName := filepath.Split(chartRef)
+			udCheck = filepath.Join(udCheck, chartName)
+		}
+
+		if _, err := os.Stat(udCheck); err != nil {
+			if err := os.MkdirAll(udCheck, 0755); err != nil {
 				return out.String(), errors.Wrap(err, "failed to untar (mkdir)")
 			}
 
-		} else if !fi.IsDir() {
-			return out.String(), errors.Errorf("failed to untar: %s is not a directory", ud)
+		} else {
+			return out.String(), errors.Errorf("failed to untar: a file or directory with the name %s already exists", udCheck)
 		}
 
 		return out.String(), chartutil.ExpandFile(ud, saved)

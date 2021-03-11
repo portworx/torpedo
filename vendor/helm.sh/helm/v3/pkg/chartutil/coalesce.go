@@ -35,8 +35,6 @@ import (
 //	- A chart has access to all of the variables for it, as well as all of
 //		the values destined for its dependencies.
 func CoalesceValues(chrt *chart.Chart, vals map[string]interface{}) (Values, error) {
-	// create a copy of vals and then pass it to coalesce
-	// and coalesceDeps, as both will mutate the passed values
 	v, err := copystructure.Copy(vals)
 	if err != nil {
 		return vals, err
@@ -47,10 +45,7 @@ func CoalesceValues(chrt *chart.Chart, vals map[string]interface{}) (Values, err
 	if valsCopy == nil {
 		valsCopy = make(map[string]interface{})
 	}
-	if _, err := coalesce(chrt, valsCopy); err != nil {
-		return valsCopy, err
-	}
-	return coalesceDeps(chrt, valsCopy)
+	return coalesce(chrt, valsCopy)
 }
 
 // coalesce coalesces the dest values and the chart values, giving priority to the dest values.
@@ -162,7 +157,11 @@ func coalesceValues(c *chart.Chart, v map[string]interface{}) {
 				// if v[key] is a table, merge nv's val table into v[key].
 				src, ok := val.(map[string]interface{})
 				if !ok {
-					log.Printf("warning: skipped value for %s: Not a table.", key)
+					// If the original value is nil, there is nothing to coalesce, so we don't print
+					// the warning but simply continue
+					if val != nil {
+						log.Printf("warning: skipped value for %s: Not a table.", key)
+					}
 					continue
 				}
 				// Because v has higher precedence than nv, dest values override src
@@ -180,25 +179,28 @@ func coalesceValues(c *chart.Chart, v map[string]interface{}) {
 //
 // dest is considered authoritative.
 func CoalesceTables(dst, src map[string]interface{}) map[string]interface{} {
-	if dst == nil || src == nil {
+	// When --reuse-values is set but there are no modifications yet, return new values
+	if src == nil {
+		return dst
+	}
+	if dst == nil {
 		return src
 	}
 	// Because dest has higher precedence than src, dest values override src
 	// values.
 	for key, val := range src {
-		if istable(val) {
-			switch innerdst, ok := dst[key]; {
-			case !ok:
-				dst[key] = val
-			case istable(innerdst):
-				CoalesceTables(innerdst.(map[string]interface{}), val.(map[string]interface{}))
-			default:
+		if dv, ok := dst[key]; ok && dv == nil {
+			delete(dst, key)
+		} else if !ok {
+			dst[key] = val
+		} else if istable(val) {
+			if istable(dv) {
+				CoalesceTables(dv.(map[string]interface{}), val.(map[string]interface{}))
+			} else {
 				log.Printf("warning: cannot overwrite table with non table for %s (%v)", key, val)
 			}
-		} else if dv, ok := dst[key]; ok && istable(dv) {
+		} else if istable(dv) && val != nil {
 			log.Printf("warning: destination for %s is a table. Ignoring non-table value %v", key, val)
-		} else if !ok { // <- ok is still in scope from preceding conditional.
-			dst[key] = val
 		}
 	}
 	return dst
