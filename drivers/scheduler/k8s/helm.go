@@ -31,6 +31,19 @@ import (
 
 var settings *cli.EnvSettings
 
+// constants for helm ConfigMap fields
+const (
+	HelmInstallURL  = "install-url"
+	HelmUpgradeURL  = "upgrade-url"
+	HelmValues      = "values"
+	HelmExtraValues = "extra-values"
+
+	// would overwrite existing fields if provided
+	// to handle chart and repo name changes during upgrade
+	HelmChartName   = "chart-name"
+	HelmRepoName    = "repo-name"
+)
+
 // HelmSchedule will install the application with helm
 func (k *K8s) HelmSchedule(app *spec.AppSpec, appNamespace string, options scheduler.ScheduleOptions) ([]interface{}, error) {
 	var specObjects []interface{}
@@ -38,14 +51,9 @@ func (k *K8s) HelmSchedule(app *spec.AppSpec, appNamespace string, options sched
 
 	for _, appspec := range app.SpecList {
 		if repoInfo, ok := appspec.(*scheduler.HelmRepo); ok {
-			args := map[string]string{}
-			if k.helmValuesConfigMapName != "" {
-				customValues, err := k.GetHelmParamsValues(app.Key)
-				if err != nil {
-					logrus.Warnf("Error in getting custom values for parameters for the app %s, Err: %v", app.Key, err)
-				} else {
-					args["set"] = customValues
-				}
+			err = k.SetHelmParams(app.Key, repoInfo, options)
+			if err != nil {
+				return nil, err
 			}
 
 			var yamlBuf bytes.Buffer
@@ -71,9 +79,17 @@ func (k *K8s) HelmSchedule(app *spec.AppSpec, appNamespace string, options sched
 
 			// Install the chart through helm
 			repoInfo.Namespace = appNamespace
-			manifest, err := k.InstallChart(repoInfo, args)
-			if err != nil {
-				return nil, err
+			var manifest string
+			if !options.Upgrade {
+				manifest, err = k.InstallChart(repoInfo)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				manifest, err = k.UpgradeChart(repoInfo)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 			// Parse the manifest which is a yaml to get the k8s spec objects
@@ -89,16 +105,49 @@ func (k *K8s) HelmSchedule(app *spec.AppSpec, appNamespace string, options sched
 	return specObjects, nil
 }
 
-// GetHelmParamsValues will get the custom values of the app which need to be set during helm install of the app
-func (k *K8s) GetHelmParamsValues(appName string) (string, error) {
-	configMap, err := k8sCore.GetConfigMap(k.helmValuesConfigMapName, "default")
+// SetHelmParams will set RepoInfo fields of the app from k8s ConfigMap
+func (k *K8s) SetHelmParams(appKey string, helmRepo *scheduler.HelmRepo, options scheduler.ScheduleOptions) error {
+	configMap, err := k8sCore.GetConfigMap(appKey, "default")
 	if err != nil {
-		return "", fmt.Errorf("Failed to get config map: Err: %v", err)
+		return fmt.Errorf("failed to get config map: %v", err)
 	}
-	if _, ok := configMap.Data[appName]; !ok {
-		return "", fmt.Errorf("Helm custom values for app %s are not set in the configmap %s", appName, k.helmValuesConfigMapName)
+	urlKey := HelmInstallURL
+	if options.Upgrade {
+		// use a different helm URL for staging repo
+		urlKey = HelmUpgradeURL
+		// add a different helm staging repo
+		if repoName, ok := configMap.Data[HelmRepoName]; ok {
+			logrus.Debugf("upgrading helm repo name from %s to %s", helmRepo.RepoName, repoName)
+			helmRepo.RepoName = repoName
+		}
+		// chart name could be changed during upgrade, e.g. px-backup -> px-central
+		if chartName, ok := configMap.Data[HelmChartName]; ok {
+			logrus.Debugf("upgrading helm chart name from %s to %s", helmRepo.ChartName, chartName)
+			helmRepo.ChartName = chartName
+		}
 	}
-	return configMap.Data[appName], nil
+
+	if url, ok := configMap.Data[urlKey]; ok {
+		helmRepo.URL = url
+		logrus.Debugf("helm repo URL set: %s", helmRepo.URL)
+	} else {
+		return fmt.Errorf("helm repo url '%s' not provided in the configmap %s", urlKey, appKey)
+	}
+
+	if values, ok := configMap.Data[HelmValues]; ok {
+		helmRepo.Values = values
+		logrus.Debugf("helm values set: %s", helmRepo.Values)
+	} else {
+		return fmt.Errorf("helm install custom values not provided in the configmap %s", appKey)
+	}
+
+	// some values are generated during the test, e.g. UI endpoint and OIDC secret
+	if extraValues, ok := configMap.Data[HelmExtraValues]; ok {
+		helmRepo.Values = fmt.Sprintf("%s,%s", helmRepo.Values, extraValues)
+		logrus.Debugf("helm extra values added: %s", helmRepo.Values)
+	}
+
+	return  nil
 }
 
 // ParseCharts parses the application spec file having helm repo info
@@ -216,7 +265,7 @@ func (k *K8s) RepoUpdate() error {
 }
 
 // InstallChart will install the helm chart
-func (k *K8s) InstallChart(repoInfo *scheduler.HelmRepo, args map[string]string) (string, error) {
+func (k *K8s) InstallChart(repoInfo *scheduler.HelmRepo) (string, error) {
 	actionConfig := new(action.Configuration)
 	if err := actionConfig.Init(settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
 		return "", err
@@ -232,7 +281,7 @@ func (k *K8s) InstallChart(repoInfo *scheduler.HelmRepo, args map[string]string)
 		return "", err
 	}
 
-	logrus.Debugf("chart path: %s", cp)
+	logrus.Debugf("chart install path: %s", cp)
 
 	p := getter.All(settings)
 	valueOpts := &values.Options{}
@@ -242,7 +291,7 @@ func (k *K8s) InstallChart(repoInfo *scheduler.HelmRepo, args map[string]string)
 	}
 
 	// Add args
-	if err := strvals.ParseInto(args["set"], vals); err != nil {
+	if err := strvals.ParseInto(repoInfo.Values, vals); err != nil {
 		return "", errors.Wrap(err, "failed parsing --set data")
 	}
 
@@ -295,6 +344,63 @@ func isChartInstallable(ch *chart.Chart) (bool, error) {
 		return true, nil
 	}
 	return false, errors.Errorf("%s charts are not installable", ch.Metadata.Type)
+}
+
+// UpgradeChart will upgrade the release
+func (k *K8s) UpgradeChart(repoInfo *scheduler.HelmRepo) (string, error) {
+	actionConfig := new(action.Configuration)
+	if err := actionConfig.Init(settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
+		return "", err
+	}
+
+	client := action.NewUpgrade(actionConfig)
+	if client.Version == "" && client.Devel {
+		client.Version = ">0.0.0-0"
+	}
+	cp, err := client.ChartPathOptions.LocateChart(fmt.Sprintf("%s/%s", repoInfo.RepoName, repoInfo.ChartName), settings)
+	if err != nil {
+		return "", err
+	}
+	logrus.Debugf("chart upgrade path: %s", cp)
+
+	// Check chart dependencies to make sure all are present in /charts
+	chartRequested, err := loader.Load(cp)
+	if err != nil {
+		return "", err
+	}
+
+	validInstallableChart, err := isChartInstallable(chartRequested)
+	if !validInstallableChart {
+		return "", err
+	}
+
+	client.Namespace = repoInfo.Namespace
+	vals, err := k.GetChartValues(repoInfo)
+	if err != nil  {
+		return "", err
+	}
+
+	release, err := client.Run(repoInfo.ReleaseName, chartRequested, vals)
+	if err != nil {
+		return "", err
+	}
+	return release.Manifest, nil
+}
+
+// GetChartValues gets existing helm values for current installed release
+func (k *K8s) GetChartValues(repoInfo *scheduler.HelmRepo) (map[string]interface{}, error) {
+	actionConfig := new(action.Configuration)
+	if err := actionConfig.Init(settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
+		return nil, err
+	}
+
+	client := action.NewGetValues(actionConfig)
+	values, err := client.Run(repoInfo.ReleaseName)
+	if err != nil {
+		return nil, err
+	}
+
+	return values, nil
 }
 
 // UnInstallHelmChart will uninstall the release

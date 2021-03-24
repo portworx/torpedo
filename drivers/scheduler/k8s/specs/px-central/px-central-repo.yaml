@@ -1,5 +1,3 @@
-# TODO: (jliao) add release/staging url
-url: "http://charts.portworx.io/"
 reponame: "portworx"
 chartname: "px-backup"
-releasename: "px-backup"
+releasename: "px-central"

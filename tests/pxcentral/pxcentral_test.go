@@ -10,9 +10,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 )
@@ -23,6 +25,15 @@ const (
 	appReadinessTimeout  = 20 * time.Minute
 )
 
+// To run tests here, k8s ConfigMaps need to be created for each app before starting torpedo
+// ConfigMap names are: px-central, px-license-server and px-monitor
+// the Date field should contains helm chart url, helm values (new url, repo and chart name for upgrade tests)
+// for simple installation, only install-url and values are needed, while for upgrade test here is an example:
+// install-url: http://charts.portworx.io/
+// upgrade-url: https://raw.githubusercontent.com/portworx/helm/master/repo/staging (staging chart to upgrade to)
+// values: persistentStorage.storageClassName=central-sc,persistentStorage.enabled=true
+// repo-name: portworx-staging (create a new staging repo for upgrade)
+// chart-name: px-central (if the chart name for release installed is changed, e.g. px-backup to px-central)
 func TestPxcentral(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -67,7 +78,7 @@ var _ = Describe("{Installpxcentral}", func() {
 			Expect(contexts).NotTo(BeEmpty())
 
 			// Skipping volume validation until other volume providers are implemented.
-			// Also change the app readinessTimeout to 20mins
+			// Also change the app readinessTimeout to 20 mins
 			context = contexts[0]
 			context.SkipVolumeValidation = true
 			context.ReadinessTimeout = appReadinessTimeout
@@ -116,18 +127,13 @@ var _ = Describe("{Installpxcentral}", func() {
 				logrus.Infof("Got OIDC client secret: %s", oidcSecret)
 			})
 
-			Step("Adding values to helm values ConfigMap", func() {
-				configMap, err := core.Instance().GetConfigMap(Inst().HelmValuesConfigMap, "default")
+			Step("Adding extra values to helm ConfigMap", func() {
+				configMap, err := core.Instance().GetConfigMap(monitorApp, "default")
 				Expect(err).NotTo(HaveOccurred())
 
-				monitorValues, exist := configMap.Data[monitorApp]
-				Expect(exist).To(Equal(true))
-
-				configMap.Data[monitorApp] = fmt.Sprintf("%s,pxmonitor.pxCentralEndpoint=%s,pxmonitor.oidcClientSecret=%s",
-														 monitorValues,
-														 endpoint,
-														 oidcSecret)
-
+				configMap.Data[k8s.HelmExtraValues] = fmt.Sprintf("pxmonitor.pxCentralEndpoint=%s,pxmonitor.oidcClientSecret=%s",
+					                                              endpoint,
+														 		  oidcSecret)
 				configMap, err = core.Instance().UpdateConfigMap(configMap)
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("Updated helm values config map for px-monitor: %s", configMap.Data[monitorApp])
@@ -158,6 +164,70 @@ var _ = Describe("{Installpxcentral}", func() {
 
 			TearDownContext(context, opts)
 			logrus.Infof("Successfully destroyed px-central")
+
+			err := core.Instance().DeleteNamespace(context.GetID())
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+})
+
+// This test installs px-central from release repo then upgrade using staging repo
+// testing 1.2.3 -> 1.3.0 multi charts to single chart upgrade
+// TODO: need to clarify what it the upgrade path and steps, once the new chart is ready
+var _ = Describe("{Upgradepxcentral}", func() {
+	It("has to setup, upgrade, validate and teardown apps", func() {
+		var context *scheduler.Context
+
+		centralApp := "px-central"
+		centralOptions := scheduler.ScheduleOptions{
+			AppKeys:            []string{centralApp},
+			StorageProvisioner: Inst().Provisioner,
+		}
+
+		Step("Install px-central using 1.2.x helm repo then validate", func() {
+			contexts, err := Inst().S.Schedule(Inst().InstanceID, centralOptions)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contexts).NotTo(BeEmpty())
+
+			context = contexts[0]
+			context.SkipVolumeValidation = true
+			context.ReadinessTimeout = appReadinessTimeout
+
+			ValidateContext(context)
+			logrus.Infof("Successfully validated specs for px-central")
+		})
+
+		Step("Upgrade px-central using single chart helm repo then validate", func() {
+			err := batch.Instance().DeleteJob("pxcentral-post-install-hook", context.GetID())
+			Expect(err).NotTo(HaveOccurred())
+
+			// set a different helm chart repo name for staging chart
+			// and update the chart name from px-backup to px-central
+			configMap, err := core.Instance().GetConfigMap(centralApp, "default")
+			Expect(err).NotTo(HaveOccurred())
+
+			configMap.Data[k8s.HelmRepoName] = "portworx-staging"
+			configMap.Data[k8s.HelmChartName] = centralApp
+			_, err = core.Instance().UpdateConfigMap(configMap)
+			Expect(err).NotTo(HaveOccurred())
+
+			centralOptions.Upgrade = true
+			err = Inst().S.AddTasks(context, centralOptions)
+			Expect(err).NotTo(HaveOccurred())
+
+			ValidateContext(context)
+			logrus.Infof("Successfully upgraded px-central to staging version")
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			TearDownContext(context, opts)
+			logrus.Infof("Successfully destroyed px-central")
+
+			err := core.Instance().DeleteNamespace(context.GetID())
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })

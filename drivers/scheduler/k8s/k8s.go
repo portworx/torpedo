@@ -155,16 +155,15 @@ var (
 
 // K8s  The kubernetes structure
 type K8s struct {
-	SpecFactory             *spec.Factory
-	NodeDriverName          string
-	VolDriverName           string
-	secretConfigMapName     string
-	helmValuesConfigMapName string
-	customConfig            map[string]scheduler.AppConfig
-	eventsStorage           map[string][]scheduler.Event
-	SecretType              string
-	VaultAddress            string
-	VaultToken              string
+	SpecFactory         *spec.Factory
+	NodeDriverName      string
+	VolDriverName       string
+	secretConfigMapName string
+	customConfig        map[string]scheduler.AppConfig
+	eventsStorage       map[string][]scheduler.Event
+	SecretType          string
+	VaultAddress        string
+	VaultToken          string
 }
 
 // IsNodeReady  Check whether the cluster node is ready
@@ -196,7 +195,6 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.NodeDriverName = schedOpts.NodeDriverName
 	k.VolDriverName = schedOpts.VolDriverName
 	k.secretConfigMapName = schedOpts.SecretConfigMapName
-	k.helmValuesConfigMapName = schedOpts.HelmValuesConfigMapName
 	k.customConfig = schedOpts.CustomAppConfig
 	k.SecretType = schedOpts.SecretType
 	k.VaultAddress = schedOpts.VaultAddress
@@ -383,7 +381,7 @@ func (k *K8s) IsAppHelmChartType(fileName string) (bool, error) {
 		return false, nil
 	}
 
-	if repoInfo.URL != "" && repoInfo.RepoName != "" && repoInfo.ChartName != "" && repoInfo.ReleaseName != "" {
+	if repoInfo.RepoName != "" && repoInfo.ChartName != "" && repoInfo.ReleaseName != "" {
 		// If the yaml file with helmRepo info for the app is found, exit here.
 		logrus.Infof("Helm chart was found in file: [%s]", fileName)
 		return true, nil
@@ -1811,14 +1809,17 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []corev1.Pod
 
+	var removeSpecs []interface{}
 	for _, appSpec := range ctx.App.SpecList {
 		if repoInfo, ok := appSpec.(*scheduler.HelmRepo); ok {
-			_, err := k.UnInstallHelmChart(repoInfo)
+			specs, err := k.UnInstallHelmChart(repoInfo)
 			if err != nil {
 				return err
 			}
+			removeSpecs = append(removeSpecs, specs...)
 		}
 	}
+	ctx.App.SpecList = k.removeExistingSpecs(ctx.App.SpecList, removeSpecs)
 
 	k8sOps := k8sAutopilot
 	apRule := ctx.ScheduleOptions.AutopilotRule
@@ -1832,7 +1833,9 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			currPods, err := k.destroyCoreObject(appSpec, opts, ctx.App)
-			if err != nil {
+			// during helm upgrade or uninstall, objects may be deleted but not removed from the SpecList
+			// so tolerate non-existing errors for those objects during tear down
+			if err != nil && !strings.Contains(err.Error(), "not found") {
 				return nil, true, err
 			}
 			return currPods, false, nil

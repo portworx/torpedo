@@ -112,6 +112,8 @@ type ScheduleOptions struct {
 	PvcNodesAnnotation []string
 	// PvcSize is the size of PVC
 	PvcSize int64
+	// Upgrade specifies whether to schedule an upgrade job
+	Upgrade bool
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -305,11 +307,13 @@ type Event struct {
 
 // HelmRepo has the related info about the repo
 type HelmRepo struct {
-	URL         string `yaml:"url"`
 	RepoName    string `yaml:"reponame"`
 	ChartName   string `yaml:"chartname"`
 	ReleaseName string `yaml:"releasename"`
+	URL         string
 	Namespace   string
+	Version     string
+	Values      string
 }
 
 // Register registers the given scheduler driver
