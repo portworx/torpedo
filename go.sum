@@ -779,6 +779,8 @@ github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef h1:/N+yBb
 github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/sched-ops v0.20.4-openstorage-rc3 h1:tXnHsjZT2wZ2BCXf8avDoya7zGyCgLNUC8Upt+WEQrY=
 github.com/portworx/sched-ops v0.20.4-openstorage-rc3/go.mod h1:DpRDDqXWQrReFJ5SHWWrURuZdzVKjrh2OxbAfwnrAyk=
+github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c202335f7 h1:E/ZYLCbNezKg4bT1CmZXWgi2vY6PuPHwdVBZOdQDmfM=
+github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c202335f7/go.mod h1:DpRDDqXWQrReFJ5SHWWrURuZdzVKjrh2OxbAfwnrAyk=
 github.com/portworx/talisman v0.0.0-20191007232806-837747f38224 h1:r4LpGHxnh3tliXnaJcciROXU/snARMN6/OXhGPJyzGA=
 github.com/portworx/talisman v0.0.0-20191007232806-837747f38224/go.mod h1:OjpMH9Uh5o9ntVGktm4FbjLNwubJ3ITih2OfYrAeWtA=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
