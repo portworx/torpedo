@@ -145,6 +145,12 @@ var _ = Describe("{Installpxcentral}", func() {
 
 				ValidateContext(context)
 				logrus.Infof("Successfully validated specs for px-monitor")
+
+				// remove extra values in config map
+				configMap, err := core.Instance().GetConfigMap(monitorApp, "default")
+				configMap.Data[k8s.HelmExtraValues] = ""
+				configMap, err = core.Instance().UpdateConfigMap(configMap)
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
@@ -227,6 +233,55 @@ var _ = Describe("{Upgradepxcentral}", func() {
 			logrus.Infof("Successfully destroyed px-central")
 
 			err := core.Instance().DeleteNamespace(context.GetID())
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+})
+
+var _ = Describe("{InstallpxcentralWithoutBackup}", func() {
+	It("has to setup, validate and teardown apps", func() {
+		var context *scheduler.Context
+
+		centralApp := "px-central"
+		centralOptions := scheduler.ScheduleOptions{
+			AppKeys:            []string{centralApp},
+			StorageProvisioner: Inst().Provisioner,
+		}
+
+		Step("Install px-central with px-backup disabled then validate", func() {
+			configMap, err := core.Instance().GetConfigMap(centralApp, "default")
+			Expect(err).NotTo(HaveOccurred())
+
+			configMap.Data[k8s.HelmExtraValues] = "pxbackup.enabled=false"
+			_, err = core.Instance().UpdateConfigMap(configMap)
+			Expect(err).NotTo(HaveOccurred())
+
+			contexts, err := Inst().S.Schedule(Inst().InstanceID, centralOptions)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contexts).NotTo(BeEmpty())
+
+			context = contexts[0]
+			context.SkipVolumeValidation = true
+			context.ReadinessTimeout = appReadinessTimeout
+
+			ValidateContext(context)
+			logrus.Infof("Successfully validated specs for px-central")
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+			TearDownContext(context, opts)
+			logrus.Infof("Successfully destroyed px-central")
+
+			// remove extra values in config map
+			configMap, err := core.Instance().GetConfigMap(centralApp, "default")
+			configMap.Data[k8s.HelmExtraValues] = ""
+			_, err = core.Instance().UpdateConfigMap(configMap)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = core.Instance().DeleteNamespace(context.GetID())
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
