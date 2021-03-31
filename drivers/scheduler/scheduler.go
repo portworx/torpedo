@@ -114,6 +114,8 @@ type ScheduleOptions struct {
 	PvcSize int64
 	// Upgrade specifies whether to schedule an upgrade job
 	Upgrade bool
+	// Namespace to schedule app installation if not empty
+	Namespace string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -143,6 +145,9 @@ type Driver interface {
 
 	// ScheduleUninstall uninstalls tasks from an existing context
 	ScheduleUninstall(*Context, ScheduleOptions) error
+
+	// RemoveAppSpecsByName removes certain specs from list to avoid validation
+	RemoveAppSpecsByName(ctx *Context, removeSpecs []interface{}) error
 
 	// UpdateTasksID updates task IDs in the given context
 	UpdateTasksID(*Context, string) error

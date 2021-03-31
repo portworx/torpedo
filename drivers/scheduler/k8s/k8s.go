@@ -604,7 +604,14 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	var contexts []*scheduler.Context
 	for _, app := range apps {
 
-		appNamespace := app.GetID(instanceID)
+		var appNamespace string
+		if options.Namespace != "" {
+			appNamespace = options.Namespace
+		} else {
+			appNamespace = app.GetID(instanceID)
+			options.Namespace = appNamespace
+		}
+
 		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
 		if err != nil {
 			return nil, err
@@ -799,7 +806,8 @@ func (k *K8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 		return fmt.Errorf("need to specify list of applications to add to context")
 	}
 
-	appNamespace := ctx.GetID()
+	// new tasks will be added to namespace of current context only
+	appNamespace := ctx.ScheduleOptions.Namespace
 	var apps []*spec.AppSpec
 	specObjects := ctx.App.SpecList
 	for _, key := range options.AppKeys {
@@ -856,25 +864,43 @@ func(k *K8s) ScheduleUninstall(ctx *scheduler.Context, options scheduler.Schedul
 			}
 		}
 	}
-	ctx.App.SpecList = k.removeExistingSpecs(ctx.App.SpecList, removeSpecs)
+	err := k.RemoveAppSpecsByName(ctx, removeSpecs)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-// removeSpecs removes uninstalled spec objects from an app's spec list
+// RemoveSpecs removes uninstalled spec objects from an app's spec list
 // so those objects will not be accessed during context validation and app destroy
-func(k *K8s) removeExistingSpecs(specs, removeSpecs []interface{}) []interface{} {
+// and during helm uninstall they can be deleted gracefully
+func(k *K8s) RemoveAppSpecsByName(ctx *scheduler.Context, removeSpecs []interface{}) error {
 	var remainSpecs []interface{}
+
 	SPECS:
-	for _, spec := range specs {
+	for _, spec := range ctx.App.SpecList {
 		for  _, removeSpec := range removeSpecs {
-			if specObj, ok := spec.(*appsapi.Deployment); ok {
-				if removeObj, ok := removeSpec.(*appsapi.Deployment); ok {
+			if specObj, ok := spec.(*corev1.ConfigMap); ok {
+				if removeObj, ok := removeSpec.(*corev1.ConfigMap); ok {
 					if  specObj.Name == removeObj.Name {
 						continue SPECS
 					}
 				}
-			} else if specObj, ok := spec.(*appsapi.StatefulSet); ok {
-				if removeObj, ok := removeSpec.(*appsapi.StatefulSet); ok {
+			} else if specObj, ok := spec.(*rbacv1.ClusterRole); ok {
+				if removeObj, ok := removeSpec.(*rbacv1.ClusterRole); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
+				if removeObj, ok := removeSpec.(*rbacv1.ClusterRoleBinding); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*appsapi.Deployment); ok {
+				if removeObj, ok := removeSpec.(*appsapi.Deployment); ok {
 					if  specObj.Name == removeObj.Name {
 						continue SPECS
 					}
@@ -885,14 +911,62 @@ func(k *K8s) removeExistingSpecs(specs, removeSpecs []interface{}) []interface{}
 						continue SPECS
 					}
 				}
+			} else if specObj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+				if removeObj, ok := removeSpec.(*corev1.PersistentVolumeClaim); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*monitoringv1.Prometheus); ok {
+				if removeObj, ok := removeSpec.(*monitoringv1.Prometheus); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*monitoringv1.PrometheusRule); ok {
+				if removeObj, ok := removeSpec.(*monitoringv1.PrometheusRule); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*rbacv1.Role); ok {
+				if removeObj, ok := removeSpec.(*rbacv1.Role); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*rbacv1.RoleBinding); ok {
+				if removeObj, ok := removeSpec.(*rbacv1.RoleBinding); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*corev1.Secret); ok {
+				if removeObj, ok := removeSpec.(*corev1.Secret); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
 			} else if specObj, ok := spec.(*corev1.Service); ok {
 				if removeObj, ok := removeSpec.(*corev1.Service); ok {
 					if  specObj.Name == removeObj.Name {
 						continue SPECS
 					}
 				}
-			} else if specObj, ok := spec.(*corev1.ConfigMap); ok {
-				if removeObj, ok := removeSpec.(*corev1.ConfigMap); ok {
+			} else if specObj, ok := spec.(*corev1.ServiceAccount); ok {
+				if removeObj, ok := removeSpec.(*corev1.ServiceAccount); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*monitoringv1.ServiceMonitor); ok {
+				if removeObj, ok := removeSpec.(*monitoringv1.ServiceMonitor); ok {
+					if  specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*appsapi.StatefulSet); ok {
+				if removeObj, ok := removeSpec.(*appsapi.StatefulSet); ok {
 					if  specObj.Name == removeObj.Name {
 						continue SPECS
 					}
@@ -901,7 +975,9 @@ func(k *K8s) removeExistingSpecs(specs, removeSpecs []interface{}) []interface{}
 		}
 		remainSpecs = append(remainSpecs, spec)
 	}
-	return remainSpecs
+
+	ctx.App.SpecList = remainSpecs
+	return nil
 }
 
 // UpdateTasksID updates task IDs in the given context
@@ -1819,7 +1895,11 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			removeSpecs = append(removeSpecs, specs...)
 		}
 	}
-	ctx.App.SpecList = k.removeExistingSpecs(ctx.App.SpecList, removeSpecs)
+	// helm uninstall would delete objects automatically so skip destroy for those
+	err := k.RemoveAppSpecsByName(ctx, removeSpecs)
+	if err != nil {
+		return err
+	}
 
 	k8sOps := k8sAutopilot
 	apRule := ctx.ScheduleOptions.AutopilotRule

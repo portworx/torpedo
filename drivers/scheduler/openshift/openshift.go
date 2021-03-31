@@ -80,7 +80,13 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 	var contexts []*scheduler.Context
 	for _, app := range apps {
 
-		appNamespace := app.GetID(instanceID)
+		var appNamespace string
+		if options.Namespace != "" {
+			appNamespace = options.Namespace
+		} else {
+			appNamespace = app.GetID(instanceID)
+			options.Namespace = appNamespace
+		}
 
 		// Update security context for namespace and user
 		if err := k.updateSecurityContextConstraints(appNamespace); err != nil {

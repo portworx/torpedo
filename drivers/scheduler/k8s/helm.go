@@ -142,7 +142,7 @@ func (k *K8s) SetHelmParams(appKey string, helmRepo *scheduler.HelmRepo, options
 	}
 
 	// some values are generated during the test, e.g. UI endpoint and OIDC secret
-	if extraValues, ok := configMap.Data[HelmExtraValues]; ok {
+	if extraValues, ok := configMap.Data[HelmExtraValues]; ok && extraValues != "" {
 		helmRepo.Values = fmt.Sprintf("%s,%s", helmRepo.Values, extraValues)
 		logrus.Debugf("helm extra values added: %s", helmRepo.Values)
 	}
@@ -363,6 +363,27 @@ func (k *K8s) UpgradeChart(repoInfo *scheduler.HelmRepo) (string, error) {
 	}
 	logrus.Debugf("chart upgrade path: %s", cp)
 
+	p := getter.All(settings)
+	valueOpts := &values.Options{}
+	vals, err := valueOpts.MergeValues(p)
+	if err != nil {
+		return "", err
+	}
+
+	// Get values from ConfigMap if exist
+	if err := strvals.ParseInto(repoInfo.Values, vals); err != nil {
+		return "", errors.Wrap(err, "failed parsing --set data")
+	}
+
+	// Overwrite using existing values
+	existVals, err := k.GetChartValues(repoInfo)
+	if err != nil  {
+		return "", errors.Wrap(err, "failed getting existing values --set data")
+	}
+	for k, v := range existVals {
+		vals[k] = v
+	}
+
 	// Check chart dependencies to make sure all are present in /charts
 	chartRequested, err := loader.Load(cp)
 	if err != nil {
@@ -375,10 +396,6 @@ func (k *K8s) UpgradeChart(repoInfo *scheduler.HelmRepo) (string, error) {
 	}
 
 	client.Namespace = repoInfo.Namespace
-	vals, err := k.GetChartValues(repoInfo)
-	if err != nil  {
-		return "", err
-	}
 
 	release, err := client.Run(repoInfo.ReleaseName, chartRequested, vals)
 	if err != nil {

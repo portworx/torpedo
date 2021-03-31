@@ -276,6 +276,15 @@ func(d *dcos) ScheduleUninstall(ctx *scheduler.Context, options scheduler.Schedu
 	}
 }
 
+// RemoveAppSpecsByName removes certain specs from list to avoid validation
+func(d *dcos) RemoveAppSpecsByName(ctx *scheduler.Context, removeSpecs []interface{}) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveAppSpecsByName()",
+	}
+}
+
 func (d *dcos) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
