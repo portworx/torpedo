@@ -3477,7 +3477,9 @@ func (k *K8s) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 						coolDownPeriod = 5 // default autopilot cool down period
 					}
 					// sleep to wait until all events are published
-					time.Sleep(time.Second*time.Duration(coolDownPeriod) + 10)
+					sleepTime := time.Second*time.Duration(coolDownPeriod+10)
+					logrus.Infof("sleep %s until all events are published", sleepTime)
+					time.Sleep(sleepTime)
 
 					objectToValidateName := fmt.Sprintf("%s:pvc-%s", rule.Name, obj.UID)
 					logrus.Infof("[%s] Validating events", objectToValidateName)
@@ -3503,8 +3505,6 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	}
 
 	expectedAroStates := []apapi.RuleState{
-		apapi.RuleStateInit,
-		apapi.RuleStateNormal,
 		apapi.RuleStateTriggered,
 		apapi.RuleStateActiveActionsPending,
 		apapi.RuleStateActiveActionsInProgress,
@@ -3523,17 +3523,20 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	for _, aro := range listAutopilotRuleObjects.Items {
 		var aroStates []apapi.RuleState
 		for _, aroStatusItem := range aro.Status.Items {
+			if aroStatusItem.State == "" {
+				continue
+			}
 			aroStates = append(aroStates, aroStatusItem.State)
 		}
 		if reflect.DeepEqual(aroStates, expectedAroStates) {
 			logrus.Debugf("autopilot rule object: %s has all expected states", aro.Name)
-			return nil
+		} else {
+			formattedObject, _ := json.MarshalIndent(listAutopilotRuleObjects.Items, "", "\t")
+			logrus.Debugf("autopilot rule objects items: %s", string(formattedObject))
+			return fmt.Errorf("autopilot rule object: %s doesn't have all expected states", aro.Name)
 		}
-		logrus.Debugf("autopilot rule object: %s doesn't have all expected states", aro.Name)
 	}
-
-	formattedObject, _ := json.MarshalIndent(listAutopilotRuleObjects.Items, "", "\t")
-	return fmt.Errorf("none of the autopilot rule objects have all expected states\n autopilot rule objects items: %s", string(formattedObject))
+	return nil
 }
 
 func validateEvents(objName string, events map[string]int32, count int32) error {
@@ -3779,7 +3782,8 @@ func (k *K8s) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 	if err != nil {
 		return nil, err
 	}
-	logrus.Infof("Created autopilot rule: %+v", apRuleObj)
+	apRuleObjString, _ := json.MarshalIndent(apRuleObj, "", "\t")
+	logrus.Infof("Created autopilot rule: %s", apRuleObjString)
 
 	return apRuleObj.(*apapi.AutopilotRule), nil
 }
