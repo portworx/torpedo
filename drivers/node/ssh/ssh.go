@@ -527,6 +527,27 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 	return file, nil
 }
 
+// Stat runs a stat command on a node for a particular file
+func (s *SSH) Stat(n node.Node, file string, options node.ConnectionOpts) error {
+	cmd := fmt.Sprintf("stat %s", file)
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, options, cmd, true)
+		return out, true, err
+	}
+
+	out, err := task.DoRetryWithTimeout(t,
+		options.Timeout,
+		options.TimeBeforeRetry)
+
+	if err != nil {
+		return &node.ErrFileNotFound{
+			File:  file,
+			Cause: fmt.Sprintf("%s. cause: %s", out, err.Error()),
+		}
+	}
+	return nil
+}
+
 func init() {
 	s := &SSH{
 		Driver:   node.NotSupportedDriver,

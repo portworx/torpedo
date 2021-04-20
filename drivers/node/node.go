@@ -125,6 +125,9 @@ type Driver interface {
 	// Systemctl runs a systemctl command for the given service on the node
 	Systemctl(node Node, service string, options SystemctlOpts) error
 
+	// Stat runs a stat command on a node for a particular file
+	Stat(node Node, file string, options ConnectionOpts) error
+
 	// TestConnection tests connection to given node. returns nil if driver can connect to given node
 	TestConnection(node Node, options ConnectionOpts) error
 
@@ -323,5 +326,12 @@ func (d *notSupportedDriver) RebootVM(node Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RebootVM()",
+	}
+}
+
+func (d *notSupportedDriver) Stat(node Node, file string, options ConnectionOpts) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "Stat()",
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -61,8 +62,6 @@ import (
 	// import generic csi driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
 	"github.com/portworx/torpedo/pkg/log"
-
-	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -179,13 +178,15 @@ func ValidateCleanup() {
 
 			return "", false, nil
 		}
-
 		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
 		if err != nil {
 			logrus.Info("an error occurred, collecting bundle")
 			CollectSupport()
 		}
 		expect(err).NotTo(haveOccurred())
+		if len(Inst().KnownPasswordList) > 0 {
+			CheckLogsForKnownPass()
+		}
 	})
 }
 
@@ -688,11 +689,64 @@ func CollectSupport() {
 
 				runCmd(fmt.Sprintf("cat /proc/mounts > %s/mounts.log", Inst().BundleLocation), n)
 
-				// this is a small tweak especially for providers like openshift, aws where oci-mon saves this file
-				// with root read permissions only but collect support bundle is a non-root user
-				runCmd(fmt.Sprintf("chmod 755 %s/oci.log", Inst().BundleLocation), n)
+				fixOciLogPermissions(n)
 			})
 		}
+	})
+}
+
+func fixOciLogPermissions(n node.Node) {
+	// this is a small tweak especially for providers like openshift, aws where oci-mon saves this file
+	// with root read permissions only but collect support bundle is a non-root user
+	file := fmt.Sprintf("%s/oci.log", Inst().BundleLocation)
+	err := Inst().N.Stat(n, file, node.ConnectionOpts{
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
+	})
+	if err == nil {
+		runCmd(fmt.Sprintf("chmod 755 %s", file), n)
+	}
+}
+
+// CheckLogsForKnownPass checks for password list provided in Inst().KnownPasswordList param
+func CheckLogsForKnownPass() {
+	context(fmt.Sprintf("generating support bundle..."), func() {
+		nodes := node.GetWorkerNodes()
+		expect(nodes).NotTo(beEmpty())
+		var err error
+		for _, n := range nodes {
+			if !n.IsStorageDriverInstalled {
+				continue
+			}
+			runCmd(fmt.Sprintf("journalctl -lu portworx* > %s/portworx.log", Inst().BundleLocation), n)
+			fixOciLogPermissions(n)
+			knownPasswords := strings.ReplaceAll(Inst().KnownPasswordList, ",", "|")
+			cmdTpl := fmt.Sprintf("grep -nE \"(%s)\"", knownPasswords)
+			// in this case we're ignoring errors since grep can return non zero
+			connOpts := node.ConnectionOpts{
+				Timeout:         defaultTimeout,
+				TimeBeforeRetry: defaultCmdRetryInterval,
+				Sudo:            true,
+				IgnoreError:     true,
+			}
+			cmd := fmt.Sprintf("%s %s/portworx.log", cmdTpl, Inst().BundleLocation)
+			out, _ := Inst().N.RunCommand(n, cmd, connOpts)
+			lines := strings.Split(out, "\n")
+			if len(lines) > 0 {
+				logrus.Errorf("exposed password found: %v", lines)
+				err = fmt.Errorf("exposed password found")
+			}
+
+			cmd = fmt.Sprintf("%s %s/oci.log", cmdTpl, Inst().BundleLocation)
+			out, _ = Inst().N.RunCommand(n, cmd, connOpts)
+			lines = strings.Split(out, "\n")
+			if len(lines) > 0 {
+				logrus.Errorf("exposed password found: %v", lines)
+				err = fmt.Errorf("exposed password found")
+			}
+		}
+		expect(err).NotTo(haveOccurred())
 	})
 }
 
@@ -903,6 +957,7 @@ type Torpedo struct {
 	SchedUpgradeHops                    string
 	AutopilotUpgradeImage               string
 	CsiGenericDriverConfigMap           string
+	KnownPasswordList                   string
 }
 
 // ParseFlags parses command line flags
@@ -932,6 +987,7 @@ func ParseFlags() {
 	var schedUpgradeHops string
 	var autopilotUpgradeImage string
 	var csiGenericDriverConfigMapName string
+	var knownPasswordsList string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -964,6 +1020,7 @@ func ParseFlags() {
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
 	flag.StringVar(&autopilotUpgradeImage, autopilotUpgradeImageCliFlag, "", "Autopilot version which will be used for checking version after upgrade autopilot")
 	flag.StringVar(&csiGenericDriverConfigMapName, csiGenericDriverConfigMapFlag, "", "Name of config map that stores provisioner details when CSI generic driver is being used")
+	flag.StringVar(&knownPasswordsList, "known-passwords", "", "Comma separated list of known passwords used")
 	flag.Parse()
 
 	appList, err := splitCsv(appListCSV)
@@ -1036,6 +1093,7 @@ func ParseFlags() {
 				SchedUpgradeHops:                    schedUpgradeHops,
 				AutopilotUpgradeImage:               autopilotUpgradeImage,
 				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
+				KnownPasswordList:                   knownPasswordsList,
 			}
 		})
 	}

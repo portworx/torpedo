@@ -419,6 +419,7 @@ spec:
             "--vault-token=$VAULT_TOKEN",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
+            "--known-passwords=$KNOWN_PASSWORDS",
             "$APP_DESTROY_TIMEOUT_ARG",
             "$SCHEDULER_UPGRADE_HOPS_ARG",
             "$MAX_STORAGE_NODES_PER_AZ_ARG"

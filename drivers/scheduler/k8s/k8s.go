@@ -3476,7 +3476,7 @@ func (k *K8s) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 						coolDownPeriod = 5 // default autopilot cool down period
 					}
 					// sleep to wait until all events are published
-					sleepTime := time.Second*time.Duration(coolDownPeriod+10)
+					sleepTime := time.Second * time.Duration(coolDownPeriod+10)
 					logrus.Infof("sleep %s until all events are published", sleepTime)
 					time.Sleep(sleepTime)
 
