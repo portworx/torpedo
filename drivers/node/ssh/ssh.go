@@ -37,7 +37,6 @@ const (
 const (
 	execPodDaemonSetLabel   = "debug"
 	execPodDefaultNamespace = "kube-system"
-	defaultSpecsRoot        = "../drivers/scheduler/k8s/specs"
 )
 
 const (
@@ -88,14 +87,14 @@ func useSSH() bool {
 }
 
 // Init initializes SSH node driver
-func (s *SSH) Init() error {
+func (s *SSH) Init(nodeOpts node.InitOptions) error {
 
 	nodes := node.GetWorkerNodes()
 	var err error
 	if useSSH() {
 		err = s.initSSH()
 	} else {
-		err = s.initExecPod()
+		err = s.initExecPod(nodeOpts.SpecDir)
 	}
 
 	if err != nil {
@@ -120,12 +119,12 @@ func (s *SSH) Init() error {
 	return nil
 }
 
-func (s *SSH) initExecPod() error {
+func (s *SSH) initExecPod(specDir string) error {
 	var ds *appsv1_api.DaemonSet
 	var err error
 	if ds, err = k8sApps.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
 		s, err := scheduler.Get(k8s_driver.SchedName)
-		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), s)
+		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", specDir, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), s)
 		if err != nil {
 			return fmt.Errorf("Error while loading debug daemonset spec file. Err: %s", err)
 		}
