@@ -94,6 +94,8 @@ github.com/aws/aws-sdk-go/service/s3/s3manager
 github.com/aws/aws-sdk-go/service/ssm
 github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
+# github.com/blang/semver v3.5.1+incompatible
+github.com/blang/semver
 # github.com/coreos/go-oidc v2.2.1+incompatible
 github.com/coreos/go-oidc
 # github.com/davecgh/go-spew v1.1.1
@@ -353,11 +355,15 @@ github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
 # github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 github.com/openshift/api/apps/v1
+github.com/openshift/api/config/v1
 github.com/openshift/api/security/v1
 # github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 github.com/openshift/client-go/apps/clientset/versioned
 github.com/openshift/client-go/apps/clientset/versioned/scheme
 github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1
+github.com/openshift/client-go/config/clientset/versioned
+github.com/openshift/client-go/config/clientset/versioned/scheme
+github.com/openshift/client-go/config/clientset/versioned/typed/config/v1
 github.com/openshift/client-go/security/clientset/versioned
 github.com/openshift/client-go/security/clientset/versioned/scheme
 github.com/openshift/client-go/security/clientset/versioned/typed/security/v1
@@ -376,7 +382,7 @@ github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
 # github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef
 github.com/portworx/px-backup-api/pkg/apis/v1
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20210401031424-429c07e70276
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20210407163031-09e9dcbb0f2f
 github.com/portworx/sched-ops/k8s/apps
 github.com/portworx/sched-ops/k8s/autopilot
 github.com/portworx/sched-ops/k8s/batch

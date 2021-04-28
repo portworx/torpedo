@@ -6,6 +6,7 @@ require (
 	github.com/Azure/azure-storage-blob-go v0.9.0
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/aws/aws-sdk-go v1.35.37
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/fatih/color v1.9.0
 	github.com/gambol99/go-marathon v0.7.1
@@ -19,9 +20,10 @@ require (
 	github.com/libopenstorage/stork v1.3.0-beta1.0.20210331175814-30fe03cc1e33
 	github.com/onsi/ginkgo v1.15.0
 	github.com/onsi/gomega v1.10.5
+	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20210401031424-429c07e70276
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20210407163031-09e9dcbb0f2f
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.7.0
 	github.com/stretchr/testify v1.7.0
