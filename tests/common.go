@@ -145,15 +145,16 @@ func InitInstance() {
 	}
 
 	err = Inst().S.Init(scheduler.InitOptions{
-		SpecDir:             Inst().SpecDir,
-		VolDriverName:       Inst().V.String(),
-		NodeDriverName:      Inst().N.String(),
-		SecretConfigMapName: Inst().ConfigMap,
-		CustomAppConfig:     Inst().CustomAppConfig,
-		StorageProvisioner:  Inst().Provisioner,
-		SecretType:          Inst().SecretType,
-		VaultAddress:        Inst().VaultAddress,
-		VaultToken:          Inst().VaultToken,
+		SpecDir:                  Inst().SpecDir,
+		VolDriverName:            Inst().V.String(),
+		NodeDriverName:           Inst().N.String(),
+		SecretConfigMapName:      Inst().ConfigMap,
+		CustomAppConfig:          Inst().CustomAppConfig,
+		StorageProvisioner:       Inst().Provisioner,
+		SecretType:               Inst().SecretType,
+		VaultAddress:             Inst().VaultAddress,
+		VaultToken:               Inst().VaultToken,
+		IsFlashBladeProxyVolumes: Inst().FlashBladeProxyVolumes,
 	})
 	expect(err).NotTo(haveOccurred())
 
@@ -901,6 +902,7 @@ type Torpedo struct {
 	CustomAppConfig                     map[string]scheduler.AppConfig
 	Backup                              backup.Driver
 	SecretType                          string
+	FlashBladeProxyVolumes              bool
 	VaultAddress                        string
 	VaultToken                          string
 	SchedUpgradeHops                    string
@@ -930,6 +932,7 @@ func ParseFlags() {
 	var customAppConfig map[string]scheduler.AppConfig
 	var enableStorkUpgrade bool
 	var secretType string
+	var flashBladeProxyVolumes bool
 	var vaultAddress string
 	var vaultToken string
 	var schedUpgradeHops string
@@ -962,6 +965,7 @@ func ParseFlags() {
 	flag.StringVar(&bundleLocation, "bundle-location", defaultBundleLocation, "Path to support bundle output files")
 	flag.StringVar(&customConfigPath, "custom-config", "", "Path to custom configuration files")
 	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
+	flag.BoolVar(&flashBladeProxyVolumes, "flash-blade-proxy-volumes", false, "To enable using Pure FB backend for shared volumes")
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
@@ -1034,6 +1038,7 @@ func ParseFlags() {
 				CustomAppConfig:                     customAppConfig,
 				Backup:                              backupDriver,
 				SecretType:                          secretType,
+				FlashBladeProxyVolumes:              flashBladeProxyVolumes,
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
 				SchedUpgradeHops:                    schedUpgradeHops,

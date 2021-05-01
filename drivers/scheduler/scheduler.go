@@ -86,6 +86,8 @@ type InitOptions struct {
 	VaultAddress string
 	// VaultToken vault authentication token
 	VaultToken string
+	// IsFlashBladeProxyVolumes identifies if this is flash blade proxy volumes setup
+	IsFlashBladeProxyVolumes bool
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
