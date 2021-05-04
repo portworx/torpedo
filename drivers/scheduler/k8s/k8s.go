@@ -153,16 +153,16 @@ var (
 
 // K8s  The kubernetes structure
 type K8s struct {
-	SpecFactory              *spec.Factory
-	NodeDriverName           string
-	VolDriverName            string
-	secretConfigMapName      string
-	customConfig             map[string]scheduler.AppConfig
-	eventsStorage            map[string][]scheduler.Event
-	SecretType               string
-	VaultAddress             string
-	VaultToken               string
-	IsFlashBladeProxyVolumes bool
+	SpecFactory         *spec.Factory
+	NodeDriverName      string
+	VolDriverName       string
+	secretConfigMapName string
+	customConfig        map[string]scheduler.AppConfig
+	eventsStorage       map[string][]scheduler.Event
+	SecretType          string
+	VaultAddress        string
+	VaultToken          string
+	PureVolumes         bool
 }
 
 // IsNodeReady  Check whether the cluster node is ready
@@ -199,7 +199,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.VaultAddress = schedOpts.VaultAddress
 	k.VaultToken = schedOpts.VaultToken
 	k.eventsStorage = make(map[string][]scheduler.Event)
-	k.IsFlashBladeProxyVolumes = schedOpts.IsFlashBladeProxyVolumes
+	k.PureVolumes = schedOpts.PureVolumes
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -860,7 +860,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		obj.Namespace = ns.Name
 
 		// If Pure FB backend is enabled, we will modify StorageClass parameters here
-		if k.IsFlashBladeProxyVolumes {
+		if k.PureVolumes {
 			newStorageClassParameters := convertStorageClassToPure(obj.Parameters)
 			obj.Parameters = newStorageClassParameters
 		}

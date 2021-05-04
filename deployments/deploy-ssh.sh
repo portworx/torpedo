@@ -65,8 +65,8 @@ if [ -z "${ENABLE_STORK_UPGRADE}" ]; then
     ENABLE_STORK_UPGRADE=false
 fi
 
-if [ -z "${IS_FLASH_BLADE_PROXY_VOLUMES}" ]; then
-    IS_FLASH_BLADE_PROXY_VOLUMES=false
+if [ -z "${IS_PURE_VOLUMES}" ]; then
+    IS_PURE_VOLUMES=false
 fi
 
 if [ -n "${PROVISIONER}" ]; then
@@ -419,7 +419,7 @@ spec:
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
-            "--flash-blade-proxy-volumes=$IS_FLASH_BLADE_PROXY_VOLUMES",
+            "--pure-volumes=$IS_PURE_VOLUMES",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
