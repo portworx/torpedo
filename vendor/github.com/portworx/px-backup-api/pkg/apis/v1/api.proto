@@ -33,6 +33,7 @@ message ClusterInfo {
     // delete_restores will determine whether the restore
     // belong to given cluster needs to be deleted or not.
     bool delete_restores = 6;
+    string stork_version = 7;
 
     // Message for maintaing status of the cluster.
     message StatusInfo {
@@ -220,6 +221,9 @@ message BackupScheduleInfo {
     StatusInfo status = 12;
     SuspendedBy suspended_by = 13;
     repeated ResourceInfo include_resources = 14;
+    string stork_version = 15;
+    string csi_snapshot_class_name = 16;
+    repeated string resource_types = 17;
 
     message SuspendedBy {
         Source source = 1;
@@ -335,6 +339,10 @@ message BackupInfo {
     // Reference to cloud credential object used for backup
     string cloud_credential = 15;
     repeated ResourceInfo include_resources = 16;
+    uint64 resource_count = 17;
+    string stork_version = 18;
+    string csi_snapshot_class_name = 19;
+    repeated string resource_types = 20;
 
     enum Stage {
         Invalid = 0;
@@ -362,7 +370,7 @@ message BackupInfo {
         map<string, string> options = 8;
         uint64 total_size = 9;
         // actual size of the backup
-        // incase of invremental, it's the incremental backup size
+        // incase of incremental, it's the incremental backup size
         uint64 actual_size = 10;
     }
 
@@ -447,6 +455,8 @@ message RestoreInfo {
     repeated string include_optional_resource_types = 10;
     uint64 total_size = 11;
     repeated ResourceInfo include_resources = 12;
+    uint64 resource_count = 13;
+    string stork_version = 14;
 
     message RestoredResource {
         string name = 1;
@@ -525,6 +535,13 @@ message EnumerateOptions {
     // filter will be returned
     string cluster_name_filter = 5;
     uint64 object_index = 6;
+    // Ths option will be set to true by the caller, when they want to have
+    // complete backup object. That means the backupObject's
+    // resource list will be set to complete list of resources.
+    // If this option is set to false, resource list will be
+    // set to nil and rest of the backupObject details will be returned in the
+    // response.
+    bool include_detailed_resources = 7;
 }
 
 service SchedulePolicy {
@@ -569,6 +586,15 @@ service SchedulePolicy {
             delete : "/v1/schedulepolicy/{org_id}/{name}"
         };
     }
+
+    // UpdateOwnership updates ownership of existing object
+    rpc UpdateOwnership(SchedulePolicyOwnershipUpdateRequest)
+        returns (SchedulePolicyOwnershipUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/schedulepolicy/updateownership"
+            body : "*"
+        };
+    }
 }
 
 // Define SchedulePolicyCreateRequest struct
@@ -611,6 +637,15 @@ message SchedulePolicyDeleteRequest {
 }
 // Define SchedulePolicyDeleteResponse struct
 message SchedulePolicyDeleteResponse {}
+
+message SchedulePolicyOwnershipUpdateRequest {
+    string org_id = 1;
+    // Schedule policy name
+    string name = 2;
+    Ownership ownership = 3;
+}
+
+message SchedulePolicyOwnershipUpdateResponse {}
 
 service BackupSchedule {
     // Create creates new backup schedule
@@ -673,6 +708,10 @@ message BackupScheduleCreateRequest {
     string post_exec_rule = 9;
     // List of resources to backup (optional)
     repeated ResourceInfo include_resources = 10;
+    // Snapshot class name to use for backup schedule (optional)
+    string csi_snapshot_class_name = 11;
+    // List of resource types to backup (optional)
+    repeated string resource_types = 12;
 }
 
 // Define BackupScheduleCreateResponse struct
@@ -696,6 +735,8 @@ message BackupScheduleUpdateRequest {
     bool suspend = 10;
     // List of resources to backup (optional)
     repeated ResourceInfo include_resources = 11;
+    // Snapshot class name to use for backup schedule (optional)
+    string csi_snapshot_class_name = 12;
 }
 
 // Define BackupScheduleUpdateResponse struct
@@ -705,6 +746,10 @@ message BackupScheduleEnumerateRequest {
     string org_id = 1;
     // label selectors for the object for filtering
     map<string, string> labels = 2;
+    // Backuplocation name.
+    // Enumerate will return list of backupschedule that
+    // uses this backuplocation
+    string backup_location = 3;
 }
 
 // Define BackupScheduleEnumerateResponse struct
@@ -809,6 +854,10 @@ message ClusterEnumerateRequest {
     // label selectors for the object for filtering
     map<string, string> labels = 2;
     bool include_secrets = 3;
+    // cloud credential name.
+    // Enumerate will return list of cluster that
+    // uses this cloud credential
+    string cloud_credential = 4;
 }
 
 // Define ClusterEnumerateResponse struct
@@ -881,6 +930,15 @@ service CloudCredential {
             delete : "/v1/cloudcredential/{org_id}/{name}"
         };
     }
+
+    // UpdateOwnership updates ownership of existing object
+    rpc UpdateOwnership(CloudCredentialOwnershipUpdateRequest)
+        returns (CloudCredentialOwnershipUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/cloudcredential/updateownership"
+            body : "*"
+        };
+    }
 }
 
 // Define CloudCredentialCreateRequest struct
@@ -933,6 +991,15 @@ message CloudCredentialDeleteRequest {
 // Define CloudCredentialInspectResponse struct
 message CloudCredentialDeleteResponse {}
 
+message CloudCredentialOwnershipUpdateRequest {
+    string org_id = 1;
+    // Cloud credential name to be updated
+    string name = 2;
+    Ownership ownership = 3;
+}
+
+message CloudCredentialOwnershipUpdateResponse {}
+
 service BackupLocation {
     // Create creates new backup location
     rpc Create(BackupLocationCreateRequest)
@@ -984,6 +1051,15 @@ service BackupLocation {
             body : "*"
         };
     }
+
+    // UpdateOwnership updates ownership of existing object
+    rpc UpdateOwnership(BackupLocationOwnershipUpdateRequest)
+        returns (BackupLocationOwnershipUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/backuplocation/updateownership"
+            body : "*"
+        };
+    }
 }
 
 // Define BackupLocationCreateRequest struct
@@ -1009,6 +1085,10 @@ message BackupLocationEnumerateRequest {
     string org_id = 1;
     // label selectors for the object for filtering
     map<string, string> labels = 2;
+    // cloud credential name.
+    // Enumerate will return list of backuplocation that
+    // uses this cloud credential
+    string cloud_credential = 3;
 }
 
 // Define BackupLocationEnumerateResponse struct
@@ -1047,6 +1127,17 @@ message BackupLocationValidateRequest {
 
 // Define BackupLocationValidateResponse struct
 message BackupLocationValidateResponse {}
+
+// Define BackupLocationOwnershipUpdateRequest struct
+message BackupLocationOwnershipUpdateRequest {
+    string org_id = 1;
+    // Backup location to be updated
+    string name = 2;
+    Ownership ownership = 3;
+}
+
+// Define BackupLocationOwnershipUpdateResponse struct
+message BackupLocationOwnershipUpdateResponse {}
 
 service Metrics {
     rpc Inspect(MetricsInspectRequest) returns (MetricsInspectResponse) {
@@ -1124,6 +1215,10 @@ message BackupCreateRequest {
     string post_exec_rule = 7;
     // List of resources to backup (optional)
     repeated ResourceInfo include_resources = 8;
+    // Snapshot class name to use for backup (optional)
+    string csi_snapshot_class_name = 9;
+    // List of resource types to backup (optional)
+    repeated string resource_types = 10;
 }
 
 // Response message structure for backup create
@@ -1167,6 +1262,8 @@ message BackupInspectResponse { BackupObject backup = 1; }
 message BackupDeleteRequest {
     string name = 1;
     string org_id = 2;
+    // cluster name or uid to perform delete through
+    string cluster = 3;
 }
 
 // Response message strcuture for object delete
@@ -1359,6 +1456,17 @@ message RuleDeleteRequest {
 // Define RuleDeleteResponse struct
 message RuleDeleteResponse {}
 
+// Define RuleOwnershipUpdateRequest struct
+message RuleOwnershipUpdateRequest {
+    string org_id = 1;
+    // Rule to be updated
+    string name = 2;
+    Ownership ownership = 3;
+}
+
+// Define RuleOwnershipUpdateResponse struct
+message RuleOwnershipUpdateResponse {}
+
 service Rules {
     // Create creates new rule
     rpc Create(RuleCreateRequest) returns (RuleCreateResponse) {
@@ -1396,6 +1504,15 @@ service Rules {
             delete : "/v1/rule/{org_id}/{name}"
         };
     }
+
+    // UpdateOwnership updates ownership of existing object
+    rpc UpdateOwnership(RuleOwnershipUpdateRequest)
+        returns (RuleOwnershipUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/rule/updateownership"
+            body : "*"
+        };
+    }
 }
 
 service Version {
@@ -1424,11 +1541,21 @@ message VersionGetResponse {
 
 message LicenseActivateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
-    string activation_id = 2;
-    bytes license_data = 3;
+    oneof activation {
+        string activation_id = 2;
+        bytes license_data = 3;
+        string usage_based_id = 4;
+    }
 }
 
 message LicenseActivateResponse {}
+
+message LicenseUpdateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    string usage_based_id = 2;
+}
+
+message LicenseUpdateResponse {}
 
 message LicenseInspectRequest { string org_id = 1; }
 
@@ -1436,6 +1563,7 @@ message LicenseInspectResponse { LicenseResponseInfo license_resp_info = 1; }
 
 message LicenseResponseInfo {
     repeated FeatureInfo feature_info = 1;
+    Status status = 2;
 
     message FeatureInfo {
         // Feature name
@@ -1453,6 +1581,15 @@ message LicenseResponseInfo {
         google.protobuf.Timestamp expires = 3;
         // Start time of license
         google.protobuf.Timestamp starts = 4;
+        // License type defined in common.proto
+        LicenseType type = 5;
+    }
+
+    message Status {
+        // Representing if license is active or expired
+        string status = 1;
+        // Reason for above status
+        string reason = 2;
     }
 }
 
@@ -1471,4 +1608,166 @@ service License {
             get : "/v1/license/{org_id}"
         };
     }
+
+    // Update updates Usage Based activation ID
+    rpc Update(LicenseUpdateRequest) returns (LicenseUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/license"
+            body : "*"
+        };
+    }
 }
+
+service ActivityTimeLine {
+    // Enumerate returns a list of activity data for a given time period
+    rpc Enumerate(ActivityEnumerateRequest)
+        returns (ActivityEnumerateResponse) {
+        option (google.api.http) = {
+            get : "/v1/restore/{org_id}/{days}/{interval}"
+        };
+    }
+}
+
+message ActivityEnumerateRequest {
+    string org_id = 1;
+    // Time period for which activity is needed
+    int32 days = 2;
+    // Interval for which we want the activity
+    // For now Hourly and Daily are supported
+    Interval interval = 3;
+    string time_zone = 4;
+    enum Interval {
+        Invalid = 0;
+        Hourly = 1;
+        Daily = 2;
+    }
+}
+
+message ActivityEnumerateResponse {
+    repeated Data activity_data = 1;
+
+    message Data {
+        google.protobuf.Timestamp start_time = 1;
+        google.protobuf.Timestamp end_time = 2;
+        uint64 successful_backups = 3;
+        uint64 failed_backups = 4;
+        uint64 inprogress_backups = 5;
+        uint64 partial_success = 6;
+        uint64 delete_pending = 7;
+        uint64 pending_backups = 8;
+        double successful_backups_time_taken = 9;
+        double failed_backups_time_taken = 10;
+        double partial_success_time_taken = 11;
+        uint64 deleting_backups = 12;
+        // Total number of backups in a given time frame (irrespective of the
+        // state)
+        uint64 total_backups = 13;
+        // Size of the backups
+        uint64 total_backup_size = 14;
+    }
+}
+// Defines a RoleObject object.
+message RoleObject {
+    // Metadata of the object
+    Metadata metadata = 1 [ (gogoproto.embed) = true ];
+    // RoleConfig associated with role object
+    repeated RoleConfig rules = 2;
+    // Keyclock UID associated with role
+    string role_id = 3;
+}
+
+// RoleConfig object for set of rules associated with each role object
+// services - PX-Backup services names
+// apis - allowed apis for px-backup services
+message RoleConfig {
+    // The gRPC service name
+    repeated string services = 1;
+    // The API name in the service in lowercase
+    repeated string apis = 2;
+}
+
+service Role {
+    // Create creates new role object in datastore
+    rpc Create(RoleCreateRequest) returns (RoleCreateResponse) {
+        option (google.api.http) = {
+            post : "/v1/role"
+            body : "*"
+        };
+    }
+    // Enumerate returns a list of roles object
+    rpc Enumerate(RoleEnumerateRequest) returns (RoleEnumerateResponse) {
+        option (google.api.http) = {
+            get : "/v1/role/{org_id}"
+        };
+    }
+
+    // Inspect returns detailed information about requested role object
+    rpc Inspect(RoleInspectRequest) returns (RoleInspectResponse) {
+        option (google.api.http) = {
+            get : "/v1/role/{org_id}/{name}"
+        };
+    }
+    // Update given role information
+    rpc Update(RoleUpdateRequest) returns (RoleUpdateResponse) {
+        option (google.api.http) = {
+            put : "/v1/role"
+            body : "*"
+        };
+    }
+    // Delete removes given role from px-backup
+    rpc Delete(RoleDeleteRequest) returns (RoleDeleteResponse) {
+        option (google.api.http) = {
+            delete : "/v1/role/{org_id}/{name}"
+        };
+    }
+}
+
+// RoleCreateRequest defines roleobject create structure
+// Metadata with each role object
+// RoleConfig set of rules over api services for given role object
+message RoleCreateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    repeated RoleConfig rules = 2;
+    // Keyclock UID associated with role
+    string role_id = 3;
+}
+
+message RoleCreateResponse {}
+// RoleUpdateRequest defines roleobject update structure
+message RoleUpdateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    repeated RoleConfig rules = 2;
+    // Keyclock UID associated with role
+    string role_id = 3;
+}
+
+// Define RoleUpdateResponse struct
+message RoleUpdateResponse {}
+
+// Define RoleEnumerateRequest struct
+message RoleEnumerateRequest {
+    string org_id = 1;
+    // Optional arguments for enumeration
+    EnumerateOptions enumerate_options = 2 [ (gogoproto.embed) = true ];
+}
+
+// Define RoleEnumerateResponse struct
+message RoleEnumerateResponse { repeated RoleObject roles = 1; }
+
+// Define RoleInspectRequest struct
+message RoleInspectRequest {
+    string org_id = 1;
+    string name = 2;
+}
+
+// Define RoleInspectResponse struct
+message RoleInspectResponse { RoleObject role = 1; }
+
+// Define RoleDeleteRequest struct
+message RoleDeleteRequest {
+    string org_id = 1;
+    string name = 2;
+}
+
+// Define RoleDeleteResponse struct
+message RoleDeleteResponse {}
