@@ -93,6 +93,26 @@ type KeycloakUserCredentials struct {
 	Value string `json:"value"`
 }
 
+// KeycloakGroupRepresentation group representation
+type KeycloakGroupRepresentation struct {
+	Name      string   `json:"name"`
+	ID        string   `json:"id"`
+	Path      string   `json:"path"`
+	SubGroups []string `json:"subGroups"`
+}
+
+// KeycloakGroupAdd adding group
+type KeycloakGroupAdd struct {
+	Name string `json:"name"`
+}
+
+// KeycloakGroupToUser representation of adding group to user
+type KeycloakGroupToUser struct {
+	UserID  string `json:"userId"`
+	GroupID string `json:"groupId"`
+	Realm   string `json:"realm"`
+}
+
 // GetToken fetches JWT token for given user credentials
 func GetToken(userName, password string) (string, error) {
 	fn := "GetToken"
@@ -471,6 +491,117 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 	ctx := GetCtxWithToken(token)
 
 	return ctx, nil
+}
+
+// GetAllGroups fetches all available groups
+func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
+	fn := "GetAllGroups"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/groups", keycloakEndPoint)
+	method := "GET"
+	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	var groups []KeycloakGroupRepresentation
+	err = json.Unmarshal(response, &groups)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	logrus.Infof("line 516 list of groups : %v", groups)
+	return groups, nil
+}
+
+// AddGroup adds a new group
+func AddGroup(group string) error {
+	fn := "AddGroup"
+	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/groups", keycloakEndPoint)
+	method := "POST"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return err
+	}
+	groups := KeycloakGroupAdd{
+		Name: group,
+	}
+
+	userBytes, err := json.Marshal(&groups)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return err
+	}
+	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return err
+	}
+
+	return nil
+}
+
+// AddGroupToUser add group to a user
+func AddGroupToUser(user, group string) error {
+	fn := "AddGroupToUser"
+	groupID, err := FetchIDOfGroup(group)
+	if err != nil {
+		return err
+	}
+
+	userID, err := FetchIDOfUser(user)
+	if err != nil {
+		return err
+	}
+
+	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users/%s/groups/%s", keycloakEndPoint, userID, groupID)
+	method := "PUT"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return err
+	}
+	data := KeycloakGroupToUser{
+		UserID:  userID,
+		GroupID: groupID,
+		Realm:   "master",
+	}
+
+	dataBytes, err := json.Marshal(&data)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return err
+	}
+	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(dataBytes)))
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return err
+	}
+
+	return nil
+}
+
+// FetchIDOfGroup fetched ID of a group
+func FetchIDOfGroup(name string) (string, error) {
+	groups, err := GetAllGroups()
+	if err != nil {
+		return "", nil
+	}
+
+	var groupID string
+	for _, group := range groups {
+		if group.Name == name {
+			groupID = group.ID
+			break
+		}
+	}
+
+	return groupID, nil
 }
 
 func processHTTPRequest(
