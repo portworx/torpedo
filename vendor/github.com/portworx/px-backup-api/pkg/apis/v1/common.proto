@@ -56,6 +56,8 @@ message CreateMetadata {
     map<string, string> labels = 4;
     // ownership of the object
     Ownership ownership = 5;
+    // uid of the object
+    string uid = 6;
 }
 
 // Ownership information for objects(eg: backup object, schedule object).
@@ -116,4 +118,9 @@ message Ownership {
     // TODO: Instead of PublicAccessControl, can we just set '*' in
     // collaborators with required permission?
     PublicAccessControl public = 4;
+}
+
+message ObjectRef {
+    string name = 1;
+    string uid = 2;
 }

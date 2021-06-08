@@ -26,7 +26,7 @@ type PackageSpec struct {
 	ID      string
 	Name    string
 	PkgPath string
-	// Errors that occured while building the import graph. These will
+	// Errors that occurred while building the import graph. These will
 	// primarily be parse errors or failure to resolve imports, but
 	// may also be other errors.
 	Errors          []packages.Error
@@ -37,6 +37,7 @@ type PackageSpec struct {
 	Imports         map[string]*PackageSpec
 	TypesSizes      types.Sizes
 	Hash            cache.ActionID
+	Module          *packages.Module
 
 	Config config.Config
 }
@@ -48,7 +49,7 @@ func (spec *PackageSpec) String() string {
 type Package struct {
 	*PackageSpec
 
-	// Errors that occured while loading the package. These will
+	// Errors that occurred while loading the package. These will
 	// primarily be parse or type errors, but may also be lower-level
 	// failures such as file-system ones.
 	Errors    []packages.Error
@@ -63,7 +64,7 @@ type Package struct {
 // syntax trees.
 //
 // The provided config can set any setting with the exception of Mode.
-func Graph(cfg *packages.Config, patterns ...string) ([]*PackageSpec, error) {
+func Graph(c *cache.Cache, cfg *packages.Config, patterns ...string) ([]*PackageSpec, error) {
 	var dcfg packages.Config
 	if cfg != nil {
 		dcfg = *cfg
@@ -74,7 +75,8 @@ func Graph(cfg *packages.Config, patterns ...string) ([]*PackageSpec, error) {
 		packages.NeedExportsFile |
 		packages.NeedFiles |
 		packages.NeedCompiledGoFiles |
-		packages.NeedTypesSizes
+		packages.NeedTypesSizes |
+		packages.NeedModule
 	pkgs, err := packages.Load(&dcfg, patterns...)
 	if err != nil {
 		return nil, err
@@ -93,6 +95,7 @@ func Graph(cfg *packages.Config, patterns ...string) ([]*PackageSpec, error) {
 			ExportFile:      pkg.ExportFile,
 			Imports:         map[string]*PackageSpec{},
 			TypesSizes:      pkg.TypesSizes,
+			Module:          pkg.Module,
 		}
 		for path, imp := range pkg.Imports {
 			spec.Imports[path] = m[imp]
@@ -106,7 +109,7 @@ func Graph(cfg *packages.Config, patterns ...string) ([]*PackageSpec, error) {
 		} else {
 			spec.Config = config.DefaultConfig
 		}
-		spec.Hash, err = computeHash(spec)
+		spec.Hash, err = computeHash(c, spec)
 		if err != nil {
 			spec.Errors = append(spec.Errors, convertError(err)...)
 		}
