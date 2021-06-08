@@ -1,486 +1,124 @@
+// Package lintcmd implements the frontend of an analysis runner.
+// It serves as the entry-point for the staticcheck command, and can also be used to implement custom linters that behave like staticcheck.
 package lintcmd
 
 import (
-	"crypto/sha256"
 	"flag"
 	"fmt"
-	"go/build"
-	"go/token"
-	"io"
 	"log"
 	"os"
-	"os/signal"
-	"path/filepath"
-	"regexp"
+	"reflect"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"honnef.co/go/tools/analysis/lint"
 	"honnef.co/go/tools/config"
 	"honnef.co/go/tools/go/loader"
-	"honnef.co/go/tools/internal/cache"
-	"honnef.co/go/tools/lintcmd/runner"
 	"honnef.co/go/tools/lintcmd/version"
-	"honnef.co/go/tools/unused"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/buildutil"
-	"golang.org/x/tools/go/packages"
 )
 
-type ignore interface {
-	Match(p problem) bool
+// Command represents a linter command line tool.
+type Command struct {
+	name           string
+	flags          *flag.FlagSet
+	analyzers      map[string]*lint.Analyzer
+	version        string
+	machineVersion string
 }
 
-type lineIgnore struct {
-	File    string
-	Line    int
-	Checks  []string
-	Matched bool
-	Pos     token.Position
-}
-
-func (li *lineIgnore) Match(p problem) bool {
-	pos := p.Position
-	if pos.Filename != li.File || pos.Line != li.Line {
-		return false
-	}
-	for _, c := range li.Checks {
-		if m, _ := filepath.Match(c, p.Category); m {
-			li.Matched = true
-			return true
-		}
-	}
-	return false
-}
-
-func (li *lineIgnore) String() string {
-	matched := "not matched"
-	if li.Matched {
-		matched = "matched"
-	}
-	return fmt.Sprintf("%s:%d %s (%s)", li.File, li.Line, strings.Join(li.Checks, ", "), matched)
-}
-
-type fileIgnore struct {
-	File   string
-	Checks []string
-}
-
-func (fi *fileIgnore) Match(p problem) bool {
-	if p.Position.Filename != fi.File {
-		return false
-	}
-	for _, c := range fi.Checks {
-		if m, _ := filepath.Match(c, p.Category); m {
-			return true
-		}
-	}
-	return false
-}
-
-type severity uint8
-
-const (
-	severityError severity = iota
-	severityWarning
-	severityIgnored
-)
-
-func (s severity) String() string {
-	switch s {
-	case severityError:
-		return "error"
-	case severityWarning:
-		return "warning"
-	case severityIgnored:
-		return "ignored"
-	default:
-		return fmt.Sprintf("Severity(%d)", s)
+// NewCommand returns a new Command.
+func NewCommand(name string) *Command {
+	return &Command{
+		name:           name,
+		flags:          flagSet(name),
+		analyzers:      map[string]*lint.Analyzer{},
+		version:        "devel",
+		machineVersion: "devel",
 	}
 }
 
-// problem represents a problem in some source code.
-type problem struct {
-	runner.Diagnostic
-	Severity severity
+// SetVersion sets the command's version.
+// It is divided into a human part and a machine part.
+// For example, Staticcheck 2020.2.1 had the human version "2020.2.1" and the machine version "v0.1.1".
+// If you only use Semver, you can set both parts to the same value.
+//
+// Calling this method is optional. Both versions default to "devel", and we'll attempt to deduce more version information from the Go module.
+func (cmd *Command) SetVersion(human, machine string) {
+	cmd.version = human
+	cmd.machineVersion = machine
 }
 
-func (p problem) equal(o problem) bool {
-	return p.Position == o.Position &&
-		p.End == o.End &&
-		p.Message == o.Message &&
-		p.Category == o.Category &&
-		p.Severity == o.Severity
+// FlagSet returns the command's flag set.
+// This can be used to add additional command line arguments.
+func (cmd *Command) FlagSet() *flag.FlagSet {
+	return cmd.flags
 }
 
-func (p *problem) String() string {
-	return fmt.Sprintf("%s (%s)", p.Message, p.Category)
-}
-
-// A linter lints Go source code.
-type linter struct {
-	Checkers []*analysis.Analyzer
-	Config   config.Config
-	Runner   *runner.Runner
-}
-
-func failed(res runner.Result) []problem {
-	var problems []problem
-
-	for _, e := range res.Errors {
-		switch e := e.(type) {
-		case packages.Error:
-			msg := e.Msg
-			if len(msg) != 0 && msg[0] == '\n' {
-				// TODO(dh): See https://github.com/golang/go/issues/32363
-				msg = msg[1:]
-			}
-
-			var posn token.Position
-			if e.Pos == "" {
-				// Under certain conditions (malformed package
-				// declarations, multiple packages in the same
-				// directory), go list emits an error on stderr
-				// instead of JSON. Those errors do not have
-				// associated position information in
-				// go/packages.Error, even though the output on
-				// stderr may contain it.
-				if p, n, err := parsePos(msg); err == nil {
-					if abs, err := filepath.Abs(p.Filename); err == nil {
-						p.Filename = abs
-					}
-					posn = p
-					msg = msg[n+2:]
-				}
-			} else {
-				var err error
-				posn, _, err = parsePos(e.Pos)
-				if err != nil {
-					panic(fmt.Sprintf("internal error: %s", e))
-				}
-			}
-			p := problem{
-				Diagnostic: runner.Diagnostic{
-					Position: posn,
-					Message:  msg,
-					Category: "compile",
-				},
-				Severity: severityError,
-			}
-			problems = append(problems, p)
-		case error:
-			p := problem{
-				Diagnostic: runner.Diagnostic{
-					Position: token.Position{},
-					Message:  e.Error(),
-					Category: "compile",
-				},
-				Severity: severityError,
-			}
-			problems = append(problems, p)
-		}
+// AddAnalyzers adds analyzers to the command.
+// These are lint.Analyzer analyzers, which wrap analysis.Analyzer analyzers, bundling them with structured documentation.
+//
+// To add analysis.Analyzer analyzers without providing structured documentation, use AddBareAnalyzers.
+func (cmd *Command) AddAnalyzers(as ...*lint.Analyzer) {
+	for _, a := range as {
+		cmd.analyzers[a.Analyzer.Name] = a
 	}
-
-	return problems
 }
 
-type unusedKey struct {
-	pkgPath string
-	base    string
-	line    int
-	name    string
-}
-
-type unusedPair struct {
-	key unusedKey
-	obj unused.SerializedObject
-}
-
-func success(allowedChecks map[string]bool, res runner.ResultData) []problem {
-	diags := res.Diagnostics
-	var problems []problem
-	for _, diag := range diags {
-		if !allowedChecks[diag.Category] {
-			continue
-		}
-		problems = append(problems, problem{Diagnostic: diag})
-	}
-	return problems
-}
-
-func filterIgnored(problems []problem, res runner.ResultData, allowedAnalyzers map[string]bool) ([]problem, error) {
-	couldveMatched := func(ig *lineIgnore) bool {
-		for _, c := range ig.Checks {
-			if c == "U1000" {
-				// We never want to flag ignores for U1000,
-				// because U1000 isn't local to a single
-				// package. For example, an identifier may
-				// only be used by tests, in which case an
-				// ignore would only fire when not analyzing
-				// tests. To avoid spurious "useless ignore"
-				// warnings, just never flag U1000.
-				return false
-			}
-
-			// Even though the runner always runs all analyzers, we
-			// still only flag unmatched ignores for the set of
-			// analyzers the user has expressed interest in. That way,
-			// `staticcheck -checks=SA1000` won't complain about an
-			// unmatched ignore for an unrelated check.
-			if allowedAnalyzers[c] {
-				return true
-			}
+// AddBareAnalyzers adds bare analyzers to the command.
+func (cmd *Command) AddBareAnalyzers(as ...*analysis.Analyzer) {
+	for _, a := range as {
+		var title, text string
+		if idx := strings.Index(a.Doc, "\n\n"); idx > -1 {
+			title = a.Doc[:idx]
+			text = a.Doc[idx+2:]
 		}
 
-		return false
-	}
-
-	ignores, moreProblems := parseDirectives(res.Directives)
-
-	for _, ig := range ignores {
-		for i := range problems {
-			p := &problems[i]
-			if ig.Match(*p) {
-				p.Severity = severityIgnored
-			}
+		doc := &lint.Documentation{
+			Title:    title,
+			Text:     text,
+			Severity: lint.SeverityWarning,
 		}
 
-		if ig, ok := ig.(*lineIgnore); ok && !ig.Matched && couldveMatched(ig) {
-			p := problem{
-				Diagnostic: runner.Diagnostic{
-					Position: ig.Pos,
-					Message:  "this linter directive didn't match anything; should it be removed?",
-					Category: "staticcheck",
-				},
-			}
-			moreProblems = append(moreProblems, p)
+		cmd.analyzers[a.Name] = &lint.Analyzer{
+			Doc:      doc,
+			Analyzer: a,
 		}
 	}
-
-	return append(problems, moreProblems...), nil
 }
 
-func newLinter(cfg config.Config) (*linter, error) {
-	r, err := runner.New(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return &linter{
-		Config: cfg,
-		Runner: r,
-	}, nil
-}
+func flagSet(name string) *flag.FlagSet {
+	flags := flag.NewFlagSet("", flag.ExitOnError)
+	flags.Usage = usage(name, flags)
+	flags.String("tags", "", "List of `build tags`")
+	flags.Bool("tests", true, "Include tests")
+	flags.Bool("version", false, "Print version and exit")
+	flags.Bool("show-ignored", false, "Don't filter ignored problems")
+	flags.String("f", "text", "Output `format` (valid choices are 'stylish', 'text' and 'json')")
+	flags.String("explain", "", "Print description of `check`")
+	flags.Bool("list-checks", false, "List all available checks")
 
-func (l *linter) SetGoVersion(n int) {
-	l.Runner.GoVersion = n
-}
+	flags.String("debug.cpuprofile", "", "Write CPU profile to `file`")
+	flags.String("debug.memprofile", "", "Write memory profile to `file`")
+	flags.Bool("debug.version", false, "Print detailed version information about this program")
+	flags.Bool("debug.no-compile-errors", false, "Don't print compile errors")
+	flags.String("debug.measure-analyzers", "", "Write analysis measurements to `file`. `file` will be opened for appending if it already exists.")
+	flags.String("debug.trace", "", "Write trace to `file`")
 
-func (l *linter) Lint(cfg *packages.Config, patterns []string) (problems []problem, warnings []string, err error) {
-	results, err := l.Runner.Run(cfg, l.Checkers, patterns)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if len(results) == 0 && err == nil {
-		// TODO(dh): emulate Go's behavior more closely once we have
-		// access to go list's Match field.
-		for _, pattern := range patterns {
-			fmt.Fprintf(os.Stderr, "warning: %q matched no packages\n", pattern)
-		}
-	}
-
-	analyzerNames := make([]string, len(l.Checkers))
-	for i, a := range l.Checkers {
-		analyzerNames[i] = a.Name
-	}
-
-	used := map[unusedKey]bool{}
-	var unuseds []unusedPair
-	for _, res := range results {
-		if len(res.Errors) > 0 && !res.Failed {
-			panic("package has errors but isn't marked as failed")
-		}
-		if res.Failed {
-			problems = append(problems, failed(res)...)
-		} else {
-			if res.Skipped {
-				warnings = append(warnings, fmt.Sprintf("skipped package %s because it is too large", res.Package))
-				continue
-			}
-
-			if !res.Initial {
-				continue
-			}
-
-			allowedAnalyzers := filterAnalyzerNames(analyzerNames, res.Config.Checks)
-			resd, err := res.Load()
-			if err != nil {
-				return nil, nil, err
-			}
-			ps := success(allowedAnalyzers, resd)
-			filtered, err := filterIgnored(ps, resd, allowedAnalyzers)
-			if err != nil {
-				return nil, nil, err
-			}
-			problems = append(problems, filtered...)
-
-			for _, obj := range resd.Unused.Used {
-				// FIXME(dh): pick the object whose filename does not include $GOROOT
-				key := unusedKey{
-					pkgPath: res.Package.PkgPath,
-					base:    filepath.Base(obj.Position.Filename),
-					line:    obj.Position.Line,
-					name:    obj.Name,
-				}
-				used[key] = true
-			}
-
-			if allowedAnalyzers["U1000"] {
-				for _, obj := range resd.Unused.Unused {
-					key := unusedKey{
-						pkgPath: res.Package.PkgPath,
-						base:    filepath.Base(obj.Position.Filename),
-						line:    obj.Position.Line,
-						name:    obj.Name,
-					}
-					unuseds = append(unuseds, unusedPair{key, obj})
-					if _, ok := used[key]; !ok {
-						used[key] = false
-					}
-				}
-			}
-		}
-	}
-
-	for _, uo := range unuseds {
-		if used[uo.key] {
-			continue
-		}
-		if uo.obj.InGenerated {
-			continue
-		}
-		problems = append(problems, problem{
-			Diagnostic: runner.Diagnostic{
-				Position: uo.obj.DisplayPosition,
-				Message:  fmt.Sprintf("%s %s is unused", uo.obj.Kind, uo.obj.Name),
-				Category: "U1000",
-			},
-		})
-	}
-
-	if len(problems) == 0 {
-		return nil, warnings, nil
-	}
-
-	sort.Slice(problems, func(i, j int) bool {
-		pi := problems[i].Position
-		pj := problems[j].Position
-
-		if pi.Filename != pj.Filename {
-			return pi.Filename < pj.Filename
-		}
-		if pi.Line != pj.Line {
-			return pi.Line < pj.Line
-		}
-		if pi.Column != pj.Column {
-			return pi.Column < pj.Column
-		}
-
-		return problems[i].Message < problems[j].Message
-	})
-
-	var out []problem
-	out = append(out, problems[0])
-	for i, p := range problems[1:] {
-		// We may encounter duplicate problems because one file
-		// can be part of many packages.
-		if !problems[i].equal(p) {
-			out = append(out, p)
-		}
-	}
-	return out, warnings, nil
-}
-
-func filterAnalyzerNames(analyzers []string, checks []string) map[string]bool {
-	allowedChecks := map[string]bool{}
-
-	for _, check := range checks {
-		b := true
-		if len(check) > 1 && check[0] == '-' {
-			b = false
-			check = check[1:]
-		}
-		if check == "*" || check == "all" {
-			// Match all
-			for _, c := range analyzers {
-				allowedChecks[c] = b
-			}
-		} else if strings.HasSuffix(check, "*") {
-			// Glob
-			prefix := check[:len(check)-1]
-			isCat := strings.IndexFunc(prefix, func(r rune) bool { return unicode.IsNumber(r) }) == -1
-
-			for _, a := range analyzers {
-				idx := strings.IndexFunc(a, func(r rune) bool { return unicode.IsNumber(r) })
-				if isCat {
-					// Glob is S*, which should match S1000 but not SA1000
-					cat := a[:idx]
-					if prefix == cat {
-						allowedChecks[a] = b
-					}
-				} else {
-					// Glob is S1*
-					if strings.HasPrefix(a, prefix) {
-						allowedChecks[a] = b
-					}
-				}
-			}
-		} else {
-			// Literal check name
-			allowedChecks[check] = b
-		}
-	}
-	return allowedChecks
-}
-
-var posRe = regexp.MustCompile(`^(.+?):(\d+)(?::(\d+)?)?`)
-
-func parsePos(pos string) (token.Position, int, error) {
-	if pos == "-" || pos == "" {
-		return token.Position{}, 0, nil
-	}
-	parts := posRe.FindStringSubmatch(pos)
-	if parts == nil {
-		return token.Position{}, 0, fmt.Errorf("internal error: malformed position %q", pos)
-	}
-	file := parts[1]
-	line, _ := strconv.Atoi(parts[2])
-	col, _ := strconv.Atoi(parts[3])
-	return token.Position{
-		Filename: file,
-		Line:     line,
-		Column:   col,
-	}, len(parts[0]), nil
-}
-
-func usage(name string, flags *flag.FlagSet) func() {
-	return func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", name)
-		fmt.Fprintf(os.Stderr, "\t%s [flags] # runs on package in current directory\n", name)
-		fmt.Fprintf(os.Stderr, "\t%s [flags] packages\n", name)
-		fmt.Fprintf(os.Stderr, "\t%s [flags] directory\n", name)
-		fmt.Fprintf(os.Stderr, "\t%s [flags] files... # must be a single package\n", name)
-		fmt.Fprintf(os.Stderr, "Flags:\n")
-		flags.PrintDefaults()
-	}
+	checks := list{"inherit"}
+	fail := list{"all"}
+	version := versionFlag("module")
+	flags.Var(&checks, "checks", "Comma-separated list of `checks` to enable.")
+	flags.Var(&fail, "fail", "Comma-separated list of `checks` that can cause a non-zero exit status.")
+	flags.Var(&version, "go", "Target Go `version` in the format '1.x', or the literal 'module' to use the module's Go version")
+	return flags
 }
 
 type list []string
@@ -499,56 +137,48 @@ func (list *list) Set(s string) error {
 	return nil
 }
 
-func FlagSet(name string) *flag.FlagSet {
-	flags := flag.NewFlagSet("", flag.ExitOnError)
-	flags.Usage = usage(name, flags)
-	flags.String("tags", "", "List of `build tags`")
-	flags.Bool("tests", true, "Include tests")
-	flags.Bool("version", false, "Print version and exit")
-	flags.Bool("show-ignored", false, "Don't filter ignored problems")
-	flags.String("f", "text", "Output `format` (valid choices are 'stylish', 'text' and 'json')")
-	flags.String("explain", "", "Print description of `check`")
+type versionFlag string
 
-	flags.String("debug.cpuprofile", "", "Write CPU profile to `file`")
-	flags.String("debug.memprofile", "", "Write memory profile to `file`")
-	flags.Bool("debug.version", false, "Print detailed version information about this program")
-	flags.Bool("debug.no-compile-errors", false, "Don't print compile errors")
-	flags.String("debug.measure-analyzers", "", "Write analysis measurements to `file`. `file` will be opened for appending if it already exists.")
-	flags.String("debug.trace", "", "Write trace to `file`")
-
-	checks := list{"inherit"}
-	fail := list{"all"}
-	flags.Var(&checks, "checks", "Comma-separated list of `checks` to enable.")
-	flags.Var(&fail, "fail", "Comma-separated list of `checks` that can cause a non-zero exit status.")
-
-	tags := build.Default.ReleaseTags
-	v := tags[len(tags)-1][2:]
-	version := new(lint.VersionFlag)
-	if err := version.Set(v); err != nil {
-		panic(fmt.Sprintf("internal error: %s", err))
-	}
-
-	flags.Var(version, "go", "Target Go `version` in the format '1.x'")
-	return flags
+func (v *versionFlag) String() string {
+	return fmt.Sprintf("%q", string(*v))
 }
 
-func findCheck(cs []*analysis.Analyzer, check string) (*analysis.Analyzer, bool) {
-	for _, c := range cs {
-		if c.Name == check {
-			return c, true
+func (v *versionFlag) Set(s string) error {
+	if s == "module" {
+		*v = "module"
+	} else {
+		var vf lint.VersionFlag
+		if err := vf.Set(s); err != nil {
+			return err
 		}
+		*v = versionFlag(s)
 	}
-	return nil, false
+	return nil
 }
 
-func ProcessFlagSet(cs []*analysis.Analyzer, fs *flag.FlagSet) {
+// ParseFlags parses command line flags.
+// It must be called before calling Run.
+// After calling ParseFlags, the values of flags can be accessed.
+//
+// Example:
+//
+// 	cmd.ParseFlags(os.Args[1:])
+func (cmd *Command) ParseFlags(args []string) {
+	cmd.flags.Parse(args)
+}
+
+// Run runs all registered analyzers and reports their findings.
+// It always calls os.Exit and does not return.
+func (cmd *Command) Run() {
+	fs := cmd.flags
 	tags := fs.Lookup("tags").Value.(flag.Getter).Get().(string)
 	tests := fs.Lookup("tests").Value.(flag.Getter).Get().(bool)
-	goVersion := fs.Lookup("go").Value.(flag.Getter).Get().(int)
+	goVersion := string(*fs.Lookup("go").Value.(*versionFlag))
 	theFormatter := fs.Lookup("f").Value.(flag.Getter).Get().(string)
 	printVersion := fs.Lookup("version").Value.(flag.Getter).Get().(bool)
 	showIgnored := fs.Lookup("show-ignored").Value.(flag.Getter).Get().(bool)
 	explain := fs.Lookup("explain").Value.(flag.Getter).Get().(string)
+	listChecks := fs.Lookup("list-checks").Value.(flag.Getter).Get().(bool)
 
 	cpuProfile := fs.Lookup("debug.cpuprofile").Value.(flag.Getter).Get().(string)
 	memProfile := fs.Lookup("debug.memprofile").Value.(flag.Getter).Get().(string)
@@ -610,12 +240,31 @@ func ProcessFlagSet(cs []*analysis.Analyzer, fs *flag.FlagSet) {
 	}
 
 	if debugVersion {
-		version.Verbose()
+		version.Verbose(cmd.version, cmd.machineVersion)
+		exit(0)
+	}
+
+	cs := make([]*lint.Analyzer, 0, len(cmd.analyzers))
+	for _, a := range cmd.analyzers {
+		cs = append(cs, a)
+	}
+
+	if listChecks {
+		sort.Slice(cs, func(i, j int) bool {
+			return cs[i].Analyzer.Name < cs[j].Analyzer.Name
+		})
+		for _, c := range cs {
+			var title string
+			if c.Doc != nil {
+				title = c.Doc.Title
+			}
+			fmt.Printf("%s %s\n", c.Analyzer.Name, title)
+		}
 		exit(0)
 	}
 
 	if printVersion {
-		version.Print()
+		version.Print(cmd.version, cmd.machineVersion)
 		exit(0)
 	}
 
@@ -629,18 +278,17 @@ func ProcessFlagSet(cs []*analysis.Analyzer, fs *flag.FlagSet) {
 	}
 
 	if explain != "" {
-		var haystack []*analysis.Analyzer
-		haystack = append(haystack, cs...)
-		check, ok := findCheck(haystack, explain)
+		check, ok := cmd.analyzers[explain]
 		if !ok {
 			fmt.Fprintln(os.Stderr, "Couldn't find check", explain)
 			exit(1)
 		}
-		if check.Doc == "" {
+		if check.Analyzer.Doc == "" {
 			fmt.Fprintln(os.Stderr, explain, "has no documentation")
 			exit(1)
 		}
 		fmt.Println(check.Doc)
+		fmt.Println("Online documentation\n    https://staticcheck.io/docs/checks#" + check.Analyzer.Name)
 		exit(0)
 	}
 
@@ -652,6 +300,8 @@ func ProcessFlagSet(cs []*analysis.Analyzer, fs *flag.FlagSet) {
 		f = &stylishFormatter{W: os.Stdout}
 	case "json":
 		f = jsonFormatter{W: os.Stdout}
+	case "sarif":
+		f = &sarifFormatter{}
 	case "null":
 		f = nullFormatter{}
 	default:
@@ -684,11 +334,15 @@ func ProcessFlagSet(cs []*analysis.Analyzer, fs *flag.FlagSet) {
 	fail := *fs.Lookup("fail").Value.(*list)
 	analyzerNames := make([]string, len(cs))
 	for i, a := range cs {
-		analyzerNames[i] = a.Name
+		analyzerNames[i] = a.Analyzer.Name
 	}
 	shouldExit := filterAnalyzerNames(analyzerNames, fail)
 	shouldExit["staticcheck"] = true
 	shouldExit["compile"] = true
+
+	if f, ok := f.(complexFormatter); ok {
+		f.Start(cs)
+	}
 
 	for _, p := range ps {
 		if p.Category == "compile" && debugNoCompile {
@@ -710,101 +364,81 @@ func ProcessFlagSet(cs []*analysis.Analyzer, fs *flag.FlagSet) {
 		f.Stats(len(ps), numErrors, numWarnings, numIgnored)
 	}
 
+	if f, ok := f.(complexFormatter); ok {
+		f.End()
+	}
+
 	if numErrors > 0 {
 		exit(1)
 	}
 	exit(0)
 }
 
-type options struct {
-	Config config.Config
+func usage(name string, fs *flag.FlagSet) func() {
+	return func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [packages]\n", name)
 
-	Tags                     string
-	LintTests                bool
-	GoVersion                int
-	PrintAnalyzerMeasurement func(analysis *analysis.Analyzer, pkg *loader.PackageSpec, d time.Duration)
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Flags:")
+		printDefaults(fs)
+
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "For help about specifying packages, see 'go help packages'")
+	}
 }
 
-func computeSalt() ([]byte, error) {
-	if version.Version != "devel" {
-		return []byte(version.Version), nil
+// isZeroValue determines whether the string represents the zero
+// value for a flag.
+//
+// this function has been copied from the Go standard library's 'flag' package.
+func isZeroValue(f *flag.Flag, value string) bool {
+	// Build a zero value of the flag's Value type, and see if the
+	// result of calling its String method equals the value passed in.
+	// This works unless the Value type is itself an interface type.
+	typ := reflect.TypeOf(f.Value)
+	var z reflect.Value
+	if typ.Kind() == reflect.Ptr {
+		z = reflect.New(typ.Elem())
+	} else {
+		z = reflect.Zero(typ)
 	}
-	p, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-	f, err := os.Open(p)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return nil, err
-	}
-	return h.Sum(nil), nil
+	return value == z.Interface().(flag.Value).String()
 }
 
-func doLint(cs []*analysis.Analyzer, paths []string, opt *options) ([]problem, []string, error) {
-	salt, err := computeSalt()
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not compute salt for cache: %s", err)
-	}
-	cache.SetSalt(salt)
-
-	if opt == nil {
-		opt = &options{}
-	}
-
-	l, err := newLinter(opt.Config)
-	if err != nil {
-		return nil, nil, err
-	}
-	l.Checkers = cs
-	l.SetGoVersion(opt.GoVersion)
-	l.Runner.Stats.PrintAnalyzerMeasurement = opt.PrintAnalyzerMeasurement
-
-	cfg := &packages.Config{}
-	if opt.LintTests {
-		cfg.Tests = true
-	}
-	if opt.Tags != "" {
-		cfg.BuildFlags = append(cfg.BuildFlags, "-tags", opt.Tags)
-	}
-
-	printStats := func() {
-		// Individual stats are read atomically, but overall there
-		// is no synchronisation. For printing rough progress
-		// information, this doesn't matter.
-		switch l.Runner.Stats.State() {
-		case runner.StateInitializing:
-			fmt.Fprintln(os.Stderr, "Status: initializing")
-		case runner.StateLoadPackageGraph:
-			fmt.Fprintln(os.Stderr, "Status: loading package graph")
-		case runner.StateBuildActionGraph:
-			fmt.Fprintln(os.Stderr, "Status: building action graph")
-		case runner.StateProcessing:
-			fmt.Fprintf(os.Stderr, "Packages: %d/%d initial, %d/%d total; Workers: %d/%d\n",
-				l.Runner.Stats.ProcessedInitialPackages(),
-				l.Runner.Stats.InitialPackages(),
-				l.Runner.Stats.ProcessedPackages(),
-				l.Runner.Stats.TotalPackages(),
-				l.Runner.ActiveWorkers(),
-				l.Runner.TotalWorkers(),
-			)
-		case runner.StateFinalizing:
-			fmt.Fprintln(os.Stderr, "Status: finalizing")
+// this function has been copied from the Go standard library's 'flag' package and modified to skip debug flags.
+func printDefaults(fs *flag.FlagSet) {
+	fs.VisitAll(func(f *flag.Flag) {
+		// Don't print debug flags
+		if strings.HasPrefix(f.Name, "debug.") {
+			return
 		}
-	}
-	if len(infoSignals) > 0 {
-		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, infoSignals...)
-		defer signal.Stop(ch)
-		go func() {
-			for range ch {
-				printStats()
+
+		var b strings.Builder
+		fmt.Fprintf(&b, "  -%s", f.Name) // Two spaces before -; see next two comments.
+		name, usage := flag.UnquoteUsage(f)
+		if len(name) > 0 {
+			b.WriteString(" ")
+			b.WriteString(name)
+		}
+		// Boolean flags of one ASCII letter are so common we
+		// treat them specially, putting their usage on the same line.
+		if b.Len() <= 4 { // space, space, '-', 'x'.
+			b.WriteString("\t")
+		} else {
+			// Four spaces before the tab triggers good alignment
+			// for both 4- and 8-space tab stops.
+			b.WriteString("\n    \t")
+		}
+		b.WriteString(strings.ReplaceAll(usage, "\n", "\n    \t"))
+
+		if !isZeroValue(f, f.DefValue) {
+			if T := reflect.TypeOf(f.Value); T.Name() == "*stringValue" && T.PkgPath() == "flag" {
+				// put quotes on the value
+				fmt.Fprintf(&b, " (default %q)", f.DefValue)
+			} else {
+				fmt.Fprintf(&b, " (default %v)", f.DefValue)
 			}
-		}()
-	}
-	return l.Lint(cfg, paths)
+		}
+		fmt.Fprint(fs.Output(), b.String(), "\n")
+	})
 }

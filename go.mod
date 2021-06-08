@@ -14,8 +14,8 @@ require (
 	github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b // indirect
 	github.com/fatih/color v1.7.0
 	github.com/gambol99/go-marathon v0.7.1
-	github.com/gogo/googleapis v1.4.0 // indirect
 	github.com/golang/protobuf v1.5.2
+	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
 	github.com/hashicorp/go-version v1.1.0
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
@@ -32,7 +32,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240 // indirect
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
-	github.com/portworx/px-backup-api v1.2.1-0.20210422105810-9029542da5fb
+	github.com/portworx/px-backup-api v1.2.1-0.20210608134439-01a3059d49ea
 	github.com/portworx/sched-ops v0.0.0-20200723032629-257aba0944dc
 	github.com/sendgrid/rest v2.6.0+incompatible // indirect
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
@@ -40,8 +40,8 @@ require (
 	github.com/stretchr/testify v1.5.1
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/net v0.0.0-20210316092652-d523dce5a7f4
-	google.golang.org/grpc v1.36.1
+	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
+	google.golang.org/grpc v1.38.0
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000 // indirect

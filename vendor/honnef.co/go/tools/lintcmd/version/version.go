@@ -7,14 +7,14 @@ import (
 	"runtime"
 )
 
-const Version = "2020.2.3"
-const MachineVersion = "v0.1.3"
+const Version = "2021.1"
+const MachineVersion = "v0.2.0"
 
 // version returns a version descriptor and reports whether the
 // version is a known release.
-func version() (human, machine string, known bool) {
-	if Version != "devel" {
-		return Version, MachineVersion, true
+func version(human, machine string) (human_, machine_ string, known bool) {
+	if human != "devel" {
+		return human, machine, true
 	}
 	v, ok := buildInfoVersion()
 	if ok {
@@ -23,8 +23,8 @@ func version() (human, machine string, known bool) {
 	return "devel", "", false
 }
 
-func Print() {
-	human, machine, release := version()
+func Print(human, machine string) {
+	human, machine, release := version(human, machine)
 
 	if release {
 		fmt.Printf("%s %s (%s)\n", filepath.Base(os.Args[0]), human, machine)
@@ -35,8 +35,8 @@ func Print() {
 	}
 }
 
-func Verbose() {
-	Print()
+func Verbose(human, machine string) {
+	Print(human, machine)
 	fmt.Println()
 	fmt.Println("Compiled with Go version:", runtime.Version())
 	printBuildInfo()

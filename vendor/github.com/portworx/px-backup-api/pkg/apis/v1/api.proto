@@ -25,6 +25,7 @@ message ClusterInfo {
         (gogoproto.jsontag) = "kubeconfig",
         (gogoproto.moretags) = "secure:\"true\""
     ];
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 3;
     StatusInfo status = 4;
     // delete_backups will determine whether the backups
@@ -34,8 +35,9 @@ message ClusterInfo {
     // belong to given cluster needs to be deleted or not.
     bool delete_restores = 6;
     string stork_version = 7;
+    ObjectRef cloud_credential_ref = 8;
 
-    // Message for maintaing status of the cluster.
+    // Message for maintaining status of the cluster.
     message StatusInfo {
         enum Status {
             Invalid = 0;
@@ -203,11 +205,12 @@ message SchedulePolicyObject {
 }
 
 message BackupScheduleInfo {
+    // schedule_policy is deprecated, not to be used.
     string schedule_policy = 1;
     bool suspend = 2;
     ReclaimPolicyType reclaim_policy = 3;
     map<string, StatusInfoList> backup_status = 4;
-    // Name of BackupLocation
+    // Name of BackupLocation, is deprecated. Not to be used.
     string backup_location = 5;
     // Name of Cluster
     string cluster = 6;
@@ -215,6 +218,7 @@ message BackupScheduleInfo {
     repeated string namespaces = 7;
     // Label selectors to choose resources
     map<string, string> label_selectors = 8;
+    // pre_exec_rule and post_exec_rule is deprecated. Not to be used.
     string pre_exec_rule = 9;
     string post_exec_rule = 10;
     bool delete_backups = 11;
@@ -224,6 +228,10 @@ message BackupScheduleInfo {
     string stork_version = 15;
     string csi_snapshot_class_name = 16;
     repeated string resource_types = 17;
+    ObjectRef schedule_policy_ref = 18;
+    ObjectRef backup_location_ref = 19;
+    ObjectRef pre_exec_rule_ref = 20;
+    ObjectRef post_exec_rule_ref = 21;
 
     message SuspendedBy {
         Source source = 1;
@@ -282,12 +290,14 @@ message BackupLocationInfo {
         (gogoproto.jsontag) = "encryptionkey",
         (gogoproto.moretags) = "secure:\"true\""
     ];
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 4;
     StatusInfo status = 5;
     bool delete_backups = 6;
     bool validate_cloud_credential = 7;
+    ObjectRef cloud_credential_ref = 8;
     oneof config { S3Config s3_config = 100; }
-    // Message for maintaing status of the object.
+    // Message for maintaining status of the object.
     message StatusInfo {
         enum Status {
             Invalid = 0;
@@ -315,7 +325,7 @@ message ResourceInfo {
 }
 
 message BackupInfo {
-    // Name of BackupLocation
+    // Name of BackupLocation, deprecated. Not to be used.
     string backup_location = 1;
     // Name of Cluster
     string cluster = 2;
@@ -328,6 +338,7 @@ message BackupInfo {
     repeated Volume volumes = 7;
     string backup_path = 8;
     Stage stage = 9;
+    // pre_exec_rule and post_exec_rule are deprecated, not to be used,
     string pre_exec_rule = 10;
     string post_exec_rule = 11;
     // Name of the backup schedule, if the backup was taken by schedule through
@@ -336,13 +347,18 @@ message BackupInfo {
     BackupSchedule backup_schedule = 12;
     string cr_name = 13;
     uint64 total_size = 14;
-    // Reference to cloud credential object used for backup
+    // Reference to cloud credential object used for backup.
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 15;
     repeated ResourceInfo include_resources = 16;
     uint64 resource_count = 17;
     string stork_version = 18;
     string csi_snapshot_class_name = 19;
     repeated string resource_types = 20;
+    ObjectRef backup_location_ref = 21;
+    ObjectRef pre_exec_rule_ref = 22;
+    ObjectRef post_exec_rule_ref = 23;
+    ObjectRef cloud_credential_ref = 24;
 
     enum Stage {
         Invalid = 0;
@@ -374,7 +390,7 @@ message BackupInfo {
         uint64 actual_size = 10;
     }
 
-    // Message for maintaing status of the object.
+    // Message for maintaining status of the object.
     message StatusInfo {
         enum Status {
             Invalid = 0;
@@ -438,7 +454,8 @@ message ReplacePolicy {
 message RestoreInfo {
     // Name of backup to restore from
     string backup = 1;
-    // Name of backup location to restore from
+    // Name of backup location to restore from.
+    // backup_location is deprecated, not to be used.
     string backup_location = 2;
     // Label selectors to choose resources
     map<string, string> label_selectors = 3;
@@ -457,6 +474,7 @@ message RestoreInfo {
     repeated ResourceInfo include_resources = 12;
     uint64 resource_count = 13;
     string stork_version = 14;
+    ObjectRef backup_location_ref = 15;
 
     message RestoredResource {
         string name = 1;
@@ -479,7 +497,7 @@ message RestoreInfo {
         uint64 total_size = 9;
     }
 
-    // Message for maintaing status of the object.
+    // Message for maintaining status of the object.
     message StatusInfo {
         enum Status {
             Invalid = 0;
@@ -625,6 +643,7 @@ message SchedulePolicyEnumerateResponse {
 message SchedulePolicyInspectRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 // Define SchedulePolicyInspectResponse struct
 message SchedulePolicyInspectResponse {
@@ -634,15 +653,16 @@ message SchedulePolicyInspectResponse {
 message SchedulePolicyDeleteRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 // Define SchedulePolicyDeleteResponse struct
 message SchedulePolicyDeleteResponse {}
 
 message SchedulePolicyOwnershipUpdateRequest {
     string org_id = 1;
-    // Schedule policy name
     string name = 2;
     Ownership ownership = 3;
+    string uid = 4;
 }
 
 message SchedulePolicyOwnershipUpdateResponse {}
@@ -694,9 +714,10 @@ service BackupSchedule {
 // Define BackupScheduleCreateRequest struct
 message BackupScheduleCreateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    // schedule_policy is deprecated, not to be used
     string schedule_policy = 2;
     BackupScheduleInfo.ReclaimPolicyType reclaim_policy = 3;
-    // Name of BackupLocation
+    // Name of BackupLocation, is deprecated. Not to be used
     string backup_location = 4;
     // Name of Cluster
     string cluster = 5;
@@ -704,6 +725,7 @@ message BackupScheduleCreateRequest {
     repeated string namespaces = 6;
     // Label selectors to choose resources
     map<string, string> label_selectors = 7;
+    // pre_exec_rule and post_exec_rule are deprecated. Not to be used.
     string pre_exec_rule = 8;
     string post_exec_rule = 9;
     // List of resources to backup (optional)
@@ -712,6 +734,10 @@ message BackupScheduleCreateRequest {
     string csi_snapshot_class_name = 11;
     // List of resource types to backup (optional)
     repeated string resource_types = 12;
+    ObjectRef schedule_policy_ref = 13;
+    ObjectRef backup_location_ref = 14;
+    ObjectRef pre_exec_rule_ref = 15;
+    ObjectRef post_exec_rule_ref = 16;
 }
 
 // Define BackupScheduleCreateResponse struct
@@ -720,9 +746,10 @@ message BackupScheduleCreateResponse {}
 // Define BackupScheduleUpdateRequest struct
 message BackupScheduleUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    // schedule_policy is deprecated, not to be used
     string schedule_policy = 2;
     BackupScheduleInfo.ReclaimPolicyType reclaim_policy = 3;
-    // Name of BackupLocation
+    // Name of BackupLocation, is deprecated. Not to be used
     string backup_location = 4;
     // Name of Cluster
     string cluster = 5;
@@ -730,6 +757,7 @@ message BackupScheduleUpdateRequest {
     repeated string namespaces = 6;
     // Label selectors to choose resources
     map<string, string> label_selectors = 7;
+    // pre_exec_rule and post_exec_rule are deprecated. Not to be used.
     string pre_exec_rule = 8;
     string post_exec_rule = 9;
     bool suspend = 10;
@@ -737,6 +765,10 @@ message BackupScheduleUpdateRequest {
     repeated ResourceInfo include_resources = 11;
     // Snapshot class name to use for backup schedule (optional)
     string csi_snapshot_class_name = 12;
+    ObjectRef schedule_policy_ref = 13;
+    ObjectRef backup_location_ref = 14;
+    ObjectRef pre_exec_rule_ref = 15;
+    ObjectRef post_exec_rule_ref = 16;
 }
 
 // Define BackupScheduleUpdateResponse struct
@@ -749,7 +781,9 @@ message BackupScheduleEnumerateRequest {
     // Backuplocation name.
     // Enumerate will return list of backupschedule that
     // uses this backuplocation
+    // backup_location is deprecated, not to be used.
     string backup_location = 3;
+    ObjectRef backup_location_ref = 4;
 }
 
 // Define BackupScheduleEnumerateResponse struct
@@ -761,6 +795,7 @@ message BackupScheduleEnumerateResponse {
 message BackupScheduleInspectRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define BackupScheduleInspectResponse struct
@@ -775,6 +810,7 @@ message BackupScheduleDeleteRequest {
     // delete_backups indicates whether the cloud backup files need to
     // be deleted or retained.
     bool delete_backups = 3;
+    string uid = 4;
 }
 
 // Define BackupScheduleDeleteResponse struct
@@ -828,7 +864,9 @@ message ClusterCreateRequest {
         (gogoproto.jsontag) = "kubeconfig",
         (gogoproto.moretags) = "secure:\"true\""
     ];
+    // cloud_credential_ref is deprecated, not to be used.
     string cloud_credential = 4;
+    ObjectRef cloud_credential_ref = 5;
 }
 
 // Define ClusterCreateResponse struct
@@ -842,7 +880,9 @@ message ClusterUpdateRequest {
         (gogoproto.jsontag) = "kubeconfig",
         (gogoproto.moretags) = "secure:\"true\""
     ];
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 4;
+    ObjectRef cloud_credential_ref = 5;
 }
 
 // Define ClusterUpdateResponse struct
@@ -857,7 +897,9 @@ message ClusterEnumerateRequest {
     // cloud credential name.
     // Enumerate will return list of cluster that
     // uses this cloud credential
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 4;
+    ObjectRef cloud_credential_ref = 5;
 }
 
 // Define ClusterEnumerateResponse struct
@@ -975,6 +1017,7 @@ message CloudCredentialInspectRequest {
     string org_id = 1;
     string name = 2;
     bool include_secrets = 3;
+    string uid = 4;
 }
 
 // Define CloudCredentialInspectResponse struct
@@ -986,6 +1029,7 @@ message CloudCredentialInspectResponse {
 message CloudCredentialDeleteRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define CloudCredentialInspectResponse struct
@@ -993,9 +1037,10 @@ message CloudCredentialDeleteResponse {}
 
 message CloudCredentialOwnershipUpdateRequest {
     string org_id = 1;
-    // Cloud credential name to be updated
+    // Cloud credential name to be updated.
     string name = 2;
     Ownership ownership = 3;
+    string uid = 4;
 }
 
 message CloudCredentialOwnershipUpdateResponse {}
@@ -1088,7 +1133,9 @@ message BackupLocationEnumerateRequest {
     // cloud credential name.
     // Enumerate will return list of backuplocation that
     // uses this cloud credential
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 3;
+    ObjectRef cloud_credential_ref = 4;
 }
 
 // Define BackupLocationEnumerateResponse struct
@@ -1100,6 +1147,7 @@ message BackupLocationEnumerateResponse {
 message BackupLocationInspectRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define BackupLocationInspectResponse struct
@@ -1114,6 +1162,7 @@ message BackupLocationDeleteRequest {
     // delete_backups indicates whether the cloud backup files need to
     // be deleted or retained.
     bool delete_backups = 3;
+    string uid = 4;
 }
 
 // Define BackupLocationDeleteResponse struct
@@ -1123,6 +1172,7 @@ message BackupLocationDeleteResponse {}
 message BackupLocationValidateRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define BackupLocationValidateResponse struct
@@ -1134,6 +1184,7 @@ message BackupLocationOwnershipUpdateRequest {
     // Backup location to be updated
     string name = 2;
     Ownership ownership = 3;
+    string uid = 4;
 }
 
 // Define BackupLocationOwnershipUpdateResponse struct
@@ -1202,6 +1253,7 @@ service Backup {
 message BackupCreateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
     // Name or UID + orgid of BackupLocation
+    // backup_location is deprecated, not to be used.
     string backup_location = 2;
     // Name or UID of Cluster
     string cluster = 3;
@@ -1210,8 +1262,10 @@ message BackupCreateRequest {
     // Label selectors to choose resources
     map<string, string> label_selectors = 5;
     // Pre check rule to run before backup is started
+    // deprecated, not to be used.
     string pre_exec_rule = 6;
     // Post check rule to run after backup is completed
+    // deprecated, not to be used.
     string post_exec_rule = 7;
     // List of resources to backup (optional)
     repeated ResourceInfo include_resources = 8;
@@ -1219,6 +1273,9 @@ message BackupCreateRequest {
     string csi_snapshot_class_name = 9;
     // List of resource types to backup (optional)
     repeated string resource_types = 10;
+    ObjectRef backup_location_ref = 11;
+    ObjectRef pre_exec_rule_ref = 12;
+    ObjectRef post_exec_rule_ref = 13;
 }
 
 // Response message structure for backup create
@@ -1228,13 +1285,15 @@ message BackupCreateResponse {}
 message BackupUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
     // Reference to cloud credential object used for backup
+    // cloud_credential is deprecated, not to be used.
     string cloud_credential = 2;
+    ObjectRef cloud_credential_ref = 3;
 }
 
 // Define BackupUpdateResponse struct
 message BackupUpdateResponse {}
 
-//  Request message strcuture for enumerate object
+//  Request message structure for enumerate object
 message BackupEnumerateRequest {
     // Organization id
     string org_id = 1;
@@ -1249,16 +1308,16 @@ message BackupEnumerateResponse {
     bool complete = 3;
 }
 
-// Request message strcuture for object inspect
+// Request message structure for object inspect
 message BackupInspectRequest {
     string name = 1;
     string org_id = 2;
 }
 
-// Response message strcuture for object inspect
+// Response message structure for object inspect
 message BackupInspectResponse { BackupObject backup = 1; }
 
-// Request message strcuture for object delete
+// Request message structure for object delete
 message BackupDeleteRequest {
     string name = 1;
     string org_id = 2;
@@ -1266,7 +1325,7 @@ message BackupDeleteRequest {
     string cluster = 3;
 }
 
-// Response message strcuture for object delete
+// Response message structure for object delete
 message BackupDeleteResponse {}
 
 service Restore {
@@ -1442,6 +1501,7 @@ message RuleEnumerateResponse { repeated RuleObject rules = 1; }
 message RuleInspectRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define RuleInspectResponse struct
@@ -1451,6 +1511,7 @@ message RuleInspectResponse { RuleObject rule = 1; }
 message RuleDeleteRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define RuleDeleteResponse struct
@@ -1462,6 +1523,7 @@ message RuleOwnershipUpdateRequest {
     // Rule to be updated
     string name = 2;
     Ownership ownership = 3;
+    string uid = 4;
 }
 
 // Define RuleOwnershipUpdateResponse struct
@@ -1758,6 +1820,7 @@ message RoleEnumerateResponse { repeated RoleObject roles = 1; }
 message RoleInspectRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define RoleInspectResponse struct
@@ -1767,6 +1830,7 @@ message RoleInspectResponse { RoleObject role = 1; }
 message RoleDeleteRequest {
     string org_id = 1;
     string name = 2;
+    string uid = 3;
 }
 
 // Define RoleDeleteResponse struct
