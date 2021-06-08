@@ -310,12 +310,14 @@ func (p *portworx) UpdateOwnershipBackupLocation(ctx context.Context, req *api.B
 func (p *portworx) WaitForBackupLocationDeletion(
 	ctx context.Context,
 	backupLocationName,
+	UID,
 	orgID string,
 	timeout time.Duration,
 	timeBeforeRetry time.Duration,
 ) error {
 	req := &api.BackupLocationInspectRequest{
 		Name:  backupLocationName,
+		Uid:   UID,
 		OrgId: orgID,
 	}
 	var blError error
