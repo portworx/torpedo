@@ -94,3 +94,13 @@ type ErrFailedToSystemCheck struct {
 func (e *ErrFailedToSystemCheck) Error() string {
 	return fmt.Sprintf("System check failed on: %v. Cause: %v", e.Node.Name, e.Cause)
 }
+
+// ErrFileNotFound error type when we fail to stat file
+type ErrFileNotFound struct {
+	File  string
+	Cause string
+}
+
+func (e *ErrFileNotFound) Error() string {
+	return fmt.Sprintf("File not found: %s. Cause: %v", e.File, e.Cause)
+}
