@@ -266,27 +266,6 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 
 	baseInterval := 10 * time.Minute
-	triggerInterval[RebootNode][10] = 1 * baseInterval
-	triggerInterval[RebootNode][9] = 2 * baseInterval
-	triggerInterval[RebootNode][8] = 3 * baseInterval
-	triggerInterval[RebootNode][7] = 4 * baseInterval
-	triggerInterval[RebootNode][6] = 5 * baseInterval
-	triggerInterval[RebootNode][5] = 6 * baseInterval // Default global chaos level, 3 hrs
-
-	triggerInterval[CrashVolDriver][10] = 1 * baseInterval
-	triggerInterval[CrashVolDriver][9] = 2 * baseInterval
-	triggerInterval[CrashVolDriver][8] = 3 * baseInterval
-	triggerInterval[CrashVolDriver][7] = 4 * baseInterval
-	triggerInterval[CrashVolDriver][6] = 5 * baseInterval
-	triggerInterval[CrashVolDriver][5] = 6 * baseInterval // Default global chaos level, 3 hrs
-
-	triggerInterval[RestartVolDriver][10] = 1 * baseInterval
-	triggerInterval[RestartVolDriver][9] = 2 * baseInterval
-	triggerInterval[RestartVolDriver][8] = 3 * baseInterval
-	triggerInterval[RestartVolDriver][7] = 4 * baseInterval
-	triggerInterval[RestartVolDriver][6] = 5 * baseInterval
-	triggerInterval[RestartVolDriver][5] = 6 * baseInterval // Default global chaos level, 3 hrs
-
 	triggerInterval[AppTaskDown][10] = 1 * baseInterval
 	triggerInterval[AppTaskDown][9] = 2 * baseInterval
 	triggerInterval[AppTaskDown][8] = 3 * baseInterval
@@ -294,7 +273,40 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown][6] = 5 * baseInterval
 	triggerInterval[AppTaskDown][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
-	baseInterval = 30 * time.Minute
+	baseInterval = 60 * time.Minute
+	triggerInterval[RebootNode][10] = 1 * baseInterval
+	triggerInterval[RebootNode][9] = 2 * baseInterval
+	triggerInterval[RebootNode][8] = 3 * baseInterval
+	triggerInterval[RebootNode][7] = 4 * baseInterval
+	triggerInterval[RebootNode][6] = 5 * baseInterval
+	triggerInterval[RebootNode][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[RebootNode][4] = 1 * baseInterval
+	triggerInterval[RebootNode][3] = 2 * baseInterval
+	triggerInterval[RebootNode][2] = 3 * baseInterval
+	triggerInterval[RebootNode][1] = 4 * baseInterval
+
+	triggerInterval[CrashVolDriver][10] = 1 * baseInterval
+	triggerInterval[CrashVolDriver][9] = 2 * baseInterval
+	triggerInterval[CrashVolDriver][8] = 3 * baseInterval
+	triggerInterval[CrashVolDriver][7] = 4 * baseInterval
+	triggerInterval[CrashVolDriver][6] = 5 * baseInterval
+	triggerInterval[CrashVolDriver][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[CrashVolDriver][4] = 7 * baseInterval
+	triggerInterval[CrashVolDriver][3] = 8 * baseInterval
+	triggerInterval[CrashVolDriver][2] = 9 * baseInterval
+	triggerInterval[CrashVolDriver][1] = 10 * baseInterval
+
+	triggerInterval[RestartVolDriver][10] = 1 * baseInterval
+	triggerInterval[RestartVolDriver][9] = 2 * baseInterval
+	triggerInterval[RestartVolDriver][8] = 3 * baseInterval
+	triggerInterval[RestartVolDriver][7] = 4 * baseInterval
+	triggerInterval[RestartVolDriver][6] = 5 * baseInterval
+	triggerInterval[RestartVolDriver][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[RestartVolDriver][4] = 7 * baseInterval
+	triggerInterval[RestartVolDriver][3] = 8 * baseInterval
+	triggerInterval[RestartVolDriver][2] = 9 * baseInterval
+	triggerInterval[RestartVolDriver][1] = 10 * baseInterval
+
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
 	triggerInterval[EmailReporter][8] = 3 * baseInterval
