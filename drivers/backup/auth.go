@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -18,11 +19,14 @@ import (
 
 const (
 	// PxCentralAdminUser px central admin
-	PxCentralAdminUser = "px-central-admin"
+	PxCentralAdminUser = "admin"
+	httpTimeout        = 1 * time.Minute
+)
+
+var (
+	keycloakEndPoint string
 	// PxCentralAdminPwd pwd for PxCentralAdminUser
-	PxCentralAdminPwd = "H@nK!0asew"
-	keycloakEndPoint  = "pxcentral-keycloak-http:80"
-	httpTimeout       = 1 * time.Minute
+	PxCentralAdminPwd string
 )
 
 const (
@@ -111,6 +115,21 @@ type KeycloakGroupToUser struct {
 	UserID  string `json:"userId"`
 	GroupID string `json:"groupId"`
 	Realm   string `json:"realm"`
+}
+
+// InitKeycloak finds the cluster IP of the keycloak server and assigns it to keycloakEndPoint.
+func InitKeycloak() error {
+	var err error
+	keycloakEndPoint, err = k8s.Instance().GetServiceEndpoint("px-backup-ui", "px-backup")
+	logrus.Infof("Updated keycloakEndpoint to %s", keycloakEndPoint)
+	return err
+}
+
+// InitAdminPassword assigns admin password from environment variable.
+func InitAdminPassword() bool {
+	var ok bool
+	PxCentralAdminPwd, ok = os.LookupEnv("PXBACKUP_PASSWORD")
+	return ok
 }
 
 // GetToken fetches JWT token for given user credentials

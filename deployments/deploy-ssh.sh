@@ -470,6 +470,8 @@ spec:
       value: "$IMAGE_PULL_USERNAME"
     - name: IMAGE_PULL_PASSWORD
       value: "$IMAGE_PULL_PASSWORD"
+    - name: PXBACKUP_PASSWORD
+      value: "$PXBACKUP_PASSWORD"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

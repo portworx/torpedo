@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup"
 	"os"
 	"strconv"
 	"strings"
@@ -23,7 +24,7 @@ import (
 const (
 	testTriggersConfigMap = "longevity-triggers"
 	configMapNS           = "default"
-	controllLoopSleepTime = time.Second * 15
+	controlLoopSleepTime  = time.Second * 15
 )
 
 var (
@@ -49,6 +50,9 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 	populateIntervals()
 	populateDisruptiveTriggers()
+	InitBackupAuth()
+	err := backup.UpdatePxBackupAdminSecret()
+	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = Describe("{Longevity}", func() {
@@ -56,13 +60,21 @@ var _ = Describe("{Longevity}", func() {
 	var triggerLock sync.Mutex
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerFunctions := map[string]func([]*scheduler.Context, *chan *EventRecord){
-		RebootNode:       TriggerRebootNodes,
-		RestartVolDriver: TriggerRestartVolDriver,
-		CrashVolDriver:   TriggerCrashVolDriver,
-		HAIncrease:       TriggerHAIncrease,
-		HADecrease:       TriggerHADecrease,
-		EmailReporter:    TriggerEmailReporter,
-		AppTaskDown:      TriggerAppTaskDown,
+		RebootNode:                      TriggerRebootNodes,
+		RestartVolDriver:                TriggerRestartVolDriver,
+		CrashVolDriver:                  TriggerCrashVolDriver,
+		HAIncrease:                      TriggerHAIncrease,
+		HADecrease:                      TriggerHADecrease,
+		EmailReporter:                   TriggerEmailReporter,
+		AppTaskDown:                     TriggerAppTaskDown,
+		BackupAllApps:                   TriggerBackupApps,
+		InspectScheduledBackups:         TriggerInspectScheduledBackup,
+		BackupSpecificResource:          TriggerBackupSpecificResource,
+		BackupSpecificResourceOnCluster: TriggerBackupSpecificResourceOnCluster,
+		TestInspectBackup:               TriggerInspectBackup,
+		TestInspectRestore:              TriggerInspectRestore,
+		TestDeleteBackup:                TriggerDeleteBackup,
+		RestoreNamespace:                TriggerRestoreNamespace,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -78,15 +90,25 @@ var _ = Describe("{Longevity}", func() {
 			ValidateApplications(contexts)
 		})
 
+		Step("Setup backup", func() {
+			// Set cluster context to cluster where torpedo is running
+			SetClusterContext("")
+			SetupBackup("backup-test")
+		})
+
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
 			for triggerType, triggerFunc := range triggerFunctions {
+				logrus.Infof("Adding trigger %s", triggerType)
 				go testTrigger(&wg, contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
 				wg.Add(1)
 			}
 		})
-		CollectEventRecords(&triggerEventsChan)
+		logrus.Infof("Finished registering triggers")
+		go CollectEventRecords(&triggerEventsChan)
 		wg.Wait()
+		close(triggerEventsChan)
+		logrus.Infof("Finished waiting")
 		Step("teardown all apps", func() {
 			for _, ctx := range contexts {
 				TearDownContext(ctx, nil)
@@ -135,7 +157,7 @@ func testTrigger(wg *sync.WaitGroup,
 			   triggerLoc.Lock()
 			} else {
 			   // If trigger is non-disruptive then just check if no other disruptive trigger is running or not
-			   // and release the lock immidiately so that other non-disruptive triggers can happen.
+			   // and release the lock immediately so that other non-disruptive triggers can happen.
 				triggerLoc.Lock()
 				logrus.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
 				triggerLoc.Unlock()
@@ -152,8 +174,9 @@ func testTrigger(wg *sync.WaitGroup,
 			lastInvocationTime = time.Now().Local()
 
 		}
-		time.Sleep(controllLoopSleepTime)
+		time.Sleep(controlLoopSleepTime)
 	}
+	logrus.Infof("Trigger %s finished", triggerType)
 }
 
 func watchConfigMap() error {
@@ -192,13 +215,21 @@ func watchConfigMap() error {
 
 func populateDisruptiveTriggers() {
 	disruptiveTriggers = map[string]bool{
-		HAIncrease:       true,
-		HADecrease:       false,
-		RestartVolDriver: false,
-		CrashVolDriver:   false,
-		RebootNode:       true,
-		EmailReporter:    false,
-		AppTaskDown:      false,
+		HAIncrease:                      true,
+		HADecrease:                      false,
+		RestartVolDriver:                false,
+		CrashVolDriver:                  false,
+		RebootNode:                      true,
+		EmailReporter:                   false,
+		AppTaskDown:                     false,
+		BackupAllApps:                   false,
+		InspectScheduledBackups:         false,
+		BackupSpecificResource:          false,
+		BackupSpecificResourceOnCluster: false,
+		TestInspectBackup:               false,
+		TestInspectRestore:              false,
+		TestDeleteBackup:                false,
+		RestoreNamespace:                false,
 	}
 }
 
@@ -222,7 +253,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 
 func setEmailRecipients(configData *map[string]string) {
 	// Get email recipients from configMap
-	if emailRecipients, ok := (*configData)[EmailRecipientsConfigMapField]; !ok {
+	if emailRecipients, ok := (*configData)[EmailRecipientsConfigMapField]; !ok { //emailRecipients, ok
 		logrus.Warnf("No [%s] field found in [%s] config-map in [%s] namespace."+
 			"Defaulting email recipients to [%s].\n",
 			EmailRecipientsConfigMapField, testTriggersConfigMap, configMapNS, DefaultEmailRecipient)
@@ -251,6 +282,9 @@ func populateTriggers(triggers *map[string]string) error {
 				testTriggersConfigMap, configMapNS, err)
 		}
 		chaosMap[triggerType] = chaosLevelInt
+		if triggerType == InspectScheduledBackups {
+			SetScheduledBackupInterval(triggerInterval[triggerType][chaosLevelInt])
+		}
 	}
 	return nil
 }
@@ -264,28 +298,92 @@ func populateIntervals() {
 	triggerInterval[HADecrease] = map[int]time.Duration{}
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
+	triggerInterval[BackupAllApps] = map[int]time.Duration{}
+	triggerInterval[InspectScheduledBackups] = map[int]time.Duration{}
+	triggerInterval[BackupSpecificResource] = map[int]time.Duration{}
+	triggerInterval[BackupSpecificResourceOnCluster] = map[int]time.Duration{}
+	triggerInterval[TestInspectRestore] = map[int]time.Duration{}
+	triggerInterval[TestInspectBackup] = map[int]time.Duration{}
+	triggerInterval[TestDeleteBackup] = map[int]time.Duration{}
+	triggerInterval[RestoreNamespace] = map[int]time.Duration{}
 
 	baseInterval := 10 * time.Minute
+	triggerInterval[BackupAllApps][10] = 1 * baseInterval
+	triggerInterval[BackupAllApps][9] = 2 * baseInterval
+	triggerInterval[BackupAllApps][8] = 3 * baseInterval
+	triggerInterval[BackupAllApps][7] = 4 * baseInterval
+	triggerInterval[BackupAllApps][6] = 5 * baseInterval
+	triggerInterval[BackupAllApps][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
+	triggerInterval[InspectScheduledBackups][10] = 1 * baseInterval
+	triggerInterval[InspectScheduledBackups][9] = 2 * baseInterval
+	triggerInterval[InspectScheduledBackups][8] = 3 * baseInterval
+	triggerInterval[InspectScheduledBackups][7] = 4 * baseInterval
+	triggerInterval[InspectScheduledBackups][6] = 5 * baseInterval
+	triggerInterval[InspectScheduledBackups][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
+	triggerInterval[TestInspectRestore][10] = 1 * baseInterval
+	triggerInterval[TestInspectRestore][9] = 2 * baseInterval
+	triggerInterval[TestInspectRestore][8] = 3 * baseInterval
+	triggerInterval[TestInspectRestore][7] = 4 * baseInterval
+	triggerInterval[TestInspectRestore][6] = 5 * baseInterval
+	triggerInterval[TestInspectRestore][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
+	triggerInterval[TestInspectBackup][10] = 1 * baseInterval
+	triggerInterval[TestInspectBackup][9] = 2 * baseInterval
+	triggerInterval[TestInspectBackup][8] = 3 * baseInterval
+	triggerInterval[TestInspectBackup][7] = 4 * baseInterval
+	triggerInterval[TestInspectBackup][6] = 5 * baseInterval
+	triggerInterval[TestInspectBackup][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
+	triggerInterval[TestDeleteBackup][10] = 1 * baseInterval
+	triggerInterval[TestDeleteBackup][9] = 2 * baseInterval
+	triggerInterval[TestDeleteBackup][8] = 3 * baseInterval
+	triggerInterval[TestDeleteBackup][7] = 4 * baseInterval
+	triggerInterval[TestDeleteBackup][6] = 5 * baseInterval
+	triggerInterval[TestDeleteBackup][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
+	triggerInterval[RestoreNamespace][10] = 1 * baseInterval
+	triggerInterval[RestoreNamespace][9] = 2 * baseInterval
+	triggerInterval[RestoreNamespace][8] = 3 * baseInterval
+	triggerInterval[RestoreNamespace][7] = 4 * baseInterval
+	triggerInterval[RestoreNamespace][6] = 5 * baseInterval
+	triggerInterval[RestoreNamespace][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
+	triggerInterval[BackupSpecificResource][10] = 1 * baseInterval
+	triggerInterval[BackupSpecificResource][9] = 2 * baseInterval
+	triggerInterval[BackupSpecificResource][8] = 3 * baseInterval
+	triggerInterval[BackupSpecificResource][7] = 4 * baseInterval
+	triggerInterval[BackupSpecificResource][6] = 5 * baseInterval
+	triggerInterval[BackupSpecificResource][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
+	triggerInterval[BackupSpecificResourceOnCluster][10] = 1 * baseInterval
+	triggerInterval[BackupSpecificResourceOnCluster][9] = 2 * baseInterval
+	triggerInterval[BackupSpecificResourceOnCluster][8] = 3 * baseInterval
+	triggerInterval[BackupSpecificResourceOnCluster][7] = 4 * baseInterval
+	triggerInterval[BackupSpecificResourceOnCluster][6] = 5 * baseInterval
+	triggerInterval[BackupSpecificResourceOnCluster][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 2 * baseInterval
 	triggerInterval[RebootNode][8] = 3 * baseInterval
 	triggerInterval[RebootNode][7] = 4 * baseInterval
 	triggerInterval[RebootNode][6] = 5 * baseInterval
-	triggerInterval[RebootNode][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[RebootNode][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
 	triggerInterval[CrashVolDriver][10] = 1 * baseInterval
 	triggerInterval[CrashVolDriver][9] = 2 * baseInterval
 	triggerInterval[CrashVolDriver][8] = 3 * baseInterval
 	triggerInterval[CrashVolDriver][7] = 4 * baseInterval
 	triggerInterval[CrashVolDriver][6] = 5 * baseInterval
-	triggerInterval[CrashVolDriver][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[CrashVolDriver][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
 	triggerInterval[RestartVolDriver][10] = 1 * baseInterval
 	triggerInterval[RestartVolDriver][9] = 2 * baseInterval
 	triggerInterval[RestartVolDriver][8] = 3 * baseInterval
 	triggerInterval[RestartVolDriver][7] = 4 * baseInterval
 	triggerInterval[RestartVolDriver][6] = 5 * baseInterval
-	triggerInterval[RestartVolDriver][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[RestartVolDriver][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
 	triggerInterval[AppTaskDown][10] = 1 * baseInterval
 	triggerInterval[AppTaskDown][9] = 2 * baseInterval
@@ -335,6 +433,16 @@ func populateIntervals() {
 	triggerInterval[HADecrease][0] = 0
 	triggerInterval[RestartVolDriver][0] = 0
 	triggerInterval[AppTaskDown][0] = 0
+	triggerInterval[BackupAllApps][0] = 0
+	triggerInterval[InspectScheduledBackups][0] = 0
+	triggerInterval[BackupSpecificResource][0] = 0
+	triggerInterval[EmailReporter][0] = 0
+	triggerInterval[BackupSpecificResourceOnCluster][0] = 0
+	triggerInterval[TestInspectRestore][0] = 0
+	triggerInterval[TestInspectBackup][0] = 0
+	triggerInterval[TestDeleteBackup][0] = 0
+	triggerInterval[RestoreNamespace][0] = 0
+
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
@@ -353,6 +461,8 @@ func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 }
 
 var _ = AfterSuite(func() {
+	DeleteScheduledBackup()
+	TearDownBackupRestoreAll()
 	PerformSystemCheck()
 	ValidateCleanup()
 })
