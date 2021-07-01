@@ -18,6 +18,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -1845,7 +1846,7 @@ func getProviderClusterConfigPath(provider string, kubeconfigs []string) (string
 	logrus.Infof("Get kubeconfigPath from list %v and provider %s",
 		kubeconfigs, provider)
 	for _, kubeconfigPath := range kubeconfigs {
-		if strings.Contains(kubeconfigPath, provider) {
+		if strings.Contains(provider, kubeconfigPath) {
 			fullPath := path.Join(kubeconfigDirectory, kubeconfigPath)
 			return fullPath, nil
 		}
