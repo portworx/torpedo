@@ -315,7 +315,6 @@ func init() {
 	str, err := GetPxCentralAdminPwd()
 	if err != nil {
 		logrus.Errorf("Error fetching password from secret: %v", err)
-		panic("Failed to fetch password from px-central-admin!")
 	}
 	PxCentralAdminPwd = str
 }
