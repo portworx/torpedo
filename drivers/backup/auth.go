@@ -16,12 +16,19 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// PxCentralAdminPwd password of PxCentralAdminUser
+var PxCentralAdminPwd string
+
 const (
 	// PxCentralAdminUser px central admin
 	PxCentralAdminUser = "px-central-admin"
-	// PxCentralAdminPwd pwd for PxCentralAdminUser
-	PxCentralAdminPwd = "H@nK!0asew"
+	// PxCentralAdminSecretName secret for PxCentralAdminUser
+	PxCentralAdminSecretName = "px-central-admin"
+	// PxCentralAdminSecretNamespace namespace of PxCentralAdminSecretName
+	PxCentralAdminSecretNamespace = "px-backup"
+	// keycloakEndPoint Endpoint for keycloak
 	keycloakEndPoint  = "pxcentral-keycloak-http:80"
+	/// httpTimeout timeout for http request
 	httpTimeout       = 1 * time.Minute
 )
 
@@ -155,6 +162,22 @@ func GetCommonHTTPHeaders(userName, password string) (http.Header, error) {
 	headers.Add("Content-Type", "application/json")
 
 	return headers, nil
+}
+
+// GetPxCentralAdminPwd fetches password from PxCentralAdminUser from secret
+func GetPxCentralAdminPwd() (string, error){
+
+	secret, err := k8s.Instance().GetSecret(PxCentralAdminSecretName, PxCentralAdminSecretNamespace)
+	if err != nil {
+		return "", err
+	}
+
+	PxCentralAdminPwd := string(secret.Data["credential"])
+	if PxCentralAdminPwd == "" {
+		return "", fmt.Errorf("px-central-admin secret is empty")
+	}
+
+	return PxCentralAdminPwd, nil
 }
 
 // GetAllRoles lists all the available role in keycloak
@@ -607,6 +630,7 @@ func FetchIDOfGroup(name string) (string, error) {
 // FetchUserDetailsFromID fetches user name and email ID
 func FetchUserDetailsFromID(userID string) (string, string) {
 	fn := "FetchUserDetailsFromID"
+
 	// First fetch all users to get the client id for the client
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
