@@ -12,6 +12,7 @@ import (
 	"time"
 
 	k8s "github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/metadata"
 )
@@ -27,9 +28,9 @@ const (
 	// PxCentralAdminSecretNamespace namespace of PxCentralAdminSecretName
 	PxCentralAdminSecretNamespace = "px-backup"
 	// keycloakEndPoint Endpoint for keycloak
-	keycloakEndPoint  = "pxcentral-keycloak-http:80"
+	keycloakEndPoint = "pxcentral-keycloak-http:80"
 	/// httpTimeout timeout for http request
-	httpTimeout       = 1 * time.Minute
+	httpTimeout = 1 * time.Minute
 )
 
 const (
@@ -43,6 +44,9 @@ const (
 	AdminTokenSecretName = "px-backup-admin-secret"
 	// AdminTokenSecretNamespace which has admin user jwt token information
 	AdminTokenSecretNamespace = "px-backup"
+
+	defaultWaitTimeout  time.Duration = 30 * time.Second
+	defaultWaitInterval time.Duration = 5 * time.Second
 )
 
 type tokenResponse struct {
@@ -165,7 +169,7 @@ func GetCommonHTTPHeaders(userName, password string) (http.Header, error) {
 }
 
 // GetPxCentralAdminPwd fetches password from PxCentralAdminUser from secret
-func GetPxCentralAdminPwd() (string, error){
+func GetPxCentralAdminPwd() (string, error) {
 
 	secret, err := k8s.Instance().GetSecret(PxCentralAdminSecretName, PxCentralAdminSecretNamespace)
 	if err != nil {
@@ -628,40 +632,53 @@ func FetchIDOfGroup(name string) (string, error) {
 }
 
 // FetchUserDetailsFromID fetches user name and email ID
-func FetchUserDetailsFromID(userID string) (string, string) {
+func FetchUserDetailsFromID(userID string) (string, string, error) {
 	fn := "FetchUserDetailsFromID"
 
 	// First fetch all users to get the client id for the client
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
 		logrus.Errorf("%s: %v", fn, err)
-		return "", ""
-	}
-	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users", keycloakEndPoint)
-	method := "GET"
-	response, err := processHTTPRequest(method, reqURL, headers, nil)
-	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
-		return "", ""
-	}
-	var users []KeycloakUserRepresentation
-	err = json.Unmarshal(response, &users)
-	if err != nil {
-		logrus.Errorf("%s: %v", fn, err)
-		return "", ""
+		return "", "", err
 	}
 	var userName string
 	var email string
-
-	for _, user := range users {
-		if user.ID == userID {
-			userName = user.Name
-			email = user.Email
-			break
+	f := func() (interface{}, bool, error) {
+		reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users", keycloakEndPoint)
+		method := "GET"
+		response, err := processHTTPRequest(method, reqURL, headers, nil)
+		if err != nil {
+			logrus.Errorf("%s: %v", fn, err)
+			return nil, true, err
 		}
+		var users []KeycloakUserRepresentation
+		err = json.Unmarshal(response, &users)
+		if err != nil {
+			logrus.Errorf("%s: %v", fn, err)
+			return nil, true, err
+		}
+
+		for _, user := range users {
+			if user.ID == userID {
+				userName = user.Name
+				email = user.Email
+				break
+			}
+		}
+		if userName == "" || email == "" {
+			// In some case there might be no error but we got empty user name/email, retry again
+			return nil, true, fmt.Errorf("got emptry user/email, retrying again")
+		}
+
+		return nil, false, nil
 	}
 
-	return userName, email
+	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, defaultWaitInterval)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to fetch user name/email: [%v]", err)
+	}
+
+	return userName, email, nil
 }
 
 func processHTTPRequest(
