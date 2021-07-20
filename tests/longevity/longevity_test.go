@@ -461,6 +461,7 @@ func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 }
 
 var _ = AfterSuite(func() {
+
 	DeleteScheduledBackup()
 	TearDownBackupRestoreAll()
 	PerformSystemCheck()
