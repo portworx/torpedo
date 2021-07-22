@@ -350,6 +350,34 @@ func populateIntervals() {
 	triggerInterval[RestoreNamespace][6] = 5 * baseInterval
 	triggerInterval[RestoreNamespace][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
+	triggerInterval[TestInspectRestore][10] = 1 * baseInterval
+	triggerInterval[TestInspectRestore][9] = 2 * baseInterval
+	triggerInterval[TestInspectRestore][8] = 3 * baseInterval
+	triggerInterval[TestInspectRestore][7] = 4 * baseInterval
+	triggerInterval[TestInspectRestore][6] = 5 * baseInterval
+	triggerInterval[TestInspectRestore][5] = 6 * baseInterval
+
+	triggerInterval[TestInspectBackup][10] = 1 * baseInterval
+	triggerInterval[TestInspectBackup][9] = 2 * baseInterval
+	triggerInterval[TestInspectBackup][8] = 3 * baseInterval
+	triggerInterval[TestInspectBackup][7] = 4 * baseInterval
+	triggerInterval[TestInspectBackup][6] = 5 * baseInterval
+	triggerInterval[TestInspectBackup][5] = 6 * baseInterval
+
+	triggerInterval[TestDeleteBackup][10] = 1 * baseInterval
+	triggerInterval[TestDeleteBackup][9] = 2 * baseInterval
+	triggerInterval[TestDeleteBackup][8] = 3 * baseInterval
+	triggerInterval[TestDeleteBackup][7] = 4 * baseInterval
+	triggerInterval[TestDeleteBackup][6] = 5 * baseInterval
+	triggerInterval[TestDeleteBackup][5] = 6 * baseInterval
+
+	triggerInterval[RestoreNamespace][10] = 1 * baseInterval
+	triggerInterval[RestoreNamespace][9] = 2 * baseInterval
+	triggerInterval[RestoreNamespace][8] = 3 * baseInterval
+	triggerInterval[RestoreNamespace][7] = 4 * baseInterval
+	triggerInterval[RestoreNamespace][6] = 5 * baseInterval
+	triggerInterval[RestoreNamespace][5] = 6 * baseInterval
+
 	triggerInterval[BackupSpecificResource][10] = 1 * baseInterval
 	triggerInterval[BackupSpecificResource][9] = 2 * baseInterval
 	triggerInterval[BackupSpecificResource][8] = 3 * baseInterval
