@@ -18,7 +18,6 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
