@@ -1123,7 +1123,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 						err = Inst().Backup.WaitForBackupCompletion(
 							ctx,
 							backupName, orgID,
-							2*time.Minute,
+							backupRestoreCompletionTimeoutMin*time.Minute,
 							retrySeconds*time.Second)
 						if err != nil {
 							bkpNamespaceErrors[namespace] = err
@@ -1187,7 +1187,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 							fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 								err))
 						err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, orgID,
-							2*time.Minute,
+							backupRestoreCompletionTimeoutMin*time.Minute,
 							retrySeconds*time.Second)
 						if err != nil {
 							bkpNamespaceErrors[namespace] = err
