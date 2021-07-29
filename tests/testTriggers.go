@@ -820,15 +820,6 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 			}
 		}
 	})
-	Step("Clean up config maps", func() {
-		for _, namespace := range bkpNamespaces {
-			for i := 0; i < configMapCount; i++ {
-				configName := fmt.Sprintf("%s-%d-%d", namespace, BackupCounter, i)
-				err := core.Instance().DeleteConfigMap(configName, namespace)
-				ProcessErrorWithMessage(event, err, fmt.Sprintf("Unable to delete config map [%s]", configName))
-			}
-		}
-	})
 }
 
 // TriggerInspectBackup inspects backup and checks for errors
