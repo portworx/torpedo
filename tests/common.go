@@ -2495,3 +2495,65 @@ func DeleteNamespace() error {
 
 	return nil
 }
+
+//AddLabelToResource adds a label to a resource and errors if the resource type is not implemented
+func AddLabelToResource(spec interface{}, key string, val string) error {
+	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+		if obj.Labels == nil {
+			obj.Labels = make(map[string]string)
+		}
+		logrus.Infof("Adding label [%s=%s] to PVC %s", key, val, obj.Name)
+		obj.Labels[key] = val
+		core.Instance().UpdatePersistentVolumeClaim(obj)
+		return nil
+	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+		if obj.Labels == nil {
+			obj.Labels = make(map[string]string)
+		}
+		logrus.Infof("Adding label [%s=%s] to ConfigMap %s", key, val, obj.Name)
+		obj.Labels[key] = val
+		core.Instance().UpdateConfigMap(obj)
+		return nil
+	} else if obj, ok := spec.(*v1.Secret); ok {
+		if obj.Labels == nil {
+			obj.Labels = make(map[string]string)
+		}
+		logrus.Infof("Adding label [%s=%s] to Secret %s", key, val, obj.Name)
+		obj.Labels[key] = val
+		core.Instance().UpdateSecret(obj)
+		return nil
+	}
+	return fmt.Errorf("Spec is of unknown resource type")
+}
+
+//DeleteLabelFromResource deletes a label by key from some resource and doesn't error if something doesn't exist
+func DeleteLabelFromResource(spec interface{}, key string) {
+	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+		if obj.Labels != nil {
+			_, ok := obj.Labels[key]
+			if ok {
+				logrus.Infof("Deleting label with key [%s] from PVC %s", key, obj.Name)
+				delete(obj.Labels, key)
+				core.Instance().UpdatePersistentVolumeClaim(obj)
+			}
+		}
+	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+		if obj.Labels != nil {
+			_, ok := obj.Labels[key]
+			if ok {
+				logrus.Infof("Deleting label with key [%s] from ConfigMap %s", key, obj.Name)
+				delete(obj.Labels, key)
+				core.Instance().UpdateConfigMap(obj)
+			}
+		}
+	} else if obj, ok := spec.(*v1.Secret); ok {
+		if obj.Labels != nil {
+			_, ok := obj.Labels[key]
+			if ok {
+				logrus.Infof("Deleting label with key [%s] from Secret %s", key, obj.Name)
+				delete(obj.Labels, key)
+				core.Instance().UpdateSecret(obj)
+			}
+		}
+	}
+}

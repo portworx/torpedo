@@ -3,12 +3,14 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/backup"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
+	"math/rand"
 	"os/exec"
 	"reflect"
 	"sort"
@@ -135,6 +137,8 @@ const (
 	RestoreNamespace = "restoreNamespace"
 	//BackupSpecificResourceOnCluster backs up all of a resource type on the cluster
 	BackupSpecificResourceOnCluster = "backupSpecificResourceOnCluster"
+	//BackupUsingLabelOnCluster backs up resources on a cluster using a specific label
+	BackupUsingLabelOnCluster = "backupUsingLabelOnCluster"
 )
 
 // TriggerHAIncrease performs repl-add on all volumes of given contexts
@@ -694,16 +698,17 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
-
-	defer func() {
-		event.End = time.Now().Format(time.RFC1123)
-		*recordChan <- event
-	}()
-
+	namespaceResourceMap := make(map[string][]string)
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
+	if err != nil {
+		return
+	}
 	sourceClusterConfigPath, err := getSourceClusterConfigPath()
 	UpdateOutcome(event, err)
+	if err != nil {
+		return
+	}
 	SetClusterContext(sourceClusterConfigPath)
 	BackupCounter++
 	bkpNamespaces := make([]string, 0)
@@ -713,8 +718,8 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 		namespace := ctx.GetID()
 		bkpNamespaces = append(bkpNamespaces, namespace)
 	}
-	configMapCount := 2
 	Step("Create config maps", func() {
+		configMapCount := 2
 		for _, namespace := range bkpNamespaces {
 			for i := 0; i < configMapCount; i++ {
 				configName := fmt.Sprintf("%s-%d-%d", namespace, BackupCounter, i)
@@ -726,40 +731,34 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 				}
 				_, err := core.Instance().CreateConfigMap(cm)
 				ProcessErrorWithMessage(event, err, fmt.Sprintf("Unable to create config map [%s]", configName))
+				if err == nil {
+					namespaceResourceMap[namespace] = append(namespaceResourceMap[namespace], configName)
+				}
 			}
 		}
 	})
-	cmCount := make(map[string]int)
+	defer func() {
+		Step("Clean up config maps", func() {
+			for _, namespace := range bkpNamespaces {
+				for _, configName := range namespaceResourceMap[namespace] {
+					err := core.Instance().DeleteConfigMap(configName, namespace)
+					ProcessErrorWithMessage(event, err, fmt.Sprintf("Unable to delete config map [%s]", configName))
+				}
+			}
+		})
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
 	bkpNames := make([]string, 0)
 	Step("Create backups", func() {
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, BackupCounter)
+			bkpNames = append(bkpNames, namespace)
 			logrus.Infof("Create backup full name %s:%s:%s", sourceClusterName, namespace, backupName)
 			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, backupLocationUID,
 				[]string{namespace}, labelSelectors, orgID)
 			backupCreateRequest.Name = backupName
-			cmList, err := core.Instance().GetConfigMaps(namespace)
-			UpdateOutcome(event, err)
-			if len(cmList.Items) == 0 {
-				continue
-			}
-			// Kube-root-ca.crt configmap present in all namespaces
-			// In Stork version 2.6.2 this gets backed up, but in 2.6-dev, it doesn't
-			cmCount[namespace] = len(cmList.Items) - 1
-			bkpNames = append(bkpNames, namespace)
-			var includeResource []*api.ResourceInfo
-			for _, cm := range cmList.Items {
-				logrus.Infof("Found configMap [%s] in namespace [%s]", cm.Name, namespace)
-				resourceInfo := &api.ResourceInfo{
-					Group:     "",
-					Kind:      "ConfigMap",
-					Name:      cm.Name,
-					Namespace: namespace,
-					Version:   "v1",
-				}
-				includeResource = append(includeResource, resourceInfo)
-			}
-			backupCreateRequest.IncludeResources = includeResource
+			backupCreateRequest.ResourceTypes = []string{"ConfigMap"}
 			err = CreateBackupFromRequest(backupName, orgID, backupCreateRequest)
 			UpdateOutcome(event, err)
 			if err != nil {
@@ -805,8 +804,10 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 			bkpInspectResp, err := InspectBackup(backupName)
 			UpdateOutcome(event, err)
 			backupObj := bkpInspectResp.GetBackup()
-			if backupObj.GetResourceCount() != uint64(cmCount[namespace]) {
-				errMsg := fmt.Sprintf("Backup [%s] has an incorrect number of objects, expected [%d], actual [%d]", backupName, cmCount[namespace], backupObj.GetResourceCount())
+			cmList, err := core.Instance().GetConfigMaps(namespace, nil)
+			//kube-root-ca.crt exists in every namespace but does not get backed up, so we subtract 1 from the count
+			if backupObj.GetResourceCount() != uint64(len(cmList.Items)-1) {
+				errMsg := fmt.Sprintf("Backup [%s] has an incorrect number of objects, expected [%d], actual [%d]", backupName, len(cmList.Items)-1, backupObj.GetResourceCount())
 				err = fmt.Errorf(errMsg)
 				ProcessErrorWithMessage(event, err, errMsg)
 			}
@@ -816,15 +817,6 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 					err = fmt.Errorf(errMsg)
 					ProcessErrorWithMessage(event, err, errMsg)
 				}
-			}
-		}
-	})
-	Step("Clean up config maps", func() {
-		for _, namespace := range bkpNamespaces {
-			for i := 0; i < configMapCount; i++ {
-				configName := fmt.Sprintf("%s-%d-%d", namespace, BackupCounter, i)
-				err := core.Instance().DeleteConfigMap(configName, namespace)
-				ProcessErrorWithMessage(event, err, fmt.Sprintf("Unable to delete config map [%s]", configName))
 			}
 		}
 	})
@@ -1077,8 +1069,14 @@ func TriggerBackupSpecificResourceOnCluster(contexts []*scheduler.Context, recor
 	}()
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
+	if err != nil {
+		return
+	}
 	sourceClusterConfigPath, err := getSourceClusterConfigPath()
 	UpdateOutcome(event, err)
+	if err != nil {
+		return
+	}
 	SetClusterContext(sourceClusterConfigPath)
 	BackupCounter++
 	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, Inst().InstanceID, BackupCounter)
@@ -1087,37 +1085,196 @@ func TriggerBackupSpecificResourceOnCluster(contexts []*scheduler.Context, recor
 	totalPVC := 0
 	Step("Backup all persistent volume claims on source cluster", func() {
 		nsList, err := core.Instance().ListNamespaces(labelSelectors)
-		ProcessErrorWithMessage(event, err, "Could not list namespaces on source cluster")
-		if err != nil {
-			return
-		}
-		var includeResource []*api.ResourceInfo
-		for _, ns := range nsList.Items {
-			pvcList, err := core.Instance().GetPersistentVolumeClaims(ns.Name, labelSelectors)
-			ProcessErrorWithMessage(event, err, fmt.Sprintf("Could not list PVCs in namespace %s", ns.Name))
-			if err != nil {
-				continue
-			}
-			if len(pvcList.Items) > 0 {
+		UpdateOutcome(event, err)
+		if err == nil {
+			for _, ns := range nsList.Items {
 				namespaces = append(namespaces, ns.Name)
 			}
-			for _, pvc := range pvcList.Items {
-				logrus.Infof("Found PVC [%s] in namespace [%s]", pvc.Name, ns.Name)
-				resourceInfo := &api.ResourceInfo{
-					Group:     "",
-					Kind:      "PersistentVolumeClaim",
-					Name:      pvc.Name,
-					Namespace: ns.Name,
-					Version:   "v1",
-				}
-				includeResource = append(includeResource, resourceInfo)
-				totalPVC++
+			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, backupLocationUID,
+				namespaces, labelSelectors, orgID)
+			backupCreateRequest.Name = backupName
+			backupCreateRequest.ResourceTypes = []string{"PersistentVolumeClaim"}
+			err = CreateBackupFromRequest(backupName, orgID, backupCreateRequest)
+			UpdateOutcome(event, err)
+		}
+	})
+	if err != nil {
+		return
+	}
+	Step("Wait for backup to complete", func() {
+		ctx, err := backup.GetPxCentralAdminCtx()
+		if err != nil {
+			ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+		} else {
+			err = Inst().Backup.WaitForBackupCompletion(
+				ctx,
+				backupName, orgID,
+				backupRestoreCompletionTimeoutMin*time.Minute,
+				retrySeconds*time.Second)
+			if err == nil {
+				logrus.Infof("Backup [%s] completed successfully", backupName)
+			} else {
+				ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]", backupName, err))
 			}
 		}
+	})
+	if err != nil {
+		return
+	}
+	Step("Check PVCs in backup", func() {
+		bkpInspectResp, err := InspectBackup(backupName)
+		UpdateOutcome(event, err)
+		if err == nil {
+			backupObj := bkpInspectResp.GetBackup()
+			pvcList, err := core.Instance().GetPersistentVolumes()
+			UpdateOutcome(event, err)
+			if err == nil {
+				if backupObj.GetResourceCount() != uint64(len(pvcList.Items))*2 { //Each backed up PVC should give a PVC and a PV, hence x2
+					errMsg := fmt.Sprintf("Backup %s has incorrect number of objects, expected [%d], actual [%d]", backupName, totalPVC, backupObj.GetResourceCount())
+					err = fmt.Errorf(errMsg)
+					ProcessErrorWithMessage(event, err, errMsg)
+				}
+				for _, resource := range backupObj.GetResources() {
+					if resource.GetKind() != "PersistentVolumeClaim" && resource.GetKind() != "PersistentVolume" {
+						errMsg := fmt.Sprintf("Backup %s contains non PersistentVolumeClaim resource of type [%v]", backupName, resource.GetKind())
+						err = fmt.Errorf(errMsg)
+						ProcessErrorWithMessage(event, err, errMsg)
+					}
+				}
+			}
+		}
+	})
+}
+
+//TriggerBackupByLabel gives a label to random resources on the cluster and tries to back up only resources with that label
+func TriggerBackupByLabel(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: BackupUsingLabelOnCluster,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	labelKey := "backup-by-label"
+	labelValue := uuid.New()
+	defer func() {
+		Step("Delete the temporary labels", func() {
+			nsList, err := core.Instance().ListNamespaces(nil)
+			UpdateOutcome(event, err)
+			for _, ns := range nsList.Items {
+				pvcList, err := core.Instance().GetPersistentVolumeClaims(ns.Name, nil)
+				UpdateOutcome(event, err)
+				for _, pvc := range pvcList.Items {
+					pvcPointer, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, ns.Name)
+					UpdateOutcome(event, err)
+					if err == nil {
+						DeleteLabelFromResource(pvcPointer, labelKey)
+					}
+				}
+				cmList, err := core.Instance().GetConfigMaps(ns.Name, nil)
+				UpdateOutcome(event, err)
+				for _, cm := range cmList.Items {
+					cmPointer, err := core.Instance().GetConfigMap(cm.Name, ns.Name)
+					UpdateOutcome(event, err)
+					if err == nil {
+						DeleteLabelFromResource(cmPointer, labelKey)
+					}
+				}
+				secretList, err := core.Instance().GetSecrets(ns.Name, nil)
+				UpdateOutcome(event, err)
+				for _, secret := range secretList.Items {
+					secretPointer, err := core.Instance().GetConfigMap(secret.Name, ns.Name)
+					UpdateOutcome(event, err)
+					if err == nil {
+						DeleteLabelFromResource(secretPointer, labelKey)
+					}
+				}
+			}
+		})
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	err := backup.UpdatePxBackupAdminSecret()
+	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
+	if err != nil {
+		return
+	}
+	sourceClusterConfigPath, err := getSourceClusterConfigPath()
+	UpdateOutcome(event, err)
+	if err != nil {
+		return
+	}
+	SetClusterContext(sourceClusterConfigPath)
+	BackupCounter++
+	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, Inst().InstanceID, BackupCounter)
+	namespaces := make([]string, 0)
+	labelSelectors := make(map[string]string)
+	labeledResources := make(map[string]bool)
+	Step("Add labels to random resources", func() {
+		nsList, err := core.Instance().ListNamespaces(nil)
+		UpdateOutcome(event, err)
+		for _, ns := range nsList.Items {
+			namespaces = append(namespaces, ns.Name)
+			pvcList, err := core.Instance().GetPersistentVolumeClaims(ns.Name, nil)
+			UpdateOutcome(event, err)
+			for _, pvc := range pvcList.Items {
+				pvcPointer, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, ns.Name)
+				UpdateOutcome(event, err)
+				if err == nil {
+					dice := rand.Intn(4)
+					if dice == 1 {
+						err = AddLabelToResource(pvcPointer, labelKey, labelValue)
+						UpdateOutcome(event, err)
+						if err == nil {
+							resourceName := fmt.Sprintf("%s/%s/PersistentVolumeClaim", ns.Name, pvc.Name)
+							labeledResources[resourceName] = true
+						}
+					}
+				}
+			}
+			cmList, err := core.Instance().GetConfigMaps(ns.Name, nil)
+			UpdateOutcome(event, err)
+			for _, cm := range cmList.Items {
+				cmPointer, err := core.Instance().GetConfigMap(cm.Name, ns.Name)
+				UpdateOutcome(event, err)
+				if err == nil {
+					dice := rand.Intn(4)
+					if dice == 1 {
+						err = AddLabelToResource(cmPointer, labelKey, labelValue)
+						UpdateOutcome(event, err)
+						if err == nil {
+							resourceName := fmt.Sprintf("%s/%s/ConfigMap", ns.Name, cm.Name)
+							labeledResources[resourceName] = true
+						}
+					}
+				}
+			}
+			secretList, err := core.Instance().GetSecrets(ns.Name, nil)
+			UpdateOutcome(event, err)
+			for _, secret := range secretList.Items {
+				secretPointer, err := core.Instance().GetSecret(secret.Name, ns.Name)
+				UpdateOutcome(event, err)
+				if err == nil {
+					dice := rand.Intn(4)
+					if dice == 1 {
+						err = AddLabelToResource(secretPointer, labelKey, labelValue)
+						UpdateOutcome(event, err)
+						if err == nil {
+							resourceName := fmt.Sprintf("%s/%s/Secret", ns.Name, secret.Name)
+							labeledResources[resourceName] = true
+						}
+					}
+				}
+			}
+		}
+	})
+	Step(fmt.Sprintf("Backup using label [%s=%s]", labelKey, labelValue), func() {
+		labelSelectors[labelKey] = labelValue
 		backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, backupLocationUID,
 			namespaces, labelSelectors, orgID)
 		backupCreateRequest.Name = backupName
-		backupCreateRequest.IncludeResources = includeResource
 		err = CreateBackupFromRequest(backupName, orgID, backupCreateRequest)
 		UpdateOutcome(event, err)
 		if err != nil {
@@ -1142,23 +1299,21 @@ func TriggerBackupSpecificResourceOnCluster(contexts []*scheduler.Context, recor
 			}
 		}
 	})
-	Step("Check PVs in backup", func() {
+	Step("Check that we only backed up objects with specified labels", func() {
 		bkpInspectResp, err := InspectBackup(backupName)
 		UpdateOutcome(event, err)
 		if err != nil {
 			return
 		}
 		backupObj := bkpInspectResp.GetBackup()
-		if backupObj.GetResourceCount() != uint64(totalPVC)*2 { //Each backed up PVC should give a PVC and a PV, hence x2
-			errMsg := fmt.Sprintf("Backup %s has incorrect number of objects, expected [%d], actual [%d]", backupName, totalPVC, backupObj.GetResourceCount())
-			err = fmt.Errorf(errMsg)
-			ProcessErrorWithMessage(event, err, errMsg)
-		}
 		for _, resource := range backupObj.GetResources() {
-			if resource.GetKind() != "PersistentVolumeClaim" && resource.GetKind() != "PersistentVolume" {
-				errMsg := fmt.Sprintf("Backup %s contains non PersistentVolumeClaim resource of type [%v]", backupName, resource.GetKind())
-				err = fmt.Errorf(errMsg)
-				ProcessErrorWithMessage(event, err, errMsg)
+			if resource.GetKind() == "PersistentVolume" { //PV are automatically backed up with PVCs
+				continue
+			}
+			resourceName := fmt.Sprintf("%s/%s/%s", resource.Namespace, resource.Namespace, resource.GetKind())
+			if _, ok := labeledResources[resourceName]; !ok {
+				err = fmt.Errorf("Backup [%s] has a resource [%s]that shouldn't be there", backupName, resourceName)
+				UpdateOutcome(event, err)
 			}
 		}
 	})

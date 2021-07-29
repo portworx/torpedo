@@ -75,6 +75,7 @@ var _ = Describe("{Longevity}", func() {
 		TestInspectRestore:              TriggerInspectRestore,
 		TestDeleteBackup:                TriggerDeleteBackup,
 		RestoreNamespace:                TriggerRestoreNamespace,
+		BackupUsingLabelOnCluster:       TriggerBackupByLabel,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -230,6 +231,7 @@ func populateDisruptiveTriggers() {
 		TestInspectRestore:              false,
 		TestDeleteBackup:                false,
 		RestoreNamespace:                false,
+		BackupUsingLabelOnCluster:       false,
 	}
 }
 
@@ -306,6 +308,7 @@ func populateIntervals() {
 	triggerInterval[TestInspectBackup] = map[int]time.Duration{}
 	triggerInterval[TestDeleteBackup] = map[int]time.Duration{}
 	triggerInterval[RestoreNamespace] = map[int]time.Duration{}
+	triggerInterval[BackupUsingLabelOnCluster] = map[int]time.Duration{}
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupAllApps][10] = 1 * baseInterval
@@ -392,6 +395,13 @@ func populateIntervals() {
 	triggerInterval[BackupSpecificResourceOnCluster][6] = 5 * baseInterval
 	triggerInterval[BackupSpecificResourceOnCluster][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
+	triggerInterval[BackupUsingLabelOnCluster][10] = 1 * baseInterval
+	triggerInterval[BackupUsingLabelOnCluster][9] = 1 * baseInterval
+	triggerInterval[BackupUsingLabelOnCluster][8] = 1 * baseInterval
+	triggerInterval[BackupUsingLabelOnCluster][7] = 1 * baseInterval
+	triggerInterval[BackupUsingLabelOnCluster][6] = 1 * baseInterval
+	triggerInterval[BackupUsingLabelOnCluster][5] = 1 * baseInterval
+
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 2 * baseInterval
 	triggerInterval[RebootNode][8] = 3 * baseInterval
@@ -470,7 +480,7 @@ func populateIntervals() {
 	triggerInterval[TestInspectBackup][0] = 0
 	triggerInterval[TestDeleteBackup][0] = 0
 	triggerInterval[RestoreNamespace][0] = 0
-
+	triggerInterval[BackupUsingLabelOnCluster][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
