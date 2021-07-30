@@ -1113,24 +1113,27 @@ func TriggerBackupSpecificResourceOnCluster(contexts []*scheduler.Context, recor
 		return
 	}
 	Step("Check PVCs in backup", func() {
+		for _, ns := range namespaces {
+			pvcList, err := core.Instance().GetPersistentVolumeClaims(ns, labelSelectors)
+			UpdateOutcome(event, err)
+			if err == nil {
+				totalPVC += len(pvcList.Items) * 2
+			}
+		}
 		bkpInspectResp, err := InspectBackup(backupName)
 		UpdateOutcome(event, err)
 		if err == nil {
 			backupObj := bkpInspectResp.GetBackup()
-			pvcList, err := core.Instance().GetPersistentVolumes()
-			UpdateOutcome(event, err)
-			if err == nil {
-				if backupObj.GetResourceCount() != uint64(len(pvcList.Items))*2 { //Each backed up PVC should give a PVC and a PV, hence x2
-					errMsg := fmt.Sprintf("Backup %s has incorrect number of objects, expected [%d], actual [%d]", backupName, totalPVC, backupObj.GetResourceCount())
+			if backupObj.GetResourceCount() != uint64(totalPVC) { //Each backed up PVC should give a PVC and a PV, hence x2
+				errMsg := fmt.Sprintf("Backup %s has incorrect number of objects, expected [%d], actual [%d]", backupName, totalPVC, backupObj.GetResourceCount())
+				err = fmt.Errorf(errMsg)
+				ProcessErrorWithMessage(event, err, errMsg)
+			}
+			for _, resource := range backupObj.GetResources() {
+				if resource.GetKind() != "PersistentVolumeClaim" && resource.GetKind() != "PersistentVolume" {
+					errMsg := fmt.Sprintf("Backup %s contains non PersistentVolumeClaim resource of type [%v]", backupName, resource.GetKind())
 					err = fmt.Errorf(errMsg)
 					ProcessErrorWithMessage(event, err, errMsg)
-				}
-				for _, resource := range backupObj.GetResources() {
-					if resource.GetKind() != "PersistentVolumeClaim" && resource.GetKind() != "PersistentVolume" {
-						errMsg := fmt.Sprintf("Backup %s contains non PersistentVolumeClaim resource of type [%v]", backupName, resource.GetKind())
-						err = fmt.Errorf(errMsg)
-						ProcessErrorWithMessage(event, err, errMsg)
-					}
 				}
 			}
 		}

@@ -135,6 +135,8 @@ func testTrigger(wg *sync.WaitGroup,
 	start := time.Now().Local()
 	lastInvocationTime := start
 
+	lastInvocationTime = lastInvocationTime.Add(-15 * time.Minute)
+
 	for {
 		// if timeout is 0, run indefinitely
 		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
@@ -310,7 +312,7 @@ func populateIntervals() {
 	triggerInterval[RestoreNamespace] = map[int]time.Duration{}
 	triggerInterval[BackupUsingLabelOnCluster] = map[int]time.Duration{}
 
-	baseInterval := 10 * time.Minute
+	baseInterval := 5 * time.Minute
 	triggerInterval[BackupAllApps][10] = 1 * baseInterval
 	triggerInterval[BackupAllApps][9] = 2 * baseInterval
 	triggerInterval[BackupAllApps][8] = 3 * baseInterval

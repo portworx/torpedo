@@ -1252,10 +1252,10 @@ func SetupBackup(testName string) {
 	logrus.Infof("Run Setup backup with object store provider: %s", provider)
 	orgID = "default"
 	bucketName = fmt.Sprintf("%s-%s", bucketNamePrefix, Inst().InstanceID)
-	//cloudCredUID = uuid.New()
-	cloudCredUID = "5a48be84-4f63-40ae-b7f1-4e4039ab7477"
-	//backupLocationUID = uuid.New()
-	backupLocationUID = "64d908e7-40cf-4c9e-a5cf-672e955fd0ca"
+	cloudCredUID = uuid.New()
+	//cloudCredUID = "5a48be84-4f63-40ae-b7f1-4e4039ab7477"
+	backupLocationUID = uuid.New()
+	//backupLocationUID = "64d908e7-40cf-4c9e-a5cf-672e955fd0ca"
 
 	CreateBucket(provider, bucketName)
 	CreateOrganization(orgID)
