@@ -76,6 +76,8 @@ var _ = Describe("{Longevity}", func() {
 		TestDeleteBackup:                TriggerDeleteBackup,
 		RestoreNamespace:                TriggerRestoreNamespace,
 		BackupUsingLabelOnCluster:       TriggerBackupByLabel,
+		BackupRestartPX:                 TriggerBackupRestartPX,
+		BackupRestartNode:               TriggerBackupRestartNode,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -134,7 +136,6 @@ func testTrigger(wg *sync.WaitGroup,
 
 	start := time.Now().Local()
 	lastInvocationTime := start
-
 	lastInvocationTime = lastInvocationTime.Add(-15 * time.Minute)
 
 	for {
@@ -234,6 +235,8 @@ func populateDisruptiveTriggers() {
 		TestDeleteBackup:                false,
 		RestoreNamespace:                false,
 		BackupUsingLabelOnCluster:       false,
+		BackupRestartPX:                 false,
+		BackupRestartNode:               false,
 	}
 }
 
@@ -311,6 +314,8 @@ func populateIntervals() {
 	triggerInterval[TestDeleteBackup] = map[int]time.Duration{}
 	triggerInterval[RestoreNamespace] = map[int]time.Duration{}
 	triggerInterval[BackupUsingLabelOnCluster] = map[int]time.Duration{}
+	triggerInterval[BackupRestartPX] = map[int]time.Duration{}
+	triggerInterval[BackupRestartNode] = map[int]time.Duration{}
 
 	baseInterval := 5 * time.Minute
 	triggerInterval[BackupAllApps][10] = 1 * baseInterval
@@ -398,11 +403,25 @@ func populateIntervals() {
 	triggerInterval[BackupSpecificResourceOnCluster][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
 	triggerInterval[BackupUsingLabelOnCluster][10] = 1 * baseInterval
-	triggerInterval[BackupUsingLabelOnCluster][9] = 1 * baseInterval
-	triggerInterval[BackupUsingLabelOnCluster][8] = 1 * baseInterval
-	triggerInterval[BackupUsingLabelOnCluster][7] = 1 * baseInterval
-	triggerInterval[BackupUsingLabelOnCluster][6] = 1 * baseInterval
-	triggerInterval[BackupUsingLabelOnCluster][5] = 1 * baseInterval
+	triggerInterval[BackupUsingLabelOnCluster][9] = 2 * baseInterval
+	triggerInterval[BackupUsingLabelOnCluster][8] = 3 * baseInterval
+	triggerInterval[BackupUsingLabelOnCluster][7] = 4 * baseInterval
+	triggerInterval[BackupUsingLabelOnCluster][6] = 5 * baseInterval
+	triggerInterval[BackupUsingLabelOnCluster][5] = 6 * baseInterval
+
+	triggerInterval[BackupRestartPX][10] = 1 * baseInterval
+	triggerInterval[BackupRestartPX][9] = 2 * baseInterval
+	triggerInterval[BackupRestartPX][8] = 3 * baseInterval
+	triggerInterval[BackupRestartPX][7] = 4 * baseInterval
+	triggerInterval[BackupRestartPX][6] = 5 * baseInterval
+	triggerInterval[BackupRestartPX][5] = 6 * baseInterval
+
+	triggerInterval[BackupRestartNode][10] = 1 * baseInterval
+	triggerInterval[BackupRestartNode][9] = 2 * baseInterval
+	triggerInterval[BackupRestartNode][8] = 3 * baseInterval
+	triggerInterval[BackupRestartNode][7] = 4 * baseInterval
+	triggerInterval[BackupRestartNode][6] = 5 * baseInterval
+	triggerInterval[BackupRestartNode][5] = 6 * baseInterval
 
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 2 * baseInterval
@@ -483,6 +502,8 @@ func populateIntervals() {
 	triggerInterval[TestDeleteBackup][0] = 0
 	triggerInterval[RestoreNamespace][0] = 0
 	triggerInterval[BackupUsingLabelOnCluster][0] = 0
+	triggerInterval[BackupRestartPX][0] = 0
+	triggerInterval[BackupRestartNode][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
