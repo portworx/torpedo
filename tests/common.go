@@ -86,7 +86,6 @@ const (
 	clusterName                       = "tp-cluster"
 	credName                          = "tp-backup-cred"
 	backupNamePrefix                  = "tp-backup"
-	schedulePolicyName                = "schedule-policy"
 	backupScheduleNamePrefix          = "tp-bkp-schedule"
 	restoreNamePrefix                 = "tp-restore"
 	bucketNamePrefix                  = "tp-backup-bucket"
@@ -96,6 +95,11 @@ const (
 	destinationClusterName            = "destination-cluster"
 	backupRestoreCompletionTimeoutMin = 20
 	retrySeconds                      = 10
+
+	schedulePolicyAllName   = "schedule-policy-all"
+	schedulePolicyScaleName = "schedule-policy-scale"
+	backupScheduleAllName   = "-all"
+	backupScheduleScaleName = "-scale"
 
 	storkDeploymentName      = "stork"
 	storkDeploymentNamespace = "kube-system"
@@ -160,14 +164,17 @@ const (
 
 var (
 	// Backup vars
-	orgID                   string
-	bucketName              string
-	cloudCredUID            string
-	backupLocationUID       string
-	backupScheduleUID       string
-	schedulePolicyUID       string
-	scheduledBackupInterval time.Duration
-	contextsCreated         []*scheduler.Context
+	orgID                                string
+	bucketName                           string
+	cloudCredUID                         string
+	backupLocationUID                    string
+	backupScheduleAllUID                 string
+	schedulePolicyAllUID                 string
+	scheduledBackupAllNamespacesInterval time.Duration
+	backupScheduleScaleUID               string
+	schedulePolicyScaleUID               string
+	scheduledBackupScaleInterval         time.Duration
+	contextsCreated                      []*scheduler.Context
 )
 
 var (
@@ -1914,15 +1921,14 @@ func CreateRestoreGetErr(restoreName string, backupName string,
 	return err
 }
 
-// CreateScheduledBackup creates a scheduled backup with time interval waitTime
-func CreateScheduledBackup() (err error) {
+// CreateScheduledBackup creates a scheduled backup with time interval
+func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicyName, schedulePolicyUID string,
+	interval time.Duration, namespaces []string) (err error) {
 	var ctx context1.Context
 	labelSelectors := make(map[string]string)
-	Step(fmt.Sprintf("Create scheduled backup %s of all namespaces on cluster %s in organization %s",
-		backupScheduleNamePrefix, sourceClusterName, orgID), func() {
+	Step(fmt.Sprintf("Create scheduled backup %s of namespaces %v on cluster %s in organization %s",
+		backupScheduleNamePrefix+backupScheduleName, namespaces, sourceClusterName, orgID), func() {
 		backupDriver := Inst().Backup
-		schedulePolicyUID = uuid.New()
-		backupScheduleUID = uuid.New()
 
 		// Create a schedule policy
 		schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
@@ -1936,7 +1942,7 @@ func CreateScheduledBackup() (err error) {
 				Interval: &api.SchedulePolicyInfo_IntervalPolicy{
 					// Retain 5 backups at a time for ease of inspection
 					Retain:  5,
-					Minutes: int64(scheduledBackupInterval / time.Minute),
+					Minutes: int64(interval / time.Minute),
 					IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
 						Count: 0,
 					},
@@ -1955,12 +1961,12 @@ func CreateScheduledBackup() (err error) {
 		// Create a backup schedule
 		bkpScheduleCreateRequest := &api.BackupScheduleCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
-				Name:  backupScheduleNamePrefix,
+				Name:  backupScheduleNamePrefix + backupScheduleName,
 				Uid:   backupScheduleUID,
 				OrgId: orgID,
 			},
 
-			Namespaces: []string{"*"},
+			Namespaces: namespaces,
 
 			ReclaimPolicy: api.BackupScheduleInfo_Delete,
 			// Name of Cluster
@@ -1990,11 +1996,10 @@ func CreateScheduledBackup() (err error) {
 }
 
 // UpdateScheduledBackup updates the scheduled backup with time interval from global vars
-func UpdateScheduledBackup() (err error) {
+func UpdateScheduledBackup(schedulePolicyName, schedulePolicyUID string, scheduledBackupInterval time.Duration) (err error) {
 	var ctx context1.Context
 
-	Step(fmt.Sprintf("Update scheduled backup %s of all namespaces on cluster %s in organization %s",
-		backupScheduleNamePrefix, sourceClusterName, orgID), func() {
+	Step(fmt.Sprintf("Update schedule policy %s", schedulePolicyName), func() {
 		backupDriver := Inst().Backup
 
 		// Create a backup schedule
@@ -2029,16 +2034,16 @@ func UpdateScheduledBackup() (err error) {
 }
 
 // DeleteScheduledBackup deletes the scheduled backup and schedule policy from the CreateScheduledBackup
-func DeleteScheduledBackup() (err error) {
+func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicyName, schedulePolicyUID string) (err error) {
 	var ctx context1.Context
 
 	Step(fmt.Sprintf("Delete scheduled backup %s of all namespaces on cluster %s in organization %s",
-		backupScheduleNamePrefix, sourceClusterName, orgID), func() {
+		backupScheduleName, sourceClusterName, orgID), func() {
 		backupDriver := Inst().Backup
 
 		bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
 			OrgId: orgID,
-			Name:  backupScheduleNamePrefix,
+			Name:  backupScheduleName,
 			// delete_backups indicates whether the cloud backup files need to
 			// be deleted or retained.
 			DeleteBackups: true,
@@ -2061,7 +2066,7 @@ func DeleteScheduledBackup() (err error) {
 		clusterObj := clusterResp.GetCluster()
 
 		namespace := "*"
-		err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleNamePrefix, namespace, orgID,
+		err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, orgID,
 			clusterObj,
 			backupRestoreCompletionTimeoutMin*time.Minute,
 			retrySeconds*time.Second)
@@ -2084,7 +2089,7 @@ func DeleteScheduledBackup() (err error) {
 }
 
 // InspectScheduledBackup inspects the scheduled backup
-func InspectScheduledBackup() (bkpScheduleInspectResponse *api.BackupScheduleInspectResponse, err error) {
+func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpScheduleInspectResponse *api.BackupScheduleInspectResponse, err error) {
 	var ctx context1.Context
 
 	Step(fmt.Sprintf("Inspect scheduled backup %s of all namespaces on cluster %s in organization %s",
@@ -2093,7 +2098,7 @@ func InspectScheduledBackup() (bkpScheduleInspectResponse *api.BackupScheduleIns
 
 		bkpScheduleInspectRequest := &api.BackupScheduleInspectRequest{
 			OrgId: orgID,
-			Name:  backupScheduleNamePrefix,
+			Name:  backupScheduleNamePrefix + backupScheduleName,
 			Uid:   backupScheduleUID,
 		}
 		ctx, err = backup.GetPxCentralAdminCtx()
@@ -2137,12 +2142,66 @@ func InspectBackup(backupName string) (bkpInspectResponse *api.BackupInspectResp
 	return bkpInspectResponse, err
 }
 
-// SetScheduledBackupInterval sets scheduled backup interval based on
-func SetScheduledBackupInterval(interval time.Duration) {
-	scheduledBackupInterval = interval
-	_, err := InspectScheduledBackup()
+// WaitForScheduledBackup waits until a new backup is taken from scheduled backup with UID backupScheduleUID
+func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Duration, timeout time.Duration) (*api.BackupObject, error) {
+	beginTime := time.Now()
+	beginTimeSec := beginTime.Unix()
+
+	t := func() (interface{}, bool, error) {
+		logrus.Infof("Enumerating backups")
+		bkpEnumerateReq := &api.BackupEnumerateRequest{
+			OrgId: orgID}
+		ctx, err := backup.GetPxCentralAdminCtx()
+		if err != nil {
+			return nil, true, err
+		}
+		curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+		if err != nil {
+			return nil, true, err
+		}
+		for _, bkp := range curBackups.GetBackups() {
+			createTime := bkp.GetCreateTime()
+			if beginTimeSec > createTime.GetSeconds() {
+				break
+			}
+			if (bkp.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_Success ||
+				bkp.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_PartialSuccess) &&
+				bkp.GetBackupSchedule().GetName() == backupScheduleName {
+				return bkp, false, nil
+			}
+		}
+		err = fmt.Errorf("unable to find backup from backup schedule with name %s after time %v",
+			backupScheduleName, beginTime)
+		return nil, true, err
+	}
+
+	bkpInterface, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+	if err != nil {
+		return nil, err
+	}
+	bkp := bkpInterface.(*api.BackupObject)
+	return bkp, nil
+
+}
+
+// SetScheduledBackupInterval sets scheduled backup interval
+func SetScheduledBackupInterval(interval time.Duration, triggerType string) {
+	scheduledBackupInterval := interval
+
+	var schedulePolicyName string
+	var schedulePolicyUID string
+	if triggerType == InspectScheduledBackups {
+		schedulePolicyName = schedulePolicyAllName
+		schedulePolicyUID = schedulePolicyAllUID
+		scheduledBackupAllNamespacesInterval = scheduledBackupInterval
+	} else {
+		schedulePolicyName = schedulePolicyScaleName
+		schedulePolicyUID = schedulePolicyScaleUID
+		scheduledBackupScaleInterval = scheduledBackupInterval
+	}
+	_, err := InspectScheduledBackup(schedulePolicyName, schedulePolicyUID)
 	if ObjectExists(err) {
-		UpdateScheduledBackup()
+		UpdateScheduledBackup(schedulePolicyName, schedulePolicyUID, scheduledBackupInterval)
 	}
 }
 
@@ -2383,18 +2442,37 @@ func DeleteBackupLocation(name string, orgID string) {
 
 // TearDownBackupRestoreAll enumerates backups and restores before deleting them
 func TearDownBackupRestoreAll() {
-	logrus.Infof("Enumerating backups")
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
+	logrus.Infof("Enumerating scheduled backups")
+	bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId:  orgID,
+		Labels: make(map[string]string),
+		BackupLocationRef: &api.ObjectRef{
+			Name: backupLocationName,
+			Uid:  backupLocationUID,
+		},
+	}
 	ctx, err := backup.GetPxCentralAdminCtx()
 	expect(err).NotTo(haveOccurred())
-	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
-	backups := enumBkpResponse.GetBackups()
-	for _, backup := range backups {
-		DeleteBackup(backup.GetName(), orgID)
+	enumBkpScheduleResponse, _ := Inst().Backup.EnumerateBackupSchedule(ctx, bkpScheduleEnumerateReq)
+	bkpSchedules := enumBkpScheduleResponse.GetBackupSchedules()
+	for _, bkpSched := range bkpSchedules {
+		schedPol := bkpSched.GetSchedulePolicyRef()
+		DeleteScheduledBackup(bkpSched.GetName(), bkpSched.GetUid(), schedPol.GetName(), schedPol.GetUid())
 	}
 
 	logrus.Infof("Enumerating backups")
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+	}
+	ctx, err = backup.GetPxCentralAdminCtx()
+	expect(err).NotTo(haveOccurred())
+	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+	backups := enumBkpResponse.GetBackups()
+	for _, bkp := range backups {
+		DeleteBackup(bkp.GetName(), orgID)
+	}
+
+	logrus.Infof("Enumerating restores")
 	restoreEnumerateReq := &api.RestoreEnumerateRequest{
 		OrgId: orgID}
 	ctx, err = backup.GetPxCentralAdminCtx()
@@ -2405,8 +2483,8 @@ func TearDownBackupRestoreAll() {
 		DeleteRestore(restore.GetName(), orgID)
 	}
 
-	for _, backup := range backups {
-		Inst().Backup.WaitForBackupDeletion(ctx, backup.GetName(), orgID,
+	for _, bkp := range backups {
+		Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), orgID,
 			backupRestoreCompletionTimeoutMin*time.Minute,
 			retrySeconds*time.Second)
 	}

@@ -69,6 +69,7 @@ var _ = Describe("{Longevity}", func() {
 		AppTaskDown:                     TriggerAppTaskDown,
 		BackupAllApps:                   TriggerBackupApps,
 		InspectScheduledBackups:         TriggerInspectScheduledBackup,
+		BackupScheduleScale:             TriggerBackupScheduleScale,
 		BackupSpecificResource:          TriggerBackupSpecificResource,
 		BackupSpecificResourceOnCluster: TriggerBackupSpecificResourceOnCluster,
 		TestInspectBackup:               TriggerInspectBackup,
@@ -227,6 +228,7 @@ func populateDisruptiveTriggers() {
 		AppTaskDown:                     false,
 		BackupAllApps:                   false,
 		InspectScheduledBackups:         false,
+		BackupScheduleScale:             true,
 		BackupSpecificResource:          false,
 		BackupSpecificResourceOnCluster: false,
 		TestInspectBackup:               false,
@@ -286,8 +288,8 @@ func populateTriggers(triggers *map[string]string) error {
 				testTriggersConfigMap, configMapNS, err)
 		}
 		chaosMap[triggerType] = chaosLevelInt
-		if triggerType == InspectScheduledBackups {
-			SetScheduledBackupInterval(triggerInterval[triggerType][chaosLevelInt])
+		if triggerType == InspectScheduledBackups || triggerType == BackupScheduleScale {
+			SetScheduledBackupInterval(triggerInterval[triggerType][chaosLevelInt], triggerType)
 		}
 	}
 	return nil
@@ -304,6 +306,7 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 	triggerInterval[BackupAllApps] = map[int]time.Duration{}
 	triggerInterval[InspectScheduledBackups] = map[int]time.Duration{}
+	triggerInterval[BackupScheduleScale] = map[int]time.Duration{}
 	triggerInterval[BackupSpecificResource] = map[int]time.Duration{}
 	triggerInterval[BackupSpecificResourceOnCluster] = map[int]time.Duration{}
 	triggerInterval[TestInspectRestore] = map[int]time.Duration{}
@@ -312,7 +315,7 @@ func populateIntervals() {
 	triggerInterval[RestoreNamespace] = map[int]time.Duration{}
 	triggerInterval[BackupUsingLabelOnCluster] = map[int]time.Duration{}
 
-	baseInterval := 5 * time.Minute
+	baseInterval := 1 * time.Minute
 	triggerInterval[BackupAllApps][10] = 1 * baseInterval
 	triggerInterval[BackupAllApps][9] = 2 * baseInterval
 	triggerInterval[BackupAllApps][8] = 3 * baseInterval
@@ -326,6 +329,13 @@ func populateIntervals() {
 	triggerInterval[InspectScheduledBackups][7] = 4 * baseInterval
 	triggerInterval[InspectScheduledBackups][6] = 5 * baseInterval
 	triggerInterval[InspectScheduledBackups][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
+	triggerInterval[BackupScheduleScale][10] = 1 * baseInterval
+	triggerInterval[BackupScheduleScale][9] = 2 * baseInterval
+	triggerInterval[BackupScheduleScale][8] = 3 * baseInterval
+	triggerInterval[BackupScheduleScale][7] = 4 * baseInterval
+	triggerInterval[BackupScheduleScale][6] = 5 * baseInterval
+	triggerInterval[BackupScheduleScale][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
 	triggerInterval[TestInspectRestore][10] = 1 * baseInterval
 	triggerInterval[TestInspectRestore][9] = 2 * baseInterval
@@ -501,7 +511,6 @@ func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 }
 
 var _ = AfterSuite(func() {
-	DeleteScheduledBackup()
 	TearDownBackupRestoreAll()
 	PerformSystemCheck()
 	ValidateCleanup()

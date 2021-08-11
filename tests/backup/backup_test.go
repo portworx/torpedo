@@ -1744,8 +1744,8 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 	})
 })
 
-// teardownStork removes stork application by scaling it to 0
-func removeStork() {
+// ScaleStork scales stork deployment
+func ScaleStork(scaleFactor int32) {
 	ctx := &scheduler.Context{
 		App: &spec.AppSpec{
 			SpecList: []interface{}{
@@ -1760,28 +1760,7 @@ func removeStork() {
 	}
 	logrus.Infof("Execute task for destroying stork")
 	err := Inst().S.ScaleApplication(ctx, map[string]int32{
-		storkDeploymentName + k8s.DeploymentSuffix: 0,
-	})
-	Expect(err).NotTo(HaveOccurred())
-}
-
-// restartStork restarts stork application by scaling it back to 3
-func restartStork() {
-	ctx := &scheduler.Context{
-		App: &spec.AppSpec{
-			SpecList: []interface{}{
-				&appsapi.Deployment{
-					ObjectMeta: meta_v1.ObjectMeta{
-						Name:      storkDeploymentName,
-						Namespace: storkDeploymentNamespace,
-					},
-				},
-			},
-		},
-	}
-	logrus.Infof("Execute task for destroying stork")
-	err := Inst().S.ScaleApplication(ctx, map[string]int32{
-		storkDeploymentName + k8s.DeploymentSuffix: 3,
+		storkDeploymentName + k8s.DeploymentSuffix: scaleFactor,
 	})
 	Expect(err).NotTo(HaveOccurred())
 }

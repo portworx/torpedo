@@ -125,6 +125,8 @@ const (
 	BackupAllApps = "backupAllApps"
 	// InspectScheduledBackups Create one namespace, delete one namespace, inspect next scheduled backup
 	InspectScheduledBackups = "inspectScheduledBackups"
+	// BackupScheduleScale Scales apps up and down and checks scheduled backups
+	BackupScheduleScale = "backupScheduleScale"
 	// TestInspectBackup Inspect a backup
 	TestInspectBackup = "inspectBackup"
 	// TestInspectRestore Inspect a restore
@@ -617,48 +619,26 @@ func TriggerInspectScheduledBackup(contexts []*scheduler.Context, recordChan *ch
 	err = CreateNamespace()
 	ProcessErrorWithMessage(event, err, "Failed to create namespace")
 
-	logrus.Infof("Enumerating backups")
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	ProcessErrorWithMessage(event, err, "Failed to get px-central admin context")
-	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
-	ProcessErrorWithMessage(event, err, "Enumerate backup request failed")
-
-	waitForNBackups := curBackups.GetTotalCount() + 1
-	for _, bkp := range curBackups.GetBackups() {
-		if bkp.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_DeletePending ||
-			bkp.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_Deleting {
-			waitForNBackups--
-		}
-	}
-
-	_, err = InspectScheduledBackup()
+	_, err = InspectScheduledBackup(backupScheduleAllName, backupScheduleAllUID)
 	if ObjectExists(err) {
-		err = CreateScheduledBackup()
+		namespaces := []string{"*"}
+		backupScheduleAllUID = uuid.New()
+		schedulePolicyAllUID = uuid.New()
+		err = CreateScheduledBackup(backupScheduleAllName, backupScheduleAllUID,
+			schedulePolicyAllName, schedulePolicyAllUID, scheduledBackupAllNamespacesInterval, namespaces)
 		ProcessErrorWithMessage(event, err, "Create scheduled backup failed")
 	} else if err != nil {
 		ProcessErrorWithMessage(event, err, "Inspecting scheduled backup failed")
 	}
 
-	logrus.Infof("Waiting for another backup")
-
-	// Wait for 1 more backup to get created
-	err = Inst().Backup.BackupScheduleWaitForNBackupsCompletion(
-		ctx,
-		orgID,
-		orgID,
-		int(waitForNBackups),
-		scheduledBackupInterval*2,
-		defaultRetryInterval,
-	)
-	ProcessErrorWithMessage(event, err, "Failed to wait for backup to be created")
+	latestBkp, err := WaitForScheduledBackup(backupScheduleNamePrefix + backupScheduleAllName,
+		defaultRetryInterval, scheduledBackupAllNamespacesInterval*2)
+	errorMessage := fmt.Sprintf("Failed to wait for a new scheduled backup from scheduled backup %s",
+		backupScheduleNamePrefix+backupScheduleAllName)
+	ProcessErrorWithMessage(event, err, errorMessage)
 
 	logrus.Infof("Verify namespaces")
 	// Verify that all namespaces are present in latest backup
-	curBackups, err = Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
-	ProcessErrorWithMessage(event, err, "Enumerate backup request failed")
-	latestBkp := curBackups.GetBackups()[0]
 	latestBkpNamespaces := latestBkp.GetNamespaces()
 	namespacesList, err := core.Instance().ListNamespaces(nil)
 	ProcessErrorWithMessage(event, err, "List namespaces failed")
@@ -1311,6 +1291,156 @@ func TriggerBackupByLabel(contexts []*scheduler.Context, recordChan *chan *Event
 			}
 		}
 	})
+}
+
+// TriggerBackupScheduleScale creates a scheduled backup and checks that scaling an app is reflected
+func TriggerBackupScheduleScale(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: BackupScheduleScale,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	err := backup.UpdatePxBackupAdminSecret()
+	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
+
+	bkpNamespaces := make([]string, 0)
+	labelSelectors := make(map[string]string)
+	for _, ctx := range contexts {
+		namespace := ctx.GetID()
+		bkpNamespaces = append(bkpNamespaces, namespace)
+	}
+
+	_, err = InspectScheduledBackup(backupScheduleScaleName, backupScheduleScaleUID)
+	if ObjectExists(err) {
+		backupScheduleScaleUID = uuid.New()
+		schedulePolicyScaleUID = uuid.New()
+		err = CreateScheduledBackup(backupScheduleScaleName, backupScheduleScaleUID,
+			schedulePolicyScaleName, schedulePolicyScaleUID,
+			scheduledBackupScaleInterval, bkpNamespaces)
+		ProcessErrorWithMessage(event, err, "Create scheduled backup failed")
+	} else if err != nil {
+		ProcessErrorWithMessage(event, err, "Inspecting scheduled backup failed")
+	}
+
+	for _, ctx := range contexts {
+		Step(fmt.Sprintf("scale up app: %s by %d ", ctx.App.Key, len(node.GetWorkerNodes())), func() {
+			applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+			UpdateOutcome(event, err)
+			for name, scale := range applicationScaleUpMap {
+				applicationScaleUpMap[name] = scale + int32(len(node.GetWorkerNodes()))
+			}
+			err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+			UpdateOutcome(event, err)
+		})
+
+		Step("Giving few seconds for scaled up applications to stabilize", func() {
+			time.Sleep(10 * time.Second)
+		})
+
+		ValidateContext(ctx)
+	}
+
+	scaleUpBkp, err := WaitForScheduledBackup(backupScheduleNamePrefix + backupScheduleScaleName,
+		defaultRetryInterval, scheduledBackupScaleInterval*2)
+	errorMessage := fmt.Sprintf("Failed to wait for a new scheduled backup from scheduled backup %s",
+		backupScheduleNamePrefix+backupScheduleScaleName)
+	ProcessErrorWithMessage(event, err, errorMessage)
+
+	logrus.Infof("Verify newest pods have been scaled in backup")
+	for _, ns := range bkpNamespaces {
+		pods, err := core.Instance().GetPods(ns, labelSelectors)
+		UpdateOutcome(event, err)
+		for _, pod := range pods.Items {
+			found := false
+			for _, resource := range scaleUpBkp.GetResources() {
+				if resource.GetNamespace() == ns && resource.GetName() == pod.GetName() {
+					found = true
+				}
+			}
+			if !found {
+				err = fmt.Errorf("pod %s in namespace %s not present in backup", pod.GetName(), ns)
+				UpdateOutcome(event, err)
+			}
+		}
+	}
+
+	for _, resource := range scaleUpBkp.GetResources() {
+		if resource.GetKind() != "Pod" {
+			continue
+		}
+		ns := resource.GetNamespace()
+		name := resource.GetName()
+		_, err := core.Instance().GetPodByName(ns, name)
+		if err != nil {
+			err = fmt.Errorf("pod %s in namespace %s present in backup but not on cluster", name, ns)
+			UpdateOutcome(event, err)
+		}
+	}
+
+	for _, ctx := range contexts {
+		Step(fmt.Sprintf("scale down app %s by %d", ctx.App.Key, len(node.GetWorkerNodes())), func() {
+			applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
+			UpdateOutcome(event, err)
+			for name, scale := range applicationScaleDownMap {
+				applicationScaleDownMap[name] = scale - int32(len(node.GetWorkerNodes()))
+			}
+			err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+			UpdateOutcome(event, err)
+		})
+
+		Step("Giving few seconds for scaled down applications to stabilize", func() {
+			time.Sleep(10 * time.Second)
+		})
+
+		ValidateContext(ctx)
+	}
+
+	scaleDownBkp, err := WaitForScheduledBackup(backupScheduleNamePrefix + backupScheduleScaleName,
+		defaultRetryInterval, scheduledBackupScaleInterval*2)
+	errorMessage = fmt.Sprintf("Failed to wait for a new scheduled backup from scheduled backup %s",
+		backupScheduleNamePrefix+backupScheduleScaleName)
+	ProcessErrorWithMessage(event, err, errorMessage)
+
+	logrus.Infof("Verify pods have been scaled in backup")
+	for _, ns := range bkpNamespaces {
+		pods, err := core.Instance().GetPods(ns, labelSelectors)
+		UpdateOutcome(event, err)
+		for _, pod := range pods.Items {
+			found := false
+			for _, resource := range scaleDownBkp.GetResources() {
+				if resource.GetNamespace() == ns && resource.GetName() == pod.GetName() {
+					found = true
+				}
+			}
+			if !found {
+				err = fmt.Errorf("pod %s in namespace %s not present in backup", pod.GetName(), ns)
+				UpdateOutcome(event, err)
+			}
+		}
+	}
+
+	for _, resource := range scaleDownBkp.GetResources() {
+		if resource.GetKind() != "Pod" {
+			continue
+		}
+		ns := resource.GetNamespace()
+		name := resource.GetName()
+		_, err := core.Instance().GetPodByName(ns, name)
+		if err != nil {
+			err = fmt.Errorf("pod %s in namespace %s present in backup but not on cluster", name, ns)
+			UpdateOutcome(event, err)
+		}
+	}
 }
 
 // CollectEventRecords collects eventRecords from channel
