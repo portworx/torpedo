@@ -53,13 +53,6 @@ const (
 	appReadinessTimeout = 10 * time.Minute
 )
 
-var (
-	orgID             string
-	bucketName        string
-	cloudCredUID      string
-	backupLocationUID string
-)
-
 var _ = BeforeSuite(func() {
 	logrus.Infof("Init instance")
 	InitInstance()
@@ -93,19 +86,19 @@ func getProvider() string {
 func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	for _, bkpNamespace := range bkpNamespaces {
 		BackupName := fmt.Sprintf("%s-%s", backupNamePrefix, bkpNamespace)
-		DeleteBackup(BackupName, orgID)
+		DeleteBackup(BackupName, OrgID)
 	}
 	for _, restoreNamespace := range restoreNamespaces {
 		RestoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, restoreNamespace)
-		DeleteRestore(RestoreName, orgID)
+		DeleteRestore(RestoreName, OrgID)
 	}
 
 	provider := getProvider()
-	DeleteCluster(destinationClusterName, orgID)
-	DeleteCluster(sourceClusterName, orgID)
-	DeleteBackupLocation(backupLocationName, orgID)
-	DeleteCloudCredential(credName, orgID, cloudCredUID)
-	DeleteBucket(provider, bucketName)
+	DeleteCluster(destinationClusterName, OrgID)
+	DeleteCluster(sourceClusterName, OrgID)
+	DeleteBackupLocation(backupLocationName, OrgID)
+	DeleteCloudCredential(credName, OrgID, CloudCredUID)
+	DeleteBucket(provider, BucketName)
 }
 
 var _ = AfterSuite(func() {
@@ -185,8 +178,8 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 			Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 				sourceClusterName, namespace, backupName), func() {
 				CreateBackup(backupName,
-					sourceClusterName, backupLocationName, backupLocationUID,
-					[]string{namespace}, labelSelectors, orgID)
+					sourceClusterName, backupLocationName, BackupLocationUID,
+					[]string{namespace}, labelSelectors, OrgID)
 			})
 		}
 
@@ -196,7 +189,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 				backupName := fmt.Sprintf("%s-%s", backupNamePrefix, namespace)
 				req := &api.BackupInspectRequest{
 					Name:  backupName,
-					OrgId: orgID,
+					OrgId: OrgID,
 				}
 
 				logrus.Infof("backup %s wait for running", backupName)
@@ -231,7 +224,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 						err))
 				err = Inst().Backup.WaitForBackupCompletion(
 					ctx,
-					backupName, orgID,
+					backupName, OrgID,
 					backupRestoreCompletionTimeoutMin*time.Minute,
 					retrySeconds*time.Second)
 				Expect(err).NotTo(HaveOccurred(),
@@ -257,7 +250,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 				destinationClusterName, namespace, restoreName,
 				sourceClusterName, namespace, backupName), func() {
 				CreateRestore(restoreName, backupName, namespaceMapping,
-					destinationClusterName, orgID)
+					destinationClusterName, OrgID)
 			})
 		}
 
@@ -270,7 +263,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 				Expect(err).NotTo(HaveOccurred(),
 					fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 						err))
-				err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, orgID,
+				err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, OrgID,
 					backupRestoreCompletionTimeoutMin*time.Minute,
 					retrySeconds*time.Second)
 				Expect(err).NotTo(HaveOccurred(),
@@ -349,15 +342,15 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 				logrus.Infof("Run Setup backup with object store provider: %s", provider)
 				orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
 					provider, Inst().InstanceID)
-				bucketName = fmt.Sprintf("%s-%s-%s", bucketNamePrefix, provider, Inst().InstanceID)
+				BucketName = fmt.Sprintf("%s-%s-%s", bucketNamePrefix, provider, Inst().InstanceID)
 				credName := fmt.Sprintf("%s-%s", credName, provider)
-				cloudCredUID = uuid.New()
+				CloudCredUID = uuid.New()
 				backupLocation := fmt.Sprintf("%s-%s", backupLocationName, provider)
 				providerUID[provider] = uuid.New()
-				CreateBucket(provider, bucketName)
+				CreateBucket(provider, BucketName)
 				CreateOrganization(orgID)
-				CreateCloudCredential(provider, credName, cloudCredUID, orgID)
-				CreateBackupLocation(provider, backupLocation, providerUID[provider], credName, cloudCredUID, bucketName, orgID)
+				CreateCloudCredential(provider, credName, CloudCredUID, orgID)
+				CreateBackupLocation(provider, backupLocation, providerUID[provider], credName, CloudCredUID, BucketName, orgID)
 				CreateProviderClusterObject(provider, kubeconfigList, credName, orgID)
 			}
 		})
@@ -837,7 +830,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 
 				DeleteCluster(clusterName, orgID)
 				DeleteBackupLocation(backupLocation, orgID)
-				DeleteCloudCredential(credName, orgID, cloudCredUID)
+				DeleteCloudCredential(credName, orgID, CloudCredUID)
 				DeleteBucket(provider, bucketName)
 			}
 		})
@@ -912,14 +905,14 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			BackupName := fmt.Sprintf("%s-%s", backupNamePrefix, bkpNamespace)
 
 			Step(fmt.Sprintf("Create Backup [%s]", BackupName), func() {
-				CreateBackup(BackupName, sourceClusterName, backupLocationName, backupLocationUID,
-					[]string{bkpNamespace}, labelSelectors, orgID)
+				CreateBackup(BackupName, sourceClusterName, backupLocationName, BackupLocationUID,
+					[]string{bkpNamespace}, labelSelectors, OrgID)
 			})
 
 			triggerFn := func() (bool, error) {
 				backupInspectReq := &api.BackupInspectRequest{
 					Name:  BackupName,
-					OrgId: orgID,
+					OrgId: OrgID,
 				}
 				ctx, err := backup.GetPxCentralAdminCtx()
 				Expect(err).NotTo(HaveOccurred(),
@@ -941,7 +934,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			}
 
 			bkpNode := GetNodesForBackup(BackupName, bkpNamespace,
-				orgID, sourceClusterName, triggerOpts)
+				OrgID, sourceClusterName, triggerOpts)
 			Expect(len(bkpNode)).NotTo(Equal(0),
 				fmt.Sprintf("Did not found any node on which backup [%v] is running.",
 					BackupName))
@@ -957,7 +950,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 				Expect(err).NotTo(HaveOccurred(),
 					fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 						err))
-				err = Inst().Backup.WaitForBackupCompletion(ctx, BackupName, orgID,
+				err = Inst().Backup.WaitForBackupCompletion(ctx, BackupName, OrgID,
 					backupRestoreCompletionTimeoutMin*time.Minute,
 					retrySeconds*time.Second)
 				Expect(err).NotTo(HaveOccurred(),
@@ -971,7 +964,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			RestoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, bkpNamespace)
 			Step(fmt.Sprintf("Create Restore [%s]", RestoreName), func() {
 				CreateRestore(RestoreName, BackupName,
-					namespaceMapping, destinationClusterName, orgID)
+					namespaceMapping, destinationClusterName, OrgID)
 			})
 
 			Step(fmt.Sprintf("Wait for Restore [%s] to complete", RestoreName), func() {
@@ -979,7 +972,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 				Expect(err).NotTo(HaveOccurred(),
 					fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 						err))
-				err = Inst().Backup.WaitForRestoreCompletion(ctx, RestoreName, orgID,
+				err = Inst().Backup.WaitForRestoreCompletion(ctx, RestoreName, OrgID,
 					backupRestoreCompletionTimeoutMin*time.Minute,
 					retrySeconds*time.Second)
 				Expect(err).NotTo(HaveOccurred(),
@@ -1094,8 +1087,8 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 			Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 				sourceClusterName, namespace, backupName), func() {
 				err = CreateBackupGetErr(backupName,
-					sourceClusterName, backupLocationName, backupLocationUID,
-					[]string{namespace}, labelSelectors, orgID)
+					sourceClusterName, backupLocationName, BackupLocationUID,
+					[]string{namespace}, labelSelectors, OrgID)
 				if err != nil {
 					bkpNamespaceErrors[namespace] = err
 				}
@@ -1115,7 +1108,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 					Step(fmt.Sprintf("Wait for backup %s to complete", backupName), func() {
 						err = Inst().Backup.WaitForBackupCompletion(
 							ctx,
-							backupName, orgID,
+							backupName, OrgID,
 							backupRestoreCompletionTimeoutMin*time.Minute,
 							retrySeconds*time.Second)
 						if err != nil {
@@ -1155,7 +1148,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 					destinationClusterName, namespace, restoreName,
 					sourceClusterName, namespace, backupName), func() {
 					err = CreateRestoreGetErr(restoreName, backupName, namespaceMapping,
-						destinationClusterName, orgID)
+						destinationClusterName, OrgID)
 					if err != nil {
 						bkpNamespaceErrors[namespace] = err
 					}
@@ -1174,7 +1167,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 					defer wg.Done()
 					Step(fmt.Sprintf("Wait for restore %s:%s to complete",
 						namespace, restoreName), func() {
-						err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, orgID,
+						err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, OrgID,
 							backupRestoreCompletionTimeoutMin*time.Minute,
 							retrySeconds*time.Second)
 						if err != nil {
@@ -1330,11 +1323,11 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 					sourceClusterName, namespace, backupName), func() {
 					err = CreateBackupGetErr(backupName,
-						sourceClusterName, backupLocationName, backupLocationUID,
-						[]string{namespace}, labelSelectores, orgID)
+						sourceClusterName, backupLocationName, BackupLocationUID,
+						[]string{namespace}, labelSelectores, OrgID)
 					if err != nil {
 						aliveBackup[namespace] = false
-						logrus.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]", backupName, orgID, err)
+						logrus.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]", backupName, OrgID, err)
 					}
 				})
 			}
@@ -1346,7 +1339,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				Step(fmt.Sprintf("Wait for backup %s to complete", backupName), func() {
 					err = Inst().Backup.WaitForBackupCompletion(
 						ctx,
-						backupName, orgID,
+						backupName, OrgID,
 						backupRestoreCompletionTimeoutMin*time.Minute,
 						retrySeconds*time.Second)
 					if err == nil {
@@ -1370,10 +1363,10 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				Step(fmt.Sprintf("Create restore full name %s:%s:%s",
 					destinationClusterName, namespace, restoreName), func() {
 					err = CreateRestoreGetErr(restoreName, backupName, namespaceMapping,
-						destinationClusterName, orgID)
+						destinationClusterName, OrgID)
 					if err != nil {
 						logrus.Errorf("Failed to create restore [%s] in org [%s] on cluster [%s]. Error: [%v]",
-							restoreName, orgID, clusterName, err)
+							restoreName, OrgID, clusterName, err)
 						aliveRestore[namespace] = false
 					}
 				})
@@ -1385,7 +1378,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				restoreName := fmt.Sprintf("%s-%s-%d", restoreNamePrefix, namespace, counter)
 				Step(fmt.Sprintf("Wait for restore %s:%s to complete",
 					namespace, restoreName), func() {
-					err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, orgID,
+					err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, OrgID,
 						backupRestoreCompletionTimeoutMin*time.Minute,
 						retrySeconds*time.Second)
 					if err == nil {
@@ -1552,12 +1545,12 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 					Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 						sourceClusterName, namespace, backupName), func() {
 						err = CreateBackupGetErr(backupName,
-							sourceClusterName, backupLocationName, backupLocationUID,
-							[]string{namespace}, labelSelectores, orgID)
+							sourceClusterName, backupLocationName, BackupLocationUID,
+							[]string{namespace}, labelSelectores, OrgID)
 						if err != nil {
 							//aliveBackup[namespace] = false
 							bkpNamespaceErrors[namespace] = err
-							logrus.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]", backupName, orgID, err)
+							logrus.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]", backupName, OrgID, err)
 						}
 					})
 				}(namespace)
@@ -1581,7 +1574,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 						} else {
 							err = Inst().Backup.WaitForBackupCompletion(
 								ctx,
-								backupName, orgID,
+								backupName, OrgID,
 								backupRestoreCompletionTimeoutMin*time.Minute,
 								retrySeconds*time.Second)
 							if err == nil {
@@ -1617,10 +1610,10 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 					Step(fmt.Sprintf("Create restore full name %s:%s:%s",
 						destinationClusterName, namespace, restoreName), func() {
 						err = CreateRestoreGetErr(restoreName, backupName, namespaceMapping,
-							destinationClusterName, orgID)
+							destinationClusterName, OrgID)
 						if err != nil {
 							logrus.Errorf("Failed to create restore [%s] in org [%s] on cluster [%s]. Error: [%v]",
-								restoreName, orgID, clusterName, err)
+								restoreName, OrgID, clusterName, err)
 							bkpNamespaceErrors[namespace] = err
 						}
 					})
@@ -1643,7 +1636,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 							logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 							bkpNamespaceErrors[namespace] = err
 						} else {
-							err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, orgID,
+							err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, OrgID,
 								backupRestoreCompletionTimeoutMin*time.Minute,
 								retrySeconds*time.Second)
 							if err == nil {

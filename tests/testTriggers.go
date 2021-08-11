@@ -556,8 +556,8 @@ func TriggerBackupApps(contexts []*scheduler.Context, recordChan *chan *EventRec
 			Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 				sourceClusterName, namespace, backupName), func() {
 				err = CreateBackupGetErr(backupName,
-					sourceClusterName, backupLocationName, backupLocationUID,
-					[]string{namespace}, labelSelectors, orgID)
+					sourceClusterName, backupLocationName, BackupLocationUID,
+					[]string{namespace}, labelSelectors, OrgID)
 				if err != nil {
 					bkpNamespaceErrors[namespace] = err
 				}
@@ -580,7 +580,7 @@ func TriggerBackupApps(contexts []*scheduler.Context, recordChan *chan *EventRec
 				} else {
 					err = Inst().Backup.WaitForBackupCompletion(
 						ctx,
-						backupName, orgID,
+						backupName, OrgID,
 						backupRestoreCompletionTimeoutMin*time.Minute,
 						retrySeconds*time.Second)
 					if err == nil {
@@ -739,11 +739,11 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 			backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, backupCounter)
 			bkpNames = append(bkpNames, namespace)
 			logrus.Infof("Create backup full name %s:%s:%s", sourceClusterName, namespace, backupName)
-			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, backupLocationUID,
-				[]string{namespace}, labelSelectors, orgID)
+			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, BackupLocationUID,
+				[]string{namespace}, labelSelectors, OrgID)
 			backupCreateRequest.Name = backupName
 			backupCreateRequest.ResourceTypes = []string{"ConfigMap"}
-			err = CreateBackupFromRequest(backupName, orgID, backupCreateRequest)
+			err = CreateBackupFromRequest(backupName, OrgID, backupCreateRequest)
 			UpdateOutcome(event, err)
 			if err != nil {
 				bkpNamespaceErrors[namespace] = err
@@ -765,7 +765,7 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 			} else {
 				err = Inst().Backup.WaitForBackupCompletion(
 					ctx,
-					backupName, orgID,
+					backupName, OrgID,
 					backupRestoreCompletionTimeoutMin*time.Minute,
 					retrySeconds*time.Second)
 				if err == nil {
@@ -825,7 +825,7 @@ func TriggerInspectBackup(contexts []*scheduler.Context, recordChan *chan *Event
 
 	logrus.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
+		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
 	ProcessErrorWithMessage(event, err, "InspectBackup failed: Failed to get px-central admin context")
 	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
@@ -866,7 +866,7 @@ func TriggerInspectRestore(contexts []*scheduler.Context, recordChan *chan *Even
 
 	logrus.Infof("Enumerating restores")
 	restoreEnumerateReq := &api.RestoreEnumerateRequest{
-		OrgId: orgID}
+		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
 	ProcessErrorWithMessage(event, err, "InspectRestore failed: Failed to get px-central admin context")
 	curRestores, err := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
@@ -917,7 +917,7 @@ func TriggerRestoreNamespace(contexts []*scheduler.Context, recordChan *chan *Ev
 
 	logrus.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
+		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
 	ProcessErrorWithMessage(event, err, "Restore namespace failed: Failed to get px-central admin context")
 	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
@@ -951,7 +951,7 @@ func TriggerRestoreNamespace(contexts []*scheduler.Context, recordChan *chan *Ev
 	restoreCreateRequest := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
-			OrgId: orgID,
+			OrgId: OrgID,
 		},
 		Backup:           backupToRestore.GetName(),
 		Cluster:          destinationClusterName,
@@ -961,7 +961,7 @@ func TriggerRestoreNamespace(contexts []*scheduler.Context, recordChan *chan *Ev
 	desc := fmt.Sprintf("Restore namespace failed: Create restore %s failed", restoreName)
 	ProcessErrorWithMessage(event, err, desc)
 
-	err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, orgID,
+	err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, OrgID,
 		backupRestoreCompletionTimeoutMin*time.Minute,
 		retrySeconds*time.Second)
 	desc = fmt.Sprintf("Restore namespace failed: Failed to wait for restore [%s] to complete.", restoreName)
@@ -1008,7 +1008,7 @@ func TriggerDeleteBackup(contexts []*scheduler.Context, recordChan *chan *EventR
 
 	logrus.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
+		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
 	ProcessErrorWithMessage(event, err, "DeleteBackup failed: Failed to get px-central admin context")
 	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
@@ -1019,7 +1019,7 @@ func TriggerDeleteBackup(contexts []*scheduler.Context, recordChan *chan *EventR
 	}
 
 	backupToDelete := curBackups.GetBackups()[0]
-	err = DeleteBackupAndDependencies(backupToDelete.GetName(), orgID, backupToDelete.GetCluster())
+	err = DeleteBackupAndDependencies(backupToDelete.GetName(), OrgID, backupToDelete.GetCluster())
 	desc := fmt.Sprintf("DeleteBackup failed: Delete backup %s on cluster %s failed",
 		backupToDelete.GetName(), backupToDelete.GetCluster())
 	ProcessErrorWithMessage(event, err, desc)
@@ -1065,11 +1065,11 @@ func TriggerBackupSpecificResourceOnCluster(contexts []*scheduler.Context, recor
 			for _, ns := range nsList.Items {
 				namespaces = append(namespaces, ns.Name)
 			}
-			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, backupLocationUID,
-				namespaces, labelSelectors, orgID)
+			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, BackupLocationUID,
+				namespaces, labelSelectors, OrgID)
 			backupCreateRequest.Name = backupName
 			backupCreateRequest.ResourceTypes = []string{"PersistentVolumeClaim"}
-			err = CreateBackupFromRequest(backupName, orgID, backupCreateRequest)
+			err = CreateBackupFromRequest(backupName, OrgID, backupCreateRequest)
 			UpdateOutcome(event, err)
 		}
 	})
@@ -1083,7 +1083,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts []*scheduler.Context, recor
 		} else {
 			err = Inst().Backup.WaitForBackupCompletion(
 				ctx,
-				backupName, orgID,
+				backupName, OrgID,
 				backupRestoreCompletionTimeoutMin*time.Minute,
 				retrySeconds*time.Second)
 			if err == nil {
@@ -1253,10 +1253,10 @@ func TriggerBackupByLabel(contexts []*scheduler.Context, recordChan *chan *Event
 	})
 	Step(fmt.Sprintf("Backup using label [%s=%s]", labelKey, labelValue), func() {
 		labelSelectors[labelKey] = labelValue
-		backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, backupLocationUID,
-			namespaces, labelSelectors, orgID)
+		backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, BackupLocationUID,
+			namespaces, labelSelectors, OrgID)
 		backupCreateRequest.Name = backupName
-		err = CreateBackupFromRequest(backupName, orgID, backupCreateRequest)
+		err = CreateBackupFromRequest(backupName, OrgID, backupCreateRequest)
 		UpdateOutcome(event, err)
 		if err != nil {
 			return
@@ -1269,7 +1269,7 @@ func TriggerBackupByLabel(contexts []*scheduler.Context, recordChan *chan *Event
 		} else {
 			err = Inst().Backup.WaitForBackupCompletion(
 				ctx,
-				backupName, orgID,
+				backupName, OrgID,
 				backupRestoreCompletionTimeoutMin*time.Minute,
 				retrySeconds*time.Second)
 			if err == nil {
@@ -1489,8 +1489,8 @@ func TriggerBackupRestartPX(contexts []*scheduler.Context, recordChan *chan *Eve
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 			sourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				sourceClusterName, backupLocationName, backupLocationUID,
-				[]string{bkpNamespaces[nsIndex]}, labelSelectors, orgID)
+				sourceClusterName, backupLocationName, BackupLocationUID,
+				[]string{bkpNamespaces[nsIndex]}, labelSelectors, OrgID)
 			if err != nil {
 				bkpError = true
 			}
@@ -1520,7 +1520,7 @@ func TriggerBackupRestartPX(contexts []*scheduler.Context, recordChan *chan *Eve
 			} else {
 				err = Inst().Backup.WaitForBackupCompletion(
 					ctx,
-					backupName, orgID,
+					backupName, OrgID,
 					backupRestoreCompletionTimeoutMin*time.Minute,
 					retrySeconds*time.Second)
 				if err == nil {
@@ -1573,8 +1573,8 @@ func TriggerBackupRestartNode(contexts []*scheduler.Context, recordChan *chan *E
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 			sourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				sourceClusterName, backupLocationName, backupLocationUID,
-				[]string{bkpNamespaces[nsIndex]}, labelSelectors, orgID)
+				sourceClusterName, backupLocationName, BackupLocationUID,
+				[]string{bkpNamespaces[nsIndex]}, labelSelectors, OrgID)
 			if err != nil {
 				bkpError = true
 			}
@@ -1658,7 +1658,7 @@ func TriggerBackupRestartNode(contexts []*scheduler.Context, recordChan *chan *E
 			} else {
 				err = Inst().Backup.WaitForBackupCompletion(
 					ctx,
-					backupName, orgID,
+					backupName, OrgID,
 					backupRestoreCompletionTimeoutMin*time.Minute,
 					retrySeconds*time.Second)
 				if err == nil {

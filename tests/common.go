@@ -164,10 +164,10 @@ const (
 
 var (
 	// Backup vars
-	orgID                                string
-	bucketName                           string
-	cloudCredUID                         string
-	backupLocationUID                    string
+	OrgID                                string
+	BucketName                           string
+	CloudCredUID                         string
+	BackupLocationUID                    string
 	backupScheduleAllUID                 string
 	schedulePolicyAllUID                 string
 	scheduledBackupAllNamespacesInterval time.Duration
@@ -1249,18 +1249,18 @@ func SetupBackup(testName string) {
 	logrus.Infof("Backup driver: %v", Inst().Backup)
 	provider := getProvider()
 	logrus.Infof("Run Setup backup with object store provider: %s", provider)
-	orgID = "default"
-	bucketName = fmt.Sprintf("%s-%s", bucketNamePrefix, Inst().InstanceID)
-	cloudCredUID = uuid.New()
+	OrgID = "default"
+	BucketName = fmt.Sprintf("%s-%s", bucketNamePrefix, Inst().InstanceID)
+	CloudCredUID = uuid.New()
 	//cloudCredUID = "5a48be84-4f63-40ae-b7f1-4e4039ab7477"
-	backupLocationUID = uuid.New()
+	BackupLocationUID = uuid.New()
 	//backupLocationUID = "64d908e7-40cf-4c9e-a5cf-672e955fd0ca"
 
-	CreateBucket(provider, bucketName)
-	CreateOrganization(orgID)
-	CreateCloudCredential(provider, credName, cloudCredUID, orgID)
-	CreateBackupLocation(provider, backupLocationName, backupLocationUID, credName, cloudCredUID, bucketName, orgID)
-	CreateSourceAndDestClusters(credName, orgID)
+	CreateBucket(provider, BucketName)
+	CreateOrganization(OrgID)
+	CreateCloudCredential(provider, credName, CloudCredUID, OrgID)
+	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, credName, CloudCredUID, BucketName, OrgID)
+	CreateSourceAndDestClusters(credName, OrgID)
 }
 
 // CreateBucket (provider string, bucketName string, incorrectCreds bool)
@@ -1558,7 +1558,7 @@ func EnumerateCloudCredential() {
 		logrus.Infof("Orgs: %s", response)
 
 		empty := &api.CloudCredentialEnumerateRequest{
-			OrgId: orgID,
+			OrgId: OrgID,
 		}
 		ctx, err = backup.GetPxCentralAdminCtx()
 		expect(err).NotTo(haveOccurred(),
@@ -1577,7 +1577,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAws:
 		createS3BackupLocation(name, uid, credName, credUID, bucketName, orgID)
 	case drivers.ProviderAzure:
-		createAzureBackupLocation(name, uid, credName, cloudCredUID, bucketName, orgID)
+		createAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
 	}
 }
 
@@ -1919,7 +1919,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 	var ctx context1.Context
 	labelSelectors := make(map[string]string)
 	Step(fmt.Sprintf("Create scheduled backup %s of namespaces %v on cluster %s in organization %s",
-		backupScheduleNamePrefix+backupScheduleName, namespaces, sourceClusterName, orgID), func() {
+		backupScheduleNamePrefix+backupScheduleName, namespaces, sourceClusterName, OrgID), func() {
 		backupDriver := Inst().Backup
 
 		// Create a schedule policy
@@ -1927,7 +1927,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 			CreateMetadata: &api.CreateMetadata{
 				Name:  schedulePolicyName,
 				Uid:   schedulePolicyUID,
-				OrgId: orgID,
+				OrgId: OrgID,
 			},
 
 			SchedulePolicy: &api.SchedulePolicyInfo{
@@ -1955,7 +1955,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 			CreateMetadata: &api.CreateMetadata{
 				Name:  backupScheduleNamePrefix + backupScheduleName,
 				Uid:   backupScheduleUID,
-				OrgId: orgID,
+				OrgId: OrgID,
 			},
 
 			Namespaces: namespaces,
@@ -1972,7 +1972,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 			},
 			BackupLocationRef: &api.ObjectRef{
 				Name: backupLocationName,
-				Uid:  backupLocationUID,
+				Uid:  BackupLocationUID,
 			},
 		}
 		ctx, err = backup.GetPxCentralAdminCtx()
@@ -1999,7 +1999,7 @@ func UpdateScheduledBackup(schedulePolicyName, schedulePolicyUID string, schedul
 			CreateMetadata: &api.CreateMetadata{
 				Name:  schedulePolicyName,
 				Uid:   schedulePolicyUID,
-				OrgId: orgID,
+				OrgId: OrgID,
 			},
 
 			SchedulePolicy: &api.SchedulePolicyInfo{
@@ -2030,11 +2030,11 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 	var ctx context1.Context
 
 	Step(fmt.Sprintf("Delete scheduled backup %s of all namespaces on cluster %s in organization %s",
-		backupScheduleName, sourceClusterName, orgID), func() {
+		backupScheduleName, sourceClusterName, OrgID), func() {
 		backupDriver := Inst().Backup
 
 		bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
-			OrgId: orgID,
+			OrgId: OrgID,
 			Name:  backupScheduleName,
 			// delete_backups indicates whether the cloud backup files need to
 			// be deleted or retained.
@@ -2050,7 +2050,7 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 			return
 		}
 
-		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: sourceClusterName, IncludeSecrets: true}
+		clusterReq := &api.ClusterInspectRequest{OrgId: OrgID, Name: sourceClusterName, IncludeSecrets: true}
 		clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 		if err != nil {
 			return
@@ -2058,13 +2058,13 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 		clusterObj := clusterResp.GetCluster()
 
 		namespace := "*"
-		err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, orgID,
+		err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, OrgID,
 			clusterObj,
 			backupRestoreCompletionTimeoutMin*time.Minute,
 			retrySeconds*time.Second)
 
 		schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
-			OrgId: orgID,
+			OrgId: OrgID,
 			Name:  schedulePolicyName,
 			Uid:   schedulePolicyUID,
 		}
@@ -2085,11 +2085,11 @@ func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpSc
 	var ctx context1.Context
 
 	Step(fmt.Sprintf("Inspect scheduled backup %s of all namespaces on cluster %s in organization %s",
-		backupScheduleNamePrefix, sourceClusterName, orgID), func() {
+		backupScheduleNamePrefix, sourceClusterName, OrgID), func() {
 		backupDriver := Inst().Backup
 
 		bkpScheduleInspectRequest := &api.BackupScheduleInspectRequest{
-			OrgId: orgID,
+			OrgId: OrgID,
 			Name:  backupScheduleNamePrefix + backupScheduleName,
 			Uid:   backupScheduleUID,
 		}
@@ -2115,11 +2115,11 @@ func InspectBackup(backupName string) (bkpInspectResponse *api.BackupInspectResp
 	var ctx context1.Context
 
 	Step(fmt.Sprintf("Inspect backup %s in org %s",
-		backupName, orgID), func() {
+		backupName, OrgID), func() {
 		backupDriver := Inst().Backup
 
 		bkpInspectRequest := &api.BackupInspectRequest{
-			OrgId: orgID,
+			OrgId: OrgID,
 			Name:  backupName,
 		}
 		ctx, err = backup.GetPxCentralAdminCtx()
@@ -2142,7 +2142,7 @@ func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Durati
 	t := func() (interface{}, bool, error) {
 		logrus.Infof("Enumerating backups")
 		bkpEnumerateReq := &api.BackupEnumerateRequest{
-			OrgId: orgID}
+			OrgId: OrgID}
 		ctx, err := backup.GetPxCentralAdminCtx()
 		if err != nil {
 			return nil, true, err
@@ -2415,14 +2415,14 @@ func DeleteBackupLocation(name string, orgID string) {
 			Name:          name,
 			OrgId:         orgID,
 			DeleteBackups: true,
-			Uid:           backupLocationUID,
+			Uid:           BackupLocationUID,
 		}
 		ctx, err := backup.GetPxCentralAdminCtx()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 				err))
 		backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
-		backupDriver.WaitForBackupLocationDeletion(ctx, backupLocationName, backupLocationUID, orgID,
+		backupDriver.WaitForBackupLocationDeletion(ctx, backupLocationName, BackupLocationUID, orgID,
 			defaultTimeout,
 			defaultRetryInterval)
 		// Best effort cleanup, dont fail test, if deletion fails
@@ -2436,11 +2436,11 @@ func DeleteBackupLocation(name string, orgID string) {
 func TearDownBackupRestoreAll() {
 	logrus.Infof("Enumerating scheduled backups")
 	bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
-		OrgId:  orgID,
+		OrgId:  OrgID,
 		Labels: make(map[string]string),
 		BackupLocationRef: &api.ObjectRef{
 			Name: backupLocationName,
-			Uid:  backupLocationUID,
+			Uid:  BackupLocationUID,
 		},
 	}
 	ctx, err := backup.GetPxCentralAdminCtx()
@@ -2454,59 +2454,59 @@ func TearDownBackupRestoreAll() {
 
 	logrus.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID,
+		OrgId: OrgID,
 	}
 	ctx, err = backup.GetPxCentralAdminCtx()
 	expect(err).NotTo(haveOccurred())
 	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
 	backups := enumBkpResponse.GetBackups()
 	for _, bkp := range backups {
-		DeleteBackup(bkp.GetName(), orgID)
+		DeleteBackup(bkp.GetName(), OrgID)
 	}
 
 	logrus.Infof("Enumerating restores")
 	restoreEnumerateReq := &api.RestoreEnumerateRequest{
-		OrgId: orgID}
+		OrgId: OrgID}
 	ctx, err = backup.GetPxCentralAdminCtx()
 	expect(err).NotTo(haveOccurred())
 	enumRestoreResponse, _ := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
 	restores := enumRestoreResponse.GetRestores()
 	for _, restore := range restores {
-		DeleteRestore(restore.GetName(), orgID)
+		DeleteRestore(restore.GetName(), OrgID)
 	}
 
 	for _, bkp := range backups {
-		Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), orgID,
+		Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), OrgID,
 			backupRestoreCompletionTimeoutMin*time.Minute,
 			retrySeconds*time.Second)
 	}
 	for _, restore := range restores {
-		Inst().Backup.WaitForRestoreDeletion(ctx, restore.GetName(), orgID,
+		Inst().Backup.WaitForRestoreDeletion(ctx, restore.GetName(), OrgID,
 			backupRestoreCompletionTimeoutMin*time.Minute,
 			retrySeconds*time.Second)
 	}
 	provider := getProvider()
-	DeleteCluster(destinationClusterName, orgID)
-	DeleteCluster(sourceClusterName, orgID)
-	DeleteBackupLocation(backupLocationName, orgID)
-	DeleteCloudCredential(credName, orgID, cloudCredUID)
-	DeleteBucket(provider, bucketName)
+	DeleteCluster(destinationClusterName, OrgID)
+	DeleteCluster(sourceClusterName, OrgID)
+	DeleteBackupLocation(backupLocationName, OrgID)
+	DeleteCloudCredential(credName, OrgID, CloudCredUID)
+	DeleteBucket(provider, BucketName)
 }
 
 //TearDownBackupRestoreSpecific deletes backups and restores specified by name as well as backup location
 func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 	for _, backupName := range backups {
-		DeleteBackup(backupName, orgID)
+		DeleteBackup(backupName, OrgID)
 	}
 	for _, restoreName := range restores {
-		DeleteRestore(restoreName, orgID)
+		DeleteRestore(restoreName, OrgID)
 	}
 	provider := getProvider()
-	DeleteCluster(destinationClusterName, orgID)
-	DeleteCluster(sourceClusterName, orgID)
-	DeleteBackupLocation(backupLocationName, orgID)
-	DeleteCloudCredential(credName, orgID, cloudCredUID)
-	DeleteBucket(provider, bucketName)
+	DeleteCluster(destinationClusterName, OrgID)
+	DeleteCluster(sourceClusterName, OrgID)
+	DeleteBackupLocation(backupLocationName, OrgID)
+	DeleteCloudCredential(credName, OrgID, CloudCredUID)
+	DeleteBucket(provider, BucketName)
 }
 
 // CreateNamespace creates a new nginx app
