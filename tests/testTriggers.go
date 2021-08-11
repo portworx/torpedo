@@ -6,6 +6,7 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -141,6 +142,10 @@ const (
 	BackupSpecificResourceOnCluster = "backupSpecificResourceOnCluster"
 	//BackupUsingLabelOnCluster backs up resources on a cluster using a specific label
 	BackupUsingLabelOnCluster = "backupUsingLabelOnCluster"
+	//BackupRestartPX restarts Portworx during a backup
+	BackupRestartPX = "backupRestartPX"
+	//BackupRestartNode restarts a node with PX during a backup
+	BackupRestartNode = "backupRestartNode"
 )
 
 // TriggerHAIncrease performs repl-add on all volumes of given contexts
@@ -590,7 +595,6 @@ func TriggerBackupApps(contexts []*scheduler.Context, recordChan *chan *EventRec
 			})
 		}
 	})
-	logrus.Infof("Finished TriggerBackupApps")
 }
 
 // TriggerInspectScheduledBackup creates scheduled backup if it doesn't exist and makes sure backups are correct otherwise
@@ -1298,7 +1302,7 @@ func TriggerBackupScheduleScale(contexts []*scheduler.Context, recordChan *chan 
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
-			ID:   GenerateUUID(),
+			ID: GenerateUUID(),
 			Type: BackupScheduleScale,
 		},
 		Start:   time.Now().Format(time.RFC1123),
@@ -1315,6 +1319,7 @@ func TriggerBackupScheduleScale(contexts []*scheduler.Context, recordChan *chan 
 
 	bkpNamespaces := make([]string, 0)
 	labelSelectors := make(map[string]string)
+
 	for _, ctx := range contexts {
 		namespace := ctx.GetID()
 		bkpNamespaces = append(bkpNamespaces, namespace)
@@ -1350,7 +1355,7 @@ func TriggerBackupScheduleScale(contexts []*scheduler.Context, recordChan *chan 
 		ValidateContext(ctx)
 	}
 
-	scaleUpBkp, err := WaitForScheduledBackup(backupScheduleNamePrefix + backupScheduleScaleName,
+	scaleUpBkp, err := WaitForScheduledBackup(backupScheduleNamePrefix+backupScheduleScaleName,
 		defaultRetryInterval, scheduledBackupScaleInterval*2)
 	errorMessage := fmt.Sprintf("Failed to wait for a new scheduled backup from scheduled backup %s",
 		backupScheduleNamePrefix+backupScheduleScaleName)
@@ -1405,7 +1410,7 @@ func TriggerBackupScheduleScale(contexts []*scheduler.Context, recordChan *chan 
 		ValidateContext(ctx)
 	}
 
-	scaleDownBkp, err := WaitForScheduledBackup(backupScheduleNamePrefix + backupScheduleScaleName,
+	scaleDownBkp, err := WaitForScheduledBackup(backupScheduleNamePrefix+backupScheduleScaleName,
 		defaultRetryInterval, scheduledBackupScaleInterval*2)
 	errorMessage = fmt.Sprintf("Failed to wait for a new scheduled backup from scheduled backup %s",
 		backupScheduleNamePrefix+backupScheduleScaleName)
@@ -1441,6 +1446,228 @@ func TriggerBackupScheduleScale(contexts []*scheduler.Context, recordChan *chan 
 			UpdateOutcome(event, err)
 		}
 	}
+}
+
+//TriggerBackupRestartPX backs up an application and restarts Portworx during the backup
+func TriggerBackupRestartPX(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: BackupRestartPX,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("Update admin secret", func() {
+		err := backup.UpdatePxBackupAdminSecret()
+		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
+	})
+	BackupCounter++
+	bkpNamespaces := make([]string, 0)
+	labelSelectors := make(map[string]string)
+	sourceClusterConfigPath, err := getSourceClusterConfigPath()
+	UpdateOutcome(event, err)
+	SetClusterContext(sourceClusterConfigPath)
+	for _, ctx := range contexts {
+	namespace := ctx.GetID()
+	bkpNamespaces = append(bkpNamespaces, namespace)
+	}
+	nsIndex := rand.Intn(len(bkpNamespaces))
+	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, bkpNamespaces[nsIndex], BackupCounter)
+	bkpError := false
+	Step("Backup a single namespace", func() {
+		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
+			sourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
+			err = CreateBackupGetErr(backupName,
+				sourceClusterName, backupLocationName, backupLocationUID,
+				[]string{bkpNamespaces[nsIndex]}, labelSelectors, orgID)
+			if err != nil {
+				bkpError = true
+			}
+			UpdateOutcome(event, err)
+		})
+	})
+
+	Step("Restart Portworx", func() {
+		nodes := node.GetStorageDriverNodes()
+		nodeIndex := rand.Intn(len(nodes))
+		logrus.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+		StopVolDriverAndWait([]node.Node{nodes[nodeIndex]})
+		logrus.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+		StartVolDriverAndWait([]node.Node{nodes[nodeIndex]})
+		logrus.Infof("Giving a few seconds for volume driver to stabilize")
+		time.Sleep(20 * time.Second)
+	})
+
+	Step("Wait for backup to complete", func() {
+		if bkpError {
+			logrus.Warningf("Skipping waiting for backup [%s] due to error", backupName)
+		} else {
+			ctx, err := backup.GetPxCentralAdminCtx()
+			if err != nil {
+				logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+				UpdateOutcome(event, err)
+			} else {
+				err = Inst().Backup.WaitForBackupCompletion(
+					ctx,
+					backupName, orgID,
+					backupRestoreCompletionTimeoutMin*time.Minute,
+					retrySeconds*time.Second)
+				if err == nil {
+					logrus.Infof("Backup [%s] completed successfully", backupName)
+				} else {
+					logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+						backupName, err)
+					UpdateOutcome(event, err)
+				}
+			}
+		}
+	})
+}
+
+//TriggerBackupRestartNode backs up an application and restarts a node with Portworx during the backup
+func TriggerBackupRestartNode(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: BackupRestartNode,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	Step("Update admin secret", func() {
+		err := backup.UpdatePxBackupAdminSecret()
+		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
+	})
+	BackupCounter++
+	bkpNamespaces := make([]string, 0)
+	labelSelectors := make(map[string]string)
+	sourceClusterConfigPath, err := getSourceClusterConfigPath()
+	UpdateOutcome(event, err)
+	SetClusterContext(sourceClusterConfigPath)
+	for _, ctx := range contexts {
+		namespace := ctx.GetID()
+		bkpNamespaces = append(bkpNamespaces, namespace)
+	}
+	// Choose a random namespace to back up
+	nsIndex := rand.Intn(len(bkpNamespaces))
+	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, bkpNamespaces[nsIndex], BackupCounter)
+	bkpError := false
+	Step("Backup a single namespace", func() {
+		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
+			sourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
+			err = CreateBackupGetErr(backupName,
+				sourceClusterName, backupLocationName, backupLocationUID,
+				[]string{bkpNamespaces[nsIndex]}, labelSelectors, orgID)
+			if err != nil {
+				bkpError = true
+			}
+			UpdateOutcome(event, err)
+		})
+	})
+
+	Step("Restart a Portworx node", func() {
+		nodes := node.GetStorageDriverNodes()
+		// Choose a random node to reboot
+		nodeIndex := rand.Intn(len(nodes))
+		Step(fmt.Sprintf("reboot node: %s", nodes[nodeIndex].Name), func() {
+			err := Inst().N.RebootNode(nodes[nodeIndex], node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         1 * time.Minute,
+					TimeBeforeRetry: 5 * time.Second,
+				},
+			})
+			expect(err).NotTo(haveOccurred())
+			UpdateOutcome(event, err)
+		})
+
+		Step(fmt.Sprintf("wait for node: [%s] to be back up", nodes[nodeIndex].Name), func() {
+			err := Inst().N.TestConnection(nodes[nodeIndex], node.ConnectionOpts{
+				Timeout:         15 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+			expect(err).NotTo(haveOccurred())
+			UpdateOutcome(event, err)
+		})
+
+		Step(fmt.Sprintf("wait for volume driver to stop on node: [%v]", nodes[nodeIndex].Name), func() {
+			err := Inst().V.WaitDriverDownOnNode(nodes[nodeIndex])
+			expect(err).NotTo(haveOccurred())
+			UpdateOutcome(event, err)
+		})
+
+		Step(fmt.Sprintf("wait to scheduler: [%s] and volume driver: [%s] to start",
+			Inst().S.String(), Inst().V.String()), func() {
+
+			err := Inst().S.IsNodeReady(nodes[nodeIndex])
+			expect(err).NotTo(haveOccurred())
+			UpdateOutcome(event, err)
+
+			err = Inst().V.WaitDriverUpOnNode(nodes[nodeIndex], Inst().DriverStartTimeout)
+			expect(err).NotTo(haveOccurred())
+			UpdateOutcome(event, err)
+		})
+
+		Step(fmt.Sprintf("wait for px-backup pods to come up on node: [%v]", nodes[nodeIndex].Name), func() {
+			// should probably make px-backup namespace a global constant
+			timeout := 6 * time.Minute
+			t := func() (interface{}, bool, error) {
+				pxbPods, err := core.Instance().GetPodsByNode(nodes[nodeIndex].Name, "px-backup")
+				if err != nil {
+					logrus.Errorf("Failed to get apps on node [%s]", nodes[nodeIndex].Name)
+					return "", true, err
+				}
+				for _, pod := range pxbPods.Items {
+					if !core.Instance().IsPodReady(pod) {
+						err = fmt.Errorf("Pod [%s] is not ready on node [%s] after %v", pod.Name, nodes[nodeIndex].Name, timeout)
+						return "", true, err
+					}
+				}
+				return "", false, nil
+			}
+			_, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval)
+			UpdateOutcome(event, err)
+		})
+	})
+
+	Step("Wait for backup to complete", func() {
+		if bkpError {
+			logrus.Warningf("Skipping waiting for backup [%s] due to error", backupName)
+		} else {
+			ctx, err := backup.GetPxCentralAdminCtx()
+			if err != nil {
+				logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+				UpdateOutcome(event, err)
+			} else {
+				err = Inst().Backup.WaitForBackupCompletion(
+					ctx,
+					backupName, orgID,
+					backupRestoreCompletionTimeoutMin*time.Minute,
+					retrySeconds*time.Second)
+				if err == nil {
+					logrus.Infof("Backup [%s] completed successfully", backupName)
+				} else {
+					logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+						backupName, err)
+					UpdateOutcome(event, err)
+				}
+			}
+		}
+	})
 }
 
 // CollectEventRecords collects eventRecords from channel
