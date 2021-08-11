@@ -24,9 +24,9 @@ const (
 )
 
 var (
-	keycloakEndPoint string
+	keycloakEndPoint, _ = k8s.Instance().GetServiceEndpoint("px-backup-ui", "px-backup")
 	// PxCentralAdminPwd pwd for PxCentralAdminUser
-	PxCentralAdminPwd string
+	PxCentralAdminPwd, _ = os.LookupEnv("PXBACKUP_PASSWORD")
 )
 
 const (
@@ -115,21 +115,6 @@ type KeycloakGroupToUser struct {
 	UserID  string `json:"userId"`
 	GroupID string `json:"groupId"`
 	Realm   string `json:"realm"`
-}
-
-// InitKeycloak finds the cluster IP of the keycloak server and assigns it to keycloakEndPoint.
-func InitKeycloak() error {
-	var err error
-	keycloakEndPoint, err = k8s.Instance().GetServiceEndpoint("px-backup-ui", "px-backup")
-	logrus.Infof("Updated keycloakEndpoint to %s", keycloakEndPoint)
-	return err
-}
-
-// InitAdminPassword assigns admin password from environment variable.
-func InitAdminPassword() bool {
-	var ok bool
-	PxCentralAdminPwd, ok = os.LookupEnv("PXBACKUP_PASSWORD")
-	return ok
 }
 
 // GetToken fetches JWT token for given user credentials

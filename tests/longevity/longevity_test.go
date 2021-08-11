@@ -50,7 +50,6 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 	populateIntervals()
 	populateDisruptiveTriggers()
-	InitBackupAuth()
 	err := backup.UpdatePxBackupAdminSecret()
 	Expect(err).NotTo(HaveOccurred())
 })
@@ -68,8 +67,8 @@ var _ = Describe("{Longevity}", func() {
 		EmailReporter:                   TriggerEmailReporter,
 		AppTaskDown:                     TriggerAppTaskDown,
 		BackupAllApps:                   TriggerBackupApps,
-		InspectScheduledBackups:         TriggerInspectScheduledBackup,
-		BackupScheduleScale:             TriggerBackupScheduleScale,
+		BackupScheduleAll:               TriggerScheduledBackupAll,
+		BackupScheduleScale:             TriggerScheduledBackupScale,
 		BackupSpecificResource:          TriggerBackupSpecificResource,
 		BackupSpecificResourceOnCluster: TriggerBackupSpecificResourceOnCluster,
 		TestInspectBackup:               TriggerInspectBackup,
@@ -94,7 +93,7 @@ var _ = Describe("{Longevity}", func() {
 			ValidateApplications(contexts)
 		})
 
-		Step("Setup backup", func() {
+		Step("Setup PX backup", func() {
 			// Set cluster context to cluster where torpedo is running
 			SetClusterContext("")
 			SetupBackup("backup-test")
@@ -137,7 +136,6 @@ func testTrigger(wg *sync.WaitGroup,
 
 	start := time.Now().Local()
 	lastInvocationTime := start
-	lastInvocationTime = lastInvocationTime.Add(-15 * time.Minute)
 
 	for {
 		// if timeout is 0, run indefinitely
@@ -228,7 +226,7 @@ func populateDisruptiveTriggers() {
 		EmailReporter:                   false,
 		AppTaskDown:                     false,
 		BackupAllApps:                   false,
-		InspectScheduledBackups:         false,
+		BackupScheduleAll:               false,
 		BackupScheduleScale:             true,
 		BackupSpecificResource:          false,
 		BackupSpecificResourceOnCluster: false,
@@ -291,7 +289,7 @@ func populateTriggers(triggers *map[string]string) error {
 				testTriggersConfigMap, configMapNS, err)
 		}
 		chaosMap[triggerType] = chaosLevelInt
-		if triggerType == InspectScheduledBackups || triggerType == BackupScheduleScale {
+		if triggerType == BackupScheduleAll || triggerType == BackupScheduleScale {
 			SetScheduledBackupInterval(triggerInterval[triggerType][chaosLevelInt], triggerType)
 		}
 	}
@@ -308,7 +306,7 @@ func populateIntervals() {
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 	triggerInterval[BackupAllApps] = map[int]time.Duration{}
-	triggerInterval[InspectScheduledBackups] = map[int]time.Duration{}
+	triggerInterval[BackupScheduleAll] = map[int]time.Duration{}
 	triggerInterval[BackupScheduleScale] = map[int]time.Duration{}
 	triggerInterval[BackupSpecificResource] = map[int]time.Duration{}
 	triggerInterval[BackupSpecificResourceOnCluster] = map[int]time.Duration{}
@@ -320,7 +318,7 @@ func populateIntervals() {
 	triggerInterval[BackupRestartPX] = map[int]time.Duration{}
 	triggerInterval[BackupRestartNode] = map[int]time.Duration{}
 
-	baseInterval := 1 * time.Minute
+	baseInterval := 10 * time.Minute
 	triggerInterval[BackupAllApps][10] = 1 * baseInterval
 	triggerInterval[BackupAllApps][9] = 2 * baseInterval
 	triggerInterval[BackupAllApps][8] = 3 * baseInterval
@@ -328,12 +326,12 @@ func populateIntervals() {
 	triggerInterval[BackupAllApps][6] = 5 * baseInterval
 	triggerInterval[BackupAllApps][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
-	triggerInterval[InspectScheduledBackups][10] = 1 * baseInterval
-	triggerInterval[InspectScheduledBackups][9] = 2 * baseInterval
-	triggerInterval[InspectScheduledBackups][8] = 3 * baseInterval
-	triggerInterval[InspectScheduledBackups][7] = 4 * baseInterval
-	triggerInterval[InspectScheduledBackups][6] = 5 * baseInterval
-	triggerInterval[InspectScheduledBackups][5] = 6 * baseInterval // Default global chaos level, 1 hr
+	triggerInterval[BackupScheduleAll][10] = 1 * baseInterval
+	triggerInterval[BackupScheduleAll][9] = 2 * baseInterval
+	triggerInterval[BackupScheduleAll][8] = 3 * baseInterval
+	triggerInterval[BackupScheduleAll][7] = 4 * baseInterval
+	triggerInterval[BackupScheduleAll][6] = 5 * baseInterval
+	triggerInterval[BackupScheduleAll][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
 	triggerInterval[BackupScheduleScale][10] = 1 * baseInterval
 	triggerInterval[BackupScheduleScale][9] = 2 * baseInterval
@@ -503,7 +501,7 @@ func populateIntervals() {
 	triggerInterval[RestartVolDriver][0] = 0
 	triggerInterval[AppTaskDown][0] = 0
 	triggerInterval[BackupAllApps][0] = 0
-	triggerInterval[InspectScheduledBackups][0] = 0
+	triggerInterval[BackupScheduleAll][0] = 0
 	triggerInterval[BackupSpecificResource][0] = 0
 	triggerInterval[EmailReporter][0] = 0
 	triggerInterval[BackupSpecificResourceOnCluster][0] = 0

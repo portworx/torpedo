@@ -420,7 +420,6 @@ func (p *portworx) GetVolumeBackupIDs(
 		return false, true, fmt.Errorf("Volume backup has not started yet")
 	}
 
-	// _, err = task.DoRetryWithTimeout(getBackupIDfromStork, 5*time.Minute, 15*time.Second)
 	_, err = task.DoRetryWithTimeout(getBackupIDfromStork, 5*time.Minute, 5*time.Second)
 	if err != nil {
 		return volumeBackupIDs, err

@@ -55,11 +55,11 @@ var EmailRecipients []string
 // with SendGrid Email APIs
 var SendGridEmailAPIKey string
 
-//BackupCounter holds the iteration of TriggerBackup
-var BackupCounter = 0
+//backupCounter holds the iteration of TriggerBackup
+var backupCounter = 0
 
-// RestoreCounter holds the iteration of TriggerRestore
-var RestoreCounter = 0
+// restoreCounter holds the iteration of TriggerRestore
+var restoreCounter = 0
 
 var newNamespaceCounter = 0
 
@@ -124,8 +124,8 @@ const (
 	EmailReporter = "emailReporter"
 	// BackupAllApps Perform backups of all deployed apps
 	BackupAllApps = "backupAllApps"
-	// InspectScheduledBackups Create one namespace, delete one namespace, inspect next scheduled backup
-	InspectScheduledBackups = "inspectScheduledBackups"
+	// BackupScheduleAll Creates and deletes namespaces and checks a scheduled backup for inclusion
+	BackupScheduleAll = "backupScheduleAll"
 	// BackupScheduleScale Scales apps up and down and checks scheduled backups
 	BackupScheduleScale = "backupScheduleScale"
 	// TestInspectBackup Inspect a backup
@@ -539,7 +539,7 @@ func TriggerBackupApps(contexts []*scheduler.Context, recordChan *chan *EventRec
 		err := backup.UpdatePxBackupAdminSecret()
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	})
-	BackupCounter++
+	backupCounter++
 	bkpNamespaces := make([]string, 0)
 	labelSelectors := make(map[string]string)
 	for _, ctx := range contexts {
@@ -552,7 +552,7 @@ func TriggerBackupApps(contexts []*scheduler.Context, recordChan *chan *EventRec
 		UpdateOutcome(event, err)
 		SetClusterContext(sourceClusterConfigPath)
 		for _, namespace := range bkpNamespaces {
-			backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, BackupCounter)
+			backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, backupCounter)
 			Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 				sourceClusterName, namespace, backupName), func() {
 				err = CreateBackupGetErr(backupName,
@@ -565,7 +565,7 @@ func TriggerBackupApps(contexts []*scheduler.Context, recordChan *chan *EventRec
 			})
 		}
 		for _, namespace := range bkpNamespaces {
-			backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, BackupCounter)
+			backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, backupCounter)
 			err, ok := bkpNamespaceErrors[namespace]
 			if ok {
 				logrus.Warningf("Skipping waiting for backup %s because %s", backupName, err)
@@ -597,13 +597,13 @@ func TriggerBackupApps(contexts []*scheduler.Context, recordChan *chan *EventRec
 	})
 }
 
-// TriggerInspectScheduledBackup creates scheduled backup if it doesn't exist and makes sure backups are correct otherwise
-func TriggerInspectScheduledBackup(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerScheduledBackupAll creates scheduled backup if it doesn't exist and makes sure backups are correct otherwise
+func TriggerScheduledBackupAll(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: InspectScheduledBackups,
+			Type: BackupScheduleAll,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -620,7 +620,7 @@ func TriggerInspectScheduledBackup(contexts []*scheduler.Context, recordChan *ch
 	err = DeleteNamespace()
 	ProcessErrorWithMessage(event, err, "Failed to delete namespace")
 
-	err = CreateNamespace()
+	err = CreateNamespace([]string{"nginx"})
 	ProcessErrorWithMessage(event, err, "Failed to create namespace")
 
 	_, err = InspectScheduledBackup(backupScheduleAllName, backupScheduleAllUID)
@@ -635,7 +635,7 @@ func TriggerInspectScheduledBackup(contexts []*scheduler.Context, recordChan *ch
 		ProcessErrorWithMessage(event, err, "Inspecting scheduled backup failed")
 	}
 
-	latestBkp, err := WaitForScheduledBackup(backupScheduleNamePrefix + backupScheduleAllName,
+	latestBkp, err := WaitForScheduledBackup(backupScheduleNamePrefix+backupScheduleAllName,
 		defaultRetryInterval, scheduledBackupAllNamespacesInterval*2)
 	errorMessage := fmt.Sprintf("Failed to wait for a new scheduled backup from scheduled backup %s",
 		backupScheduleNamePrefix+backupScheduleAllName)
@@ -694,7 +694,7 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 		return
 	}
 	SetClusterContext(sourceClusterConfigPath)
-	BackupCounter++
+	backupCounter++
 	bkpNamespaces := make([]string, 0)
 	labelSelectors := make(map[string]string)
 	bkpNamespaceErrors := make(map[string]error)
@@ -706,7 +706,7 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 		configMapCount := 2
 		for _, namespace := range bkpNamespaces {
 			for i := 0; i < configMapCount; i++ {
-				configName := fmt.Sprintf("%s-%d-%d", namespace, BackupCounter, i)
+				configName := fmt.Sprintf("%s-%d-%d", namespace, backupCounter, i)
 				cm := &v1.ConfigMap{
 					ObjectMeta: meta_v1.ObjectMeta{
 						Name:      configName,
@@ -736,7 +736,7 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 	bkpNames := make([]string, 0)
 	Step("Create backups", func() {
 		for _, namespace := range bkpNamespaces {
-			backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, BackupCounter)
+			backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, backupCounter)
 			bkpNames = append(bkpNames, namespace)
 			logrus.Infof("Create backup full name %s:%s:%s", sourceClusterName, namespace, backupName)
 			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, backupLocationUID,
@@ -751,7 +751,7 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 		}
 	})
 	for _, namespace := range bkpNames {
-		backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, BackupCounter)
+		backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, backupCounter)
 		err, ok := bkpNamespaceErrors[namespace]
 		if ok {
 			logrus.Warningf("Skipping waiting for backup [%s] because [%s]", backupName, err)
@@ -779,7 +779,7 @@ func TriggerBackupSpecificResource(contexts []*scheduler.Context, recordChan *ch
 	}
 	Step("Check that only config maps are backed up", func() {
 		for _, namespace := range bkpNames {
-			backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, BackupCounter)
+			backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, backupCounter)
 			err, ok := bkpNamespaceErrors[namespace]
 			if ok {
 				logrus.Warningf("Skipping inspecting backup [%s] because [%s]", backupName, err)
@@ -907,7 +907,7 @@ func TriggerRestoreNamespace(contexts []*scheduler.Context, recordChan *chan *Ev
 		*recordChan <- event
 	}()
 
-	RestoreCounter++
+	restoreCounter++
 	namespacesList, err := core.Instance().ListNamespaces(nil)
 	ProcessErrorWithMessage(event, err, "Restore namespace failed: List namespaces failed")
 
@@ -937,15 +937,15 @@ func TriggerRestoreNamespace(contexts []*scheduler.Context, recordChan *chan *Ev
 	if backupToRestore == nil {
 		return
 	}
-	restoreName := fmt.Sprintf("%s-%d", backupToRestore.GetName(), RestoreCounter)
+	restoreName := fmt.Sprintf("%s-%d", backupToRestore.GetName(), restoreCounter)
 
 	// Pick one namespace to restore
 	// In case destination cluster == source cluster, restore to a new namespace
 	namespaceMapping := make(map[string]string)
 	namespaces := backupToRestore.GetNamespaces()
+	restoredNs := namespaces[0]
 	if len(namespaces) > 0 {
-		ns := namespaces[0]
-		namespaceMapping[ns] = fmt.Sprintf("%s-restore-%s-%d", ns, Inst().InstanceID, RestoreCounter)
+		namespaceMapping[restoredNs] = fmt.Sprintf("%s-restore-%s-%d", restoredNs, Inst().InstanceID, restoreCounter)
 	}
 
 	restoreCreateRequest := &api.RestoreCreateRequest{
@@ -979,12 +979,12 @@ func TriggerRestoreNamespace(contexts []*scheduler.Context, recordChan *chan *Ev
 
 	nsFound := false
 	for _, ns := range newNamespacesList.Items {
-		if ns.GetName() == namespaces[0] {
+		if ns.GetName() == restoredNs {
 			nsFound = true
 		}
 	}
 	if !nsFound {
-		err = fmt.Errorf("namespace %s not found", namespaces[0])
+		err = fmt.Errorf("namespace %s not found", restoredNs)
 		ProcessErrorWithMessage(event, err, "RestoreNamespace restored incorrect namespaces")
 	}
 }
@@ -1053,8 +1053,8 @@ func TriggerBackupSpecificResourceOnCluster(contexts []*scheduler.Context, recor
 		return
 	}
 	SetClusterContext(sourceClusterConfigPath)
-	BackupCounter++
-	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, Inst().InstanceID, BackupCounter)
+	backupCounter++
+	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, Inst().InstanceID, backupCounter)
 	namespaces := make([]string, 0)
 	labelSelectors := make(map[string]string)
 	totalPVC := 0
@@ -1185,8 +1185,8 @@ func TriggerBackupByLabel(contexts []*scheduler.Context, recordChan *chan *Event
 		return
 	}
 	SetClusterContext(sourceClusterConfigPath)
-	BackupCounter++
-	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, Inst().InstanceID, BackupCounter)
+	backupCounter++
+	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, Inst().InstanceID, backupCounter)
 	namespaces := make([]string, 0)
 	labelSelectors := make(map[string]string)
 	labeledResources := make(map[string]bool)
@@ -1201,6 +1201,7 @@ func TriggerBackupByLabel(contexts []*scheduler.Context, recordChan *chan *Event
 				pvcPointer, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, ns.Name)
 				UpdateOutcome(event, err)
 				if err == nil {
+					// Randomly choose some pvcs to add labels to for backup
 					dice := rand.Intn(4)
 					if dice == 1 {
 						err = AddLabelToResource(pvcPointer, labelKey, labelValue)
@@ -1218,6 +1219,7 @@ func TriggerBackupByLabel(contexts []*scheduler.Context, recordChan *chan *Event
 				cmPointer, err := core.Instance().GetConfigMap(cm.Name, ns.Name)
 				UpdateOutcome(event, err)
 				if err == nil {
+					// Randomly choose some configmaps to add labels to for backup
 					dice := rand.Intn(4)
 					if dice == 1 {
 						err = AddLabelToResource(cmPointer, labelKey, labelValue)
@@ -1235,6 +1237,7 @@ func TriggerBackupByLabel(contexts []*scheduler.Context, recordChan *chan *Event
 				secretPointer, err := core.Instance().GetSecret(secret.Name, ns.Name)
 				UpdateOutcome(event, err)
 				if err == nil {
+					// Randomly choose some secrets to add labels to for backup
 					dice := rand.Intn(4)
 					if dice == 1 {
 						err = AddLabelToResource(secretPointer, labelKey, labelValue)
@@ -1297,12 +1300,12 @@ func TriggerBackupByLabel(contexts []*scheduler.Context, recordChan *chan *Event
 	})
 }
 
-// TriggerBackupScheduleScale creates a scheduled backup and checks that scaling an app is reflected
-func TriggerBackupScheduleScale(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerScheduledBackupScale creates a scheduled backup and checks that scaling an app is reflected
+func TriggerScheduledBackupScale(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
-			ID: GenerateUUID(),
+			ID:   GenerateUUID(),
 			Type: BackupScheduleScale,
 		},
 		Start:   time.Now().Format(time.RFC1123),
@@ -1469,18 +1472,18 @@ func TriggerBackupRestartPX(contexts []*scheduler.Context, recordChan *chan *Eve
 		err := backup.UpdatePxBackupAdminSecret()
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	})
-	BackupCounter++
+	backupCounter++
 	bkpNamespaces := make([]string, 0)
 	labelSelectors := make(map[string]string)
 	sourceClusterConfigPath, err := getSourceClusterConfigPath()
 	UpdateOutcome(event, err)
 	SetClusterContext(sourceClusterConfigPath)
 	for _, ctx := range contexts {
-	namespace := ctx.GetID()
-	bkpNamespaces = append(bkpNamespaces, namespace)
+		namespace := ctx.GetID()
+		bkpNamespaces = append(bkpNamespaces, namespace)
 	}
 	nsIndex := rand.Intn(len(bkpNamespaces))
-	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, bkpNamespaces[nsIndex], BackupCounter)
+	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, bkpNamespaces[nsIndex], backupCounter)
 	bkpError := false
 	Step("Backup a single namespace", func() {
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
@@ -1552,7 +1555,7 @@ func TriggerBackupRestartNode(contexts []*scheduler.Context, recordChan *chan *E
 		err := backup.UpdatePxBackupAdminSecret()
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	})
-	BackupCounter++
+	backupCounter++
 	bkpNamespaces := make([]string, 0)
 	labelSelectors := make(map[string]string)
 	sourceClusterConfigPath, err := getSourceClusterConfigPath()
@@ -1564,7 +1567,7 @@ func TriggerBackupRestartNode(contexts []*scheduler.Context, recordChan *chan *E
 	}
 	// Choose a random namespace to back up
 	nsIndex := rand.Intn(len(bkpNamespaces))
-	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, bkpNamespaces[nsIndex], BackupCounter)
+	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, bkpNamespaces[nsIndex], backupCounter)
 	bkpError := false
 	Step("Backup a single namespace", func() {
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",

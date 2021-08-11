@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	//"encoding/base64" need to comment out due to common.go
 	"fmt"
 	"github.com/pborman/uuid"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -64,9 +63,6 @@ var (
 var _ = BeforeSuite(func() {
 	logrus.Infof("Init instance")
 	InitInstance()
-
-	InitBackupAuth()
-
 	err := backup.UpdatePxBackupAdminSecret()
 	Expect(err).NotTo(HaveOccurred())
 })
@@ -1047,6 +1043,11 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 	restoreNamespaces := make([]string, 0)
 
 	It("has to perform simultaneous backups and restores", func() {
+		ctx, err := backup.GetPxCentralAdminCtx()
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+
 		Step("Setup backup", func() {
 			// Set cluster context to cluster where torpedo is running
 			SetClusterContext("")
@@ -1088,20 +1089,17 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 			}
 		})
 
-		// TODO(stgleb): Add multi-namespace backup when ready in px-backup
 		for _, namespace := range bkpNamespaces {
-			go func(namespace string) {
-				backupName := fmt.Sprintf("%s-%s", backupNamePrefix, namespace)
-				Step(fmt.Sprintf("Create backup full name %s:%s:%s",
-					sourceClusterName, namespace, backupName), func() {
-					err = CreateBackupGetErr(backupName,
-						sourceClusterName, backupLocationName, backupLocationUID,
-						[]string{namespace}, labelSelectors, orgID)
-					if err != nil {
-						bkpNamespaceErrors[namespace] = err
-					}
-				})
-			}(namespace)
+			backupName := fmt.Sprintf("%s-%s", backupNamePrefix, namespace)
+			Step(fmt.Sprintf("Create backup full name %s:%s:%s",
+				sourceClusterName, namespace, backupName), func() {
+				err = CreateBackupGetErr(backupName,
+					sourceClusterName, backupLocationName, backupLocationUID,
+					[]string{namespace}, labelSelectors, orgID)
+				if err != nil {
+					bkpNamespaceErrors[namespace] = err
+				}
+			})
 		}
 
 		var wg sync.WaitGroup
@@ -1115,11 +1113,6 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 				go func(wg *sync.WaitGroup, namespace, backupName string) {
 					defer wg.Done()
 					Step(fmt.Sprintf("Wait for backup %s to complete", backupName), func() {
-
-						ctx, err := backup.GetPxCentralAdminCtx()
-						Expect(err).NotTo(HaveOccurred(),
-							fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-								err))
 						err = Inst().Backup.WaitForBackupCompletion(
 							ctx,
 							backupName, orgID,
@@ -1138,15 +1131,17 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 
 		successfulBackups = len(bkpNamespaces) - len(bkpNamespaceErrors)
 
-		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
-			for _, ctx := range contexts {
-				TearDownContext(ctx, map[string]bool{
-					SkipClusterScopedObjects:                    true,
-					scheduler.OptionsWaitForResourceLeakCleanup: true,
-					scheduler.OptionsWaitForDestroy:             true,
-				})
-			}
-		})
+		if successfulBackups == len(bkpNamespaces) {
+			Step("teardown all applications on source cluster before switching context to destination cluster", func() {
+				for _, ctx := range contexts {
+					TearDownContext(ctx, map[string]bool{
+						SkipClusterScopedObjects:                    true,
+						scheduler.OptionsWaitForResourceLeakCleanup: true,
+						scheduler.OptionsWaitForDestroy:             true,
+					})
+				}
+			})
+		}
 
 		for _, namespace := range bkpNamespaces {
 			restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, namespace)
@@ -1155,18 +1150,16 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 				logrus.Infof("Skipping create restore %s because %s", restoreName, error)
 			} else {
 				restoreNamespaces = append(restoreNamespaces, namespace)
-				go func(namespace string) {
-					backupName := fmt.Sprintf("%s-%s", backupNamePrefix, namespace)
-					Step(fmt.Sprintf("Create restore %s:%s:%s from backup %s:%s:%s",
-						destinationClusterName, namespace, restoreName,
-						sourceClusterName, namespace, backupName), func() {
-						err = CreateRestoreGetErr(restoreName, backupName, namespaceMapping,
-							destinationClusterName, orgID)
-						if err != nil {
-							bkpNamespaceErrors[namespace] = err
-						}
-					})
-				}(namespace)
+				backupName := fmt.Sprintf("%s-%s", backupNamePrefix, namespace)
+				Step(fmt.Sprintf("Create restore %s:%s:%s from backup %s:%s:%s",
+					destinationClusterName, namespace, restoreName,
+					sourceClusterName, namespace, backupName), func() {
+					err = CreateRestoreGetErr(restoreName, backupName, namespaceMapping,
+						destinationClusterName, orgID)
+					if err != nil {
+						bkpNamespaceErrors[namespace] = err
+					}
+				})
 			}
 		}
 
@@ -1181,11 +1174,6 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 					defer wg.Done()
 					Step(fmt.Sprintf("Wait for restore %s:%s to complete",
 						namespace, restoreName), func() {
-
-						ctx, err := backup.GetPxCentralAdminCtx()
-						Expect(err).NotTo(HaveOccurred(),
-							fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-								err))
 						err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, orgID,
 							backupRestoreCompletionTimeoutMin*time.Minute,
 							retrySeconds*time.Second)
@@ -1274,6 +1262,9 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 	volumeParams := make(map[string]map[string]string)
 	namespaceContextMap := make(map[string][]*scheduler.Context)
 	It("has to connect and check the backup setup", func() {
+		ctx, err := backup.GetPxCentralAdminCtx()
+		logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+
 		Step("Setup backup", func() {
 			// Set cluster context to cluster where torpedo is running
 			SetClusterContext("")
@@ -1353,24 +1344,18 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				}
 				backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, namespace, counter)
 				Step(fmt.Sprintf("Wait for backup %s to complete", backupName), func() {
-					ctx, err := backup.GetPxCentralAdminCtx()
-					if err != nil {
-						logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
-						aliveBackup[namespace] = false
+					err = Inst().Backup.WaitForBackupCompletion(
+						ctx,
+						backupName, orgID,
+						backupRestoreCompletionTimeoutMin*time.Minute,
+						retrySeconds*time.Second)
+					if err == nil {
+						logrus.Infof("Backup [%s] completed successfully", backupName)
+						successfulBackups++
 					} else {
-						err = Inst().Backup.WaitForBackupCompletion(
-							ctx,
-							backupName, orgID,
-							backupRestoreCompletionTimeoutMin*time.Minute,
-							retrySeconds*time.Second)
-						if err == nil {
-							logrus.Infof("Backup [%s] completed successfully", backupName)
-							successfulBackups++
-						} else {
-							logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
-								backupName, err)
-							aliveBackup[namespace] = false
-						}
+						logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+							backupName, err)
+						aliveBackup[namespace] = false
 					}
 				})
 			}
@@ -1400,22 +1385,16 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				restoreName := fmt.Sprintf("%s-%s-%d", restoreNamePrefix, namespace, counter)
 				Step(fmt.Sprintf("Wait for restore %s:%s to complete",
 					namespace, restoreName), func() {
-					ctx, err := backup.GetPxCentralAdminCtx()
-					if err != nil {
-						logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
-						aliveRestore[namespace] = false
+					err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, orgID,
+						backupRestoreCompletionTimeoutMin*time.Minute,
+						retrySeconds*time.Second)
+					if err == nil {
+						logrus.Infof("Restore [%s] completed successfully", restoreName)
+						successfulRestores++
 					} else {
-						err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, orgID,
-							backupRestoreCompletionTimeoutMin*time.Minute,
-							retrySeconds*time.Second)
-						if err == nil {
-							logrus.Infof("Restore [%s] completed successfully", restoreName)
-							successfulRestores++
-						} else {
-							logrus.Errorf("Failed to wait for restore [%s] to complete. Error: [%v]",
-								restoreName, err)
-							aliveRestore[namespace] = false
-						}
+						logrus.Errorf("Failed to wait for restore [%s] to complete. Error: [%v]",
+							restoreName, err)
+						aliveRestore[namespace] = false
 					}
 				})
 			}
@@ -1451,30 +1430,35 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				}
 				ValidateRestoredApplications(remainingContexts, volumeParams)
 			})
-			Step("teardown all restored apps", func() {
-				for _, ctx := range remainingContexts {
-					TearDownContext(ctx, nil)
+			if successfulRestores == numRestores {
+				Step("teardown all restored apps", func() {
+					for _, ctx := range remainingContexts {
+						TearDownContext(ctx, nil)
+					}
+				})
+			}
+		}
+
+		if successfulBackups == numBackups && successfulRestores == numRestores {
+			Step("teardown applications on source cluster", func() {
+				sourceClusterConfigPath, err := getSourceClusterConfigPath()
+				if err != nil {
+					logrus.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
+				} else {
+					SetClusterContext(sourceClusterConfigPath)
+					for _, ctx := range contexts {
+						TearDownContext(ctx, map[string]bool{
+							SkipClusterScopedObjects:                    true,
+							scheduler.OptionsWaitForResourceLeakCleanup: true,
+							scheduler.OptionsWaitForDestroy:             true,
+						})
+					}
 				}
 			})
+			Step("teardown backup/restore objects", func() {
+				TearDownBackupRestoreSpecific(successfulBackupNames, successfulRestoreNames)
+			})
 		}
-		Step("teardown applications on source cluster", func() {
-			sourceClusterConfigPath, err := getSourceClusterConfigPath()
-			if err != nil {
-				logrus.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
-			} else {
-				SetClusterContext(sourceClusterConfigPath)
-				for _, ctx := range contexts {
-					TearDownContext(ctx, map[string]bool{
-						SkipClusterScopedObjects:                    true,
-						scheduler.OptionsWaitForResourceLeakCleanup: true,
-						scheduler.OptionsWaitForDestroy:             true,
-					})
-				}
-			}
-		})
-		Step("teardown backup/restore objects", func() {
-			TearDownBackupRestoreSpecific(successfulBackupNames, successfulRestoreNames)
-		})
 		Step("report statistics", func() {
 			logrus.Infof("%d/%d backups succeeded.", successfulBackups, numBackups)
 			logrus.Infof("%d/%d restores succeeded.", successfulRestores, numRestores)

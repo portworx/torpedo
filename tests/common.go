@@ -393,14 +393,6 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 	return nil
 }
 
-// InitBackupAuth initializes keycloak endpoint and px-central admin password
-func InitBackupAuth() {
-	err := backup.InitKeycloak()
-	expect(err).NotTo(haveOccurred())
-	ok := backup.InitAdminPassword()
-	expect(ok).To(beTrue(), fmt.Sprintf("No environment variable 'PXBACKUP_PASSWORD' supplied"))
-}
-
 // ValidateRestoredApplicationsGetErr validates applications restored by backup driver and updates errors instead of failing the test
 func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumeParameters map[string]map[string]string, bkpErrors map[string]error) {
 	var updatedVolumeParams map[string]map[string]string
@@ -2190,7 +2182,7 @@ func SetScheduledBackupInterval(interval time.Duration, triggerType string) {
 
 	var schedulePolicyName string
 	var schedulePolicyUID string
-	if triggerType == InspectScheduledBackups {
+	if triggerType == BackupScheduleAll {
 		schedulePolicyName = schedulePolicyAllName
 		schedulePolicyUID = schedulePolicyAllUID
 		scheduledBackupAllNamespacesInterval = scheduledBackupInterval
@@ -2518,9 +2510,8 @@ func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 }
 
 // CreateNamespace creates a new nginx app
-func CreateNamespace() error {
+func CreateNamespace(appKeys []string) error {
 	volumeParams := make(map[string]map[string]string)
-	appKey := "nginx"
 	taskName := fmt.Sprintf("new-%s-%d", Inst().InstanceID, newNamespaceCounter)
 	sourceClusterConfigPath, err := getSourceClusterConfigPath()
 	if err != nil {
@@ -2528,23 +2519,27 @@ func CreateNamespace() error {
 	}
 	SetClusterContext(sourceClusterConfigPath)
 
-	ctx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-		AppKeys:            []string{appKey},
+	contexts, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+		AppKeys:            appKeys,
 		StorageProvisioner: Inst().Provisioner,
 	})
 	if err != nil {
 		return err
 	}
 	// Skip volume validation until other volume providers are implemented.
-	ctx[0].SkipVolumeValidation = true
+	for _, ctx := range contexts {
+		ctx.SkipVolumeValidation = true
+	}
 
-	ValidateApplications(ctx)
-	for vol, params := range GetVolumeParameters(ctx[0]) {
-		volumeParams[vol] = params
+	ValidateApplications(contexts)
+	for _, ctx := range contexts {
+		for vol, params := range GetVolumeParameters(ctx) {
+			volumeParams[vol] = params
+		}
 	}
 
 	SetClusterContext(sourceClusterConfigPath)
-	contextsCreated = append(contextsCreated, ctx[0])
+	contextsCreated = append(contextsCreated, contexts...)
 	newNamespaceCounter++
 
 	return nil
