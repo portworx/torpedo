@@ -78,6 +78,8 @@ var _ = Describe("{Longevity}", func() {
 		BackupUsingLabelOnCluster:       TriggerBackupByLabel,
 		BackupRestartPX:                 TriggerBackupRestartPX,
 		BackupRestartNode:               TriggerBackupRestartNode,
+		BackupDeleteBackupPod:           TriggerBackupDeleteBackupPod,
+		BackupScaleMongo:                TriggerBackupScaleMongo,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -237,6 +239,8 @@ func populateDisruptiveTriggers() {
 		BackupUsingLabelOnCluster:       false,
 		BackupRestartPX:                 false,
 		BackupRestartNode:               false,
+		BackupDeleteBackupPod:           false,
+		BackupScaleMongo:                false,
 	}
 }
 
@@ -317,8 +321,17 @@ func populateIntervals() {
 	triggerInterval[BackupUsingLabelOnCluster] = map[int]time.Duration{}
 	triggerInterval[BackupRestartPX] = map[int]time.Duration{}
 	triggerInterval[BackupRestartNode] = map[int]time.Duration{}
+	triggerInterval[BackupDeleteBackupPod] = map[int]time.Duration{}
+	triggerInterval[BackupScaleMongo] = map[int]time.Duration{}
 
 	baseInterval := 10 * time.Minute
+	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
+	triggerInterval[BackupScaleMongo][9] = 2 * baseInterval
+	triggerInterval[BackupScaleMongo][8] = 3 * baseInterval
+	triggerInterval[BackupScaleMongo][7] = 4 * baseInterval
+	triggerInterval[BackupScaleMongo][6] = 5 * baseInterval
+	triggerInterval[BackupScaleMongo][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
 	triggerInterval[BackupAllApps][10] = 1 * baseInterval
 	triggerInterval[BackupAllApps][9] = 2 * baseInterval
 	triggerInterval[BackupAllApps][8] = 3 * baseInterval
@@ -459,6 +472,13 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown][6] = 5 * baseInterval
 	triggerInterval[AppTaskDown][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
+	triggerInterval[BackupDeleteBackupPod][10] = 1 * baseInterval
+	triggerInterval[BackupDeleteBackupPod][9] = 2 * baseInterval
+	triggerInterval[BackupDeleteBackupPod][8] = 3 * baseInterval
+	triggerInterval[BackupDeleteBackupPod][7] = 4 * baseInterval
+	triggerInterval[BackupDeleteBackupPod][6] = 5 * baseInterval
+	triggerInterval[BackupDeleteBackupPod][5] = 6 * baseInterval // Default global chaos level, 1 hr
+
 	baseInterval = 30 * time.Minute
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
@@ -512,6 +532,8 @@ func populateIntervals() {
 	triggerInterval[BackupUsingLabelOnCluster][0] = 0
 	triggerInterval[BackupRestartPX][0] = 0
 	triggerInterval[BackupRestartNode][0] = 0
+	triggerInterval[BackupDeleteBackupPod][0] = 0
+	triggerInterval[BackupScaleMongo][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

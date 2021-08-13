@@ -101,8 +101,12 @@ const (
 	backupScheduleAllName   = "-all"
 	backupScheduleScaleName = "-scale"
 
-	storkDeploymentName      = "stork"
-	storkDeploymentNamespace = "kube-system"
+	storkDeploymentName                = "stork"
+	storkDeploymentNamespace           = "kube-system"
+	pxbackupDeploymentName             = "px-backup"
+	pxbackupDeploymentNamespace        = "px-backup"
+	pxbackupMongodbDeploymentName      = "pxc-backup-mongodb"
+	pxbackupMongodbDeploymentNamespace = "px-backup"
 
 	appReadinessTimeout = 10 * time.Minute
 )
@@ -162,11 +166,14 @@ const (
 	defaultCmdRetryInterval = 5 * time.Second
 )
 
+// Backup vars
 var (
-	// Backup vars
-	OrgID                                string
-	BucketName                           string
-	CloudCredUID                         string
+	// OrgID is pxbackup OrgID
+	OrgID      string
+	BucketName string
+	// CloudCredUID is pxbackup cloud cred UID
+	CloudCredUID string
+	// BackupLocationUID is pxbackup backupLocation UID
 	BackupLocationUID                    string
 	backupScheduleAllUID                 string
 	schedulePolicyAllUID                 string

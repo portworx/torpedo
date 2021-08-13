@@ -8,6 +8,9 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
@@ -146,6 +149,10 @@ const (
 	BackupRestartPX = "backupRestartPX"
 	//BackupRestartNode restarts a node with PX during a backup
 	BackupRestartNode = "backupRestartNode"
+	// BackupDeleteBackupPod deletes px-backup pod during a backup
+	BackupDeleteBackupPod = "backupDeleteBackupPod"
+	// BackupScaleMongo deletes px-backup pod during a backup
+	BackupScaleMongo = "backupScaleMongo"
 )
 
 // TriggerHAIncrease performs repl-add on all volumes of given contexts
@@ -1668,6 +1675,188 @@ func TriggerBackupRestartNode(contexts []*scheduler.Context, recordChan *chan *E
 						backupName, err)
 					UpdateOutcome(event, err)
 				}
+			}
+		}
+	})
+}
+
+// TriggerBackupDeleteBackupPod backs up an application and restarts px-backup pod during the backup
+func TriggerBackupDeleteBackupPod(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: BackupDeleteBackupPod,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("Update admin secret", func() {
+		err := backup.UpdatePxBackupAdminSecret()
+		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
+	})
+	backupCounter++
+	labelSelectors := make(map[string]string)
+	sourceClusterConfigPath, err := getSourceClusterConfigPath()
+	UpdateOutcome(event, err)
+	SetClusterContext(sourceClusterConfigPath)
+
+	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, "deleteBackupPod", backupCounter)
+	Step("Backup all namespaces", func() {
+		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
+			sourceClusterName, "all", backupName), func() {
+			err = CreateBackupGetErr(backupName,
+				sourceClusterName, backupLocationName, BackupLocationUID,
+				[]string{"*"}, labelSelectors, OrgID)
+			UpdateOutcome(event, err)
+		})
+	})
+
+	Step("Delete px-backup pod", func() {
+		ctx := &scheduler.Context{
+			App: &spec.AppSpec{
+				SpecList: []interface{}{
+					&appsapi.Deployment{
+						ObjectMeta: meta_v1.ObjectMeta{
+							Name:      pxbackupDeploymentName,
+							Namespace: pxbackupDeploymentNamespace,
+						},
+					},
+				},
+			},
+		}
+		err = Inst().S.DeleteTasks(ctx, nil)
+		UpdateOutcome(event, err)
+
+		err = Inst().S.WaitForRunning(ctx, backupRestoreCompletionTimeoutMin, defaultRetryInterval)
+		UpdateOutcome(event, err)
+	})
+
+	Step("Wait for backup to complete", func() {
+		ctx, err := backup.GetPxCentralAdminCtx()
+		if err != nil {
+			logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+			UpdateOutcome(event, err)
+		} else {
+			err = Inst().Backup.WaitForBackupCompletion(
+				ctx,
+				backupName, OrgID,
+				backupRestoreCompletionTimeoutMin*time.Minute,
+				retrySeconds*time.Second)
+			if err == nil {
+				logrus.Infof("Backup [%s] completed successfully", backupName)
+			} else {
+				logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+					backupName, err)
+				UpdateOutcome(event, err)
+			}
+		}
+	})
+}
+
+// TriggerBackupScaleMongo backs up an application and scales down Mongo pod during the backup
+func TriggerBackupScaleMongo(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: BackupScaleMongo,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("Update admin secret", func() {
+		err := backup.UpdatePxBackupAdminSecret()
+		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
+	})
+	backupCounter++
+	labelSelectors := make(map[string]string)
+	sourceClusterConfigPath, err := getSourceClusterConfigPath()
+	UpdateOutcome(event, err)
+	SetClusterContext(sourceClusterConfigPath)
+
+	backupName := fmt.Sprintf("%s-%s-%d", backupNamePrefix, "scaleMongo", backupCounter)
+	Step("Backup all namespaces", func() {
+		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
+			sourceClusterName, "all", backupName), func() {
+			err = CreateBackupGetErr(backupName,
+				sourceClusterName, backupLocationName, BackupLocationUID,
+				[]string{"*"}, labelSelectors, OrgID)
+			UpdateOutcome(event, err)
+		})
+	})
+
+	Step("Scale mongodb down to 0", func() {
+		ctx := &scheduler.Context{
+			App: &spec.AppSpec{
+				SpecList: []interface{}{
+					&appsapi.Deployment{
+						ObjectMeta: meta_v1.ObjectMeta{
+							Name:      pxbackupMongodbDeploymentName,
+							Namespace: pxbackupMongodbDeploymentNamespace,
+						},
+					},
+				},
+			},
+		}
+		err = Inst().S.ScaleApplication(ctx, map[string]int32{
+			pxbackupMongodbDeploymentName + k8s.StatefulSetSuffix: 0,
+		})
+		UpdateOutcome(event, err)
+
+		Step("Giving few seconds for scaled up applications to stabilize", func() {
+			time.Sleep(45 * time.Second)
+		})
+	})
+
+	Step("Scale mongodb up to 3", func() {
+		ctx := &scheduler.Context{
+			App: &spec.AppSpec{
+				SpecList: []interface{}{
+					&appsapi.Deployment{
+						ObjectMeta: meta_v1.ObjectMeta{
+							Name:      pxbackupMongodbDeploymentName,
+							Namespace: pxbackupMongodbDeploymentNamespace,
+						},
+					},
+				},
+			},
+		}
+		err = Inst().S.ScaleApplication(ctx, map[string]int32{
+			pxbackupMongodbDeploymentName + k8s.StatefulSetSuffix: 3,
+		})
+		UpdateOutcome(event, err)
+	})
+
+	Step("Wait for backup to complete", func() {
+		ctx, err := backup.GetPxCentralAdminCtx()
+		if err != nil {
+			logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+			UpdateOutcome(event, err)
+		} else {
+			err = Inst().Backup.WaitForBackupCompletion(
+				ctx,
+				backupName, OrgID,
+				backupRestoreCompletionTimeoutMin*time.Minute,
+				retrySeconds*time.Second)
+			if err == nil {
+				logrus.Infof("Backup [%s] completed successfully", backupName)
+			} else {
+				logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+					backupName, err)
+				UpdateOutcome(event, err)
 			}
 		}
 	})
