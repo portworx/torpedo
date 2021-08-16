@@ -1,9 +1,8 @@
-package tests
+package suites
 
 import (
 	"fmt"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
@@ -18,8 +17,8 @@ import (
 )
 
 const (
-	defaultTimeout       = 6 * time.Minute
-	defaultRetryInterval = 10 * time.Second
+	decommissionTimeout       = 6 * time.Minute
+	decommissionRetryInterval = 10 * time.Second
 )
 
 func TestDecommissionNode(t *testing.T) {
@@ -89,7 +88,7 @@ var _ = Describe("{DecommissionNode}", func() {
 						}
 						return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
 					}
-					decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+					decommissioned, err := task.DoRetryWithTimeout(t, decommissionTimeout, decommissionRetryInterval)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(decommissioned.(bool)).To(BeTrue())
 				})
@@ -121,9 +120,3 @@ var _ = AfterSuite(func() {
 	PerformSystemCheck()
 	ValidateCleanup()
 })
-
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}

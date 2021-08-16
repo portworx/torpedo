@@ -1,8 +1,7 @@
-package tests
+package suites
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -409,8 +408,3 @@ var _ = AfterSuite(func() {
 	PerformSystemCheck()
 	ValidateCleanup()
 })
-
-func TestMain(m *testing.M) {
-	ParseFlags()
-	os.Exit(m.Run())
-}

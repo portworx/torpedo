@@ -1,8 +1,7 @@
-package tests
+package suites
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -163,9 +162,3 @@ var _ = AfterSuite(func() {
 	PerformSystemCheck()
 	ValidateCleanup()
 })
-
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}

@@ -1,4 +1,4 @@
-package tests
+package suites
 
 import (
 	"context"
@@ -131,12 +131,6 @@ var _ = AfterSuite(func() {
 	//ValidateCleanup()
 	//	BackupCleanup()
 })
-
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
 
 func SetClusterContext(clusterConfigPath string) {
 	err := Inst().S.SetConfig(clusterConfigPath)

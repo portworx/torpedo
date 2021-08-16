@@ -1,8 +1,7 @@
-package tests
+package suites
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -15,9 +14,9 @@ import (
 )
 
 const (
-	defaultTimeout       = 1 * time.Minute
-	driveFailTimeout     = 2 * time.Minute
-	defaultRetryInterval = 5 * time.Second
+	yankDriveTimeout       = 1 * time.Minute
+	driveFailTimeout       = 2 * time.Minute
+	yankDriveRetryInterval = 5 * time.Second
 )
 
 func TestDriveFailure(t *testing.T) {
@@ -72,8 +71,8 @@ var _ = Describe("{DriveFailure}", func() {
 				Step(fmt.Sprintf("induce a failure on all drives on the node %v", nodeWithDrive), func() {
 					for _, driveToFail := range drives {
 						busID, err := Inst().N.YankDrive(nodeWithDrive, driveToFail, node.ConnectionOpts{
-							Timeout:         defaultTimeout,
-							TimeBeforeRetry: defaultRetryInterval,
+							Timeout:         yankDriveTimeout,
+							TimeBeforeRetry: yankDriveRetryInterval,
 						})
 						busInfoMap[driveToFail] = busID
 						Expect(err).NotTo(HaveOccurred())
@@ -122,9 +121,3 @@ var _ = AfterSuite(func() {
 	PerformSystemCheck()
 	ValidateCleanup()
 })
-
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
