@@ -2315,6 +2315,21 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 	return vols, nil
 }
 
+// GetPVCs returns all pvcs for the given context
+func (k *K8s) GetPVCs(ctx *scheduler.Context) ([]*corev1.PersistentVolumeClaim, error) {
+	var pvcs []*corev1.PersistentVolumeClaim
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			pvcs = append(pvcs, pvcObj)
+		}
+	}
+	return pvcs, nil
+}
+
 // GetVolumes  Get the volumes
 //
 func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	corev1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
 	"time"
@@ -437,6 +438,14 @@ func (d *dcos) GetVolumeDriverVolumeName(name string, namespace string) (string,
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetVolumeDriverVolumeName()",
+	}
+}
+
+func (d *dcos) GetPVCs(ctx *scheduler.Context) ([]*corev1.PersistentVolumeClaim, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPVCs()",
 	}
 }
 

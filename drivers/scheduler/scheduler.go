@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -160,6 +161,9 @@ type Driver interface {
 
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context, *VolumeOptions) ([]*volume.Volume, error)
+
+	// GetPVCs returns all pvcs for the given context
+	GetPVCs(*Context) ([]*corev1.PersistentVolumeClaim, error)
 
 	// GetVolumes returns all storage volumes for the given context
 	GetVolumes(*Context) ([]*volume.Volume, error)
