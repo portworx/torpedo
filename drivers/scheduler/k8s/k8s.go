@@ -2961,6 +2961,7 @@ func (k *K8s) IsScalable(spec interface{}) bool {
 				}
 			}
 		}
+		return true
 	} else if _, ok := spec.(*appsapi.StatefulSet); ok {
 		return true
 	}

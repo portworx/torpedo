@@ -2,24 +2,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vdbench-sv4-svc
+  name: vdbench-sv4-svc-multivol
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: vdbench-sv4-svc
+      app: vdbench-sv4-svc-multivol
   template:
     metadata:
       labels:
-        app: vdbench-sv4-svc
+        app: vdbench-sv4-svc-multivol
     spec:
+      schedulerName: stork
       containers:
         - name: vdbench
-          image: srinav/ocp-vdbench:v1
+          image: srinav/ocp-vdbench:v3
           imagePullPolicy: IfNotPresent
           command: ["./bench_runner.sh"]
           {{ if .ClaimsCount }}
-          args: ["Basic", "5400", "datadir", "1" , "{{ .ClaimsCount }}"]
+          args: ["Basic", "5400", "datadir", "1" , "{{ .ClaimsCount }}", "$(POD_NAME)"]
           {{ end }}
           env:
             - name: POD_NAME
