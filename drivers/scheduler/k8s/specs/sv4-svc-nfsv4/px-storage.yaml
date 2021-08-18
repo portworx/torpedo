@@ -1,0 +1,77 @@
+##### Portworx storage class with sharedv4_mount_options: "vers=4.0"
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: px-sc-sharedv4-svc-vers4
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  sharedv4: "true"
+  sharedv4_svc_type: "ClusterIP"
+  sharedv4_mount_options: "vers=4.0"
+allowVolumeExpansion: true
+---
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-pvc-sharedv4-vers4
+spec:
+  storageClassName: px-sc-sharedv4-svc-vers4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+##### Portworx storage class with nfs_v4: "true"
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: px-sc-sharedv4-svc-nfsv4
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  sharedv4: "true"
+  sharedv4_svc_type: "ClusterIP"
+  nfs_v4: "true"
+allowVolumeExpansion: true
+---
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-pvc-sharedv4-nfsv4
+spec:
+  storageClassName: px-sc-sharedv4-svc-nfsv4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+##### Portworx storage class with export_options: "security_label"
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: px-sc-sharedv4-svc-security
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  sharedv4: "true"
+  sharedv4_svc_type: "ClusterIP"
+  export_options: "security_label"
+allowVolumeExpansion: true
+---
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-pvc-sharedv4-security
+spec:
+  storageClassName: px-sc-sharedv4-svc-security
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
