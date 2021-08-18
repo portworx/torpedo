@@ -733,7 +733,7 @@ func errIsNotFound(err error) bool {
 }
 
 func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
-	logrus.Info("testing volume %v", vol)
+	logrus.Infof("testing volume %v", vol)
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})

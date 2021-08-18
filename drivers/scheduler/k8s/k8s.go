@@ -2218,13 +2218,15 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 					Cause: fmt.Sprintf("[%s] Failed to get PVC: %v. Err: %v", ctx.App.Key, obj.Name, err),
 				}
 			}
-
-			vols = append(vols, &volume.Volume{
-				ID:        string(pvcObj.Spec.VolumeName),
-				Name:      obj.Name,
-				Namespace: obj.Namespace,
-				Shared:    k.isPVCShared(obj),
-			})
+			logrus.Infof("testing volume name %v", obj.Name)
+			if obj.Name != "" {
+				vols = append(vols, &volume.Volume{
+					ID:        string(pvcObj.Spec.VolumeName),
+					Name:      obj.Name,
+					Namespace: obj.Namespace,
+					Shared:    k.isPVCShared(obj),
+				})
+			}
 
 			if err := k8sCore.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
 				if k8serrors.IsNotFound(err) {
