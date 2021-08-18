@@ -422,7 +422,9 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 
 // ValidateVolumesDeleted checks it given volumes got deleted
 func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
+	logrus.Infof("testing appName %v, vols %v", appName, vols)
 	for _, vol := range vols {
+		logrus.Infof("testing appName %v, vol %v", appName, vol)
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
 			err := Inst().V.ValidateDeleteVolume(vol)
