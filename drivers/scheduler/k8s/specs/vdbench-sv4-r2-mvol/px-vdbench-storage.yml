@@ -12,9 +12,9 @@ allowVolumeExpansion: true
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: vdbench-pvc-sharedv4
+  name: vdbench-pvc-sharedv4-1
 spec:
-  storageClassName: vdbench-sc-sharedv4-1
+  storageClassName: vdbench-sc-sharedv4
   accessModes:
     - ReadWriteMany
   resources:

@@ -316,7 +316,7 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 })
 
 // This test performs sharedv4 nfs server pod termination failover use case
-var _ = Describe("{NfsServerTermination}", func() {
+var _ = Describe("{NfsServerKill}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to validate that the new pods started successfully after nfs server node is terminated", func() {
@@ -325,7 +325,7 @@ var _ = Describe("{NfsServerTermination}", func() {
 		var err error
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nfsservertermination-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nfskill-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
