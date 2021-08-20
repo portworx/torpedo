@@ -412,6 +412,7 @@ func KillANodeAndValidate(storageDriverNodes []node.Node) {
 	nodeToKill := storageDriverNodes[rand.Intn(len(storageDriverNodes))]
 
 	Step(fmt.Sprintf("Deleting node [%v]", nodeToKill.Name), func() {
+		logrus.Infof("Instance is of %v ", Inst().N.String())
 		err := Inst().N.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
 		Expect(err).NotTo(HaveOccurred())
 	})

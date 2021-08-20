@@ -188,6 +188,32 @@ func (a *aws) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	return nil
 }
 
+func (a *aws) DeleteNode(n node.Node, timeout time.Duration) error {
+	var err error
+	instanceID, err := a.getNodeIDByPrivAddr(n)
+	if err != nil {
+		return &node.ErrFailedToDeleteNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get instance ID due to: %v", err),
+		}
+	}
+	//Terminate the instance by its InstanceID
+	stopInstanceInput := &ec2.TerminateInstancesInput{
+		InstanceIds: []*string{
+			aws_pkg.String(instanceID),
+		},
+	}
+	_, err = a.svc.TerminateInstances(stopInstanceInput)
+	if err != nil {
+		return &node.ErrFailedToDeleteNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to terminate instance due to: %v", err),
+		}
+	}
+
+	return nil
+}
+
 // TODO add AWS implementation for this
 func (a *aws) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
 	return "", nil
