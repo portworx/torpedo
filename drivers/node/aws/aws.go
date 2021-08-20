@@ -163,6 +163,28 @@ func (a *aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 }
 
 func (a *aws) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
+	var err error
+	instanceID, err := a.getNodeIDByPrivAddr(n)
+	if err != nil {
+		return &node.ErrFailedToShutdownNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get instance ID due to: %v", err),
+		}
+	}
+	//Reboot the instance by its InstanceID
+	stopInstanceInput := &ec2.StopInstancesInput{
+		InstanceIds: []*string{
+			aws_pkg.String(instanceID),
+		},
+	}
+	_, err = a.svc.StopInstances(stopInstanceInput)
+	if err != nil {
+		return &node.ErrFailedToShutdownNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to stop instance due to: %v", err),
+		}
+	}
+
 	return nil
 }
 

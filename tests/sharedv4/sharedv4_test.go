@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -11,8 +12,16 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	defaultWaitRebootTimeout = 5 * time.Minute
+	defaultCommandRetry      = 5 * time.Second
+	defaultCommandTimeout    = 1 * time.Minute
+	nodeDeleteTimeoutMins    = 7 * time.Minute
 )
 
 func TestSharedV4SVC(t *testing.T) {
@@ -28,7 +37,7 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-// This test performs mutli volume mounts to a single  deployment
+// This test performs multi volume mounts to a single  deployment
 var _ = Describe("{MultiVolumeMounts}", func() {
 
 	It("has to create multiple sharedv4-svc volumes and mount to sing pod", func() {
@@ -108,12 +117,12 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 
 		Step("Scale up and down all app", func() {
 			for _, ctx := range contexts {
-				globalScaleFactor := Inst().GlobalScaleFactor
+
 				Step(fmt.Sprintf("scale up app: %s", ctx.App.Key), func() {
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
 					for name, scale := range applicationScaleUpMap {
-						if globalScaleFactor == 100 && scale < 25 {
+						if frequency == 100 && scale < 25 {
 
 							applicationScaleUpMap[name] = scale + 25
 						} else {
@@ -136,7 +145,7 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
 					for name, scale := range applicationScaleUpMap {
-						if globalScaleFactor == 100 && scale < 50 {
+						if frequency == 100 && scale < 50 {
 
 							applicationScaleUpMap[name] = scale + 25
 						} else {
@@ -159,7 +168,7 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
 					for name, scale := range applicationScaleUpMap {
-						if globalScaleFactor == 100 && scale < 75 {
+						if frequency == 100 && scale < 75 {
 
 							applicationScaleUpMap[name] = scale + 25
 						} else {
@@ -182,7 +191,7 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
 					for name, scale := range applicationScaleUpMap {
-						if globalScaleFactor == 100 && scale < 100 {
+						if frequency == 100 && scale < 100 {
 
 							applicationScaleUpMap[name] = scale + 25
 						} else {
@@ -205,7 +214,7 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
 					for name, scale := range applicationScaleDownMap {
-						if globalScaleFactor == 100 && scale == 100 {
+						if frequency == 100 && scale >= 100 {
 
 							applicationScaleDownMap[name] = scale - 25
 						} else {
@@ -228,7 +237,7 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
 					for name, scale := range applicationScaleDownMap {
-						if globalScaleFactor == 100 && scale > 50 {
+						if frequency == 100 && scale > 50 {
 
 							applicationScaleDownMap[name] = scale - 25
 						} else {
@@ -251,7 +260,7 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
 					for name, scale := range applicationScaleDownMap {
-						if globalScaleFactor == 100 && scale > 25 {
+						if frequency == 100 && scale > 25 {
 
 							applicationScaleDownMap[name] = scale - 15
 						} else {
@@ -306,8 +315,118 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 
 })
 
+// This test performs sharedv4 nfs server pod termination failover use case
+var _ = Describe("{NfsServerTermination}", func() {
+	var contexts []*scheduler.Context
+
+	It("has to validate that the new pods started successfully after nfs server node is terminated", func() {
+		contexts = make([]*scheduler.Context, 0)
+		nodesToKill := []node.Node{}
+		var err error
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nfsservertermination-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+		for _, ctx := range contexts {
+			var appVolumes []*volume.Volume
+			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(appVolumes).NotTo(BeEmpty())
+			})
+			for _, v := range appVolumes {
+
+				Step("get attached node and stop the instance", func() {
+					currNodes := node.GetStorageDriverNodes()
+					countOfCurrNodes := len(currNodes)
+
+					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
+					nodesToKill = append(nodesToKill, *attachedNode)
+
+					// Reboot node and check driver status
+					Step(fmt.Sprintf("stop node : %v having volume: %v attached", attachedNode.Name, v.Name), func() {
+
+						KillANodeAndValidate(nodesToKill)
+
+						Step("validate applications", func() {
+							for _, ctx := range contexts {
+								ValidateContext(ctx)
+							}
+						})
+
+						Step(fmt.Sprintf("validate node: %v is stopped", attachedNode.Name), func() {
+							currNodes = node.GetStorageDriverNodes()
+							isNodePresent := false
+							for _, currNode := range currNodes {
+								if currNode.Name == attachedNode.Name {
+									isNodePresent = true
+									break
+								}
+							}
+							Expect(isNodePresent).To(BeFalse())
+						})
+
+						Step(fmt.Sprintf("wait to new instance to start scheduler: %s and volume driver: %s",
+							Inst().S.String(), Inst().V.String()), func() {
+							time.Sleep(2 * time.Minute)
+							currNodes = node.GetStorageDriverNodes()
+							Expect(countOfCurrNodes).To(Equal(len(currNodes)))
+							for _, n := range currNodes {
+
+								err = Inst().S.IsNodeReady(n)
+								Expect(err).NotTo(HaveOccurred())
+
+								err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+								Expect(err).NotTo(HaveOccurred())
+							}
+						})
+
+						Step("validate apps", func() {
+							for _, ctx := range contexts {
+								ValidateContext(ctx)
+							}
+						})
+
+					})
+				})
+			}
+
+		}
+
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
 	ParseFlags()
 	os.Exit(m.Run())
+}
+
+func KillANodeAndValidate(storageDriverNodes []node.Node) {
+	rand.Seed(time.Now().Unix())
+	nodeToKill := storageDriverNodes[rand.Intn(len(storageDriverNodes))]
+
+	Step(fmt.Sprintf("Deleting node [%v]", nodeToKill.Name), func() {
+		err := Inst().N.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Step("Wait for 10 min. to node get replaced by autoscalling group", func() {
+		time.Sleep(10 * time.Minute)
+	})
+
+	err := Inst().S.RefreshNodeRegistry()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = Inst().V.RefreshDriverEndpoints()
+	Expect(err).NotTo(HaveOccurred())
+
+	Step(fmt.Sprintf("Validate number of storage nodes after killing node [%v]", nodeToKill.Name), func() {
+		ValidateClusterSize(int64(len(storageDriverNodes)))
+	})
 }
