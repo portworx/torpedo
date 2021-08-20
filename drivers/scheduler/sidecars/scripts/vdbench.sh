@@ -18,8 +18,8 @@ OUTPUT_DIR="/output"
 
 # Use this to update the size of the volume
 updateTemplates() {
-  for i in "templates/${TEST_TEMPLATES}/File"*; do sed -e "s|anchor=/datadir1|anchor=/$TEST_DIR|g" -i "$i"; done
-  for i in "templates/${TEST_TEMPLATES}/File"*; do sed -e "s|elapsed=60|elapsed=$TEST_DURATION|g" -i "$i"; done
+  for i in `ls templates/${TEST_TEMPLATES}/File*`; do sed -e "s|anchor=/datadir1|anchor=/$TEST_DIR|g" -i $i; done
+  for i in `ls templates/${TEST_TEMPLATES}/File*`; do sed -e "s|elapsed=60|elapsed=$TEST_DURATION|g" -i $i; done
 }
 
 
@@ -27,8 +27,7 @@ if [ $# -gt 0 ];
 then
   echo "Setting the test templates as $1"
   TEST_TEMPLATES=$1
-  if [ ! -d "templates/$TEST_TEMPLATES" ];
-  then
+  if [ ! -d "templates/$TEST_TEMPLATES" ]; then
     echo "Specified templates do not exist."
     exit 1
   fi
@@ -55,32 +54,41 @@ fi
 
 #Verify that the datadir1 used by the templates is mounted
 if [ 2 -ne $IS_LOCAL_DIR ]; then
-  if ! df -h -P | grep -q datadir1; then
-    printf "datadir1 not mounted successfully, exiting \n"
+  df -h -P | grep -q datadir1
+  if [ `echo $?` -ne 0 ]; then
+    echo -e "datadir1 not mounted successfully, exiting \n"
     exit
   else
     echo "datadir1 mounted successfully"
   fi
 else
-  if ! mkdir -p "/$TEST_DIR"; then
-    printf "/%s could not be created, exiting \n" "$TEST_DIR"
+  mkdir -p /$TEST_DIR
+  if [ `echo $?` -ne 0 ]; then
+    echo -e "/$TEST_DIR could not be created, exiting \n"
     exit
   fi
-  rm -rf "/${TEST_DIR:?}/"*
+  rm -rf /$TEST_DIR/*
   echo "using /$TEST_DIR for testing"
+fi
+
+# create output dir
+mkdir -p /$OUTPUT_DIR
+if [ `echo $?` -ne 0 ]; then
+  echo -e "/$OUTPUT_DIR could not be created, exiting \n"
+  exit
 fi
 
 updateTemplates
 
 # Start vdbench I/O iterating through each template file
-timestamp=$(date +%d%m%Y_%H%M%S)
-printf "Running %s Workloads\n" "$TEST_TEMPLATES"
+timestamp=`date +%d%m%Y_%H%M%S`
+echo -e "Running $TEST_TEMPLATES Workloads\n"
 pwd
 id
 
-for i in $(find "templates/${TEST_TEMPLATES}/" -maxdepth 1 ! -name "${TEST_TEMPLATES}" | cut -d "/" -f 3)
+for i in `ls templates/${TEST_TEMPLATES}/ | cut -d "/" -f 3`
 do
  echo "######## Starting workload -- $i#######"
- ./vdbench -f "templates/${TEST_TEMPLATES}/$i" -o "${OUTPUT_DIR}/output-$i-$timestamp"
+ ./vdbench -f templates/${TEST_TEMPLATES}/$i -o ${OUTPUT_DIR}/output-$i-$timestamp
  echo "######## Ended workload -- $i#######"
 done
