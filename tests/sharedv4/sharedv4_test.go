@@ -115,196 +115,32 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 			}
 		})
 
-		Step("Scale up and down all app", func() {
-			for _, ctx := range contexts {
-
-				Step(fmt.Sprintf("scale up app: %s", ctx.App.Key), func() {
-					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					for name, scale := range applicationScaleUpMap {
-						if frequency == 100 && scale < 25 {
-
-							applicationScaleUpMap[name] = scale + 25
-						} else {
-							applicationScaleUpMap[name] = scale + int32(len(node.GetWorkerNodes()))
-						}
-						logrus.Infof("scaling app %v by %d", name, applicationScaleUpMap[name])
-					}
-					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				Step("Giving few seconds for scaled up applications to stabilize", func() {
-					time.Sleep(10 * time.Second)
-				})
-
-				ctx.SkipVolumeValidation = false
-				ValidateContext(ctx)
-
-				Step(fmt.Sprintf("scale up app: %s", ctx.App.Key), func() {
-					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					for name, scale := range applicationScaleUpMap {
-						if frequency == 100 && scale < 50 {
-
-							applicationScaleUpMap[name] = scale + 25
-						} else {
-							applicationScaleUpMap[name] = scale + int32(len(node.GetWorkerNodes()))
-						}
-						logrus.Infof("scaling app %v by %d", name, applicationScaleUpMap[name])
-					}
-					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				Step("Giving few seconds for scaled up applications to stabilize", func() {
-					time.Sleep(10 * time.Second)
-				})
-
-				ctx.SkipVolumeValidation = false
-				ValidateContext(ctx)
-
-				Step(fmt.Sprintf("scale up app: %s", ctx.App.Key), func() {
-					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					for name, scale := range applicationScaleUpMap {
-						if frequency == 100 && scale < 75 {
-
-							applicationScaleUpMap[name] = scale + 25
-						} else {
-							applicationScaleUpMap[name] = scale + int32(len(node.GetWorkerNodes()))
-						}
-						logrus.Infof("scaling app %v by %d", name, applicationScaleUpMap[name])
-					}
-					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				Step("Giving few seconds for scaled up applications to stabilize", func() {
-					time.Sleep(10 * time.Second)
-				})
-
-				ctx.SkipVolumeValidation = false
-				ValidateContext(ctx)
-
-				Step(fmt.Sprintf("scale up app: %s", ctx.App.Key), func() {
-					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					for name, scale := range applicationScaleUpMap {
-						if frequency == 100 && scale < 100 {
-
-							applicationScaleUpMap[name] = scale + 25
-						} else {
-							applicationScaleUpMap[name] = scale + int32(len(node.GetWorkerNodes()))
-						}
-						logrus.Infof("scaling app %v by %d", name, applicationScaleUpMap[name])
-					}
-					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				Step("Giving few seconds for scaled up applications to stabilize", func() {
-					time.Sleep(10 * time.Second)
-				})
-
-				ctx.SkipVolumeValidation = false
-				ValidateContext(ctx)
-
-				Step(fmt.Sprintf("scale down app %s", ctx.App.Key), func() {
-					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					for name, scale := range applicationScaleDownMap {
-						if frequency == 100 && scale >= 100 {
-
-							applicationScaleDownMap[name] = scale - 25
-						} else {
-							applicationScaleDownMap[name] = scale - 1
-						}
-						logrus.Infof("scaling app %v by %d", name, applicationScaleDownMap[name])
-					}
-					err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				Step("Giving few seconds for scaled down applications to stabilize", func() {
-					time.Sleep(10 * time.Second)
-				})
-
-				ctx.SkipVolumeValidation = false
-				ValidateContext(ctx)
-
-				Step(fmt.Sprintf("scale down app %s", ctx.App.Key), func() {
-					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					for name, scale := range applicationScaleDownMap {
-						if frequency == 100 && scale > 50 {
-
-							applicationScaleDownMap[name] = scale - 25
-						} else {
-							applicationScaleDownMap[name] = scale - 1
-						}
-						logrus.Infof("scaling app %v by %d", name, applicationScaleDownMap[name])
-					}
-					err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				Step("Giving few seconds for scaled down applications to stabilize", func() {
-					time.Sleep(10 * time.Second)
-				})
-
-				ctx.SkipVolumeValidation = false
-				ValidateContext(ctx)
-
-				Step(fmt.Sprintf("scale down app %s", ctx.App.Key), func() {
-					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					for name, scale := range applicationScaleDownMap {
-						if frequency == 100 && scale > 25 {
-
-							applicationScaleDownMap[name] = scale - 15
-						} else {
-							applicationScaleDownMap[name] = scale - 1
-						}
-						logrus.Infof("scaling app %v by %d", name, applicationScaleDownMap[name])
-					}
-					err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				Step("Giving few seconds for scaled down applications to stabilize", func() {
-					time.Sleep(10 * time.Second)
-				})
-
-				ctx.SkipVolumeValidation = false
-				ValidateContext(ctx)
-			}
-		})
-
 		Step("get nodes where app is running and restart volume driver", func() {
 			for _, ctx := range contexts {
-				appNodes, err := Inst().S.GetNodesForApp(ctx)
+				appVolumes, err := Inst().S.GetVolumes(ctx)
 				Expect(err).NotTo(HaveOccurred())
-				for _, appNode := range appNodes {
+				for _, appVolume := range appVolumes {
+					attachedNode, err := Inst().V.GetNodeForVolume(appVolume, defaultCommandTimeout, defaultCommandRetry)
+					Expect(err).NotTo(HaveOccurred())
 					Step(
 						fmt.Sprintf("stop volume driver %s on app %s's node: %s",
-							Inst().V.String(), ctx.App.Key, appNode.Name),
+							Inst().V.String(), ctx.App.Key, attachedNode.Name),
 						func() {
-							StopVolDriverAndWait([]node.Node{appNode})
+							StopVolDriverAndWait([]node.Node{*attachedNode})
 						})
 
 					Step(
 						fmt.Sprintf("starting volume %s driver on app %s's node %s",
-							Inst().V.String(), ctx.App.Key, appNode.Name),
+							Inst().V.String(), ctx.App.Key, attachedNode.Name),
 						func() {
-							StartVolDriverAndWait([]node.Node{appNode})
+							StartVolDriverAndWait([]node.Node{*attachedNode})
 						})
 
 					Step("Giving few seconds for volume driver to stabilize", func() {
 						time.Sleep(20 * time.Second)
 					})
 
-					Step(fmt.Sprintf("validate app %s", appNode.Name), func() {
+					Step(fmt.Sprintf("validate app %s", attachedNode.Name), func() {
 						ValidateContext(ctx)
 					})
 				}
