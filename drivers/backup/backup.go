@@ -133,7 +133,7 @@ type BLocation interface {
 	UpdateOwnershipBackupLocation(ctx context.Context, req *api.BackupLocationOwnershipUpdateRequest) (*api.BackupLocationOwnershipUpdateResponse, error)
 
 	// WaitForBackupLocationDeletion watis for backup location to be deleted
-	WaitForBackupLocationDeletion(ctx context.Context, backupLocationName string, orgID string,
+	WaitForBackupLocationDeletion(ctx context.Context, backupLocationName, backupLocationUID string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
