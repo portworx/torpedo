@@ -27,7 +27,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers"
 	driver_api "github.com/portworx/torpedo/drivers/api"
-	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -487,11 +486,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 								Namespaces:     []string{namespace},
 								LabelSelectors: labelSelectores,
 							}
-							ctx, err := backup.GetPxCentralAdminCtx()
-							Expect(err).NotTo(HaveOccurred(),
-								fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-									err))
-							_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
+							_, err = backupDriver.CreateBackup(bkpCreateRequest)
 							errChan <- err
 						})
 					}(provider, namespace)
@@ -613,11 +608,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 								Cluster:          clusterName,
 								NamespaceMapping: namespaceMapping,
 							}
-							ctx, err := backup.GetPxCentralAdminCtx()
-							Expect(err).NotTo(HaveOccurred(),
-								fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-									err))
-							_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+							_, err := backupDriver.CreateRestore(createRestoreReq)
 
 							errChan <- err
 						})
@@ -755,16 +746,12 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 									Name:  backupName,
 									OrgId: orgID,
 								}
-								ctx, err = backup.GetPxCentralAdminCtx()
-								Expect(err).NotTo(HaveOccurred(),
-									fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-										err))
-								_, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
+								_, err := backupDriver.DeleteBackup(bkpDeleteRequest)
 
 								ctx, _ := context.WithTimeout(context.Background(),
 									backupRestoreCompletionTimeoutMin*time.Minute)
 
-								if err = backupDriver.WaitForBackupDeletion(ctx, backupName, orgID,
+								if err := backupDriver.WaitForBackupDeletion(ctx, backupName, orgID,
 									backupRestoreCompletionTimeoutMin*time.Minute,
 									retrySeconds*time.Second); err != nil {
 									errChan <- err
@@ -787,17 +774,13 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 									OrgId: orgID,
 									Name:  restoreName,
 								}
-								ctx, err = backup.GetPxCentralAdminCtx()
-								Expect(err).NotTo(HaveOccurred(),
-									fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-										err))
-								_, err = backupDriver.DeleteRestore(ctx, deleteRestoreReq)
+								_, err := backupDriver.DeleteRestore(deleteRestoreReq)
 
 								ctx, _ := context.WithTimeout(context.Background(),
 									backupRestoreCompletionTimeoutMin*time.Minute)
 
 								logrus.Infof("Wait for restore %s is deleted", restoreName)
-								if err = backupDriver.WaitForRestoreDeletion(ctx, restoreName, orgID,
+								if err := backupDriver.WaitForRestoreDeletion(ctx, restoreName, orgID,
 									backupRestoreCompletionTimeoutMin*time.Minute,
 									retrySeconds*time.Second); err != nil {
 									errChan <- err
@@ -1025,11 +1008,7 @@ func CreateOrganization(orgID string) {
 				Name: orgID,
 			},
 		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.CreateOrganization(ctx, req)
+		_, err := backupDriver.CreateOrganization(req)
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to create organization [%s]. Error: [%v]",
 				orgID, err))
@@ -1059,11 +1038,7 @@ func DeleteCloudCredential(name string, orgID string) {
 			Name:  name,
 			OrgId: orgID,
 		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
+		backupDriver.DeleteCloudCredential(credDeleteRequest)
 		// Best effort cleanup, dont fail test, if deletion fails
 		// Expect(err).NotTo(HaveOccurred(),
 		//	fmt.Sprintf("Failed to delete cloud credential [%s] in org [%s]", name, orgID))
@@ -1226,11 +1201,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 					},
 				},
 			}
-			ctx, err := backup.GetPxCentralAdminCtx()
-			Expect(err).NotTo(HaveOccurred(),
-				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-					err))
-			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
+			_, err := backupDriver.CreateCloudCredential(credCreateRequest)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
 		// TODO: validate CreateCloudCredentialResponse also
@@ -1256,11 +1227,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 					},
 				},
 			}
-			ctx, err := backup.GetPxCentralAdminCtx()
-			Expect(err).NotTo(HaveOccurred(),
-				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-					err))
-			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
+			_, err := backupDriver.CreateCloudCredential(credCreateRequest)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
 			// TODO: validate CreateCloudCredentialResponse also
@@ -1382,11 +1349,7 @@ func CreateS3BackupLocation(name string, cloudCred string, bucketName string, or
 			},
 		},
 	}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	Expect(err).NotTo(HaveOccurred(),
-		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-			err))
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.CreateBackupLocation(bLocationCreateReq)
 	Expect(err).NotTo(HaveOccurred(),
 		fmt.Sprintf("Failed to create backuplocation [%s] in org [%s]", name, orgID))
 }
@@ -1407,11 +1370,7 @@ func CreateAzureBackupLocation(name string, cloudCred string, bucketName string,
 			Type:            api.BackupLocationInfo_Azure,
 		},
 	}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	Expect(err).NotTo(HaveOccurred(),
-		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-			err))
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.CreateBackupLocation(bLocationCreateReq)
 	Expect(err).NotTo(HaveOccurred(),
 		fmt.Sprintf("Failed to create backuplocation [%s] in org [%s]", name, orgID))
 }
@@ -1424,11 +1383,7 @@ func DeleteBackupLocation(name string, orgID string) {
 			Name:  name,
 			OrgId: orgID,
 		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
+		backupDriver.DeleteBackupLocation(bLocationDeleteReq)
 		// Best effort cleanup, dont fail test, if deletion fails
 		//Expect(err).NotTo(HaveOccurred(),
 		//	fmt.Sprintf("Failed to delete backup location [%s] in org [%s]", name, orgID))
@@ -1571,11 +1526,7 @@ func DeleteCluster(name string, orgID string) {
 			OrgId: orgID,
 			Name:  name,
 		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+		backupDriver.DeleteCluster(clusterDeleteReq)
 		// Best effort cleanup, dont fail test, if deletion fails
 		//Expect(err).NotTo(HaveOccurred(),
 		//	fmt.Sprintf("Failed to delete cluster [%s] in org [%s]", name, orgID))
@@ -1600,11 +1551,8 @@ func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID s
 			Kubeconfig:      base64.StdEncoding.EncodeToString(kubeconfigRaw),
 			CloudCredential: cloudCred,
 		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.CreateCluster(ctx, clusterCreateReq)
+
+		_, err = backupDriver.CreateCluster(clusterCreateReq)
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to create cluster [%s] in org [%s]. Error : [%v]",
 				name, orgID, err))
@@ -1629,11 +1577,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string,
 			Namespaces:     namespaces,
 			LabelSelectors: labelSelectors,
 		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
+		_, err := backupDriver.CreateBackup(bkpCreateRequest)
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to create backup [%s] in org [%s]. Error: [%v]",
 				backupName, orgID, err))
@@ -1660,11 +1604,7 @@ func GetNodesForBackup(backupName string, bkpNamespace string,
 		Name:           clusterName,
 		IncludeSecrets: true,
 	}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	Expect(err).NotTo(HaveOccurred(),
-		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-			err))
-	clusterInspectRes, err := backupDriver.InspectCluster(ctx, clusterInspectReq)
+	clusterInspectRes, err := backupDriver.InspectCluster(clusterInspectReq)
 	Expect(err).NotTo(HaveOccurred(),
 		fmt.Sprintf("Failed to inspect cluster [%s] in org [%s]. Error: [%v]",
 			clusterName, orgID, err))
@@ -1710,11 +1650,7 @@ func CreateRestore(restoreName string, backupName string,
 			Cluster:          clusterName,
 			NamespaceMapping: namespaceMapping,
 		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+		_, err := backupDriver.CreateRestore(createRestoreReq)
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to create restore [%s] in org [%s] on cluster [%s]. Error: [%v]",
 				restoreName, orgID, clusterName, err))
@@ -1733,11 +1669,7 @@ func DeleteBackup(backupName string, orgID string) {
 			Name:  backupName,
 			OrgId: orgID,
 		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
+		backupDriver.DeleteBackup(bkpDeleteRequest)
 		// Best effort cleanup, dont fail test, if deletion fails
 		//Expect(err).NotTo(HaveOccurred(),
 		//	fmt.Sprintf("Failed to delete backup [%s] in org [%s]", backupName, orgID))
@@ -1759,11 +1691,7 @@ func DeleteRestore(restoreName string, orgID string) {
 			OrgId: orgID,
 			Name:  restoreName,
 		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.DeleteRestore(ctx, deleteRestoreReq)
+		_, err := backupDriver.DeleteRestore(deleteRestoreReq)
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to delete restore [%s] in org [%s]. Error: [%v]",
 				restoreName, orgID, err))

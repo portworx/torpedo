@@ -54,46 +54,46 @@ type Driver interface {
 // Org object interface
 type Org interface {
 	// CreateOrganization creates Organization
-	CreateOrganization(ctx context.Context, req *api.OrganizationCreateRequest) (*api.OrganizationCreateResponse, error)
+	CreateOrganization(req *api.OrganizationCreateRequest) (*api.OrganizationCreateResponse, error)
 
 	// GetOrganization enumerates organizations
-	EnumerateOrganization(ctx context.Context) (*api.OrganizationEnumerateResponse, error)
+	EnumerateOrganization() (*api.OrganizationEnumerateResponse, error)
 }
 
 // CloudCredential object interface
 type CloudCredential interface {
 	// CreateCloudCredential creates cloud credential objects
-	CreateCloudCredential(ctx context.Context, req *api.CloudCredentialCreateRequest) (*api.CloudCredentialCreateResponse, error)
+	CreateCloudCredential(req *api.CloudCredentialCreateRequest) (*api.CloudCredentialCreateResponse, error)
 
 	// UpdateCloudCredential updates cloud credential objects
-	UpdateCloudCredential(ctx context.Context, req *api.CloudCredentialUpdateRequest) (*api.CloudCredentialUpdateResponse, error)
+	UpdateCloudCredential(req *api.CloudCredentialUpdateRequest) (*api.CloudCredentialUpdateResponse, error)
 
 	// InspectCloudCredential describes the cloud credential
-	InspectCloudCredential(ctx context.Context, req *api.CloudCredentialInspectRequest) (*api.CloudCredentialInspectResponse, error)
+	InspectCloudCredential(req *api.CloudCredentialInspectRequest) (*api.CloudCredentialInspectResponse, error)
 
 	// EnumerateCloudCredential lists the cloud credentials for given Org
-	EnumerateCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error)
+	EnumerateCloudCredential(req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error)
 
 	// DeletrCloudCredential deletes a cloud credential object
-	DeleteCloudCredential(ctx context.Context, req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error)
+	DeleteCloudCredential(req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error)
 }
 
 // Cluster obj interface
 type Cluster interface {
 	// CreateCluster creates a cluster object
-	CreateCluster(ctx context.Context, req *api.ClusterCreateRequest) (*api.ClusterCreateResponse, error)
+	CreateCluster(req *api.ClusterCreateRequest) (*api.ClusterCreateResponse, error)
 
 	// UpdateCluster updates a cluster object
-	UpdateCluster(ctx context.Context, req *api.ClusterUpdateRequest) (*api.ClusterUpdateResponse, error)
+	UpdateCluster(req *api.ClusterUpdateRequest) (*api.ClusterUpdateResponse, error)
 
 	// EnumerateCluster enumerates the cluster objects
-	EnumerateCluster(ctx context.Context, req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error)
+	EnumerateCluster(req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error)
 
 	// InsepctCluster describes a cluster
-	InspectCluster(ctx context.Context, req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error)
+	InspectCluster(req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error)
 
 	// DeleteCluster deletes a cluster object
-	DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error)
+	DeleteCluster(req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error)
 
 	// WaitForClusterDeletion waits for cluster to be deleted successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
@@ -109,22 +109,22 @@ type Cluster interface {
 // BLocation obj interface
 type BLocation interface {
 	// CreateBackupLocation creates backup location object
-	CreateBackupLocation(ctx context.Context, req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error)
+	CreateBackupLocation(req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error)
 
 	// UpdateBackupLocation updates backup location object
-	UpdateBackupLocation(ctx context.Context, req *api.BackupLocationUpdateRequest) (*api.BackupLocationUpdateResponse, error)
+	UpdateBackupLocation(req *api.BackupLocationUpdateRequest) (*api.BackupLocationUpdateResponse, error)
 
 	// EnumerateBackupLocation lists backup locations for an org
-	EnumerateBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error)
+	EnumerateBackupLocation(req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error)
 
 	// InspectBackupLocation enumerates backup location objects
-	InspectBackupLocation(ctx context.Context, req *api.BackupLocationInspectRequest) (*api.BackupLocationInspectResponse, error)
+	InspectBackupLocation(req *api.BackupLocationInspectRequest) (*api.BackupLocationInspectResponse, error)
 
 	// DeleteBackupLocation deletes backup location objects
-	DeleteBackupLocation(ctx context.Context, req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error)
+	DeleteBackupLocation(req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error)
 
 	// ValidateBackupLocation validates the backuplocation object
-	ValidateBackupLocation(ctx context.Context, req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error)
+	ValidateBackupLocation(req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error)
 
 	// WaitForBackupLocationDeletion watis for backup location to be deleted
 	WaitForBackupLocationDeletion(ctx context.Context, backupLocationName string, orgID string,
@@ -134,19 +134,19 @@ type BLocation interface {
 // Backup obj interface
 type Backup interface {
 	// CreateBackup creates backup
-	CreateBackup(ctx context.Context, req *api.BackupCreateRequest) (*api.BackupCreateResponse, error)
+	CreateBackup(req *api.BackupCreateRequest) (*api.BackupCreateResponse, error)
 
 	// UpdateBackup updates backup object
-	UpdateBackup(ctx context.Context, req *api.BackupUpdateRequest) (*api.BackupUpdateResponse, error)
+	UpdateBackup(req *api.BackupUpdateRequest) (*api.BackupUpdateResponse, error)
 
 	// EnumerateBackup enumerates backup objects
-	EnumerateBackup(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error)
+	EnumerateBackup(req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error)
 
 	// InspectBackup inspects a backup object
-	InspectBackup(ctx context.Context, req *api.BackupInspectRequest) (*api.BackupInspectResponse, error)
+	InspectBackup(req *api.BackupInspectRequest) (*api.BackupInspectResponse, error)
 
 	// DeleteBackup deletes backup
-	DeleteBackup(ctx context.Context, req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error)
+	DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error)
 
 	// WaitForBackupCompletion waits for backup to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry`
@@ -176,19 +176,19 @@ type Backup interface {
 // Restore object interface
 type Restore interface {
 	// CreateRestore creates restore object
-	CreateRestore(ctx context.Context, req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error)
+	CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error)
 
 	// UpdateRestore updates restore object
-	UpdateRestore(ctx context.Context, req *api.RestoreUpdateRequest) (*api.RestoreUpdateResponse, error)
+	UpdateRestore(req *api.RestoreUpdateRequest) (*api.RestoreUpdateResponse, error)
 
 	// EnumerateRestore lists restore objects
-	EnumerateRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error)
+	EnumerateRestore(req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error)
 
 	// InspectRestore inspects a restore object
-	InspectRestore(ctx context.Context, req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error)
+	InspectRestore(req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error)
 
 	// DeleteRestore deletes a restore object
-	DeleteRestore(ctx context.Context, req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error)
+	DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error)
 
 	// WaitForRestoreCompletion waits for restore to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
@@ -199,37 +199,37 @@ type Restore interface {
 // SchedulePolicy interface
 type SchedulePolicy interface {
 	// CreateSchedulePolicy
-	CreateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error)
+	CreateSchedulePolicy(req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error)
 
 	// UpdateSchedulePolicy
-	UpdateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyUpdateRequest) (*api.SchedulePolicyUpdateResponse, error)
+	UpdateSchedulePolicy(req *api.SchedulePolicyUpdateRequest) (*api.SchedulePolicyUpdateResponse, error)
 
 	// EnumerateSchedulePolicy
-	EnumerateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error)
+	EnumerateSchedulePolicy(req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error)
 
 	// InspectSchedulePolicy
-	InspectSchedulePolicy(ctx context.Context, req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error)
+	InspectSchedulePolicy(req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error)
 
 	// DeleteSchedulePolicy
-	DeleteSchedulePolicy(ctx context.Context, req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error)
+	DeleteSchedulePolicy(req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error)
 }
 
 // ScheduleBackup interface
 type ScheduleBackup interface {
 	// CreateBackupSchedule
-	CreateBackupSchedule(ctx context.Context, req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error)
+	CreateBackupSchedule(req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error)
 
 	// UpdateBackupSchedule
-	UpdateBackupSchedule(ctx context.Context, req *api.BackupScheduleUpdateRequest) (*api.BackupScheduleUpdateResponse, error)
+	UpdateBackupSchedule(req *api.BackupScheduleUpdateRequest) (*api.BackupScheduleUpdateResponse, error)
 
 	// EnumerateBackupSchedule
-	EnumerateBackupSchedule(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error)
+	EnumerateBackupSchedule(req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error)
 
 	// InspectBackupSchedule
-	InspectBackupSchedule(ctx context.Context, req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error)
+	InspectBackupSchedule(req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error)
 
 	// DeleteBackupSchedule
-	DeleteBackupSchedule(ctx context.Context, req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error)
+	DeleteBackupSchedule(req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error)
 
 	// BackupScheduleWaitForNBackupsCompletion, waits for backup schedule to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
@@ -245,10 +245,10 @@ type ScheduleBackup interface {
 // License interface
 type License interface {
 	// ActivateLicense
-	ActivateLicense(ctx context.Context, req *api.LicenseActivateRequest) (*api.LicenseActivateResponse, error)
+	ActivateLicense(req *api.LicenseActivateRequest) (*api.LicenseActivateResponse, error)
 
 	// InspectLicense
-	InspectLicense(ctx context.Context, req *api.LicenseInspectRequest) (*api.LicenseInspectResponse, error)
+	InspectLicense(req *api.LicenseInspectRequest) (*api.LicenseInspectResponse, error)
 
 	// WaitForLicenseActivation
 	WaitForLicenseActivation(ctx context.Context, req *api.LicenseInspectRequest, timeout, retryInterval time.Duration) error
@@ -257,19 +257,19 @@ type License interface {
 // Rule interface
 type Rule interface {
 	// CreateRule creates rule object
-	CreateRule(ctx context.Context, req *api.RuleCreateRequest) (*api.RuleCreateResponse, error)
+	CreateRule(req *api.RuleCreateRequest) (*api.RuleCreateResponse, error)
 
 	// UpdateRule updates rule object
-	UpdateRule(ctx context.Context, req *api.RuleUpdateRequest) (*api.RuleUpdateResponse, error)
+	UpdateRule(req *api.RuleUpdateRequest) (*api.RuleUpdateResponse, error)
 
 	// EnumerateRule enumerates rule objects
-	EnumerateRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error)
+	EnumerateRule(req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error)
 
 	// InspectRule inspects a rule object
-	InspectRule(ctx context.Context, req *api.RuleInspectRequest) (*api.RuleInspectResponse, error)
+	InspectRule(req *api.RuleInspectRequest) (*api.RuleInspectResponse, error)
 
 	// DeleteRule deletes a rule
-	DeleteRule(ctx context.Context, req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error)
+	DeleteRule(req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)
