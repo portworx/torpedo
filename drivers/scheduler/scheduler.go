@@ -21,6 +21,8 @@ const (
 	OptionsWaitForResourceLeakCleanup = "WAIT_FOR_RESOURCE_LEAK_CLEANUP"
 	SecretVault                       = "vault"
 	SecretK8S                         = "k8s"
+	EncryptionClusterWide             = "cluster-wide"
+	EncryptionPerVolume               = "per-volume"
 )
 
 // Context holds the execution context of a test task.
@@ -88,6 +90,8 @@ type InitOptions struct {
 	VaultToken string
 	// PureVolumes identifies if this setup is using Pure backend
 	PureVolumes bool
+	// EncryptionSecretType is the type of secret to be used for volume encryption, cluster-wide or per-volume
+	EncryptionSecretType string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

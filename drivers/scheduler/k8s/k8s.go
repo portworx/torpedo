@@ -108,12 +108,12 @@ const (
 )
 
 const (
-	secretNameKey      = "secret_name"
-	secretNamespaceKey = "secret_namespace"
-	encryptionKey      = "encryption"
+	secretNameKey           = "secret_name"
+	secretNamespaceKey      = "secret_namespace"
+	encryptionSecretTypeKey = "encryption_type"
 
 	// Encryption annotations
-	encryptionName      = "secure"
+	encryptionName = "secure"
 
 	// In-Tree Auth annotations
 	secretName      = "openstorage.io/auth-secret-name"
@@ -137,6 +137,16 @@ const (
 	PvcNameKey = "pvc_name"
 	// PvcNamespaceKey key used in volume param map to store PVC namespace
 	PvcNamespaceKey = "pvc_namespace"
+
+	// Vault annotations
+	// vaultSecretName - key value to be added for vault secret name in PVC annotations
+	vaultSecretName = "px/secret-name"
+	// vaultSecretNameKey - key value to be added for vault namespace in PVC annotations
+	vaultNamespace = "px/vault-namespace"
+	// vaultSecretNameKey - key value in the config map for px-secret name for vault
+	vaultSecretNameKey = "vault_secret"
+	// vaultSecretNameKey - key value in the config map for vault namespace
+	vaultNamespaceKey = "vault_namespace"
 )
 
 var (
@@ -158,16 +168,17 @@ var (
 
 // K8s  The kubernetes structure
 type K8s struct {
-	SpecFactory         *spec.Factory
-	NodeDriverName      string
-	VolDriverName       string
-	secretConfigMapName string
-	customConfig        map[string]scheduler.AppConfig
-	eventsStorage       map[string][]scheduler.Event
-	SecretType          string
-	VaultAddress        string
-	VaultToken          string
-	PureVolumes         bool
+	SpecFactory          *spec.Factory
+	NodeDriverName       string
+	VolDriverName        string
+	secretConfigMapName  string
+	customConfig         map[string]scheduler.AppConfig
+	eventsStorage        map[string][]scheduler.Event
+	SecretType           string
+	VaultAddress         string
+	VaultToken           string
+	PureVolumes          bool
+	EncryptionSecretType string
 }
 
 // IsNodeReady  Check whether the cluster node is ready
@@ -205,6 +216,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.VaultToken = schedOpts.VaultToken
 	k.eventsStorage = make(map[string][]scheduler.Event)
 	k.PureVolumes = schedOpts.PureVolumes
+	k.EncryptionSecretType = schedOpts.EncryptionSecretType
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -854,10 +866,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
 			}
 		}
-
 		err = k.addSecurityAnnotation(spec, configMap)
 		if err != nil {
-			return nil, fmt.Errorf("failed to add annotations to storage object: %v", err)
+			return nil, fmt.Errorf("failed to add security annotations to storage object: %v", err)
 		}
 
 	}
@@ -1053,25 +1064,24 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 }
 
 func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMap) error {
-	//logrus.Debugf("Config Map details: %v", configMap.Data)
 	secretNameKeyFlag := false
 	secretNamespaceKeyFlag := false
-	encryptionFlag := false
+	encryptionSecretType := ""
 	if _, ok := configMap.Data[secretNameKey]; ok {
 		secretNameKeyFlag = true
 	}
 	if _, ok := configMap.Data[secretNamespaceKey]; ok {
 		secretNamespaceKeyFlag = true
 	}
-	if _, ok := configMap.Data[encryptionKey]; ok {
-		encryptionFlag = true
+	if encrSecType, ok := configMap.Data[encryptionSecretTypeKey]; ok {
+		encryptionSecretType = encrSecType
 	}
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		if obj.Parameters == nil {
 			obj.Parameters = make(map[string]string)
 		}
-		if encryptionFlag {
+		if encryptionSecretType != "" {
 			obj.Parameters[encryptionName] = "true"
 		}
 		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
@@ -1102,6 +1112,18 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		}
 		if secretNamespaceKeyFlag {
 			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
+
+		// Per-volume encryption requested
+		if encryptionSecretType == scheduler.EncryptionPerVolume {
+			if k.SecretType == scheduler.SecretVault {
+				obj.Annotations[vaultSecretName] = configMap.Data[vaultSecretNameKey]
+				// TODO add this once we have support for vault enterprise
+				//obj.Annotations[vaultNamespace] = configMap.Data[vaultNamespaceKey]
+			} else if k.SecretType == scheduler.SecretK8S {
+				// TODO
+				logrus.Warnf("Support for per-volume encryption for k8s secret type not added to torpedo yet.")
+			}
 		}
 	} else if obj, ok := spec.(*snapv1.VolumeSnapshot); ok {
 		if obj.Metadata.Annotations == nil {
@@ -1249,7 +1271,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		return dep, nil
 
 	} else if obj, ok := spec.(*appsapi.StatefulSet); ok {
-		// Add security annotations if running with auth-enabled
+		// Add annotations for security and encryption if running with auth-enabled and/or encrypted volumes
 		configMapName := k.secretConfigMapName
 		if configMapName != "" {
 			configMap, err := k8sCore.GetConfigMap(configMapName, "default")
