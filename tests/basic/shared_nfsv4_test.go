@@ -2,32 +2,16 @@ package tests
 
 import (
 	"fmt"
-	"os"
-	"testing"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
 )
-
-func TestNFSv4(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_shared.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Shared", specReporters)
-}
-
-var _ = BeforeSuite(func() {
-	InitInstance()
-})
 
 var _ = Describe("{NFSv4NotSupported}", func() {
 	var contexts []*scheduler.Context
@@ -70,10 +54,4 @@ func validatePVCs(ctx *scheduler.Context) {
 	for _, pvc := range pvcs {
 		Expect(pvc.Phase).To(Equal(string(corev1.ClaimPending)), fmt.Sprintf("pvc %v should be in pending phase", pvc.Name))
 	}
-}
-
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
 }
