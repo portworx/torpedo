@@ -440,14 +440,6 @@ func (d *dcos) GetVolumeDriverVolumeName(name string, namespace string) (string,
 	}
 }
 
-func (d *dcos) GetPVCs(ctx *scheduler.Context) ([]*volume.PVC, error) {
-	// TODO: Add implementation
-	return nil, &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "GetPVCs()",
-	}
-}
-
 func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{

@@ -2218,15 +2218,13 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 					Cause: fmt.Sprintf("[%s] Failed to get PVC: %v. Err: %v", ctx.App.Key, obj.Name, err),
 				}
 			}
-			// don't return the vol if VolumeName is empty
-			if pvcObj.Spec.VolumeName != "" {
-				vols = append(vols, &volume.Volume{
-					ID:        string(pvcObj.Spec.VolumeName),
-					Name:      obj.Name,
-					Namespace: obj.Namespace,
-					Shared:    k.isPVCShared(obj),
-				})
-			}
+
+			vols = append(vols, &volume.Volume{
+				ID:        string(pvcObj.Spec.VolumeName),
+				Name:      obj.Name,
+				Namespace: obj.Namespace,
+				Shared:    k.isPVCShared(obj),
+			})
 
 			if err := k8sCore.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
 				if k8serrors.IsNotFound(err) {
@@ -2317,24 +2315,6 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 	return vols, nil
 }
 
-// GetPVCs returns all pvcs for the given context
-func (k *K8s) GetPVCs(ctx *scheduler.Context) ([]*volume.PVC, error) {
-	var pvcs []*volume.PVC
-	for _, specObj := range ctx.App.SpecList {
-		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			if err != nil {
-				return nil, err
-			}
-			pvcs = append(pvcs, &volume.PVC{
-				Name:  pvcObj.Name,
-				Phase: string(pvcObj.Status.Phase),
-			})
-		}
-	}
-	return pvcs, nil
-}
-
 // GetVolumes  Get the volumes
 //
 func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
@@ -2380,14 +2360,12 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			for _, pvc := range pvcList.Items {
-				if pvc.Spec.VolumeName != "" {
-					vols = append(vols, &volume.Volume{
-						ID:        pvc.Spec.VolumeName,
-						Name:      pvc.Name,
-						Namespace: pvc.Namespace,
-						Shared:    k.isPVCShared(&pvc),
-					})
-				}
+				vols = append(vols, &volume.Volume{
+					ID:        pvc.Spec.VolumeName,
+					Name:      pvc.Name,
+					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
+				})
 			}
 		}
 	}

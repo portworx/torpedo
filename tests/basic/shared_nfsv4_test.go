@@ -5,53 +5,49 @@ import (
 	"time"
 
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/sirupsen/logrus"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
-	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("{NFSv4NotSupported}", func() {
 	var contexts []*scheduler.Context
 
-	It("has to create sv4 svc volume with nfsv4, validate, and teardown apps", func() {
+	It("validates that NFSv4 is not allowed with sharedv4 service", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nfsv4notsupported-%d", i))...)
 		}
 
-		// validatePVCs will make sure they are in pending state.
-		// sleep 30 seconds here, to make sure the pending state is not just transient
+		// sleep a bit to make sure that the state is not just transient
 		time.Sleep(30 * time.Second)
-
 		for _, ctx := range contexts {
-			Step(fmt.Sprintf("validate: %s's pvcs", ctx.App.Key), func() {
-				validatePVCs(ctx)
+			Step(fmt.Sprintf("verifying that no volumes were created for %s", ctx.App.Key), func() {
+				validateNoVolumes(ctx)
 			})
 		}
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-
 		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
+			TearDownContext(ctx, map[string]bool{scheduler.OptionsWaitForResourceLeakCleanup: true})
 		}
 	})
+
 	JustAfterEach(func() {
 		AfterEachTest(contexts)
 	})
 })
 
-func validatePVCs(ctx *scheduler.Context) {
-	pvcs, err := Inst().S.GetPVCs(ctx)
-	if err != nil {
-		logrus.Infof("get pvc error %v", err)
-	}
-	Expect(len(pvcs)).To(Equal(3), "There should be 3 PVCs")
-	for _, pvc := range pvcs {
-		Expect(pvc.Phase).To(Equal(string(corev1.ClaimPending)), fmt.Sprintf("pvc %v should be in pending phase", pvc.Name))
+func validateNoVolumes(ctx *scheduler.Context) {
+	vols, err := Inst().S.GetVolumes(ctx)
+	Expect(err).ShouldNot(HaveOccurred())
+	for _, vol := range vols {
+		// GetVolumes() actually returns all PVCs (whether bound or not) with vol.ID set to the PV name.
+		// Fail only if vol.ID is not empty.
+		if vol.ID != "" {
+			Fail(fmt.Sprintf("Sharedv4 service volume %v for PVC %v/%v should not have been created with NFSv4",
+				vol.ID, vol.Namespace, vol.Name))
+		}
 	}
 }
