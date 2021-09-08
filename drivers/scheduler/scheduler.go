@@ -161,9 +161,6 @@ type Driver interface {
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context, *VolumeOptions) ([]*volume.Volume, error)
 
-	// GetPVCs returns all pvcs for the given context
-	GetPVCs(*Context) ([]*volume.PVC, error)
-
 	// GetVolumes returns all storage volumes for the given context
 	GetVolumes(*Context) ([]*volume.Volume, error)
 

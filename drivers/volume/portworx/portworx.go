@@ -734,6 +734,10 @@ func errIsNotFound(err error) bool {
 
 func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
+	if volumeName == "" {
+		// This can happen if the k8s PVC was never bound to a volume. Nothing to do.
+		return nil
+	}
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 		if err != nil && errIsNotFound(err) {

@@ -46,12 +46,7 @@ var _ = Describe("{NFSv4NotSupported}", func() {
 })
 
 func validatePVCs(ctx *scheduler.Context) {
-	pvcs, err := Inst().S.GetPVCs(ctx)
-	if err != nil {
-		logrus.Infof("get pvc error %v", err)
-	}
-	Expect(len(pvcs)).To(Equal(3), "There should be 3 PVCs")
-	for _, pvc := range pvcs {
-		Expect(pvc.Phase).To(Equal(string(corev1.ClaimPending)), fmt.Sprintf("pvc %v should be in pending phase", pvc.Name))
-	}
+	vols, err := Inst().S.GetVolumes(ctx)
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(vols).To(BeEmpty(), "Volumes should not have been created with NFSv4")
 }
