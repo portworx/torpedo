@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -24,13 +23,11 @@ const (
 	nodeDeleteTimeoutMins    = 7 * time.Minute
 )
 
-func TestSharedV4SVC(t *testing.T) {
+func TestSharedV4Service(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_Sharedv4_SVC.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo: Sharedv4_SVC", specReporters)
+	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo: Sharedv4_SVC", []Reporter{reporters.NewJUnitReporter("/testresults/junit_Sharedv4_SVC.xml")})
+
 }
 
 var _ = BeforeSuite(func() {
@@ -40,7 +37,7 @@ var _ = BeforeSuite(func() {
 // This test performs multi volume mounts to a single  deployment
 var _ = Describe("{MultiVolumeMounts}", func() {
 
-	It("has to create multiple sharedv4-svc volumes and mount to sing pod", func() {
+	It("has to create multiple sharedv4-svc volumes and mount to single pod", func() {
 		// set frequency mins depending on the chaos level
 		var frequency int
 		var timeout time.Duration
@@ -78,7 +75,6 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 		default:
 			frequency = 10
 			timeout = 1 * time.Minute
-
 		}
 
 		customAppConfig := scheduler.AppConfig{
@@ -111,11 +107,10 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 				ctx.ReadinessTimeout = timeout
 				ctx.SkipVolumeValidation = false
 				ValidateContext(ctx)
-
 			}
 		})
 
-		Step("get nodes where app is running and restart volume driver", func() {
+		Step("get nodes where volume is attached and restart volume driver", func() {
 			for _, ctx := range contexts {
 				appVolumes, err := Inst().S.GetVolumes(ctx)
 				Expect(err).NotTo(HaveOccurred())
@@ -146,22 +141,19 @@ var _ = Describe("{MultiVolumeMounts}", func() {
 				}
 			}
 		})
-
 	})
-
 })
 
 // This test performs sharedv4 nfs server pod termination failover use case
-var _ = Describe("{NfsServerKill}", func() {
+var _ = Describe("{NFSServerNodeDelete}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to validate that the new pods started successfully after nfs server node is terminated", func() {
 		contexts = make([]*scheduler.Context, 0)
-		nodesToKill := []node.Node{}
 		var err error
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nfskill-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nodekill-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
@@ -179,29 +171,27 @@ var _ = Describe("{NfsServerKill}", func() {
 					countOfCurrNodes := len(currNodes)
 
 					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
-					nodesToKill = append(nodesToKill, *attachedNode)
 
-					// Reboot node and check driver status
-					Step(fmt.Sprintf("stop node : %v having volume: %v attached", attachedNode.Name, v.Name), func() {
+					// Delete node and check Apps status
+					Step(fmt.Sprintf("delete node : %v having volume: %v attached", attachedNode.Name, v.Name), func() {
 
-						KillANodeAndValidate(nodesToKill)
+						KillANodeAndValidate(*attachedNode)
 
-						Step("validate applications", func() {
-							for _, ctx := range contexts {
-								ValidateContext(ctx)
-							}
-						})
-
-						Step(fmt.Sprintf("validate node: %v is stopped", attachedNode.Name), func() {
+						Step(fmt.Sprintf("validate node: %v is deleted", attachedNode.Name), func() {
 							currNodes = node.GetStorageDriverNodes()
-							isNodePresent := false
 							for _, currNode := range currNodes {
 								if currNode.Name == attachedNode.Name {
-									isNodePresent = true
+									Fail(fmt.Sprintf("Node: %v still exists",
+										attachedNode.Name))
 									break
 								}
 							}
-							Expect(isNodePresent).To(BeFalse())
+						})
+
+						Step(fmt.Sprintf("validate applications after node [%v] deletion", attachedNode.Name), func() {
+							for _, ctx := range contexts {
+								ValidateContext(ctx)
+							}
 						})
 
 						Step(fmt.Sprintf("wait to new instance to start scheduler: %s and volume driver: %s",
@@ -219,7 +209,7 @@ var _ = Describe("{NfsServerKill}", func() {
 							}
 						})
 
-						Step("validate apps", func() {
+						Step("validate apps after new node is ready", func() {
 							for _, ctx := range contexts {
 								ValidateContext(ctx)
 							}
@@ -243,9 +233,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func KillANodeAndValidate(storageDriverNodes []node.Node) {
-	rand.Seed(time.Now().Unix())
-	nodeToKill := storageDriverNodes[rand.Intn(len(storageDriverNodes))]
+func KillANodeAndValidate(nodeToKill node.Node) {
 
 	Step(fmt.Sprintf("Deleting node [%v]", nodeToKill.Name), func() {
 		logrus.Infof("Instance is of %v ", Inst().N.String())
@@ -253,8 +241,20 @@ func KillANodeAndValidate(storageDriverNodes []node.Node) {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Step("Wait for 10 min. to node get replaced by autoscalling group", func() {
-		time.Sleep(10 * time.Minute)
+	Step(fmt.Sprintf("Wait for node: %v to be deleted", nodeToKill.Name), func() {
+		maxWait := 10
+	OUTER:
+		for maxWait > 0 {
+			for _, currNode := range node.GetStorageDriverNodes() {
+				if currNode.Name == nodeToKill.Name {
+					logrus.Infof("Node %v still exists. Waiting for a minute to check again", nodeToKill.Name)
+					maxWait--
+					time.Sleep(1 * time.Minute)
+					continue OUTER
+				}
+			}
+			break
+		}
 	})
 
 	err := Inst().S.RefreshNodeRegistry()
@@ -262,8 +262,4 @@ func KillANodeAndValidate(storageDriverNodes []node.Node) {
 
 	err = Inst().V.RefreshDriverEndpoints()
 	Expect(err).NotTo(HaveOccurred())
-
-	Step(fmt.Sprintf("Validate number of storage nodes after killing node [%v]", nodeToKill.Name), func() {
-		ValidateClusterSize(int64(len(storageDriverNodes)))
-	})
 }

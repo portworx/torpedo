@@ -16,12 +16,10 @@ spec:
       schedulerName: stork
       containers:
         - name: vdbench
-          image: srinav/ocp-vdbench:v3
+          image: portworx/vdbench:multivol
           imagePullPolicy: IfNotPresent
           command: ["./bench_runner.sh"]
-          {{ if .ClaimsCount }}
           args: ["Basic", "5400", "datadir", "1" , "{{ .ClaimsCount }}", "$(POD_NAME)"]
-          {{ end }}
           env:
             - name: POD_NAME
               valueFrom:

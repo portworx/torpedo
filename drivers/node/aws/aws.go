@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -76,6 +77,7 @@ func (a *aws) Init(nodeOpts node.InitOptions) error {
 func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
 	instanceID, err := a.getNodeIDByPrivAddr(n)
+	logrus.Infof("Got Insatacne id:%v", instanceID)
 	if err != nil {
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
@@ -95,8 +97,11 @@ func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 			aws_pkg.String(instanceID),
 		},
 	}
+	logrus.Infof("sendCommandInput:%+v", sendCommandInput)
 	sendCommandOutput, err := a.svcSsm.SendCommand(sendCommandInput)
+	logrus.Infof("sendCommandOutput:%+v", sendCommandOutput)
 	if err != nil {
+		logrus.Infof("sendCommandOutput Err:%+v", err)
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to send command to instance %s: %v", instanceID, err),
