@@ -24,12 +24,6 @@ type Volume struct {
 	Shared        bool
 }
 
-// PVC is a generic struct encapsulating PVCs in the cluster
-type PVC struct {
-	Name  string
-	Phase string
-}
-
 // Snapshot is a generic struct encapsulating snapshots in the cluster
 type Snapshot struct {
 	ID        string
