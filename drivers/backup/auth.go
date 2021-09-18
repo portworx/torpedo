@@ -500,3 +500,39 @@ func processHTTPRequest(
 
 	return ioutil.ReadAll(httpResponse.Body)
 }
+
+// FetchUserDetailsFromID fetches user name and email ID
+func FetchUserDetailsFromID(userID string) (string, string) {
+	fn := "FetchUserDetailsFromID"
+	// First fetch all users to get the client id for the client
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return "", ""
+	}
+	reqURL := fmt.Sprintf("http://%s/auth/admin/realms/master/users", keycloakEndPoint)
+	method := "GET"
+	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return "", ""
+	}
+	var users []KeycloakUserRepresentation
+	err = json.Unmarshal(response, &users)
+	if err != nil {
+		logrus.Errorf("%s: %v", fn, err)
+		return "", ""
+	}
+	var userName string
+	var email string
+
+	for _, user := range users {
+		if user.ID == userID {
+			userName = user.Name
+			email = user.Email
+			break
+		}
+	}
+
+	return userName, email
+}
