@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
 
@@ -54,4 +55,69 @@ func validatePVCs(ctx *scheduler.Context) {
 	for _, pvc := range pvcs {
 		Expect(pvc.Phase).To(Equal(string(corev1.ClaimPending)), fmt.Sprintf("pvc %v should be in pending phase", pvc.Name))
 	}
+}
+
+var _ = Describe("{PodDeletedOnOldNFSServer}", func() {
+	var contexts []*scheduler.Context
+
+	It("has to setup, validate, failover, make sure pods on old server got deleted, and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poddeletedonoldnfsserver-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		for _, ctx := range contexts {
+			Step(fmt.Sprintf("validate: %s's pvcs", ctx.App.Key), func() {
+				vols, err := Inst().S.GetVolumes(ctx)
+				if err != nil {
+					logrus.Infof("get volumes error %v", err)
+				}
+				vol := vols[0]
+				replicaSets, err := Inst().V.GetReplicaSets(vol)
+				if err != nil {
+					logrus.Infof("get replicaSets error %v", err)
+				}
+				var replicaNodes []string
+				for _, replicaSet := range replicaSets {
+					nodes := replicaSet.Nodes
+					logrus.Infof("testing nodes %v, replicatSet %v", nodes, replicaSet)
+					replicaNodes = append(replicaNodes, nodes...)
+				}
+				allNodes := node.GetWorkerNodes()
+				var nodesNotWithReplica []node.Node
+				for _, node := range allNodes {
+					logrus.Infof("testing node %v", node)
+					if !contains(replicaNodes, node.Name) {
+						nodesNotWithReplica = append(nodesNotWithReplica, node)
+					}
+				}
+				logrus.Infof("testing nodesNotWithReplica %v", nodesNotWithReplica)
+				for _, node := range nodesNotWithReplica {
+					Inst().S.DisableSchedulingOnNode(node)
+				}
+			})
+		}
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
+func contains(arr []string, str string) bool {
+	for _, a := range arr {
+		if a == str {
+			return true
+		}
+	}
+	return false
 }
