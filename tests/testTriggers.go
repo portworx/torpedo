@@ -121,6 +121,8 @@ const (
 	CrashVolDriver = "crashVolDriver"
 	// RebootNode reboots alll nodes one by one
 	RebootNode = "rebootNode"
+	// VolumeResize increases volume size
+	VolumeResize = "volumeResize"
 	// EmailReporter notifies via email outcome of past events
 	EmailReporter = "emailReporter"
 	// CoreChecker checks if any cores got generated
@@ -594,6 +596,60 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 				}
 			}
 		})
+	})
+}
+
+// TriggerVolumeResize increases all volumes size and validates app
+func TriggerVolumeResize(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: VolumeResize,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	Step("get volumes for all apps in test and update replication factor and size", func() {
+		for _, ctx := range contexts {
+			var appVolumes []*volume.Volume
+			var err error
+			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				UpdateOutcome(event, err)
+				if len(appVolumes) == 0 {
+					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+				}
+			})
+			var requestedVols []*volume.Volume
+			Step(
+				fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
+					Inst().V.String(), ctx.App.Key, appVolumes),
+				func() {
+					requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
+					UpdateOutcome(event, err)
+				})
+			Step(
+				fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+					ctx.App.Key, appVolumes),
+				func() {
+					for _, v := range requestedVols {
+						// Need to pass token before validating volume
+						params := make(map[string]string)
+						if Inst().ConfigMap != "" {
+							params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+							UpdateOutcome(event, err)
+						}
+						err := Inst().V.ValidateUpdateVolume(v, params)
+						UpdateOutcome(event, err)
+					}
+				})
+		}
 	})
 }
 
