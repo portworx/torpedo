@@ -19,7 +19,7 @@ spec:
   {{ if .Replicas }}
   replicas: {{ .Replicas }}
   {{ else }}
-  replicas: 3{{ end }}
+  replicas: 2{{ end }}
   selector:
     matchLabels:
       app: nginx
@@ -28,6 +28,16 @@ spec:
       labels:
         app: nginx
     spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - nginx
+            topologyKey: kubernetes.io/hostname
       containers:
       - name: nginx
         image: bitnami/nginx
@@ -37,12 +47,7 @@ spec:
         volumeMounts:
         - name: nginx-persistent-storage
           mountPath: /usr/share/nginx/html
-        - name: nginx-persistent-storage-enc
-          mountPath: /usr/share/nginx/html-enc
       volumes:
       - name: nginx-persistent-storage
         persistentVolumeClaim:
           claimName: px-nginx-pvc-sharedv4
-      - name: nginx-persistent-storage-enc
-        persistentVolumeClaim:
-          claimName: px-nginx-pvc-enc-sharedv4

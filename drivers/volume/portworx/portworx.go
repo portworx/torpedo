@@ -818,6 +818,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 	volumeName := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
+		logrus.Infof("testing volumeInspectResponse %v", volumeInspectResponse)
 		if err != nil {
 			logrus.Warnf("Failed to inspect volume: %s due to: %v", volumeName, err)
 			return nil, false, &ErrFailedToInspectVolume{
@@ -826,8 +827,16 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 			}
 		}
 		pxVol := volumeInspectResponse.Volume
+		logrus.Infof("testing pxVol %v", pxVol)
 		for _, n := range node.GetStorageDriverNodes() {
-			if ok, err := d.isVolumeAttachedOnNode(pxVol, n); !ok || err != nil {
+			d.isVolumeAttachedOnNode(pxVol, n)
+		}
+		for _, n := range node.GetStorageDriverNodes() {
+			ok, err := d.isVolumeAttachedOnNode(pxVol, n)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok {
 				return &n, false, err
 			}
 		}
@@ -894,7 +903,9 @@ func (d *portworx) isVolumeAttachedOnNode(volume *api.Volume, node node.Node) (b
 	// check for alternate IPs
 	for _, ip := range node.Addresses {
 		logrus.Debugf("Checking if volume is on Node %s (%s)", node.Name, ip)
+		logrus.Infof("testing name %v, ip %v, volume attached on %v", node.Name, ip, volume.AttachedOn)
 		if ip == volume.AttachedOn {
+			logrus.Infof("testing true name %v, ip %v, volume attached on %v", node.Name, ip, volume.AttachedOn)
 			return true, nil
 		}
 	}
