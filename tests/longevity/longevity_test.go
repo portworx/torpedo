@@ -35,7 +35,7 @@ var (
 	// other triggers are allowed to happen only after existing triggers are complete.
 	disruptiveTriggers map[string]bool
 
-	triggerFunctions map[string]func([]*scheduler.Context, *chan *EventRecord)
+	triggerFunctions map[string]func(*[]*scheduler.Context, *chan *EventRecord)
 )
 
 func TestLongevity(t *testing.T) {
@@ -54,10 +54,10 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{Longevity}", func() {
-	var contexts []*scheduler.Context
+	contexts := make([]*scheduler.Context, 0)
 	var triggerLock sync.Mutex
 	triggerEventsChan := make(chan *EventRecord, 100)
-	triggerFunctions = map[string]func([]*scheduler.Context, *chan *EventRecord){
+	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 		DeployApps:       TriggerDeployNewApps,
 		RebootNode:       TriggerRebootNodes,
 		RestartVolDriver: TriggerRestartVolDriver,
@@ -76,12 +76,12 @@ var _ = Describe("{Longevity}", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		TriggerDeployNewApps([]*scheduler.Context{}, &triggerEventsChan)
+		TriggerDeployNewApps(&contexts, &triggerEventsChan)
 
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
 			for triggerType, triggerFunc := range triggerFunctions {
-				go testTrigger(&wg, contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
+				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
 				wg.Add(1)
 			}
 		})
@@ -99,9 +99,9 @@ var _ = Describe("{Longevity}", func() {
 })
 
 func testTrigger(wg *sync.WaitGroup,
-	contexts []*scheduler.Context,
+	contexts *[]*scheduler.Context,
 	triggerType string,
-	triggerFunc func([]*scheduler.Context, *chan *EventRecord),
+	triggerFunc func(*[]*scheduler.Context, *chan *EventRecord),
 	triggerLoc *sync.Mutex,
 	triggerEventsChan *chan *EventRecord) {
 	defer wg.Done()

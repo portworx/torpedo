@@ -130,7 +130,7 @@ const (
 )
 
 // TriggerCoreChecker checks if any cores got generated
-func TriggerCoreChecker(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -169,7 +169,7 @@ func TriggerCoreChecker(contexts []*scheduler.Context, recordChan *chan *EventRe
 }
 
 // TriggerDeployNewApps deploys applications in separate namespaces
-func TriggerDeployNewApps(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -187,13 +187,12 @@ func TriggerDeployNewApps(contexts []*scheduler.Context, recordChan *chan *Event
 	errorChan := make(chan error, errorChannelSize)
 
 	Step("Deploy applications", func() {
-		contexts := []*scheduler.Context{}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			newContexts := ScheduleApplications(fmt.Sprintf("longevity-%d", i), &errorChan)
-			contexts = append(contexts, newContexts...)
+			*contexts = append(*contexts, newContexts...)
 		}
 
-		for _, ctx := range contexts {
+		for _, ctx := range *contexts {
 			ctx.SkipVolumeValidation = false
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
@@ -204,7 +203,7 @@ func TriggerDeployNewApps(contexts []*scheduler.Context, recordChan *chan *Event
 }
 
 // TriggerHAIncrease peforms repl-add on all volumes of given contexts
-func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -223,7 +222,7 @@ func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 	expReplMap := make(map[*volume.Volume]int64)
 	Step("get volumes for all apps in test and increase replication factor", func() {
 		time.Sleep(10 * time.Minute)
-		for _, ctx := range contexts {
+		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
 			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
@@ -301,7 +300,7 @@ func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 }
 
 // TriggerHADecrease performs repl-reduce on all volumes of given contexts
-func TriggerHADecrease(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -319,7 +318,7 @@ func TriggerHADecrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 
 	expReplMap := make(map[*volume.Volume]int64)
 	Step("get volumes for all apps in test and decrease replication factor", func() {
-		for _, ctx := range contexts {
+		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
 			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
@@ -389,7 +388,7 @@ func TriggerHADecrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 }
 
 // TriggerAppTaskDown deletes application task for all contexts
-func TriggerAppTaskDown(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -405,7 +404,7 @@ func TriggerAppTaskDown(contexts []*scheduler.Context, recordChan *chan *EventRe
 		*recordChan <- event
 	}()
 
-	for _, ctx := range contexts {
+	for _, ctx := range *contexts {
 		Step(fmt.Sprintf("delete tasks for app: [%s]", ctx.App.Key), func() {
 			err := Inst().S.DeleteTasks(ctx, nil)
 			UpdateOutcome(event, err)
@@ -424,7 +423,7 @@ func TriggerAppTaskDown(contexts []*scheduler.Context, recordChan *chan *EventRe
 }
 
 // TriggerCrashVolDriver crashes vol driver
-func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -459,7 +458,7 @@ func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *Even
 }
 
 // TriggerRestartVolDriver restarts volume driver and validates app
-func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -508,7 +507,7 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 				time.Sleep(20 * time.Second)
 			})
 
-			for _, ctx := range contexts {
+			for _, ctx := range *contexts {
 				Step(fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key), func() {
 					errorChan := make(chan error, errorChannelSize)
 					ValidateContext(ctx, &errorChan)
@@ -522,7 +521,7 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 }
 
 // TriggerRebootNodes reboots node on which apps are running
-func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -583,7 +582,7 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 					})
 
 					Step("validate apps", func() {
-						for _, ctx := range contexts {
+						for _, ctx := range *contexts {
 							Step(fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key), func() {
 								errorChan := make(chan error, errorChannelSize)
 								ValidateContext(ctx, &errorChan)
@@ -600,7 +599,7 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 }
 
 // TriggerVolumeResize increases all volumes size and validates app
-func TriggerVolumeResize(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -615,12 +614,13 @@ func TriggerVolumeResize(contexts []*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("get volumes for all apps in test and update replication factor and size", func() {
-		for _, ctx := range contexts {
+	Step("get volumes for all apps in test and update size", func() {
+		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
 			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
 				appVolumes, err = Inst().S.GetVolumes(ctx)
+				logrus.Infof("len of app volumes is : %v", len(appVolumes))
 				UpdateOutcome(event, err)
 				if len(appVolumes) == 0 {
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
@@ -631,6 +631,7 @@ func TriggerVolumeResize(contexts []*scheduler.Context, recordChan *chan *EventR
 				fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
 					Inst().V.String(), ctx.App.Key, appVolumes),
 				func() {
+					logrus.Info("increasing volume size")
 					requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
 					UpdateOutcome(event, err)
 				})
@@ -664,7 +665,7 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 }
 
 // TriggerEmailReporter sends email with all reported errors
-func TriggerEmailReporter(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerEmailReporter(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	// emailRecords stores events to be notified
 
 	emailData := emailData{}
