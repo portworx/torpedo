@@ -23,7 +23,7 @@ const (
 
 var _ = Describe("{NFSServerFailover}", func() {
 	var contexts []*scheduler.Context
-
+	logrus.Infof("testing 2")
 	It("has to setup, validate, failover, make sure pods on old server got restarted, and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
 
