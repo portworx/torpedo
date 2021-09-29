@@ -14,6 +14,10 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
+const (
+	PXEnterpriseSKU = "PX-Enterprise Trial"
+)
+
 func TestUpgrade(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -44,6 +48,15 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				Inst().StorageDriverUpgradeEndpointVersion,
 				Inst().EnableStorkUpgrade)
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Step("Validate License", func() {
+			summary, err := Inst().V.GetLicenseSummary()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+			Expect(summary.SKU).To(Equal(PXEnterpriseSKU),
+				fmt.Sprintf("SKU did not match: [%v]", PXEnterpriseSKU))
 		})
 
 		Step("validate all apps after upgrade", func() {
