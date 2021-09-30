@@ -114,6 +114,8 @@ var _ = Describe("{NFSServerFailover}", func() {
 
 				var newServer *node.Node
 
+				time.Sleep(5 * time.Minute)
+
 				for i := 0; i < 10; i++ {
 					server, err := Inst().V.GetNodeForVolume(volume, defaultCommandTimeout, defaultCommandRetry)
 					Expect(err).NotTo(HaveOccurred())
