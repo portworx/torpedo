@@ -22,7 +22,7 @@ allowVolumeExpansion: true
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: px-nginx-pvc-sharedv4
+  name: sharedv4-svc
 spec:
   storageClassName: px-nginx-sc-sharedv4-svc
   accessModes:

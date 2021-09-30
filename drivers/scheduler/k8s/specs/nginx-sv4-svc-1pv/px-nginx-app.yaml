@@ -50,4 +50,4 @@ spec:
       volumes:
       - name: nginx-persistent-storage
         persistentVolumeClaim:
-          claimName: px-nginx-pvc-sharedv4
+          claimName: sharedv4-svc
