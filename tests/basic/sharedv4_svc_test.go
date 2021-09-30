@@ -103,7 +103,7 @@ var _ = Describe("{NFSServerFailover}", func() {
 
 				var newServer *node.Node
 
-				for i := 0; i < 10; i++ {
+				for i := 0; i < 60; i++ {
 					server, err := Inst().V.GetNodeForVolume(volume, defaultCommandTimeout, defaultCommandRetry)
 					// there could be intermittent error here
 					if err != nil {
@@ -115,7 +115,7 @@ var _ = Describe("{NFSServerFailover}", func() {
 							break
 						}
 					}
-					time.Sleep(time.Minute)
+					time.Sleep(10 * time.Second)
 				}
 				// make sure nfs server failed over
 				Expect(newServer).NotTo(BeNil())
@@ -152,8 +152,7 @@ var _ = Describe("{NFSServerFailover}", func() {
 				Expect(podRestartedOnNewServer).To(BeTrue())
 
 				// re-enable scheduling on non replica nodes
-				allNodes := node.GetWorkerNodes()
-				for _, node := range allNodes {
+				for _, node := range node.GetWorkerNodes() {
 					if !nodeReplicaMap[node.VolDriverNodeID] {
 						Inst().S.EnableSchedulingOnNode(node)
 					}
