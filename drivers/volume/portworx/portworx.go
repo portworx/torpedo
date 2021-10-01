@@ -793,7 +793,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
 		if err != nil {
 			logrus.Warnf("Failed to inspect volume: %s due to: %v", volumeName, err)
-			return nil, false, &ErrFailedToInspectVolume{
+			return nil, true, &ErrFailedToInspectVolume{
 				ID:    volumeName,
 				Cause: err.Error(),
 			}
@@ -802,7 +802,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 		for _, n := range node.GetStorageDriverNodes() {
 			ok, err := d.isVolumeAttachedOnNode(pxVol, n)
 			if err != nil {
-				return nil, false, err
+				return nil, true, err
 			}
 			if ok {
 				return &n, false, err
