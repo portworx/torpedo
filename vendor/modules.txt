@@ -197,7 +197,7 @@ github.com/googleapis/gnostic/compiler
 github.com/googleapis/gnostic/extensions
 github.com/googleapis/gnostic/jsonschema
 github.com/googleapis/gnostic/openapiv2
-# github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
+# github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 github.com/grpc-ecosystem/go-grpc-middleware/util/metautils
 # github.com/grpc-ecosystem/grpc-gateway v1.16.0
 github.com/grpc-ecosystem/grpc-gateway/internal
@@ -207,9 +207,11 @@ github.com/grpc-ecosystem/grpc-gateway/utilities
 github.com/hashicorp/errwrap
 # github.com/hashicorp/go-cleanhttp v0.5.1
 github.com/hashicorp/go-cleanhttp
+# github.com/hashicorp/go-hclog v0.12.2
+github.com/hashicorp/go-hclog
 # github.com/hashicorp/go-multierror v1.1.0
 github.com/hashicorp/go-multierror
-# github.com/hashicorp/go-retryablehttp v0.6.6
+# github.com/hashicorp/go-retryablehttp v0.6.2
 github.com/hashicorp/go-retryablehttp
 # github.com/hashicorp/go-rootcerts v1.0.2
 github.com/hashicorp/go-rootcerts
@@ -229,7 +231,7 @@ github.com/hashicorp/hcl/json/scanner
 github.com/hashicorp/hcl/json/token
 # github.com/hashicorp/vault/api v1.0.5-0.20200317185738-82f498082f02
 github.com/hashicorp/vault/api
-# github.com/hashicorp/vault/sdk v0.1.14-0.20200429182704-29fce8f27ce4
+# github.com/hashicorp/vault/sdk v0.1.14-0.20200215195600-2ca765f0a500
 github.com/hashicorp/vault/sdk/helper/compressutil
 github.com/hashicorp/vault/sdk/helper/consts
 github.com/hashicorp/vault/sdk/helper/hclutil
@@ -251,7 +253,7 @@ github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1
 github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1
 github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/scheme
 github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/typed/volumesnapshot/v1beta1
-# github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc2 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
+# github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc6 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
 github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1
 github.com/kubernetes-incubator/external-storage/snapshot/pkg/client
 # github.com/libopenstorage/autopilot-api v1.3.0 => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
@@ -292,7 +294,7 @@ github.com/libopenstorage/openstorage/pkg/storagepool
 github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
-# github.com/libopenstorage/stork v1.3.0-beta1.0.20210503014041-fb328e234db7
+# github.com/libopenstorage/stork v1.4.1-0.20211010060227-d6e67057bce0 => github.com/libopenstorage/stork v1.4.1-0.20211010060227-d6e67057bce0
 github.com/libopenstorage/stork/pkg/apis/stork
 github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1
 github.com/libopenstorage/stork/pkg/client/clientset/versioned
@@ -393,7 +395,7 @@ github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
 # github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
 github.com/portworx/px-backup-api/pkg/apis/v1
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20210916142241-b43071d02b7d => github.com/portworx/sched-ops v1.20.4-rc1.0.20210614212742-d19cd551f94a
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20211010061741-6d4c2973dcaf => github.com/portworx/sched-ops v1.20.4-rc1.0.20210614212742-d19cd551f94a
 github.com/portworx/sched-ops/k8s/apiextensions
 github.com/portworx/sched-ops/k8s/apps
 github.com/portworx/sched-ops/k8s/autopilot
@@ -419,7 +421,7 @@ github.com/sendgrid/rest
 # github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 github.com/sendgrid/sendgrid-go
 github.com/sendgrid/sendgrid-go/helpers/mail
-# github.com/sirupsen/logrus v1.7.0
+# github.com/sirupsen/logrus v1.8.1
 github.com/sirupsen/logrus
 # github.com/spf13/pflag v1.0.5
 github.com/spf13/pflag
@@ -890,7 +892,7 @@ k8s.io/client-go/util/workqueue
 k8s.io/klog/v2
 # k8s.io/kube-openapi v0.0.0-20210216185858-15cd8face8d6
 k8s.io/kube-openapi/pkg/util/proto
-# k8s.io/utils v0.0.0-20201110183641-67b214c5f920
+# k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
 k8s.io/utils/integer
 k8s.io/utils/pointer
 # sigs.k8s.io/controller-runtime v0.8.0

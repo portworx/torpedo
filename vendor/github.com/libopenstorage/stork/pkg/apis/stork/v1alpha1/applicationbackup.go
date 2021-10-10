@@ -9,6 +9,10 @@ const (
 	ApplicationBackupResourceName = "applicationbackup"
 	// ApplicationBackupResourcePlural is plural for "applicationbackup" resource
 	ApplicationBackupResourcePlural = "applicationbackups"
+	// ApplicationBackupGeneric for using generic driver for backups/restore
+	ApplicationBackupGeneric = "generic"
+	// GenericDriver is name for generic driver
+	GenericDriver = "kdmp"
 )
 
 // +genclient
@@ -24,16 +28,18 @@ type ApplicationBackup struct {
 
 // ApplicationBackupSpec is the spec used to backup applications
 type ApplicationBackupSpec struct {
-	Namespaces     []string                           `json:"namespaces"`
-	BackupLocation string                             `json:"backupLocation"`
-	Selectors      map[string]string                  `json:"selectors"`
-	PreExecRule    string                             `json:"preExecRule"`
-	PostExecRule   string                             `json:"postExecRule"`
-	ReclaimPolicy  ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
+	Namespaces        []string                           `json:"namespaces"`
+	BackupLocation    string                             `json:"backupLocation"`
+	Selectors         map[string]string                  `json:"selectors"`
+	PreExecRule       string                             `json:"preExecRule"`
+	PostExecRule      string                             `json:"postExecRule"`
+	ReclaimPolicy     ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
+	SkipServiceUpdate bool                               `json:"skipServiceUpdate"`
 	// Options to be passed in to the driver
 	Options          map[string]string `json:"options"`
 	IncludeResources []ObjectInfo      `json:"includeResources"`
 	ResourceTypes    []string          `json:"resourceTypes"`
+	BackupType       string            `json:"backupType"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup
@@ -76,17 +82,19 @@ type ApplicationBackupResourceInfo struct {
 
 // ApplicationBackupVolumeInfo is the info for the backup of a volume
 type ApplicationBackupVolumeInfo struct {
-	PersistentVolumeClaim string                      `json:"persistentVolumeClaim"`
-	Namespace             string                      `json:"namespace"`
-	Volume                string                      `json:"volume"`
-	BackupID              string                      `json:"backupID"`
-	DriverName            string                      `json:"driverName"`
-	Zones                 []string                    `json:"zones"`
-	Status                ApplicationBackupStatusType `json:"status"`
-	Reason                string                      `json:"reason"`
-	Options               map[string]string           `jons:"options"`
-	TotalSize             uint64                      `json:"totalSize"`
-	ActualSize            uint64                      `json:"actualSize"`
+	PersistentVolumeClaim    string                      `json:"persistentVolumeClaim"`
+	PersistentVolumeClaimUID string                      `json:"persistentVolumeClaimUID"`
+	Namespace                string                      `json:"namespace"`
+	Volume                   string                      `json:"volume"`
+	BackupID                 string                      `json:"backupID"`
+	DriverName               string                      `json:"driverName"`
+	Zones                    []string                    `json:"zones"`
+	Status                   ApplicationBackupStatusType `json:"status"`
+	Reason                   string                      `json:"reason"`
+	Options                  map[string]string           `jons:"options"`
+	TotalSize                uint64                      `json:"totalSize"`
+	ActualSize               uint64                      `json:"actualSize"`
+	StorageClass             string                      `json:"storageClass"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup
