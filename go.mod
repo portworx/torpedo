@@ -28,7 +28,7 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
 	github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef
-	github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c202335f7
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20211010081655-084f992ec2b9
 	github.com/sendgrid/rest v2.6.0+incompatible // indirect
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.6.0
@@ -50,7 +50,7 @@ replace (
 	github.com/docker/docker => github.com/docker/docker v17.12.0-ce-rc1.0.20190717161051-705d9623b7c1+incompatible
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000 => github.com/libopenstorage/external-storage v5.3.0-alpha.1.0.20200130041458-d2b33d4448ea+incompatible
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c202335f7
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20211010081655-084f992ec2b9
 	github.com/prometheus/prometheus => github.com/prometheus/prometheus v1.8.2-0.20190424153033-d3245f150225
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.0.0
 
