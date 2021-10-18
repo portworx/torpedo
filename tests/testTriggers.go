@@ -151,6 +151,8 @@ const (
 	RebootNode = "rebootNode"
 	// VolumeResize increases volume size
 	VolumeResize = "volumeResize"
+	// LocalSnapShot takes local snaap shot of the volumes
+	LocalSnapShot = "localSnapShot"
 	// EmailReporter notifies via email outcome of past events
 	EmailReporter = "emailReporter"
 	// CoreChecker checks if any cores got generated
@@ -718,6 +720,28 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 				})
 		}
 	})
+}
+
+func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: LocalSnapShot,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("get all volumes and take local snapshot", func() {
+
+	})
+
 }
 
 // CollectEventRecords collects eventRecords from channel
