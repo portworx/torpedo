@@ -122,7 +122,7 @@ const (
 	defaultRetryInterval      = 10 * time.Second
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
-	defaultDriverStartTimeout = 12 * time.Minute
+	defaultDriverStartTimeout = 10 * time.Minute
 )
 
 var (
