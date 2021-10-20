@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	defaultWaitRebootTimeout     = 5 * time.Minute
 	defaultWaitRebootRetry       = 10 * time.Second
 	defaultCommandRetry          = 5 * time.Second
 	defaultCommandTimeout        = 1 * time.Minute
@@ -132,36 +131,40 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 				Expect(err).NotTo(HaveOccurred())
 				for _, vol := range vols {
 					if vol.Shared {
-						n, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-						Expect(err).NotTo(HaveOccurred())
-						logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
-						err = Inst().S.DisableSchedulingOnNode(*n)
-						Expect(err).NotTo(HaveOccurred())
-						err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
-						Expect(err).NotTo(HaveOccurred())
-						err = Inst().N.RebootNode(*n, node.RebootNodeOpts{
-							Force: true,
-							ConnectionOpts: node.ConnectionOpts{
-								Timeout:         defaultCommandTimeout,
-								TimeBeforeRetry: defaultCommandRetry,
-							},
-						})
+						for i := 0; i < Inst().ChaosLevel; {
+							n, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
+							Expect(err).NotTo(HaveOccurred())
+							logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+							err = Inst().S.DisableSchedulingOnNode(*n)
+							Expect(err).NotTo(HaveOccurred())
+							err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
+							Expect(err).NotTo(HaveOccurred())
+							err = Inst().N.RebootNode(*n, node.RebootNodeOpts{
+								Force: true,
+								ConnectionOpts: node.ConnectionOpts{
+									Timeout:         defaultCommandTimeout,
+									TimeBeforeRetry: defaultCommandRetry,
+								},
+							})
 
-						// as we keep the storage driver down on node until we check if the volume, we wait a minute for
-						// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
-						logrus.Info("wait for 1 minute for node reboot")
-						time.Sleep(defaultCommandTimeout)
-						ctx.RefreshStorageEndpoint = true
-						ValidateContext(ctx)
-						n2, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-						Expect(err).NotTo(HaveOccurred())
-						// the mount should move to another node otherwise fail
-						Expect(n2.SchedulerNodeName).NotTo(Equal(n.SchedulerNodeName))
-						logrus.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
-						StartVolDriverAndWait([]node.Node{*n})
-						err = Inst().S.EnableSchedulingOnNode(*n)
-						Expect(err).NotTo(HaveOccurred())
-						ValidateApplications(contexts)
+							// as we keep the storage driver down on node until we check if the volume, we wait a minute for
+							// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
+							logrus.Info("wait for 1 minute for node reboot")
+							time.Sleep(defaultCommandTimeout)
+							ctx.RefreshStorageEndpoint = true
+							ValidateContext(ctx)
+							n2, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
+							Expect(err).NotTo(HaveOccurred())
+							// the mount should move to another node otherwise fail
+							Expect(n2.SchedulerNodeName).NotTo(Equal(n.SchedulerNodeName))
+							logrus.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
+							StartVolDriverAndWait([]node.Node{*n})
+							err = Inst().S.EnableSchedulingOnNode(*n)
+							Expect(err).NotTo(HaveOccurred())
+							ValidateApplications(contexts)
+							// sleep for 1min until the next iteration
+							time.Sleep(defaultCommandTimeout)
+						}
 					}
 				}
 			}
