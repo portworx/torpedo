@@ -106,6 +106,13 @@ var _ = Describe("{NFSServerFailover}", func() {
 				time.Sleep(5 * time.Minute)
 
 				for i := 0; i < 60; i++ {
+					vols, err := Inst().S.GetVolumes(ctx)
+					if err != nil {
+						logrus.Infof("Failed to get volume. Error: %v", err)
+						time.Sleep(10 * time.Second)
+						continue
+					}
+					volume = vols[0]
 					server, err := Inst().V.GetNodeForVolume(volume, defaultCommandTimeout, defaultCommandRetry)
 					// there could be intermittent error here
 					if err != nil {
