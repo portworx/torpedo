@@ -2853,9 +2853,8 @@ func (k *K8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string
 				dep, err = k8sOps.UpdateDeployment(dep)
 				if err == nil {
 					return dep, false, nil // succeeded, no retry
-				} else {
-					return "", true, err // failed to update deployment, retry
 				}
+				return "", true, err // failed to update deployment, retry
 			}
 			_, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
 			if err != nil {
