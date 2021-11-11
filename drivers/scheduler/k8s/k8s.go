@@ -2847,7 +2847,7 @@ func (k *K8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string
 			t := func() (interface{}, bool, error) {
 				dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
 				if err != nil {
-					return "", false, err // do not retry if we fail to get dep
+					return "", true, err // failed to get deployment, retry
 				}
 				*dep.Spec.Replicas = newScaleFactor
 				dep, err = k8sOps.UpdateDeployment(dep)
@@ -2856,7 +2856,7 @@ func (k *K8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string
 				}
 				return "", true, err // failed to update deployment, retry
 			}
-			_, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
+			_, err := task.DoRetryWithTimeout(t, 2*time.Minute, time.Second)
 			if err != nil {
 				return &scheduler.ErrFailedToUpdateApp{
 					App:   ctx.App,
