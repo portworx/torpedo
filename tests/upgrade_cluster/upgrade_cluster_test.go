@@ -26,6 +26,64 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
+var _ = Describe("{InterleavedUpgrade}", func() {
+	var contexts []*scheduler.Context
+
+	It("upgrade scheduler and ensure everything is running fine", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradecluster-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		var schedVersions []string
+		if len(Inst().SchedUpgradeHops) > 0 {
+			schedVersions = strings.Split(Inst().SchedUpgradeHops, ",")
+		}
+		Expect(schedVersions).NotTo(BeEmpty())
+
+		var endpointUrls []string
+		if len(Inst().StorageDriverUpgradeEndpointURL) > 0 {
+			endpointUrls = strings.Split(Inst().StorageDriverUpgradeEndpointURL, ",")
+		}
+		Expect(endpointUrls).NotTo(BeEmpty())
+
+		var endpointVersions []string
+		if len(Inst().StorageDriverUpgradeEndpointVersion) > 0 {
+			endpointVersions = strings.Split(Inst().StorageDriverUpgradeEndpointVersion, ",")
+		}
+		Expect(endpointVersions).NotTo(BeEmpty())
+
+		for i, version := range schedVersions {
+			Step("start scheduler upgrade", func() {
+				err := Inst().S.UpgradeScheduler(version)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Step("validate all apps after upgrade", func() {
+				ValidateApplications(contexts)
+			})
+
+			Step("start the upgrade of volume driver", func() {
+				err := Inst().V.UpgradeDriver(endpointUrls[i], endpointVersions[i], false)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Step("validate all apps after upgrade", func() {
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
+				}
+			})
+		}
+
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = Describe("{UpgradeCluster}", func() {
 	var contexts []*scheduler.Context
 
