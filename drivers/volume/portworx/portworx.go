@@ -70,6 +70,7 @@ const (
 
 const (
 	defaultTimeout                    = 2 * time.Minute
+	defaultWhichTimeout               = 30 * time.Second
 	defaultRetryInterval              = 10 * time.Second
 	maintenanceOpTimeout              = 1 * time.Minute
 	maintenanceWaitTimeout            = 2 * time.Minute
@@ -251,7 +252,7 @@ func (d *portworx) updateNodes(pxNodes []api.StorageNode) error {
 }
 
 func (d *portworx) updateNode(n *node.Node, pxNodes []api.StorageNode) error {
-	logrus.Infof("Updating node: %+v", *n)
+	logrus.Infof("Updating node: %s", n.Name)
 	isPX, err := d.schedOps.IsPXEnabled(*n)
 	if err != nil {
 		return err
@@ -264,9 +265,11 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []api.StorageNode) error {
 
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
-			logrus.Infof("Checking PX node %+v for address %s", pxNode, address)
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.SchedulerNodeName {
 				if len(pxNode.Id) > 0 {
+					logrus.Infof("Checking PX node %s (%s) IP: %s px version: %s OS: %s kernel: %s",
+						pxNode.SchedulerNodeName, pxNode.Id, address, pxNode.NodeLabels["PX Version"],
+						pxNode.NodeLabels["OS"], pxNode.NodeLabels["Kernel Version"])
 					n.StorageNode = pxNode
 					n.VolDriverNodeID = pxNode.Id
 					n.IsStorageDriverInstalled = isPX
@@ -2682,10 +2685,10 @@ func (d *portworx) getPxctlPath(n node.Node) string {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
-		Timeout:         defaultTimeout,
+		Timeout:         defaultWhichTimeout,
 		Sudo:            true,
 	}
-	out, err := d.nodeDriver.RunCommand(n, "which pxctl", opts)
+	out, err := d.nodeDriver.Which(n, "pxctl", opts)
 	if err != nil {
 		return "sudo /opt/pwx/bin/pxctl"
 	}

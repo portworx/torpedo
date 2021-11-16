@@ -171,6 +171,9 @@ type Driver interface {
 
 	// SystemctlUnitExist checks if a given service exists in a node
 	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
+
+	// Which returns the path for a given command
+	Which(node Node, cmd string, options ConnectionOpts) (string, error)
 }
 
 // Register registers the given node driver
@@ -350,5 +353,12 @@ func (d *notSupportedDriver) SystemctlUnitExist(node Node, service string, optio
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SystemctlUnitExist()",
+	}
+}
+
+func (d *notSupportedDriver) Which(node Node, cmd string, options ConnectionOpts) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "Which()",
 	}
 }
