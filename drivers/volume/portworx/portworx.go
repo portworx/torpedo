@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"math"
 	"net/http"
+	"os/exec"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -21,8 +23,11 @@ import (
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
+	operatorcorev1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -39,7 +44,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -125,6 +132,8 @@ var deleteVolumeLabelList = []string{
 }
 
 var k8sCore = core.Instance()
+var pxOperator = operator.Instance()
+var apiExtentions = apiextensions.Instance()
 
 type portworx struct {
 	legacyClusterManager  cluster.Cluster
@@ -1673,16 +1682,39 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string, ena
 		return fmt.Errorf("no endpoint supplied for upgrading driver")
 	}
 
-	if err := d.upgradePortworx(endpointURL, endpointVersion); err != nil {
-		return err
+	_, err := apiExtentions.GetCRD("storageclusters.core.libopenstorage.org", metav1.GetOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("failed to get storagecluster CRD. cause: %v", err)
 	}
 
-	if enableStork {
-		if err := d.upgradeStork(endpointURL, endpointVersion); err != nil {
+	if k8serrors.IsNotFound(err) {
+		if err := d.upgradePortworx(endpointURL, endpointVersion); err != nil {
 			return err
 		}
+
+		if enableStork {
+			if err := d.upgradeStork(endpointURL, endpointVersion); err != nil {
+				return err
+			}
+		} else {
+			logrus.Infof("stork upgrade is disabled, skipping...")
+		}
 	} else {
-		logrus.Infof("stork upgrade is disabled, skipping...")
+		storageClusters, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to list storagecluster. cause: %v", err)
+		}
+
+		if len(storageClusters.Items) > 0 {
+			clusterName := storageClusters.Items[0].GetClusterName()
+			stc, err := pxOperator.GetStorageCluster(clusterName, schedops.PXNamespace)
+			if err != nil {
+				return fmt.Errorf("failed to get storagecluster %s. cause: %v", clusterName, err)
+			}
+			if err := d.upgradePortworxUsingOperator(stc, endpointURL, endpointVersion); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -2734,6 +2766,40 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 		return status.(string), nil
 	}
 	return api.Status_STATUS_NONE.String(), nil
+}
+
+func (d *portworx) upgradePortworxUsingOperator(stc *operatorcorev1.StorageCluster, url string, endpointVersion string) error {
+	imageTag := endpointVersion
+	if strings.Contains(url, "edge") {
+		url = fmt.Sprintf("%s/%s/version", url, endpointVersion)
+		stdout, err := exec.Command("curl", "-L", url).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("error while getting px version url %s, error %v", url, err)
+		}
+		var data interface{}
+		err = yaml.Unmarshal(stdout, &data)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal px version. cause: %v", err)
+		}
+		versionMap := data.(map[string]interface{})
+		imageTag = versionMap["version"].(string)
+	}
+	stcImage := strings.Split(stc.Spec.Image, ":")[0]
+	stc.Spec.Image = fmt.Sprintf("%s:%s", stcImage, imageTag)
+
+	_, err := pxOperator.UpdateStorageCluster(stc)
+	if err != nil {
+		return fmt.Errorf("failed to update storagecluster. cause: %v", err)
+	}
+
+	logrus.Infof("Storage cluster updated to version: %s", endpointVersion)
+
+	for _, node := range node.GetStorageDriverNodes() {
+		if err := d.WaitForUpgrade(node, endpointVersion); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {

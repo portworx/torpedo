@@ -292,6 +292,11 @@ github.com/libopenstorage/openstorage/pkg/storagepool
 github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
+# github.com/libopenstorage/operator v0.0.0-20210303221358-0bb211a9908c
+github.com/libopenstorage/operator/pkg/apis/core/v1
+github.com/libopenstorage/operator/pkg/client/clientset/versioned
+github.com/libopenstorage/operator/pkg/client/clientset/versioned/scheme
+github.com/libopenstorage/operator/pkg/client/clientset/versioned/typed/core/v1
 # github.com/libopenstorage/stork v1.4.1-0.20210903185636-5a1f8a4142bf
 github.com/libopenstorage/stork/pkg/apis/stork
 github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1
@@ -405,6 +410,7 @@ github.com/portworx/sched-ops/k8s/externalsnapshotter
 github.com/portworx/sched-ops/k8s/externalstorage
 github.com/portworx/sched-ops/k8s/networking
 github.com/portworx/sched-ops/k8s/openshift
+github.com/portworx/sched-ops/k8s/operator
 github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
