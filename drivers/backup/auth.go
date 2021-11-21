@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -47,6 +48,8 @@ const (
 
 	defaultWaitTimeout  time.Duration = 30 * time.Second
 	defaultWaitInterval time.Duration = 5 * time.Second
+	// pxBackupNamespace where px backup is running
+	pxBackupNamespace = "PX_BACKUP_NAMESPACE"
 )
 
 type tokenResponse struct {
@@ -124,6 +127,15 @@ type KeycloakGroupToUser struct {
 	Realm   string `json:"realm"`
 }
 
+// GetPxBackupNamespace returns namespace of px-backup deployment.
+func GetPxBackupNamespace() string {
+	ns := os.Getenv(pxBackupNamespace)
+	if ns == "" {
+		return AdminTokenSecretNamespace
+	}
+	return ns
+}
+
 // GetToken fetches JWT token for given user credentials
 func GetToken(userName, password string) (string, error) {
 	fn := "GetToken"
@@ -171,7 +183,7 @@ func GetCommonHTTPHeaders(userName, password string) (http.Header, error) {
 // GetPxCentralAdminPwd fetches password from PxCentralAdminUser from secret
 func GetPxCentralAdminPwd() (string, error) {
 
-	secret, err := k8s.Instance().GetSecret(PxCentralAdminSecretName, PxCentralAdminSecretNamespace)
+	secret, err := k8s.Instance().GetSecret(PxCentralAdminSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return "", err
 	}
