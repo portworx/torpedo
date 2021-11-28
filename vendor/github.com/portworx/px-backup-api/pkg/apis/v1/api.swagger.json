@@ -13,7 +13,7 @@
   "paths": {
     "/v1/backup": {
       "post": {
-        "summary": "Create creates a new backup object",
+        "summary": "Creates a new backup object",
         "operationId": "Backup_Create",
         "responses": {
           "200": {
@@ -238,7 +238,7 @@
     },
     "/v1/backuplocation": {
       "post": {
-        "summary": "Create creates new backup location",
+        "summary": "Creates new backup location",
         "operationId": "BackupLocation_Create",
         "responses": {
           "200": {
@@ -416,7 +416,7 @@
         ]
       }
     },
-    "/v1/backuplocation/{org_id}/{name}": {
+    "/v1/backuplocation/{org_id}/{name}/{uid}": {
       "get": {
         "summary": "Inspect returns detailed information about a specified backup location",
         "operationId": "BackupLocation_Inspect",
@@ -449,8 +449,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -489,17 +489,17 @@
             "type": "string"
           },
           {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
             "name": "delete_backups",
             "description": "delete_backups indicates whether the cloud backup files need to\nbe deleted or retained.",
             "in": "query",
             "required": false,
             "type": "boolean"
-          },
-          {
-            "name": "uid",
-            "in": "query",
-            "required": false,
-            "type": "string"
           }
         ],
         "tags": [
@@ -509,7 +509,7 @@
     },
     "/v1/backupschedule": {
       "post": {
-        "summary": "Create creates new backup schedule",
+        "summary": "Creates new backup schedule",
         "operationId": "BackupSchedule_Create",
         "responses": {
           "200": {
@@ -540,7 +540,7 @@
         ]
       },
       "put": {
-        "summary": "Update updates a backup schedule",
+        "summary": "Updates a backup schedule",
         "operationId": "BackupSchedule_Update",
         "responses": {
           "200": {
@@ -714,7 +714,7 @@
     },
     "/v1/cloudcredential": {
       "post": {
-        "summary": "Create creates new cloud credential",
+        "summary": "Creates new cloud credential",
         "operationId": "CloudCredential_Create",
         "responses": {
           "200": {
@@ -846,7 +846,7 @@
         ]
       }
     },
-    "/v1/cloudcredential/{org_id}/{name}": {
+    "/v1/cloudcredential/{org_id}/{name}/{uid}": {
       "get": {
         "summary": "Inspect returns detailed information about the specified cloud credential",
         "operationId": "CloudCredential_Inspect",
@@ -878,16 +878,16 @@
             "type": "string"
           },
           {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
             "name": "include_secrets",
             "in": "query",
             "required": false,
             "type": "boolean"
-          },
-          {
-            "name": "uid",
-            "in": "query",
-            "required": false,
-            "type": "string"
           }
         ],
         "tags": [
@@ -926,8 +926,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -938,7 +938,7 @@
     },
     "/v1/cluster": {
       "post": {
-        "summary": "Create creates a new cluster",
+        "summary": "Creates a new cluster",
         "operationId": "Cluster_Create",
         "responses": {
           "200": {
@@ -1204,7 +1204,7 @@
         ]
       },
       "put": {
-        "summary": "Update updates Usage Based activation ID",
+        "summary": "Updates Usage Based activation ID",
         "operationId": "License_Update",
         "responses": {
           "200": {
@@ -1319,7 +1319,7 @@
         ]
       },
       "post": {
-        "summary": "Create creates new organization object in datastore",
+        "summary": "Creates new organization object in datastore",
         "operationId": "Organization_Create",
         "responses": {
           "200": {
@@ -1383,7 +1383,7 @@
     },
     "/v1/restore": {
       "post": {
-        "summary": "Create creates new restore object in datastore\nIt will also trigger a restore operation on the target cluster",
+        "summary": "Creates new restore object in datastore\nIt will also trigger a restore operation on the target cluster",
         "operationId": "Restore_Create",
         "responses": {
           "200": {
@@ -1700,7 +1700,7 @@
         ]
       },
       "post": {
-        "summary": "Create creates new role object in datastore",
+        "summary": "Creates new role object in datastore",
         "operationId": "Role_Create",
         "responses": {
           "200": {
@@ -1843,7 +1843,7 @@
         ]
       }
     },
-    "/v1/role/{org_id}/{name}": {
+    "/v1/role/{org_id}/{name}/{uid}": {
       "get": {
         "summary": "Inspect returns detailed information about requested role object",
         "operationId": "Role_Inspect",
@@ -1876,8 +1876,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -1917,8 +1917,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -1929,7 +1929,7 @@
     },
     "/v1/rule": {
       "post": {
-        "summary": "Create creates new rule",
+        "summary": "Creates new rule",
         "operationId": "Rules_Create",
         "responses": {
           "200": {
@@ -2055,7 +2055,7 @@
         ]
       }
     },
-    "/v1/rule/{org_id}/{name}": {
+    "/v1/rule/{org_id}/{name}/{uid}": {
       "get": {
         "summary": "Inspect returns detailed information about the specified rule",
         "operationId": "Rules_Inspect",
@@ -2088,8 +2088,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -2129,8 +2129,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -2141,7 +2141,7 @@
     },
     "/v1/schedulepolicy": {
       "post": {
-        "summary": "Create creates new schedule policy.",
+        "summary": "Creates new schedule policy.",
         "operationId": "SchedulePolicy_Create",
         "responses": {
           "200": {
@@ -2267,7 +2267,7 @@
         ]
       }
     },
-    "/v1/schedulepolicy/{org_id}/{name}": {
+    "/v1/schedulepolicy/{org_id}/{name}/{uid}": {
       "get": {
         "summary": "Inspect returns detail information about a specified schedule policy",
         "operationId": "SchedulePolicy_Inspect",
@@ -2300,8 +2300,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -2341,8 +2341,8 @@
           },
           {
             "name": "uid",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -2353,7 +2353,7 @@
     },
     "/v1/version": {
       "get": {
-        "summary": "Get gets the version of the server",
+        "summary": "gets the version of the server",
         "operationId": "Version_Get",
         "responses": {
           "200": {
@@ -2676,6 +2676,9 @@
         "backup_type": {
           "$ref": "#/definitions/BackupInfoBackupType",
           "title": "To get type of backup (generic or non-generic)"
+        },
+        "cr_uid": {
+          "type": "string"
         }
       }
     },
@@ -2792,6 +2795,15 @@
           "title": "actual size of the backup\nincase of incremental, it's the incremental backup size"
         },
         "storage_class": {
+          "type": "string"
+        },
+        "pvc_id": {
+          "type": "string"
+        },
+        "provisioner": {
+          "type": "string"
+        },
+        "volumesnapshot": {
           "type": "string"
         }
       }
@@ -4955,5 +4967,18 @@
         }
       }
     }
-  }
+  },
+  "securityDefinitions": {
+    "bearer": {
+      "type": "apiKey",
+      "description": "Authentication token, prefixed by Bearer: Bearer \u003ctoken\u003e",
+      "name": "Authorization",
+      "in": "header"
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ]
 }

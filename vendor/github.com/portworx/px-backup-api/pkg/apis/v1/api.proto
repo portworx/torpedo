@@ -10,10 +10,26 @@ import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "pkg/apis/v1/common.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
 
 option (gogoproto.populate_all) = true;
 option (gogoproto.equal_all) = true;
 option (gogoproto.testgen_all) = true;
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+    security_definitions : {
+        security : {
+            key : "bearer"
+            value : {
+                type : TYPE_API_KEY
+                in : IN_HEADER
+                name : "Authorization"
+                description : "Authentication token, prefixed by Bearer: "
+                              "Bearer <token>"
+            }
+        }
+    }
+    security : {security_requirement : {key : "bearer"}}
+};
 
 message OrganizationObject {
     Metadata metadata = 1 [ (gogoproto.embed) = true ];
@@ -380,6 +396,7 @@ message BackupInfo {
     ObjectRef cloud_credential_ref = 24;
     // To get type of backup (generic or non-generic)
     BackupType backup_type = 25;
+    string cr_uid = 26;
     message BackupType {
         Type type = 1;
         enum Type {
@@ -418,6 +435,9 @@ message BackupInfo {
         // incase of incremental, it's the incremental backup size
         uint64 actual_size = 10;
         string storage_class = 11;
+        string pvc_id = 12;
+        string provisioner = 13;
+        string volumesnapshot = 14;
     }
 
     // Message for maintaining status of the object.
@@ -594,7 +614,7 @@ message EnumerateOptions {
 }
 
 service SchedulePolicy {
-    // Create creates new schedule policy.
+    // Creates new schedule policy.
     rpc Create(SchedulePolicyCreateRequest)
         returns (SchedulePolicyCreateResponse) {
         option (google.api.http) = {
@@ -624,7 +644,7 @@ service SchedulePolicy {
     rpc Inspect(SchedulePolicyInspectRequest)
         returns (SchedulePolicyInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/schedulepolicy/{org_id}/{name}"
+            get : "/v1/schedulepolicy/{org_id}/{name}/{uid}"
         };
     }
 
@@ -632,7 +652,7 @@ service SchedulePolicy {
     rpc Delete(SchedulePolicyDeleteRequest)
         returns (SchedulePolicyDeleteResponse) {
         option (google.api.http) = {
-            delete : "/v1/schedulepolicy/{org_id}/{name}"
+            delete : "/v1/schedulepolicy/{org_id}/{name}/{uid}"
         };
     }
 
@@ -699,7 +719,7 @@ message SchedulePolicyOwnershipUpdateRequest {
 message SchedulePolicyOwnershipUpdateResponse {}
 
 service BackupSchedule {
-    // Create creates new backup schedule
+    // Creates new backup schedule
     rpc Create(BackupScheduleCreateRequest)
         returns (BackupScheduleCreateResponse) {
         option (google.api.http) = {
@@ -708,7 +728,7 @@ service BackupSchedule {
         };
     }
 
-    // Update updates a backup schedule
+    // Updates a backup schedule
     rpc Update(BackupScheduleUpdateRequest)
         returns (BackupScheduleUpdateResponse) {
         option (google.api.http) = {
@@ -856,7 +876,7 @@ message BackupScheduleDeleteResponse {}
 
 service Cluster {
 
-    // Create creates a new cluster
+    // Creates a new cluster
     rpc Create(ClusterCreateRequest) returns (ClusterCreateResponse) {
         option (google.api.http) = {
             post : "/v1/cluster"
@@ -969,7 +989,7 @@ message ClusterDeleteRequest {
 message ClusterDeleteResponse {}
 
 service CloudCredential {
-    // Create creates new cloud credential
+    // Creates new cloud credential
     rpc Create(CloudCredentialCreateRequest)
         returns (CloudCredentialCreateResponse) {
         option (google.api.http) = {
@@ -999,7 +1019,7 @@ service CloudCredential {
     rpc Inspect(CloudCredentialInspectRequest)
         returns (CloudCredentialInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/cloudcredential/{org_id}/{name}"
+            get : "/v1/cloudcredential/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1007,7 +1027,7 @@ service CloudCredential {
     rpc Delete(CloudCredentialDeleteRequest)
         returns (CloudCredentialDeleteResponse) {
         option (google.api.http) = {
-            delete : "/v1/cloudcredential/{org_id}/{name}"
+            delete : "/v1/cloudcredential/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1084,7 +1104,7 @@ message CloudCredentialOwnershipUpdateRequest {
 message CloudCredentialOwnershipUpdateResponse {}
 
 service BackupLocation {
-    // Create creates new backup location
+    // Creates new backup location
     rpc Create(BackupLocationCreateRequest)
         returns (BackupLocationCreateResponse) {
         option (google.api.http) = {
@@ -1114,7 +1134,7 @@ service BackupLocation {
     rpc Inspect(BackupLocationInspectRequest)
         returns (BackupLocationInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/backuplocation/{org_id}/{name}"
+            get : "/v1/backuplocation/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1122,7 +1142,7 @@ service BackupLocation {
     rpc Delete(BackupLocationDeleteRequest)
         returns (BackupLocationDeleteResponse) {
         option (google.api.http) = {
-            delete : "/v1/backuplocation/{org_id}/{name}"
+            delete : "/v1/backuplocation/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1249,7 +1269,7 @@ message MetricsInspectResponse {
 }
 
 service Backup {
-    // Create creates a new backup object
+    // Creates a new backup object
     rpc Create(BackupCreateRequest) returns (BackupCreateResponse) {
         option (google.api.http) = {
             post : "/v1/backup"
@@ -1374,7 +1394,7 @@ message BackupDeleteRequest {
 message BackupDeleteResponse {}
 
 service Restore {
-    // Create creates new restore object in datastore
+    // Creates new restore object in datastore
     // It will also trigger a restore operation on the target cluster
     rpc Create(RestoreCreateRequest) returns (RestoreCreateResponse) {
         option (google.api.http) = {
@@ -1476,7 +1496,7 @@ message RestoreDeleteRequest {
 message RestoreDeleteResponse {}
 
 service Organization {
-    // Create creates new organization object in datastore
+    // Creates new organization object in datastore
     rpc Create(OrganizationCreateRequest) returns (OrganizationCreateResponse) {
         option (google.api.http) = {
             post : "/v1/organization"
@@ -1577,7 +1597,7 @@ message RuleOwnershipUpdateRequest {
 message RuleOwnershipUpdateResponse {}
 
 service Rules {
-    // Create creates new rule
+    // Creates new rule
     rpc Create(RuleCreateRequest) returns (RuleCreateResponse) {
         option (google.api.http) = {
             post : "/v1/rule"
@@ -1603,14 +1623,14 @@ service Rules {
     // Inspect returns detailed information about the specified rule
     rpc Inspect(RuleInspectRequest) returns (RuleInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/rule/{org_id}/{name}"
+            get : "/v1/rule/{org_id}/{name}/{uid}"
         };
     }
 
     // Delete removes rule from px-backup
     rpc Delete(RuleDeleteRequest) returns (RuleDeleteResponse) {
         option (google.api.http) = {
-            delete : "/v1/rule/{org_id}/{name}"
+            delete : "/v1/rule/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1625,7 +1645,7 @@ service Rules {
 }
 
 service Version {
-    // Get gets the version of the server
+    // gets the version of the server
     rpc Get(VersionGetRequest) returns (VersionGetResponse) {
         option (google.api.http) = {
             get : "/v1/version"
@@ -1718,7 +1738,7 @@ service License {
         };
     }
 
-    // Update updates Usage Based activation ID
+    // Updates Usage Based activation ID
     rpc Update(LicenseUpdateRequest) returns (LicenseUpdateResponse) {
         option (google.api.http) = {
             put : "/v1/license"
@@ -1792,7 +1812,7 @@ message RoleConfig {
 }
 
 service Role {
-    // Create creates new role object in datastore
+    // Creates new role object in datastore
     rpc Create(RoleCreateRequest) returns (RoleCreateResponse) {
         option (google.api.http) = {
             post : "/v1/role"
@@ -1809,7 +1829,7 @@ service Role {
     // Inspect returns detailed information about requested role object
     rpc Inspect(RoleInspectRequest) returns (RoleInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/role/{org_id}/{name}"
+            get : "/v1/role/{org_id}/{name}/{uid}"
         };
     }
     // Update given role information
@@ -1822,7 +1842,7 @@ service Role {
     // Delete removes given role from px-backup
     rpc Delete(RoleDeleteRequest) returns (RoleDeleteResponse) {
         option (google.api.http) = {
-            delete : "/v1/role/{org_id}/{name}"
+            delete : "/v1/role/{org_id}/{name}/{uid}"
         };
     }
     // Permission returns list of service,apis permission for given user

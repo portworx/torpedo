@@ -22,16 +22,16 @@ require (
 	github.com/onsi/gomega v1.10.5
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
-	github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20211115213015-b317aedd1e61
+	github.com/portworx/px-backup-api v1.2.2-0.20211122112023-4085309cb896
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20211117101733-1f213fafc48e
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.0.0-20201208171446-5f87f3452ae9
-	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
-	google.golang.org/genproto v0.0.0-20210916144049-3192f974c780
+	golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d
+	google.golang.org/genproto v0.0.0-20211118181313-81c1377c94b1
 	google.golang.org/grpc v1.40.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.20.4
