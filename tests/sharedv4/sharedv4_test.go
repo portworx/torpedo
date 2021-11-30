@@ -248,6 +248,8 @@ var _ = Describe("{MultiVolumeMountsForSharedV4Svc}", func() {
 					})
 
 					Step(fmt.Sprintf("validate app %s", attachedNode.Name), func() {
+						ctx.ReadinessTimeout = timeout
+						ctx.SkipVolumeValidation = true
 						ValidateContext(ctx)
 					})
 				}
