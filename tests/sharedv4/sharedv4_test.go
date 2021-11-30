@@ -150,6 +150,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 var _ = Describe("{MultiVolumeMountsForSharedV4Svc}", func() {
 
 	It("has to create multiple sharedv4-svc volumes and mount to single pod", func() {
+		logrus.Infof("testing skip volume validation")
 		// set frequency mins depending on the chaos level
 		var frequency int
 		var timeout time.Duration
