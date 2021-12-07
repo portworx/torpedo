@@ -312,7 +312,6 @@ PodLoop:
 		skipHostMountCheck := false
 		for containerName, paths := range containerPaths {
 			output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
-			mounts := strings.Split(output, "\n")
 			if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
 				// if pod is not found or in completed state so delay the check and move to next pod
 				logrus.Warnf("Failed to execute command in pod. Cause %v", err)
@@ -320,6 +319,7 @@ PodLoop:
 			} else if err != nil {
 				return validatedMountPods, err
 			}
+			mounts := strings.Split(output, "\n")
 			for _, path := range paths {
 				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s ", path))
 				pxMountFound := false
