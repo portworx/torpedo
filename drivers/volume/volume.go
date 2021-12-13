@@ -129,6 +129,9 @@ type Driver interface {
 	// failure.
 	RecoverDriver(n node.Node) error
 
+	// GetDriverVersion will return the pxctl version from the node
+	GetDriverVersion() (string, error)
+
 	// RefreshDriverEndpoints refreshes volume driver endpoint
 	RefreshDriverEndpoints() error
 
