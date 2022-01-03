@@ -853,14 +853,18 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		}
 	}()
 	context(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
-		Step(fmt.Sprintf("start volume driver on nodes: %v", appNodes), func() {
+		var appNodeNames []string
+		for _, appNode := range appNodes {
+			appNodeNames = append(appNodeNames, appNode.Name)
+		}
+		Step(fmt.Sprintf("start volume driver on nodes: %v", appNodeNames), func() {
 			for _, n := range appNodes {
 				err := Inst().V.StartDriver(n)
 				processError(err, errChan...)
 			}
 		})
 
-		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
+		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodeNames), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -878,12 +882,16 @@ func StopVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		}
 	}()
 	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
-		Step(fmt.Sprintf("stop volume driver on nodes: %v", appNodes), func() {
+		var appNodeNames []string
+		for _, appNode := range appNodes {
+			appNodeNames = append(appNodeNames, appNode.Name)
+		}
+		Step(fmt.Sprintf("stop volume driver on nodes: %v", appNodeNames), func() {
 			err := Inst().V.StopDriver(appNodes, false, nil)
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
+		Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodeNames), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverDownOnNode(n)
 				processError(err, errChan...)
@@ -901,12 +909,16 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		}
 	}()
 	context(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
-		Step(fmt.Sprintf("crash volume driver on nodes: %v", appNodes), func() {
+		var appNodeNames []string
+		for _, appNode := range appNodes {
+			appNodeNames = append(appNodeNames, appNode.Name)
+		}
+		Step(fmt.Sprintf("crash volume driver on nodes: %v", appNodeNames), func() {
 			err := Inst().V.StopDriver(appNodes, true, nil)
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
+		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodeNames), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)

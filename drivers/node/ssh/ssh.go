@@ -310,8 +310,9 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 		output, err := s.doCmd(n, options, command, options.IgnoreError)
 		if err != nil {
 			return "", true, &node.ErrFailedToRunCommand{
-				Addr:  n.Name,
-				Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
+				Node:    n,
+				Command: command,
+				Cause:   err.Error(),
 			}
 		}
 		return output, false, nil
@@ -413,6 +414,31 @@ func (s *SSH) SystemctlUnitExist(n node.Node, service string, options node.Syste
 	return len(out.(string)) > 0, nil
 }
 
+// Which returns the path for a given command
+func (s *SSH) Which(n node.Node, cmd string, options node.ConnectionOpts) (string, error) {
+	whichCmd := fmt.Sprintf("sudo which %s", cmd)
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, options, whichCmd, false)
+		// if the command is not in PATH, there is no need to retry
+		if err != nil && strings.Contains(err.Error(), fmt.Sprintf("no %s in", cmd)) {
+			return out, false, err
+		} else if err != nil {
+			return out, true, err
+		}
+		return out, false, nil
+	}
+	out, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
+	if err != nil {
+		return "", &node.ErrFailedToRunCommand{
+			Node:    n,
+			Command: whichCmd,
+			Cause:   err.Error(),
+		}
+	}
+
+	return out.(string), nil
+}
+
 func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 
 	if useSSH() {
@@ -437,10 +463,7 @@ func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error)
 	}
 
 	if debugPod == nil {
-		return "", &node.ErrFailedToRunCommand{
-			Node:  n,
-			Cause: fmt.Sprintf("debug pod not found in node %v", n),
-		}
+		return "", fmt.Errorf("debug pod not found in node %v", n)
 	}
 	return k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 }
@@ -462,19 +485,16 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 	}
 
 	if debugPod == nil {
-		return "", &node.ErrFailedToRunCommand{
-			Node:  n,
-			Cause: fmt.Sprintf("debug pod not found in node %v", n),
-		}
+		return "", fmt.Errorf("debug pod not found in node %v", n)
 	}
 
 	t := func() (interface{}, bool, error) {
 		output, err := k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 		if ignoreErr == false && err != nil {
-			return nil, true, &node.ErrFailedToRunCommand{
-				Node: n,
-				Cause: fmt.Sprintf("failed to run command in pod. command: %v , err: %v, pod: %v",
-					cmds, err, debugPod),
+			return nil, true, &node.ErrFailedToRunCommandInPod{
+				Pod:     debugPod,
+				Command: cmds,
+				Cause:   err.Error(),
 			}
 		}
 
@@ -494,18 +514,12 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	var sterr string
 	connection, err := s.getConnection(n, options)
 	if err != nil {
-		return "", &node.ErrFailedToRunCommand{
-			Addr:  n.UsableAddr,
-			Cause: fmt.Sprintf("failed to dial: %v", err),
-		}
+		return "", fmt.Errorf("failed to dial: %v", err)
 	}
 
 	session, err := connection.NewSession()
 	if err != nil {
-		return "", &node.ErrFailedToRunCommand{
-			Addr:  n.UsableAddr,
-			Cause: fmt.Sprintf("failed to create session: %s", err),
-		}
+		return "", fmt.Errorf("failed to create session: %v", err)
 	}
 	defer session.Close()
 
@@ -535,10 +549,7 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	}
 
 	if ignoreErr == false && err != nil {
-		return out, &node.ErrFailedToRunCommand{
-			Addr:  n.UsableAddr,
-			Cause: fmt.Sprintf("failed to run command due to: %v", sterr),
-		}
+		return out, fmt.Errorf("failed to run command due to: %v", sterr)
 	}
 	return out, nil
 }

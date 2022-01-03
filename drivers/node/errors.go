@@ -2,6 +2,8 @@ package node
 
 import (
 	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 // ErrFailedToTestConnection error type when failing to test connection
@@ -56,13 +58,25 @@ func (e *ErrFailedToRunSystemctlOnNode) Error() string {
 
 // ErrFailedToRunCommand error type when failing to run command
 type ErrFailedToRunCommand struct {
-	Addr  string
-	Node  Node
-	Cause string
+	Node    Node
+	Command interface{}
+	Cause   string
 }
 
 func (e *ErrFailedToRunCommand) Error() string {
-	return fmt.Sprintf("Failed to run command on: %v. Cause: %v", e.Addr, e.Cause)
+	return fmt.Sprintf("Failed to run command %v on: %s (%v). Cause: %s", e.Command, e.Node.Name, e.Node.Addresses, e.Cause)
+}
+
+// ErrFailedToRunCommandInPod error type when failing to run command
+type ErrFailedToRunCommandInPod struct {
+	Pod     *corev1.Pod
+	Command interface{}
+	Cause   string
+}
+
+func (e *ErrFailedToRunCommandInPod) Error() string {
+	return fmt.Sprintf("Failed to run command %v in pod: [%s] %s, node: %s (%s). Cause: %s",
+		e.Command, e.Pod.Namespace, e.Pod.Name, e.Pod.Spec.NodeName, e.Pod.Status.HostIP, e.Cause)
 }
 
 // ErrFailedToYankDrive error type when we fail to simulate drive failure
