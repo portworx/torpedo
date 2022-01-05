@@ -29,11 +29,13 @@ require (
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
+	github.com/spf13/viper v1.7.0
 	github.com/stretchr/testify v1.7.0
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
+	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
 	google.golang.org/genproto v0.0.0-20210916144049-3192f974c780
 	google.golang.org/grpc v1.40.0
 	gopkg.in/yaml.v2 v2.4.0
