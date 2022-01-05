@@ -308,20 +308,25 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						// number of nodes required = aggregation level * replication factor
 						currAggr, err := Inst().V.GetAggregationLevel(v)
 						UpdateOutcome(event, err)
+						storageNodes, err := GetStorageNodes()
+						UpdateOutcome(event, err)
 
-						if currAggr > 1 {
-							MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
-						}
-						if currRep == MaxRF {
+						//Calulating Max Replication Factor allowed
+						MaxRF = int64(len(storageNodes)) / currAggr
+
+						expRF := currRep + 1
+
+						if expRF > 3 || expRF > MaxRF {
 							errExpected = true
+							expRF = currRep
 						}
-						err = Inst().V.SetReplicationFactor(v, currRep+1, nil, opts)
-						expReplMap[v] = currRep + 1
+						expReplMap[v] = expRF
 						if !errExpected {
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, opts)
 							UpdateOutcome(event, err)
 						} else {
 							if !expect(err).To(haveOccurred()) {
-								UpdateOutcome(event, fmt.Errorf("expected HA increase to fail since new repl factor is greater than %v but it did not", MaxRF))
+								UpdateOutcome(event, fmt.Errorf("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF))
 							}
 						}
 					})
@@ -333,12 +338,10 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						UpdateOutcome(event, err)
 
 						if newRepl != expReplMap[v] {
-							err = fmt.Errorf("volume has invalid repl value. Expected:%d Actual:%d", expReplMap[v], newRepl)
+							err = fmt.Errorf("volume [%s] has invalid repl value for volume. Expected:%d Actual:%d", v.Name, expReplMap[v], newRepl)
 							UpdateOutcome(event, err)
-						}
-						if newRepl != expReplMap[v] {
-							UpdateOutcome(event,
-								fmt.Errorf("actual volume replica %d does not match with expected volume replica %d for volume [%s]", newRepl, expReplMap[v], v.Name))
+						} else {
+							logrus.Infof("Successfully validated repl for volume %s", v.Name)
 						}
 					})
 			}
@@ -397,19 +400,21 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						errExpected := false
 						currRep, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
+						expRF := currRep - 1
 
-						if currRep == MinRF {
+						if expRF < MinRF {
 							errExpected = true
+							expRF = currRep
 						}
 
 						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, opts)
-						expReplMap[v] = currRep - 1
+						expReplMap[v] = expRF
 						if !errExpected {
+							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, opts)
 							UpdateOutcome(event, err)
-
 						} else {
 							if !expect(err).To(haveOccurred()) {
-								UpdateOutcome(event, fmt.Errorf("expected HA reduce to fail since new repl factor is less than %v but it did not", MinRF))
+								UpdateOutcome(event, fmt.Errorf("cannot perfomr HA reduce as new repl factor is less than minimum value %v ", MinRF))
 							}
 						}
 
@@ -422,12 +427,9 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						UpdateOutcome(event, err)
 
 						if newRepl != expReplMap[v] {
-							UpdateOutcome(event, fmt.Errorf("volume has invalid repl value. Expected:%d Actual:%d", expReplMap[v], newRepl))
+							UpdateOutcome(event, fmt.Errorf("volume [%s] has invalid repl value . Expected:%d Actual:%d", v.Name, expReplMap[v], newRepl))
 						}
-						if newRepl != expReplMap[v] {
-							UpdateOutcome(event,
-								fmt.Errorf("actual volume replica %d does not match with expected volume replica %d for volume [%s]", newRepl, expReplMap[v], v.Name))
-						}
+
 					})
 			}
 			Step(fmt.Sprintf("validating context after reducing HA for app: %s",
