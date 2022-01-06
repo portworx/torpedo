@@ -614,7 +614,7 @@ func ValidateVolumeStatsticsDynamicUpdate(ctx *scheduler.Context, errChan ...*ch
 }
 
 func fbVolumeExpectedSizechange(sizeChangeInBytes uint64) error {
-	if sizeChangeInBytes < (512 - 30) *oneMegabytes || sizeChangeInBytes > (512  + 30)*oneMegabytes {
+	if sizeChangeInBytes < (512-30)*oneMegabytes || sizeChangeInBytes > (512+30)*oneMegabytes {
 		return errUnexpectedSizeChangeAfterFBIO
 	}
 	return nil
@@ -2459,7 +2459,8 @@ func TearDownBackupRestoreAll() {
 			Uid:  BackupLocationUID,
 		},
 	}
-	ctx, err := backup.GetPxCentralAdminCtx()
+	//ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := backup.GetAdminCtxFromSecret()
 	expect(err).NotTo(haveOccurred())
 	enumBkpScheduleResponse, _ := Inst().Backup.EnumerateBackupSchedule(ctx, bkpScheduleEnumerateReq)
 	bkpSchedules := enumBkpScheduleResponse.GetBackupSchedules()
