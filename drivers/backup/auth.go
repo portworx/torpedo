@@ -495,7 +495,8 @@ func GetPxCentralAdminCtx() (context.Context, error) {
 // UpdatePxBackupAdminSecret updating "px-backup-admin-secret" token with
 // "px-central-admin" token
 func UpdatePxBackupAdminSecret() error {
-	pxCentralAdminToken, err := GetPxCentralAdminToken()
+	//pxCentralAdminToken, err := GetPxCentralAdminToken()
+	pxCentralAdminToken, err := GetAdminTokenFromSecret()
 	if err != nil {
 		return err
 	}
@@ -534,6 +535,27 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 	ctx := GetCtxWithToken(token)
 
 	return ctx, nil
+}
+
+// GetAdminTokenFromSecret with provided name and namespace
+func GetAdminTokenFromSecret() (string, error) {
+	err := UpdatePxBackupAdminSecret()
+	if err != nil {
+		return "", err
+	}
+
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, AdminTokenSecretNamespace)
+	if err != nil {
+		return "", err
+	}
+
+	token := string(secret.Data[OrgToken])
+	if token == "" {
+		return "", fmt.Errorf("admin token is empty")
+	}
+	logrus.Infof("Token from Admin secret: %v", token)
+
+	return token, nil
 }
 
 // GetAllGroups fetches all available groups

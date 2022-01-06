@@ -201,8 +201,8 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		*recordChan <- event
 	}()
 
-	context(fmt.Sprintf("checking for core files..."), func() {
-		Step(fmt.Sprintf("verifying if core files are present on each node"), func() {
+	context("checking for core files...", func() {
+		Step("verifying if core files are present on each node", func() {
 			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
