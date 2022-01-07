@@ -320,14 +320,15 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							errExpected = true
 							expRF = currRep
 						}
+						logrus.Infof("Expected Replication factor %v", expRF)
+						logrus.Infof("Max Replication factor %v", MaxRF)
 						expReplMap[v] = expRF
 						if !errExpected {
-							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, opts)
+							err = Inst().V.SetReplicationFactor(v, expRF, nil, opts)
 							UpdateOutcome(event, err)
 						} else {
-							if !expect(err).To(haveOccurred()) {
-								UpdateOutcome(event, fmt.Errorf("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF))
-							}
+							logrus.Infof("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF)
+							UpdateOutcome(event, fmt.Errorf("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF))
 						}
 					})
 				Step(
@@ -343,15 +344,19 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						} else {
 							logrus.Infof("Successfully validated repl for volume %s", v.Name)
 						}
+						logrus.Infof("repl increase validation completed on app %s", v.Name)
 					})
 			}
 			Step(fmt.Sprintf("validating context after increasing HA for app: %s",
 				ctx.App.Key), func() {
 				errorChan := make(chan error, errorChannelSize)
 				ctx.SkipVolumeValidation = false
+				logrus.Infof("Context Validation after increasing HA started for  %s", ctx.App.Key)
 				ValidateContext(ctx, &errorChan)
+				logrus.Infof("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
 				for err := range errorChan {
 					UpdateOutcome(event, err)
+					logrus.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
 				}
 			})
 		}
@@ -406,16 +411,15 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							errExpected = true
 							expRF = currRep
 						}
-
-						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, opts)
 						expReplMap[v] = expRF
+						logrus.Infof("Expected Replication factor %v", expRF)
+						logrus.Infof("Min Replication factor %v", MinRF)
 						if !errExpected {
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, opts)
 							UpdateOutcome(event, err)
 						} else {
-							if !expect(err).To(haveOccurred()) {
-								UpdateOutcome(event, fmt.Errorf("cannot perfomr HA reduce as new repl factor is less than minimum value %v ", MinRF))
-							}
+							logrus.Infof("cannot perfomr HA reduce as new repl factor is less than minimum value %v ", MinRF)
+							UpdateOutcome(event, fmt.Errorf("cannot perfomr HA reduce as new repl factor is less than minimum value %v ", MinRF))
 						}
 
 					})
@@ -429,6 +433,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						if newRepl != expReplMap[v] {
 							UpdateOutcome(event, fmt.Errorf("volume [%s] has invalid repl value . Expected:%d Actual:%d", v.Name, expReplMap[v], newRepl))
 						}
+						logrus.Infof("repl decrease validation completed on app %s", v.Name)
 
 					})
 			}
@@ -436,9 +441,12 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				ctx.App.Key), func() {
 				errorChan := make(chan error, errorChannelSize)
 				ctx.SkipVolumeValidation = false
+				logrus.Infof("Context Validation after reducing HA started for  %s", ctx.App.Key)
 				ValidateContext(ctx, &errorChan)
+				logrus.Infof("Context Validation after reducing HA is completed for  %s", ctx.App.Key)
 				for err := range errorChan {
 					UpdateOutcome(event, err)
+					logrus.Infof("Context outcome after reducing HA is updated for  %s", ctx.App.Key)
 				}
 			})
 		}

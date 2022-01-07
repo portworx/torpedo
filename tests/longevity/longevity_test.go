@@ -167,6 +167,7 @@ func testTrigger(wg *sync.WaitGroup,
 			}*/
 
 			triggerFunc(contexts, triggerEventsChan)
+			logrus.Infof("Trigger Function completed for [%s]\n", triggerType)
 
 			//if isDisruptiveTrigger(triggerType) {
 			triggerLoc.Unlock()
@@ -500,6 +501,8 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown][3] = 21 * baseInterval
 	triggerInterval[AppTaskDown][2] = 24 * baseInterval
 	triggerInterval[AppTaskDown][1] = 27 * baseInterval
+
+	baseInterval = 2 * time.Minute
 
 	triggerInterval[HAIncrease][10] = 1 * baseInterval
 	triggerInterval[HAIncrease][9] = 3 * baseInterval
