@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: fio-job-config
+  namespace: fio-cloudsnap-longevity
 data:
     fio.job: |
         [global]
@@ -29,6 +30,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grok-exporter
+  namespace: fio-cloudsnap-longevity
 data:
   config.yml: |-
     global:

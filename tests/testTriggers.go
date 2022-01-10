@@ -784,7 +784,36 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 	time.Sleep(3 * time.Minute)
 	snapshotScheduleRetryInterval := 10 * time.Second
 	snapshotScheduleRetryTimeout := 3 * time.Minute
+
 	Step("Validate Cloud Snaps", func() {
+
+		for _, ctx := range *contexts {
+			var appVolumes []*volume.Volume
+			var err error
+			if ctx.App.Key == "fio-cloudsnap" {
+				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					UpdateOutcome(event, err)
+					if len(appVolumes) == 0 {
+						UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+					}
+				})
+				logrus.Infof("Got volume count : %v", len(appVolumes))
+
+				for _, v := range appVolumes {
+					snapshotScheduleName := v.Name + "-interval-schedule"
+					logrus.Infof("snapshotScheduleName : %v", snapshotScheduleName)
+					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
+						"fio-cloudsnap-longevity",
+						snapshotScheduleRetryTimeout,
+						snapshotScheduleRetryInterval)
+					logrus.Infof("snapStatuses: %v", snapStatuses)
+					UpdateOutcome(event, err)
+				}
+
+			}
+
+		}
 		snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule("intervalpolicy",
 			"default",
 			snapshotScheduleRetryTimeout,

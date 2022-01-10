@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: fio
+  namespace: fio-cloudsnap-longevity
 spec:
   serviceName: fio
   replicas: 3
@@ -65,7 +66,7 @@ spec:
   - metadata:
       name: fio-log
     spec:
-      storageClassName: fio-log
+      storageClassName: fio-cloudsnap-sc
       accessModes:
       - ReadWriteOnce
       resources:
@@ -76,6 +77,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: grok-exporter-svc
+  namespace: fio-cloudsnap-longevity
   labels:
       app: fio
 spec:
