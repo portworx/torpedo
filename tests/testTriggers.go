@@ -21,6 +21,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -729,7 +730,7 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 }
 
 // TriggerCloudSnapShost deploy cloudsnap apps and validates snapshot
-func TriggerCloudSnapShost(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	uuid := GenerateUUID()
 	event := &EventRecord{
@@ -781,16 +782,15 @@ func TriggerCloudSnapShost(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	// 	logrus.Info("CloudSnap apps are already deplyed")
 	// }
 	time.Sleep(3 * time.Minute)
+	snapshotScheduleRetryInterval := 10 * time.Second
+	snapshotScheduleRetryTimeout := 3 * time.Minute
 	Step("Validate Cloud Snaps", func() {
-		for _, ctx := range *contexts {
-
-			snapshosts, err := Inst().S.GetSnapshots(ctx)
-			UpdateOutcome(event, err)
-			for _, snap := range snapshosts {
-				logrus.Infof("snapshot name is : %s", snap.Name)
-			}
-
-		}
+		snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule("intervalpolicy",
+			"default",
+			snapshotScheduleRetryTimeout,
+			snapshotScheduleRetryInterval)
+		logrus.Infof("snapStatuses: %v", snapStatuses)
+		UpdateOutcome(event, err)
 
 	})
 

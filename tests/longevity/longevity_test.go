@@ -436,7 +436,7 @@ func populateIntervals() {
 	triggerInterval[BackupRestartNode][6] = 5 * baseInterval
 	triggerInterval[BackupRestartNode][5] = 6 * baseInterval
 
-	baseInterval = 60 * time.Minute
+	baseInterval = 6 * time.Minute
 
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 3 * baseInterval
@@ -522,7 +522,7 @@ func populateIntervals() {
 	triggerInterval[BackupDeleteBackupPod][6] = 5 * baseInterval
 	triggerInterval[BackupDeleteBackupPod][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
-	baseInterval = 6 * time.Hour
+	baseInterval = 6 * time.Minute
 	triggerInterval[CloudSnapShot][10] = 1 * baseInterval
 	triggerInterval[CloudSnapShot][9] = 3 * baseInterval
 	triggerInterval[CloudSnapShot][8] = 6 * baseInterval
