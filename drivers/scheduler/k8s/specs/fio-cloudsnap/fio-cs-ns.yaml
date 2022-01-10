@@ -1,6 +1,0 @@
-kind: Namespace
-apiVersion: v1
-metadata:
-  name: fio-cloudsnap-longevity
-  labels:
-    name: fio-cloudsnap-longevity

@@ -57,8 +57,6 @@ const (
 	errorChannelSize                 = 50
 )
 
-var isCloudSnapAppDeployed bool
-
 // EmailRecipients list of email IDs to send email to
 var EmailRecipients []string
 
@@ -729,7 +727,7 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 	})
 }
 
-// TriggerCloudSnapShost deploy cloudsnap apps and validates snapshot
+// TriggerCloudSnapShot deploy cloudsnap apps and validates snapshot
 func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	uuid := GenerateUUID()
@@ -747,41 +745,6 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		*recordChan <- event
 	}()
 
-	//var cloudsanpContexts []*scheduler.Context
-
-	// if !isCloudSnapAppDeployed {
-
-	// 	Step("Create Cloud Credential", func() {
-	// 		req, err := getCreateCloudCredentialRequest(uuid)
-	// 		UpdateOutcome(event, err)
-	// 		err = createCloudCredential(req)
-	// 		UpdateOutcome(event, err)
-
-	// 	})
-	// 	errorChan := make(chan error, errorChannelSize)
-
-	// 	Step("Schedule CloudSnap Applications", func() {
-	// 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-	// 			taskName := fmt.Sprintf("%s-%v-%d", "longevity-cs", Inst().InstanceID, i)
-	// 			newContexts, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-	// 				AppKeys:            Inst().CloudSanpAppList, //ToDo: change applist to cloudsnap applist
-	// 				StorageProvisioner: Inst().Provisioner,
-	// 			})
-	// 			processError(err, &errorChan)
-	// 			if len(newContexts) == 0 {
-	// 				processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), &errorChan)
-	// 			}
-	// 			cloudsanpContexts = append(cloudsanpContexts, newContexts...)
-	// 		}
-
-	// 		*contexts = append(*contexts, cloudsanpContexts...)
-	// 		isCloudSnapAppDeployed = true
-
-	// 	})
-	// } else {
-	// 	logrus.Info("CloudSnap apps are already deplyed")
-	// }
-	time.Sleep(3 * time.Minute)
 	snapshotScheduleRetryInterval := 10 * time.Second
 	snapshotScheduleRetryTimeout := 3 * time.Minute
 
@@ -790,7 +753,8 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
-			if ctx.App.Key == "fio-cloudsnap" {
+			if strings.Contains(ctx.App.Key, "cloudsnap") {
+
 				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
 					appVolumes, err = Inst().S.GetVolumes(ctx)
 					UpdateOutcome(event, err)
@@ -800,26 +764,33 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 				})
 				logrus.Infof("Got volume count : %v", len(appVolumes))
 
+				appNamespace := ctx.App.Key + "-" + ctx.UID
+				logrus.Infof("Namespace : %v", appNamespace)
+
 				for _, v := range appVolumes {
 					snapshotScheduleName := v.Name + "-interval-schedule"
 					logrus.Infof("snapshotScheduleName : %v", snapshotScheduleName)
 					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
-						"fio-cloudsnap-longevity",
+						appNamespace,
 						snapshotScheduleRetryTimeout,
 						snapshotScheduleRetryInterval)
-					logrus.Infof("snapStatuses: %v", snapStatuses)
+					if err == nil {
+						for k, v := range snapStatuses {
+							logrus.Infof("Policy Type: %v", k)
+							for _, e := range v {
+								logrus.Infof("ScheduledVolumeSnapShot Name: %v", e.Name)
+								logrus.Infof("ScheduledVolumeSnapShot status: %v", e.Status)
+							}
+						}
+					} else {
+						logrus.Infof("Got error while getting volume snapshot status :%v", err.Error())
+					}
 					UpdateOutcome(event, err)
 				}
 
 			}
 
 		}
-		snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule("intervalpolicy",
-			"default",
-			snapshotScheduleRetryTimeout,
-			snapshotScheduleRetryInterval)
-		logrus.Infof("snapStatuses: %v", snapStatuses)
-		UpdateOutcome(event, err)
 
 	})
 

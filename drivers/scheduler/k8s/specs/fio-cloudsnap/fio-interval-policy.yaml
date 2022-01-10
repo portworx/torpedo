@@ -4,5 +4,5 @@ metadata:
   name: intervalpolicy
 policy:
   interval:
-    intervalMinutes: 10
+    intervalMinutes: 30
     retain: 2
