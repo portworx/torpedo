@@ -502,8 +502,6 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown][2] = 24 * baseInterval
 	triggerInterval[AppTaskDown][1] = 27 * baseInterval
 
-	baseInterval = 2 * time.Minute
-
 	triggerInterval[HAIncrease][10] = 1 * baseInterval
 	triggerInterval[HAIncrease][9] = 3 * baseInterval
 	triggerInterval[HAIncrease][8] = 6 * baseInterval

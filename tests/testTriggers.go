@@ -49,7 +49,7 @@ const (
 
 const (
 	validateReplicationUpdateTimeout = 2 * time.Hour
-	errorChannelSize                 = 10
+	errorChannelSize                 = 50
 )
 
 // EmailRecipients list of email IDs to send email to
@@ -347,18 +347,18 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						logrus.Infof("repl increase validation completed on app %s", v.Name)
 					})
 			}
-			// Step(fmt.Sprintf("validating context after increasing HA for app: %s",
-			// 	ctx.App.Key), func() {
-			// 	errorChan := make(chan error, errorChannelSize)
-			// 	ctx.SkipVolumeValidation = false
-			// 	logrus.Infof("Context Validation after increasing HA started for  %s", ctx.App.Key)
-			// 	ValidateContext(ctx, &errorChan)
-			// 	logrus.Infof("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
-			// 	for err := range errorChan {
-			// 		UpdateOutcome(event, err)
-			// 		logrus.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
-			// 	}
-			// })
+			Step(fmt.Sprintf("validating context after increasing HA for app: %s",
+				ctx.App.Key), func() {
+				errorChan := make(chan error, errorChannelSize)
+				ctx.SkipVolumeValidation = true
+				logrus.Infof("Context Validation after increasing HA started for  %s", ctx.App.Key)
+				ValidateContext(ctx, &errorChan)
+				logrus.Infof("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+					logrus.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
+				}
+			})
 		}
 	})
 }
@@ -437,18 +437,18 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 					})
 			}
-			// Step(fmt.Sprintf("validating context after reducing HA for app: %s",
-			// 	ctx.App.Key), func() {
-			// 	errorChan := make(chan error, errorChannelSize)
-			// 	ctx.SkipVolumeValidation = false
-			// 	logrus.Infof("Context Validation after reducing HA started for  %s", ctx.App.Key)
-			// 	ValidateContext(ctx, &errorChan)
-			// 	logrus.Infof("Context Validation after reducing HA is completed for  %s", ctx.App.Key)
-			// 	for err := range errorChan {
-			// 		UpdateOutcome(event, err)
-			// 		logrus.Infof("Context outcome after reducing HA is updated for  %s", ctx.App.Key)
-			// 	}
-			// })
+			Step(fmt.Sprintf("validating context after reducing HA for app: %s",
+				ctx.App.Key), func() {
+				errorChan := make(chan error, errorChannelSize)
+				ctx.SkipVolumeValidation = true
+				logrus.Infof("Context Validation after reducing HA started for  %s", ctx.App.Key)
+				ValidateContext(ctx, &errorChan)
+				logrus.Infof("Context Validation after reducing HA is completed for  %s", ctx.App.Key)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+					logrus.Infof("Context outcome after reducing HA is updated for  %s", ctx.App.Key)
+				}
+			})
 		}
 	})
 }
