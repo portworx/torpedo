@@ -162,6 +162,8 @@ const (
 	EmailReporter = "emailReporter"
 	// CoreChecker checks if any cores got generated
 	CoreChecker = "coreChecker"
+	// PoolResizeDisk resize-disk operation on storage pool
+	PoolResizeDisk = "poolResizeDisk"
 	// BackupAllApps Perform backups of all deployed apps
 	BackupAllApps = "backupAllApps"
 	// BackupScheduleAll Creates and deletes namespaces and checks a scheduled backup for inclusion
@@ -2330,6 +2332,50 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 			}
 		}
 	})
+}
+
+// TriggerPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
+func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolResizeDisk,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	Step("get storage pools and perform resize-disk by percentage on it ", func() {
+		time.Sleep(1 * time.Minute)
+		for _, ctx := range *contexts {
+			var appVolumes []*volume.Volume
+			var err error
+			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				UpdateOutcome(event, err)
+				if len(appVolumes) == 0 {
+					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+				}
+				for _, vol := range appVolumes {
+					replicaSets, err := Inst().V.GetReplicaSets(vol)
+					logrus.Infof("Error %v", err)
+					for _, poolUUID := range replicaSets[0].PoolUuids {
+						logrus.Infof("Pool UUID: %v, Vol: %v", poolUUID, vol.Name)
+						err = Inst().V.ResizeStoragePoolByPercentage(poolUUID, 2, uint64(10))
+						UpdateOutcome(event, err)
+
+					}
+
+				}
+			})
+		}
+	})
+
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {
