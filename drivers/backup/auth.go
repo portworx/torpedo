@@ -495,8 +495,7 @@ func GetPxCentralAdminCtx() (context.Context, error) {
 // UpdatePxBackupAdminSecret updating "px-backup-admin-secret" token with
 // "px-central-admin" token
 func UpdatePxBackupAdminSecret() error {
-	//pxCentralAdminToken, err := GetPxCentralAdminToken()
-	pxCentralAdminToken, err := GetAdminTokenFromSecret()
+	pxCentralAdminToken, err := GetPxCentralAdminToken()
 	if err != nil {
 		return err
 	}

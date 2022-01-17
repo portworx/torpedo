@@ -2536,8 +2536,7 @@ func TearDownBackupRestoreAll() {
 			Uid:  BackupLocationUID,
 		},
 	}
-	//ctx, err := backup.GetPxCentralAdminCtx()
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := backup.GetPxCentralAdminCtx()
 	expect(err).NotTo(haveOccurred())
 	enumBkpScheduleResponse, _ := Inst().Backup.EnumerateBackupSchedule(ctx, bkpScheduleEnumerateReq)
 	bkpSchedules := enumBkpScheduleResponse.GetBackupSchedules()
