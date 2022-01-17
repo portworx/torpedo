@@ -63,6 +63,7 @@ var _ = Describe("{Longevity}", func() {
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 		DeployApps:                      TriggerDeployNewApps,
 		RebootNode:                      TriggerRebootNodes,
+		CrashNode:                       TriggerCrashNodes,
 		RestartVolDriver:                TriggerRestartVolDriver,
 		CrashVolDriver:                  TriggerCrashVolDriver,
 		HAIncrease:                      TriggerHAIncrease,
@@ -222,6 +223,7 @@ func populateDisruptiveTriggers() {
 		RestartVolDriver:                false,
 		CrashVolDriver:                  false,
 		RebootNode:                      true,
+		CrashNode:                       true,
 		EmailReporter:                   false,
 		AppTaskDown:                     false,
 		DeployApps:                      false,
@@ -468,6 +470,18 @@ func populateIntervals() {
 	triggerInterval[RebootNode][3] = 21 * baseInterval
 	triggerInterval[RebootNode][2] = 24 * baseInterval
 	triggerInterval[RebootNode][1] = 27 * baseInterval
+
+	baseInterval = 2 * time.Minute
+	triggerInterval[CrashNode][10] = 1 * baseInterval
+	triggerInterval[CrashNode][9] = 3 * baseInterval
+	triggerInterval[CrashNode][8] = 6 * baseInterval
+	triggerInterval[CrashNode][7] = 9 * baseInterval
+	triggerInterval[CrashNode][6] = 12 * baseInterval
+	triggerInterval[CrashNode][5] = 15 * baseInterval
+	triggerInterval[CrashNode][4] = 18 * baseInterval
+	triggerInterval[CrashNode][3] = 21 * baseInterval
+	triggerInterval[CrashNode][2] = 24 * baseInterval
+	triggerInterval[CrashNode][1] = 27 * baseInterval
 
 	triggerInterval[CrashVolDriver][10] = 1 * baseInterval
 	triggerInterval[CrashVolDriver][9] = 3 * baseInterval
