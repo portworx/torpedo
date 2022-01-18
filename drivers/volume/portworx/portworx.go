@@ -1267,6 +1267,7 @@ func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStora
 
 	// start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {
+		logrus.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
 
 		jobListResp, err := d.storagePoolManager.Resize(d.getContext(), &api.SdkStoragePoolResizeRequest{
 			Uuid: poolUUID,
@@ -1278,8 +1279,9 @@ func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStora
 		if err != nil {
 			return nil, true, err
 		}
-		logrus.Infof("Resize respone: %v", jobListResp)
-
+		if jobListResp.String() != "" {
+			logrus.Infof("Resize respone: %v", jobListResp.String())
+		}
 		return nil, false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, validateRebalanceJobsTimeout, validateRebalanceJobsInterval); err != nil {

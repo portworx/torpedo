@@ -2350,28 +2350,56 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("get storage pools and perform resize-disk by percentage on it ", func() {
+	Step("get storage pools and perform resize-disk by 10 percentage on it ", func() {
 		time.Sleep(1 * time.Minute)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
-			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+			Step("Get StoragePool IDs from the app volumes", func() {
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				UpdateOutcome(event, err)
 				if len(appVolumes) == 0 {
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
+				poolSet := make(map[string]struct{})
+				var exists = struct{}{}
 				for _, vol := range appVolumes {
 					replicaSets, err := Inst().V.GetReplicaSets(vol)
-					logrus.Infof("Error %v", err)
+					UpdateOutcome(event, err)
+
 					for _, poolUUID := range replicaSets[0].PoolUuids {
 						logrus.Infof("Pool UUID: %v, Vol: %v", poolUUID, vol.Name)
-						err = Inst().V.ResizeStoragePoolByPercentage(poolUUID, 2, uint64(10))
-						UpdateOutcome(event, err)
+						poolSet[poolUUID] = exists
 
 					}
-
 				}
+
+				for id := range poolSet {
+					err = Inst().V.ResizeStoragePoolByPercentage(id, 2, uint64(5))
+					UpdateOutcome(event, err)
+				}
+				logrus.Infof("Waiting for 10 mins for resize to finish")
+				time.Sleep(10 * time.Minute)
+				Step("Validate the Pool status after re-size disk", func() {
+					nodeList := node.GetStorageDriverNodes()
+					if len(nodeList) == 0 {
+						UpdateOutcome(event, fmt.Errorf("unable to get node list"))
+					}
+					for _, n := range nodeList {
+						for _, p := range n.StoragePools {
+							poolID := p.GetUuid()
+							poolLastOperationType := p.GetLastOperation().GetType().String()
+							poolLastOperationStatus := p.GetLastOperation().GetStatus().String()
+							poolLastOperationMsg := p.GetLastOperation().GetMsg()
+							logrus.Infof("Pool ID: %s, LastOperation: %s, Status: %s, Message:%s", poolID, poolLastOperationType, poolLastOperationStatus, poolLastOperationMsg)
+							if poolLastOperationStatus != "OPERATION_SUCCESSFUL" {
+								UpdateOutcome(event, fmt.Errorf("last operation %v for pool %v is failed with Msg: %v", poolLastOperationType, poolID, poolLastOperationMsg))
+							}
+						}
+					}
+
+				})
+
 			})
 		}
 	})
