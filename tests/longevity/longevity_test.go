@@ -293,6 +293,7 @@ func populateTriggers(triggers *map[string]string) error {
 func populateIntervals() {
 	triggerInterval = map[string]map[int]time.Duration{}
 	triggerInterval[RebootNode] = map[int]time.Duration{}
+	triggerInterval[CrashNode] = map[int]time.Duration{}
 	triggerInterval[CrashVolDriver] = map[int]time.Duration{}
 	triggerInterval[RestartVolDriver] = map[int]time.Duration{}
 	triggerInterval[HAIncrease] = map[int]time.Duration{}
@@ -449,7 +450,6 @@ func populateIntervals() {
 	triggerInterval[RebootNode][2] = 24 * baseInterval
 	triggerInterval[RebootNode][1] = 27 * baseInterval
 
-	baseInterval = 2 * time.Minute
 	triggerInterval[CrashNode][10] = 1 * baseInterval
 	triggerInterval[CrashNode][9] = 3 * baseInterval
 	triggerInterval[CrashNode][8] = 6 * baseInterval
@@ -571,6 +571,7 @@ func populateIntervals() {
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
+	triggerInterval[CrashNode][0] = 0
 	triggerInterval[CrashVolDriver][0] = 0
 	triggerInterval[HAIncrease][0] = 0
 	triggerInterval[HADecrease][0] = 0
