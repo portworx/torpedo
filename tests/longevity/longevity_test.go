@@ -70,6 +70,7 @@ var _ = Describe("{Longevity}", func() {
 		CoreChecker:      TriggerCoreChecker,
 		CloudSnapShot:    TriggerCloudSnapShot,
 		PoolResizeDisk:   TriggerPoolResizeDisk,
+		PoolAddDisk:      TriggerPoolAddDisk,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -303,6 +304,7 @@ func populateIntervals() {
 	triggerInterval[CoreChecker] = map[int]time.Duration{}
 	triggerInterval[VolumeResize] = make(map[int]time.Duration)
 	triggerInterval[PoolResizeDisk] = make(map[int]time.Duration)
+	triggerInterval[PoolAddDisk] = make(map[int]time.Duration)
 	triggerInterval[BackupAllApps] = map[int]time.Duration{}
 	triggerInterval[BackupScheduleAll] = map[int]time.Duration{}
 	triggerInterval[BackupScheduleScale] = map[int]time.Duration{}
@@ -529,6 +531,17 @@ func populateIntervals() {
 	triggerInterval[PoolResizeDisk][2] = 24 * baseInterval
 	triggerInterval[PoolResizeDisk][1] = 27 * baseInterval
 
+	triggerInterval[PoolAddDisk][10] = 1 * baseInterval
+	triggerInterval[PoolAddDisk][9] = 3 * baseInterval
+	triggerInterval[PoolAddDisk][8] = 6 * baseInterval
+	triggerInterval[PoolAddDisk][7] = 9 * baseInterval
+	triggerInterval[PoolAddDisk][6] = 12 * baseInterval
+	triggerInterval[PoolAddDisk][5] = 15 * baseInterval
+	triggerInterval[PoolAddDisk][4] = 18 * baseInterval
+	triggerInterval[PoolAddDisk][3] = 21 * baseInterval
+	triggerInterval[PoolAddDisk][2] = 24 * baseInterval
+	triggerInterval[PoolAddDisk][1] = 27 * baseInterval
+
 	triggerInterval[BackupDeleteBackupPod][10] = 1 * baseInterval
 	triggerInterval[BackupDeleteBackupPod][9] = 2 * baseInterval
 	triggerInterval[BackupDeleteBackupPod][8] = 3 * baseInterval
@@ -590,6 +603,7 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown][0] = 0
 	triggerInterval[VolumeResize][0] = 0
 	triggerInterval[PoolResizeDisk][0] = 0
+	triggerInterval[PoolAddDisk][0] = 0
 	triggerInterval[BackupAllApps][0] = 0
 	triggerInterval[BackupScheduleAll][0] = 0
 	triggerInterval[BackupSpecificResource][0] = 0
