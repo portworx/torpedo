@@ -769,7 +769,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 				for _, v := range appVolumes {
 					snapshotScheduleName := v.Name + "-interval-schedule"
-					logrus.Infof("snapshotScheduleName : %v", snapshotScheduleName)
+					logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.name)
 					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
 						appNamespace,
 						snapshotScheduleRetryTimeout,
