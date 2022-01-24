@@ -583,8 +583,6 @@ func populateIntervals() {
 	triggerInterval[DeployApps][2] = 9 * baseInterval
 	triggerInterval[DeployApps][1] = 10 * baseInterval
 
-	baseInterval = 3 * time.Minute
-
 	triggerInterval[PoolAddDisk][10] = 1 * baseInterval
 	triggerInterval[PoolAddDisk][9] = 3 * baseInterval
 	triggerInterval[PoolAddDisk][8] = 6 * baseInterval
@@ -596,7 +594,7 @@ func populateIntervals() {
 	triggerInterval[PoolAddDisk][2] = 24 * baseInterval
 	triggerInterval[PoolAddDisk][1] = 30 * baseInterval
 
-	//baseInterval = 30 * time.Minute
+	baseInterval = 30 * time.Minute
 
 	triggerInterval[PoolResizeDisk][10] = 1 * baseInterval
 	triggerInterval[PoolResizeDisk][9] = 3 * baseInterval
