@@ -63,6 +63,9 @@ var EmailRecipients []string
 // RunningTriggers map of events and corresponding interval
 var RunningTriggers map[string]time.Duration
 
+// ChaosMap stores mapping between test trigger and its chaos level.
+var ChaosMap map[string]int
+
 // SendGridEmailAPIKey holds API key used to interact
 // with SendGrid Email APIs
 var SendGridEmailAPIKey string
@@ -2427,7 +2430,9 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("get storage pools and perform resize-disk by 10 percentage on it ", func() {
+	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
+
+	Step(fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel), func() {
 		time.Sleep(1 * time.Minute)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
@@ -2452,8 +2457,7 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				}
 
 				for id := range poolSet {
-					//TODO : Parametrize the resize percentage
-					err = Inst().V.ResizeStoragePoolByPercentage(id, 2, uint64(10))
+					err = Inst().V.ResizeStoragePoolByPercentage(id, 2, uint64(chaosLevel))
 					UpdateOutcome(event, err)
 				}
 				logrus.Infof("Waiting for 10 mins for resize to initiate and check status")
@@ -2500,7 +2504,8 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("get storage pools and perform add-disk by 10 percentage on it ", func() {
+	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
+	Step(fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel), func() {
 		time.Sleep(1 * time.Minute)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
@@ -2525,8 +2530,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				}
 
 				for id := range poolSet {
-					//TODO : Parametrize the resize percentage
-					err = Inst().V.ResizeStoragePoolByPercentage(id, 1, uint64(10))
+					err = Inst().V.ResizeStoragePoolByPercentage(id, 1, uint64(chaosLevel))
 					UpdateOutcome(event, err)
 				}
 				logrus.Infof("Waiting for 10 mins for add disk to initiate and check status")
@@ -2554,6 +2558,37 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			})
 		}
 	})
+
+}
+
+func getPoolExpandPercentage(triggerType string) uint64 {
+	var percentageValue uint64
+
+	t := ChaosMap[triggerType]
+
+	switch t {
+	case 1:
+		percentageValue = 100
+	case 2:
+		percentageValue = 90
+	case 3:
+		percentageValue = 80
+	case 4:
+		percentageValue = 70
+	case 5:
+		percentageValue = 60
+	case 6:
+		percentageValue = 50
+	case 7:
+		percentageValue = 40
+	case 8:
+		percentageValue = 30
+	case 9:
+		percentageValue = 20
+	case 10:
+		percentageValue = 10
+	}
+	return percentageValue
 
 }
 
