@@ -212,7 +212,7 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sv4-svc-failover-io-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("failover-io-%d", i))...)
 		}
 
 		Step("scale the test-sv4-svc apps so that one pod runs on each worker node", func() {
@@ -451,6 +451,8 @@ func validateAppLogs(ctx *scheduler.Context, numPods int) {
 		for _, line := range lines {
 			if strings.Contains(line, "ERROR") {
 				errors = append(errors, fmt.Sprintf("pod %s: %s", podName, line))
+			} else if strings.Contains(line, "WARNING") {
+				logrus.Warnf("pod %s: %s", podName, line)
 			}
 		}
 	}
