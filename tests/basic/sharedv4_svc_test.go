@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -23,8 +24,7 @@ import (
 const (
 	defaultCommandRetry   = 5 * time.Second
 	defaultCommandTimeout = 1 * time.Minute
-	exportPathPrefix      = "/var/lib/osd/pxns"
-	pxctlPath             = "/opt/pwx/bin/pxctl"
+	exportPathPrefix      = "/var/lib/osd/pxns/"
 )
 
 var _ = Describe("{NFSServerFailover}", func() {
@@ -261,14 +261,19 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 
 		Step("for each context, restart volume driver on NFS server node and verify I/O", func() {
 			for _, ctx := range testSv4Contexts {
-				var countersBefore, countersAfter map[string]appCounter
 				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				apiVol, err := Inst().V.InspectVolume(vols[0].ID)
 				Expect(err).NotTo(HaveOccurred())
 
 				// verify failover and failback by repeating the steps below
 				for i := 0; i < 2; i++ {
+					var countersBefore, countersAfter map[string]appCounter
+					var attachedNodeBefore, attachedNodeAfter *node.Node
+
 					// get the attached node before the failover
-					attachedNodeBefore, err := Inst().V.GetNodeForVolume(vols[0],
+					attachedNodeBefore, err = Inst().V.GetNodeForVolume(vols[0],
 						defaultCommandTimeout, defaultCommandRetry)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -276,7 +281,7 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 						fmt.Sprintf("get counter values from node %v for app %s's volume before failover",
 							attachedNodeBefore.Name, ctx.App.Key),
 						func() {
-							countersBefore = getAppCounters(vols[0], attachedNodeBefore,
+							countersBefore = getAppCounters(apiVol, attachedNodeBefore,
 								3*time.Duration(numPods)*time.Second)
 						})
 
@@ -307,11 +312,11 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 					Step(
 						fmt.Sprintf("get counter values for app %s's volume after failover #%d", ctx.App.Key, 0),
 						func() {
-							attachedNodeAfter, err := Inst().V.GetNodeForVolume(vols[0],
+							attachedNodeAfter, err = Inst().V.GetNodeForVolume(vols[0],
 								defaultCommandTimeout, defaultCommandRetry)
 							Expect(err).NotTo(HaveOccurred())
 							Expect(attachedNodeAfter.Name).NotTo(Equal(attachedNodeBefore.Name))
-							countersAfter = getAppCounters(vols[0], attachedNodeAfter,
+							countersAfter = getAppCounters(apiVol, attachedNodeAfter,
 								3*time.Duration(numPods)*time.Second)
 						})
 
@@ -321,6 +326,7 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 							// others should not be interrupted
 							validateAppCounters(ctx, countersBefore, countersAfter, numPods, 2)
 							validateAppLogs(ctx, numPods)
+							validateExports(apiVol, attachedNodeBefore, attachedNodeAfter)
 						})
 				}
 			}
@@ -352,7 +358,7 @@ func getTestSv4Contexts(contexts []*scheduler.Context) []*scheduler.Context {
 }
 
 // returns the appCounter structs for the app pods by scanning the export path on the NFS server
-func getAppCounters(vol *volume.Volume, attachedNode *node.Node, sleepInterval time.Duration) map[string]appCounter {
+func getAppCounters(vol *api.Volume, attachedNode *node.Node, sleepInterval time.Duration) map[string]appCounter {
 	snap1 := getAppCountersSnapshot(vol, attachedNode)
 	time.Sleep(sleepInterval)
 	snap2 := getAppCountersSnapshot(vol, attachedNode)
@@ -368,20 +374,18 @@ func getAppCounters(vol *volume.Volume, attachedNode *node.Node, sleepInterval t
 	return ret
 }
 
-func getAppCountersSnapshot(vol *volume.Volume, attachedNode *node.Node) map[string]int {
+func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string]int {
 	counterByPodName := map[string]int{}
 	// We find all the files in the root dir where the pods are writing their counters.
 	// Exclude the common file, tmp files. Use grep '' to get the lines in "fileName:counter" format.
-	// The volume.ID contains PV name. We need the PX volume id to contruct the export path. So, we use
-	// backticks to run "pxctl volume list | grep <PV name> | awk {print $1}" to fill in the PX volume ID.
 	// Example:
-	// # find /var/lib/osd/pxns/`pxctl v l | grep pvc-28b994b6-74a9-422f-939f-dd5631b3c581 | awk '{print $1}'` -maxdepth 1 -type f | grep -v -e common -e tmp | xargs grep ''
+	// # find /var/lib/osd/pxns/283170809327294682 -maxdepth 1 -type f | grep -v -e common -e tmp | xargs grep ''
 	// /var/lib/osd/pxns/283170809327294682/sv4test-88d78b767-n5gkc:478941
 	// /var/lib/osd/pxns/283170809327294682/sv4test-88d78b767-5bgxn:5437
 	// /var/lib/osd/pxns/283170809327294682/sv4test-88d78b767-48br7:521419
 	//
-	cmd := fmt.Sprintf("find %s/`%s volume list | grep %s | awk '{print $1}'` -maxdepth 1 -type f "+
-		"| grep -v -e common -e tmp | xargs grep ''", exportPathPrefix, pxctlPath, vol.ID)
+	cmd := fmt.Sprintf("find %s%s -maxdepth 1 -type f | grep -v -e common -e tmp | xargs grep ''",
+		exportPathPrefix, vol.Id)
 	output, err := runCmd(cmd, *attachedNode)
 	Expect(err).NotTo(HaveOccurred())
 	for _, line := range strings.Split(output, "\n") {
@@ -457,6 +461,37 @@ func validateAppLogs(ctx *scheduler.Context, numPods int) {
 		}
 	}
 	Expect(errors).To(BeNil(), "Errors found in the pod logs: %v", errors)
+}
+
+// returns the appCounter structs for the app pods by scanning the export path on the NFS server
+func validateExports(vol *api.Volume, attachedNodeBefore *node.Node, attachedNodeAfter *node.Node) {
+	exports := getExportsOnNode(vol, attachedNodeBefore)
+	Expect(len(exports)).To(BeNumerically("==", 0),
+		"exports found on the old NFS server %s for volume %s: %v", attachedNodeBefore.Name, vol.Id, exports)
+
+	exports = getExportsOnNode(vol, attachedNodeAfter)
+	Expect(len(exports)).To(BeNumerically(">", 0),
+		"no exports found on the new NFS server %s for volume %s", attachedNodeAfter.Name, vol.Id)
+}
+
+// Returns the IP addresses of the clients to which the volume is being exported from the specified node.
+func getExportsOnNode(vol *api.Volume, node *node.Node) []string {
+	output, err := runCmd("showmount --no-headers -e", *node)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Sample output:
+	//
+	// /var/lib/osd/pxns/1006668872421973051 192.168.121.219,192.168.121.38,192.168.121.243,192.168.121.124,192.168.121.98
+	// /var/lib/osd/pxns/366303365379384956  192.168.121.219,192.168.121.38,192.168.121.98,192.168.121.243,192.168.121.124
+	//
+	for _, line := range strings.Split(output, "\n") {
+		clientsStr := strings.TrimPrefix(line, exportPathPrefix+vol.Id+" ")
+		if clientsStr != line {
+			// prefix was found
+			return strings.Split(strings.TrimSpace(clientsStr), ",")
+		}
+	}
+	return nil
 }
 
 func runCmd(cmd string, n node.Node) (string, error) {
