@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -128,6 +129,52 @@ var _ = Describe("{UpgradeStork}", func() {
 
 		})
 	}
+	JustAfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{UpgradeVolumeDriverSharedV4}", func() {
+	var testrailID = 54370
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54370
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	It("validate apps, upgrade volume driver, re-install apps, and ensure everything is running fine", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("preupgradevolumedriversharedv4-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		Step("start the upgrade of volume driver", func() {
+			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
+				Inst().StorageDriverUpgradeEndpointVersion,
+				Inst().EnableStorkUpgrade)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Step("re-install and validate all apps after upgrade", func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriversharedv4-%d", i))...)
+			}
+
+			ValidateApplications(contexts)
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
 	JustAfterEach(func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
