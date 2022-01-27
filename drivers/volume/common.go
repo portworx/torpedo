@@ -94,6 +94,7 @@ func (d *DefaultDriver) CleanupVolume(name string) error {
 	}
 }
 
+// InspectVolume inspects the volume with the given name
 func (d *DefaultDriver) InspectVolume(name string) (*api.Volume, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
