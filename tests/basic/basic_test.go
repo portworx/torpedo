@@ -505,7 +505,7 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 			contexts = make([]*scheduler.Context, 0)
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cordonstoragenodesdeploydestroy-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cordondeploydestroy-%d", i))...)
 			}
 			ValidateApplications(contexts)
 
