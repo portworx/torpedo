@@ -54,6 +54,7 @@ type Node struct {
 	StoragePools             []StoragePool
 }
 
+// IsStorageNode returns true if the node is a storage node, false otherwise
 func IsStorageNode(n Node) bool {
 	return len(n.StoragePools) > 0
 }
