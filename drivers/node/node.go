@@ -54,6 +54,10 @@ type Node struct {
 	StoragePools             []StoragePool
 }
 
+func IsStorageNode(n Node) bool {
+	return len(n.StoragePools) > 0
+}
+
 // ConnectionOpts provide basic options for all operations and can be embedded by other options
 type ConnectionOpts struct {
 	Timeout         time.Duration

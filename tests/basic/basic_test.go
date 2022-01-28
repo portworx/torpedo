@@ -494,9 +494,9 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 
 		Step("Cordon all storage nodes", func() {
 			nodes := node.GetWorkerNodes()
-			for _, node := range nodes {
-				if node.IsStorageDriverInstalled {
-					err := Inst().S.DisableSchedulingOnNode(node)
+			for _, n := range nodes {
+				if node.IsStorageNode(n) {
+					err := Inst().S.DisableSchedulingOnNode(n)
 					Expect(err).NotTo(HaveOccurred())
 				}
 			}
