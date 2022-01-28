@@ -2604,6 +2604,38 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 	return nil
 }
 
+// GetSnapShotData retruns the snapshotdata
+func (k *K8s) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
+
+	snap, err := k8sExternalStorage.GetSnapshot(snapshotName, snapshotNameSpace)
+	if err != nil {
+		return nil, &scheduler.ErrFailedToGetVolumeParameters{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("failed to get Snapshot: %v. Err: %v", snapshotName, err),
+		}
+	}
+
+	snapDataName := snap.Spec.SnapshotDataName
+	logrus.Infof("Got SnapData Name: %v", snapDataName)
+	if len(snapDataName) == 0 {
+		return nil, &scheduler.ErrFailedToGetVolumeParameters{
+			App: ctx.App,
+			Cause: fmt.Sprintf("snapshot: [%s] %s does not have snapshotdata set",
+				snap.Metadata.Namespace, snap.Metadata.Name),
+		}
+	}
+
+	snapData, err := k8sExternalStorage.GetSnapshotData(snapDataName)
+	if err != nil {
+		return nil, &scheduler.ErrFailedToGetVolumeParameters{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("failed to get volumesnapshotdata: %s due to: %v", snapDataName, err),
+		}
+	}
+
+	return snapData, nil
+}
+
 // GetWorkloadSizeFromAppSpec gets workload size from an application spec
 func (k *K8s) GetWorkloadSizeFromAppSpec(context *scheduler.Context) (uint64, error) {
 	var err error

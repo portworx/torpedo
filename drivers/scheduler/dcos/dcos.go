@@ -10,6 +10,7 @@ import (
 
 	docker "github.com/docker/docker/client"
 	marathon "github.com/gambol99/go-marathon"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -95,6 +96,14 @@ func (d *dcos) ValidateAutopilotRuleObjects() error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateAutopilotRuleObjects()",
+	}
+}
+
+// GetSnapShotData retruns given snapshots
+func (d *dcos) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateSnapShot()",
 	}
 }
 func (d *dcos) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
