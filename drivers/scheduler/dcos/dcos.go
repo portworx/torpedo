@@ -484,6 +484,15 @@ func (d *dcos) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
 	}
 }
 
+// GetPodLog returns logs for all the pods in the specified context
+func (d *dcos) GetPodLog(ctx *scheduler.Context, sinceSeconds int64) (map[string]string, error) {
+	// TODO: Add implementation
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPodLog()",
+	}
+}
+
 func (d *dcos) ResizeVolume(cxt *scheduler.Context, configMap string) ([]*volume.Volume, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
@@ -800,6 +809,14 @@ func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ParseCharts()",
+	}
+}
+
+func (d *dcos) RecycleNode(n node.Node) error {
+	//Recycle is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RecycleNode()",
 	}
 }
 

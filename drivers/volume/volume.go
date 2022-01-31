@@ -53,6 +53,9 @@ type Driver interface {
 	// String returns the string name of this driver.
 	String() string
 
+	// InspectVolume inspects the volume with the given name
+	InspectVolume(name string) (*api.Volume, error)
+
 	// CleanupVolume forcefully unmounts/detaches and deletes a storage volume.
 	// This is only called by Torpedo during cleanup operations, it is not
 	// used during orchestration simulations.
@@ -123,6 +126,9 @@ type Driver interface {
 
 	// UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
 	UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error
+
+	// UpgradeStork upgrades the stork driver from the given link and checks if it was upgraded to endpointVersion
+	UpgradeStork(endpointURL string, endpointVersion string) error
 
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string

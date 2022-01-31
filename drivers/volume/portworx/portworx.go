@@ -328,6 +328,18 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 	return false, nil
 }
 
+func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), inspectVolumeTimeout)
+	defer cancel()
+
+	response, err := d.getVolDriver().Inspect(ctx, &api.SdkVolumeInspectRequest{VolumeId: name})
+	if err != nil {
+		return nil, err
+	}
+
+	return response.Volume, nil
+}
+
 func (d *portworx) CleanupVolume(volumeName string) error {
 	volDriver := d.getVolDriver()
 	volumes, err := volDriver.Enumerate(d.getContext(), &api.SdkVolumeEnumerateRequest{}, nil)
@@ -1748,7 +1760,7 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string, ena
 	}
 
 	if enableStork {
-		if err := d.upgradeStork(endpointURL, endpointVersion); err != nil {
+		if err := d.UpgradeStork(endpointURL, endpointVersion); err != nil {
 			return err
 		}
 	} else {
@@ -1810,8 +1822,8 @@ func (d *portworx) upgradePortworx(endpointURL string, endpointVersion string) e
 	return nil
 }
 
-// upgradeStork upgrades stork
-func (d *portworx) upgradeStork(endpointURL string, endpointVersion string) error {
+// UpgradeStork upgrades stork
+func (d *portworx) UpgradeStork(endpointURL string, endpointVersion string) error {
 	storkSpecFileName := "/stork.yaml"
 	nodeList := node.GetStorageDriverNodes()
 	pxNode := nodeList[0]

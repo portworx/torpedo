@@ -35,6 +35,17 @@ func UpdateNode(n Node) error {
 	return nil
 }
 
+// DeleteNode method delete a given node if exist in the node collection
+func DeleteNode(n Node) error {
+	if n.uuid == "" {
+		return fmt.Errorf("UUID should be set to delete existing node")
+	}
+	lock.Lock()
+	defer lock.Unlock()
+	delete(nodeRegistry, n.uuid)
+	return nil
+}
+
 // GetNodes returns all the nodes from the node collection
 func GetNodes() []Node {
 	var nodeList []Node

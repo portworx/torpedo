@@ -107,6 +107,166 @@ func (k *openshift) StartSchedOnNode(n node.Node) error {
 	return nil
 }
 
+// Check for newly create OCP node and retun OCP node
+func (k *openshift) checkAndGetNewNode() (string, error) {
+	var err error
+	var newNodeName string
+
+	// Waiting for new node to be ready
+	newNodeName, err = k.getAndWaitMachineToBeReady()
+	if err != nil {
+		// This is to handle error case when newly provisioned node not ready in 10 minutes
+		// Deleting the newly provisioned node and waiting for one more time before returning error
+		if len(newNodeName) != 0 {
+			k.deleteAMachine(newNodeName)
+		}
+		// Waiting for new node to be ready
+		newNodeName, err = k.getAndWaitMachineToBeReady()
+		if err != nil {
+			return newNodeName, err
+		}
+	}
+
+	// VM is up and ready. Waiting for other services to be up and joining it to cluster.
+	err = k.waitForJoinK8sNode(newNodeName)
+	if err != nil {
+		return newNodeName, err
+	}
+
+	return newNodeName, nil
+}
+
+// Waits for newly provisioned OCP node to be ready and running
+func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
+	var err error
+
+	t := func() (interface{}, bool, error) {
+
+		var output []byte
+		cmd := "kubectl get machines -n openshift-machine-api"
+		cmd += " --sort-by='.metadata.creationTimestamp' | tail -1"
+
+		output, err = exec.Command("sh", "-c", cmd).CombinedOutput()
+		result := strings.Fields(string(output))
+
+		if err != nil {
+			return "", true, fmt.Errorf(
+				"FAILED: Unable to get new OCP VM:[%s] status. cause: %v", result[0], err,
+			)
+		} else if strings.ToLower(result[1]) != "running" {
+			return result[0], true, &scheduler.ErrFailedToBringUpNode{
+				Node:  result[0],
+				Cause: fmt.Errorf("FAILED: OCP Unable to bring up the new node"),
+			}
+		}
+		return result[0], false, nil
+	}
+
+	output, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		if output != nil {
+			return output.(string), err
+		}
+		return "", err
+	}
+	nodeName := output.(string)
+	logrus.Infof("New OCP VM: [%s] is up now", nodeName)
+	return nodeName, nil
+}
+
+// Wait for node to join k8s cluster
+func (k *openshift) waitForJoinK8sNode(node string) error {
+	t := func() (interface{}, bool, error) {
+		if err := k8sCore.IsNodeReady(node); err != nil {
+			return "", true, fmt.Errorf(
+				"FAILED: Waiting for new node:[%s] to join k8s cluster. cause: %v", node, err,
+			)
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+	logrus.Infof("New OCP VM: [%s] is ready and joined k8s cluster", node)
+	return nil
+}
+
+// Delete the OCP node using kubectl command
+func (k *openshift) deleteAMachine(nodeName string) error {
+	var err error
+
+	// Delete the node from machineset using kubectl command
+	t := func() (interface{}, bool, error) {
+		cmd := "kubectl delete machines -n openshift-machine-api " + nodeName
+		if _, err = exec.Command("sh", "-c", cmd).CombinedOutput(); err != nil {
+			return "", true, fmt.Errorf("failed to delete machine. cause: %v", err)
+		}
+		return "", false, nil
+	}
+	if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 60*time.Second); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Method to recycling OCP node
+func (k *openshift) RecycleNode(n node.Node) error {
+	logrus.Infof("Inside Recyling OCP node: [%s] ", n.Name)
+
+	// Check if node is valid before proceeding for delete a node
+	var worker []node.Node = node.GetWorkerNodes()
+	if node.Contains(worker, n) {
+
+		// Delete the node from machines using kubectl command
+		logrus.Infof("Recyling OCP node: [%s] ", n.Name)
+		err := k.deleteAMachine(n.Name)
+		if err != nil {
+			logrus.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", n.Name, err)
+			return err
+		}
+
+		// Delete the node from the list
+		err = node.DeleteNode(n)
+		if err != nil {
+			return &scheduler.ErrFailedToUpdateNodeList{
+				Node: n.Name,
+				Cause: fmt.Sprintf(
+					"Failed to remove OCP node [%s] from node list. Error: [%v]", n.Name, err),
+			}
+
+		}
+		logrus.Infof("Successfully deleted the OCP node: [%s] ", n.Name)
+
+		// OCP creates a new node once the desired number of worker node count goes down
+		// Wait for OCP to provision new node and update new node to the k8s node list
+		newOCPNode, err := k.checkAndGetNewNode()
+		if err != nil {
+			return &scheduler.ErrFailedToGetNode{
+				Cause: fmt.Sprintf("Failed to get newly created OCP node name. Error: [%v]", err),
+			}
+		}
+
+		// Getting k8s node
+		newNode, err := k8sCore.GetNodeByName(newOCPNode)
+		if err != nil {
+			return err
+		}
+
+		//Adding node to a list
+		err = k.AddNewNode(*newNode)
+		if err != nil {
+			return &scheduler.ErrFailedToUpdateNodeList{
+				Node: newOCPNode,
+				Cause: fmt.Sprintf(
+					"Failed to update new OCP node [%s] in node list. Error: [%v]", newOCPNode, err),
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("FAILED: Node is not a worker node")
+}
+
 func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var apps []*spec.AppSpec
 	if len(options.AppKeys) > 0 {
@@ -430,6 +590,13 @@ func getChannel(version string) (string, error) {
 		return version, nil
 	}
 
+	versionSplit := strings.Split(version, "-")
+	channel := "stable"
+	if len(versionSplit) > 1 {
+		channel = versionSplit[0]
+		version = versionSplit[1]
+	}
+
 	ver, err := semver.Make(version)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse version: %s. cause: %v", version, err)
@@ -438,22 +605,10 @@ func getChannel(version string) (string, error) {
 	channels := map[string]string{
 		"stable":    fmt.Sprintf("stable-%d.%d", ver.Major, ver.Minor),
 		"candidate": fmt.Sprintf("candidate-%d.%d", ver.Major, ver.Minor),
+		"fast":      fmt.Sprintf("fast-%d.%d", ver.Major, ver.Minor),
 	}
-	var output, previousOutput []byte
-	selectedChannel := ""
-	for _, channel := range channels {
-		url := fmt.Sprintf("curl -sL %s/%s | grep %s || true", OpenshiftMirror, channel, version)
-		if output, err = exec.Command("sh", "-c", url).CombinedOutput(); err != nil {
-			break
-		}
-		if string(output) == string(previousOutput) {
-			selectedChannel = channels["stable"]
-		} else {
-			selectedChannel = channel
-		}
-		previousOutput = output
-	}
-	return selectedChannel, err
+
+	return channels[channel], err
 }
 
 func downloadOCP4Client(ocpVersion string) error {

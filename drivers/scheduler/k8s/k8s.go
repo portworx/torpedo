@@ -218,7 +218,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	}
 
 	for _, n := range nodes.Items {
-		if err = k.addNewNode(n); err != nil {
+		if err = k.AddNewNode(n); err != nil {
 			return err
 		}
 	}
@@ -237,7 +237,8 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	return nil
 }
 
-func (k *K8s) addNewNode(newNode corev1.Node) error {
+// AddNewNode method parse and add node to node registry  
+func (k *K8s) AddNewNode(newNode corev1.Node) error {
 	n := k.parseK8SNode(newNode)
 	if err := k.IsNodeReady(n); err != nil {
 		return err
@@ -298,7 +299,7 @@ func (k *K8s) RefreshNodeRegistry() error {
 	node.CleanupRegistry()
 
 	for _, n := range nodes.Items {
-		if err = k.addNewNode(n); err != nil {
+		if err = k.AddNewNode(n); err != nil {
 			return err
 		}
 	}
@@ -3080,6 +3081,27 @@ func (k *K8s) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
 	return k8sCore.GetPodsUsingPVC(pvcname, namespace)
 }
 
+// GetPodLog returns logs for all the pods in the specified context
+func (k *K8s) GetPodLog(ctx *scheduler.Context, sinceSeconds int64) (map[string]string, error) {
+	var sinceSecondsArg *int64
+	if sinceSeconds > 0 {
+		sinceSecondsArg = &sinceSeconds
+	}
+	pods, err := k.getPodsForApp(ctx)
+	if err != nil {
+		return nil, err
+	}
+	logsByPodName := map[string]string{}
+	for _, pod := range pods {
+		output, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &v1.PodLogOptions{SinceSeconds: sinceSecondsArg})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get logs for the pod %s/%s: %w", pod.Namespace, pod.Name, err)
+		}
+		logsByPodName[pod.Name] = output
+	}
+	return logsByPodName, nil
+}
+
 // Describe describe the test case
 func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 	var buf bytes.Buffer
@@ -4441,6 +4463,15 @@ func (k *K8s) CreateSecret(namespace, name, dataField, secretDataString string) 
 
 	_, err := k8sCore.CreateSecret(secret)
 	return err
+}
+
+// RecycleNode method not supported for K8s scheduler
+func (k *K8s) RecycleNode(n node.Node) error {
+	//Recycle is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RecycleNode()",
+	}
 }
 
 func substituteImageWithInternalRegistry(spec interface{}) {

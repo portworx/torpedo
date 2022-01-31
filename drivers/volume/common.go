@@ -94,6 +94,14 @@ func (d *DefaultDriver) CleanupVolume(name string) error {
 	}
 }
 
+// InspectVolume inspects the volume with the given name
+func (d *DefaultDriver) InspectVolume(name string) (*api.Volume, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InspectVolume()",
+	}
+}
+
 // GetStorageDevices returns the list of storage devices used by the given node.
 func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 	// TODO: Implement
@@ -328,6 +336,14 @@ func (d *DefaultDriver) StartDriver(n node.Node) error {
 
 // UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
 func (d *DefaultDriver) UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpgradeDriver()",
+	}
+}
+
+// UpgradeStork upgrades the stork driver from the given link and checks if it was upgraded to endpointVersion
+func (d *DefaultDriver) UpgradeStork(endpointURL string, endpointVersion string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpgradeDriver()",

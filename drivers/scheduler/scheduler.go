@@ -189,6 +189,9 @@ type Driver interface {
 	// GetPodsForPVC returns pods using the pvc
 	GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error)
 
+	// GetPodLog returns logs for all the pods in the specified context
+	GetPodLog(ctx *Context, sinceSeconds int64) (map[string]string, error)
+
 	// ResizeVolume resizes all the volumes of a given context
 	ResizeVolume(*Context, string) ([]*volume.Volume, error)
 
@@ -306,6 +309,9 @@ type Driver interface {
 
 	// DeleteSecret deletes secret with given name in given namespace
 	DeleteSecret(namespace, name string) error
+
+	//RecyleNode deletes nodes with given node
+	RecycleNode(n node.Node) error
 }
 
 var (
