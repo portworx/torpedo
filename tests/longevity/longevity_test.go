@@ -27,8 +27,6 @@ const (
 )
 
 var (
-	// Stores mapping between test trigger and its chaos level.
-	chaosMap map[string]int
 	// Stores mapping between chaos level and its freq. Values are hardcoded
 	triggerInterval map[string]map[int]time.Duration
 	// Stores which are disruptive triggers. When disruptive triggers are happening in test,
@@ -73,6 +71,7 @@ var _ = Describe("{Longevity}", func() {
 		CloudSnapShot:    TriggerCloudSnapShot,
 		PoolResizeDisk:   TriggerPoolResizeDisk,
 		PoolAddDisk:      TriggerPoolAddDisk,
+		UpgradeStork:     TriggerUpgradeStork,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -165,7 +164,7 @@ func testTrigger(wg *sync.WaitGroup,
 }
 
 func watchConfigMap() error {
-	chaosMap = map[string]int{}
+	ChaosMap = map[string]int{}
 	cm, err := core.Instance().GetConfigMap(testTriggersConfigMap, configMapNS)
 	if err != nil {
 		return fmt.Errorf("Error reading config map: %v", err)
@@ -274,7 +273,7 @@ func populateTriggers(triggers *map[string]string) error {
 			return fmt.Errorf("Failed to get chaos levels from configMap [%s] in [%s] namespace. Error:[%v]",
 				testTriggersConfigMap, configMapNS, err)
 		}
-		chaosMap[triggerType] = chaosLevelInt
+		ChaosMap[triggerType] = chaosLevelInt
 		if triggerType == BackupScheduleAll || triggerType == BackupScheduleScale {
 			SetScheduledBackupInterval(triggerInterval[triggerType][chaosLevelInt], triggerType)
 		}
@@ -282,7 +281,7 @@ func populateTriggers(triggers *map[string]string) error {
 
 	RunningTriggers = map[string]time.Duration{}
 	for triggerType := range triggerFunctions {
-		chaosLevel, ok := chaosMap[triggerType]
+		chaosLevel, ok := ChaosMap[triggerType]
 		if !ok {
 			chaosLevel = Inst().ChaosLevel
 		}
@@ -325,6 +324,7 @@ func populateIntervals() {
 	triggerInterval[BackupDeleteBackupPod] = map[int]time.Duration{}
 	triggerInterval[BackupScaleMongo] = map[int]time.Duration{}
 	triggerInterval[CloudSnapShot] = make(map[int]time.Duration)
+	triggerInterval[UpgradeStork] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -547,28 +547,6 @@ func populateIntervals() {
 	triggerInterval[VolumeResize][2] = 24 * baseInterval
 	triggerInterval[VolumeResize][1] = 27 * baseInterval
 
-	triggerInterval[PoolResizeDisk][10] = 1 * baseInterval
-	triggerInterval[PoolResizeDisk][9] = 3 * baseInterval
-	triggerInterval[PoolResizeDisk][8] = 6 * baseInterval
-	triggerInterval[PoolResizeDisk][7] = 9 * baseInterval
-	triggerInterval[PoolResizeDisk][6] = 12 * baseInterval
-	triggerInterval[PoolResizeDisk][5] = 15 * baseInterval
-	triggerInterval[PoolResizeDisk][4] = 18 * baseInterval
-	triggerInterval[PoolResizeDisk][3] = 21 * baseInterval
-	triggerInterval[PoolResizeDisk][2] = 24 * baseInterval
-	triggerInterval[PoolResizeDisk][1] = 27 * baseInterval
-
-	triggerInterval[PoolAddDisk][10] = 1 * baseInterval
-	triggerInterval[PoolAddDisk][9] = 3 * baseInterval
-	triggerInterval[PoolAddDisk][8] = 6 * baseInterval
-	triggerInterval[PoolAddDisk][7] = 9 * baseInterval
-	triggerInterval[PoolAddDisk][6] = 12 * baseInterval
-	triggerInterval[PoolAddDisk][5] = 15 * baseInterval
-	triggerInterval[PoolAddDisk][4] = 18 * baseInterval
-	triggerInterval[PoolAddDisk][3] = 21 * baseInterval
-	triggerInterval[PoolAddDisk][2] = 24 * baseInterval
-	triggerInterval[PoolAddDisk][1] = 27 * baseInterval
-
 	triggerInterval[BackupDeleteBackupPod][10] = 1 * baseInterval
 	triggerInterval[BackupDeleteBackupPod][9] = 2 * baseInterval
 	triggerInterval[BackupDeleteBackupPod][8] = 3 * baseInterval
@@ -620,6 +598,39 @@ func populateIntervals() {
 	triggerInterval[DeployApps][2] = 9 * baseInterval
 	triggerInterval[DeployApps][1] = 10 * baseInterval
 
+	triggerInterval[PoolAddDisk][10] = 1 * baseInterval
+	triggerInterval[PoolAddDisk][9] = 3 * baseInterval
+	triggerInterval[PoolAddDisk][8] = 6 * baseInterval
+	triggerInterval[PoolAddDisk][7] = 9 * baseInterval
+	triggerInterval[PoolAddDisk][6] = 12 * baseInterval
+	triggerInterval[PoolAddDisk][5] = 15 * baseInterval
+	triggerInterval[PoolAddDisk][4] = 18 * baseInterval
+	triggerInterval[PoolAddDisk][3] = 21 * baseInterval
+	triggerInterval[PoolAddDisk][2] = 24 * baseInterval
+	triggerInterval[PoolAddDisk][1] = 30 * baseInterval
+
+	baseInterval = 30 * time.Minute
+
+	triggerInterval[PoolResizeDisk][10] = 1 * baseInterval
+	triggerInterval[PoolResizeDisk][9] = 3 * baseInterval
+	triggerInterval[PoolResizeDisk][8] = 6 * baseInterval
+	triggerInterval[PoolResizeDisk][7] = 9 * baseInterval
+	triggerInterval[PoolResizeDisk][6] = 12 * baseInterval
+	triggerInterval[PoolResizeDisk][5] = 15 * baseInterval
+	triggerInterval[PoolResizeDisk][4] = 18 * baseInterval
+	triggerInterval[PoolResizeDisk][3] = 21 * baseInterval
+	triggerInterval[PoolResizeDisk][2] = 24 * baseInterval
+	triggerInterval[PoolResizeDisk][1] = 30 * baseInterval
+
+	baseInterval = 300 * time.Minute
+
+	triggerInterval[UpgradeStork][10] = 1 * baseInterval
+	triggerInterval[UpgradeStork][9] = 2 * baseInterval
+	triggerInterval[UpgradeStork][8] = 3 * baseInterval
+	triggerInterval[UpgradeStork][7] = 4 * baseInterval
+	triggerInterval[UpgradeStork][6] = 5 * baseInterval
+	triggerInterval[UpgradeStork][5] = 6 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -648,12 +659,14 @@ func populateIntervals() {
 	triggerInterval[BackupDeleteBackupPod][0] = 0
 	triggerInterval[BackupScaleMongo][0] = 0
 	triggerInterval[CloudSnapShot][0] = 0
+	triggerInterval[UpgradeStork][0] = 0
+
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 	var chaosLevel int
 	var ok bool
-	chaosLevel, ok = chaosMap[triggerType]
+	chaosLevel, ok = ChaosMap[triggerType]
 	if !ok {
 		chaosLevel = Inst().ChaosLevel
 		logrus.Warnf("Chaos level for trigger [%s] not found in chaos map. Using global chaos level [%d]",

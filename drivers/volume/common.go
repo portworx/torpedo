@@ -84,16 +84,16 @@ func (d *DefaultDriver) RefreshDriverEndpoints() error {
 
 }
 
-// Clone volume clones the volume specified in VolumeId paramerter
+// CloneVolume clones the volume specified in VolumeId paramerter
 // returns the volume_id of the cloned volume
-func (d *DefaultDriver) CloneVolume(volumeId string) (string, error) {
+func (d *DefaultDriver) CloneVolume(volumeID string) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CloneVolume()",
 	}
 }
 
-// Delete the volume specified bu volumeID
+// DeleteVolume deletes the volume specified by volumeID
 func (d *DefaultDriver) DeleteVolume(volumeID string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -108,6 +108,14 @@ func (d *DefaultDriver) CleanupVolume(name string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CleanupVolume()",
+	}
+}
+
+// InspectVolume inspects the volume with the given name
+func (d *DefaultDriver) InspectVolume(name string) (*api.Volume, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InspectVolume()",
 	}
 }
 
@@ -351,8 +359,16 @@ func (d *DefaultDriver) UpgradeDriver(endpointURL string, endpointVersion string
 	}
 }
 
+// UpgradeStork upgrades the stork driver from the given link and checks if it was upgraded to endpointVersion
+func (d *DefaultDriver) UpgradeStork(endpointURL string, endpointVersion string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpgradeDriver()",
+	}
+}
+
 // GetClusterPairingInfo returns cluster pair information
-func (d *DefaultDriver) GetClusterPairingInfo() (map[string]string, error) {
+func (d *DefaultDriver) GetClusterPairingInfo(kubeConfigPath string) (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	return pairInfo, &errors.ErrNotSupported{
 		Type:      "Function",

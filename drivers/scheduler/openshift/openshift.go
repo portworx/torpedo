@@ -122,13 +122,13 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 	}
 
 	var contexts []*scheduler.Context
+	oldOptionsNamespace := options.Namespace
 	for _, app := range apps {
 
-		var appNamespace string
+		appNamespace := app.GetID(instanceID)
 		if options.Namespace != "" {
 			appNamespace = options.Namespace
 		} else {
-			appNamespace = app.GetID(instanceID)
 			options.Namespace = appNamespace
 		}
 
@@ -159,6 +159,7 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 		}
 
 		contexts = append(contexts, ctx)
+		options.Namespace = oldOptionsNamespace
 	}
 
 	return contexts, nil
@@ -429,6 +430,13 @@ func getChannel(version string) (string, error) {
 		return version, nil
 	}
 
+	versionSplit := strings.Split(version, "-")
+	channel := "stable"
+	if len(versionSplit) > 1 {
+		channel = versionSplit[0]
+		version = versionSplit[1]
+	}
+
 	ver, err := semver.Make(version)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse version: %s. cause: %v", version, err)
@@ -437,22 +445,10 @@ func getChannel(version string) (string, error) {
 	channels := map[string]string{
 		"stable":    fmt.Sprintf("stable-%d.%d", ver.Major, ver.Minor),
 		"candidate": fmt.Sprintf("candidate-%d.%d", ver.Major, ver.Minor),
+		"fast":      fmt.Sprintf("fast-%d.%d", ver.Major, ver.Minor),
 	}
-	var output, previousOutput []byte
-	selectedChannel := ""
-	for _, channel := range channels {
-		url := fmt.Sprintf("curl -sL %s/%s | grep %s || true", OpenshiftMirror, channel, version)
-		if output, err = exec.Command("sh", "-c", url).CombinedOutput(); err != nil {
-			break
-		}
-		if string(output) == string(previousOutput) {
-			selectedChannel = channels["stable"]
-		} else {
-			selectedChannel = channel
-		}
-		previousOutput = output
-	}
-	return selectedChannel, err
+
+	return channels[channel], err
 }
 
 func downloadOCP4Client(ocpVersion string) error {

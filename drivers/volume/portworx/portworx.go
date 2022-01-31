@@ -336,12 +336,11 @@ func (d *portworx) CloneVolume(volumeID string) (string, error) {
 	}
 	pxVolume := volumeInspectResponse.Volume
 
-	vol_ID := pxVolume.Id
+	volID := pxVolume.Id
 	cloneVolumeName := pxVolume.Locator.Name + "_clone"
 
-	volumeCloneResp, err := volDriver.Clone(d.getContext(), &api.SdkVolumeCloneRequest{ParentId: vol_ID, Name: cloneVolumeName})
+	volumeCloneResp, err := volDriver.Clone(d.getContext(), &api.SdkVolumeCloneRequest{ParentId: volID, Name: cloneVolumeName})
 	if err != nil {
-		logrus.Infof("Error %v", err)
 		err = fmt.Errorf(
 			"error while Cloning %v because of: %v",
 			pxVolume.Id,
@@ -366,9 +365,8 @@ func (d *portworx) DeleteVolume(volumeID string) error {
 	}
 
 	pxVolume := volumeInspectResponse.Volume
-	vol_ID := pxVolume.Id
-	deleteVolResp, err := volDriver.Delete(d.getContext(), &api.SdkVolumeDeleteRequest{VolumeId: vol_ID})
-	_ = deleteVolResp
+	volID := pxVolume.Id
+	_, err = volDriver.Delete(d.getContext(), &api.SdkVolumeDeleteRequest{VolumeId: volID})
 	if err != nil {
 		logrus.Infof("Error %v", err)
 		err = fmt.Errorf(
@@ -380,8 +378,20 @@ func (d *portworx) DeleteVolume(volumeID string) error {
 		return err
 	}
 
-	logrus.Infof("successfully deleted Portworx volume %v ", vol_ID)
+	logrus.Infof("successfully deleted Portworx volume %v ", volID)
 	return nil
+}
+
+func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), inspectVolumeTimeout)
+	defer cancel()
+
+	response, err := d.getVolDriver().Inspect(ctx, &api.SdkVolumeInspectRequest{VolumeId: name})
+	if err != nil {
+		return nil, err
+	}
+
+	return response.Volume, nil
 }
 
 func (d *portworx) CleanupVolume(volumeName string) error {
@@ -1804,7 +1814,7 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string, ena
 	}
 
 	if enableStork {
-		if err := d.upgradeStork(endpointURL, endpointVersion); err != nil {
+		if err := d.UpgradeStork(endpointURL, endpointVersion); err != nil {
 			return err
 		}
 	} else {
@@ -1866,8 +1876,8 @@ func (d *portworx) upgradePortworx(endpointURL string, endpointVersion string) e
 	return nil
 }
 
-// upgradeStork upgrades stork
-func (d *portworx) upgradeStork(endpointURL string, endpointVersion string) error {
+// UpgradeStork upgrades stork
+func (d *portworx) UpgradeStork(endpointURL string, endpointVersion string) error {
 	storkSpecFileName := "/stork.yaml"
 	nodeList := node.GetStorageDriverNodes()
 	pxNode := nodeList[0]
@@ -1915,9 +1925,9 @@ func (d *portworx) upgradeStork(endpointURL string, endpointVersion string) erro
 }
 
 // GetClusterPairingInfo returns cluster pair information
-func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
+func (d *portworx) GetClusterPairingInfo(kubeConfigPath string) (map[string]string, error) {
 	pairInfo := make(map[string]string)
-	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
+	pxNodes, err := d.schedOps.GetRemotePXNodes(kubeConfigPath)
 	if err != nil {
 		logrus.Errorf("err retrieving remote px nodes: %v", err)
 		return nil, err
