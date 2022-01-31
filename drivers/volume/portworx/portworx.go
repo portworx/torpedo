@@ -328,6 +328,62 @@ func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) 
 	return false, nil
 }
 
+func (d *portworx) CloneVolume(volumeID string) (string, error) {
+	volDriver := d.getVolDriver()
+	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeID})
+	if err != nil {
+		return "", fmt.Errorf("failed to find volume %v due to %v", volumeID, err)
+	}
+	pxVolume := volumeInspectResponse.Volume
+
+	vol_ID := pxVolume.Id
+	cloneVolumeName := pxVolume.Locator.Name + "_clone"
+
+	volumeCloneResp, err := volDriver.Clone(d.getContext(), &api.SdkVolumeCloneRequest{ParentId: vol_ID, Name: cloneVolumeName})
+	if err != nil {
+		logrus.Infof("Error %v", err)
+		err = fmt.Errorf(
+			"error while Cloning %v because of: %v",
+			pxVolume.Id,
+			err,
+		)
+		logrus.Infof("Error returned: %v", err)
+		return "", err
+	}
+	if volumeCloneResp.VolumeId == "" {
+		logrus.Infof("Cloned volume id returned was null")
+		return "", fmt.Errorf("cloned volume id returned was null")
+	}
+	logrus.Infof("successfully clone %v as %v", volumeID, volumeCloneResp.VolumeId)
+	return volumeCloneResp.VolumeId, nil
+}
+
+func (d *portworx) DeleteVolume(volumeID string) error {
+	volDriver := d.getVolDriver()
+	volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeID})
+	if err != nil {
+		return fmt.Errorf("failed to find volume %v due to %v", volumeID, err)
+	}
+
+	pxVolume := volumeInspectResponse.Volume
+	vol_ID := pxVolume.Id
+	deleteVolResp, err := volDriver.Delete(d.getContext(), &api.SdkVolumeDeleteRequest{VolumeId: vol_ID})
+	_ = deleteVolResp
+	if err != nil {
+		logrus.Infof("Error %v", err)
+		err = fmt.Errorf(
+			"error while Delete %v because of: %v",
+			pxVolume.Id,
+			err,
+		)
+		logrus.Infof("Error returned: %v", err)
+		return err
+	}
+
+	logrus.Infof("successfully deleted Portworx volume %v ", vol_ID)
+	return nil
+}
+
 func (d *portworx) CleanupVolume(volumeName string) error {
 	volDriver := d.getVolDriver()
 	volumes, err := volDriver.Enumerate(d.getContext(), &api.SdkVolumeEnumerateRequest{}, nil)
