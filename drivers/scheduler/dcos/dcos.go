@@ -106,6 +106,24 @@ func (d *dcos) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNam
 		Operation: "ValidateSnapShot()",
 	}
 }
+
+//DeleteSnapshots  delete the snapshots
+func (d *dcos) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteSnapShot()",
+	}
+}
+
+//GetShapShotsInNameSpace get the snapshots list for the namespace
+func (d *dcos) GetShapShotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
+
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteSnapShot()",
+	}
+}
+
 func (d *dcos) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
 	fileList := []string{}
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {

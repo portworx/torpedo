@@ -3124,8 +3124,41 @@ func (k *K8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 	return snaps, nil
 }
 
+//DeleteSnapShot delete the snapshots
+func (k *K8s) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) error {
+
+	if err := k8sExternalStorage.DeleteSnapshot(snapshotName, snapshotNameSpace); err != nil {
+		if k8serrors.IsNotFound(err) {
+			logrus.Infof("[%v] Snapshot is not found: %v, skipping deletion", ctx.App.Key, snapshotName)
+
+		}
+		return &scheduler.ErrFailedToDestroyStorage{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("Failed to destroy snapshot: %v. Err: %v", snapshotName, err),
+		}
+	}
+
+	logrus.Infof("[%v] Destroyed Snapshot: %v", ctx.App.Key, snapshotName)
+
+	return nil
+
+}
+
+//GetShapShotsInNameSpace get the snapshots list for the namespace
+func (k *K8s) GetShapShotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
+
+	time.Sleep(10 * time.Second)
+	snapshotList, err := k8sExternalStorage.ListSnapshots(snapshotNameSpace)
+
+	if err != nil {
+		logrus.Infof("Snapshotsnot for app [%v] not found in namespace: %v", ctx.App.Key, snapshotNameSpace)
+		return nil, err
+	}
+
+	return snapshotList, nil
+}
+
 // GetNodesForApp get the node for the app
-//
 func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	t := func() (interface{}, bool, error) {
 		pods, err := k.getPodsForApp(ctx)
