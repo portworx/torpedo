@@ -10,6 +10,7 @@ require (
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/educlos/testrail v0.0.0-20210915115134-adb5e6f62a6d
 	github.com/fatih/color v1.9.0
+	github.com/frankban/quicktest v1.14.2 // indirect
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/protobuf v1.5.2
@@ -42,6 +43,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
 	k8s.io/api v0.20.4
+	k8s.io/apiextensions-apiserver v0.20.4
 	k8s.io/apimachinery v0.20.4
 	k8s.io/client-go v12.0.0+incompatible
 )
