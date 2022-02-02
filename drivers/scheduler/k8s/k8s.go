@@ -2262,14 +2262,13 @@ func (k *K8s) SelectiveWaitForTermination(ctx *scheduler.Context, timeout time.D
 // and not running on the nodes provided in the exclude list
 func filterPodsByNodes(ctx *scheduler.Context, excludeList []node.Node) ([]string, error) {
 	allPods := make(map[types.UID]corev1.Pod)
-	excludedNodePods := make(map[types.UID]corev1.Pod)
 	namespaces := make(map[string]string)
 	for _, specObj := range ctx.App.SpecList {
 		var pods []corev1.Pod
 		var err error
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
-			if pods, err = k8sApps.GetDeploymentPods(obj); err != nil {
-				return nil, &scheduler.ErrFailedToValidateAppDestroy{
+			if pods, err = k8sApps.GetDeploymentPods(obj); err != nil && err != schederrors.ErrPodsNotFound {
+				return nil, &scheduler.ErrFailedToGetAppStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get deployment: %v. Err: %v", obj.Name, err),
 				}
@@ -2277,8 +2276,8 @@ func filterPodsByNodes(ctx *scheduler.Context, excludeList []node.Node) ([]strin
 			namespaces[obj.Namespace] = ""
 
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			if pods, err = k8sApps.GetStatefulSetPods(obj); err != nil {
-				return nil, &scheduler.ErrFailedToValidateAppDestroy{
+			if pods, err = k8sApps.GetStatefulSetPods(obj); err != nil && err != schederrors.ErrPodsNotFound {
+				return nil, &scheduler.ErrFailedToGetAppStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get statefulset: %v. Err: %v", obj.Name, err),
 				}
@@ -2288,43 +2287,38 @@ func filterPodsByNodes(ctx *scheduler.Context, excludeList []node.Node) ([]strin
 		} else if obj, ok := specObj.(*corev1.Pod); ok {
 			pod, err := k8sCore.GetPodByUID(obj.UID, obj.Namespace)
 			if err != nil && err != schederrors.ErrPodsNotFound {
-				return nil, &scheduler.ErrFailedToValidatePodDestroy{
+				return nil, &scheduler.ErrFailedToGetAppStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get pod: %v. Err: %v", obj.Name, err),
 				}
 			}
-			pods = []corev1.Pod{*pod}
-			namespaces[obj.Namespace] = ""
+			if pod != nil {
+				pods = []corev1.Pod{*pod}
+				namespaces[obj.Namespace] = ""
+			}
 		}
 		for _, pod := range pods {
 			allPods[pod.UID] = pod
 		}
 	}
 
-	for _, excludedNode := range excludeList {
-		for _, namespace := range namespaces {
-			podList, err := k8sCore.GetPodsByNode(excludedNode.Name, namespace)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToValidateAppDestroy{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to get pods by node %v. Err: %v", excludedNode.Name, err),
-				}
-			}
-			for _, pod := range podList.Items {
-				excludedNodePods[pod.UID] = pod
-			}
-		}
-	}
-
 	// Compare the two pod maps. Create a list of pod names which are not running
 	// on the excluded nodes
-	var podNames []string
+	var podList []string
 	for _, pod := range allPods {
-		if _, exists := excludedNodePods[pod.UID]; !exists {
-			podNames = append(podNames, pod.Name)
+		excludePod := false
+		for _, excludedNode := range excludeList {
+			if pod.Spec.NodeName == excludedNode.Name {
+				excludePod = true
+				break
+			}
+		}
+		if !excludePod {
+			podInfo := pod.Namespace + "/" + pod.Name + " (" + pod.Spec.NodeName + ")"
+			podList = append(podList, podInfo)
 		}
 	}
-	return podNames, nil
+	return podList, nil
 }
 
 // DeleteTasks delete the task

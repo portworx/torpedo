@@ -210,6 +210,9 @@ type Driver interface {
 
 	//ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
+
+	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
+	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

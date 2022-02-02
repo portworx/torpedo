@@ -385,6 +385,20 @@ var _ = Describe("{Sharedv4ClientTeardownWhenServerOffline}", func() {
 			ValidateApplications(testSv4Contexts)
 		})
 
+		Step("change the sharedv4 failover strategy to normal", func() {
+			for _, ctx := range testSv4Contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred(), "failed in getting volumes: %v", err)
+
+				err = Inst().V.UpdateSharedv4FailoverStrategyUsingPxctl(vols[0].ID, api.Sharedv4FailoverStrategy_NORMAL)
+				Expect(err).NotTo(HaveOccurred(), "failed in updating sharedv4 strategy for volume %v: %v", vols[0].ID, err)
+
+				apiVol, err := Inst().V.InspectVolume(vols[0].ID)
+				Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
+				Expect(apiVol.Spec.Sharedv4Spec.FailoverStrategy == api.Sharedv4FailoverStrategy_NORMAL).To(BeTrue(), "unexpected failover strategy")
+			}
+		})
+
 		var attachedNode *node.Node
 		Step("stop the volume driver on attached node and verify application teardown succeeds", func() {
 			for _, ctx := range testSv4Contexts {
@@ -457,6 +471,20 @@ var _ = Describe("{Sharedv4ClientTeardownWhenServerOffline}", func() {
 
 				ValidateApplications([]*scheduler.Context{ctx})
 
+			}
+		})
+
+		Step("change the sharedv4 failover strategy back to aggressive", func() {
+			for _, ctx := range testSv4Contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred(), "failed in getting volumes: %v", err)
+
+				err = Inst().V.UpdateSharedv4FailoverStrategyUsingPxctl(vols[0].ID, api.Sharedv4FailoverStrategy_AGGRESSIVE)
+				Expect(err).NotTo(HaveOccurred(), "failed in updating sharedv4 strategy for volume %v: %v", vols[0].ID, err)
+
+				apiVol, err := Inst().V.InspectVolume(vols[0].ID)
+				Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
+				Expect(apiVol.Spec.Sharedv4Spec.FailoverStrategy == api.Sharedv4FailoverStrategy_AGGRESSIVE).To(BeTrue(), "unexpected failover strategy")
 			}
 		})
 
