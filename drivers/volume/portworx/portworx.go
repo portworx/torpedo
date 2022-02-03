@@ -1854,6 +1854,9 @@ func (d *portworx) testAndSetEndpointUsingNodeIP(ip string) error {
 }
 
 func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) error {
+	if strings.Contains(endpoint, ":") && !strings.Contains(endpoint, "["){
+		endpoint = fmt.Sprintf("[%s]", endpoint)
+	}
 	pxEndpoint := fmt.Sprintf("%s:%d", endpoint, sdkport)
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
