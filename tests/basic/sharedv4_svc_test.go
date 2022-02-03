@@ -703,13 +703,12 @@ var _ = Describe("{Shared4SvcClientOfflineTooLong}", func() {
 	var runID int
 	var contexts, testSv4Contexts []*scheduler.Context
 	var workers []node.Node
-	//	var kvdbNodes map[string]bool
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	It("has to stop PX on the client node long enough for server to remove the export then bring it back", func() {
+	It("has to stop PX on the client node long enough for server to remove the export then bring the node back", func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("client-offline-%d", i))...)
