@@ -386,7 +386,7 @@ func (k *openshift) validateDrivesAfterNewNodePickUptheId(delNode *api.StorageNo
 	if !isStoragelessNode {
 		// Wait for new node to pick up the deleted node ID
 		logrus.Infof("Waiting for NodeId [%s] to be picked by another node ", delNode.Id)
-		newPXNode, err := volDriver.WaitForNodeIdToBePickedByAnotherNode(delNode)
+		newPXNode, err := volDriver.WaitForNodeIDToBePickedByAnotherNode(delNode)
 		if err != nil {
 			return err
 		}
@@ -395,7 +395,7 @@ func (k *openshift) validateDrivesAfterNewNodePickUptheId(delNode *api.StorageNo
 			newPXNode.Hostname, delNode.Id,
 		)
 
-		err = volDriver.ValidateNodeAfterPickingUpNodeId(delNode, newPXNode, storagelessNodes)
+		err = volDriver.ValidateNodeAfterPickingUpNodeID(delNode, newPXNode, storagelessNodes)
 		if err != nil {
 			return err
 		}

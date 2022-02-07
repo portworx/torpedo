@@ -247,16 +247,16 @@ type Driver interface {
 	Contains([]*api.StorageNode, *api.StorageNode) bool
 
 	// UpdateNodeWithStorageInfo update a new node object
-	UpdateNodeWithStorageInfo(node.Node) error
+	UpdateNodeWithStorageInfo(n node.Node) error
 
 	// WaitForNodeIdToBePickedByAnotherNode wait for another node to pick the down node nodeId
-	WaitForNodeIdToBePickedByAnotherNode(*api.StorageNode) (*api.StorageNode, error)
+	WaitForNodeIDToBePickedByAnotherNode(n *api.StorageNode) (*api.StorageNode, error)
 
 	// ValidateNodeAfterPickingUpNodeId validates the new node pick the correct drives and pools
-	ValidateNodeAfterPickingUpNodeId(*api.StorageNode, *api.StorageNode, []*api.StorageNode) error
+	ValidateNodeAfterPickingUpNodeID(n1 *api.StorageNode, n2 *api.StorageNode, snList []*api.StorageNode) error
 
 	// WaitForPxPodsToBeUp waits for px pod to be up in given node
-	WaitForPxPodsToBeUp(node.Node) error
+	WaitForPxPodsToBeUp(n node.Node) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

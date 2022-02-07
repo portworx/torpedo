@@ -583,8 +583,8 @@ func (d *DefaultDriver) UpdateNodeWithStorageInfo(node.Node) error {
 
 }
 
-// WaitForNodeIdToBePickedByAnotherNode wait for new node to pick up the drives.
-func (d *DefaultDriver) WaitForNodeIdToBePickedByAnotherNode(
+// WaitForNodeIDToBePickedByAnotherNode wait for new node to pick up the drives.
+func (d *DefaultDriver) WaitForNodeIDToBePickedByAnotherNode(
 	n *api.StorageNode) (*api.StorageNode, error) {
 	return &api.StorageNode{}, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -592,8 +592,8 @@ func (d *DefaultDriver) WaitForNodeIdToBePickedByAnotherNode(
 	}
 }
 
-// ValidateNodeAfterPickingUpNodeId validates the node.
-func (d *DefaultDriver) ValidateNodeAfterPickingUpNodeId(
+// ValidateNodeAfterPickingUpNodeID validates the node.
+func (d *DefaultDriver) ValidateNodeAfterPickingUpNodeID(
 	n1 *api.StorageNode, n2 *api.StorageNode, sn []*api.StorageNode) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",

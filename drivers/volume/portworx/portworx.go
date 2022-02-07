@@ -391,7 +391,8 @@ func (d *portworx) WaitForPxPodsToBeUp(n node.Node) error {
 	return nil
 }
 
-func (d *portworx) ValidateNodeAfterPickingUpNodeId(delNode *api.StorageNode,
+// ValidateNodeAfterPickingUpNodeID validates the pools and drives
+func (d *portworx) ValidateNodeAfterPickingUpNodeID(delNode *api.StorageNode,
 	newNode *api.StorageNode, storagelessNodes []*api.StorageNode) error {
 
 	// If node is a storageless node below validation steps not needed
@@ -486,8 +487,8 @@ func (d *portworx) validateNodeIdMigration(delNode *api.StorageNode, newNode *ap
 	return true
 }
 
-// waitForNodeIdToBePickedByAnotherNode Waits for a given nodeID to be picked up by another node
-func (d *portworx) WaitForNodeIdToBePickedByAnotherNode(
+// waitForNodeIDToBePickedByAnotherNode Waits for a given nodeID to be picked up by another node
+func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
 	delNode *api.StorageNode) (*api.StorageNode, error) {
 
 	t := func() (interface{}, bool, error) {
