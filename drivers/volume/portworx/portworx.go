@@ -74,8 +74,10 @@ const (
 	pxMinVersionForStorkUpgrade               = "2.1"
 	formattingCommandPxctlLocalSnapshotCreate = "pxctl volume snapshot create %s --name %s"
 	formattingCommandPxctlCloudSnapCreate     = "pxctl cloudsnap backup %s"
+	pxctlVolumeUpdate                         = "pxctl volume update "
 	pxctlGroupSnapshotCreate                  = "pxctl volume snapshot group"
 	refreshEndpointParam                      = "refresh-endpoint"
+	defaultPXAPITimeout                       = 5 * time.Minute
 )
 
 const (
@@ -167,6 +169,72 @@ type metadataNode struct {
 	DbSize     int      `json:"DbSize"`
 	IsHealthy  bool     `json:"IsHealthy"`
 	ID         string   `json:"ID"`
+}
+
+// ExpandPool resizes a pool of a given ID
+func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
+
+	logrus.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, size, operation.String())
+
+	// start a task to check if pool  resize is done
+	t := func() (interface{}, bool, error) {
+		jobListResp, err := d.storagePoolManager.Resize(d.getContext(), &api.SdkStoragePoolResizeRequest{
+			Uuid: poolUUID,
+			ResizeFactor: &api.SdkStoragePoolResizeRequest_Size{
+				Size: size,
+			},
+			OperationType: operation,
+		})
+		if err != nil {
+			return nil, true, err
+		}
+		if jobListResp.String() != "" {
+			logrus.Debugf("Resize respone: %v", jobListResp.String())
+		}
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, validateRebalanceJobsTimeout, validateRebalanceJobsInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ListStoragePools returns all PX storage pools
+func (d *portworx) ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultPXAPITimeout)
+	defer cancel()
+
+	// TODO PX SDK currently does not have a way of directly getting storage pool objects.
+	// We need to list nodes and then inspect each node
+	resp, err := d.nodeManager.Enumerate(ctx, &api.SdkNodeEnumerateRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	pools := make(map[string]*api.StoragePool)
+	for _, nodeID := range resp.NodeIds {
+		logrus.Infof("<debug> NODE_ID: %s", nodeID)
+		nodeResp, err := d.nodeManager.Inspect(ctx, &api.SdkNodeInspectRequest{NodeId: nodeID})
+		if err != nil {
+			return nil, err
+		}
+
+		for _, pool := range nodeResp.Node.Pools {
+			matches := true
+			for k, v := range labelSelector.MatchLabels {
+				if v != pool.Labels[k] {
+					matches = false
+					break
+				}
+			}
+
+			if matches {
+				pools[pool.GetUuid()] = pool
+			}
+		}
+	}
+
+	return pools, nil
 }
 
 func (d *portworx) String() string {
@@ -984,6 +1052,31 @@ func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
 	})
+	if err != nil {
+		logrus.WithError(err).Error("error when creating local snapshot using PXCTL")
+		return err
+	}
+	return nil
+}
+
+func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
+	nodes := node.GetStorageDriverNodes()
+	var strategyStr string
+	if strategy == api.Sharedv4FailoverStrategy_NORMAL {
+		strategyStr = "normal"
+	} else if strategy == api.Sharedv4FailoverStrategy_AGGRESSIVE {
+		strategyStr = "aggressive"
+	} else {
+		return fmt.Errorf("invalid failover strategy: %v", strategy)
+	}
+	cmd := fmt.Sprintf("%s %s --sharedv4_failover_strategy %s", pxctlVolumeUpdate, volumeName, strategyStr)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(
+		nodes[0],
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
 	if err != nil {
 		logrus.WithError(err).Error("error when creating local snapshot using PXCTL")
 		return err
