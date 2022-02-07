@@ -259,8 +259,8 @@ func (v *vsphere) PowerOnVM(n node.Node) error {
 	return nil
 }
 
-// PowerOnVmByName powers on VM by using name
-func (v *vsphere) PowerOnVmByName(vmName string) error {
+// PowerOnVMByName powers on VM by using name
+func (v *vsphere) PowerOnVMByName(vmName string) error {
 	// Make sure vmName is part of vmMap before using this method
 	var err error
 	vm := vmMap[vmName]

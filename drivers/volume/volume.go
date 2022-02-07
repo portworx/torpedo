@@ -249,10 +249,10 @@ type Driver interface {
 	// UpdateNodeWithStorageInfo update a new node object
 	UpdateNodeWithStorageInfo(n node.Node) error
 
-	// WaitForNodeIdToBePickedByAnotherNode wait for another node to pick the down node nodeId
+	// WaitForNodeIDToBePickedByAnotherNode wait for another node to pick the down node nodeID
 	WaitForNodeIDToBePickedByAnotherNode(n *api.StorageNode) (*api.StorageNode, error)
 
-	// ValidateNodeAfterPickingUpNodeId validates the new node pick the correct drives and pools
+	// ValidateNodeAfterPickingUpNodeID validates the new node pick the correct drives and pools
 	ValidateNodeAfterPickingUpNodeID(n1 *api.StorageNode, n2 *api.StorageNode, snList []*api.StorageNode) error
 
 	// WaitForPxPodsToBeUp waits for px pod to be up in given node

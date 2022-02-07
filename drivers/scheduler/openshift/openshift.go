@@ -172,7 +172,7 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 				if err = driver.AddMachine(result[0]); err != nil {
 					return result[0], true, err
 				}
-				if err = driver.PowerOnVmByName(result[0]); err != nil {
+				if err = driver.PowerOnVMByName(result[0]); err != nil {
 					return result[0], true, err
 				}
 			}
@@ -273,7 +273,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 			delNode.Hostname,
 		)
 		for _, pool := range delNode.Pools {
-			logrus.Infof("Node [%s] is having pool id: [%s]", delNode.Hostname, pool.Uuid)
+			logrus.Infof("Node [%s] is having pool ID: [%s]", delNode.Hostname, pool.Uuid)
 
 		}
 		logrus.Infof("Before recyling a node, Node [%s] is having disks: [%v]",
@@ -281,7 +281,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		)
 
 		// Delete the node from machines using kubectl command
-		logrus.Infof("Recycling the node [%s] having NodeId: [%s]", delNode.Hostname, delNode.Id)
+		logrus.Infof("Recycling the node [%s] having NodeID: [%s]", delNode.Hostname, delNode.Id)
 		if isKVDBNode {
 			logrus.Infof("Node [%s] is one of the KVDB node", delNode.Hostname)
 		}
@@ -347,7 +347,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		}
 
 		// Validation is needed only when deleted node was StorageNode
-		if err = k.validateDrivesAfterNewNodePickUptheId(delNode, volDriver,
+		if err = k.validateDrivesAfterNewNodePickUptheID(delNode, volDriver,
 			storagelessNodes, isStoragelessNode,
 		); err != nil {
 			return err
@@ -378,20 +378,20 @@ func (k *openshift) RecycleNode(n node.Node) error {
 	return fmt.Errorf("FAILED: Node is not a worker node")
 }
 
-func (k *openshift) validateDrivesAfterNewNodePickUptheId(delNode *api.StorageNode,
+func (k *openshift) validateDrivesAfterNewNodePickUptheID(delNode *api.StorageNode,
 	volDriver volume.Driver, storagelessNodes []*api.StorageNode, isStoragelessNode bool) error {
 
 	logrus.Infof("Validating the pools and drives on new node")
 	// Validation is needed only when deleted node was StorageNode
 	if !isStoragelessNode {
 		// Wait for new node to pick up the deleted node ID
-		logrus.Infof("Waiting for NodeId [%s] to be picked by another node ", delNode.Id)
+		logrus.Infof("Waiting for NodeID [%s] to be picked by another node ", delNode.Id)
 		newPXNode, err := volDriver.WaitForNodeIDToBePickedByAnotherNode(delNode)
 		if err != nil {
 			return err
 		}
-		logrus.Infof("NodeId [%s] pick up by another node: [%s]", delNode.Id, newPXNode.Hostname)
-		logrus.Infof("Validating the node: [%s] after it picked the NodeId: [%s] ",
+		logrus.Infof("NodeID [%s] pick up by another node: [%s]", delNode.Id, newPXNode.Hostname)
+		logrus.Infof("Validating the node: [%s] after it picked the NodeID: [%s] ",
 			newPXNode.Hostname, delNode.Id,
 		)
 

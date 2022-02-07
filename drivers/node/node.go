@@ -184,8 +184,8 @@ type Driver interface {
 	// AddMachine adds the new machine instance to existing map
 	AddMachine(machineName string) error
 
-	// PowerOnVmByName power on the VM using the vm name
-	PowerOnVmByName(vmName string) error
+	// PowerOnVMByName power on the VM using the vm name
+	PowerOnVMByName(vmName string) error
 }
 
 // Register registers the given node driver
@@ -382,7 +382,7 @@ func (d *notSupportedDriver) AddMachine(machineName string) error {
 	}
 }
 
-func (d *notSupportedDriver) PowerOnVmByName(vmName string) error {
+func (d *notSupportedDriver) PowerOnVMByName(vmName string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "PowerOnVmByName()",

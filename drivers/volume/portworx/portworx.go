@@ -396,7 +396,7 @@ func (d *portworx) ValidateNodeAfterPickingUpNodeID(delNode *api.StorageNode,
 	newNode *api.StorageNode, storagelessNodes []*api.StorageNode) error {
 
 	// If node is a storageless node below validation steps not needed
-	if !d.validateNodeIdMigration(delNode, newNode, storagelessNodes) {
+	if !d.validateNodeIDMigration(delNode, newNode, storagelessNodes) {
 		return fmt.Errorf("validation failed: NodeId:[%s] pick-up failed by new Node: [%s]",
 			delNode.Id, newNode.Hostname,
 		)
@@ -465,8 +465,8 @@ func (d *portworx) comparePoolsAndDisks(srcNode *api.StorageNode,
 	return true
 }
 
-// validateNodeIdMigration validate the nodeID is picked by another storageless node
-func (d *portworx) validateNodeIdMigration(delNode *api.StorageNode, newNode *api.StorageNode,
+// validateNodeIDMigration validate the nodeID is picked by another storageless node
+func (d *portworx) validateNodeIDMigration(delNode *api.StorageNode, newNode *api.StorageNode,
 	storagelessNodes []*api.StorageNode) bool {
 	// delNode is a deleted node and newNode is a node which picked the NodeId from delNode
 
@@ -492,7 +492,7 @@ func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
 	delNode *api.StorageNode) (*api.StorageNode, error) {
 
 	t := func() (interface{}, bool, error) {
-		nNode, err := d.getPxNodeById(delNode.Id)
+		nNode, err := d.getPxNodeByID(delNode.Id)
 		if err != nil {
 			return nil, true, err
 		}
@@ -1445,13 +1445,13 @@ func (d *portworx) getStorageNodesOnStart() ([]*api.StorageNode, error) {
 	return d.getPxNodes()
 }
 
-// getPxNodeById return px node by provding node id
-func (d *portworx) getPxNodeById(nodeId string) (*api.StorageNode, error) {
+// getPxNodeByID return px node by provding node id
+func (d *portworx) getPxNodeByID(nodeID string) (*api.StorageNode, error) {
 
-	logrus.Infof("Getting the node using nodeId: [%s]", nodeId)
+	logrus.Infof("Getting the node using nodeId: [%s]", nodeID)
 	var nodeManager api.OpenStorageNodeClient = d.getNodeManager()
 
-	nodeResponse, err := nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: nodeId})
+	nodeResponse, err := nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: nodeID})
 	if err != nil {
 		return nil, err
 	}
