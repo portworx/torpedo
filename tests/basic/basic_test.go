@@ -493,12 +493,14 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 	It("has to cordon all storage nodes, deploy and destroy app", func() {
 
 		Step("Cordon all storage nodes", func() {
-			nodes := node.GetWorkerNodes()
-			for _, n := range nodes {
-				if node.IsStorageNode(n) {
-					err := Inst().S.DisableSchedulingOnNode(n)
-					Expect(err).NotTo(HaveOccurred())
-				}
+			nodes := node.GetNodes()
+			storageNodes := node.GetStorageNodes()
+			if len(nodes) == len(storageNodes) {
+				Skip("No storageless nodes detected. Skipping..")
+			}
+			for _, n := range storageNodes {
+				err := Inst().S.DisableSchedulingOnNode(n)
+				Expect(err).NotTo(HaveOccurred())
 			}
 		})
 		Step("Deploy applications", func() {
