@@ -32,6 +32,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/batch"
 	k8sCommon "github.com/portworx/sched-ops/k8s/common"
 	"github.com/portworx/sched-ops/k8s/core"
+	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/networking"
 	"github.com/portworx/sched-ops/k8s/rbac"
@@ -4511,7 +4512,7 @@ func (k *K8s) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 			}
 		}
 		if err != nil {
-			return nil, true, fmt.Errorf("Failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
+			return nil, true, fmt.Errorf("failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
 		}
 		return aRule, false, nil
 	}
@@ -4697,7 +4698,7 @@ func createDockerRegistrySecret(secretName, secretNamespace string) (*v1.Secret,
 			}
 		}
 		if err != nil {
-			return nil, fmt.Errorf("Failed to create Docker registry secret: %s. Err: %v", secretName, err)
+			return nil, fmt.Errorf("failed to create Docker registry secret: %s. Err: %v", secretName, err)
 		}
 		logrus.Infof("Created Docker registry secret: %s", secret.Name)
 		return secret, nil
