@@ -128,6 +128,16 @@ func Contains(nodes []Node, n Node) bool {
 	return false
 }
 
+// GetNodeByName returns a node which matches with given name
+func GetNodeByName(nodeName string) (Node, error) {
+	for _, n := range nodeRegistry {
+		if n.Name == nodeName {
+			return n, nil
+		}
+	}
+	return Node{}, fmt.Errorf("FAILED: Node [%s] not found in node registry", nodeName)
+}
+
 // CleanupRegistry removes entry of all nodes from registry
 func CleanupRegistry() {
 	nodeRegistry = make(map[string]Node)

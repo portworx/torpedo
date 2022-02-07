@@ -2,14 +2,13 @@ package openshift
 
 import (
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os/exec"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/blang/semver"
+	"github.com/libopenstorage/openstorage/api"
 	openshiftv1 "github.com/openshift/api/config/v1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	k8s "github.com/portworx/sched-ops/k8s/core"
@@ -17,9 +16,11 @@ import (
 	opnshift "github.com/portworx/sched-ops/k8s/openshift"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,6 +34,7 @@ const (
 	// OpenshiftMirror is the mirror we use do download ocp client
 	OpenshiftMirror   = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
 	defaultCmdTimeout = 5 * time.Minute
+	driverUpTimeout   = 10 * time.Minute
 	defaultCmdRetry   = 15 * time.Second
 )
 
@@ -141,6 +143,10 @@ func (k *openshift) checkAndGetNewNode() (string, error) {
 // Waits for newly provisioned OCP node to be ready and running
 func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 	var err error
+	var isTriedOnce bool = false
+	var provState string = "Provisioned"
+	var driverName = k.K8s.NodeDriverName
+	logrus.Info("Using Node Driver: ", driverName)
 
 	t := func() (interface{}, bool, error) {
 
@@ -156,6 +162,18 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 				"FAILED: Unable to get new OCP VM:[%s] status. cause: %v", result[0], err,
 			)
 		} else if strings.ToLower(result[1]) != "running" {
+			// Observed that OCP unable to power-on VM sometimes for vSphere driver
+			// Trying to power on the new VM once
+			if result[1] == provState && driverName == vsphere.DriverName && !isTriedOnce {
+				isTriedOnce = true
+				driver, _ := node.Get(driverName)
+				if err = driver.AddMachine(result[0]); err != nil {
+					return result[0], true, err
+				}
+				if err = driver.PowerOnVmByName(result[0]); err != nil {
+					return result[0], true, err
+				}
+			}
 			return result[0], true, &scheduler.ErrFailedToBringUpNode{
 				Node:  result[0],
 				Cause: fmt.Errorf("FAILED: OCP Unable to bring up the new node"),
@@ -189,7 +207,7 @@ func (k *openshift) waitForJoinK8sNode(node string) error {
 	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-	logrus.Infof("New OCP VM: [%s] is ready and joined k8s cluster", node)
+	logrus.Infof("New OCP VM: [%s] came up successfully and joined k8s cluster", node)
 	return nil
 }
 
@@ -214,21 +232,72 @@ func (k *openshift) deleteAMachine(nodeName string) error {
 
 // Method to recycling OCP node
 func (k *openshift) RecycleNode(n node.Node) error {
-	logrus.Infof("Inside Recyling OCP node: [%s] ", n.Name)
 
 	// Check if node is valid before proceeding for delete a node
 	var worker []node.Node = node.GetWorkerNodes()
+	var delNode *api.StorageNode
+	var isStoragelessNode bool = false
 	if node.Contains(worker, n) {
 
+		// Check if node is meta node and set the meta flag
+		isKVDBNode := n.IsMetadataNode
+
+		// Get node info before deleting the node
+		volDriver, err := volume.Get(k.VolDriverName)
+		if err != nil {
+			return err
+		}
+
+		if delNode, err = volDriver.GetPxNode(&n); err != nil {
+			return err
+		}
+
+		// Get storageless nodes
+		storagelessNodes, err := volDriver.GetStoragelessNodes()
+		if err != nil {
+			return err
+		}
+
+		// Checking if given node is storageless node
+		if volDriver.Contains(storagelessNodes, delNode) {
+			logrus.Infof(
+				"PX node [%s] is storageless node and pool validation is not needed",
+				delNode.Hostname,
+			)
+			isStoragelessNode = true
+		}
+
+		logrus.Infof("Before recyling a node, Node [%s] is having following pools:",
+			delNode.Hostname,
+		)
+		for _, pool := range delNode.Pools {
+			logrus.Infof("Node [%s] is having pool id: [%s]", delNode.Hostname, pool.Uuid)
+
+		}
+		logrus.Infof("Before recyling a node, Node [%s] is having disks: [%v]",
+			delNode.Hostname, delNode.Disks,
+		)
+
 		// Delete the node from machines using kubectl command
-		logrus.Infof("Recyling OCP node: [%s] ", n.Name)
-		err := k.deleteAMachine(n.Name)
+		logrus.Infof("Recycling the node [%s] having NodeId: [%s]", delNode.Hostname, delNode.Id)
+		if isKVDBNode {
+			logrus.Infof("Node [%s] is one of the KVDB node", delNode.Hostname)
+		}
+
+		// PowerOff machine before deleting the machine for vSphere driver
+		var driverName = k.K8s.NodeDriverName
+		if driverName == vsphere.DriverName {
+			driver, _ := node.Get(driverName)
+			driver.PowerOffVM(n)
+		}
+
+		err = k.deleteAMachine(n.Name)
 		if err != nil {
 			logrus.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", n.Name, err)
 			return err
 		}
 
-		// Delete the node from the list
+		// Removing the node from the nodeRegistry
 		err = node.DeleteNode(n)
 		if err != nil {
 			return &scheduler.ErrFailedToUpdateNodeList{
@@ -255,18 +324,84 @@ func (k *openshift) RecycleNode(n node.Node) error {
 			return err
 		}
 
-		//Adding node to a list
-		err = k.AddNewNode(*newNode)
-		if err != nil {
+		//Adding a new node to a nodeRegistry
+		if err = k.AddNewNode(*newNode); err != nil {
 			return &scheduler.ErrFailedToUpdateNodeList{
 				Node: newOCPNode,
 				Cause: fmt.Sprintf(
 					"Failed to update new OCP node [%s] in node list. Error: [%v]", newOCPNode, err),
 			}
 		}
+
+		// Getting the node object for a new node
+		newlyProvNode, err := node.GetNodeByName(newOCPNode)
+		if err != nil {
+			return err
+		}
+
+		// Waits for px pod to be up in new node
+		if err = volDriver.WaitForPxPodsToBeUp(newlyProvNode); err != nil {
+			return err
+		}
+
+		// Validation is needed only when deleted node was StorageNode
+		if err = k.validateDrivesAfterNewNodePickUptheId(delNode, volDriver,
+			storagelessNodes, isStoragelessNode,
+		); err != nil {
+			return err
+		}
+
+		// Update the new node object with storage information
+		if err = volDriver.UpdateNodeWithStorageInfo(newlyProvNode); err != nil {
+			return err
+		}
+		logrus.Infof("Successfully updated the storage info for new node: [%s] ", newlyProvNode.Name)
+
+		// Getting the new node object after storage info updated
+		newlyProvNode, err = node.GetNodeByName(newlyProvNode.Name)
+		if err != nil {
+			return err
+		}
+
+		logrus.Infof("Waiting for driver to be come up on node: [%s] ", newlyProvNode.Name)
+
+		// Waiting and make sure driver to come up successfuly on newly provisoned node
+		if err = volDriver.WaitDriverUpOnNode(newlyProvNode, driverUpTimeout); err != nil {
+			return err
+		}
+		logrus.Infof("Driver came up successfully on node: [%s] ", newlyProvNode.Name)
+
 		return nil
 	}
 	return fmt.Errorf("FAILED: Node is not a worker node")
+}
+
+func (k *openshift) validateDrivesAfterNewNodePickUptheId(delNode *api.StorageNode,
+	volDriver volume.Driver, storagelessNodes []*api.StorageNode, isStoragelessNode bool) error {
+
+	logrus.Infof("Validating the pools and drives on new node")
+	// Validation is needed only when deleted node was StorageNode
+	if !isStoragelessNode {
+		// Wait for new node to pick up the deleted node ID
+		logrus.Infof("Waiting for NodeId [%s] to be picked by another node ", delNode.Id)
+		newPXNode, err := volDriver.WaitForNodeIdToBePickedByAnotherNode(delNode)
+		if err != nil {
+			return err
+		}
+		logrus.Infof("NodeId [%s] pick up by another node: [%s]", delNode.Id, newPXNode.Hostname)
+		logrus.Infof("Validating the node: [%s] after it picked the NodeId: [%s] ",
+			newPXNode.Hostname, delNode.Id,
+		)
+
+		err = volDriver.ValidateNodeAfterPickingUpNodeId(delNode, newPXNode, storagelessNodes)
+		if err != nil {
+			return err
+		}
+		logrus.Infof("Successfully validated the pools and drives on new node")
+		return nil
+	}
+	logrus.Infof("Skipping the pool and drives validation for storageless node: [%s]", delNode.Id)
+	return nil
 }
 
 func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
@@ -365,6 +500,11 @@ func (k *openshift) updateSecurityContextConstraints(namespace string) error {
 	return nil
 }
 
+// String returns the string name of this driver.
+func (k *openshift) String() string {
+	return SchedName
+}
+
 func (k *openshift) UpgradeScheduler(version string) error {
 	var err error
 
@@ -387,10 +527,6 @@ func (k *openshift) UpgradeScheduler(version string) error {
 	}
 
 	if err := fixOCPClusterStorageOperator(upgradeVersion); err != nil {
-		return err
-	}
-
-	if err := ackAPIRemoval(upgradeVersion); err != nil {
 		return err
 	}
 
@@ -674,7 +810,17 @@ func downloadOCP4Client(ocpVersion string) error {
 // workaround for https://portworx.atlassian.net/browse/PWX-20465
 func fixOCPClusterStorageOperator(version string) error {
 
-	parsedVersion, err := getParsedVersion(version)
+	if versionReg.MatchString(version) {
+		url := fmt.Sprintf("https://mirror.openshift.com/pub/openshift-v4/clients/ocp/%s/release.txt", version)
+		command := []string{"-c", fmt.Sprintf("curl --silent -L %s | grep \"Name:\" || true", url)}
+		stdout, err := exec.Command("bash", command...).CombinedOutput()
+		if err != nil {
+			return err
+		}
+		version = strings.TrimSpace(strings.ReplaceAll(string(stdout), "Name:", ""))
+	}
+
+	parsedVersion, err := semver.Parse(version)
 	if err != nil {
 		return err
 	}
@@ -728,57 +874,6 @@ func fixOCPClusterStorageOperator(version string) error {
 		}
 	}
 	return nil
-}
-
-func ackAPIRemoval(version string) error {
-	parsedVersion, err := getParsedVersion(version)
-	if err != nil {
-		return err
-	}
-	// this issue happens on OCP 4.9
-	parsedVersion49, _ := semver.Parse("4.9.0")
-
-	if parsedVersion.GTE(parsedVersion49) {
-		t := func() (interface{}, bool, error) {
-			var output []byte
-			patchData := "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
-			args := []string{"-n", "openshift-config", "patch", "cm", "admin-acks", "--type=merge", "--patch", patchData}
-			if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-				return nil, true, fmt.Errorf("failed to ack API removal due to %s. cause: %v", string(output), err)
-			}
-			logrus.Info(string(output))
-			return nil, false, nil
-		}
-		_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
-	}
-	return err
-}
-
-func getParsedVersion(version string) (semver.Version, error) {
-	if versionReg.MatchString(version) {
-		cli := &http.Client{}
-		url := fmt.Sprintf("https://mirror.openshift.com/pub/openshift-v4/clients/ocp/%s/release.txt", version)
-		resp, err := cli.Get(url)
-		if err != nil {
-			return semver.Version{}, err
-		}
-		defer resp.Body.Close()
-		output, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return semver.Version{}, err
-		}
-		var re = regexp.MustCompile(`(?m)Name:\s+([\d.]+)`)
-		match := re.FindStringSubmatch(string(output))
-		if len(match) > 1 {
-			version = match[1]
-		}
-	}
-
-	parsedVersion, err := semver.Parse(version)
-	if err != nil {
-		return semver.Version{}, err
-	}
-	return parsedVersion, nil
 }
 
 func init() {

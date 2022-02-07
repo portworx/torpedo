@@ -13,7 +13,6 @@ import (
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // DiagRequestConfig is a request object which provides all the configuration details
@@ -203,7 +202,7 @@ func (d *DefaultDriver) ValidateCreateGroupSnapshotUsingPxctl() error {
 	}
 }
 
-// ValidateGetByteUsedForVolume validates and returns byteUsed for given volume.
+//ValidateGetByteUsedForVolume validates and returns byteUsed for given volume.
 func (d *DefaultDriver) ValidateGetByteUsedForVolume(volumeName string, params map[string]string) (uint64, error) {
 	return 0, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -211,7 +210,7 @@ func (d *DefaultDriver) ValidateGetByteUsedForVolume(volumeName string, params m
 	}
 }
 
-// ValidatePureVolumesNoReplicaSets validates Pure volumes has no replicaset.
+//ValidatePureVolumesNoReplicaSets validates Pure volumes has no replicaset.
 func (d *DefaultDriver) ValidatePureVolumesNoReplicaSets(volumeName string, params map[string]string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -446,22 +445,6 @@ func (d *DefaultDriver) ValidateStoragePools() error {
 	}
 }
 
-// ExpandPool resizes a pool of a given ID
-func (d *DefaultDriver) ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error {
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "ExpandPool()",
-	}
-}
-
-// ListStoragePools lists all existing storage pools
-func (d *DefaultDriver) ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error) {
-	return nil, &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "ListStoragePools()",
-	}
-}
-
 // ValidateRebalanceJobs validates rebalance jobs
 func (d *DefaultDriver) ValidateRebalanceJobs() error {
 	return &errors.ErrNotSupported{
@@ -529,7 +512,7 @@ func (d *DefaultDriver) RestartDriver(n node.Node, triggerOpts *driver_api.Trigg
 	}
 }
 
-// SetClusterOpts sets cluster options
+//SetClusterOpts sets cluster options
 func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -537,7 +520,7 @@ func (d *DefaultDriver) SetClusterOpts(n node.Node, rtOpts map[string]string) er
 	}
 }
 
-// ToggleCallHome toggles Call-home
+//ToggleCallHome toggles Call-home
 func (d *DefaultDriver) ToggleCallHome(n node.Node, enabled bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -545,10 +528,59 @@ func (d *DefaultDriver) ToggleCallHome(n node.Node, enabled bool) error {
 	}
 }
 
-// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
-func (d *DefaultDriver) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
+// GetPxNode return api.Storage Node
+func (d *DefaultDriver) GetPxNode(n *node.Node, nManagers ...api.OpenStorageNodeClient) (*api.StorageNode, error) {
+	return &api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxNode()",
+	}
+}
+
+// Contains return
+func (d *DefaultDriver) Contains(nodes []*api.StorageNode, n *api.StorageNode) bool {
+	return false
+}
+
+// GetStoragelessNodes return storageless node list
+func (d *DefaultDriver) GetStoragelessNodes() ([]*api.StorageNode, error) {
+	return []*api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetStoragelessNodes()",
+	}
+}
+
+// UpdateNodeWithStorageInfo updates storage info in new node object
+func (d *DefaultDriver) UpdateNodeWithStorageInfo(node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "UpdateSharedv4FailoverStrategyUsingPxctl",
+		Operation: "UpdateNodeWithStorageInfo()",
 	}
+
+}
+
+// WaitForNodeIdToBePickedByAnotherNode wait for new node to pick up the drives.
+func (d *DefaultDriver) WaitForNodeIdToBePickedByAnotherNode(
+	n *api.StorageNode) (*api.StorageNode, error) {
+	return &api.StorageNode{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForNodeIdToBePickedByAnotherNode()",
+	}
+}
+
+// ValidateNodeAfterPickingUpNodeId validates the node.
+func (d *DefaultDriver) ValidateNodeAfterPickingUpNodeId(
+	n1 *api.StorageNode, n2 *api.StorageNode, sn []*api.StorageNode) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateNodeAfterPickingUpNodeId()",
+	}
+}
+
+// WaitForPxPodsToBeUp waits for px pods to be up
+func (d *DefaultDriver) WaitForPxPodsToBeUp(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForPxPodsToBeUp()",
+	}
+
 }

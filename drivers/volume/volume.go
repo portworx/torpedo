@@ -10,7 +10,6 @@ import (
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Volume is a generic struct encapsulating volumes in the cluster
@@ -216,23 +215,38 @@ type Driver interface {
 	// GetLicenseSummary returns the activated license SKU and Features
 	GetLicenseSummary() (LicenseSummary, error)
 
-	// SetClusterOpts sets cluster options
+	//SetClusterOpts sets cluster options
 	SetClusterOpts(n node.Node, rtOpts map[string]string) error
 
-	// ToggleCallHome toggles Call-home
+	//ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
-
-	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
-	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
 
 	// ValidateStorageCluster validates all the storage cluster components
 	ValidateStorageCluster(endpointURL, endpointVersion string) error
 
-	// ExpandPool resizes a pool of a given ID
-	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+	// GetPxNode return api.StorageNode
+	GetPxNode(*node.Node, ...api.OpenStorageNodeClient) (*api.StorageNode, error)
 
-	// ListStoragePools lists all existing storage pools
-	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
+	// GetStoragelessNodes() return list of storageless nodes
+	GetStoragelessNodes() ([]*api.StorageNode, error)
+
+	// RecyclePXHost Recycle a node and validate the storageless node picked all it drives
+	//RecyclePXHost(*node.Node) error
+
+	// Contains check if StorageNode list conatins a give node or not
+	Contains([]*api.StorageNode, *api.StorageNode) bool
+
+	// UpdateNodeWithStorageInfo update a new node object
+	UpdateNodeWithStorageInfo(node.Node) error
+
+	// WaitForNodeIdToBePickedByAnotherNode wait for another node to pick the down node nodeId
+	WaitForNodeIdToBePickedByAnotherNode(*api.StorageNode) (*api.StorageNode, error)
+
+	// ValidateNodeAfterPickingUpNodeId validates the new node pick the correct drives and pools
+	ValidateNodeAfterPickingUpNodeId(*api.StorageNode, *api.StorageNode, []*api.StorageNode) error
+
+	// WaitForPxPodsToBeUp waits for px pod to be up in given node
+	WaitForPxPodsToBeUp(node.Node) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
