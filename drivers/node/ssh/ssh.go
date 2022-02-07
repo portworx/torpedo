@@ -466,42 +466,41 @@ func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error)
 }
 
 func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
-	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
-
-	allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, execPodDefaultNamespace)
-	if err != nil {
-		logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
-		return "", err
-	}
 	var debugPod *v1.Pod
-	for _, pod := range allPodsForNode.Items {
-		if pod.Labels["name"] == execPodDaemonSetLabel && k8sCore.IsPodReady(pod) {
-			debugPod = &pod
-			break
-		}
-	}
-
-	if debugPod == nil {
-		return "", &node.ErrFailedToRunCommand{
-			Node:  n,
-			Cause: fmt.Sprintf("debug pod not found in node %v", n),
-		}
-	}
-
 	t := func() (interface{}, bool, error) {
+		if debugPod == nil {
+			logrus.Debugf("Finding the debug pod to run command on node %s", n.Name)
+			allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, execPodDefaultNamespace)
+			if err != nil {
+				logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
+				return nil, true, err
+			}
+			for _, pod := range allPodsForNode.Items {
+				if pod.Labels["name"] == execPodDaemonSetLabel && k8sCore.IsPodReady(pod) {
+					debugPod = &pod
+					break
+				}
+			}
+		}
+		if debugPod == nil {
+			return nil, true, &node.ErrFailedToRunCommand{
+				Node:  n,
+				Cause: fmt.Sprintf("debug pod not found in node %v", n),
+			}
+		}
+		cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
+		logrus.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
 		output, err := k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
-		if ignoreErr == false && err != nil {
+		if !ignoreErr && err != nil {
 			return nil, true, &node.ErrFailedToRunCommand{
 				Node: n,
 				Cause: fmt.Sprintf("failed to run command in pod. command: %v , err: %v, pod: %v",
 					cmds, err, debugPod),
 			}
 		}
-
 		return output, false, nil
 	}
 
-	logrus.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
 	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
 	if err != nil {
 		return "", err

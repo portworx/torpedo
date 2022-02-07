@@ -165,6 +165,10 @@ type Driver interface {
 	// WaitForDestroy waits for application to destroy.
 	WaitForDestroy(*Context, time.Duration) error
 
+	// SelectiveWaitForTermination waits for application pods to be terminated except on the nodes
+	// provided in the exclude list
+	SelectiveWaitForTermination(ctx *Context, timeout time.Duration, excludeList []node.Node) error
+
 	// DeleteTasks deletes all tasks of the application (not the application). DeleteTasksOptions is optional.
 	DeleteTasks(*Context, *DeleteTasksOptions) error
 
@@ -255,6 +259,9 @@ type Driver interface {
 
 	// GetAutopilotNamespace gets the Autopilot namespace
 	GetAutopilotNamespace() (string, error)
+
+	// GetIOBandwidth gets container start and end time
+	GetIOBandwidth(string, string) (int, error)
 
 	// CreateAutopilotRule creates the AutopilotRule object
 	CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error)

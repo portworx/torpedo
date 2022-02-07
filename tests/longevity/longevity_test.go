@@ -63,6 +63,7 @@ var _ = Describe("{Longevity}", func() {
 		CrashVolDriver:   TriggerCrashVolDriver,
 		HAIncrease:       TriggerHAIncrease,
 		HADecrease:       TriggerHADecrease,
+		VolumeClone:      TriggerVolumeClone,
 		VolumeResize:     TriggerVolumeResize,
 		EmailReporter:    TriggerEmailReporter,
 		AppTaskDown:      TriggerAppTaskDown,
@@ -71,6 +72,7 @@ var _ = Describe("{Longevity}", func() {
 		PoolResizeDisk:   TriggerPoolResizeDisk,
 		PoolAddDisk:      TriggerPoolAddDisk,
 		UpgradeStork:     TriggerUpgradeStork,
+		VolumesDelete:    TriggerVolumeDelete,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -304,6 +306,7 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 	triggerInterval[DeployApps] = map[int]time.Duration{}
 	triggerInterval[CoreChecker] = map[int]time.Duration{}
+	triggerInterval[VolumeClone] = map[int]time.Duration{}
 	triggerInterval[VolumeResize] = make(map[int]time.Duration)
 	triggerInterval[PoolResizeDisk] = make(map[int]time.Duration)
 	triggerInterval[PoolAddDisk] = make(map[int]time.Duration)
@@ -323,6 +326,7 @@ func populateIntervals() {
 	triggerInterval[BackupScaleMongo] = map[int]time.Duration{}
 	triggerInterval[CloudSnapShot] = make(map[int]time.Duration)
 	triggerInterval[UpgradeStork] = make(map[int]time.Duration)
+	triggerInterval[VolumesDelete] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -523,6 +527,17 @@ func populateIntervals() {
 	triggerInterval[HADecrease][2] = 24 * baseInterval
 	triggerInterval[HADecrease][1] = 27 * baseInterval
 
+	triggerInterval[VolumeClone][10] = 1 * baseInterval
+	triggerInterval[VolumeClone][9] = 3 * baseInterval
+	triggerInterval[VolumeClone][8] = 6 * baseInterval
+	triggerInterval[VolumeClone][7] = 9 * baseInterval
+	triggerInterval[VolumeClone][6] = 12 * baseInterval
+	triggerInterval[VolumeClone][5] = 15 * baseInterval
+	triggerInterval[VolumeClone][4] = 18 * baseInterval
+	triggerInterval[VolumeClone][3] = 21 * baseInterval
+	triggerInterval[VolumeClone][2] = 24 * baseInterval
+	triggerInterval[VolumeClone][1] = 27 * baseInterval
+
 	triggerInterval[VolumeResize][10] = 1 * baseInterval
 	triggerInterval[VolumeResize][9] = 3 * baseInterval
 	triggerInterval[VolumeResize][8] = 6 * baseInterval
@@ -618,6 +633,17 @@ func populateIntervals() {
 	triggerInterval[UpgradeStork][6] = 5 * baseInterval
 	triggerInterval[UpgradeStork][5] = 6 * baseInterval
 
+	triggerInterval[VolumesDelete][10] = 1 * baseInterval
+	triggerInterval[VolumesDelete][9] = 3 * baseInterval
+	triggerInterval[VolumesDelete][8] = 6 * baseInterval
+	triggerInterval[VolumesDelete][7] = 9 * baseInterval
+	triggerInterval[VolumesDelete][6] = 12 * baseInterval
+	triggerInterval[VolumesDelete][5] = 15 * baseInterval
+	triggerInterval[VolumesDelete][4] = 18 * baseInterval
+	triggerInterval[VolumesDelete][3] = 21 * baseInterval
+	triggerInterval[VolumesDelete][2] = 24 * baseInterval
+	triggerInterval[VolumesDelete][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -627,6 +653,7 @@ func populateIntervals() {
 	triggerInterval[HADecrease][0] = 0
 	triggerInterval[RestartVolDriver][0] = 0
 	triggerInterval[AppTaskDown][0] = 0
+	triggerInterval[VolumeClone][0] = 0
 	triggerInterval[VolumeResize][0] = 0
 	triggerInterval[PoolResizeDisk][0] = 0
 	triggerInterval[PoolAddDisk][0] = 0
@@ -646,6 +673,7 @@ func populateIntervals() {
 	triggerInterval[BackupScaleMongo][0] = 0
 	triggerInterval[CloudSnapShot][0] = 0
 	triggerInterval[UpgradeStork][0] = 0
+	triggerInterval[VolumesDelete][0] = 0
 
 }
 

@@ -32,6 +32,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/batch"
 	k8sCommon "github.com/portworx/sched-ops/k8s/common"
 	"github.com/portworx/sched-ops/k8s/core"
+	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/networking"
 	"github.com/portworx/sched-ops/k8s/rbac"
@@ -55,6 +56,8 @@ import (
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -507,6 +510,14 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 			return nil, err
 		}
 
+		if err := apiextensionsv1beta1.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
+
+		if err := apiextensionsv1.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
+
 		codecs := serializer.NewCodecFactory(schemeObj)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 		if err != nil {
@@ -586,6 +597,10 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*monitoringv1.ServiceMonitor); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*corev1.Namespace); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {
 		return specObj, nil
 	}
 
@@ -2236,6 +2251,89 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 	}
 
 	return nil
+}
+
+// SelectiveWaitForTermination waits for application pods to be terminated except on the nodes
+// provided in the exclude list
+func (k *K8s) SelectiveWaitForTermination(ctx *scheduler.Context, timeout time.Duration, excludeList []node.Node) error {
+	t := func() (interface{}, bool, error) {
+		podNames, err := filterPodsByNodes(ctx, excludeList)
+		if err != nil {
+			return nil, true, err
+		}
+		if len(podNames) > 0 {
+			return nil, true, fmt.Errorf("pods %s still present in the system", podNames)
+		}
+		return nil, false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, DefaultRetryInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
+// filterPodsByNodes returns a list of pod names started as part of the provided context
+// and not running on the nodes provided in the exclude list
+func filterPodsByNodes(ctx *scheduler.Context, excludeList []node.Node) ([]string, error) {
+	allPods := make(map[types.UID]corev1.Pod)
+	namespaces := make(map[string]string)
+	for _, specObj := range ctx.App.SpecList {
+		var pods []corev1.Pod
+		var err error
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			if pods, err = k8sApps.GetDeploymentPods(obj); err != nil && err != schederrors.ErrPodsNotFound {
+				return nil, &scheduler.ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get deployment: %v. Err: %v", obj.Name, err),
+				}
+			}
+			namespaces[obj.Namespace] = ""
+
+		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			if pods, err = k8sApps.GetStatefulSetPods(obj); err != nil && err != schederrors.ErrPodsNotFound {
+				return nil, &scheduler.ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get statefulset: %v. Err: %v", obj.Name, err),
+				}
+			}
+			namespaces[obj.Namespace] = ""
+
+		} else if obj, ok := specObj.(*corev1.Pod); ok {
+			pod, err := k8sCore.GetPodByUID(obj.UID, obj.Namespace)
+			if err != nil && err != schederrors.ErrPodsNotFound {
+				return nil, &scheduler.ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get pod: %v. Err: %v", obj.Name, err),
+				}
+			}
+			if pod != nil {
+				pods = []corev1.Pod{*pod}
+				namespaces[obj.Namespace] = ""
+			}
+		}
+		for _, pod := range pods {
+			allPods[pod.UID] = pod
+		}
+	}
+
+	// Compare the two pod maps. Create a list of pod names which are not running
+	// on the excluded nodes
+	var podList []string
+	for _, pod := range allPods {
+		excludePod := false
+		for _, excludedNode := range excludeList {
+			if pod.Spec.NodeName == excludedNode.Name {
+				excludePod = true
+				break
+			}
+		}
+		if !excludePod {
+			podInfo := pod.Namespace + "/" + pod.Name + " (" + pod.Spec.NodeName + ")"
+			podList = append(podList, podInfo)
+		}
+	}
+	return podList, nil
 }
 
 // DeleteTasks delete the task
@@ -4002,6 +4100,24 @@ func (k *K8s) createBatchObjects(
 
 		logrus.Infof("[%v] Created CronJob: %v", app.Key, cronjob.Name)
 		return cronjob, nil
+	} else if obj, ok := spec.(*batchv1.Job); ok {
+		obj.Namespace = ns.Name
+		job, err := k8sBatch.CreateJob(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if job, err = k8sBatch.GetJob(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Job: %v", app.Key, job.Name)
+				return job, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Job: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created CronJob: %v", app.Key, job.Name)
+		return job, nil
 	}
 	return nil, nil
 }
@@ -4120,6 +4236,45 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 		}
 	}
 	return nil
+}
+
+// GetIOBandwidth takes in the pod name and namespace and returns the IOPs speed
+func (k *K8s) GetIOBandwidth(podName string, namespace string) (int, error) {
+	logrus.Infof("Getting the IO Speed in pod %s", podName)
+	pod, err := k8sCore.GetPodByName(podName, namespace)
+	if err != nil {
+		return 0, fmt.Errorf("error in getting FIO PODS")
+	}
+	logOptions := corev1.PodLogOptions{
+		// Getting 250 lines from the pod logs to get the io_bytes
+		TailLines: getInt64Address(250),
+	}
+	log, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &logOptions)
+	if err != nil {
+		return 0, err
+	}
+	outputLines := strings.Split(log, "\n")
+	for _, line := range outputLines {
+		if strings.Contains(line, "iops") {
+			re := regexp.MustCompile(`[0-9]+`)
+			speedBytes := string(re.FindAll([]byte(line), -1)[0])
+			speed, err := strconv.Atoi(speedBytes)
+			if err != nil {
+				return 0, fmt.Errorf("Error in getting the speed")
+			}
+			// We need to consider non Zero number from the speeds returned,
+			// since it will return read speed, trim speed and we are performing only write operation
+			if speed == 0 {
+				continue
+			}
+			return speed, nil
+		}
+	}
+	return 0, fmt.Errorf("pod %s does not have bandwidth in logs", podName)
+}
+
+func getInt64Address(x int64) *int64 {
+	return &x
 }
 
 func validateEvents(objName string, events map[string]int32, count int32) error {

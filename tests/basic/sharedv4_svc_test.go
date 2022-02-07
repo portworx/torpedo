@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -22,9 +23,16 @@ import (
 )
 
 const (
-	defaultCommandRetry   = 5 * time.Second
-	defaultCommandTimeout = 1 * time.Minute
-	exportPathPrefix      = "/var/lib/osd/pxns/"
+	defaultCommandRetry          = 5 * time.Second
+	defaultCommandTimeout        = 1 * time.Minute
+	defaultWaitRebootTimeout     = 5 * time.Minute
+	defaultWaitRebootRetry       = 10 * time.Second
+	defaultTestConnectionTimeout = 15 * time.Minute
+	exportPathPrefix             = "/var/lib/osd/pxns/"
+
+	// failover methods
+	reboot           = "reboot"
+	volDriverRestart = "volDriverRestart"
 )
 
 var _ = Describe("{NFSServerFailover}", func() {
@@ -177,7 +185,7 @@ var _ = Describe("{NFSServerFailover}", func() {
 	})
 })
 
-// Test below uses test-sharedv4 app https://github.com/portworx/test-sharedv4 .
+// Below tests uses test-sharedv4 app https://github.com/portworx/test-sharedv4 .
 //
 // The test-sharedv4 app has the following properties:
 // - uses node anti-affinity to ensure that each pod is on a different node
@@ -197,7 +205,7 @@ type appCounter struct {
 	active bool
 }
 
-// Bring PX down on the node where the volume is attached. Verify that there is no I/O disruption.
+// Induce failovers and verify that there is no I/O disruption.
 var _ = Describe("{Shared4SvcFailoverIO}", func() {
 	var testrailID = 54374
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54374
@@ -209,7 +217,7 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
+	It("has to verify no I/O disruption for test-sv4-svc apps after PX restart or reboot on NFS server node", func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("failover-io-%d", i))...)
@@ -259,8 +267,8 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 			}
 		})
 
-		Step("for each context, restart volume driver on NFS server node and verify I/O", func() {
-			for _, ctx := range testSv4Contexts {
+		for _, ctx := range testSv4Contexts {
+			Step(fmt.Sprintf("induce multiple sharedv4 service failovers and verify I/O for app %s", ctx.App.Key), func() {
 				vols, err := Inst().S.GetVolumes(ctx)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -268,67 +276,245 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// verify failover and failback by repeating the steps below
-				for i := 0; i < 2; i++ {
+				numFailovers := 4
+				numFailoversStr := os.Getenv("SHAREDV4_SVC_NUM_FAILOVERS")
+				if numFailoversStr != "" {
+					numFailovers, err = strconv.Atoi(numFailoversStr)
+					Expect(err).ToNot(HaveOccurred())
+				}
+
+				for i := 0; i < numFailovers; i++ {
 					var countersBefore, countersAfter map[string]appCounter
 					var attachedNodeBefore, attachedNodeAfter *node.Node
+					var failoverMethod string
 
-					// get the attached node before the failover
-					attachedNodeBefore, err = Inst().V.GetNodeForVolume(vols[0],
-						defaultCommandTimeout, defaultCommandRetry)
-					Expect(err).NotTo(HaveOccurred())
+					// The first 1/2 failovers are done by stopping PX on the NFS server node.
+					// The next 1/2 failovers are done by rebooting the node.
+					if i < numFailovers/2 {
+						failoverMethod = volDriverRestart
+					} else {
+						failoverMethod = reboot
+					}
+					failoverLog := fmt.Sprintf("the failover #%d by %s", i, failoverMethod)
 
-					Step(
-						fmt.Sprintf("get counter values from node %v for app %s's volume before failover",
-							attachedNodeBefore.Name, ctx.App.Key),
+					Step(fmt.Sprintf("get the attached node for app %s's volume %s before %s",
+						ctx.App.Key, vols[0].ID, failoverLog),
+						func() {
+							attachedNodeBefore, err = Inst().V.GetNodeForVolume(vols[0],
+								defaultCommandTimeout, defaultCommandRetry)
+							Expect(err).NotTo(HaveOccurred())
+							logrus.Infof("volume %v (%v) is attached to node %v before %s",
+								vols[0].ID, apiVol.Id, attachedNodeBefore.Name, failoverLog)
+						})
+
+					Step(fmt.Sprintf("get counters from node %v for app %s's volume before %s",
+						attachedNodeBefore.Name, ctx.App.Key, failoverLog),
 						func() {
 							countersBefore = getAppCounters(apiVol, attachedNodeBefore,
 								3*time.Duration(numPods)*time.Second)
 						})
 
-					Step(
-						fmt.Sprintf("failover #%d for app %s by stopping the volume driver on node %s",
+					if failoverMethod == volDriverRestart {
+						Step(fmt.Sprintf("failover #%d by restarting the volume driver %s on node where app %s's "+
+							"volume is attached: %s", i, Inst().V.String(), ctx.App.Key, attachedNodeBefore.Name),
+							func() {
+								restartVolumeDriverOnNode(attachedNodeBefore)
+							})
+					} else if failoverMethod == reboot {
+						Step(fmt.Sprintf("failover #%d by rebooting the node where app %s's volume is attached: %s",
 							i, ctx.App.Key, attachedNodeBefore.Name),
-						func() {
-							StopVolDriverAndWait([]node.Node{*attachedNodeBefore})
-						})
+							func() {
+								rebootNodeAndWaitForReady(attachedNodeBefore)
+							})
+					} else {
+						Fail(fmt.Sprintf("unknown failover method %v", failoverMethod))
+					}
 
-					Step(
-						fmt.Sprintf("start volume driver %s on node where app %s's volume was attached: %s",
-							Inst().V.String(), ctx.App.Key, attachedNodeBefore.Name),
-						func() {
-							StartVolDriverAndWait([]node.Node{*attachedNodeBefore})
-						})
-
-					Step("Giving few seconds for volume driver and the app pods to stabilize",
-						func() {
-							time.Sleep(60 * time.Second)
-						})
-
-					Step(fmt.Sprintf("validate app %s", ctx.App.Key),
+					Step(fmt.Sprintf("validate app %s after %s", ctx.App.Key, failoverLog),
 						func() {
 							ValidateContext(ctx)
 						})
 
-					Step(
-						fmt.Sprintf("get counter values for app %s's volume after failover #%d", ctx.App.Key, 0),
+					Step(fmt.Sprintf("get counter values for app %s's volume after %s", ctx.App.Key, failoverLog),
 						func() {
 							attachedNodeAfter, err = Inst().V.GetNodeForVolume(vols[0],
 								defaultCommandTimeout, defaultCommandRetry)
 							Expect(err).NotTo(HaveOccurred())
 							Expect(attachedNodeAfter.Name).NotTo(Equal(attachedNodeBefore.Name))
+							logrus.Infof("volume %v (%v) is attached to node %v after %s",
+								vols[0].ID, apiVol.Id, attachedNodeAfter.Name, failoverLog)
 							countersAfter = getAppCounters(apiVol, attachedNodeAfter,
 								3*time.Duration(numPods)*time.Second)
 						})
 
-					Step(fmt.Sprintf("validate no I/O disruption for app %s after failover #%d", ctx.App.Key, i),
+					Step(fmt.Sprintf("validate no I/O disruption for app %s after %s", ctx.App.Key, failoverLog),
 						func() {
-							// 2 pods (1 on the old NFS server and 1 on the new NFS server) should get restarted,
-							// others should not be interrupted
-							validateAppCounters(ctx, countersBefore, countersAfter, numPods, 2)
+							// Usually 2 pods, one on the old NFS server and one on the new NFS server, should be deleted.
+							numDeletions := []int{2}
+							if failoverMethod == reboot {
+								// 1 or 2 pods may get deleted depending on what kubelet does on the rebooted node.
+								// It could set up the mount for the same pod or it could create a new pod.
+								numDeletions = append(numDeletions, 1)
+							}
+							validateAppCounters(ctx, countersBefore, countersAfter, numPods, numDeletions)
 							validateAppLogs(ctx, numPods)
 							validateExports(apiVol, attachedNodeBefore, attachedNodeAfter)
 						})
 				}
+			})
+		}
+
+		Step("destroy apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, map[string]bool{scheduler.OptionsWaitForResourceLeakCleanup: true})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Bring PX down on the node where the volume is attached. Verify that pods on client nodes unmount the volume
+// and teardown successfully
+var _ = Describe("{Sharedv4ClientTeardownWhenServerOffline}", func() {
+	var testrailID = 54780
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54780
+	var runID, numPods int
+	var testSv4Contexts, contexts []*scheduler.Context
+
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to schedule apps, stop volume driver on node where volume is attached, teardown the application", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("clientteardown-%d", i))...)
+		}
+		testSv4Contexts = getTestSv4Contexts(contexts)
+
+		Step("scale the sharedv4 apps so that one pod runs on each worker node", func() {
+			if len(testSv4Contexts) == 0 {
+				Skip("No sharedv4 apps were found")
+			}
+			numPods = len(node.GetWorkerNodes())
+			for _, ctx := range testSv4Contexts {
+				Step(fmt.Sprintf("scale up app %s to %d", ctx.App.Key, numPods), func() {
+					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					for name := range applicationScaleUpMap {
+						applicationScaleUpMap[name] = int32(numPods)
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			}
+
+			ValidateApplications(testSv4Contexts)
+		})
+
+		Step("change the sharedv4 failover strategy to normal", func() {
+			for _, ctx := range testSv4Contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred(), "failed in getting volumes: %v", err)
+
+				err = Inst().V.UpdateSharedv4FailoverStrategyUsingPxctl(vols[0].ID, api.Sharedv4FailoverStrategy_NORMAL)
+				Expect(err).NotTo(HaveOccurred(), "failed in updating sharedv4 strategy for volume %v: %v", vols[0].ID, err)
+
+				apiVol, err := Inst().V.InspectVolume(vols[0].ID)
+				Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
+				Expect(apiVol.Spec.Sharedv4Spec.FailoverStrategy == api.Sharedv4FailoverStrategy_NORMAL).To(BeTrue(), "unexpected failover strategy")
+			}
+		})
+
+		var attachedNode *node.Node
+		Step("stop the volume driver on attached node and verify application teardown succeeds", func() {
+			for _, ctx := range testSv4Contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				attachedNode, err = Inst().V.GetNodeForVolume(
+					vols[0],
+					defaultCommandTimeout,
+					defaultCommandRetry,
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				Step(
+					fmt.Sprintf("stopping volume driver on node %s", attachedNode.Name),
+					func() {
+						StopVolDriverAndWait([]node.Node{*attachedNode})
+					},
+				)
+
+				Step(fmt.Sprintf("scale down app %s to 0", ctx.App.Key), func() {
+					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					for name := range applicationScaleUpMap {
+						applicationScaleUpMap[name] = int32(0)
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				Step(
+					fmt.Sprintf("ensure client pods have terminated"),
+					func() {
+						err = Inst().S.SelectiveWaitForTermination(
+							ctx,
+							Inst().DestroyAppTimeout,
+							[]node.Node{*attachedNode},
+						)
+						Expect(err).NotTo(HaveOccurred())
+					},
+				)
+				Step(
+					fmt.Sprintf("ensure volume is detached"),
+					func() {
+						vols, err := Inst().S.GetVolumes(ctx)
+						Expect(err).NotTo(HaveOccurred(), "failed in getting volumes: %v", err)
+
+						apiVol, err := Inst().V.InspectVolume(vols[0].ID)
+						Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
+						Expect(len(apiVol.AttachedOn) == 0).To(BeTrue(), "expected volume %v to be detached", vols[0].Name)
+					},
+				)
+				Step(
+					fmt.Sprintf("starting volume driver on node %s", attachedNode.Name),
+					func() {
+						StartVolDriverAndWait([]node.Node{*attachedNode})
+					},
+				)
+
+				numPods = len(node.GetWorkerNodes())
+				Step(fmt.Sprintf("scale up app %s to %d", ctx.App.Key, numPods), func() {
+					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					for name := range applicationScaleUpMap {
+						applicationScaleUpMap[name] = int32(numPods)
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				ValidateApplications([]*scheduler.Context{ctx})
+
+			}
+		})
+
+		Step("change the sharedv4 failover strategy back to aggressive", func() {
+			for _, ctx := range testSv4Contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred(), "failed in getting volumes: %v", err)
+
+				err = Inst().V.UpdateSharedv4FailoverStrategyUsingPxctl(vols[0].ID, api.Sharedv4FailoverStrategy_AGGRESSIVE)
+				Expect(err).NotTo(HaveOccurred(), "failed in updating sharedv4 strategy for volume %v: %v", vols[0].ID, err)
+
+				apiVol, err := Inst().V.InspectVolume(vols[0].ID)
+				Expect(err).NotTo(HaveOccurred(), "failed in inspect volume: %v", err)
+				Expect(apiVol.Spec.Sharedv4Spec.FailoverStrategy == api.Sharedv4FailoverStrategy_AGGRESSIVE).To(BeTrue(), "unexpected failover strategy")
 			}
 		})
 
@@ -337,6 +523,224 @@ var _ = Describe("{Shared4SvcFailoverIO}", func() {
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
 				TearDownContext(ctx, opts)
+			}
+		})
+
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Bring PX down on the client nodes one by one. Verify that there is no I/O disruption.
+var _ = Describe("{Shared4SvcClientRestart}", func() {
+	var testrailID = 54383
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54383
+	var runID int
+	var contexts, testSv4Contexts []*scheduler.Context
+	var numPods int
+	var workers []node.Node
+
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to verify no I/O disruption for test-sv4-svc apps after PX restart on NFS client node", func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("client-restart-%d", i))...)
+		}
+		testSv4Contexts = getTestSv4Contexts(contexts)
+		if len(testSv4Contexts) == 0 {
+			Skip("No test-sv4-svc apps were found")
+		}
+		workers = node.GetWorkerNodes()
+		numPods = len(workers)
+
+		Step("scale the test-sv4-svc apps so that one pod runs on each worker node", func() {
+			scaleApps(testSv4Contexts, numPods)
+		})
+
+		ValidateApplications(contexts)
+
+		for _, ctx := range testSv4Contexts {
+			Step(fmt.Sprintf("restart client nodes one by one and verify I/O for app %s", ctx.App.Key), func() {
+				var attachedNode *node.Node
+
+				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				apiVol, err := Inst().V.InspectVolume(vols[0].ID)
+				Expect(err).NotTo(HaveOccurred())
+
+				attachedNode, err = Inst().V.GetNodeForVolume(vols[0], defaultCommandTimeout, defaultCommandRetry)
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("volume %v (%v) is attached to node %v", vols[0].ID, apiVol.Id, attachedNode.Name)
+
+				// restart PX on the client nodes one at a time
+				for _, worker := range workers {
+					var countersBefore, countersAfter map[string]appCounter
+
+					// we don't expect a failover
+					validateAttachedNode(vols[0], attachedNode)
+
+					if worker.Name == attachedNode.Name {
+						continue
+					}
+					restartLog := fmt.Sprintf(
+						"restarting the volume driver on node %s where app %s's client pod is running",
+						worker.Name, ctx.App.Key)
+
+					Step(fmt.Sprintf("get counters from node %s before %s", attachedNode.Name, restartLog),
+						func() {
+							countersBefore = getAppCounters(apiVol, attachedNode, 3*time.Duration(numPods)*time.Second)
+						})
+
+					Step(restartLog,
+						func() {
+							restartVolumeDriverOnNode(&worker)
+						})
+
+					Step(fmt.Sprintf("validate app after %s", restartLog),
+						func() {
+							ValidateContext(ctx)
+							validateAttachedNode(vols[0], attachedNode)
+						})
+
+					Step(fmt.Sprintf("get counters from node %s after %s", attachedNode.Name, restartLog),
+						func() {
+							countersAfter = getAppCounters(apiVol, attachedNode, 3*time.Duration(numPods)*time.Second)
+						})
+
+					Step(fmt.Sprintf("validate no I/O disruption after %s", restartLog),
+						func() {
+							validateAppCounters(ctx, countersBefore, countersAfter, numPods, nil /* no pod deletions */)
+							validateAppLogs(ctx, numPods)
+						})
+				}
+			})
+		}
+
+		Step("destroy apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, map[string]bool{scheduler.OptionsWaitForResourceLeakCleanup: true})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Scale app down and verify that the server removed the export for client node. Then,
+// scale the app up again and verify that the server added the export back.
+var _ = Describe("{Shared4SvcUnexportExport}", func() {
+	var testrailID = 54776
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54776
+	var runID int
+	var contexts, testSv4Contexts []*scheduler.Context
+	var workers []node.Node
+
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("has to verify that the server unexports and re-exports volume to the client node "+
+		"after pod goes away and comes back", func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("client-restart-%d", i))...)
+		}
+		testSv4Contexts = getTestSv4Contexts(contexts)
+		if len(testSv4Contexts) == 0 {
+			Skip("No test-sv4-svc apps were found")
+		}
+		workers = node.GetWorkerNodes()
+
+		Step("scale the test-sv4-svc apps so that one pod runs on each worker node", func() {
+			scaleApps(testSv4Contexts, len(workers))
+		})
+		ValidateApplications(contexts)
+
+		for _, ctx := range testSv4Contexts {
+			Step(fmt.Sprintf("scale the deployment down and then up for app %s", ctx.App.Key), func() {
+				var attachedNode *node.Node
+				var nodeWithNoPod *node.Node
+
+				vols, err := Inst().S.GetVolumes(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				apiVol, err := Inst().V.InspectVolume(vols[0].ID)
+				Expect(err).NotTo(HaveOccurred())
+
+				attachedNode, err = Inst().V.GetNodeForVolume(vols[0], defaultCommandTimeout, defaultCommandRetry)
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("volume %v (%v) is attached to node %v", vols[0].ID, apiVol.Id, attachedNode.Name)
+
+				exportsBeforeScaleDown := getExportsOnNode(apiVol, attachedNode)
+
+				// Scale down the app by 1 and check if the pod on NFS client node got removed.
+				// If not, scale down by 1 more. It should not take more than 2 attempts since
+				// there is no more than 1 pod running on each node.
+			Outer:
+				for i := 1; i < 3; i++ {
+					scaleApp(ctx, len(workers)-i)
+					ValidateContext(ctx)
+
+					pods, err := core.Instance().GetPodsUsingPV(vols[0].ID)
+					Expect(err).NotTo(HaveOccurred())
+
+					podsByWorker := map[string]corev1.Pod{}
+					for _, pod := range pods {
+						podsByWorker[pod.Spec.NodeName] = pod
+					}
+					for _, worker := range workers {
+						if _, ok := podsByWorker[worker.Name]; !ok && worker.Name != attachedNode.Name {
+							nodeWithNoPod = &worker
+							break Outer
+						}
+					}
+				}
+				Expect(nodeWithNoPod).NotTo(BeNil(), "did not find NFS client node whose pod was removed")
+
+				// IPs that were exported before scaling down the app that we expect to remain exported
+				var otherClients []string
+				for _, export := range exportsBeforeScaleDown {
+					if export != nodeWithNoPod.DataIp {
+						otherClients = append(otherClients, export)
+					}
+				}
+				Expect(otherClients).ToNot(BeEmpty())
+
+				// We don't expect a failover
+				validateAttachedNode(vols[0], attachedNode)
+				exportsAfterScaleDown := getExportsOnNode(apiVol, attachedNode)
+
+				Expect(exportsBeforeScaleDown).To(ContainElement(nodeWithNoPod.DataIp),
+					"client IP not found in the exports before scaling down the app")
+
+				Expect(exportsAfterScaleDown).ToNot(ContainElement(nodeWithNoPod.DataIp),
+					"client IP still present in the exports after scaling down the app")
+
+				Expect(exportsAfterScaleDown).To(ContainElements(otherClients),
+					"different client IP unexpectedly disappeared from the exports after scaling down the app")
+
+				// scale the app up again to have one pod on each worker node
+				scaleApp(ctx, len(workers))
+				ValidateContext(ctx)
+
+				// We don't expect a failover
+				validateAttachedNode(vols[0], attachedNode)
+				exportsAfterScaleUp := getExportsOnNode(apiVol, attachedNode)
+				Expect(exportsAfterScaleUp).Should(ContainElement(nodeWithNoPod.DataIp),
+					"client IP did not re-appear in the exports after scaling up the app")
+			})
+		}
+
+		Step("destroy apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, map[string]bool{scheduler.OptionsWaitForResourceLeakCleanup: true})
 			}
 		})
 	})
@@ -377,14 +781,19 @@ func getAppCounters(vol *api.Volume, attachedNode *node.Node, sleepInterval time
 func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string]int {
 	counterByPodName := map[string]int{}
 	// We find all the files in the root dir where the pods are writing their counters.
-	// Exclude the common file, tmp files. Use grep '' to get the lines in "fileName:counter" format.
 	// Example:
-	// # find /var/lib/osd/pxns/283170809327294682 -maxdepth 1 -type f | grep -v -e common -e tmp | xargs grep ''
-	// /var/lib/osd/pxns/283170809327294682/sv4test-88d78b767-n5gkc:478941
-	// /var/lib/osd/pxns/283170809327294682/sv4test-88d78b767-5bgxn:5437
-	// /var/lib/osd/pxns/283170809327294682/sv4test-88d78b767-48br7:521419
+	// # find /var/lib/osd/pxns/1088228603475411556 -maxdepth 1 -type f -exec tail -1 {} \; -exec echo -n ':' \; -print
+	// 1500:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-vmdn5
+	// 2458:/var/lib/osd/pxns/1088228603475411556/common
+	// 1404:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-m9kzc
+	// 1436:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-g79kh
+	// 71:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-mwxn2
+	// 1395:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-4ck8x
+	// 77:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-d6598
+	// 91:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-68nwv
+	// 1406:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-h6hgx
 	//
-	cmd := fmt.Sprintf("find %s%s -maxdepth 1 -type f | grep -v -e common -e tmp | xargs grep ''",
+	cmd := fmt.Sprintf("find %s%s -maxdepth 1 -type f -exec tail -1 {} \\; -exec echo -n ':' \\; -print",
 		exportPathPrefix, vol.Id)
 	output, err := runCmd(cmd, *attachedNode)
 	Expect(err).NotTo(HaveOccurred())
@@ -395,10 +804,14 @@ func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string
 		parts := strings.Split(line, ":")
 		Expect(len(parts)).To(Equal(2))
 
-		val, err := strconv.Atoi(parts[1])
+		podName := path.Base(parts[1])
+		if podName == "common" {
+			// ignore the common file that all pods write to
+			continue
+		}
+		val, err := strconv.Atoi(parts[0])
 		Expect(err).NotTo(HaveOccurred())
 
-		podName := path.Base(parts[0])
 		counterByPodName[podName] = val
 	}
 	return counterByPodName
@@ -409,12 +822,16 @@ func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string
 // - the specified number of pods should have stopped incrementing their counters and the same number of
 //   new pods should have started incrementing the counters
 func validateAppCounters(ctx *scheduler.Context, countersBefore, countersAfter map[string]appCounter,
-	numPods, expectedPodRestarts int) {
+	numPods int, numDeletions []int) {
 
 	var survivingPods []string
 	var terminatedPods []string
 	var newPods []string
 
+	if numDeletions == nil {
+		// no pod deletions expected
+		numDeletions = []int{0}
+	}
 	for podName, counterBefore := range countersBefore {
 		// pod was not active even before the failover. This can happen when there are multiple failovers.
 		if !counterBefore.active {
@@ -438,10 +855,18 @@ func validateAppCounters(ctx *scheduler.Context, countersBefore, countersAfter m
 			newPods = append(newPods, podName)
 		}
 	}
-	// pods on old and new NFS server should have been terminated and new ones should have replaced them
-	Expect(len(terminatedPods)).To(Equal(expectedPodRestarts))
-	Expect(len(newPods)).To(Equal(expectedPodRestarts))
-	Expect(len(survivingPods) + len(newPods)).To(Equal(numPods))
+	Expect(len(terminatedPods)).To(BeElementOf(numDeletions),
+		"len of actual terminated pods %v was not one of %v: countersBefore=%v, countersAfter=%v",
+		terminatedPods, numDeletions, countersBefore, countersAfter)
+
+	Expect(len(newPods)).To(Equal(len(terminatedPods)),
+		"len of actual new pods %v did not match len of %v: countersBefore=%v, countersAfter=%v",
+		newPods, terminatedPods, countersBefore, countersAfter)
+
+	currentPods := len(survivingPods) + len(newPods)
+	Expect(currentPods).To(Equal(numPods),
+		"count of current pods %d did not match %d: countersBefore=%v, countersAfter=%v",
+		currentPods, numPods, countersBefore, countersAfter)
 }
 
 // There should not be any errors in the pod logs.
@@ -492,6 +917,74 @@ func getExportsOnNode(vol *api.Volume, node *node.Node) []string {
 		}
 	}
 	return nil
+}
+
+func restartVolumeDriverOnNode(nodeObj *node.Node) {
+	logrus.Infof("Stopping volume driver on node %s", nodeObj.Name)
+	StopVolDriverAndWait([]node.Node{*nodeObj})
+
+	logrus.Infof("Sleep to allow the failover before restarting the volume driver on node %s", nodeObj.Name)
+	time.Sleep(30 * time.Second)
+
+	logrus.Infof("Starting volume driver on node %s", nodeObj.Name)
+	StartVolDriverAndWait([]node.Node{*nodeObj})
+
+	logrus.Infof("Giving volume driver and the app pods some time to settle down on node %s", nodeObj.Name)
+	time.Sleep(60 * time.Second)
+}
+
+func rebootNodeAndWaitForReady(nodeObj *node.Node) {
+	logrus.Infof("Rebooting node %s", nodeObj.Name)
+	err := Inst().N.RebootNode(*nodeObj, node.RebootNodeOpts{
+		Force: true,
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         defaultCommandTimeout,
+			TimeBeforeRetry: defaultCommandRetry,
+		},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	logrus.Infof("Testing connection to node %s", nodeObj.Name)
+	err = Inst().N.TestConnection(*nodeObj, node.ConnectionOpts{
+		Timeout:         defaultTestConnectionTimeout,
+		TimeBeforeRetry: defaultWaitRebootRetry,
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	logrus.Infof("Waiting for node %s to be ready", nodeObj.Name)
+	err = Inst().S.IsNodeReady(*nodeObj)
+	Expect(err).NotTo(HaveOccurred())
+
+	logrus.Infof("Waiting for driver to be up on node %s", nodeObj.Name)
+	err = Inst().V.WaitDriverUpOnNode(*nodeObj, Inst().DriverStartTimeout)
+	Expect(err).NotTo(HaveOccurred())
+
+	logrus.Infof("Successfully rebooted the node %s", nodeObj.Name)
+}
+
+func scaleApps(contexts []*scheduler.Context, numPods int) {
+	for _, ctx := range contexts {
+		scaleApp(ctx, numPods)
+	}
+}
+
+func scaleApp(ctx *scheduler.Context, numPods int) {
+	logrus.Infof("scaling app %s to %d", ctx.App.Key, numPods)
+	applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+	Expect(err).NotTo(HaveOccurred())
+	for name := range applicationScaleUpMap {
+		applicationScaleUpMap[name] = int32(numPods)
+	}
+	err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+func validateAttachedNode(vol *volume.Volume, attachedNode *node.Node) {
+	err := Inst().V.RefreshDriverEndpoints()
+	Expect(err).NotTo(HaveOccurred())
+	attachedNodeNow, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(attachedNodeNow.Name).Should(Equal(attachedNode.Name), "unexpected failover")
 }
 
 func runCmd(cmd string, n node.Node) (string, error) {

@@ -10,6 +10,7 @@ import (
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Volume is a generic struct encapsulating volumes in the cluster
@@ -53,6 +54,13 @@ type Driver interface {
 	// String returns the string name of this driver.
 	String() string
 
+	// CloneVolume creates a clone of the volume whose volumeName is passed as arg.
+	// returns volume_id of the cloned volume and error if there is any
+	CloneVolume(volumeID string) (string, error)
+
+	// Delete the volume of the Volume ID provided
+	DeleteVolume(volumeID string) error
+
 	// InspectVolume inspects the volume with the given name
 	InspectVolume(name string) (*api.Volume, error)
 
@@ -90,6 +98,9 @@ type Driver interface {
 
 	// ValidateUpdateVolume validates if volume changes has been applied
 	ValidateUpdateVolume(vol *Volume, params map[string]string) error
+
+	// SetIoThrottle validates if volume changes has been applied
+	SetIoBandwidth(vol *Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error
 
 	// ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 	ValidateDeleteVolume(vol *Volume) error
@@ -205,11 +216,23 @@ type Driver interface {
 	// GetLicenseSummary returns the activated license SKU and Features
 	GetLicenseSummary() (LicenseSummary, error)
 
-	//SetClusterOpts sets cluster options
+	// SetClusterOpts sets cluster options
 	SetClusterOpts(n node.Node, rtOpts map[string]string) error
 
-	//ToggleCallHome toggles Call-home
+	// ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
+
+	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
+	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
+
+	// ValidateStorageCluster validates all the storage cluster components
+	ValidateStorageCluster(endpointURL, endpointVersion string) error
+
+	// ExpandPool resizes a pool of a given ID
+	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error
+
+	// ListStoragePools lists all existing storage pools
+	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

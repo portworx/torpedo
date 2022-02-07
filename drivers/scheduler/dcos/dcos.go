@@ -375,6 +375,15 @@ func (d *dcos) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) err
 	return nil
 }
 
+// SelectiveWaitForTermination waits for application pods to be terminated except on the nodes
+// provided in the exclude list
+func (d *dcos) SelectiveWaitForTermination(ctx *scheduler.Context, timeout time.Duration, excludeList []node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SelectiveWaitForTermination",
+	}
+}
+
 func (d *dcos) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOptions) error {
 	if opts != nil {
 		logrus.Warnf("DCOS driver doesn't yet support delete task options")
@@ -697,6 +706,15 @@ func (d *dcos) GetAutopilotNamespace() (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetAutopilotNamespace()",
+	}
+}
+
+// GetIOBandwidth returns the IO bandwidth for the given pod name and namespace
+func (d *dcos) GetIOBandwidth(string, string) (int, error) {
+	// TODO implement this method
+	return 0, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetIOBandwidth()",
 	}
 }
 
