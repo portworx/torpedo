@@ -147,7 +147,7 @@ var _ = Describe("{UpgradeVolumeDriverSharedV4}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("preupgradevolumedriversharedv4-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("b4upgradevolumedriversvc4-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
@@ -161,7 +161,7 @@ var _ = Describe("{UpgradeVolumeDriverSharedV4}", func() {
 
 		Step("re-install and validate all apps after upgrade", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriversharedv4-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriversvc4-%d", i))...)
 			}
 
 			ValidateApplications(contexts)
