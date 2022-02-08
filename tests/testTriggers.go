@@ -67,6 +67,9 @@ var RunningTriggers map[string]time.Duration
 // ChaosMap stores mapping between test trigger and its chaos level.
 var ChaosMap map[string]int
 
+// coresMap stores mapping between node name and cores generated.
+var coresMap map[string]string
+
 // SendGridEmailAPIKey holds API key used to interact
 // with SendGrid Email APIs
 var SendGridEmailAPIKey string
@@ -117,6 +120,7 @@ type nodeInfo struct {
 	NodeName  string
 	PxVersion string
 	Status    string
+	Cores     string
 }
 
 type triggerInfo struct {
@@ -228,6 +232,8 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	coresMap = nil
+	coresMap = make(map[string]string)
 
 	context("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
@@ -245,7 +251,11 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				UpdateOutcome(event, err)
 
 				if len(file) != 0 {
-					UpdateOutcome(event, fmt.Errorf("[%s] found on node [%s]", file, n.Name))
+					logrus.Warnf("[%s] found on node [%s]", file, n.Name)
+					coresMap[n.Name] = "1"
+				} else {
+					coresMap[n.Name] = ""
+
 				}
 			}
 		})
@@ -1397,7 +1407,7 @@ func TriggerEmailReporter(contexts *[]*scheduler.Context, recordChan *chan *Even
 		}
 
 		emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp, NodeName: n.Name,
-			PxVersion: n.NodeLabels["PX Version"], Status: pxStatus})
+			PxVersion: n.NodeLabels["PX Version"], Status: pxStatus, Cores: coresMap[n.Name]})
 	}
 
 	for k, v := range RunningTriggers {
@@ -3089,10 +3099,20 @@ tbody tr:last-child {
    <td align="center"><h4>PX Node Name </h4></td>
    <td align="center"><h4>PX Version </h4></td>
    <td align="center"><h4>PX Status </h4></td>
+   <td align="center"><h4>Cores </h4></td>
  </tr>
-{{range .NodeInfo}}<tr>
-{{range rangeStruct .}} <td>{{.}}</td>
-{{end}}</tr>
+{{range .NodeInfo}}
+<tr>
+<td>{{ .MgmtIP }}</td>
+<td>{{ .NodeName }}</td>
+<td>{{ .PxVersion }}</td>
+<td>{{ .Status }}</td>
+{{ if .Cores }}
+<td bgcolor="red">1</td>
+{{ else }}
+<td>0</td>
+{{ end }}
+</tr>
 {{end}}
 </table>
 <hr/>
