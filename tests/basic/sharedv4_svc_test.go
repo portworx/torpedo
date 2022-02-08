@@ -240,7 +240,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 	var contexts, testSv4Contexts []*scheduler.Context
 	var workers []node.Node
 	var numPods int
-	var namespace_prefix string
+	var namespacePrefix string
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -248,7 +248,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 		// Set up all apps
 		contexts = nil
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s%d", namespace_prefix, i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s%d", namespacePrefix, i))...)
 		}
 
 		// Skip the test if there are no test-sharedv4 apps
@@ -362,7 +362,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 		// test failover/failback by restarting the volume driver
 		Context("{Shared4SvcRestartVolDriver}", func() {
 			BeforeEach(func() {
-				namespace_prefix = "restartvoldriver-"
+				namespacePrefix = "restartvoldriver-"
 				fm = &failoverMethodRestartVolDriver{}
 				testrailID = 54374
 			})
@@ -372,7 +372,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 		// test failover/failback by rebooting the node
 		Context("{Shared4SvcRebootNode}", func() {
 			BeforeEach(func() {
-				namespace_prefix = "rebootnode-"
+				namespacePrefix = "rebootnode-"
 				fm = &failoverMethodReboot{}
 				testrailID = 54385
 			})
@@ -385,7 +385,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 	Context("{Sharedv4ClientTeardownWhenServerOffline}", func() {
 		BeforeEach(func() {
 			testrailID = 54780
-			namespace_prefix = "clientteardown-"
+			namespacePrefix = "clientteardown-"
 
 		})
 
@@ -461,7 +461,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 	Context("{Shared4SvcClientRestart}", func() {
 		BeforeEach(func() {
 			testrailID = 54383
-			namespace_prefix = "clientrestart-"
+			namespacePrefix = "clientrestart-"
 		})
 
 		It("has to verify no I/O disruption for test-sv4-svc apps after PX restart on NFS client node", func() {
@@ -532,7 +532,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 	Context("{Shared4SvcUnexportExport}", func() {
 		BeforeEach(func() {
 			testrailID = 54776
-			namespace_prefix = "unexport-"
+			namespacePrefix = "unexport-"
 		})
 
 		It("has to verify that the server unexports and re-exports volume to the client node "+
@@ -621,7 +621,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 	Context("{Shared4SvcClientOfflineTooLong}", func() {
 		BeforeEach(func() {
 			testrailID = 54778
-			namespace_prefix = "clientoffline-"
+			namespacePrefix = "clientoffline-"
 		})
 
 		JustBeforeEach(func() {
