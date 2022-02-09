@@ -571,7 +571,27 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShot][2] = 24 * baseInterval
 	triggerInterval[CloudSnapShot][1] = 27 * baseInterval
 
-	baseInterval = 2 * time.Minute
+	triggerInterval[LocalSnapShot][10] = 1 * baseInterval
+	triggerInterval[LocalSnapShot][9] = 3 * baseInterval
+	triggerInterval[LocalSnapShot][8] = 6 * baseInterval
+	triggerInterval[LocalSnapShot][7] = 9 * baseInterval
+	triggerInterval[LocalSnapShot][6] = 12 * baseInterval
+	triggerInterval[LocalSnapShot][5] = 15 * baseInterval
+	triggerInterval[LocalSnapShot][4] = 18 * baseInterval
+	triggerInterval[LocalSnapShot][3] = 21 * baseInterval
+	triggerInterval[LocalSnapShot][2] = 24 * baseInterval
+	triggerInterval[LocalSnapShot][1] = 27 * baseInterval
+
+	triggerInterval[DeleteLocalSnapShot][10] = 1 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][9] = 3 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][8] = 6 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][7] = 9 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][6] = 12 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][5] = 15 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][4] = 18 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][3] = 21 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][2] = 24 * baseInterval
+	triggerInterval[DeleteLocalSnapShot][1] = 27 * baseInterval
 
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
@@ -583,8 +603,6 @@ func populateIntervals() {
 	triggerInterval[EmailReporter][3] = 8 * baseInterval
 	triggerInterval[EmailReporter][2] = 9 * baseInterval
 	triggerInterval[EmailReporter][1] = 10 * baseInterval
-
-	baseInterval = 1 * time.Minute
 
 	triggerInterval[CoreChecker][10] = 1 * baseInterval
 	triggerInterval[CoreChecker][9] = 2 * baseInterval
