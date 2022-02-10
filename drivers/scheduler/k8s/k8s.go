@@ -2609,7 +2609,7 @@ func (k *K8s) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotName
 
 	snap, err := k8sExternalStorage.GetSnapshot(snapshotName, snapshotNameSpace)
 	if err != nil {
-		return nil, &scheduler.ErrFailedToGetVolumeParameters{
+		return nil, &scheduler.ErrFailedToGetSnapShot{
 			App:   ctx.App,
 			Cause: fmt.Sprintf("failed to get Snapshot: %v. Err: %v", snapshotName, err),
 		}
@@ -2618,7 +2618,7 @@ func (k *K8s) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotName
 	snapDataName := snap.Spec.SnapshotDataName
 	logrus.Infof("Got SnapData Name: %v", snapDataName)
 	if len(snapDataName) == 0 {
-		return nil, &scheduler.ErrFailedToGetVolumeParameters{
+		return nil, &scheduler.ErrFailedToGetSnapShotDataName{
 			App: ctx.App,
 			Cause: fmt.Sprintf("snapshot: [%s] %s does not have snapshotdata set",
 				snap.Metadata.Namespace, snap.Metadata.Name),
@@ -2627,7 +2627,7 @@ func (k *K8s) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotName
 
 	snapData, err := k8sExternalStorage.GetSnapshotData(snapDataName)
 	if err != nil {
-		return nil, &scheduler.ErrFailedToGetVolumeParameters{
+		return nil, &scheduler.ErrFailedToGetSnapShotData{
 			App:   ctx.App,
 			Cause: fmt.Sprintf("failed to get volumesnapshotdata: %s due to: %v", snapDataName, err),
 		}
