@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -755,6 +756,66 @@ var _ = Describe("{Shared4 service apps}", func() {
 					counters := getAppCounters(apiVol, attachedNode, 3*time.Duration(numPods)*time.Second)
 					activePods := getActivePods(counters)
 					Expect(len(activePods)).To(Equal(numPods))
+				})
+			}
+		})
+	})
+
+	// Delete k8s service
+	Context("{Sharedv4SvcDeleteK8sService}", func() {
+		BeforeEach(func() {
+			testrailID = 55050
+			namespacePrefix = "deletek8s-"
+		})
+
+		It("has to delete k8s service", func() {
+			for _, ctx := range testSv4Contexts {
+				Step("Delete service and verify deletion", func() {
+					logrus.Infof("uid: %s", ctx.GetID())
+					ns := ctx.GetID()
+
+					services, err := core.Instance().ListServices(ns, metav1.ListOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(len(services.Items)).To(Equal(1))
+
+					logrus.Infof("services: %v %v", services.Items, services.Items[0].Name)
+					serviceName := services.Items[0].Name
+					core.Instance().DeleteService(serviceName, ns)
+
+					// verify the deletetionTimpstamp is there
+					service, err := core.Instance().GetService(serviceName, ns)
+					Expect(err).NotTo(HaveOccurred())
+
+					deletionTimestamp := service.DeletionTimestamp
+					logrus.Infof("deletion timpstamp: %v", deletionTimestamp)
+					Expect(deletionTimestamp).NotTo(BeEmpty())
+				})
+
+				Step("rescale apps", func() {
+					scaleApp(ctx, 0)
+					ValidateContext(ctx)
+
+					scaleApp(ctx, numPods)
+					ValidateContext(ctx)
+				})
+
+				Step("get service and verify deletion is gone", func() {
+					logrus.Infof("uid: %s", ctx.GetID())
+					ns := ctx.GetID()
+
+					services, err := core.Instance().ListServices(ns, metav1.ListOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(len(services.Items)).To(Equal(1))
+
+					logrus.Infof("services: %v %v", services.Items, services.Items[0].Name)
+					serviceName := services.Items[0].Name
+
+					// verify the deletetionTimpstamp is there
+					service, err := core.Instance().GetService(serviceName, ns)
+					Expect(err).NotTo(HaveOccurred())
+					deletionTimestamp := service.DeletionTimestamp
+					logrus.Infof("deletion timpstamp: %v", deletionTimestamp)
+					Expect(deletionTimestamp).To(BeEmpty())
 				})
 			}
 		})
