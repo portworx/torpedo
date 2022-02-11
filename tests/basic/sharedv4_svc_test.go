@@ -788,7 +788,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 
 					deletionTimestamp := service.DeletionTimestamp
 					logrus.Infof("deletion timpstamp: %v", deletionTimestamp)
-					Expect(deletionTimestamp).NotTo(BeEmpty())
+					Expect(deletionTimestamp).NotTo(BeNil())
 				})
 
 				Step("rescale apps", func() {
@@ -815,7 +815,7 @@ var _ = Describe("{Shared4 service apps}", func() {
 					Expect(err).NotTo(HaveOccurred())
 					deletionTimestamp := service.DeletionTimestamp
 					logrus.Infof("deletion timpstamp: %v", deletionTimestamp)
-					Expect(deletionTimestamp).To(BeEmpty())
+					Expect(deletionTimestamp).To(BeNil())
 				})
 			}
 		})
