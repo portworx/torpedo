@@ -218,6 +218,8 @@ const (
 	BackupScaleMongo = "backupScaleMongo"
 	// UpgradeStork  upgrade stork version based on PX and k8s version
 	UpgradeStork = "upgradeStork"
+	// UpgradeVolumeDriver  upgrade volume driver version to the latest build
+	UpgradeVolumeDriver = "upgradeVolumeDriver"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -2969,6 +2971,42 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		}
 	})
 
+}
+
+// TriggerUpgradeVolumeDriver upgrades volume driver version to the latest build
+func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CoreChecker,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	context("upgrade volume driver to the latest version", func() {
+		Step("start the volume driver upgrade", func() {
+			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
+				Inst().StorageDriverUpgradeEndpointVersion,
+				Inst().EnableStorkUpgrade)
+			if err != nil {
+				logrus.Infof("Error upgrading: %v", err.Error())
+			}
+			UpdateOutcome(event, err)
+
+		})
+
+		Step("validate all apps after upgrade", func() {
+			for _, ctx := range *contexts {
+				ValidateContext(ctx)
+			}
+		})
+	})
 }
 
 // TriggerUpgradeStork peforms add-disk on the storage pools for the given contexts

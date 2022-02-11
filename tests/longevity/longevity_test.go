@@ -75,6 +75,7 @@ var _ = Describe("{Longevity}", func() {
 		PoolAddDisk:         TriggerPoolAddDisk,
 		UpgradeStork:        TriggerUpgradeStork,
 		VolumesDelete:       TriggerVolumeDelete,
+		UpgradeVolumeDriver: TriggerUpgradeVolumeDriver,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -331,6 +332,7 @@ func populateIntervals() {
 	triggerInterval[VolumesDelete] = make(map[int]time.Duration)
 	triggerInterval[LocalSnapShot] = make(map[int]time.Duration)
 	triggerInterval[DeleteLocalSnapShot] = make(map[int]time.Duration)
+	triggerInterval[UpgradeVolumeDriver] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -650,7 +652,7 @@ func populateIntervals() {
 	triggerInterval[PoolResizeDisk][2] = 24 * baseInterval
 	triggerInterval[PoolResizeDisk][1] = 30 * baseInterval
 
-	baseInterval = 300 * time.Minute
+	baseInterval = 2 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
 	triggerInterval[UpgradeStork][9] = 2 * baseInterval
@@ -658,6 +660,13 @@ func populateIntervals() {
 	triggerInterval[UpgradeStork][7] = 4 * baseInterval
 	triggerInterval[UpgradeStork][6] = 5 * baseInterval
 	triggerInterval[UpgradeStork][5] = 6 * baseInterval
+
+	triggerInterval[UpgradeVolumeDriver][10] = 1 * baseInterval
+	triggerInterval[UpgradeVolumeDriver][9] = 2 * baseInterval
+	triggerInterval[UpgradeVolumeDriver][8] = 3 * baseInterval
+	triggerInterval[UpgradeVolumeDriver][7] = 4 * baseInterval
+	triggerInterval[UpgradeVolumeDriver][6] = 5 * baseInterval
+	triggerInterval[UpgradeVolumeDriver][5] = 6 * baseInterval
 
 	triggerInterval[VolumesDelete][10] = 1 * baseInterval
 	triggerInterval[VolumesDelete][9] = 3 * baseInterval
