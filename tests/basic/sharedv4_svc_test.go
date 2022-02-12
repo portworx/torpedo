@@ -913,7 +913,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 				})
 
 				Step(fmt.Sprintf("verify that the volume %v (%v) is still in resync", vol.ID, apiVol.Id), func() {
-					cmd := fmt.Sprintf("pxctl volume inspect %s | grep 'Replication Status'", apiVol.Id)
+					cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", apiVol.Id)
 					replStatus, err := runCmd(cmd, *resyncReplica)
 					Expect(err).NotTo(HaveOccurred(), replStatus)
 					Expect(replStatus).To(ContainSubstring("Resync"))
@@ -953,7 +953,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 				Step(fmt.Sprintf("verify resync done for volume %v (%v)", vol.ID, apiVol.Id), func() {
 					Eventually(func() (string, error) {
-						cmd := fmt.Sprintf("pxctl volume inspect %s | grep 'Replication Status'", apiVol.Id)
+						cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", apiVol.Id)
 						return runCmd(cmd, *resyncReplica)
 					}, 10*time.Minute, 10*time.Second).Should(ContainSubstring("Up"),
 						"resync not done for volume %v (%v) for app %v", vol.ID, apiVol.Id, ctx.App.Key)
@@ -1055,7 +1055,7 @@ func getAppCountersSnapshot(vol *api.Volume, attachedNode *node.Node) map[string
 	// 1404:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-m9kzc
 	// 1436:/var/lib/osd/pxns/1088228603475411556/sv4test-5d849459d7-g79kh
 	//
-	cmd := fmt.Sprintf("find %s/%s -maxdepth 1 -type f -exec tail -1 {} \\; -exec echo -n ':' \\; -print",
+	cmd := fmt.Sprintf("find %s/%s -maxdepth 1 -type f -exec tail -1 {} \\; -exec echo -n \":\" \\; -print",
 		exportPathPrefix, vol.Id)
 	output, err := runCmd(cmd, *attachedNode)
 	Expect(err).NotTo(HaveOccurred())
