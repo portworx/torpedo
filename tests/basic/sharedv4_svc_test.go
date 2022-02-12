@@ -750,7 +750,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 		})
 	})
 
-	// Verify the recovery procedure after user accedentally deletes the sharedv4 k8s service object
+	// Verify the recovery procedure after user accidentally deletes the sharedv4 k8s service object
 	// Recovery is done by scaling deployment to 0 and then back up.
 	Context("{Sharedv4SvcDeleteK8sService}", func() {
 		BeforeEach(func() {
