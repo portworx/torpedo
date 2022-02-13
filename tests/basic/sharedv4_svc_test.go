@@ -227,6 +227,7 @@ type appCounter struct {
 type failoverMethod interface {
 	doFailover(attachedNode *node.Node)
 	getExpectedPodDeletions() []int
+	sleepBetweenFailovers() time.Duration
 	String() string
 }
 
@@ -246,6 +247,10 @@ func (fm *failoverMethodRestartVolDriver) getExpectedPodDeletions() []int {
 	return []int{2}
 }
 
+func (fm *failoverMethodRestartVolDriver) sleepBetweenFailovers() time.Duration {
+	return 30 * time.Second
+}
+
 type failoverMethodReboot struct {
 }
 
@@ -261,6 +266,10 @@ func (fm *failoverMethodReboot) getExpectedPodDeletions() []int {
 	// 1 or 2 pods may get deleted depending on what kubelet does on the rebooted node.
 	// The kubelet could set up the mount for the same pod or it could create a new pod.
 	return []int{1, 2}
+}
+
+func (fm *failoverMethodReboot) sleepBetweenFailovers() time.Duration {
+	return 2 * time.Minute
 }
 
 var _ = Describe("{Sharedv4SvcFunctional}", func() {
@@ -336,6 +345,15 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 							counterCollectionInterval := 3 * time.Duration(numPods) * time.Second
 							failoverLog := fmt.Sprintf("failover #%d by %s for app %s", i, fm, ctx.App.Key)
+
+							if i > 0 {
+								Step("sleep between the failovers",
+									func() {
+										dur := fm.sleepBetweenFailovers()
+										logrus.Infof("sleeping for %v between the failovers", dur)
+										time.Sleep(dur)
+									})
+							}
 
 							Step(fmt.Sprintf("get the attached node for volume %s before %s", vol.ID, failoverLog),
 								func() {
@@ -543,14 +561,15 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 				Step(fmt.Sprintf("scale the deployment down and then up for app %s", ctx.App.Key), func() {
 
 					vol, apiVol, attachedNode := getSv4TestAppVol(ctx)
-					exportsBeforeScaleDown := getExportsOnNode(apiVol, attachedNode)
 
 					// Scale down the app by 1 and check if the pod on NFS client node got removed.
 					// If not, scale down by 1 more. It should not take more than 2 attempts since
 					// there is no more than 1 pod running on each node.
 					var nodeWithNoPod *node.Node
+					var exportsBeforeScaleDown []string
 				Outer:
 					for i := 1; i < 3; i++ {
+						exportsBeforeScaleDown = getExportsOnNode(apiVol, attachedNode)
 						newNumPods := len(workers) - i
 						scaleApp(ctx, newNumPods)
 
@@ -581,7 +600,9 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 					}
 					Expect(nodeWithNoPod).NotTo(BeNil(), "did not find NFS client node whose pod was removed")
 
-					// IPs that were exported before scaling down the app that we expect to remain exported
+					// IPs that were exported before scaling down the app that we expect to remain exported.
+					// Note that this may include 2 IPs (data and mgmt) for the attached node
+					// depending on whether we deleted the bind-mounted pod above.
 					var otherClients []string
 					for _, export := range exportsBeforeScaleDown {
 						if export != nodeWithNoPod.DataIp {
@@ -694,8 +715,9 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 					// TODO: offlineClientTimeout = 15 * time.Minute in ref.go
 					// need to make it configurable so that we don't have to sleep for that long in the test
-					logrus.Infof("sleep to allow the server to remove client %v's export", clientNode.Name)
-					time.Sleep(offlineClientTimeout + 1*time.Minute)
+					dur := offlineClientTimeout + 1*time.Minute
+					logrus.Infof("sleep for %v to allow the server to remove client %v's export", dur, clientNode.Name)
+					time.Sleep(dur)
 
 					// We don't expect a failover
 					validateAttachedNode(vol, attachedNode)
@@ -725,8 +747,9 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 					logrus.Infof("Starting volume driver on node %s", clientNode.Name)
 					StartVolDriverAndWait([]node.Node{*clientNode})
 
-					logrus.Infof("Giving some time for app and PX to settle down on node %s", clientNode.Name)
-					time.Sleep(60 * time.Second)
+					dur := 60 * time.Second
+					logrus.Infof("sleeping for %v for app and PX to settle down on node %s", dur, clientNode.Name)
+					time.Sleep(dur)
 				})
 
 				Step(fmt.Sprintf("validate app %s after all nodes are up", ctx.App.Key), func() {
@@ -1029,6 +1052,7 @@ func getAppCounters(vol *api.Volume, attachedNode *node.Node, sleepInterval time
 	snap1 := getAppCountersSnapshot(vol, attachedNode)
 	logrus.Infof("app counters snapshot 1 for volume %v: %v", vol.Id, snap1)
 
+	logrus.Infof("sleeping for %v between the app counter snaps", sleepInterval)
 	time.Sleep(sleepInterval)
 
 	snap2 := getAppCountersSnapshot(vol, attachedNode)
@@ -1196,14 +1220,16 @@ func restartVolumeDriverOnNode(nodeObj *node.Node) {
 	logrus.Infof("Stopping volume driver on node %s", nodeObj.Name)
 	StopVolDriverAndWait([]node.Node{*nodeObj})
 
-	logrus.Infof("Sleep to allow the failover before restarting the volume driver on node %s", nodeObj.Name)
-	time.Sleep(30 * time.Second)
+	dur := 30 * time.Second
+	logrus.Infof("sleep for %v to allow the failover before restarting the volume driver on node %s", dur, nodeObj.Name)
+	time.Sleep(dur)
 
 	logrus.Infof("Starting volume driver on node %s", nodeObj.Name)
 	StartVolDriverAndWait([]node.Node{*nodeObj})
 
-	logrus.Infof("Giving volume driver and the app pods some time to settle down on node %s", nodeObj.Name)
-	time.Sleep(60 * time.Second)
+	dur = 60 * time.Second
+	logrus.Infof("sleep for %v to allow volume driver and the app pods to settle down on node %s", dur, nodeObj.Name)
+	time.Sleep(dur)
 }
 
 func rebootNodeAndWaitForReady(nodeObj *node.Node) {
