@@ -268,6 +268,23 @@ func (fm *failoverMethodReboot) getExpectedPodDeletions() []int {
 	return []int{1, 2}
 }
 
+type failoverMethodRecover struct {
+}
+
+func (fm *failoverMethodRecover) doFailover(attachedNode *node.Node) {
+	recoverVolumeDriverOnNode(attachedNode)
+}
+
+func (fm *failoverMethodRecover) String() string {
+	return "reboot"
+}
+
+func (fm *failoverMethodRecover) getExpectedPodDeletions() []int {
+	// 1 or 2 pods may get deleted depending on what kubelet does on the rebooted node.
+	// The kubelet could set up the mount for the same pod or it could create a new pod.
+	return []int{1, 2}
+}
+
 func (fm *failoverMethodReboot) sleepBetweenFailovers() time.Duration {
 	return 2 * time.Minute
 }
@@ -417,6 +434,16 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 				namespacePrefix = "rebootnode"
 				fm = &failoverMethodReboot{}
 				testrailID = 54385
+			})
+			testFailoverFailback()
+		})
+
+		// test failover/failback by recover the node
+		Context("{Shared4SvcRecoverNode}", func() {
+			BeforeEach(func() {
+				namespacePrefix = "recovernode-"
+				fm = &failoverMethodRecover{}
+				testrailID = 54375
 			})
 			testFailoverFailback()
 		})
@@ -1230,6 +1257,15 @@ func restartVolumeDriverOnNode(nodeObj *node.Node) {
 	dur = 60 * time.Second
 	logrus.Infof("sleep for %v to allow volume driver and the app pods to settle down on node %s", dur, nodeObj.Name)
 	time.Sleep(dur)
+}
+
+func recoverVolumeDriverOnNode(nodeObj *node.Node) {
+	logrus.Infof("Stopping volume driver on node %s", nodeObj.Name)
+	err := Inst().V.RecoverDriver(*nodeObj)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = Inst().V.WaitDriverUpOnNode(*nodeObj, Inst().DriverStartTimeout)
+	Expect(err).NotTo(HaveOccurred())
 }
 
 func rebootNodeAndWaitForReady(nodeObj *node.Node) {
