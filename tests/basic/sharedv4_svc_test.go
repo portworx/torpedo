@@ -276,7 +276,7 @@ func (fm *failoverMethodRecover) doFailover(attachedNode *node.Node) {
 }
 
 func (fm *failoverMethodRecover) String() string {
-	return "reboot"
+	return "recover"
 }
 
 func (fm *failoverMethodRecover) getExpectedPodDeletions() []int {
@@ -1260,9 +1260,12 @@ func restartVolumeDriverOnNode(nodeObj *node.Node) {
 }
 
 func recoverVolumeDriverOnNode(nodeObj *node.Node) {
-	logrus.Infof("Stopping volume driver on node %s", nodeObj.Name)
+	logrus.Infof("Recovering volume driver on node %s", nodeObj.Name)
 	err := Inst().V.RecoverDriver(*nodeObj)
 	Expect(err).NotTo(HaveOccurred())
+
+	logrus.Infof("Sleep to allow the failover before restarting the volume driver on node %s", nodeObj.Name)
+	time.Sleep(60 * time.Second)
 
 	err = Inst().V.WaitDriverUpOnNode(*nodeObj, Inst().DriverStartTimeout)
 	Expect(err).NotTo(HaveOccurred())
