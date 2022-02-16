@@ -442,10 +442,10 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 			testFailoverFailback()
 		})
 
-		// test failover/failback by recover the node
-		Context("{Shared4SvcRecoverNode}", func() {
+		// test failover/failback by putting the node in maintenance mode
+		Context("{Shared4SvcMaintainNode}", func() {
 			BeforeEach(func() {
-				namespacePrefix = "recovernode-"
+				namespacePrefix = "maintainnode-"
 				fm = &failoverMethodMaintenance{}
 				testrailID = 54375
 			})
