@@ -652,7 +652,7 @@ func populateIntervals() {
 	triggerInterval[PoolResizeDisk][2] = 24 * baseInterval
 	triggerInterval[PoolResizeDisk][1] = 30 * baseInterval
 
-	baseInterval = 2 * time.Minute
+	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
 	triggerInterval[UpgradeStork][9] = 2 * baseInterval

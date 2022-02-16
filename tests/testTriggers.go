@@ -2993,19 +2993,60 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 
 	context("upgrade volume driver to the latest version", func() {
 		Step("start the volume driver upgrade", func() {
-			IsOperatorBasedInstall, _ := Inst().V.IsOpearatorBasedInstall()
+			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 			if IsOperatorBasedInstall {
-				logrus.Info("It is operator based install")
+				logrus.Info("Initiating operator based install upgrade")
 				operatorTag, err := getOperatorLatestVersion()
 				UpdateOutcome(event, err)
 				if operatorTag != "" {
 					operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
 					logrus.Info(operatorImage)
+					err = Inst().V.UpdateStorageClusterImage(operatorImage)
+					UpdateOutcome(event, err)
+					if err == nil {
+						expectedTag := strings.Split(operatorImage, "_")[1]
+						expectedVersion := fmt.Sprintf("%v-%v", Inst().StorageDriverUpgradeEndpointVersion, expectedTag)
+
+						nodes := node.GetStorageDriverNodes()
+						for _, n := range nodes {
+							isUpgradeDone := false
+							isExit := false
+							waitCount := 10
+							for !isUpgradeDone && !isExit {
+								err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+								UpdateOutcome(event, err)
+								if err == nil {
+									pxVersion, err := Inst().V.GetPxVersionOnNode(n)
+									UpdateOutcome(event, err)
+									if err == nil {
+										if pxVersion == expectedVersion {
+											isUpgradeDone = true
+											logrus.Infof("Node [%x] successfully upgraded to %v", n.Name, pxVersion)
+										} else {
+											waitCount--
+											logrus.Infof("Waiting for 2 mins for PX upgrade to initiate on node: %v", n.Name)
+											time.Sleep(2 * time.Minute)
+											if waitCount == 0 {
+												isExit = true
+												err = fmt.Errorf("node [%x] upgrade to %v failed", n.Name, pxVersion)
+												UpdateOutcome(event, err)
+											}
+
+										}
+
+									}
+
+								}
+							}
+
+						}
+
+					}
 
 				}
 
 			} else {
-				logrus.Info("It is daemonset based install")
+				logrus.Info("Initiatingdaemonset based install upgrade")
 				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
 					Inst().StorageDriverUpgradeEndpointVersion,
 					Inst().EnableStorkUpgrade)
@@ -3020,6 +3061,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 
 		Step("validate all apps after upgrade", func() {
 			for _, ctx := range *contexts {
+				ctx.SkipVolumeValidation = true
 				ValidateContext(ctx)
 			}
 		})
