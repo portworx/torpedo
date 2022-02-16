@@ -268,6 +268,10 @@ func (fm *failoverMethodReboot) getExpectedPodDeletions() []int {
 	return []int{1, 2}
 }
 
+func (fm *failoverMethodReboot) sleepBetweenFailovers() time.Duration {
+	return 2 * time.Minute
+}
+
 type failoverMethodRecover struct {
 }
 
@@ -285,8 +289,8 @@ func (fm *failoverMethodRecover) getExpectedPodDeletions() []int {
 	return []int{1, 2}
 }
 
-func (fm *failoverMethodReboot) sleepBetweenFailovers() time.Duration {
-	return 2 * time.Minute
+func (fm *failoverMethodRecover) sleepBetweenFailovers() time.Duration {
+	return 30 * time.Second
 }
 
 var _ = Describe("{Sharedv4SvcFunctional}", func() {
@@ -1263,9 +1267,6 @@ func recoverVolumeDriverOnNode(nodeObj *node.Node) {
 	logrus.Infof("Recovering volume driver on node %s", nodeObj.Name)
 	err := Inst().V.RecoverDriver(*nodeObj)
 	Expect(err).NotTo(HaveOccurred())
-
-	logrus.Infof("Sleep to allow the failover before restarting the volume driver on node %s", nodeObj.Name)
-	time.Sleep(60 * time.Second)
 
 	err = Inst().V.WaitDriverUpOnNode(*nodeObj, Inst().DriverStartTimeout)
 	Expect(err).NotTo(HaveOccurred())

@@ -124,7 +124,7 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 }
 
 var csiProvisionerOnly = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	PortworxCsi:     "pxd.portworx.com",
+	PortworxCsi: "pxd.portworx.com",
 }
 
 var deleteVolumeLabelList = []string{
@@ -638,7 +638,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		if apiNode.Status == api.Status_STATUS_MAINTENANCE {
 			return nil, false, nil
 		}
-		return nil, true, fmt.Errorf("Node %v is not in Maintenance mode", n.Name)
+		return nil, true, fmt.Errorf("node %v is not in Maintenance mode", n.Name)
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, maintenanceWaitTimeout, defaultRetryInterval); err != nil {
@@ -647,6 +647,10 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 			Cause: err.Error(),
 		}
 	}
+	// TODO: refactor the function into two pieces, entermaintenance and exitmaintenance. So we don't need to have
+	// random sleep interval in the middle.
+	time.Sleep(30 * time.Second)
+
 	t = func() (interface{}, bool, error) {
 		if err := d.maintenanceOp(n, exitMaintenancePath); err != nil {
 			return nil, true, err
