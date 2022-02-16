@@ -170,10 +170,8 @@ var _ = Describe("{UpgradeVolumeDriverReinstall}", func() {
 		})
 
 		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
+				TearDownContext(ctx, map[string]bool{"scheduler.OptionsWaitForResourceLeakCleanup": true})
 			}
 		})
 	})
