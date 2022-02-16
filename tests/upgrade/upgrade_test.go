@@ -134,7 +134,9 @@ var _ = Describe("{UpgradeStork}", func() {
 	})
 })
 
-var _ = Describe("{UpgradeVolumeDriverSharedV4}", func() {
+// UpgradeVolumeDriverReinstall test validates the scheduled app and re-install them. Making sure the operation and
+// new installation runs smoothly
+var _ = Describe("{UpgradeVolumeDriverReinstall}", func() {
 	var testrailID = 54370
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54370
 	var runID int
@@ -147,7 +149,7 @@ var _ = Describe("{UpgradeVolumeDriverSharedV4}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("b4upgradevolumedriversvc4-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("b4upgradevolumedriverreinstall-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
@@ -161,7 +163,7 @@ var _ = Describe("{UpgradeVolumeDriverSharedV4}", func() {
 
 		Step("re-install and validate all apps after upgrade", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriversvc4-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriverreinstall-%d", i))...)
 			}
 
 			ValidateApplications(contexts)
