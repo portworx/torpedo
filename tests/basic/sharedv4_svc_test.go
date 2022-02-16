@@ -276,11 +276,11 @@ type failoverMethodMaintenance struct {
 }
 
 func (fm *failoverMethodMaintenance) doFailover(attachedNode *node.Node) {
-	recoverVolumeDriverOnNode(attachedNode)
+	maintainVolumeDriverOnNode(attachedNode)
 }
 
 func (fm *failoverMethodMaintenance) String() string {
-	return "recover"
+	return "maintenance"
 }
 
 func (fm *failoverMethodMaintenance) getExpectedPodDeletions() []int {
@@ -1263,9 +1263,16 @@ func restartVolumeDriverOnNode(nodeObj *node.Node) {
 	time.Sleep(dur)
 }
 
-func recoverVolumeDriverOnNode(nodeObj *node.Node) {
-	logrus.Infof("Recovering volume driver on node %s", nodeObj.Name)
-	err := Inst().V.RecoverDriver(*nodeObj)
+func maintainVolumeDriverOnNode(nodeObj *node.Node) {
+	logrus.Infof("Putting node %s in maintenance mode", nodeObj.Name)
+	err := Inst().V.EnterMaintenance(*nodeObj)
+	Expect(err).NotTo(HaveOccurred())
+
+	dur := 30 * time.Second
+	logrus.Infof("sleep for %v to allow the failover before exiting node %s from maintenance mode", dur, nodeObj.Name)
+	time.Sleep(dur)
+
+	err = Inst().V.ExitMaintenance(*nodeObj)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = Inst().V.WaitDriverUpOnNode(*nodeObj, Inst().DriverStartTimeout)

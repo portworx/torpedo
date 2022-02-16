@@ -620,6 +620,18 @@ func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
 
 func (d *portworx) RecoverDriver(n node.Node) error {
 
+	if err := d.EnterMaintenance(n); err != nil {
+		return err
+	}
+
+	if err := d.ExitMaintenance(n); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *portworx) EnterMaintenance(n node.Node) error {
 	t := func() (interface{}, bool, error) {
 		if err := d.maintenanceOp(n, enterMaintenancePath); err != nil {
 			return nil, true, err
@@ -647,11 +659,11 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 			Cause: err.Error(),
 		}
 	}
-	// TODO: refactor the function into two pieces, entermaintenance and exitmaintenance. So we don't need to have
-	// random sleep interval in the middle.
-	time.Sleep(30 * time.Second)
+	return nil
+}
 
-	t = func() (interface{}, bool, error) {
+func (d *portworx) ExitMaintenance(n node.Node) error {
+	t := func() (interface{}, bool, error) {
 		if err := d.maintenanceOp(n, exitMaintenancePath); err != nil {
 			return nil, true, err
 		}
