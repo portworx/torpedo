@@ -272,24 +272,24 @@ func (fm *failoverMethodReboot) sleepBetweenFailovers() time.Duration {
 	return 2 * time.Minute
 }
 
-type failoverMethodRecover struct {
+type failoverMethodMaintenance struct {
 }
 
-func (fm *failoverMethodRecover) doFailover(attachedNode *node.Node) {
+func (fm *failoverMethodMaintenance) doFailover(attachedNode *node.Node) {
 	recoverVolumeDriverOnNode(attachedNode)
 }
 
-func (fm *failoverMethodRecover) String() string {
+func (fm *failoverMethodMaintenance) String() string {
 	return "recover"
 }
 
-func (fm *failoverMethodRecover) getExpectedPodDeletions() []int {
+func (fm *failoverMethodMaintenance) getExpectedPodDeletions() []int {
 	// 1 or 2 pods may get deleted depending on what kubelet does on the rebooted node.
 	// The kubelet could set up the mount for the same pod or it could create a new pod.
-	return []int{1, 2}
+	return []int{2}
 }
 
-func (fm *failoverMethodRecover) sleepBetweenFailovers() time.Duration {
+func (fm *failoverMethodMaintenance) sleepBetweenFailovers() time.Duration {
 	return 30 * time.Second
 }
 
@@ -446,7 +446,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 		Context("{Shared4SvcRecoverNode}", func() {
 			BeforeEach(func() {
 				namespacePrefix = "recovernode-"
-				fm = &failoverMethodRecover{}
+				fm = &failoverMethodMaintenance{}
 				testrailID = 54375
 			})
 			testFailoverFailback()
