@@ -46,17 +46,9 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 		}
 
 		// scale all the apps to have 2 pods since later we will have only 2 nodes where the pods can run
-		for _, ctx := range contexts {
-			Step(fmt.Sprintf("scale app %s to 2", ctx.App.Key), func() {
-				applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				for name := range applicationScaleUpMap {
-					applicationScaleUpMap[name] = int32(2)
-				}
-				err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
-				Expect(err).NotTo(HaveOccurred())
-			})
-		}
+		Step("scale all apps to 2", func() {
+			scaleApps(contexts, 2)
+		})
 
 		ValidateApplications(contexts)
 
@@ -99,13 +91,7 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 
 			// scale down and then scale up the app, so that pods are only scheduled on replica nodes
 			Step(fmt.Sprintf("scale down app: %s to 0 ", ctx.App.Key), func() {
-				applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				for name := range applicationScaleUpMap {
-					applicationScaleUpMap[name] = int32(0)
-				}
-				err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
-				Expect(err).NotTo(HaveOccurred())
+				scaleApp(ctx, 0)
 			})
 
 			// wait until all pods are gone
@@ -114,13 +100,7 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 			})
 
 			Step(fmt.Sprintf("scale up app: %s to 2", ctx.App.Key), func() {
-				applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				for name := range applicationScaleUpMap {
-					applicationScaleUpMap[name] = int32(2)
-				}
-				err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
-				Expect(err).NotTo(HaveOccurred())
+				scaleApp(ctx, 2)
 				ValidateContext(ctx)
 			})
 
