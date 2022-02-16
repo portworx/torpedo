@@ -231,6 +231,9 @@ type Driver interface {
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
 
+	//IsOpearatorBasedInstall returns if px is operator based
+	IsOpearatorBasedInstall() (bool, error)
+
 	// ValidateStorageCluster validates all the storage cluster components
 	ValidateStorageCluster(endpointURL, endpointVersion string) error
 

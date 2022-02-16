@@ -3215,6 +3215,13 @@ func (d *portworx) ToggleCallHome(n node.Node, enabled bool) error {
 	return nil
 }
 
+func (d *portworx) IsOpearatorBasedInstall() (bool, error) {
+	_, err := apiExtentions.GetCRD("storageclusters.core.libopenstorage.org", metav1.GetOptions{})
+
+	return err == nil, err
+
+}
+
 func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) error {
 	// check if storagecluster CRD is present, in case yes, we continue validation
 	// otherwise px was deployed using daemonset, we skip this validation

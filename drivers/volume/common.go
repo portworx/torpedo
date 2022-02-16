@@ -625,3 +625,11 @@ func (d *DefaultDriver) WaitForPxPodsToBeUp(n node.Node) error {
 	}
 
 }
+
+// IsOpearatorBasedInstall eturns if px is operator based
+func (d *DefaultDriver) IsOpearatorBasedInstall() (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ExpandPool()",
+	}
+}

@@ -3,7 +3,9 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
 	"reflect"
@@ -2991,13 +2993,28 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 
 	context("upgrade volume driver to the latest version", func() {
 		Step("start the volume driver upgrade", func() {
-			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
-				Inst().StorageDriverUpgradeEndpointVersion,
-				Inst().EnableStorkUpgrade)
-			if err != nil {
-				logrus.Infof("Error upgrading: %v", err.Error())
+			IsOperatorBasedInstall, _ := Inst().V.IsOpearatorBasedInstall()
+			if IsOperatorBasedInstall {
+				logrus.Info("It is operator based install")
+				operatorTag, err := getOperatorLatestVersion()
+				UpdateOutcome(event, err)
+				if operatorTag != "" {
+					operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
+					logrus.Info(operatorImage)
+
+				}
+
+			} else {
+				logrus.Info("It is daemonset based install")
+				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
+					Inst().StorageDriverUpgradeEndpointVersion,
+					Inst().EnableStorkUpgrade)
+				if err != nil {
+					logrus.Infof("Error upgrading: %v", err.Error())
+				}
+				UpdateOutcome(event, err)
+
 			}
-			UpdateOutcome(event, err)
 
 		})
 
@@ -3007,6 +3024,32 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 			}
 		})
 	})
+}
+
+func getOperatorLatestVersion() (string, error) {
+	url := fmt.Sprintf("%s/%s/version", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+	logrus.Infof("URL is : %v", url)
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to send GET request to %s, Err: %v", url, err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %+v", resp.Body)
+	}
+
+	// Convert response body to string
+	bodyString := string(bodyBytes)
+	for _, line := range strings.Split(bodyString, "\n") {
+		if strings.Contains(line, "version:") {
+			operatorTag := strings.Split(strings.TrimSpace(line), ": ")[1]
+			return operatorTag, nil
+		}
+	}
+	return "", fmt.Errorf("operator version not found in respose body : %v", bodyString)
+
 }
 
 // TriggerUpgradeStork peforms add-disk on the storage pools for the given contexts
