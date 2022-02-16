@@ -284,8 +284,7 @@ func (fm *failoverMethodMaintenance) String() string {
 }
 
 func (fm *failoverMethodMaintenance) getExpectedPodDeletions() []int {
-	// 1 or 2 pods may get deleted depending on what kubelet does on the rebooted node.
-	// The kubelet could set up the mount for the same pod or it could create a new pod.
+	// 2 pods, one on the old NFS server and one on the new NFS server should be deleted.
 	return []int{2}
 }
 
@@ -445,7 +444,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 		// test failover/failback by putting the node in maintenance mode
 		Context("{Shared4SvcMaintainNode}", func() {
 			BeforeEach(func() {
-				namespacePrefix = "maintainnode-"
+				namespacePrefix = "maintainnode"
 				fm = &failoverMethodMaintenance{}
 				testrailID = 54375
 			})
