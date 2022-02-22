@@ -392,6 +392,7 @@ func (d *notSupportedDriver) PowerOnVMByName(vmName string) error {
 	}
 }
 
+// IsUsingSSH returns true if the command will be run using ssh
 func (d *notSupportedDriver) IsUsingSSH() bool {
 	return false
 }

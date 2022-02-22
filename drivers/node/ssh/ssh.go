@@ -83,6 +83,7 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	return pubkey, nil
 }
 
+// IsUsingSSH returns true if the command will be run using ssh
 func IsUsingSSH() bool {
 	return len(os.Getenv("TORPEDO_SSH_KEY")) > 0 || len(os.Getenv("TORPEDO_SSH_PASSWORD")) > 0
 }
