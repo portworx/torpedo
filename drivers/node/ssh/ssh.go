@@ -605,6 +605,7 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 	return file, nil
 }
 
+// New returns a new SSH object
 func New() *SSH {
 	return &SSH{
 		Driver: node.NotSupportedDriver,
