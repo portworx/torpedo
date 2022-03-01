@@ -2136,7 +2136,10 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 	t := func() (interface{}, bool, error) {
 		var terminatingPods []string
 		pods, err := k.getPodsForApp(ctx)
-		if err != nil {
+		// sadly, getPodsForApp returns an error if there are no pods
+		if err != schederrors.ErrPodsNotFound {
+			return nil, false, nil
+		} else if err != nil {
 			return nil, true, fmt.Errorf("failed to get pods for app %v: %w", ctx.App.Key, err)
 		}
 		for _, pod := range pods {
