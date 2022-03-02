@@ -2133,7 +2133,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 		}
 	}
 
-	t := func() (interface{}, bool, error) {
+	isPodTerminating := func() (interface{}, bool, error) {
 		var terminatingPods []string
 		pods, err := k.getPodsForApp(ctx)
 		// sadly, getPodsForApp returns an error if there are no pods
@@ -2153,7 +2153,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 		return nil, false, nil
 	}
 
-	_, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+	_, err := task.DoRetryWithTimeout(isPodTerminating, k8sDestroyTimeout, DefaultRetryInterval)
 	if err != nil {
 		logrus.Warnf("Timed out waiting for app %v's pods to terminate: %v", ctx.App.Key, err)
 		return err
