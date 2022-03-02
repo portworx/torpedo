@@ -2340,8 +2340,9 @@ func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClie
 
 func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	var err error
-
-	logrus.Warnf("unable to get service endpoint falling back to node addr: err=%v, skipPXSvcEndpoint=%v", err, d.skipPXSvcEndpoint)
+	// we are removing using service endpoint because services would
+	// return a random node endpoint the service chooses and puts it in maintenance.
+	// this would fail the status check in `EnterMaintenanc` and `ExitMaintenance`
 	pxdRestPort, err := getRestContainerPort()
 	if err != nil {
 		return err
