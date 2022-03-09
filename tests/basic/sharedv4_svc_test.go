@@ -400,7 +400,20 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 							Step(fmt.Sprintf("get counters from node %v before %s", attachedNodeBefore.Name, failoverLog),
 								func() {
-									countersBefore = getAppCounters(apiVol, attachedNodeBefore, counterCollectionInterval)
+									activeKeys := 0
+									Eventually(func() bool {
+										countersBefore = getAppCounters(apiVol, attachedNodeBefore, counterCollectionInterval)
+										activeKeys = 0
+										for key := range countersBefore {
+											if countersBefore[key].active {
+												activeKeys++
+											}
+										}
+										return (activeKeys == numPods)
+									}, 3*time.Minute, 10*time.Second).Should(BeTrue(),
+										"number of active keys did not match %v/%vfor volume %v (%v) for app %v",
+										activeKeys, len(countersBefore), vol.ID, apiVol.Id, ctx.App.Key)
+
 								})
 
 							Step(fmt.Sprintf("failover #%d by %s", i, fm),
