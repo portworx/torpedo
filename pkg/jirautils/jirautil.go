@@ -8,16 +8,19 @@ import (
 )
 
 var (
-	client *jira.Client
+	client                     *jira.Client
+	isJiraConnectionSuccessful bool
+
+	//AccountID for bug assignment
+	AccountID string
 )
 
 const (
-	jiraAPIToken = "jCSvaoTxEtPFHZeD3jB0B6FF"
-	jiraURL      = "https://portworx.atlassian.net/"
+	jiraURL = "https://portworx.atlassian.net/"
 )
 
-// CreateIssue creates issue in jira
-func CreateIssue(username, token string) {
+// Init function for the Jira
+func Init(username, token string) {
 	httpClient := jira.BasicAuthTransport{
 		Username: username,
 		Password: token,
@@ -26,19 +29,33 @@ func CreateIssue(username, token string) {
 
 	client, err = jira.NewClient(httpClient.Client(), jiraURL)
 	if err != nil {
-		logrus.Error(err)
-	} else {
-		getProjects(client)
+		isJiraConnectionSuccessful = false
+		logrus.Errorf("Testrail connection not successful, Cause: %v", err)
 
 	}
-	createPTX(client, "6098fbce2614ec006818c402", "Test Description", "Test Summary")
-	getPTX(client)
+
+	isJiraConnectionSuccessful = true
 
 }
 
-func getPTX(client *jira.Client) {
+// CreateIssue creates issue in jira
+func CreateIssue(issueDesription, issueSummary string) string {
 
-	issue, _, err := client.Issue.Get("PTX-5278", nil)
+	issueKey := ""
+
+	if isJiraConnectionSuccessful {
+
+		issueKey = createPTX(issueDesription, issueSummary)
+	} else {
+		logrus.Warn("Skipping issue creation as jira connection is not successful")
+	}
+	return issueKey
+
+}
+
+func getPTX(issueID string) {
+
+	issue, _, err := client.Issue.Get(issueID, nil)
 	logrus.Infof("Error: %v", err)
 
 	logrus.Infof("%s: %+v\n", issue.Key, issue.Fields.Summary)
@@ -49,12 +66,12 @@ func getPTX(client *jira.Client) {
 
 }
 
-func createPTX(client *jira.Client, accountId, description, summary string) {
+func createPTX(description, summary string) string {
 
 	i := jira.Issue{
 		Fields: &jira.IssueFields{
 			Assignee: &jira.User{
-				AccountID: accountId,
+				AccountID: AccountID,
 			},
 			Description: description,
 			Type: jira.IssueType{
@@ -79,9 +96,11 @@ func createPTX(client *jira.Client, accountId, description, summary string) {
 	issue, resp, err := client.Issue.Create(&i)
 
 	logrus.Infof("Resp: %v", resp.StatusCode)
+	issueKey := ""
 	if resp.StatusCode == 201 {
 		logrus.Info("Successfully created new jira issue.")
 		logrus.Infof("Jira Issue: %+v\n", issue.Key)
+		issueKey = issue.Key
 
 	} else {
 		logrus.Infof("Error while creating jira issue: %v", err)
@@ -89,11 +108,13 @@ func createPTX(client *jira.Client, accountId, description, summary string) {
 		buf.ReadFrom(resp.Body)
 		newStr := buf.String()
 		logrus.Infof(newStr)
+
 	}
+	return issueKey
 
 }
 
-func getProjects(client *jira.Client) {
+func getProjects() {
 	req, _ := client.NewRequest("GET", "rest/api/3/project/recent", nil)
 
 	projects := new([]jira.Project)

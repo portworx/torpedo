@@ -30,9 +30,12 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	torpedovolume "github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/jirautils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
@@ -137,6 +140,10 @@ const (
 	testRailUserNameFlag        = "testrail-username"
 	testRailPasswordFlag        = "testrail-password"
 
+	jiraUserNameFlag  = "jira-username"
+	jiraTokenFlag     = "jira-token"
+	jiraAccountIDFlag = "jira-account-id"
+
 	// Async DR
 	pairFileName   = "cluster-pair.yaml"
 	remotePairName = "remoteclusterpair"
@@ -234,6 +241,11 @@ var (
 	testRailPassword string
 )
 
+var (
+	jiraUserName string
+	jiraToken    string
+)
+
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
@@ -284,6 +296,13 @@ func InitInstance() {
 		}
 	} else {
 		logrus.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
+	}
+
+	if jiraUserName != "" && jiraToken != "" {
+		jirautils.Init(jiraUserName, jiraToken)
+
+	} else {
+		logrus.Debugf("Not all information to connect to JIRA is provided.")
 	}
 }
 
@@ -1211,7 +1230,7 @@ func CollectSupport() {
 	})
 }
 
-func runCmd(cmd string, n node.Node) {
+func runCmd(cmd string, n node.Node) error {
 	_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         defaultCmdTimeout,
 		TimeBeforeRetry: defaultCmdRetryInterval,
@@ -1220,6 +1239,9 @@ func runCmd(cmd string, n node.Node) {
 	if err != nil {
 		logrus.Warnf("failed to run cmd: %s. err: %v", cmd, err)
 	}
+
+	return err
+
 }
 
 // PerformSystemCheck check if core files are present on each node
@@ -3039,7 +3061,9 @@ func ParseFlags() {
 	flag.StringVar(&testRailHostname, testRailHostFlag, "", "Testrail server hostname")
 	flag.StringVar(&testRailUsername, testRailUserNameFlag, "", "Username to be used for adding entries to testrail")
 	flag.StringVar(&testRailPassword, testRailPasswordFlag, "", "Password to be used for testrail update")
-
+	flag.StringVar(&jiraUserName, jiraUserNameFlag, "", "Username to be used for JIRA client")
+	flag.StringVar(&jiraToken, jiraTokenFlag, "", "API token for accessing the JIRA")
+	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
 	flag.Parse()
 
 	appList, err := splitCsv(appListCSV)
@@ -3156,4 +3180,174 @@ func init() {
 	logrus.SetLevel(logrus.InfoLevel)
 	logrus.StandardLogger().Hooks.Add(log.NewHook())
 	logrus.SetOutput(os.Stdout)
+}
+
+//CreateJiraIssueWithLogs creates a jira issue and copy logs to nfs mount
+func CreateJiraIssueWithLogs(issueDescription, issueSummary string) {
+	issueKey := jirautils.CreateIssue(issueDescription, issueSummary)
+	if issueKey != "" {
+		collectAndCopyDiagsOnWorkerNodes(issueKey)
+		collectAndCopyStorkLogs(issueKey)
+		collectAndCopyOperatorLogs(issueKey)
+		collectAndCopyAutopilotLogs(issueKey)
+
+	}
+
+}
+
+func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
+	isIssueDirCreated := false
+	for _, currNode := range node.GetWorkerNodes() {
+		err := runCmd("pwd", currNode)
+		if err == nil {
+			logrus.Infof("Creating directors logs in the node %v", currNode.Name)
+			runCmd("mkdir /root/logs", currNode)
+			logrus.Info("Mounting nfs diags directory")
+			runCmd("mount -t nfs diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618 /root/logs", currNode)
+			if !isIssueDirCreated {
+				logrus.Infof("Creating PTX %v directory in the node %v", issueKey, currNode.Name)
+				runCmd(fmt.Sprintf("mkdir /root/logs/%v", issueKey), currNode)
+				isIssueDirCreated = true
+			}
+
+			logrus.Infof("collect diags on node: %s", currNode.Name)
+
+			filePath := fmt.Sprintf("/var/cores/diags-%s-%d.tar.gz", currNode.Name, time.Now().Unix())
+
+			config := &torpedovolume.DiagRequestConfig{
+				DockerHost:    "unix:///var/run/docker.sock",
+				OutputFile:    filePath,
+				ContainerName: "",
+				Profile:       false,
+				Live:          true,
+				Upload:        false,
+				All:           true,
+				Force:         true,
+				OnHost:        true,
+				Extra:         false,
+			}
+			err = Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false, Async: true})
+
+			if err == nil {
+				filePath = fmt.Sprintf("/var/cores/%s-diags-*.tar.gz", currNode.Name)
+				logrus.Infof("copying logs %v  on node: %s", filePath, currNode.Name)
+				runCmd(fmt.Sprintf("cp %v /root/logs/%v/", filePath, issueKey), currNode)
+			} else {
+				logrus.Warnf("Error collecting diags on node: %v, Error: %v", currNode.Name, err)
+			}
+
+		}
+	}
+}
+
+func collectAndCopyStorkLogs(issueKey string) {
+
+	storkLabel := make(map[string]string)
+	storkLabel["name"] = "stork"
+	podList, err := core.Instance().GetPods("", storkLabel)
+	if err == nil {
+		logsByPodName := map[string]string{}
+		for _, p := range podList.Items {
+			logOptions := corev1.PodLogOptions{
+				// Getting 250 lines from the pod logs to get the io_bytes
+				TailLines: getInt64Address(250),
+			}
+			logrus.Info("Collecting stork logs")
+			output, err := core.Instance().GetPodLog(p.Name, p.Namespace, &logOptions)
+			if err != nil {
+				logrus.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
+			}
+			logsByPodName[p.Name] = output
+		}
+		masterNode := node.GetMasterNodes()[0]
+		err = runCmd("pwd", masterNode)
+		if err == nil {
+			logrus.Infof("Creating directors logs in the node %v", masterNode.Name)
+			runCmd("mkdir /root/logs", masterNode)
+			logrus.Info("Mounting nfs diags directory")
+			runCmd("mount -t nfs diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618 /root/logs", masterNode)
+
+			for k, v := range logsByPodName {
+				cmnd := fmt.Sprintf("echo '%v' > /root/%v.log", v, k)
+				runCmd(cmnd, masterNode)
+				runCmd(fmt.Sprintf("cp /root/%v.log /root/logs/%v/", k, issueKey), masterNode)
+			}
+		}
+
+	} else {
+		logrus.Errorf("Error in getting stork pods, Err: %v", err.Error())
+	}
+
+}
+
+func collectAndCopyOperatorLogs(issueKey string) {
+	podLabel := make(map[string]string)
+	podLabel["name"] = "portworx-operator"
+	podList, err := core.Instance().GetPods("", podLabel)
+	if err == nil {
+		logsByPodName := map[string]string{}
+		for _, p := range podList.Items {
+			logOptions := corev1.PodLogOptions{
+				// Getting 250 lines from the pod logs to get the io_bytes
+				TailLines: getInt64Address(250),
+			}
+			logrus.Info("Collecting portworx operator logs")
+			output, err := core.Instance().GetPodLog(p.Name, p.Namespace, &logOptions)
+			if err != nil {
+				logrus.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
+			}
+			logsByPodName[p.Name] = output
+		}
+		masterNode := node.GetMasterNodes()[0]
+		err = runCmd("pwd", masterNode)
+		if err == nil {
+			for k, v := range logsByPodName {
+				cmnd := fmt.Sprintf("echo '%v' > /root/%v.log", v, k)
+				runCmd(cmnd, masterNode)
+				runCmd(fmt.Sprintf("cp /root/%v.log /root/logs/%v/", k, issueKey), masterNode)
+			}
+		}
+
+	} else {
+		logrus.Errorf("Error in getting portworx-operator pods, Err: %v", err.Error())
+	}
+
+}
+
+func collectAndCopyAutopilotLogs(issueKey string) {
+	podLabel := make(map[string]string)
+	podLabel["name"] = "autopilot"
+	podList, err := core.Instance().GetPods("", podLabel)
+	if err == nil {
+		logsByPodName := map[string]string{}
+		for _, p := range podList.Items {
+			logOptions := corev1.PodLogOptions{
+				// Getting 250 lines from the pod logs to get the io_bytes
+				TailLines: getInt64Address(250),
+			}
+			logrus.Info("Collecting autopilot logs")
+			output, err := core.Instance().GetPodLog(p.Name, p.Namespace, &logOptions)
+			if err != nil {
+				logrus.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
+			}
+			logsByPodName[p.Name] = output
+		}
+		masterNode := node.GetMasterNodes()[0]
+
+		err = runCmd("pwd", masterNode)
+		if err == nil {
+			for k, v := range logsByPodName {
+				cmnd := fmt.Sprintf("echo '%v' > /root/%v.log", v, k)
+				runCmd(cmnd, masterNode)
+				runCmd(fmt.Sprintf("cp /root/%v.log /root/logs/%v/", k, issueKey), masterNode)
+			}
+		}
+	} else {
+		logrus.Errorf("Error in getting autopilot pods, Err: %v", err.Error())
+	}
+
+}
+
+func getInt64Address(x int64) *int64 {
+	return &x
 }
