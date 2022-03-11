@@ -548,11 +548,22 @@ func isDirEmpty(path string, n node.Node, d node.Driver) bool {
 }
 
 // GetServiceEndpoint get IP addr of portworx-service, preferable external IP
-func (k *k8sSchedOps) GetServiceEndpoint(volumeDriverNamespace string) (string, error) {
+func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
+	// Get volume driver namespace
+	volumeDriverNamespace, err := GetVolumeDriverNamespace()
+	if err != nil {
+		return "", fmt.Errorf("Failed to get driver namespace, Err: %v", err)
+	}
+
 	return k8sCore.GetServiceEndpoint(PXServiceName, volumeDriverNamespace)
 }
 
-func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, volumeDriverNamespace string) error {
+func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error {
+	// Get volume driver namespace
+	volumeDriverNamespace, err := GetVolumeDriverNamespace()
+	if err != nil {
+		return fmt.Errorf("Failed to get driver namespace, Err: %v", err)
+	}
 
 	binding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -568,7 +579,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, volumeDr
 			Name: "cluster-admin",
 		},
 	}
-	binding, err := k8sRbac.CreateClusterRoleBinding(binding)
+	binding, err = k8sRbac.CreateClusterRoleBinding(binding)
 	if err != nil {
 		return err
 	}
@@ -658,8 +669,16 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag, volumeDr
 }
 
 // IsPXReadyOnNode validates if Portworx pod is up and running
-func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node, volumeDriverNamespace string) bool {
+func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	var isPxPodPresent bool = false
+
+	// Get volume driver namespace
+	volumeDriverNamespace, err := GetVolumeDriverNamespace()
+	if err != nil {
+		logrus.Errorf("Failed to get driver namespace, Err: %v", err)
+		return false
+	}
+
 	pxPods, err := k8sCore.GetPodsByNode(n.Name, volumeDriverNamespace)
 	if err != nil {
 		logrus.Errorf("Failed to get apps on node %s", n.Name)

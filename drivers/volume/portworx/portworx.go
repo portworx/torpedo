@@ -261,11 +261,10 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 	d.token = token
 
 	// Get volume driver namespace
-	volumeDriverNamespace, err := schedops.GetVolumeDriverNamespace()
+	d.volumeDriverNamespace, err = schedops.GetVolumeDriverNamespace()
 	if err != nil {
 		return err
 	}
-	d.volumeDriverNamespace = volumeDriverNamespace
 
 	if d.nodeDriver, err = node.Get(nodeDriver); err != nil {
 		return err
@@ -422,7 +421,7 @@ func (d *portworx) WaitForPxPodsToBeUp(n node.Node) error {
 	// Check if PX pod is up
 	logrus.Debugf("checking if PX pod is up on node: %s", n.Name)
 	t := func() (interface{}, bool, error) {
-		if !d.schedOps.IsPXReadyOnNode(n, d.volumeDriverNamespace) {
+		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: fmt.Sprintf("px pod is not ready on node: %s after %v", n.Name, validatePXStartTimeout),
@@ -1630,7 +1629,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	// Check if PX pod is up
 	logrus.Debugf("checking if PX pod is up on node: %s", n.Name)
 	t = func() (interface{}, bool, error) {
-		if !d.schedOps.IsPXReadyOnNode(n, d.volumeDriverNamespace) {
+		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: fmt.Sprintf("px pod is not ready on node: %s after %v", n.Name, timeout),
@@ -2071,7 +2070,7 @@ func areRepSetsFinal(vol *api.Volume, replFactor int64) bool {
 func (d *portworx) setDriver() error {
 	if !d.skipPXSvcEndpoint {
 		// Try portworx-service first
-		endpoint, err := d.schedOps.GetServiceEndpoint(d.volumeDriverNamespace)
+		endpoint, err := d.schedOps.GetServiceEndpoint()
 		if err == nil && endpoint != "" {
 			if err = d.testAndSetEndpointUsingService(endpoint); err == nil {
 				d.refreshEndpoint = false
@@ -2103,12 +2102,12 @@ func (d *portworx) setDriver() error {
 }
 
 func (d *portworx) testAndSetEndpointUsingService(endpoint string) error {
-	sdkPort, err := getSDKPort(d.volumeDriverNamespace)
+	sdkPort, err := d.getSDKPort()
 	if err != nil {
 		return err
 	}
 
-	restPort, err := getRestPort(d.volumeDriverNamespace)
+	restPort, err := d.getRestPort()
 	if err != nil {
 		return err
 	}
@@ -2117,12 +2116,12 @@ func (d *portworx) testAndSetEndpointUsingService(endpoint string) error {
 }
 
 func (d *portworx) testAndSetEndpointUsingNodeIP(ip string) error {
-	sdkPort, err := getSDKContainerPort(d.volumeDriverNamespace)
+	sdkPort, err := d.getSDKContainerPort()
 	if err != nil {
 		return err
 	}
 
-	restPort, err := getRestContainerPort(d.volumeDriverNamespace)
+	restPort, err := d.getRestContainerPort()
 	if err != nil {
 		return err
 	}
@@ -2367,7 +2366,7 @@ func (d *portworx) GetClusterPairingInfo(kubeConfigPath string) (map[string]stri
 	// file up cluster pair info
 	pairInfo[clusterIP] = pxNodes[0].Addresses[0]
 	pairInfo[tokenKey] = resp.Result.Token
-	pwxServicePort, err := getRestContainerPort(d.volumeDriverNamespace)
+	pwxServicePort, err := d.getRestContainerPort()
 	if err != nil {
 		return nil, err
 	}
@@ -2537,7 +2536,7 @@ func (d *portworx) getClusterPairManager() api.OpenStorageClusterPairClient {
 }
 
 func (d *portworx) getClusterPairManagerByAddress(addr string) (api.OpenStorageClusterPairClient, error) {
-	pxPort, err := getSDKContainerPort(d.volumeDriverNamespace)
+	pxPort, err := d.getSDKContainerPort()
 	if err != nil {
 		return nil, err
 	}
@@ -2564,7 +2563,7 @@ func (d *portworx) getAlertsManager() api.OpenStorageAlertsClient {
 }
 
 func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClient, error) {
-	pxPort, err := getSDKContainerPort(d.volumeDriverNamespace)
+	pxPort, err := d.getSDKContainerPort()
 	if err != nil {
 		return nil, err
 	}
@@ -2587,7 +2586,7 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	// we are removing using service endpoint because services would
 	// return a random node endpoint the service chooses and puts it in maintenance.
 	// this would fail the status check in `EnterMaintenanc` and `ExitMaintenance`
-	pxdRestPort, err := getRestContainerPort(d.volumeDriverNamespace)
+	pxdRestPort, err := d.getRestContainerPort()
 	if err != nil {
 		return err
 	}
@@ -2754,17 +2753,17 @@ func hasIgnorePrefix(str string) bool {
 func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) {
 	var err error
 	kvdbMembers := make(map[string]metadataNode)
-	pxdRestPort, err := getRestPort(d.volumeDriverNamespace)
+	pxdRestPort, err := d.getRestPort()
 	if err != nil {
 		return kvdbMembers, err
 	}
 	var url, endpoint string
 	if !d.skipPXSvcEndpoint {
-		endpoint, err = d.schedOps.GetServiceEndpoint(d.volumeDriverNamespace)
+		endpoint, err = d.schedOps.GetServiceEndpoint()
 	}
 	if err != nil || endpoint == "" {
 		logrus.Warnf("unable to get service endpoint falling back to node addr: err=%v, skipPXSvcEndpoint=%v", err, d.skipPXSvcEndpoint)
-		pxdRestPort, err = getRestContainerPort(d.volumeDriverNamespace)
+		pxdRestPort, err = d.getRestContainerPort()
 		if err != nil {
 			return kvdbMembers, err
 		}
@@ -3368,8 +3367,8 @@ func parseMaxSize(maxSize string) uint64 {
 }
 
 // getRestPort gets the service port for rest api, required when using service endpoint
-func getRestPort(volumeDriverNamespace string) (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, volumeDriverNamespace)
+func (d *portworx) getRestPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.volumeDriverNamespace)
 	if err != nil {
 		return 0, err
 	}
@@ -3382,8 +3381,8 @@ func getRestPort(volumeDriverNamespace string) (int32, error) {
 }
 
 // getRestContainerPort gets the rest api container port exposed in the node, required when using node ip
-func getRestContainerPort(volumeDriverNamespace string) (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, volumeDriverNamespace)
+func (d *portworx) getRestContainerPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.volumeDriverNamespace)
 	if err != nil {
 		return 0, err
 	}
@@ -3396,8 +3395,8 @@ func getRestContainerPort(volumeDriverNamespace string) (int32, error) {
 }
 
 // getSDKPort gets sdk service port, required when using service endpoint
-func getSDKPort(volumeDriverNamespace string) (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, volumeDriverNamespace)
+func (d *portworx) getSDKPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.volumeDriverNamespace)
 	if err != nil {
 		return 0, err
 	}
@@ -3410,8 +3409,8 @@ func getSDKPort(volumeDriverNamespace string) (int32, error) {
 }
 
 // getSDKContainerPort gets the sdk container port in the node, required when using node ip
-func getSDKContainerPort(volumeDriverNamespace string) (int32, error) {
-	svc, err := k8sCore.GetService(schedops.PXServiceName, volumeDriverNamespace)
+func (d *portworx) getSDKContainerPort() (int32, error) {
+	svc, err := k8sCore.GetService(schedops.PXServiceName, d.volumeDriverNamespace)
 	if err != nil {
 		return 0, err
 	}

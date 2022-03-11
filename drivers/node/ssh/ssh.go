@@ -94,11 +94,10 @@ func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	var err error
 
 	// Set driver namespace
-	volumeDriverNamespace, err := schedops.GetVolumeDriverNamespace()
+	s.volumeDriverNamespace, err = schedops.GetVolumeDriverNamespace()
 	if err != nil {
 		return err
 	}
-	s.volumeDriverNamespace = volumeDriverNamespace
 
 	s.specDir = nodeOpts.SpecDir
 	nodes := node.GetWorkerNodes()

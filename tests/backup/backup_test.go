@@ -51,7 +51,7 @@ var (
 var _ = BeforeSuite(func() {
 	logrus.Infof("Init instance")
 	InitInstance()
-}) // TODO This won't work for stork deployed in custom namespace
+})
 
 func TestBackup(t *testing.T) {
 	RegisterFailHandler(Fail)

@@ -38,11 +38,11 @@ type Driver interface {
 	// GetVolumeName returns the volume name based on the volume object received
 	GetVolumeName(v *volume.Volume) string
 	// GetServiceEndpoint returns the hostname of portworx service if it is present
-	GetServiceEndpoint(volumeDriverNamespace string) (string, error)
+	GetServiceEndpoint() (string, error)
 	// UpgradePortworx upgrades portworx to the given docker image and tag
-	UpgradePortworx(ociImage, ociTag, pxImage, pxTag, volumeDriverNamespace string) error
+	UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error
 	// IsPXReadyOnNode returns true if PX pod is up on that node, else returns false
-	IsPXReadyOnNode(n node.Node, volumeDriverNamespace string) bool
+	IsPXReadyOnNode(n node.Node) bool
 	// IsPXEnabled returns true if portworx is enabled on given node
 	IsPXEnabled(n node.Node) (bool, error)
 	// GetRemotePXNodes returns list of PX node found on destination k8s cluster
