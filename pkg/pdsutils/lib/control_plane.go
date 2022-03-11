@@ -7,12 +7,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ControlPlane
+// ControlPlane struct comprise of cluster object
 type ControlPlane struct {
 	*cluster
 }
 
-// NewControlPlane
+// NewControlPlane function create ControlPlane object.
 func NewControlPlane(context string) *ControlPlane {
 	return &ControlPlane{
 		cluster: &cluster{
@@ -21,7 +21,7 @@ func NewControlPlane(context string) *ControlPlane {
 	}
 }
 
-// LogStatus
+// LogStatus return logs for PDS components.
 func (cp *ControlPlane) LogStatus() {
 	logrus.Info("Control plane:")
 
@@ -37,7 +37,7 @@ func (cp *ControlPlane) LogStatus() {
 	cp.logComponent(pdsSystemNamespace, "faktory")
 }
 
-// IsReachbale
+// IsReachbale check for the control plane reachability.
 func (cp *ControlPlane) IsReachbale(url string) bool {
 	timeout := time.Duration(5 * time.Second)
 	client := http.Client{

@@ -23,7 +23,7 @@ func (account *Account) GetAccountsList() ([]pds.ModelsAccount, error) {
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiAccountsGet``: %v\n", err)
-		log.Error("Full HTTP response: %v\n", res)
+		log.Debugf("Full HTTP response: %v\n", res)
 		return nil, err
 	}
 	return accountsModel.GetData(), nil
@@ -47,7 +47,7 @@ func (account *Account) GetAccount(accountID string) (*pds.ModelsAccount, error)
 func (account *Account) GetAccountUsers(accountID string) ([]pds.ModelsUser, error) {
 	client := account.apiClient.AccountsApi
 	accountInfo, _ := account.GetAccount(accountID)
-	log.Info("Get the users belong to the account having name: %s", accountInfo.GetName())
+	log.Infof("Get the users belong to the account having name: %s", accountInfo.GetName())
 	usersModel, res, err := client.ApiAccountsIdUsersGet(account.Context, accountID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Full HTTP response: %v", res)
