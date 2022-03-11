@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// cluster
 type cluster struct {
 	kubeconfig string
 }
@@ -16,6 +17,7 @@ const (
 	pdsSystemNamespace = "pds-system"
 )
 
+// logComponent
 func (c *cluster) logComponent(namespace, name string) {
 	logrus.Infof("Component %v", name)
 	deployment := "deployment/" + name
@@ -30,12 +32,14 @@ func (c *cluster) logComponent(namespace, name string) {
 	logrus.Infof("Output : %v", output)
 }
 
+// mustKubectl
 func (c *cluster) mustKubectl(args ...string) (string, error) {
 	kubectlArgs := append([]string{"--kubeconfig", c.kubeconfig}, args...)
 	cmd := kubectl(kubectlArgs...)
 	return mustRun(cmd)
 }
 
+// describePods
 func (c *cluster) describePods(namespace string) {
 	logrus.Infof("Pods in %s:", namespace)
 	output, err := c.mustKubectl("describe", "pods", "--namespace", namespace)
@@ -45,10 +49,12 @@ func (c *cluster) describePods(namespace string) {
 	logrus.Info(output)
 }
 
+// kubectl
 func kubectl(args ...string) *exec.Cmd {
 	return exec.Command("kubectl", args...)
 }
 
+// mustRun
 func mustRun(cmd *exec.Cmd) (string, error) {
 	out, err := runWithOutput(cmd)
 	if err != nil {
@@ -57,6 +63,7 @@ func mustRun(cmd *exec.Cmd) (string, error) {
 	return out, nil
 }
 
+// runWithOutput
 func runWithOutput(cmd *exec.Cmd) (string, error) {
 	b := new(bytes.Buffer)
 	cmd.Stdout = b

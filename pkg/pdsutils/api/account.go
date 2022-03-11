@@ -9,22 +9,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-/*
-	Account struct consists the context and apiclient.
-	It can be used to utilize CRUD functionality with respect to Accounts API.
-*/
+// Account struct comprise of Context , PDS api client.
 type Account struct {
 	Context   context.Context
 	apiClient *pds.APIClient
 }
 
-/*
-	Get the List of all the Accounts.
-	@return []pds.ModelsAccount, error
-*/
+// GetAccountsList function return list of Account objects.
 func (account *Account) GetAccountsList() ([]pds.ModelsAccount, error) {
 	client := account.apiClient.AccountsApi
-	log.Info("Get list of Accounts.")
+	log.Infof("Get list of Accounts.")
 	accountsModel, res, err := client.ApiAccountsGet(account.Context).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
@@ -35,54 +29,42 @@ func (account *Account) GetAccountsList() ([]pds.ModelsAccount, error) {
 	return accountsModel.GetData(), nil
 }
 
-/*
-	Get the Account details.
-	@param accountId string - Account UUID.
-	@return pds.ModelsAccount, error
-*/
-func (account *Account) GetAccount(accountId string) (*pds.ModelsAccount, error) {
+// GetAccount return an Account object.
+func (account *Account) GetAccount(accountID string) (*pds.ModelsAccount, error) {
 	client := account.apiClient.AccountsApi
-	log.Info("Get the account detail having UUID: %v", accountId)
-	accountModel, res, err := client.ApiAccountsIdGet(account.Context, accountId).Execute()
+	log.Infof("Get the account detail having UUID: %v", accountID)
+	accountModel, res, err := client.ApiAccountsIdGet(account.Context, accountID).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Error("Full HTTP response: %v\n", res)
-		log.Errorf("Error when calling `ApiAccountsGet``: %v\n", err)
+		log.Errorf("Full HTTP response: %v", res)
+		log.Debugf("Error when calling `ApiAccountsGet``: %v", err)
 		return nil, err
 	}
 	return accountModel, nil
 }
 
-/*
-	Get the list of users belong to the Account.
-	@param accountId string - Account UUID.
-	@return []pds.ModelsUser, error
-*/
-func (account *Account) GetAccountUsers(accountId string) ([]pds.ModelsUser, error) {
+// GetAccountUsers return list of user objects.
+func (account *Account) GetAccountUsers(accountID string) ([]pds.ModelsUser, error) {
 	client := account.apiClient.AccountsApi
-	accountInfo, _ := account.GetAccount(accountId)
-	log.Info("Get the users belong to the account having name: %v", accountInfo.GetName())
-	usersModel, res, err := client.ApiAccountsIdUsersGet(account.Context, accountId).Execute()
+	accountInfo, _ := account.GetAccount(accountID)
+	log.Info("Get the users belong to the account having name: %s", accountInfo.GetName())
+	usersModel, res, err := client.ApiAccountsIdUsersGet(account.Context, accountID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Error("Full HTTP response: %v\n", res)
-		log.Errorf("Error when calling `ApiAccountsGet``: %v\n", err)
+		log.Errorf("Full HTTP response: %v", res)
+		log.Errorf("Error when calling `ApiAccountsGet``: %v", err)
 		return nil, err
 	}
 	return usersModel.GetData(), nil
 }
 
-/*
-	Create new account.
-	@param name string - Name of the account.
-	@return *pds.ModelsAccount, error
-*/
+// CreateNewAccount create a new account and return the account object.
 func (account *Account) CreateNewAccount(name string) (*pds.ModelsAccount, error) {
-	createAccountReq := pds.ControllersCreateAccountRequest{&name}
+	createAccountReq := pds.ControllersCreateAccountRequest{Name: &name}
 	client := account.apiClient.AccountsApi
 	accountModel, res, err := client.ApiAccountsPost(account.Context).Body(createAccountReq).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		log.Error("Full HTTP response: %v\n", res)
-		log.Errorf("Error when calling `ApiAccountsGet``: %v\n", err)
+		log.Errorf("Full HTTP response: %v", res)
+		log.Debugf("Error when calling `ApiAccountsPost``: %v\n", err)
 		return nil, err
 	}
 	return accountModel, nil

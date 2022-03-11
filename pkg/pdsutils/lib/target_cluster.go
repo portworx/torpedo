@@ -4,10 +4,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// TargetCluster khash
 type TargetCluster struct {
 	*cluster
 }
 
+// LogStatus khaskh
 func (cp *TargetCluster) LogStatus() {
 	logrus.Info("Target Cluster:")
 
@@ -23,6 +25,7 @@ func (cp *TargetCluster) LogStatus() {
 	cp.logComponent(pdsSystemNamespace, "faktory")
 }
 
+// NewTargetCluster lsajajsklj
 func NewTargetCluster(context string) *TargetCluster {
 	return &TargetCluster{
 		cluster: &cluster{

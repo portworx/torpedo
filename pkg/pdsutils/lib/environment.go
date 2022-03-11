@@ -12,18 +12,23 @@ const (
 	envTargetKubeconfig       = "TARGET_KUBECONFIG"
 )
 
-type environment struct {
-	ControlPlaneURL, ControlPlaneKubeconfig, TargetKubeconfig string
+// Environment lhasha
+type Environment struct {
+	ControlPlaneURL        string
+	ControlPlaneKubeconfig string
+	TargetKubeconfig       string
 }
 
-func MustHaveEnvVariables() environment {
-	return environment{
+// MustHaveEnvVariables ljsas
+func MustHaveEnvVariables() Environment {
+	return Environment{
 		ControlPlaneURL:        mustGetEnvVariable(envControlPlaneURL),
 		ControlPlaneKubeconfig: mustGetEnvVariable(envControlPlaneKubeconfig),
 		TargetKubeconfig:       mustGetEnvVariable(envTargetKubeconfig),
 	}
 }
 
+// mustGetEnvVariable jasljla
 func mustGetEnvVariable(key string) string {
 	value, isExist := os.LookupEnv(key)
 	if !isExist {

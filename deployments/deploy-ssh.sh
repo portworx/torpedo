@@ -155,6 +155,10 @@ if [ -z "$AWS_REGION" ]; then
     echo "Using default AWS_REGION of ${AWS_REGION}"
 fi
 
+if [ -z "$PDS_CONTROL_PLANE_URL" ]; then
+    echo "PDS Control plane url:  ${PDS_CONTROL_PLANE_URL}"
+fi
+
 for i in $@
 do
 case $i in
@@ -233,6 +237,9 @@ TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\"
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
 AWS_VOLUME_MOUNT="{ \"name\": \"aws-volume\", \"mountPath\": \"/root/.aws/\" }"
 
+PDS_KUBECONFIG_VOLUME="{ \"name\": \"pds-control-plane-kubeconfig\",\"hostPath\": { \"path\": \"/tmp\", \"type\": \"DirectoryOrCreate\" } }"
+PDS_KUBECONFIG_MOUNT="{ \"name\": \"pds-control-plane-kubeconfig\", \"mountPath\": \"/tmp\" }"
+
 VOLUMES="${TESTRESULTS_VOLUME}"
 
 if [ "${STORAGE_DRIVER}" == "aws" ]; then
@@ -254,6 +261,10 @@ if [ -n "${TORPEDO_SSH_KEY_VOLUME}" ]; then
     VOLUMES="${VOLUMES},${TORPEDO_SSH_KEY_VOLUME}"
 fi
 
+if [ -n "${PDS_KUBECONFIG_VOLUME}" ]; then
+    VOLUMES="${VOLUMES},${PDS_KUBECONFIG_VOLUME}"
+fi
+
 VOLUME_MOUNTS="${TESTRESULTS_MOUNT}"
 
 if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
@@ -266,6 +277,14 @@ fi
 
 if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
+fi
+
+if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
+    VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
+fi
+
+if [ -n "${PDS_KUBECONFIG_MOUNT}" ]; then
+    VOLUME_MOUNTS="${VOLUME_MOUNTS},${PDS_KUBECONFIG_MOUNT}"
 fi
 
 BUSYBOX_IMG="busybox"
@@ -401,6 +420,7 @@ spec:
     securityContext:
       privileged: true
     command: ["sh", "-c", "mkdir -p /mnt/testresults && chmod 777 /mnt/testresults/"]
+    command: ["sh", "-c", "mkdir -p /tmp && chmod 777 /tmp"]
   containers:
   - name: torpedo
     image: ${TORPEDO_IMG}
@@ -509,6 +529,12 @@ spec:
       value: "${VSPHERE_PWD}"
     - name: VSPHERE_HOST_IP
       value: "${VSPHERE_HOST_IP}"
+    - name: CONTROL_PLANE_URL
+      value: "${CONTROL_PLANE_URL}"
+    - name: CONTROL_PLANE_KUBECONFIG
+      value: "/tmp/ctrl_kubeconfig"
+    - name: TARGET_KUBECONFIG
+      value: "/tmp/tgt_kubeconfig"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

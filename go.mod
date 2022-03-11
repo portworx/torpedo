@@ -24,7 +24,8 @@ require (
 	github.com/libopenstorage/operator v0.0.0-20220121222253-3431532a94f9
 	github.com/libopenstorage/stork v1.4.1-0.20220216141154-b9773cd69de9
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.16.0
+	github.com/onsi/ginkgo/v2 v2.1.3 // indirect
+	github.com/onsi/gomega v1.17.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
