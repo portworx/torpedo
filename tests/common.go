@@ -30,6 +30,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
@@ -238,6 +239,7 @@ var (
 func InitInstance() {
 	var err error
 	var token string
+
 	if Inst().ConfigMap != "" {
 		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
@@ -247,7 +249,12 @@ func InitInstance() {
 		token = ""
 	}
 
+	// Get volume driver namespace
+	volumeDriverNamespace, err := schedops.GetVolumeDriverNamespace()
+	expect(err).NotTo(haveOccurred())
+
 	err = Inst().S.Init(scheduler.InitOptions{
+		VolDriverNamespace:      volumeDriverNamespace,
 		SpecDir:                 Inst().SpecDir,
 		VolDriverName:           Inst().V.String(),
 		NodeDriverName:          Inst().N.String(),

@@ -90,6 +90,8 @@ type InitOptions struct {
 	CustomAppConfig map[string]AppConfig
 	// StorageProvisioner name
 	StorageProvisioner string
+	// VolDriverNamespace volume driver namespace
+	VolDriverNamespace string
 	// SecretType secret used for encryption keys
 	SecretType string
 	// VaultAddress vault api address
