@@ -222,6 +222,8 @@ const (
 	UpgradeStork = "upgradeStork"
 	// UpgradeVolumeDriver  upgrade volume driver version to the latest build
 	UpgradeVolumeDriver = "upgradeVolumeDriver"
+	// CordonNode cordon nodes and validate apps and volumes
+	CordonNode = "cordonNode"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -3110,13 +3112,74 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step(fmt.Sprintf("Upgrading stork to latest version based on the compatible PX and storage driver upgrade version "),
+	Step("Upgrading stork to latest version based on the compatible PX and storage driver upgrade version ",
 		func() {
 			err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
 				Inst().StorageDriverUpgradeEndpointVersion)
 			UpdateOutcome(event, err)
 
 		})
+}
+
+// TriggerCordonNodes cordon nodes and validate apps and volumes
+func TriggerCordonNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CordonNode,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	var err error
+
+	context("checking for core files...", func() {
+
+		Step("cordon and drain nodes and validate volumes", func() {
+			nodes := node.GetWorkerNodes()
+
+			for _, n := range nodes {
+				logrus.Infof("Cordoning the  node: %v", n)
+				err = Inst().S.DisableSchedulingOnNode(n)
+				UpdateOutcome(event, err)
+				logrus.Infof("Draining  the node: %v", n)
+				err = Inst().S.PrepareNodeToDecommission(n, Inst().Provisioner)
+				UpdateOutcome(event, err)
+				logrus.Info("waiting 5 minutes for volumes to stabilize")
+				time.Sleep(5 * time.Minute)
+				logrus.Infof("UnCordoning the  node: %v", n)
+				err = Inst().S.EnableSchedulingOnNode(n)
+				UpdateOutcome(event, err)
+
+			}
+
+			Step("Validating contexts after cordoning the nodes", func() {
+				for _, ctx := range *contexts {
+					errorChan := make(chan error, errorChannelSize)
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						if err != nil {
+							logrus.Errorf("There is a error in context validation [%v]", err.Error())
+						}
+						UpdateOutcome(event, err)
+
+					}
+
+				}
+
+			})
+
+		})
+
+	})
+
 }
 
 func getPoolExpandPercentage(triggerType string) uint64 {
