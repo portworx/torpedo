@@ -530,11 +530,11 @@ spec:
     - name: VSPHERE_HOST_IP
       value: "${VSPHERE_HOST_IP}"
     - name: CONTROL_PLANE_URL
-      value: "${CONTROL_PLANE_URL}"
+      value: "${PDS_CONTROL_PLANE_URL}"
     - name: CONTROL_PLANE_KUBECONFIG
-      value: "/tmp/ctrl_kubeconfig"
+      value: ""
     - name: TARGET_KUBECONFIG
-      value: "/tmp/tgt_kubeconfig"
+      value: ""
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

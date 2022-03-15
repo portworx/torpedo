@@ -18,7 +18,7 @@ type Account struct {
 // GetAccountsList function return list of Account objects.
 func (account *Account) GetAccountsList() ([]pds.ModelsAccount, error) {
 	client := account.apiClient.AccountsApi
-	log.Infof("Get list of Accounts.")
+	log.Info("Get list of Accounts.")
 	accountsModel, res, err := client.ApiAccountsGet(account.Context).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
@@ -45,8 +45,12 @@ func (account *Account) GetAccount(accountID string) (*pds.ModelsAccount, error)
 
 // GetAccountUsers return list of user objects.
 func (account *Account) GetAccountUsers(accountID string) ([]pds.ModelsUser, error) {
+	log.Infof("Get users for the account having UUID: %v ", accountID)
 	client := account.apiClient.AccountsApi
-	accountInfo, _ := account.GetAccount(accountID)
+	accountInfo, er := account.GetAccount(accountID)
+	if er != nil {
+		return nil, er
+	}
 	log.Infof("Get the users belong to the account having name: %s", accountInfo.GetName())
 	usersModel, res, err := client.ApiAccountsIdUsersGet(account.Context, accountID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
@@ -59,6 +63,7 @@ func (account *Account) GetAccountUsers(accountID string) ([]pds.ModelsUser, err
 
 // CreateNewAccount create a new account and return the account object.
 func (account *Account) CreateNewAccount(name string) (*pds.ModelsAccount, error) {
+	log.Info("Create new account.")
 	createAccountReq := pds.ControllersCreateAccountRequest{Name: &name}
 	client := account.apiClient.AccountsApi
 	accountModel, res, err := client.ApiAccountsPost(account.Context).Body(createAccountReq).Execute()
