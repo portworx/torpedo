@@ -25,7 +25,7 @@ const (
 
 var _ = Describe("{Sharedv4Functional}", func() {
 	var testrailID, runID int
-	var contexts, testSv4Contexts, testSharedV4Contexts []*scheduler.Context
+	var contexts, testSharedV4Contexts []*scheduler.Context
 	var workers []node.Node
 	var numPods int
 	var namespacePrefix string
@@ -41,7 +41,7 @@ var _ = Describe("{Sharedv4Functional}", func() {
 
 		// Skip the test if there are no test-sharedv4 apps
 		testSharedV4Contexts = getTestSharedV4Contexts(contexts)
-		if len(testSv4Contexts) == 0 && len(testSharedV4Contexts) == 0 {
+		if len(testSharedV4Contexts) == 0 {
 			Skip("No test-sharedv4 apps were found")
 		}
 		workers = node.GetWorkerNodes()
