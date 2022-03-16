@@ -66,7 +66,7 @@ var _ = Describe("{Sharedv4Functional}", func() {
 				// pods can mount on vols that are about to be detached/unmounted. Anti-affinity rule
 				// forced creating pods to wait for terminating pods due to one pod per node IP restriction.
 				Step(
-					fmt.Sprintf("setup app %s to remove anit-affinity rules", ctx.App.Key),
+					fmt.Sprintf("setup app %s to remove anti-affinity rules", ctx.App.Key),
 					func() {
 
 						Step(fmt.Sprintf("update %s deployment without anti-affinity", ctx.App.Key), func() {
