@@ -196,3 +196,11 @@ func getTestSharedV4Contexts(contexts []*scheduler.Context) []*scheduler.Context
 	}
 	return testSharedV4Contexts
 }
+
+// set the given path to ro
+func setPathToROMode(path string, node *node.Node) {
+	cmd := fmt.Sprintf("mount -oremount,ro %s", path)
+	_, err := runCmd(cmd, *node)
+
+	Expect(err).NotTo(HaveOccurred())
+}

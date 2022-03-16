@@ -309,7 +309,7 @@ func (fm *failoverMethodMaintenance) sleepBetweenFailovers() time.Duration {
 
 var _ = Describe("{Sharedv4SvcFunctional}", func() {
 	var testrailID, runID int
-	var contexts, testSv4Contexts, testSharedV4Contexts []*scheduler.Context
+	var contexts, testSv4Contexts []*scheduler.Context
 	var workers []node.Node
 	var numPods int
 	var namespacePrefix string
@@ -325,8 +325,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 		// Skip the test if there are no test-sharedv4 apps
 		testSv4Contexts = getTestSv4Contexts(contexts)
-		testSharedV4Contexts = getTestSharedV4Contexts(contexts)
-		if len(testSv4Contexts) == 0 && len(testSharedV4Contexts) == 0 {
+		if len(testSv4Contexts) == 0 {
 			Skip("No test-sv4-svc apps were found")
 		}
 		workers = node.GetWorkerNodes()
@@ -1273,14 +1272,6 @@ func validateExports(vol *api.Volume, attachedNodeBefore *node.Node, attachedNod
 	exports = getExportsOnNode(vol, attachedNodeAfter)
 	Expect(len(exports)).To(BeNumerically(">", 0),
 		"no exports found on the new NFS server %s for volume %s", attachedNodeAfter.Name, vol.Id)
-}
-
-// set the given path to ro
-func setPathToROMode(path string, node *node.Node) {
-	cmd := fmt.Sprintf("mount -oremount,ro %s", path)
-	_, err := runCmd(cmd, *node)
-
-	Expect(err).NotTo(HaveOccurred())
 }
 
 // Returns the IP addresses of the clients to which the volume is being exported from the specified node.
