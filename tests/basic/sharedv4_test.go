@@ -91,7 +91,7 @@ var _ = Describe("{Sharedv4Functional}", func() {
 							waitForNumPodsToEqual(ctx, 0)
 						})
 
-						Step(fmt.Sprintf("scale it backsssss %s", ctx.App.Key), func() {
+						Step(fmt.Sprintf("scale the app back to numPods for %s", ctx.App.Key), func() {
 							scaleApp(ctx, numPods)
 
 							ValidateContext(ctx)
@@ -182,7 +182,7 @@ var _ = Describe("{Sharedv4Functional}", func() {
 	// 	})
 	//
 	// 	It("", func() {
-	// 		for _, ctx := range testSv4Contexts {
+	// 		for _, ctx := range testSharedV4Contexts {
 	// 		}
 	// 	})
 
