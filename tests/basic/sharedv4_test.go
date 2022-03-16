@@ -8,7 +8,6 @@ import (
 
 	"github.com/libopenstorage/openstorage/pkg/mount"
 	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -61,21 +60,19 @@ var _ = Describe("{Sharedv4Functional}", func() {
 
 		JustBeforeEach(func() {
 			for _, ctx := range testSharedV4Contexts {
-				vol, _, attachedNode := getSv4TestAppVol(ctx)
 				k8sApps := apps.Instance()
+				// we are removing the anti-affinity rule to force the race condition in testing.
+				// without anti-affinity rule, pods creating and terminating can happen at the same time, causing
+				// pods can mount on vols that are about to be detached/unmounted. Anti-affinity rule
+				// forced creating pods to wait for terminating pods due to one pod per node IP restriction.
 				Step(
-					fmt.Sprintf("setup app %s to deploy on single node", ctx.App.Key),
+					fmt.Sprintf("setup app %s to remove anit-affinity rules", ctx.App.Key),
 					func() {
-						Step(fmt.Sprintf("add label to attached node for %s", ctx.App.Key), func() {
-							err := core.Instance().AddLabelOnNode(attachedNode.Name, "attachedNode", "true")
-							Expect(err).NotTo(HaveOccurred())
-						})
 
-						Step(fmt.Sprintf("update %s deployment with label", ctx.App.Key), func() {
+						Step(fmt.Sprintf("update %s deployment without anti-affinity", ctx.App.Key), func() {
 							deployments, err := k8sApps.ListDeployments(ctx.GetID(), metav1.ListOptions{})
 							Expect(err).NotTo(HaveOccurred())
 							deployment := deployments.Items[0]
-							deployment.Spec.Template.Spec.NodeSelector = map[string]string{"attachedNode": "true"}
 							deployment.Spec.Template.Spec.Affinity = nil
 
 							_, err = k8sApps.UpdateDeployment(&deployment)
@@ -97,15 +94,6 @@ var _ = Describe("{Sharedv4Functional}", func() {
 							ValidateContext(ctx)
 						})
 
-						// validate the pods are all on one node
-						Step(fmt.Sprintf("validate that all pods are running on the attached node for %s", ctx.App.Key), func() {
-							pods, err := core.Instance().GetPodsUsingPV(vol.ID)
-							Expect(err).NotTo(HaveOccurred())
-							for _, pod := range pods {
-								Expect(pod.Spec.NodeName).To(Equal(attachedNode.Name))
-							}
-
-						})
 					})
 			}
 
@@ -154,16 +142,6 @@ var _ = Describe("{Sharedv4Functional}", func() {
 						Expect(volumeMountRW.MatchString(mnt.Opts)).To(BeTrue())
 						Expect(volumeMountRW.MatchString(mnt.VfsOpts)).To(BeTrue())
 					}
-				})
-			}
-		})
-
-		JustAfterEach(func() {
-			for _, ctx := range testSharedV4Contexts {
-				_, _, attachedNode := getSv4TestAppVol(ctx)
-				Step(fmt.Sprintf("remove label on node for %s", ctx.App.Key), func() {
-					err := core.Instance().RemoveLabelOnNode(attachedNode.Name, "attachedNode")
-					Expect(err).NotTo(HaveOccurred())
 				})
 			}
 		})
