@@ -313,7 +313,7 @@ func (fm *failoverMethodMaintenance) sleepBetweenFailovers() time.Duration {
 
 var _ = Describe("{Sharedv4SvcFunctional}", func() {
 	var testrailID, runID int
-	var contexts, testSv4Contexts []*scheduler.Context
+	var contexts, testSv4Contexts, testSharedV4Contexts []*scheduler.Context
 	var workers []node.Node
 	var numPods int
 	var namespacePrefix string
@@ -329,8 +329,9 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 		// Skip the test if there are no test-sharedv4 apps
 		testSv4Contexts = getTestSv4Contexts(contexts)
-		if len(testSv4Contexts) == 0 {
-			Skip("No test-sv4-svc apps were found")
+		testSharedV4Contexts = getTestSharedV4Contexts(contexts)
+		if len(testSv4Contexts) == 0 && len(testSharedV4Contexts) == 0 {
+			Skip("No test-sv4-svc or test-sharedv4 apps were found")
 		}
 		workers = node.GetWorkerNodes()
 		numPods = len(workers)
@@ -1065,7 +1066,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 			})
 
 			JustBeforeEach(func() {
-				for _, ctx := range testSv4Contexts {
+				for _, ctx := range testSharedV4Contexts {
 					vol, _, attachedNode := getSv4TestAppVol(ctx)
 					k8sApps := apps.Instance()
 					Step(
@@ -1117,7 +1118,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 			})
 
 			It("should set device path to RO and validate recovery", func() {
-				for _, ctx := range testSv4Contexts {
+				for _, ctx := range testSharedV4Contexts {
 					_, apiVol, attachedNode := getSv4TestAppVol(ctx)
 					counterCollectionInterval := 3 * time.Duration(numPods) * time.Second
 					devicePath := fmt.Sprintf("%s%s", devicePathPrefix, apiVol.Id)
@@ -1164,7 +1165,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 			})
 
 			JustAfterEach(func() {
-				for _, ctx := range testSv4Contexts {
+				for _, ctx := range testSharedV4Contexts {
 					_, _, attachedNode := getSv4TestAppVol(ctx)
 					Step(fmt.Sprintf("remove label on node for %s", ctx.App.Key), func() {
 						err := core.Instance().RemoveLabelOnNode(attachedNode.Name, "attachedNode")
@@ -1229,12 +1230,23 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 func getTestSv4Contexts(contexts []*scheduler.Context) []*scheduler.Context {
 	var testSv4Contexts []*scheduler.Context
 	for _, ctx := range contexts {
-		if !strings.HasPrefix(ctx.App.Key, "test-sv4-svc") && !strings.HasPrefix(ctx.App.Key, "test-sharedv4") {
+		if !strings.HasPrefix(ctx.App.Key, "test-sv4-svc") {
 			continue
 		}
 		testSv4Contexts = append(testSv4Contexts, ctx)
 	}
 	return testSv4Contexts
+}
+
+func getTestSharedV4Contexts(contexts []*scheduler.Context) []*scheduler.Context {
+	var testSharedV4Contexts []*scheduler.Context
+	for _, ctx := range contexts {
+		if !strings.HasPrefix(ctx.App.Key, "test-sharedv4") {
+			continue
+		}
+		testSharedV4Contexts = append(testSharedV4Contexts, ctx)
+	}
+	return testSharedV4Contexts
 }
 
 // returns the appCounter structs for the app pods by scanning the export path on the NFS server

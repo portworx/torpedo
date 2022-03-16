@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: test-sv4-dep-svc
+  name: test-sharedv4-dep
 spec:
   {{ if .Replicas }}
   replicas: {{ .Replicas }}
@@ -9,11 +9,11 @@ spec:
   replicas: 3{{ end }}
   selector:
     matchLabels:
-      app: test-sv4-app-svc
+      app: test-sharedv4-app
   template:
     metadata:
       labels:
-        app: test-sv4-app-svc
+        app: test-sharedv4-app
     spec:
       affinity:
         podAntiAffinity:
@@ -23,7 +23,7 @@ spec:
               - key: app
                 operator: In
                 values:
-                - test-sv4-app-svc
+                - test-sharedv4-app
             topologyKey: "kubernetes.io/hostname"
       containers:
       - name: sv4test
@@ -37,17 +37,17 @@ spec:
               fieldRef:
                 fieldPath: metadata.name
           - name: SHARED_FILE
-            value: "/test-sv4-vol-svc/$(MY_POD_NAME)"
+            value: "/test-sharedv4-vol/$(MY_POD_NAME)"
           - name: LOCAL_FILE
             value: "/local-vol/$(MY_POD_NAME)"
         volumeMounts:
-        - name: test-sv4-vol-svc
-          mountPath: /test-sv4-vol-svc
+        - name: test-sharedv4-vol
+          mountPath: /test-sharedv4-vol
         - name: local-vol
           mountPath: /local-vol
       volumes:
-      - name: test-sv4-vol-svc
+      - name: test-sharedv4-vol
         persistentVolumeClaim:
-          claimName: test-sv4-pvc-svc
+          claimName: test-sharedv4-pvc
       - name: local-vol
         emptyDir: {}
