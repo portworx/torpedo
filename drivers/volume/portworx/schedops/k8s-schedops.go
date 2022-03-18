@@ -32,8 +32,6 @@ import (
 const (
 	// PXServiceName is the name of the portworx service in kubernetes
 	PXServiceName = "portworx-service"
-	// PXNamespace is the kubernetes namespace in which portworx daemon set runs
-	PXNamespace = "kube-system"
 	// PXDaemonSet is the name of portworx daemon set in k8s deployment
 	PXDaemonSet = "portworx"
 	// PXServiceLabelKey is the label key used for px systemd service control
@@ -551,10 +549,21 @@ func isDirEmpty(path string, n node.Node, d node.Driver) bool {
 
 // GetServiceEndpoint get IP addr of portworx-service, preferable external IP
 func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
-	return k8sCore.GetServiceEndpoint(PXServiceName, PXNamespace)
+	// Get volume driver namespace
+	volumeDriverNamespace, err := GetVolumeDriverNamespace()
+	if err != nil {
+		return "", fmt.Errorf("Failed to get driver namespace, Err: %v", err)
+	}
+
+	return k8sCore.GetServiceEndpoint(PXServiceName, volumeDriverNamespace)
 }
 
 func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error {
+	// Get volume driver namespace
+	volumeDriverNamespace, err := GetVolumeDriverNamespace()
+	if err != nil {
+		return fmt.Errorf("Failed to get driver namespace, Err: %v", err)
+	}
 
 	binding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -563,14 +572,14 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 		Subjects: []rbacv1.Subject{{
 			Kind:      "ServiceAccount",
 			Name:      talismanServiceAccount,
-			Namespace: PXNamespace,
+			Namespace: volumeDriverNamespace,
 		}},
 		RoleRef: rbacv1.RoleRef{
 			Kind: "ClusterRole",
 			Name: "cluster-admin",
 		},
 	}
-	binding, err := k8sRbac.CreateClusterRoleBinding(binding)
+	binding, err = k8sRbac.CreateClusterRoleBinding(binding)
 	if err != nil {
 		return err
 	}
@@ -578,7 +587,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 	account := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      talismanServiceAccount,
-			Namespace: PXNamespace,
+			Namespace: volumeDriverNamespace,
 		},
 	}
 	account, err = k8sCore.CreateServiceAccount(account)
@@ -603,7 +612,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "talisman",
-			Namespace: PXNamespace,
+			Namespace: volumeDriverNamespace,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &valOne,
@@ -662,7 +671,15 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 // IsPXReadyOnNode validates if Portworx pod is up and running
 func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	var isPxPodPresent bool = false
-	pxPods, err := k8sCore.GetPodsByNode(n.Name, PXNamespace)
+
+	// Get volume driver namespace
+	volumeDriverNamespace, err := GetVolumeDriverNamespace()
+	if err != nil {
+		logrus.Errorf("Failed to get driver namespace, Err: %v", err)
+		return false
+	}
+
+	pxPods, err := k8sCore.GetPodsByNode(n.Name, volumeDriverNamespace)
 	if err != nil {
 		logrus.Errorf("Failed to get apps on node %s", n.Name)
 		return false

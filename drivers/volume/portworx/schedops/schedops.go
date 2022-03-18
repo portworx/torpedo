@@ -5,9 +5,11 @@ import (
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	k8score "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"
 )
 
@@ -55,6 +57,32 @@ type Driver interface {
 var (
 	schedOpsRegistry = make(map[string]Driver)
 )
+
+const (
+	defaultVolumeDriverNamespace = "kube-system"
+	defaultPortworxServiceName   = "portworx-service"
+)
+
+// GetVolumeDriverNamespace returns volume driver namespace
+func GetVolumeDriverNamespace() (string, error) {
+	// List all services
+	k8sCore := k8score.Instance()
+	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("cannot list services, Err: %v", err)
+	}
+
+	// Set namespace for driverNamesapce same as portworx-service
+	// if portworx-service is not found, defaultDriverNamespace will be used
+	volumeDriverNamespace := defaultVolumeDriverNamespace
+	for _, svc := range allServices.Items {
+		if svc.Name == defaultPortworxServiceName {
+			volumeDriverNamespace = svc.Namespace
+			break
+		}
+	}
+	return volumeDriverNamespace, nil
+}
 
 // Register registers the given portworx scheduler operator
 func Register(name string, d Driver) error {
