@@ -39,17 +39,18 @@ func Init(username, token string) {
 }
 
 // CreateIssue creates issue in jira
-func CreateIssue(issueDesription, issueSummary string) string {
+func CreateIssue(issueDesription, issueSummary string) (string, error) {
 
 	issueKey := ""
+	var err error
 
 	if isJiraConnectionSuccessful {
 
-		issueKey = createPTX(issueDesription, issueSummary)
+		issueKey, err = createPTX(issueDesription, issueSummary)
 	} else {
 		logrus.Warn("Skipping issue creation as jira connection is not successful")
 	}
-	return issueKey
+	return issueKey, err
 
 }
 
@@ -66,7 +67,7 @@ func getPTX(issueID string) {
 
 }
 
-func createPTX(description, summary string) string {
+func createPTX(description, summary string) (string, error) {
 
 	i := jira.Issue{
 		Fields: &jira.IssueFields{
@@ -110,7 +111,7 @@ func createPTX(description, summary string) string {
 		logrus.Infof(newStr)
 
 	}
-	return issueKey
+	return issueKey, err
 
 }
 

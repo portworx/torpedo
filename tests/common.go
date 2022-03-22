@@ -126,6 +126,7 @@ const (
 	backupScheduleNamePrefix             = "tp-bkp-schedule"
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
+	pxNamespace                          = "kube-system"
 
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"
@@ -244,6 +245,11 @@ var (
 var (
 	jiraUserName string
 	jiraToken    string
+)
+
+const (
+	rootLogDir   = "/root/logs"
+	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
 )
 
 // InitInstance is the ginkgo spec for initializing torpedo
@@ -3184,8 +3190,8 @@ func init() {
 
 //CreateJiraIssueWithLogs creates a jira issue and copy logs to nfs mount
 func CreateJiraIssueWithLogs(issueDescription, issueSummary string) {
-	issueKey := jirautils.CreateIssue(issueDescription, issueSummary)
-	if issueKey != "" {
+	issueKey, err := jirautils.CreateIssue(issueDescription, issueSummary)
+	if err == nil {
 		collectAndCopyDiagsOnWorkerNodes(issueKey)
 		collectAndCopyStorkLogs(issueKey)
 		collectAndCopyOperatorLogs(issueKey)
@@ -3201,18 +3207,18 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 		err := runCmd("pwd", currNode)
 		if err == nil {
 			logrus.Infof("Creating directors logs in the node %v", currNode.Name)
-			runCmd("mkdir /root/logs", currNode)
+			runCmd(fmt.Sprintf("mkdir -p %v", rootLogDir), currNode)
 			logrus.Info("Mounting nfs diags directory")
-			runCmd("mount -t nfs diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618 /root/logs", currNode)
+			runCmd(fmt.Sprintf("mount -t nfs %v %v", diagsDirPath, rootLogDir), currNode)
 			if !isIssueDirCreated {
 				logrus.Infof("Creating PTX %v directory in the node %v", issueKey, currNode.Name)
-				runCmd(fmt.Sprintf("mkdir /root/logs/%v", issueKey), currNode)
+				runCmd(fmt.Sprintf("mkdir -p %v/%v", rootLogDir, issueKey), currNode)
 				isIssueDirCreated = true
 			}
 
 			logrus.Infof("collect diags on node: %s", currNode.Name)
 
-			filePath := fmt.Sprintf("/var/cores/diags-%s-%d.tar.gz", currNode.Name, time.Now().Unix())
+			filePath := fmt.Sprintf("/var/cores/%s-diags-*.tar.gz", currNode.Name)
 
 			config := &torpedovolume.DiagRequestConfig{
 				DockerHost:    "unix:///var/run/docker.sock",
@@ -3229,9 +3235,8 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 			err = Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false, Async: true})
 
 			if err == nil {
-				filePath = fmt.Sprintf("/var/cores/%s-diags-*.tar.gz", currNode.Name)
 				logrus.Infof("copying logs %v  on node: %s", filePath, currNode.Name)
-				runCmd(fmt.Sprintf("cp %v /root/logs/%v/", filePath, issueKey), currNode)
+				runCmd(fmt.Sprintf("cp %v %v/%v/", rootLogDir, filePath, issueKey), currNode)
 			} else {
 				logrus.Warnf("Error collecting diags on node: %v, Error: %v", currNode.Name, err)
 			}
@@ -3244,7 +3249,7 @@ func collectAndCopyStorkLogs(issueKey string) {
 
 	storkLabel := make(map[string]string)
 	storkLabel["name"] = "stork"
-	podList, err := core.Instance().GetPods("", storkLabel)
+	podList, err := core.Instance().GetPods(pxNamespace, storkLabel)
 	if err == nil {
 		logsByPodName := map[string]string{}
 		for _, p := range podList.Items {
@@ -3263,14 +3268,14 @@ func collectAndCopyStorkLogs(issueKey string) {
 		err = runCmd("pwd", masterNode)
 		if err == nil {
 			logrus.Infof("Creating directors logs in the node %v", masterNode.Name)
-			runCmd("mkdir /root/logs", masterNode)
+			runCmd(fmt.Sprintf("mkdir -p %v", rootLogDir), masterNode)
 			logrus.Info("Mounting nfs diags directory")
-			runCmd("mount -t nfs diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618 /root/logs", masterNode)
+			runCmd(fmt.Sprintf("mount -t nfs %v %v", diagsDirPath, rootLogDir), masterNode)
 
 			for k, v := range logsByPodName {
 				cmnd := fmt.Sprintf("echo '%v' > /root/%v.log", v, k)
 				runCmd(cmnd, masterNode)
-				runCmd(fmt.Sprintf("cp /root/%v.log /root/logs/%v/", k, issueKey), masterNode)
+				runCmd(fmt.Sprintf("cp /root/%v.log %v/%v/", k, rootLogDir, issueKey), masterNode)
 			}
 		}
 
@@ -3283,7 +3288,7 @@ func collectAndCopyStorkLogs(issueKey string) {
 func collectAndCopyOperatorLogs(issueKey string) {
 	podLabel := make(map[string]string)
 	podLabel["name"] = "portworx-operator"
-	podList, err := core.Instance().GetPods("", podLabel)
+	podList, err := core.Instance().GetPods(pxNamespace, podLabel)
 	if err == nil {
 		logsByPodName := map[string]string{}
 		for _, p := range podList.Items {
@@ -3304,7 +3309,7 @@ func collectAndCopyOperatorLogs(issueKey string) {
 			for k, v := range logsByPodName {
 				cmnd := fmt.Sprintf("echo '%v' > /root/%v.log", v, k)
 				runCmd(cmnd, masterNode)
-				runCmd(fmt.Sprintf("cp /root/%v.log /root/logs/%v/", k, issueKey), masterNode)
+				runCmd(fmt.Sprintf("cp /root/%v.log %v/%v/", k, rootLogDir, issueKey), masterNode)
 			}
 		}
 
@@ -3317,7 +3322,7 @@ func collectAndCopyOperatorLogs(issueKey string) {
 func collectAndCopyAutopilotLogs(issueKey string) {
 	podLabel := make(map[string]string)
 	podLabel["name"] = "autopilot"
-	podList, err := core.Instance().GetPods("", podLabel)
+	podList, err := core.Instance().GetPods(pxNamespace, podLabel)
 	if err == nil {
 		logsByPodName := map[string]string{}
 		for _, p := range podList.Items {
@@ -3339,7 +3344,7 @@ func collectAndCopyAutopilotLogs(issueKey string) {
 			for k, v := range logsByPodName {
 				cmnd := fmt.Sprintf("echo '%v' > /root/%v.log", v, k)
 				runCmd(cmnd, masterNode)
-				runCmd(fmt.Sprintf("cp /root/%v.log /root/logs/%v/", k, issueKey), masterNode)
+				runCmd(fmt.Sprintf("cp /root/%v.log %v/%v/", k, rootLogDir, issueKey), masterNode)
 			}
 		}
 	} else {
