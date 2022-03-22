@@ -25,10 +25,12 @@ require (
 	github.com/libopenstorage/operator v0.0.0-20220121222253-3431532a94f9
 	github.com/libopenstorage/stork v1.4.1-0.20220216141154-b9773cd69de9
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.16.0
+	github.com/onsi/ginkgo/v2 v2.1.3 // indirect
+	github.com/onsi/gomega v1.17.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
+	github.com/portworx/pds-api-go-client v0.0.0-20220224153951-f33532c56f81
 	github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20220216223110-573630bffd87
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
