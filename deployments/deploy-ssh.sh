@@ -183,7 +183,8 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/sharedv4.test",
             "bin/telemetry.test",
             "bin/upgrade_cluster.test",
-            "bin/pxcentral.test",'
+            "bin/pxcentral.test",
+            "bin/storage_pool.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
 fi
@@ -321,6 +322,12 @@ if [ -n "${K8S_VENDOR}" ]; then
             NODE_DRIVER="aks"
             ;;
         eks)
+            # Run torpedo on worker node, where px installation is disabled.
+            K8S_VENDOR_KEY=px/enabled
+            K8S_VENDOR_OPERATOR="In"
+            K8S_VENDOR_VALUE='values: ["false"]'
+            ;;
+        ibm)
             # Run torpedo on worker node, where px installation is disabled.
             K8S_VENDOR_KEY=px/enabled
             K8S_VENDOR_OPERATOR="In"

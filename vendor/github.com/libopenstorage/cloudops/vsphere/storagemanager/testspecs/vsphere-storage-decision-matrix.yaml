@@ -1,0 +1,163 @@
+rows:
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 32
+    max_size: 100
+    priority: 0
+    thin_provisioning: true
+    drive_type: "thin"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 100
+    max_size: 500
+    priority: 0
+    thin_provisioning: true
+    drive_type: "thin"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 500
+    max_size: 1024
+    priority: 0
+    thin_provisioning: true
+    drive_type: "thin"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 1024
+    max_size: 2048
+    priority: 0
+    thin_provisioning: true
+    drive_type: "thin"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 2048
+    max_size: 4096
+    priority: 0
+    thin_provisioning: true
+    drive_type: "thin"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 4096
+    max_size: 8192
+    priority: 0
+    thin_provisioning: true
+    drive_type: "thin"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 32
+    max_size: 100
+    priority: 0
+    thin_provisioning: true
+    drive_type: "zeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 100
+    max_size: 500
+    priority: 0
+    thin_provisioning: true
+    drive_type: "zeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 500
+    max_size: 1024
+    priority: 0
+    thin_provisioning: true
+    drive_type: "zeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 1024
+    max_size: 2048
+    priority: 0
+    thin_provisioning: true
+    drive_type: "zeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 2048
+    max_size: 4096
+    priority: 0
+    thin_provisioning: true
+    drive_type: "zeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 4096
+    max_size: 8192
+    priority: 0
+    thin_provisioning: true
+    drive_type: "zeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 32
+    max_size: 100
+    priority: 0
+    thin_provisioning: true
+    drive_type: "eagerzeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 150
+    max_size: 500
+    priority: 0
+    thin_provisioning: true
+    drive_type: "eagerzeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 500
+    max_size: 1024
+    priority: 0
+    thin_provisioning: true
+    drive_type: "eagerzeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 1024
+    max_size: 2048
+    priority: 0
+    thin_provisioning: true
+    drive_type: "eagerzeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 2048
+    max_size: 4096
+    priority: 0
+    thin_provisioning: true
+    drive_type: "eagerzeroedthick"
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 4096
+    max_size: 8192
+    priority: 0
+    thin_provisioning: true
+    drive_type: "eagerzeroedthick"

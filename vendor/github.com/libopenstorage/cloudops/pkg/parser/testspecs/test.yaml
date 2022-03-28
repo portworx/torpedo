@@ -1,0 +1,31 @@
+rows:
+        - min_iops: 1100
+          instance_type: "*"
+          instance_max_drives: 8
+          instance_min_drives: 1
+          region: "*"
+          min_size: 256
+          max_size: 8192
+          priority: 0
+          thin_provisioning: false
+          drive_type: "Premium_LRS"
+        - min_iops: 500
+          instance_type: "*"
+          instance_max_drives: 8
+          instance_min_drives: 1
+          region: "*"
+          min_size: 256
+          max_size: 4096
+          priority: 1
+          thin_provisioning: false
+          drive_type: "StandardSSD_LRS"
+        - min_iops: 1300
+          instance_type: "*"
+          instance_max_drives: 8
+          instance_min_drives: 1
+          region: "*"
+          min_size: 8192
+          max_size: 8192
+          priority: 2
+          thin_provisioning: false
+          drive_type: "Standard_LRS"

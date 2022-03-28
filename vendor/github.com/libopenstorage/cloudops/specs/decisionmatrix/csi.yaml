@@ -1,0 +1,10 @@
+rows:
+  - instance_type: "*"
+    instance_min_drives: 1
+    instance_max_drives: 12
+    region: "*"
+    min_size: 32
+    max_size: 8192
+    priority: 0
+    thin_provisioning: true
+    drive_type: "csi"

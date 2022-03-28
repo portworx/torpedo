@@ -34,7 +34,7 @@ var _ = Describe("{StoragePoolResize}", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		Expect(len(pools)).ShouldNot(BeEmpty())
+		Expect(pools).ShouldNot(BeEmpty())
 
 		var poolID string
 		for _, pool := range pools {
@@ -52,7 +52,7 @@ var _ = Describe("{StoragePoolResize}", func() {
 
 		time.Sleep(time.Second * 40)
 
-		It(fmt.Sprintf("triggers pool resize %s to the size of %v", poolToResize.Uuid, newSize), func() {
+		Step(fmt.Sprintf("triggers pool resize %s to the size of %v", poolToResize.Uuid, newSize), func() {
 			newPools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			Expect(err).NotTo(HaveOccurred())
 
