@@ -325,6 +325,7 @@ if [ -n "${K8S_VENDOR}" ]; then
             K8S_VENDOR_KEY=px/enabled
             K8S_VENDOR_OPERATOR="In"
             K8S_VENDOR_VALUE='values: ["false"]'
+            NODE_DRIVER="aws"
             ;;
     esac
 else
