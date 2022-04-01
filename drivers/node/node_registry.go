@@ -105,6 +105,17 @@ func GetStorageNodes() []Node {
 	return nodeList
 }
 
+// GetStorageLessNodes gets all the nodes with empty StoragePools
+func GetStorageLessNodes() []Node {
+	var nodeList []Node
+	for _, n := range nodeRegistry {
+		if !IsStorageNode(n) && n.IsStorageDriverInstalled {
+			nodeList = append(nodeList, n)
+		}
+	}
+	return nodeList
+}
+
 // GetMetadataNodes gets all the nodes which serves as internal kvdb metadata node
 func GetMetadataNodes() []Node {
 	var nodeList []Node

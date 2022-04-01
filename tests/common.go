@@ -110,6 +110,7 @@ const (
 	scaleFactorCliFlag                   = "scale-factor"
 	minRunTimeMinsFlag                   = "minimun-runtime-mins"
 	chaosLevelFlag                       = "chaos-level"
+	nodesToGoDownFlag                    = "nodes-to-go-down"
 	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
 	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
 	provisionerFlag                      = "provisioner"
@@ -177,6 +178,7 @@ const (
 	defaultAppScaleFactor                 = 1
 	defaultMinRunTimeMins                 = 0
 	defaultChaosLevel                     = 5
+	defaultNodesToGoDown                  = 0
 	defaultStorageUpgradeEndpointURL      = "https://install.portworx.com/upgrade"
 	defaultStorageUpgradeEndpointVersion  = "2.1.1"
 	defaultStorageProvisioner             = "portworx"
@@ -2989,6 +2991,7 @@ type Torpedo struct {
 	EnableStorkUpgrade                  bool
 	MinRunTimeMins                      int
 	ChaosLevel                          int
+	NodesToGoDown                       int
 	Provisioner                         string
 	MaxStorageNodesPerAZ                int
 	DestroyAppTimeout                   time.Duration
@@ -3023,6 +3026,7 @@ func ParseFlags() {
 	var volUpgradeEndpointVersion string
 	var minRunTimeMins int
 	var chaosLevel int
+	var nodesToGoDown int
 	var storageNodesPerAZ int
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
@@ -3052,6 +3056,7 @@ func ParseFlags() {
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
 	flag.IntVar(&minRunTimeMins, minRunTimeMinsFlag, defaultMinRunTimeMins, "Minimum Run Time in minutes for appliation deletion tests")
 	flag.IntVar(&chaosLevel, chaosLevelFlag, defaultChaosLevel, "Application deletion frequency in minutes")
+	flag.IntVar(&nodesToGoDown, nodesToGoDownFlag, defaultNodesToGoDown, "Global number of nodes to have storage driver restarted or rebooted")
 	flag.StringVar(&volUpgradeEndpointURL, storageUpgradeEndpointURLCliFlag, defaultStorageUpgradeEndpointURL,
 		"Endpoint URL link which will be used for upgrade storage driver")
 	flag.StringVar(&volUpgradeEndpointVersion, storageUpgradeEndpointVersionCliFlag, defaultStorageUpgradeEndpointVersion,
