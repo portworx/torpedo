@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -167,6 +168,8 @@ const (
 	AppTaskDown = "appTaskDown"
 	// RestartVolDriver restart volume driver
 	RestartVolDriver = "restartVolDriver"
+	// RestartManyVolDriver restarts one or more volume drivers at time
+	RestartManyVolDriver = "restartManyVolDriver"
 	// CrashVolDriver crashes volume driver
 	CrashVolDriver = "crashVolDriver"
 	// RebootNode reboots all nodes one by one
@@ -652,6 +655,85 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 	})
 }
 
+// TriggerRestartManyVolDriver restarts one or more volume drivers and validates app
+func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RestartManyVolDriver,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	driverNodesToRestart := getRandomNodes(Inst().NodesToGoDown)
+	chaosLevel := ChaosMap[RestartManyVolDriver]
+	var wg sync.WaitGroup
+	Step("get nodes bounce volume driver", func() {
+		for i := 0; i < chaosLevel; i++ {
+			for _, appNode := range driverNodesToRestart {
+				wg.Add(1)
+				go func(appNode node.Node) {
+					defer wg.Done()
+					Step(fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name), func() {
+						taskStep := fmt.Sprintf("stop volume driver on node: %s.",
+							appNode.MgmtIp)
+						event.Event.Type += "<br>" + taskStep
+						errorChan := make(chan error, errorChannelSize)
+						StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
+						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
+					})
+				}(appNode)
+			}
+
+			Step("wait all the storage drivers to be stopped", func() {
+				wg.Wait()
+			})
+
+			for _, appNode := range driverNodesToRestart {
+				wg.Add(1)
+				go func(appNode node.Node) {
+					defer wg.Done()
+					Step(fmt.Sprintf("starting volume %s driver on node %s", Inst().V.String(), appNode.Name), func() {
+						taskStep := fmt.Sprintf("starting volume driver on node: %s.",
+							appNode.MgmtIp)
+						event.Event.Type += "<br>" + taskStep
+						errorChan := make(chan error, errorChannelSize)
+						StartVolDriverAndWait([]node.Node{appNode}, &errorChan)
+						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
+					})
+
+					Step("Giving few seconds for volume driver to stabilize", func() {
+						time.Sleep(20 * time.Second)
+					})
+				}(appNode)
+			}
+			Step("wait all the storage drivers to be up", func() {
+				wg.Wait()
+			})
+			for _, ctx := range *contexts {
+				Step(fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key), func() {
+					errorChan := make(chan error, errorChannelSize)
+					ctx.ReadinessTimeout = time.Minute * 10
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+			}
+		}
+	})
+}
+
 // TriggerRebootNodes reboots node on which apps are running
 func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
@@ -734,6 +816,64 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			}
 		})
 	})
+}
+
+func randIntn(n, maxNo int) []int {
+	if n > maxNo {
+		n = maxNo
+	}
+	rand.Seed(time.Now().UnixNano())
+	generated := make(map[int]bool)
+	for i := 0; i < n; i++ {
+		randUniq := rand.Intn(maxNo)
+		if !generated[randUniq] {
+			generated[randUniq] = true
+		}
+	}
+	generatedNs := make([]int, 0)
+	for key := range generated {
+		generatedNs = append(generatedNs, key)
+	}
+	return generatedNs
+}
+
+// getRandomNodes picks random nodes evenly distributed between storage and storageless
+func getRandomNodes(numNodes int) []node.Node {
+	nodes := make([]node.Node, 0)
+	storageNodes := node.GetStorageNodes()
+	storageLessNodes := node.GetStorageLessNodes()
+	lenStorageNodes := len(storageNodes)
+	lenStorageLessNodes := len(storageLessNodes)
+	storageNodesToPick := 0
+	storageLessNodesToPick := 0
+	if lenStorageLessNodes > 0 {
+		if numNodes%2 > 0 {
+			storageNodesToPick = numNodes/2 + 1
+			storageLessNodesToPick = numNodes / 2
+		} else {
+			storageNodesToPick = numNodes / 2
+			storageLessNodesToPick = numNodes / 2
+		}
+		if storageLessNodesToPick > lenStorageLessNodes {
+			storageLessNodesToPick = lenStorageLessNodes
+			storageNodesToPick = numNodes - storageLessNodesToPick
+		}
+	} else {
+		storageNodesToPick = numNodes
+	}
+
+	stNodeIndexes := randIntn(lenStorageNodes, storageNodesToPick)
+	stLessNodeIndexes := randIntn(lenStorageLessNodes, storageLessNodesToPick)
+
+	for i := 0; i < len(stNodeIndexes); i++ {
+		nodes = append(nodes, storageNodes[stNodeIndexes[i]])
+	}
+
+	for i := 0; i < len(stLessNodeIndexes); i++ {
+		nodes = append(nodes, storageLessNodes[stLessNodeIndexes[i]])
+	}
+
+	return nodes
 }
 
 // TriggerCrashNodes crashes Worker nodes
