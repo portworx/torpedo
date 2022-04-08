@@ -54,6 +54,8 @@ const (
 	DefaultEmailRecipient = "test@portworx.com"
 	// SendGridEmailAPIKeyField is field in config map which stores the SendGrid Email API key
 	SendGridEmailAPIKeyField = "sendGridAPIKey"
+	// AppCustomConfigField is the field in config mape which stores Custom App Config
+	AppCustomConfigField = "customAppConfig"
 )
 
 const (
@@ -69,6 +71,9 @@ var RunningTriggers map[string]time.Duration
 
 // ChaosMap stores mapping between test trigger and its chaos level.
 var ChaosMap map[string]int
+
+// AppConfigMap stores mapping between test trigger and its custom app config.
+var AppConfigMap map[string]map[string]scheduler.AppConfig
 
 // coresMap stores mapping between node name and cores generated.
 var coresMap map[string]string
@@ -240,6 +245,10 @@ const (
 	AppTasksDown = "appScaleUpAndDown"
 	// AutoFsTrim enables Auto Fstrim in PX cluster
 	AutoFsTrim = "autoFsTrim"
+	// AppIncreaseDecreaseScaleFactor adds or deletes namespaces
+	AppIncreaseDecreaseScaleFactor = "appIncreaseDecreaseScaleFactor"
+	// AppIncreaseDecreaseReplicas scales app up and down stateful sets or deployments across namespaces
+	AppIncreaseDecreaseReplicas = "appIncreaseDecreaseReplicas"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -3777,6 +3786,118 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 	})
 }
 
+// TriggerAppIncreaseDecreaseScaleFactor performs app scale up or down in different namespaces according to config map
+func TriggerAppIncreaseDecreaseScaleFactor(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppIncreaseDecreaseScaleFactor,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	errorChan := make(chan error, errorChannelSize)
+	context("scale apps in or out apps in different namespaces", func() {
+		for key, value := range AppConfigMap[AppIncreaseDecreaseScaleFactor] {
+			// get all namespaces for a given app
+			appCtx := make([]*scheduler.Context, 0)
+			for _, ctx := range *contexts {
+				if ctx.App.Key == key {
+					appCtx = append(appCtx, ctx)
+				}
+			}
+			if len(appCtx) < value.Namespaces {
+				Step("scaling in apps in different namespaces", func() {
+					for i := 0; i < (value.Namespaces - len(appCtx)); i++ {
+						taskName := fmt.Sprintf("%s-%v", fmt.Sprintf("appincreasedecreasescalefactor-%d", i), Inst().InstanceID)
+						ctx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+							AppKeys:            []string{key},
+							StorageProvisioner: Inst().Provisioner,
+						})
+						UpdateOutcome(event, err)
+						*contexts = append(*contexts, ctx...)
+					}
+				})
+			} else if len(appCtx) > value.Namespaces {
+				Step("scaling out apps in different namespaces", func() {
+					nsCount := len(appCtx) - value.Namespaces
+					extraContexts := (*contexts)[nsCount:]
+					for _, ctx := range extraContexts {
+						TearDownContext(ctx, nil)
+						logrus.Info("Giving few seconds for scaled up applications to stabilize")
+						time.Sleep(10 * time.Second)
+					}
+					*contexts = (*contexts)[:nsCount]
+				})
+			}
+		}
+
+		errorChan = make(chan error, errorChannelSize)
+		Step("validate all after apps scale up/down", func() {
+			for _, ctx := range *contexts {
+				ValidateContext(ctx, &errorChan)
+			}
+			for err := range errorChan {
+				logrus.Infof("Error: %v", err)
+				UpdateOutcome(event, err)
+			}
+		})
+	})
+}
+
+// TriggerAppIncreaseDecreaseReplicas changes replicas for apps ib different namespaces
+func TriggerAppIncreaseDecreaseReplicas(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppIncreaseDecreaseReplicas,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	context("scale apps up or down on each namespace", func() {
+		for key, value := range AppConfigMap[AppIncreaseDecreaseScaleFactor] {
+			// updates replica for all namespaces for a given app
+			for _, ctx := range *contexts {
+				if ctx.App.Key == key {
+					Step("scaling up/down apps", func() {
+						applicationScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
+						UpdateOutcome(event, err)
+						if err == nil {
+							for containerName := range applicationScaleMap {
+								containerName = strings.ReplaceAll(key, k8s.DeploymentSuffix, "")
+								containerName = strings.ReplaceAll(key, k8s.StatefulSetSuffix, "")
+								applicationScaleMap[key] = int32(value.CustomPodConfig[containerName].Replicas)
+							}
+							err = Inst().S.ScaleApplication(ctx, applicationScaleMap)
+							UpdateOutcome(event, err)
+						}
+
+						logrus.Info("Giving few seconds applications to stabilize")
+						time.Sleep(10 * time.Second)
+					})
+
+					Step("validate all after apps scale up", func() {
+						ctx.SkipVolumeValidation = true
+						ValidateContext(ctx)
+					})
+				}
+			}
+		}
+	})
+}
 func prepareEmailBody(eventRecords emailData) (string, error) {
 	var err error
 	t := template.New("t").Funcs(templateFuncs)

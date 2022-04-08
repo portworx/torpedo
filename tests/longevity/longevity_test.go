@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"os"
 	"strconv"
 	"strings"
@@ -56,30 +57,32 @@ var _ = Describe("{Longevity}", func() {
 	var triggerLock sync.Mutex
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-		DeployApps:           TriggerDeployNewApps,
-		RebootNode:           TriggerRebootNodes,
-		CrashNode:            TriggerCrashNodes,
-		RestartVolDriver:     TriggerRestartVolDriver,
-		CrashVolDriver:       TriggerCrashVolDriver,
-		HAIncrease:           TriggerHAIncrease,
-		HADecrease:           TriggerHADecrease,
-		VolumeClone:          TriggerVolumeClone,
-		VolumeResize:         TriggerVolumeResize,
-		EmailReporter:        TriggerEmailReporter,
-		AppTaskDown:          TriggerAppTaskDown,
-		CoreChecker:          TriggerCoreChecker,
-		CloudSnapShot:        TriggerCloudSnapShot,
-		LocalSnapShot:        TriggerLocalSnapShot,
-		DeleteLocalSnapShot:  TriggerDeleteLocalSnapShot,
-		PoolResizeDisk:       TriggerPoolResizeDisk,
-		PoolAddDisk:          TriggerPoolAddDisk,
-		UpgradeStork:         TriggerUpgradeStork,
-		VolumesDelete:        TriggerVolumeDelete,
-		UpgradeVolumeDriver:  TriggerUpgradeVolumeDriver,
-		AppTasksDown:         TriggerAppTasksDown,
-		AutoFsTrim:           TriggerAutoFsTrim,
-		RestartManyVolDriver: TriggerRestartManyVolDriver,
-		RebootManyNodes:      TriggerRebootManyNodes,
+		DeployApps:                     TriggerDeployNewApps,
+		RebootNode:                     TriggerRebootNodes,
+		CrashNode:                      TriggerCrashNodes,
+		RestartVolDriver:               TriggerRestartVolDriver,
+		CrashVolDriver:                 TriggerCrashVolDriver,
+		HAIncrease:                     TriggerHAIncrease,
+		HADecrease:                     TriggerHADecrease,
+		VolumeClone:                    TriggerVolumeClone,
+		VolumeResize:                   TriggerVolumeResize,
+		EmailReporter:                  TriggerEmailReporter,
+		AppTaskDown:                    TriggerAppTaskDown,
+		CoreChecker:                    TriggerCoreChecker,
+		CloudSnapShot:                  TriggerCloudSnapShot,
+		LocalSnapShot:                  TriggerLocalSnapShot,
+		DeleteLocalSnapShot:            TriggerDeleteLocalSnapShot,
+		PoolResizeDisk:                 TriggerPoolResizeDisk,
+		PoolAddDisk:                    TriggerPoolAddDisk,
+		UpgradeStork:                   TriggerUpgradeStork,
+		VolumesDelete:                  TriggerVolumeDelete,
+		UpgradeVolumeDriver:            TriggerUpgradeVolumeDriver,
+		AppTasksDown:                   TriggerAppTasksDown,
+		AutoFsTrim:                     TriggerAutoFsTrim,
+		RestartManyVolDriver:           TriggerRestartManyVolDriver,
+		RebootManyNodes:                TriggerRebootManyNodes,
+		AppIncreaseDecreaseScaleFactor: TriggerAppIncreaseDecreaseScaleFactor,
+		AppIncreaseDecreaseReplicas:    TriggerAppIncreaseDecreaseReplicas,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -234,6 +237,8 @@ func populateDisruptiveTriggers() {
 		RestartManyVolDriver:            true,
 		RebootManyNodes:                 true,
 		RestartKvdbVolDriver:            true,
+		AppIncreaseDecreaseScaleFactor:  false,
+		AppIncreaseDecreaseReplicas:     false,
 	}
 }
 
@@ -248,9 +253,27 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 		return err
 	}
 
+	err = populateCustomAppConfigTrigger(configData)
+	if err != nil {
+		return err
+	}
+
 	err = populateTriggers(configData)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func populateCustomAppConfigTrigger(configData *map[string]string) error {
+	if customAppConfig, ok := (*configData)[AppCustomConfigField]; ok {
+		err := yaml.Unmarshal([]byte(customAppConfig), &AppConfigMap)
+		if err != nil {
+			return fmt.Errorf("cannot unmarshal yaml. Error: %v", err)
+		}
+		logrus.Infof("Parsed custom app config file: %+v", AppConfigMap)
+		delete(*configData, AppCustomConfigField)
 	}
 	return nil
 }
