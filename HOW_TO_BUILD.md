@@ -7,6 +7,11 @@ Torpedo uses [Ginkgo](https://github.com/onsi/ginkgo) as the testing framework.
 # make
 ```
 
+build single test (example: basic)
+```
+GINKGO_BUILD_ONE=basic make build
+```
+
 #### To deploy Torpedo image in your docker repository
 ```
 # export DOCKER_HUB_REPO=harshpx
