@@ -8,7 +8,14 @@ import (
 	v2 "github.com/IBM-Cloud/bluemix-go/api/container/containerv2"
 	"github.com/IBM-Cloud/bluemix-go/session"
 	"github.com/libopenstorage/cloudops"
+	"github.com/libopenstorage/cloudops/backoff"
 	"github.com/libopenstorage/cloudops/unsupported"
+)
+
+const (
+	labelWorkerPoolName = "ibm-cloud.kubernetes.io/worker-pool-name"
+	labelWorkerPoolID   = "ibm-cloud.kubernetes.io/worker-pool-id"
+	vpcProviderName     = "vpc-gen2"
 )
 
 type ibmOps struct {
@@ -56,13 +63,7 @@ func NewClient() (cloudops.Ops, error) {
 	i.clusterName = clusterName
 	i.resourceGroup = resourceGroup
 
-	return &ibmOps{
-		Compute:          unsupported.NewUnsupportedCompute(),
-		Storage:          unsupported.NewUnsupportedStorage(),
-		ibmClusterClient: ibmClusterClient,
-		inst:             i,
-	}, nil
-	/*return backoff.NewExponentialBackoffOps(
+	return backoff.NewExponentialBackoffOps(
 		&ibmOps{
 			Compute:          unsupported.NewUnsupportedCompute(),
 			Storage:          unsupported.NewUnsupportedStorage(),
@@ -72,24 +73,25 @@ func NewClient() (cloudops.Ops, error) {
 		isExponentialError,
 		backoff.DefaultExponentialBackoff,
 	), nil
-	*/
 }
 
-func (i *ibmOps) Name() string { return string(cloudops.IBM) }
+func (i *ibmOps) Name() string {
+	return string(cloudops.IBM)
+}
 
-func (i *ibmOps) InstanceID() string { return i.inst.name }
+func (i *ibmOps) InstanceID() string {
+	return i.inst.name
+}
 
 func isExponentialError(err error) bool {
-	// TODO: revisit
 	return true
 }
 
 func (i *ibmOps) InspectInstance(instanceID string) (*cloudops.InstanceInfo, error) {
 	target := v2.ClusterTargetHeader{
 		ResourceGroup: i.inst.resourceGroup,
-		Provider:      "vpc-gen2",
+		Provider:      vpcProviderName,
 	}
-	fmt.Printf("target Header: %+v, cluter: %+v", target, i.inst.clusterName)
 	workerDetails, err := i.ibmClusterClient.Workers().Get(i.inst.clusterName, instanceID, target)
 	if err != nil {
 		return nil, err
@@ -99,8 +101,8 @@ func (i *ibmOps) InspectInstance(instanceID string) (*cloudops.InstanceInfo, err
 		CloudResourceInfo: cloudops.CloudResourceInfo{
 			Name: workerDetails.ID,
 			Labels: map[string]string{
-				"ibm-cloud.kubernetes.io/worker-pool-name": workerDetails.PoolName,
-				"ibm-cloud.kubernetes.io/worker-pool-id":   workerDetails.PoolID,
+				labelWorkerPoolName: workerDetails.PoolName,
+				labelWorkerPoolID:   workerDetails.PoolID,
 			},
 			Zone:   workerDetails.Location,
 			Region: workerDetails.Location,
@@ -110,7 +112,38 @@ func (i *ibmOps) InspectInstance(instanceID string) (*cloudops.InstanceInfo, err
 }
 
 func (i *ibmOps) InspectInstanceGroupForInstance(instanceID string) (*cloudops.InstanceGroupInfo, error) {
-	return nil, nil
+	instanceInfo, err := i.InspectInstance(instanceID)
+	if err != nil {
+		return nil, err
+	}
+	var instGroupInfo *cloudops.InstanceGroupInfo
+	if workerPoolID, ok := instanceInfo.Labels[labelWorkerPoolID]; ok {
+		target := v2.ClusterTargetHeader{
+			ResourceGroup: i.inst.resourceGroup,
+			Provider:      vpcProviderName,
+		}
+		workerPoolDetails, err := i.ibmClusterClient.WorkerPools().GetWorkerPool(i.inst.clusterName, workerPoolID, target)
+		if err != nil {
+			return nil, err
+		}
+
+		var zones []string
+		for _, z := range workerPoolDetails.Zones {
+			zones = append(zones, z.ID)
+		}
+
+		instGroupInfo = &cloudops.InstanceGroupInfo{
+			CloudResourceInfo: cloudops.CloudResourceInfo{
+				Name:   workerPoolDetails.PoolName,
+				ID:     workerPoolDetails.ID,
+				Labels: workerPoolDetails.Labels,
+			},
+			Zones: zones,
+		}
+
+		return instGroupInfo, nil
+	}
+	return instGroupInfo, fmt.Errorf("no [%s] label found for instance [%s]", labelWorkerPoolID, instanceID)
 }
 func getInfoFromEnv() (string, string, string, error) {
 	instanceName, err := cloudops.GetEnvValueStrict("IBM_INSTANCE_NAME")
@@ -142,13 +175,24 @@ func (i *ibmOps) SetInstanceGroupSize(instanceGroupID string,
 	}
 	target := v2.ClusterTargetHeader{
 		ResourceGroup: i.inst.resourceGroup,
-		Provider:      "vpc-gen2",
+		Provider:      vpcProviderName,
 	}
 	err := i.ibmClusterClient.WorkerPools().ResizeWorkerPool(req, target)
 	if err != nil {
 		return err
 	}
-
-	// TODO: Wait fot resize operation to complete.
 	return nil
+}
+
+// GetInstanceGroupSize returns current node count of given instance group
+func (i *ibmOps) GetInstanceGroupSize(instanceGroupID string) (int64, error) {
+	target := v2.ClusterTargetHeader{
+		ResourceGroup: i.inst.resourceGroup,
+		Provider:      vpcProviderName,
+	}
+	workerPoolDetails, err := i.ibmClusterClient.WorkerPools().GetWorkerPool(i.inst.clusterName, instanceGroupID, target)
+	if err != nil {
+		return 0, err
+	}
+	return int64(workerPoolDetails.WorkerCount * len(workerPoolDetails.Zones)), nil
 }

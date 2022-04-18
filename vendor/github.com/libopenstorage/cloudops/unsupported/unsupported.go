@@ -72,7 +72,7 @@ func (u *unsupportedCompute) SetInstanceGroupVersion(instanceGroupID string,
 type unsupportedStorage struct {
 }
 
-// unsupportedStorage return wrapper for cloudOps where all methods are not supported
+// NewUnsupportedStorage return wrapper for cloudOps where all methods are not supported
 func NewUnsupportedStorage() cloudops.Storage {
 	return &unsupportedStorage{}
 }

@@ -78,52 +78,52 @@ func compute(t *testing.T, driver cloudops.Ops) {
 	require.NoError(t, err, "failed to inspect instance")
 	require.NotNil(t, info, "got nil instance info from inspect")
 
-	/*
-		groupInfo, err := driver.InspectInstanceGroupForInstance(instanceID)
-		if _, ok := err.(*cloudops.ErrNotSupported); ok {
-			return
-		}
-
-		require.NoError(t, err, "failed to inspect instance group")
-		require.NotNil(t, groupInfo, "got nil instance group info from inspect")
-
-			err = driver.SetClusterVersion("1.14.10-gke.37", 10*time.Minute)
-			if err != nil {
-				_, ok := err.(*cloudops.ErrNotSupported)
-				if !ok {
-					t.Errorf("failed to set cluster version. Error:[%v]", err)
-				}
-			}
-
-			err = driver.SetInstanceGroupVersion(groupInfo.Name, "1.14.10-gke.37", 15*time.Minute)
-			if err != nil {
-				_, ok := err.(*cloudops.ErrNotSupported)
-				if !ok {
-					t.Errorf("failed to set instance group version. Error:[%v]", err)
-				}
-			}
-	*/
-	err = driver.SetInstanceGroupSize(info.CloudResourceInfo.Labels["ibm-cloud.kubernetes.io/worker-pool-name"], clusterNodeCount, 5*time.Minute)
-	if err != nil {
-		_, ok := err.(*cloudops.ErrNotSupported)
-		if !ok {
-			t.Errorf("failed to set node count. Error:[%v]", err)
-		}
+	groupInfo, err := driver.InspectInstanceGroupForInstance(instanceID)
+	if _, ok := err.(*cloudops.ErrNotSupported); ok {
+		return
 	}
+
+	require.NoError(t, err, "failed to inspect instance group")
+	require.NotNil(t, groupInfo, "got nil instance group info from inspect")
+	require.Equal(t, len(groupInfo.Zones), 1, fmt.Sprintf("number of zones not 3 %v", groupInfo.Zones))
 	/*
-		currentCount, err := driver.GetInstanceGroupSize(groupInfo.Name)
+				err = driver.SetClusterVersion("1.14.10-gke.37", 10*time.Minute)
+				if err != nil {
+					_, ok := err.(*cloudops.ErrNotSupported)
+					if !ok {
+						t.Errorf("failed to set cluster version. Error:[%v]", err)
+					}
+				}
+
+				err = driver.SetInstanceGroupVersion(groupInfo.Name, "1.14.10-gke.37", 15*time.Minute)
+				if err != nil {
+					_, ok := err.(*cloudops.ErrNotSupported)
+					if !ok {
+						t.Errorf("failed to set instance group version. Error:[%v]", err)
+					}
+				}
+
+		err = driver.SetInstanceGroupSize(info.CloudResourceInfo.Labels["ibm-cloud.kubernetes.io/worker-pool-name"], clusterNodeCount, 5*time.Minute)
 		if err != nil {
 			_, ok := err.(*cloudops.ErrNotSupported)
 			if !ok {
-				t.Errorf("failed to get node count. Error:[%v]", err)
+				t.Errorf("failed to set node count. Error:[%v]", err)
 			}
-		} else {
-			// clusterNodeCount is per availability zone.
-			// So total cluster-wide node count is clusterNodeCount*num. of az
-			require.Equal(t, int64(clusterNodeCount*len(groupInfo.Zones)), currentCount,
-				"expected cluster node count does not match with actual node count")
 		}
-
+	*/
+	currentCount, err := driver.GetInstanceGroupSize(groupInfo.Name)
+	if err != nil {
+		_, ok := err.(*cloudops.ErrNotSupported)
+		if !ok {
+			t.Errorf("failed to get node count. Error:[%v]", err)
+		}
+	} else {
+		// clusterNodeCount is per availability zone.
+		// So total cluster-wide node count is clusterNodeCount*num. of az
+		require.Equal(t, int64(clusterNodeCount*3), currentCount,
+			"expected cluster node count does not match with actual node count")
+	}
+	/*
 		// Validate when timeout is given as 0, API does not error out.
 		err = driver.SetInstanceGroupSize(groupInfo.Name, clusterNodeCount+1, 0)
 		if err != nil {

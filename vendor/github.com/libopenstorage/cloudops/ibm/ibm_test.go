@@ -23,10 +23,8 @@ const (
 var diskName = fmt.Sprintf("%s-%s", newDiskPrefix, uuid.New())
 
 func initIBM(t *testing.T) (cloudops.Ops, map[string]interface{}) {
-	fmt.Printf("Inside init.. getting new IBM cloud client")
 	driver, err := ibm.NewClient()
 	require.NoError(t, err, "failed to instantiate storage ops driver")
-	fmt.Printf("successfully got ibm client in initIBM")
 
 	template := &compute.Disk{
 		Description: newDiskDescription,
@@ -50,20 +48,6 @@ func TestAll(t *testing.T) {
 	diskTemplates[d.Name()] = disks
 	test.RunTest(drivers, diskTemplates, sizeCheck, t)
 }
-
-/*func TestInspectInstance(t *testing.T) {
-	if gce.IsDevMode() {
-		d, _ := initIBM(t)
-		info, err := d.InspectInstance(os.Getenv("GCE_INSTANCE_NAME"))
-		require.NoError(t, err)
-		require.NotNil(t, info)
-		logrus.Infof("[debug] got instance info: %v", info)
-	} else {
-		fmt.Printf("skipping GCE tests as environment is not set...\n")
-		t.Skip("skipping GCE tests as environment is not set...")
-	}
-
-}*/
 
 func sizeCheck(template interface{}, targetSize uint64) bool {
 	return true
