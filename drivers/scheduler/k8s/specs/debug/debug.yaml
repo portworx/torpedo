@@ -24,7 +24,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
       - name: debug
-        image: ubuntu:latest
+        image: harbor.pwx.dev.purestorage.com:443/px-image/ubuntu:latest
         imagePullPolicy: IfNotPresent
         command: [ "sleep" ]
         args: [ "infinity" ]
@@ -59,3 +59,7 @@ spec:
       - name: varcore
         hostPath:
           path: /var/cores/
+      - name: reg-cred
+        secret:
+          defaultMode: 420
+          secretName: harbor-secret
