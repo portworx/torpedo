@@ -280,7 +280,7 @@ type Driver interface {
 	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
 
 	// GetPxctlStatus returns the status of pxctl
-	GetPxctlStatus(n node.Node, isJson bool) (string, error)
+	GetPxctlStatus(n node.Node, isJSON bool) (string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

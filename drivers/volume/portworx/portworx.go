@@ -3364,7 +3364,7 @@ func (d *portworx) getPxctlPath(n node.Node) string {
 	return strings.TrimSpace(out)
 }
 
-func (d *portworx) GetPxctlStatus(n node.Node, isJson bool) (string, error) {
+func (d *portworx) GetPxctlStatus(n node.Node, isJSON bool) (string, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -3381,7 +3381,7 @@ func (d *portworx) GetPxctlStatus(n node.Node, isJson bool) (string, error) {
 		}
 	}
 
-	if !isJson {
+	if !isJSON {
 		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status", pxctlPath), opts)
 		if err != nil {
 			return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
