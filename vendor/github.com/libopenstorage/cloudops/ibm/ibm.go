@@ -1,6 +1,7 @@
 package ibm
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -10,14 +11,28 @@ import (
 	"github.com/libopenstorage/cloudops"
 	"github.com/libopenstorage/cloudops/backoff"
 	"github.com/libopenstorage/cloudops/unsupported"
+	core "github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
+	"k8s.io/client-go/rest"
 )
 
 const (
-	labelWorkerPoolName = "ibm-cloud.kubernetes.io/worker-pool-name"
-	labelWorkerPoolID   = "ibm-cloud.kubernetes.io/worker-pool-id"
-	vpcProviderName     = "vpc-gen2"
+	labelWorkerPoolName         = "ibm-cloud.kubernetes.io/worker-pool-name"
+	labelWorkerPoolID           = "ibm-cloud.kubernetes.io/worker-pool-id"
+	labelWorkerID               = "ibm-cloud.kubernetes.io/worker-id"
+	vpcProviderName             = "vpc-gen2"
+	iksClusterInfoConfigMapName = "cluster-info"
+	clusterIDconfigMapField     = "cluster-config.json"
+	expectedWorkerHealthState   = "normal"
+	expectedWorkerHealthMsg     = "Ready"
 )
 
+const retrySeconds = 15
+
+// ClusterConfig stores info about iks cluster as provided by IBM
+type ClusterConfig struct {
+	ClusterID string `json:"cluster_id"`
+}
 type ibmOps struct {
 	cloudops.Compute
 	cloudops.Storage
@@ -31,7 +46,6 @@ type instance struct {
 	hostname        string
 	zone            string
 	region          string
-	resourceGroup   string
 	clusterName     string
 	clusterLocation string
 	nodePoolID      string
@@ -53,15 +67,21 @@ func NewClient() (cloudops.Ops, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ibm cluster client. error: [%v]", err)
 	}
-
-	instanceName, clusterName, resourceGroup, err := getInfoFromEnv()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster info. error: [%v] ", err)
+	var instanceName, clusterName string
+	if IsDevMode() {
+		instanceName, clusterName, err = getInfoFromEnv()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get cluster info from environment variables. error: [%v] ", err)
+		}
+	} else {
+		instanceName, clusterName, err = getIBMInfo()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get cluster info. error: [%v] ", err)
+		}
 	}
 
 	i.name = instanceName
 	i.clusterName = clusterName
-	i.resourceGroup = resourceGroup
 
 	return backoff.NewExponentialBackoffOps(
 		&ibmOps{
@@ -89,8 +109,7 @@ func isExponentialError(err error) bool {
 
 func (i *ibmOps) InspectInstance(instanceID string) (*cloudops.InstanceInfo, error) {
 	target := v2.ClusterTargetHeader{
-		ResourceGroup: i.inst.resourceGroup,
-		Provider:      vpcProviderName,
+		Provider: vpcProviderName,
 	}
 	workerDetails, err := i.ibmClusterClient.Workers().Get(i.inst.clusterName, instanceID, target)
 	if err != nil {
@@ -119,10 +138,10 @@ func (i *ibmOps) InspectInstanceGroupForInstance(instanceID string) (*cloudops.I
 	var instGroupInfo *cloudops.InstanceGroupInfo
 	if workerPoolID, ok := instanceInfo.Labels[labelWorkerPoolID]; ok {
 		target := v2.ClusterTargetHeader{
-			ResourceGroup: i.inst.resourceGroup,
-			Provider:      vpcProviderName,
+			Provider: vpcProviderName,
 		}
-		workerPoolDetails, err := i.ibmClusterClient.WorkerPools().GetWorkerPool(i.inst.clusterName, workerPoolID, target)
+		workerPoolDetails, err := i.ibmClusterClient.WorkerPools().
+			GetWorkerPool(i.inst.clusterName, workerPoolID, target)
 		if err != nil {
 			return nil, err
 		}
@@ -149,29 +168,55 @@ func (i *ibmOps) InspectInstanceGroupForInstance(instanceID string) (*cloudops.I
 // IsDevMode checks if the pkg is invoked in
 // developer mode where IBM credentials are set as env variables
 func IsDevMode() bool {
-	_, _, _, err := getInfoFromEnv()
+	_, _, err := getInfoFromEnv()
 	if err != nil {
 		return false
 	}
 	return true
 }
 
-func getInfoFromEnv() (string, string, string, error) {
+func getInfoFromEnv() (string, string, error) {
 	instanceName, err := cloudops.GetEnvValueStrict("IBM_INSTANCE_NAME")
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
 
 	clusterName, err := cloudops.GetEnvValueStrict("IBM_CLUSTER_NAME")
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
+	}
+	return instanceName, clusterName, nil
+}
+
+func getIBMInfo() (string, string, error) {
+	k8sCore := core.Instance()
+	kubeconfig, err := rest.InClusterConfig()
+	if err != nil {
+		return "", "", err
 	}
 
-	resourceGroup, err := cloudops.GetEnvValueStrict("IBM_RESOURCE_GROUP")
+	k8sCore.SetConfig(kubeconfig)
+	cm, err := k8sCore.GetConfigMap(iksClusterInfoConfigMapName, "kube-system")
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
-	return instanceName, clusterName, resourceGroup, nil
+
+	clusterInfo := &ClusterConfig{}
+	err = json.Unmarshal([]byte(cm.Data[clusterIDconfigMapField]), clusterInfo)
+	if err != nil {
+		return "", "", err
+	}
+
+	nodeName, err := cloudops.GetEnvValueStrict("NODE_NAME")
+	if err != nil {
+		return "", "", err
+	}
+
+	labels, err := k8sCore.GetLabelsOnNode(nodeName)
+	if err != nil {
+		return "", "", err
+	}
+	return labels[labelWorkerID], clusterInfo.ClusterID, nil
 }
 
 // SetInstanceGroupSize sets node count for a instance group.
@@ -185,25 +230,100 @@ func (i *ibmOps) SetInstanceGroupSize(instanceGroupID string,
 		Size:       count,
 	}
 	target := v2.ClusterTargetHeader{
-		ResourceGroup: i.inst.resourceGroup,
-		Provider:      vpcProviderName,
+		Provider: vpcProviderName,
 	}
 	err := i.ibmClusterClient.WorkerPools().ResizeWorkerPool(req, target)
 	if err != nil {
 		return err
 	}
-	return nil
+
+	err = i.waitForInstanceGroupResize(instanceGroupID, count, timeout)
+	return err
 }
 
 // GetInstanceGroupSize returns current node count of given instance group
 func (i *ibmOps) GetInstanceGroupSize(instanceGroupID string) (int64, error) {
 	target := v2.ClusterTargetHeader{
-		ResourceGroup: i.inst.resourceGroup,
-		Provider:      vpcProviderName,
+		Provider: vpcProviderName,
 	}
-	workerPoolDetails, err := i.ibmClusterClient.WorkerPools().GetWorkerPool(i.inst.clusterName, instanceGroupID, target)
+	workerPoolDetails, err := i.ibmClusterClient.WorkerPools().
+		GetWorkerPool(i.inst.clusterName, instanceGroupID, target)
 	if err != nil {
 		return 0, err
 	}
+
 	return int64(workerPoolDetails.WorkerCount * len(workerPoolDetails.Zones)), nil
+}
+
+func (i *ibmOps) getCurrentWorkers(instanceGroupID string) ([]v2.Worker, error) {
+	var currentWorkers []v2.Worker
+	target := v2.ClusterTargetHeader{
+		Provider: vpcProviderName,
+	}
+	workerList, err := i.ibmClusterClient.Workers().
+		ListByWorkerPool(i.inst.clusterName, instanceGroupID, false, target)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, worker := range workerList {
+		workerGet, err := i.ibmClusterClient.Workers().Get(i.inst.clusterName, worker.ID, target)
+		if err != nil {
+			return nil, err
+		}
+
+		if workerGet.LifeCycle.ReasonForDelete != "" {
+			// If node is in process of getting deleted, that
+			// means node is still present. Include it in the
+			// list of current nodes
+			currentWorkers = append(currentWorkers, worker)
+			continue
+		}
+
+		if workerGet.LifeCycle.ActualState == workerGet.LifeCycle.DesiredState &&
+			workerGet.Health.State == expectedWorkerHealthState &&
+			workerGet.Health.Message == expectedWorkerHealthMsg {
+			currentWorkers = append(currentWorkers, worker)
+		}
+	}
+	return currentWorkers, nil
+}
+
+func (i *ibmOps) waitForInstanceGroupResize(instanceGroupID string,
+	count int64, timeout time.Duration) error {
+	target := v2.ClusterTargetHeader{
+		Provider: vpcProviderName,
+	}
+
+	workerPoolDetails, err := i.ibmClusterClient.WorkerPools().
+		GetWorkerPool(i.inst.clusterName, instanceGroupID, target)
+	if err != nil {
+		return err
+	}
+
+	expectedWorkerCount := len(workerPoolDetails.Zones) * int(count)
+	if timeout > time.Nanosecond {
+		f := func() (interface{}, bool, error) {
+
+			currentWorkers, err := i.getCurrentWorkers(instanceGroupID)
+			if err != nil {
+				// Error occured, just retry
+				return nil, true, err
+			}
+			// The operation is done
+			if len(currentWorkers) == expectedWorkerCount {
+				return nil, false, nil
+			}
+			return nil,
+				true,
+				fmt.Errorf("number of current worker nodes [%d]. Waiting for [%d] nodes to become HEALTHY",
+					len(currentWorkers), expectedWorkerCount)
+		}
+
+		_, err = task.DoRetryWithTimeout(f, timeout, retrySeconds*time.Second)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -516,14 +516,8 @@ spec:
       value: "${VSPHERE_PWD}"
     - name: VSPHERE_HOST_IP
       value: "${VSPHERE_HOST_IP}"
-    - name: IBM_CLUSTER_NAME
-      value: "${IBM_CLUSTER_NAME}"
-    - name: IBM_RESOURCE_GROUP
-      value: "${IBM_RESOURCE_GROUP}"
     - name: IBMCLOUD_API_KEY
       value: "${IBMCLOUD_API_KEY}"
-    - name: IBM_INSTANCE_NAME
-      value: "${IBM_INSTANCE_NAME}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
