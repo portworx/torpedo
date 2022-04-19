@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -1805,7 +1806,7 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
 
 	sdkport, _ := getSDKPort()
-	pxEndpoint := fmt.Sprintf("%s:%d", endpoint, sdkport)
+	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
 	newConn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		logrus.Errorf("Got error while setting the connection endpoint, Error: %v", err)
@@ -2147,7 +2148,7 @@ func (d *portworx) testAndSetEndpointUsingNodeIP(ip string) error {
 }
 
 func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) error {
-	pxEndpoint := fmt.Sprintf("%s:%d", endpoint, sdkport)
+	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		return err
@@ -2561,7 +2562,7 @@ func (d *portworx) getClusterPairManagerByAddress(addr, token string) (api.OpenS
 	if err != nil {
 		return nil, err
 	}
-	pxEndpoint := fmt.Sprintf("%s:%d", addr, pxPort)
+	pxEndpoint := net.JoinHostPort(addr, strconv.Itoa(int(pxPort)))
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
@@ -2592,7 +2593,7 @@ func (d *portworx) getNodeManagerByAddress(addr string) (api.OpenStorageNodeClie
 	if err != nil {
 		return nil, err
 	}
-	pxEndpoint := fmt.Sprintf("%s:%d", addr, pxPort)
+	pxEndpoint := net.JoinHostPort(addr, strconv.Itoa(int(pxPort)))
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
