@@ -82,10 +82,8 @@ func GetMasterNodes() []Node {
 func GetStorageDriverNodes() []Node {
 	var nodeList []Node
 	for _, n := range nodeRegistry {
-		fmt.Printf("[GetStorageDriverNodes]: node type: %v, is px installed: %v\n\n", n.Type, n.IsStorageDriverInstalled)
 		if n.Type == TypeWorker && n.IsStorageDriverInstalled {
 			nodeList = append(nodeList, n)
-			fmt.Printf("[GetStorageDriverNodes]: adding %+v to list of nodes where px is installed.\n\n", n)
 		}
 	}
 	return nodeList
