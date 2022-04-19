@@ -1169,12 +1169,15 @@ func GetStorageNodes() ([]node.Node, error) {
 
 	storageNodes := []node.Node{}
 	nodes := node.GetStorageDriverNodes()
+	fmt.Println("[GetStorageNodes]: list of storage driver nodes (where px is installed): ")
+	fmt.Printf("%+v", nodes)
 
 	for _, node := range nodes {
 		devices, err := Inst().V.GetStorageDevices(node)
 		if err != nil {
 			return nil, err
 		}
+		fmt.Printf("[GetStorageNodes]: found %+v devices for node %+v", devices, node)
 		if len(devices) > 0 {
 			storageNodes = append(storageNodes, node)
 		}

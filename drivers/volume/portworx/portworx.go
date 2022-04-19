@@ -826,7 +826,7 @@ func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	fmt.Printf("[GetStorageDevices] node details: [%+v]\n\n", pxNode)
 	devPaths := make([]string, 0)
 	for _, value := range pxNode.Disks {
 		devPaths = append(devPaths, value.Path)
