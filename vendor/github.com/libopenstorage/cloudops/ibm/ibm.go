@@ -145,6 +145,17 @@ func (i *ibmOps) InspectInstanceGroupForInstance(instanceID string) (*cloudops.I
 	}
 	return instGroupInfo, fmt.Errorf("no [%s] label found for instance [%s]", labelWorkerPoolID, instanceID)
 }
+
+// IsDevMode checks if the pkg is invoked in
+// developer mode where IBM credentials are set as env variables
+func IsDevMode() bool {
+	_, _, _, err := getInfoFromEnv()
+	if err != nil {
+		return false
+	}
+	return true
+}
+
 func getInfoFromEnv() (string, string, string, error) {
 	instanceName, err := cloudops.GetEnvValueStrict("IBM_INSTANCE_NAME")
 	if err != nil {
