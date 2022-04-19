@@ -1579,7 +1579,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
 		case api.Status_STATUS_OK:
-			pxStatus, err := d.getPxctlStatus(n)
+			pxStatus, err := d.GetPxctlStatus(n, true)
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
@@ -3365,7 +3365,7 @@ func (d *portworx) getPxctlPath(n node.Node) string {
 	return strings.TrimSpace(out)
 }
 
-func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
+func (d *portworx) GetPxctlStatus(n node.Node, isJSON bool) (string, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -3382,6 +3382,13 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 		}
 	}
 
+	if !isJSON {
+		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status", pxctlPath), opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+		}
+		return out, nil
+	}
 	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s -j status", pxctlPath), opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)

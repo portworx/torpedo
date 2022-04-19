@@ -665,3 +665,11 @@ func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
 		Operation: "GetPxVersionOnNode()",
 	}
 }
+
+//GetPxctlStatus retruns GetPxctlStatus on the given node
+func (d *DefaultDriver) GetPxctlStatus(n node.Node, isJSON bool) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxctlStatus()",
+	}
+}
