@@ -666,10 +666,10 @@ func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
 	}
 }
 
-//GetPxctlStatus retruns GetPxctlStatus on the given node
-func (d *DefaultDriver) GetPxctlStatus(n node.Node, isJSON bool) (string, error) {
+// GetPxctlRawOutput retruns the command output run on the given node
+func (d *DefaultDriver) GetPxctlRawOutput(n node.Node, command string) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "GetPxctlStatus()",
+		Operation: "GetPxctlRawOutput()",
 	}
 }

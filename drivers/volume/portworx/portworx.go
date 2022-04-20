@@ -1578,7 +1578,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
 		case api.Status_STATUS_OK:
-			pxStatus, err := d.GetPxctlStatus(n, true)
+			pxStatus, err := d.getPxctlStatus(n)
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
@@ -3364,7 +3364,7 @@ func (d *portworx) getPxctlPath(n node.Node) string {
 	return strings.TrimSpace(out)
 }
 
-func (d *portworx) GetPxctlStatus(n node.Node, isJSON bool) (string, error) {
+func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -3381,13 +3381,6 @@ func (d *portworx) GetPxctlStatus(n node.Node, isJSON bool) (string, error) {
 		}
 	}
 
-	if !isJSON {
-		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status", pxctlPath), opts)
-		if err != nil {
-			return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
-		}
-		return out, nil
-	}
 	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s -j status", pxctlPath), opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
@@ -3412,6 +3405,41 @@ func (d *portworx) GetPxctlStatus(n node.Node, isJSON bool) (string, error) {
 		return status.(string), nil
 	}
 	return api.Status_STATUS_NONE.String(), nil
+}
+
+func (d *portworx) GetPxctlRawOutput(n node.Node, command string) (string, error) {
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+
+	pxctlPath := d.getPxctlPath(n)
+
+	// create context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to create pxctl context. cause: %v", err)
+		}
+	}
+
+	cmd := fmt.Sprintf("%s %s", pxctlPath, command)
+	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+	}
+
+	// delete context
+	if len(d.token) > 0 {
+		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to delete pxctl context. cause: %v", err)
+		}
+	}
+
+	return out, nil
+
 }
 
 func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {
