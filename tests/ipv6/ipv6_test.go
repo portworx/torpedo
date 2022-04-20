@@ -28,40 +28,83 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-// Verify pxctl status output prints address is IPv6 format
-var _ = Describe("{PxctlStatusTest}", func() {
-	// update the testrailID with your test
-	var testrailID = 9695443
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/9695443
-	var runID int
-	JustBeforeEach(func() {
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
-	})
+var _ = Describe("{IPv6PxctlFunctional}", func() {
+	var testrailID, runID int
 	var contexts []*scheduler.Context
+	var nodes []node.Node
+	var numNodes int
 
-	It("has to run pxctl status and checks for valid ipv6 addresses", func() {
-		var status string
-		var err error
+	BeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		nodes = node.GetWorkerNodes()
+		numNodes = len(nodes)
+	})
+
+	Context("{IPv6PxctlCommands}", func() {
+		var pxctlCmd string
+		var pxctlCmdFull string
+		var expectedIPCount int
 		var ips []string
 
-		nodes := node.GetWorkerNodes()
-		Step(fmt.Sprintln("run pxctl status"), func() {
-			status, err = Inst().V.GetPxctlRawOutput(nodes[0], "status")
-			Expect(err).NotTo(HaveOccurred(), status)
+		// shared test function for pxctl commands
+		testPxctlCmdForIPv6 := func() {
+			It("has to run pxctl command and checks for valid ipv6 addresses", func() {
+				var output string
+				var err error
+
+				Step(fmt.Sprintln("run pxctl command"), func() {
+					output, err = Inst().V.GetPxctlRawOutput(nodes[0], pxctlCmdFull)
+					Expect(err).NotTo(HaveOccurred(), output)
+				})
+
+				Step(fmt.Sprintln("parse address from pxctl command output"), func() {
+					ips = ipv6util.ParseIPv6AddressInPxctlCommand(pxctlCmd, output, numNodes)
+					Expect(len(ips)).To(Equal(expectedIPCount), "unexpected parsed ip count")
+				})
+
+				Step(fmt.Sprintln("validate the address are ipv6"), func() {
+					isIpv6 := ipv6util.AreAddressesIPv6(ips)
+					Expect(isIpv6).To(BeTrue(), "addresses in pxctl command output are expected to be IPv6, parsed ips: %v", ips)
+				})
+			})
+		}
+
+		// test ip address from pxctl status output
+		Context("{PxctlStatusTest}", func() {
+			JustBeforeEach(func() {
+				pxctlCmd = ipv6util.PXCTL_STATUS
+				pxctlCmdFull = ipv6util.PXCTL_STATUS
+				// number of ips are the number of nodes + 1 (the node IP where the status command is run on)
+				expectedIPCount = numNodes + 1
+				testrailID = 9695443
+			})
+			testPxctlCmdForIPv6()
 		})
 
-		Step(fmt.Sprintln("parse address from pxctl status"), func() {
-			ips = ipv6util.ParseIPv6AddressInPxctlCommand(ipv6util.PXCTL_STATUS, status, len(nodes))
-			// number of ips are the number of nodes + 1 (the node IP where the status command is run on)
-			Expect(len(ips)).To(Equal(len(nodes)+1), "unexpected ip count, should be one more than to number of worker nodes")
+		// test ip address from pxctl cluster list
+		Context("{PxctlClusterList}", func() {
+			JustBeforeEach(func() {
+				pxctlCmd = ipv6util.PXCTL_CLUSTER_LIST
+				pxctlCmdFull = ipv6util.PXCTL_CLUSTER_LIST
+				expectedIPCount = numNodes
+				testrailID = 9695444
+			})
+			testPxctlCmdForIPv6()
 		})
 
-		Step(fmt.Sprintln("validate the address are ipv6"), func() {
-			isIpv6 := ipv6util.AreAddressesIPv6(ips)
-			Expect(isIpv6).To(BeTrue(), "addresses in pxctl status are expected to be IPv6, parsed ips: %v", ips)
-		})
+		// test ip address from pxctl cluster inspect
+		Context("{PxctlClusterInspect}", func() {
 
+			JustBeforeEach(func() {
+				pxctlCmd = ipv6util.PXCTL_CLUSTER_INSPECT
+				pxctlCmdFull = fmt.Sprintf("%s %s", ipv6util.PXCTL_CLUSTER_INSPECT, nodes[0].Id)
+				expectedIPCount = 2
+				testrailID = 9695444
+			})
+			testPxctlCmdForIPv6()
+		})
 	})
+
 	JustAfterEach(func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
