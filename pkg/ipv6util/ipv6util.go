@@ -8,9 +8,12 @@ import (
 )
 
 const (
-	PXCTL_STATUS          = "status"
-	PXCTL_CLUSTER_LIST    = "cluster list"
-	PXCTL_CLUSTER_INSPECT = "cluster inspect"
+	// PxctlStatus defines the pxctl status command
+	PxctlStatus = "status"
+	// PxctlClusterList defines the pxctl cluster list command
+	PxctlClusterList = "cluster list"
+	// PxctlClusterInspect defines the pxctl cluster inspect command
+	PxctlClusterInspect = "cluster inspect"
 )
 
 type parser struct {
@@ -78,11 +81,11 @@ func (p *parser) parseLine(line string) {
 // ParseIPv6AddressInPxctlCommand takes output of `pxctl command` and return the list of IPs parsed
 func ParseIPv6AddressInPxctlCommand(command string, output string, nodeCount int) []string {
 	switch command {
-	case PXCTL_STATUS:
+	case PxctlStatus:
 		return parseIPv6AddressInPxctlStatus(output, nodeCount)
-	case PXCTL_CLUSTER_LIST:
+	case PxctlClusterList:
 		return parseIPv6AddressInPxctlClusterList(output, nodeCount)
-	case PXCTL_CLUSTER_INSPECT:
+	case PxctlClusterInspect:
 		return parseIPv6AddressInPxctlClusterInspect(output, nodeCount)
 	default:
 		return []string{}

@@ -72,8 +72,8 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 		// test ip address from pxctl status output
 		Context("{PxctlStatusTest}", func() {
 			JustBeforeEach(func() {
-				pxctlCmd = ipv6util.PXCTL_STATUS
-				pxctlCmdFull = ipv6util.PXCTL_STATUS
+				pxctlCmd = ipv6util.PxctlStatus
+				pxctlCmdFull = ipv6util.PxctlStatus
 				// number of ips are the number of nodes + 1 (the node IP where the status command is run on)
 				expectedIPCount = numNodes + 1
 				testrailID = 9695443
@@ -84,8 +84,8 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 		// test ip address from pxctl cluster list
 		Context("{PxctlClusterList}", func() {
 			JustBeforeEach(func() {
-				pxctlCmd = ipv6util.PXCTL_CLUSTER_LIST
-				pxctlCmdFull = ipv6util.PXCTL_CLUSTER_LIST
+				pxctlCmd = ipv6util.PxctlClusterList
+				pxctlCmdFull = ipv6util.PxctlClusterList
 				expectedIPCount = numNodes
 				testrailID = 9695444
 			})
@@ -96,8 +96,8 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 		Context("{PxctlClusterInspect}", func() {
 
 			JustBeforeEach(func() {
-				pxctlCmd = ipv6util.PXCTL_CLUSTER_INSPECT
-				pxctlCmdFull = fmt.Sprintf("%s %s", ipv6util.PXCTL_CLUSTER_INSPECT, nodes[0].Id)
+				pxctlCmd = ipv6util.PxctlClusterInspect
+				pxctlCmdFull = fmt.Sprintf("%s %s", ipv6util.PxctlClusterInspect, nodes[0].Id)
 				expectedIPCount = 2
 				testrailID = 9695444
 			})
