@@ -7,40 +7,127 @@ import (
 	"github.com/asaskevich/govalidator"
 )
 
-// ParseIpv6AddressInPxctlStatus takes output of `pxctl status` and return the list of IPs parsed
-func ParseIpv6AddressInPxctlStatus(status string, nodeCount int) []string {
-	ips := []string{}
-	scanner := bufio.NewScanner(strings.NewReader(status))
-	// iterate each line to check for two conditions where IPs are printed:
-	// 1. `IP: <addr>`
-	//    ex: IP: 0000:111:2222:3333:444:5555:6666:777
-	// 2. (number of nodes) lines after `IP \t ID...`
-	//    ex: IP					ID					SchedulerNodeName	Auth		StorageNode	Used	Capacity	Status	StorageStatus	Version		Kernel			OS
-	//		0000:111:2222:3333:444:5555:6666:777	f703597a-9772-4bdb-b630-6395b3c98658	...	...
-	// 		0000:111:2222:3333:444:5555:6666:777	cedc897f-a489-4c28-9c20-12b8b4c3d1d8	...	...
-	for scanner.Scan() {
-		line := scanner.Text()
-		line = strings.TrimPrefix(line, "\t")
+const (
+	PXCTL_STATUS          = "status"
+	PXCTL_CLUSTER_LIST    = "cluster list"
+	PXCTL_CLUSTER_INSPECT = "cluster inspect"
+)
 
-		if strings.HasPrefix(line, "IP") {
-			// check for the first condition
-			if strings.HasPrefix(line, "IP:") {
-				ips = append(ips, strings.Split(line, " ")[1])
-				continue
+type parser struct {
+	pxctlCommand string
+	options      []parserOption
+	scanner      *bufio.Scanner
+	ips          []string
+}
+
+type parserOption struct {
+	prefix string
+	index  int
+	count  int
+}
+
+func NewIPv6Parser(command string, options []parserOption) parser {
+	return parser{command, options, nil, nil}
+}
+
+func NewIPv6ParserOption(prefix string, index, count int) parserOption {
+	return parserOption{prefix, index, count}
+}
+
+func (p *parser) Parse(cmdOutput string) []string {
+	p.ips = []string{}
+	p.scanner = bufio.NewScanner(strings.NewReader(cmdOutput))
+	for p.scanner.Scan() {
+		line := p.scanner.Text()
+		line = strings.TrimPrefix(line, "\t")
+		p.parseLine(line)
+	}
+	return p.ips
+}
+
+// parseLine check for one of the two conditions where IPs are printed:
+// 1. The IP is on the same line. `IP: <addr>`
+//    ex: IP: 0000:111:2222:3333:444:5555:6666:777
+// 2. There are multiple IPs after the line that match prefix
+//    ex: IP					ID					SchedulerNodeName	Auth		StorageNode	Used	Capacity	Status	StorageStatus	Version		Kernel			OS
+//		0000:111:2222:3333:444:5555:6666:777	f703597a-9772-4bdb-b630-6395b3c98658	...	...
+// 		0000:111:2222:3333:444:5555:6666:777	cedc897f-a489-4c28-9c20-12b8b4c3d1d8	...	...
+func (p *parser) parseLine(line string) {
+	for _, option := range p.options {
+		if strings.HasPrefix(line, option.prefix) {
+			// 1st condiition expect to parse a single line where the prefix is match
+			if option.count == 0 {
+				p.ips = append(p.ips, strings.Fields(line)[option.index])
 			}
 
-			// check for the second condition
-			for i := 0; i < nodeCount; i++ {
-				if !scanner.Scan() {
+			// look for the IPs in lines after prefix are matched
+			for i := 0; i < option.count; i++ {
+				if !p.scanner.Scan() {
 					break
 				}
-				line := scanner.Text()
-				line = strings.TrimPrefix(line, "\t")
-				ips = append(ips, strings.Split(line, "\t")[0])
+				line := p.scanner.Text()
+				p.ips = append(p.ips, strings.Fields(line)[option.index])
 			}
 		}
 	}
-	return ips
+}
+
+func ParseIPv6AddressInPxctlCommand(command string, output string, nodeCount int) []string {
+	switch command {
+	case PXCTL_STATUS:
+		return parseIPv6AddressInPxctlStatus(output, nodeCount)
+	case PXCTL_CLUSTER_LIST:
+		return parseIPv6AddressInPxctlClusterList(output, nodeCount)
+	case PXCTL_CLUSTER_INSPECT:
+		return parseIPv6AddressInPxctlClusterInspect(output, nodeCount)
+	default:
+		return []string{}
+	}
+}
+
+// parseIpv6AddressInPxctlStatus takes output of `pxctl status` and return the list of IPs parsed
+// iterate each line to check for two conditions where IPs are printed:
+// 1. `IP: <addr>`
+//    ex: IP: 0000:111:2222:3333:444:5555:6666:777
+// 2. (number of nodes) lines after `IP \t ID...`
+//    ex: IP					ID					SchedulerNodeName	Auth		StorageNode	Used	Capacity	Status	StorageStatus	Version		Kernel			OS
+//		0000:111:2222:3333:444:5555:6666:777	f703597a-9772-4bdb-b630-6395b3c98658	...	...
+// 		0000:111:2222:3333:444:5555:6666:777	cedc897f-a489-4c28-9c20-12b8b4c3d1d8	...	...
+func parseIPv6AddressInPxctlStatus(status string, nodeCount int) []string {
+	// parse the case for IP: 0000:111:2222:3333:444:5555:6666:777
+	p1 := NewIPv6ParserOption("IP:", 1, 0)
+
+	// parse the case:
+	// IP					ID					SchedulerNodeName	Auth		StorageNode	Used	Capacity	Status	StorageStatus	Version		Kernel			OS
+	// 0000:111:2222:3333:444:5555:6666:777	f703597a-9772-4bdb-b630-6395b3c98658	...	...
+	// 0000:111:2222:3333:444:5555:6666:777	cedc897f-a489-4c28-9c20-12b8b4c3d1d8	...	...
+	p2 := NewIPv6ParserOption("IP\t", 0, nodeCount)
+	p := NewIPv6Parser("pxctl status", []parserOption{p1, p2})
+
+	return p.Parse(status)
+}
+
+// parseIpv6AddressInPxctlClusterList takes output of `pxctl status` and return the list of IPs parsed
+// iterate each line to check for the conditions where IPs are printed:
+// (number of nodes) lines after `ID\t... DATA IP\t`. ex:
+// ID					SCHEDULER_NODE_NAME	DATA IP					CPU		MEM TOTAL	MEM FREE	CONTAINERS	VERSION		Kernel				OS		STATUS
+// 2ca8932b-b17e-425c-bcbe-d33b0f64b623	node03			0000:111:2222:3333:444:5555:6666:777	... ...
+// 6b9d12e0-fb28-459e-acf1-cea4d57004e2	node04			0000:111:2222:3333:444:5555:6666:777	... ...
+func parseIPv6AddressInPxctlClusterList(output string, nodeCount int) []string {
+	option := NewIPv6ParserOption("ID\t", 2, nodeCount)
+	p := NewIPv6Parser("pxctl cluster list", []parserOption{option})
+	return p.Parse(output)
+}
+
+// parseIPv6AddressInPxctlClusterInspect takes output of `pxctl cluster inspect` and return the list of IPs parsed
+// iterate each line to check for two conditions where IPs are printed:
+// 1. `Mgmt IP\t :\t  <addr>` ex: Mgmt IP       		:  0000:111:2222:3333:444:5555:6666:111
+// 2. `Data IP\t :\t <addr>` ex: Data IP       		:  0000:111:2222:3333:444:5555:6666:111
+func parseIPv6AddressInPxctlClusterInspect(output string, nodeCount int) []string {
+	option1 := NewIPv6ParserOption("Mgmt IP", 3, 0)
+	option2 := NewIPv6ParserOption("Data IP", 3, 0)
+	p := NewIPv6Parser("pxctl cluster list", []parserOption{option1, option2})
+	return p.Parse(output)
 }
 
 // IsAddressIPv6 checks the given address is a valid Ipv6 address

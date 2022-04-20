@@ -28,7 +28,7 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-// Simple single test
+// Verify pxctl status output prints address is IPv6 format
 var _ = Describe("{PxctlStatusTest}", func() {
 	// update the testrailID with your test
 	var testrailID = 9695443
@@ -46,12 +46,12 @@ var _ = Describe("{PxctlStatusTest}", func() {
 
 		nodes := node.GetWorkerNodes()
 		Step(fmt.Sprintln("run pxctl status"), func() {
-			status, err = Inst().V.GetPxctlStatus(nodes[0], false)
+			status, err = Inst().V.GetPxctlRawOutput(nodes[0], "status")
 			Expect(err).NotTo(HaveOccurred(), status)
 		})
 
 		Step(fmt.Sprintln("parse address from pxctl status"), func() {
-			ips = ipv6util.ParseIpv6AddressInPxctlStatus(status, len(nodes))
+			ips = ipv6util.ParseIPv6AddressInPxctlCommand(ipv6util.PXCTL_STATUS, status, len(nodes))
 			// number of ips are the number of nodes + 1 (the node IP where the status command is run on)
 			Expect(len(ips)).To(Equal(len(nodes)+1), "unexpected ip count, should be one more than to number of worker nodes")
 		})
