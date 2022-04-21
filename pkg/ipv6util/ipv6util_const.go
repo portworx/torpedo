@@ -96,5 +96,10 @@ Volumes 		:
 Status  		:  Online
 `
 
+	sampleIpv6PxctlVolumeListOutput = `
+ID			NAME	SIZE	HA	SHARED	ENCRYPTED	PROXY-VOLUME	IO_PRIORITY	STATUS							SNAP-ENABLED
+197020883293002044	ipv6-volume	1 GiB	1	no	no		no		LOW		up - attached on 0000:111:2222:3333:444:5555:6666:111	no
+`
+
 	sampleNodeCount = 6
 )

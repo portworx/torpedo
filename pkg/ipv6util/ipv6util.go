@@ -2,6 +2,7 @@ package ipv6util
 
 import (
 	"bufio"
+	"regexp"
 	"strings"
 
 	"github.com/asaskevich/govalidator"
@@ -14,6 +15,11 @@ const (
 	PxctlClusterList = "cluster list"
 	// PxctlClusterInspect defines the pxctl cluster inspect command
 	PxctlClusterInspect = "cluster inspect"
+	// PxctlVolumeList defines the pxctl volume list command
+	PxctlVolumeList = "volume list"
+
+	// Ipv6VolumeName is used to define the created volume name
+	Ipv6VolumeName = "ipv6-volume"
 )
 
 type parser struct {
@@ -93,6 +99,8 @@ func ParseIPv6AddressInPxctlCommand(command string, output string, nodeCount int
 		return parseIPv6AddressInPxctlClusterList(output, nodeCount)
 	case PxctlClusterInspect:
 		return parseIPv6AddressInPxctlClusterInspect(output, nodeCount)
+	case PxctlVolumeList:
+		return parseIPv6AddressInPxctlVolumeList(output)
 	default:
 		return []string{}
 	}
@@ -141,6 +149,25 @@ func parseIPv6AddressInPxctlClusterInspect(output string, nodeCount int) []strin
 	option2 := newIPv6ParserOption("Data IP", 3, 0)
 	p := newIPv6Parser([]parserOption{option1, option2})
 	return p.parse(output)
+}
+
+// parseIPv6AddressInPxctlVolumeList takes output of `pxctl volume list` and return the list of IPs parsed
+// iterate each line to check for condition where IPs are printed:
+// - use regex to look for the volume name and `attach on`
+// ex: 197020883293002044	ipv6-volume	1 GiB	1	no	no		no		LOW		up - attached on 0000:111:2222:3333:444:5555:6666:111	no
+func parseIPv6AddressInPxctlVolumeList(output string) []string {
+	ips := []string{}
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+		line = strings.TrimPrefix(line, "\t")
+		re := regexp.MustCompile(Ipv6VolumeName + `.*attached on.*`)
+		if re.MatchString(line) {
+			ips = append(ips, strings.Fields(line)[13])
+		}
+	}
+
+	return ips
 }
 
 // IsAddressIPv6 checks the given address is a valid Ipv6 address
