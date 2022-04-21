@@ -2183,7 +2183,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 }
 
 func (d *portworx) getLegacyClusterManager(endpoint string, pxdRestPort int32) (cluster.Cluster, error) {
-	pxEndpoint := fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
+	pxEndpoint := fmt.Sprintf("http://%s", net.JoinHostPort(endpoint, strconv.Itoa(int(pxdRestPort))))
 	var cClient *client.Client
 	var err error
 	if d.token != "" {
@@ -2624,7 +2624,7 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	if err != nil {
 		return err
 	}
-	url := fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+	url := fmt.Sprintf("http://%s", net.JoinHostPort(n.Addresses[0], strconv.Itoa(int(pxdRestPort))))
 
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
@@ -2801,9 +2801,9 @@ func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) 
 		if err != nil {
 			return kvdbMembers, err
 		}
-		url = fmt.Sprintf("http://%s:%d", n.Addresses[0], pxdRestPort)
+		url = fmt.Sprintf("http://%s", net.JoinHostPort(n.Addresses[0], strconv.Itoa(int(pxdRestPort))))
 	} else {
-		url = fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
+		url = fmt.Sprintf("http://%s", net.JoinHostPort(endpoint, strconv.Itoa(int(pxdRestPort))))
 	}
 	// TODO replace by sdk call whenever it is available
 	logrus.Infof("Url to call %v", url)
@@ -2892,7 +2892,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 
 		logrus.Debug("Validating CCM health")
 		// Change to config package.
-		url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
+		url := fmt.Sprintf("http://%s/1.0/status/troubleshoot-cloud-connection", net.JoinHostPort(n.MgmtIp, strconv.Itoa(1970)))
 		resp, err := http.Get(url)
 		if err != nil {
 			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
@@ -2980,7 +2980,7 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 
 		logrus.Debug("Validating CCM health")
 		// Change to config package.
-		url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
+		url := fmt.Sprintf("http://%s/1.0/status/troubleshoot-cloud-connection", net.JoinHostPort(n.MgmtIp, strconv.Itoa(1970)))
 		ccmresp, err := http.Get(url)
 		if err != nil {
 			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
