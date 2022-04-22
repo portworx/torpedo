@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -2146,7 +2147,7 @@ func (d *portworx) testAndSetEndpointUsingNodeIP(ip string) error {
 }
 
 func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) error {
-	pxEndpoint := fmt.Sprintf("%s:%d", endpoint, sdkport)
+	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
 	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
 	if err != nil {
 		return err
