@@ -240,6 +240,10 @@ const (
 	AppTasksDown = "appScaleUpAndDown"
 	// AutoFsTrim enables Auto Fstrim in PX cluster
 	AutoFsTrim = "autoFsTrim"
+	// NodeDecommission decommission random node in the PX cluster
+	NodeDecommission = "ndoeDecomm"
+	//NodeRejoin rejoins the decommissioned node into the PX cluster
+	NodeRejoin = "nodeRejoin"
 )
 
 // TriggerCoreChecker checks if any cores got generated
