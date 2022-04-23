@@ -129,7 +129,7 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 					pxctlCmd = ipv6util.PxctlVolumeList
 					pxctlCmdFull = ipv6util.PxctlVolumeList
 					expectedIPCount = 1
-					testrailID = 9695444
+					testrailID = 9695445
 				})
 				testPxctlCmdForIPv6()
 			})
@@ -139,7 +139,7 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 					pxctlCmd = ipv6util.PxctlVolumeInspect
 					pxctlCmdFull = fmt.Sprintf("%s %s", ipv6util.PxctlVolumeInspect, volumeID)
 					expectedIPCount = 2
-					testrailID = 9695444
+					testrailID = 9695445
 				})
 				testPxctlCmdForIPv6()
 			})
