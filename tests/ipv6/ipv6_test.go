@@ -53,8 +53,8 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 				var err error
 
 				Step(fmt.Sprintln("run pxctl command"), func() {
-					output, err = Inst().V.GetPxctlRawOutput(nodes[0], pxctlCmdFull)
-					Expect(err).NotTo(HaveOccurred(), output)
+					output, err = Inst().V.GetPxctlCmdOutput(nodes[0], pxctlCmdFull)
+					Expect(err).NotTo(HaveOccurred(), "unexpected error getting pxctl command output for running: %v, got output %v", pxctlCmdFull, output)
 				})
 
 				Step(fmt.Sprintln("parse address from pxctl command output"), func() {
@@ -94,7 +94,6 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 
 		// test ip address from pxctl cluster inspect
 		Context("{PxctlClusterInspect}", func() {
-
 			JustBeforeEach(func() {
 				pxctlCmd = ipv6util.PxctlClusterInspect
 				pxctlCmdFull = fmt.Sprintf("%s %s", ipv6util.PxctlClusterInspect, nodes[0].Id)

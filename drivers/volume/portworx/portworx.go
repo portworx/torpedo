@@ -3407,7 +3407,7 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 	return api.Status_STATUS_NONE.String(), nil
 }
 
-func (d *portworx) GetPxctlRawOutput(n node.Node, command string) (string, error) {
+func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,

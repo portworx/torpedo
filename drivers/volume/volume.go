@@ -279,8 +279,8 @@ type Driver interface {
 	//GetAutoFsTrimStatus get status of autofstrim
 	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
 
-	// GetPxctlRawOutput retruns the command output run on the given node
-	GetPxctlRawOutput(n node.Node, command string) (string, error)
+	// GetPxctlCmdOutput retruns the command output run on the given node
+	GetPxctlCmdOutput(n node.Node, command string) (string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

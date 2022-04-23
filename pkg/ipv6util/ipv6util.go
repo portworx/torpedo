@@ -17,10 +17,9 @@ const (
 )
 
 type parser struct {
-	pxctlCommand string
-	options      []parserOption
-	scanner      *bufio.Scanner
-	ips          []string
+	options []parserOption
+	scanner *bufio.Scanner
+	ips     []string
 }
 
 type parserOption struct {
@@ -30,8 +29,8 @@ type parserOption struct {
 }
 
 // newIPv6Parser returns a parser instance
-func newIPv6Parser(command string, options []parserOption) parser {
-	return parser{command, options, nil, nil}
+func newIPv6Parser(options []parserOption) parser {
+	return parser{options, nil, nil}
 }
 
 // newIPv6ParserOption returns a parserOptioninstance
@@ -109,7 +108,7 @@ func parseIPv6AddressInPxctlStatus(status string, nodeCount int) []string {
 	// 0000:111:2222:3333:444:5555:6666:777	f703597a-9772-4bdb-b630-6395b3c98658	...	...
 	// 0000:111:2222:3333:444:5555:6666:777	cedc897f-a489-4c28-9c20-12b8b4c3d1d8	...	...
 	p2 := newIPv6ParserOption("IP\t", 0, nodeCount)
-	p := newIPv6Parser("pxctl status", []parserOption{p1, p2})
+	p := newIPv6Parser([]parserOption{p1, p2})
 
 	return p.parse(status)
 }
@@ -122,7 +121,7 @@ func parseIPv6AddressInPxctlStatus(status string, nodeCount int) []string {
 // 6b9d12e0-fb28-459e-acf1-cea4d57004e2	node04			0000:111:2222:3333:444:5555:6666:777	... ...
 func parseIPv6AddressInPxctlClusterList(output string, nodeCount int) []string {
 	option := newIPv6ParserOption("ID\t", 2, nodeCount)
-	p := newIPv6Parser("pxctl cluster list", []parserOption{option})
+	p := newIPv6Parser([]parserOption{option})
 	return p.parse(output)
 }
 
@@ -133,7 +132,7 @@ func parseIPv6AddressInPxctlClusterList(output string, nodeCount int) []string {
 func parseIPv6AddressInPxctlClusterInspect(output string, nodeCount int) []string {
 	option1 := newIPv6ParserOption("Mgmt IP", 3, 0)
 	option2 := newIPv6ParserOption("Data IP", 3, 0)
-	p := newIPv6Parser("pxctl cluster list", []parserOption{option1, option2})
+	p := newIPv6Parser([]parserOption{option1, option2})
 	return p.parse(output)
 }
 
