@@ -184,7 +184,7 @@ func parseIPv6AddressInPxctlVolumeInspect(output string) []string {
 	option1 := newIPv6ParserOption("State", 4, 0)
 	// 3rd item in [Node, :, 0000:111:2222:3333:444:5555:6666:222, (Pool, f54c56c1-eb9e-408b-ac92-010426e59500, )]
 	option2 := newIPv6ParserOption("Node", 2, 0)
-	p := newIPv6Parser("pxctl cluster list", []parserOption{option1, option2})
+	p := newIPv6Parser([]parserOption{option1, option2})
 	ips := p.parse(output)
 	// trim out the parenthesis for (0000:111:2222:3333:444:5555:6666:111)
 	for i, out := range ips {
