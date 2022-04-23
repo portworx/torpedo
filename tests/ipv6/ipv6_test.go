@@ -134,15 +134,15 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 				testPxctlCmdForIPv6()
 			})
 
-			// Context("{PxctlVolumeInspect", func() {
-			// 	JustBeforeEach(func() {
-			// 		pxctlCmd = ipv6util.PxctlVolumeList
-			// 		pxctlCmdFull = ipv6util.PxctlVolumeList
-			// 		expectedIPCount = 1
-			// 		testrailID = 9695444
-			// 	})
-			// 	testPxctlCmdForIPv6()
-			// })
+			Context("{PxctlVolumeInspect", func() {
+				JustBeforeEach(func() {
+					pxctlCmd = ipv6util.PxctlVolumeInspect
+					pxctlCmdFull = fmt.Sprintf("%s %s", ipv6util.PxctlVolumeInspect, volumeID)
+					expectedIPCount = 2
+					testrailID = 9695444
+				})
+				testPxctlCmdForIPv6()
+			})
 
 		})
 	})

@@ -17,6 +17,8 @@ const (
 	PxctlClusterInspect = "cluster inspect"
 	// PxctlVolumeList defines the pxctl volume list command
 	PxctlVolumeList = "volume list"
+	// PxctlVolumeInspect defines the pxctl volume inspect command
+	PxctlVolumeInspect = "volume inspect"
 
 	// Ipv6VolumeName is used to define the created volume name
 	Ipv6VolumeName = "ipv6-volume"
@@ -57,7 +59,7 @@ func (p *parser) parse(cmdOutput string) []string {
 	p.scanner = bufio.NewScanner(strings.NewReader(cmdOutput))
 	for p.scanner.Scan() {
 		line := p.scanner.Text()
-		line = strings.TrimPrefix(line, "\t")
+		line = strings.TrimLeft(line, " \t")
 		p.parseLine(line)
 	}
 	return p.ips
@@ -101,6 +103,8 @@ func ParseIPv6AddressInPxctlCommand(command string, output string, nodeCount int
 		return parseIPv6AddressInPxctlClusterInspect(output, nodeCount)
 	case PxctlVolumeList:
 		return parseIPv6AddressInPxctlVolumeList(output)
+	case PxctlVolumeInspect:
+		return parseIPv6AddressInPxctlVolumeInspect(output)
 	default:
 		return []string{}
 	}
@@ -161,12 +165,31 @@ func parseIPv6AddressInPxctlVolumeList(output string) []string {
 	for scanner.Scan() {
 		line := scanner.Text()
 		line = strings.TrimPrefix(line, "\t")
+		// look for both volume name and `attached on` string
 		re := regexp.MustCompile(Ipv6VolumeName + `.*attached on.*`)
 		if re.MatchString(line) {
 			ips = append(ips, strings.Fields(line)[13])
 		}
 	}
 
+	return ips
+}
+
+// parseIPv6AddressInPxctlVolumeInspect takes output of `pxctl volume inspect` and return the list of IPs parsed
+// iterate each line to check for two condition where IPs are printed:
+// 1. State           	 :  Attached: 1c251a9f-605d-47fc-925d-7c8cb38d8b48 (0000:111:2222:3333:444:5555:6666:111)
+// 2. Node 		 : 0000:111:2222:3333:444:5555:6666:222 (Pool f54c56c1-eb9e-408b-ac92-010426e59500 )
+func parseIPv6AddressInPxctlVolumeInspect(output string) []string {
+	// 5th item in [State, :, Attached:, 1c251a9f-605d-47fc-925d-7c8cb38d8b48, (0000:111:2222:3333:444:5555:6666:111)]
+	option1 := newIPv6ParserOption("State", 4, 0)
+	// 3rd item in [Node, :, 0000:111:2222:3333:444:5555:6666:222, (Pool, f54c56c1-eb9e-408b-ac92-010426e59500, )]
+	option2 := newIPv6ParserOption("Node", 2, 0)
+	p := newIPv6Parser("pxctl cluster list", []parserOption{option1, option2})
+	ips := p.parse(output)
+	// trim out the parenthesis for (0000:111:2222:3333:444:5555:6666:111)
+	for i, out := range ips {
+		ips[i] = strings.Trim(out, "()")
+	}
 	return ips
 }
 
