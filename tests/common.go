@@ -33,6 +33,7 @@ import (
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -59,6 +60,8 @@ import (
 	_ "github.com/portworx/torpedo/drivers/node/gke"
 	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
+        // import ibm driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/node/ibm"
 
 	// import ssh driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
@@ -640,16 +643,13 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 				}
 			})
 		}
-		// TODO: This is broken for now, doesn't properly return an error
-		//       Output error message is correct, but returns exit code 0
-		//       See https://portworx.atlassian.net/browse/PWX-22950
-		//Step("validating groupsnap for using pxctl", func() {
-		//	err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
-		//	expect(err).NotTo(beNil())
-		//	if err != nil {
-		//		expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
-		//	}
-		//})
+		Step("validating groupsnap for using pxctl", func() {
+			err = Inst().V.ValidateCreateGroupSnapshotUsingPxctl()
+			expect(err).NotTo(beNil())
+			if err != nil {
+				expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()))
+			}
+		})
 	})
 }
 
@@ -713,13 +713,16 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 		pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
 		processError(err, errChan...)
 
-		// write to the FB volume
-		cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", "dd bs=512 count=1048576 </dev/urandom > " + getMountPath(pods[0].Namespace) + "/myfile"}
+		mountPath, bytesToWrite := getPureAppDataDir(pods[0].Namespace)
+
+		// write to the Direct Access volume
+		ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s/myfile", bytesToWrite/512, mountPath)
+		cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
 		err = osutils.Kubectl(cmdArgs)
 		processError(err, errChan...)
 		fmt.Println("sleeping to let volume usage get reflected")
 		// wait until the backends size is reflected before making the REST call
-		time.Sleep(125 * time.Second)
+		time.Sleep(time.Minute * 2)
 
 		byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 		fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
@@ -735,20 +738,21 @@ func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
 	return nil
 }
 
-// getMountPath checkts the podname prefix, and finds the mountpath.
-//	unfortunately, the mountpath for PVCs all vary among applications, so Im getting the hardcoded value here
-//	maybe there will be some improvement later
-func getMountPath(namespace string) string {
+// getPureAppDataDir checks the pod namespace prefix, and returns a path that we can
+// write data to on a volume. Because the mountpath varies so heavily between applications
+// (some have multiple PVCs, some have configmap vols, etc. etc.) this is the easiest way
+// at the moment. As more apps get added to our test suite, we should add them here.
+func getPureAppDataDir(namespace string) (string, int) {
 	if strings.HasPrefix(namespace, "nginx-without-enc") {
-		return "/usr/share/nginx/html"
+		return "/usr/share/nginx/html", units.GiB / 2
 	}
 	if strings.HasPrefix(namespace, "wordpress") {
-		return "/var/www/html"
+		return "/var/www/html", units.GiB / 2
 	}
 	if strings.HasPrefix(namespace, "elasticsearch") {
-		return "/usr/share/elasticsearch/data"
+		return "/usr/share/elasticsearch/data", units.GiB * 2
 	}
-	return ""
+	return "", 0
 }
 
 // GetVolumeParameters returns volume parameters for all volumes for given context
