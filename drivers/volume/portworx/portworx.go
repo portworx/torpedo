@@ -3406,6 +3406,7 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 	return api.Status_STATUS_NONE.String(), nil
 }
 
+// GetPxctlCmdOutput returns the command output run on the given node and any error
 func (d *portworx) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,

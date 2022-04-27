@@ -666,7 +666,7 @@ func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
 	}
 }
 
-// GetPxctlCmdOutput retruns the command output run on the given node
+// GetPxctlCmdOutput returns the command output run on the given node and any error
 func (d *DefaultDriver) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",

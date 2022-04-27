@@ -22,6 +22,13 @@ type parser struct {
 	ips     []string
 }
 
+// parserOption defines the options for parsing IPv6 line
+// the options includes:
+// - prefix: prefix used to match the line
+// - index: index of the IPv6 address in the line after split the line by commons
+//          delimiters
+// - count: in some cases after we match the prefix, we parse the lines after
+//          the match. count is used to defined how many lines to parse
 type parserOption struct {
 	prefix string
 	index  int
@@ -113,7 +120,7 @@ func parseIPv6AddressInPxctlStatus(status string, nodeCount int) []string {
 	return p.parse(status)
 }
 
-// parseIpv6AddressInPxctlClusterList takes output of `pxctl status` and return the list of IPs parsed
+// parseIpv6AddressInPxctlClusterList takes output of `pxctl cluster list` and return the list of IPs parsed
 // iterate each line to check for the conditions where IPs are printed:
 // (number of nodes) lines after `ID\t... DATA IP\t`. ex:
 // ID					SCHEDULER_NODE_NAME	DATA IP					CPU		MEM TOTAL	MEM FREE	CONTAINERS	VERSION		Kernel				OS		STATUS

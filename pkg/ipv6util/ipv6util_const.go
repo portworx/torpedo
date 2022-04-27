@@ -96,5 +96,5 @@ Volumes 		:
 Status  		:  Online
 `
 
-	nodeCount = 6
+	sampleNodeCount = 6
 )
