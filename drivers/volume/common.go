@@ -86,7 +86,7 @@ func (d *DefaultDriver) RefreshDriverEndpoints() error {
 }
 
 // CreateVolume creates a volume with the given setting
-// returns volume_id of the new volume and error if there is any
+// returns volume_id of the new volume
 func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
@@ -104,7 +104,7 @@ func (d *DefaultDriver) CloneVolume(volumeID string) (string, error) {
 }
 
 // AttachVolume attaches a volume with the default setting
-// returns the device path and error if there is any
+// returns the device path
 func (d *DefaultDriver) AttachVolume(volumeID string) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",

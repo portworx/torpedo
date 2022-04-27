@@ -649,7 +649,7 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 			},
 		})
 	if err != nil {
-		err = fmt.Errorf("error while Creating volume because of: %v", err)
+		err = fmt.Errorf("error while creating volume because of: %v", err)
 		return "", err
 	}
 
@@ -694,7 +694,7 @@ func (d *portworx) AttachVolume(volumeID string) (string, error) {
 			VolumeId: volumeID,
 		})
 	if err != nil {
-		err = fmt.Errorf("error while Creating volume because of: %v", err)
+		err = fmt.Errorf("error while attaching volume because of: %v", err)
 		return "", err
 	}
 
@@ -710,7 +710,7 @@ func (d *portworx) DetachVolume(volumeID string) error {
 			VolumeId: volumeID,
 		})
 	if err != nil {
-		err = fmt.Errorf("error while Creating volume because of: %v", err)
+		err = fmt.Errorf("error while detaching volume because of: %v", err)
 		return err
 	}
 
