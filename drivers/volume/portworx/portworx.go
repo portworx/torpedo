@@ -280,17 +280,17 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 	if len(storageNodes) == 0 {
 		return fmt.Errorf("cluster inspect returned empty nodes")
 	}
-
-	err = d.updateNodes(storageNodes)
-	if err != nil {
-		return err
-	}
-	for _, n := range node.GetStorageDriverNodes() {
-		if err = d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
+	/*
+		err = d.updateNodes(storageNodes)
+		if err != nil {
 			return err
 		}
-	}
-
+		for _, n := range node.GetStorageDriverNodes() {
+			if err = d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
+				return err
+			}
+		}
+	*/
 	logrus.Infof("The following Portworx nodes are in the cluster:")
 	for _, n := range storageNodes {
 		logrus.Infof(
