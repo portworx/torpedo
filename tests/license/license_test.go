@@ -19,8 +19,8 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-// Label used to name the licensing features
-type Label string
+// LicenseLabel used to name the licensing features
+type LicenseLabel string
 
 const (
 	defaultWaitRebootTimeout = 5 * time.Minute
@@ -38,49 +38,49 @@ const (
 	expiredLicString    = "License is expired"
 
 	// LabNodes - Number of nodes maximum
-	LabNodes Label = "Nodes"
+	LabNodes LicenseLabel = "Nodes"
 	// LabVolumeSize - Volume capacity [TB] maximum
-	LabVolumeSize Label = "VolumeSize"
+	LabVolumeSize LicenseLabel = "VolumeSize"
 	// LabVolumes - Number of volumes per cluster maximum
-	LabVolumes Label = "Volumes"
+	LabVolumes LicenseLabel = "Volumes"
 	// LabSnapshots - Number of snapshots per volume maximum
-	LabSnapshots Label = "Snapshots"
+	LabSnapshots LicenseLabel = "Snapshots"
 	// LabHaLevel - Volume replica count
-	LabHaLevel Label = "HaLevel"
+	LabHaLevel LicenseLabel = "HaLevel"
 	// LabSharedVol - Shared volumes
-	LabSharedVol Label = "SharedVolume"
+	LabSharedVol LicenseLabel = "SharedVolume"
 	// LabEncryptedVol - BYOK data encryption
-	LabEncryptedVol Label = "EncryptedVolume"
+	LabEncryptedVol LicenseLabel = "EncryptedVolume"
 	// LabScaledVol - Volume sets
-	LabScaledVol Label = "ScaledVolume"
+	LabScaledVol LicenseLabel = "ScaledVolume"
 	// LabAggregatedVol - Storage aggregation
-	LabAggregatedVol Label = "AggregatedVolume"
+	LabAggregatedVol LicenseLabel = "AggregatedVolume"
 	// LabResizeVolume - Resize volumes on demand
-	LabResizeVolume Label = "ResizeVolume"
+	LabResizeVolume LicenseLabel = "ResizeVolume"
 	// LabCloudSnap - Snapshot to object store [CloudSnap]
-	LabCloudSnap Label = "SnapshotToObjectStore"
+	LabCloudSnap LicenseLabel = "SnapshotToObjectStore"
 	// LabCloudSnapDaily - Number of CloudSnaps daily per volume maximum
-	LabCloudSnapDaily Label = "SnapshotToObjectStoreDaily"
+	LabCloudSnapDaily LicenseLabel = "SnapshotToObjectStoreDaily"
 	// LabCloudMigration -Cluster-level migration [Kube-motion/Data Migration]
-	LabCloudMigration Label = "CloudMigration"
+	LabCloudMigration LicenseLabel = "CloudMigration"
 	// LabDisasterRecovery - Disaster Recovery [PX-DR]
-	LabDisasterRecovery Label = "DisasterRecovery"
+	LabDisasterRecovery LicenseLabel = "DisasterRecovery"
 	// LabAUTCapacityMgmt - Autopilot Capacity Management
-	LabAUTCapacityMgmt Label = "AUTCapacityManagement"
+	LabAUTCapacityMgmt LicenseLabel = "AUTCapacityManagement"
 	// LabPlatformBare - Bare-metal hosts
-	LabPlatformBare Label = "EnablePlatformBare"
+	LabPlatformBare LicenseLabel = "EnablePlatformBare"
 	// LabPlatformVM - Virtual machine hosts
-	LabPlatformVM Label = "EnablePlatformVM"
+	LabPlatformVM LicenseLabel = "EnablePlatformVM"
 	// LabNodeCapacity - Node disk capacity [TB] maximum
-	LabNodeCapacity Label = "NodeCapacity"
+	LabNodeCapacity LicenseLabel = "NodeCapacity"
 	// LabNodeCapacityExtend - Node disk capacity extension
-	LabNodeCapacityExtend Label = "NodeCapacityExtension"
+	LabNodeCapacityExtend LicenseLabel = "NodeCapacityExtension"
 	// LabLocalAttaches - Number of attached volumes per node maximum
-	LabLocalAttaches Label = "LocalVolumeAttaches"
+	LabLocalAttaches LicenseLabel = "LocalVolumeAttaches"
 	// LabOIDCSecurity - OIDC Security
-	LabOIDCSecurity Label = "OIDCSecurity"
+	LabOIDCSecurity LicenseLabel = "OIDCSecurity"
 	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
-	LabGlobalSecretsOnly Label = "GlobalSecretsOnly"
+	LabGlobalSecretsOnly LicenseLabel = "GlobalSecretsOnly"
 
 	essentialsFaFbSKU = "PX-Essential FA/FB"
 
@@ -107,7 +107,7 @@ const (
 )
 
 var (
-	faLicense = map[Label]interface{}{
+	faLicense = map[LicenseLabel]interface{}{
 		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
 		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
 		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 200},
@@ -170,9 +170,9 @@ var _ = Describe("{BasicEssentialsFaFbTest}", func() {
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := faLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					if _, ok := faLicense[LicenseLabel(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[LicenseLabel(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[LicenseLabel(feature.Name)]))
 					}
 				}
 			})
@@ -347,9 +347,9 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := faLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					if _, ok := faLicense[LicenseLabel(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[LicenseLabel(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[LicenseLabel(feature.Name)]))
 					}
 				}
 			})
@@ -415,9 +415,9 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := faLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					if _, ok := faLicense[LicenseLabel(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[LicenseLabel(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[LicenseLabel(feature.Name)]))
 					}
 				}
 			})
@@ -462,9 +462,9 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := faLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					if _, ok := faLicense[LicenseLabel(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[LicenseLabel(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[LicenseLabel(feature.Name)]))
 					}
 				}
 			})
@@ -547,9 +547,9 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := faLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					if _, ok := faLicense[LicenseLabel(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[LicenseLabel(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[LicenseLabel(feature.Name)]))
 					}
 				}
 			})
@@ -669,9 +669,9 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 				Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 					for _, feature := range summary.Features {
 						// if the feature limit exists in the hardcoded license limits we test it.
-						if _, ok := faLicense[Label(feature.Name)]; ok {
-							Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-								fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, faLicense[Label(feature.Name)]))
+						if _, ok := faLicense[LicenseLabel(feature.Name)]; ok {
+							Expect(feature.Quantity).To(Equal(faLicense[LicenseLabel(feature.Name)]),
+								fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, faLicense[LicenseLabel(feature.Name)]))
 						}
 					}
 				})
