@@ -25,7 +25,7 @@ require (
 	github.com/libopenstorage/openstorage v8.0.1-0.20211105030910-665c2f474186+incompatible
 	github.com/libopenstorage/operator v0.0.0-20220121222253-3431532a94f9
 	github.com/libopenstorage/stork v1.4.1-0.20220323180113-0ea773109d05
-	github.com/onsi/ginkgo v1.16.5
+	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
@@ -38,7 +38,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
-	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
 	google.golang.org/genproto v0.0.0-20210921142501-181ce0d877f6
 	google.golang.org/grpc v1.40.0

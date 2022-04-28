@@ -12,8 +12,8 @@ import (
 	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"golang.org/x/net/context"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 
 	. "github.com/portworx/torpedo/tests"
