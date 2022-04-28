@@ -80,6 +80,8 @@ var _ = Describe("{Longevity}", func() {
 		AutoFsTrim:           TriggerAutoFsTrim,
 		RestartManyVolDriver: TriggerRestartManyVolDriver,
 		RebootManyNodes:      TriggerRebootManyNodes,
+		NodeDecommission:     TriggerNodeDecommission,
+		NodeRejoin:           TriggerNodeRejoin,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",

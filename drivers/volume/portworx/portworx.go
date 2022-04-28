@@ -1584,6 +1584,12 @@ func (d *portworx) getPxNodeByID(nodeID string) (*api.StorageNode, error) {
 	return nodeResponse.Node, nil
 }
 
+func (d *portworx) GetPxNodes() ([]*api.StorageNode, error) {
+
+	return d.getPxNodes()
+
+}
+
 func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.StorageNode, error) {
 	var nodeManager api.OpenStorageNodeClient
 	if nManagers == nil {
@@ -2461,12 +2467,14 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	if err := d.StopDriver([]node.Node{*n}, false, nil); err != nil {
+	if err := d.EnterMaintenance(*n); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to stop driver on node: %v. Err: %v", n.Name, err),
 		}
 	}
+
+	time.Sleep(10 * time.Second)
 
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
@@ -2475,14 +2483,20 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 			Cause: fmt.Sprintf("Failed to inspect node: %v. Err: %v", nodeResp.Node, err),
 		}
 	}
+	logrus.Infof("removing node %v", nodeResp.Node.Id)
 
 	// TODO replace when sdk supports node removal
-	if err = d.legacyClusterManager.Remove([]api.Node{{Id: nodeResp.Node.Id}}, false); err != nil {
-		return &ErrFailedToDecommissionNode{
-			Node:  n.Name,
-			Cause: err.Error(),
+	if err = d.legacyClusterManager.Remove([]api.Node{{Id: nodeResp.Node.Id}}, true); err != nil {
+		if !strings.Contains(err.Error(), "Node remove is pending") {
+			return &ErrFailedToDecommissionNode{
+				Node:  n.Name,
+				Cause: err.Error(),
+			}
 		}
 	}
+
+	logrus.Infof(" %v: Node remove is pending. Waiting for it to complete", nodeResp.Node.Id)
+	time.Sleep(30 * time.Second)
 
 	// update node in registry
 	n.IsStorageDriverInstalled = false
@@ -2492,6 +2506,33 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 
 	// force refresh endpoint
 	d.refreshEndpoint = true
+
+	latestNodes, err := d.getPxNodes()
+
+	if err != nil {
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: err.Error(),
+		}
+
+	}
+
+	isNodeExist := false
+	for _, latestNode := range latestNodes {
+		if latestNode.Hostname == n.Hostname {
+			isNodeExist = true
+			break
+		}
+	}
+
+	if isNodeExist {
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: fmt.Errorf("node %s still exist in the PX cluster", n.Name).Error(),
+		}
+	}
+
+	logrus.Infof("Successfully removed node %v", nodeResp.Node.Id)
 
 	return nil
 }
@@ -2503,30 +2544,44 @@ func (d *portworx) RejoinNode(n *node.Node) error {
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
 	}
+
 	if _, err := d.nodeDriver.RunCommand(*n, fmt.Sprintf("%s sv node-wipe --all", d.getPxctlPath(*n)), opts); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
-			Cause: err.Error(),
+			Cause: fmt.Sprintf("Error while running node wipe: %v. Err: %v", n.Name, err),
 		}
 	}
+	logrus.Info("Node wipe is successfull")
+
 	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXServiceLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
 		}
 	}
+
 	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXEnabledLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
 		}
 	}
+
+	if err := d.RestartDriver(*n, nil); err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: err.Error(),
+		}
+
+	}
+
 	if err := k8sCore.UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to uncordon node: %v. Err: %v", n.Name, err),
 		}
 	}
+
 	return nil
 }
 
