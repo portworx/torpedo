@@ -4,10 +4,10 @@ type TargetCluster struct {
 	*cluster
 }
 
-func NewTargetCluster(context string) *TargetCluster {
-	return &TargetCluster{
-		cluster: &cluster{
-			kubeconfig: context,
-		},
+func NewTargetCluster(kubeconfig string) (*TargetCluster, error) {
+	cluster, err := newCluster(kubeconfig)
+	if err != nil {
+		return nil, err
 	}
+	return &TargetCluster{cluster}, nil
 }

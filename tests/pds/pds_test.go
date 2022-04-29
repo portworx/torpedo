@@ -1,12 +1,13 @@
 package tests
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gexec"
 	"github.com/portworx/torpedo/tests"
 
 	"github.com/portworx/torpedo/pkg/pds"
@@ -26,12 +27,14 @@ var _ = BeforeSuite(func() {
 	cpKubeconfig, err := tests.GetSourceClusterConfigPath()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cpKubeconfig).To(BeAnExistingFile())
-	controlPlane = pds.NewControlPlane(cpKubeconfig)
+	controlPlane, err = pds.NewControlPlane(cpKubeconfig)
+	Expect(err).NotTo(HaveOccurred())
 
 	targetKubeconfig, err := tests.GetDestinationClusterConfigPath()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(targetKubeconfig).To(BeAnExistingFile())
-	targetCluster = pds.NewTargetCluster(targetKubeconfig)
+	targetCluster, err = pds.NewTargetCluster(targetKubeconfig)
+	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = Describe("PDS", func() {
@@ -45,13 +48,9 @@ var _ = Describe("PDS", func() {
 
 	AfterEach(func() {
 		By("getting control plane logs", func() {
-			controlPlaneLogs := controlPlane.ComponentLogsSince(startTime)
-			for _, c := range controlPlaneLogs {
-				By("getting logs for " + c.Name)
-				session, err := gexec.Start(c.LogCmd, GinkgoWriter, GinkgoWriter)
-				Expect(err).NotTo(HaveOccurred())
-				Eventually(session).Should(gexec.Exit())
-			}
+			logs, err := controlPlane.ComponentLogsSince(context.TODO(), startTime)
+			Expect(err).NotTo(HaveOccurred())
+			fmt.Fprint(GinkgoWriter, logs)
 		})
 	})
 

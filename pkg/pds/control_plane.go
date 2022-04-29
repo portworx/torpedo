@@ -1,23 +1,27 @@
 package pds
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type ControlPlane struct {
 	*cluster
 }
 
-func NewControlPlane(kubeconfig string) *ControlPlane {
-	return &ControlPlane{
-		cluster: &cluster{
-			kubeconfig: kubeconfig,
-		},
+func NewControlPlane(kubeconfig string) (*ControlPlane, error) {
+	cluster, err := newCluster(kubeconfig)
+	if err != nil {
+		return nil, err
 	}
+	return &ControlPlane{cluster}, nil
 }
 
-func (cp *ControlPlane) ComponentLogsSince(since time.Time) []componentLog {
-	return []componentLog{
-		{"API Server", cp.logComponent(pdsSystemNamespace, "api-server", since)},
-		{"API Worker", cp.logComponent(pdsSystemNamespace, "api-worker", since)},
-		{"Faktory", cp.logComponent(pdsSystemNamespace, "faktory", since)},
+func (cp *ControlPlane) ComponentLogsSince(ctx context.Context, since time.Time) (string, error) {
+	components := []namespacedName{
+		{pdsSystemNamespace, "api-server"},
+		{pdsSystemNamespace, "api-worker"},
+		{pdsSystemNamespace, "faktory"},
 	}
+	return cp.getLogsForComponents(ctx, components, since)
 }
