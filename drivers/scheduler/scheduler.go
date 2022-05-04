@@ -65,12 +65,19 @@ func (in *Context) GetID() string {
 
 // AppConfig custom settings
 type AppConfig struct {
-	Replicas      int      `yaml:"replicas"`
-	VolumeSize    string   `yaml:"volume_size"`
-	WorkloadSize  string   `yaml:"workload_size"`
-	ClaimsCount   int      `yaml:"claims_count"`
-	CustomCommand []string `yaml:"custom_command"`
-	CustomArgs    []string `yaml:"custom_args"`
+	Replicas        int                        `yaml:"replicas"`
+	Namespaces      int                        `yaml:"namespaces"`
+	VolumeSize      string                     `yaml:"volume_size"`
+	WorkloadSize    string                     `yaml:"workload_size"`
+	ClaimsCount     int                        `yaml:"claims_count"`
+	CustomCommand   []string                   `yaml:"custom_command"`
+	CustomArgs      []string                   `yaml:"custom_args"`
+	CustomPodConfig map[string]CustomPodConfig `yaml:"custom_pod_config"`
+}
+
+// CustomPodConfig custom settings for containers inside pod
+type CustomPodConfig struct {
+	Replicas int `yaml:"replicas"`
 }
 
 // InitOptions initialization options
