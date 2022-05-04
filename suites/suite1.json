@@ -1,0 +1,10 @@
+[
+    {
+        "TestName": "Sample1",
+        "Args":{"arg1":"val1","arg2":"val2"}
+    },
+    {
+        "TestName": "Sample2",
+        "Args":{"arg3":"val3","arg4":"val4"}
+    }
+]
