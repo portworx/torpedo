@@ -63,6 +63,10 @@ func GetWorkerNodes() []Node {
 			nodeList = append(nodeList, n)
 		}
 	}
+	if len(nodeList) == 0 {
+		return GetStorageDriverNodes()
+
+	}
 	return nodeList
 }
 
@@ -82,7 +86,7 @@ func GetMasterNodes() []Node {
 func GetStorageDriverNodes() []Node {
 	var nodeList []Node
 	for _, n := range nodeRegistry {
-		if n.Type == TypeWorker && n.IsStorageDriverInstalled {
+		if n.IsStorageDriverInstalled {
 			nodeList = append(nodeList, n)
 		}
 	}
