@@ -1,0 +1,31 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+    name: elasticsearch-sc
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_block"
+  max_iops: "10000"
+  max_bandwidth: "10G"
+  csi.storage.k8s.io/fstype: ext4
+  createoptions: -b 4096
+mountOptions:
+  - nosuid
+  - discard
+allowVolumeExpansion: true
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+    name: zk-sc
+provisioner:pxd.portworx.com
+parameters:
+  backend: "pure_block"
+  max_iops: "10000"
+  max_bandwidth: "10G"
+  csi.storage.k8s.io/fstype: ext4
+  createoptions: -b 4096
+mountOptions:
+  - nosuid
+  - discard
+allowVolumeExpansion: true
