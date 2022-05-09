@@ -7,7 +7,4 @@ provisioner: pxd.portworx.com
 parameters:
   backend: "pure_block"
   csi.storage.k8s.io/fstype: ext4
-mountOptions:
-  - nosuid
-  - discard
 allowVolumeExpansion: true
