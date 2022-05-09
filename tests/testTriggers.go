@@ -57,6 +57,16 @@ const (
 )
 
 const (
+	PureSecretName      = "px-pure-secret"
+	PureSecretDataField = "pure.json"
+)
+
+const (
+	//Field to check for pure Topology is enabled on cluster
+	PureTopologyField = "pureTopology"
+)
+
+const (
 	validateReplicationUpdateTimeout = 2 * time.Hour
 	errorChannelSize                 = 50
 )
@@ -135,6 +145,24 @@ type nodeInfo struct {
 type triggerInfo struct {
 	Name     string
 	Duration time.Duration
+}
+
+type FlashArray struct {
+	MgmtEndPoint string
+	APIToken     string
+	Labels       map[string]string
+}
+
+type FlashBlade struct {
+	MgmtEndPoint string
+	APIToken     string
+	NFSEndPoint  string
+	Labels       map[string]string
+}
+
+type PureSecret struct {
+	FlashArrays []FlashArray
+	FlashBlades []FlashBlade
 }
 
 // GenerateUUID generates unique ID
@@ -360,6 +388,18 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 			}
 			for _, v := range appVolumes {
+				// Check if volumes are Pure FA/FB DA volumes
+				isPureVol, err := Inst().V.IsPureVolume(v)
+				if err == nil {
+					UpdateOutcome(event, err)
+				}
+				if isPureVol {
+					logrus.Warningf(
+						"Repl increase on Pure DA Volume [%s] not supported.",
+						"Skiping this operation", v.Name,
+					)
+					continue
+				}
 				MaxRF := Inst().V.GetMaxReplicationFactor()
 
 				Step(
@@ -473,6 +513,18 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 			}
 			for _, v := range appVolumes {
+				// Skipping repl decrease for pure volumes
+				isPureVol, err := Inst().V.IsPureVolume(v)
+				if err == nil {
+					UpdateOutcome(event, err)
+				}
+				if isPureVol {
+					logrus.Warningf(
+						"Repl decrease on Pure DA volume:[%s] not supported.",
+						"Skipping repl decrease operation in pure volume", v.Name,
+					)
+					continue
+				}
 				MinRF := Inst().V.GetMinReplicationFactor()
 
 				Step(
@@ -1303,6 +1355,19 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 				snapshotScheduleRetryTimeout := 3 * time.Minute
 
 				for _, v := range appVolumes {
+					// Skipping local snapshot for Pure DA Volumes
+					isPureVol, err := Inst().V.IsPureVolume(v)
+					if err == nil {
+						UpdateOutcome(event, err)
+					}
+					if isPureVol {
+						logrus.Warningf(
+							"Local snapshot for Pure DA volume: [%s] not supported.",
+							"Skipping this operation",
+							v.Name,
+						)
+						continue
+					}
 					snapshotScheduleName := v.Name + "-interval-schedule"
 					logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
 					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
@@ -1399,6 +1464,17 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 					snapshotScheduleRetryInterval := 10 * time.Second
 					snapshotScheduleRetryTimeout := 3 * time.Minute
 					for _, v := range appVolumes {
+						// Skipping delete local snapshot for Pure DA volumes
+						isPureVol, err := Inst().V.IsPureVolume(v)
+						if err == nil {
+							UpdateOutcome(event, err)
+						}
+						if isPureVol {
+							logrus.Warningf("Local snapshots for Pure DA volume: [%s] not supported",
+								"Skipping delete local snapshot operation", v.Name,
+							)
+							continue
+						}
 						snapshotScheduleName := v.Name + "-interval-schedule"
 						logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
 						snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
@@ -1514,6 +1590,18 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 				logrus.Infof("Got volume count : %v", len(appVolumes))
 
 				for _, v := range appVolumes {
+					// Skip cloud snapshot trigger for Pure DA volumes
+					isPureVol, err := Inst().V.IsPureVolume(v)
+					if err == nil {
+						UpdateOutcome(event, err)
+					}
+					if isPureVol {
+						logrus.Warningf(
+							"Cloud snapshot is not supported for Pure DA volumes: [%s]",
+							"Skipping cloud snapshot trigger for pure volume.", v.Name,
+						)
+						continue
+					}
 					snapshotScheduleName := v.Name + "-interval-schedule"
 					logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
 					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
@@ -3154,6 +3242,18 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				poolSet := make(map[string]struct{})
 				var exists = struct{}{}
 				for _, vol := range appVolumes {
+					//Skipping get replicaset operations for Pure Volumes
+					isPureVol, err := Inst().V.IsPureVolume(vol)
+					if err == nil {
+						UpdateOutcome(event, err)
+					}
+					if isPureVol {
+						logrus.Warningf(
+							"Pure DA volume doesn't consume space in Portworx pools",
+							"Skipping get replicaset for pure volume %s", vol.Name,
+						)
+						continue
+					}
 					replicaSets, err := Inst().V.GetReplicaSets(vol)
 					if err != nil {
 						logrus.Errorf("Got error getting replicasets:[%v]", err.Error())
@@ -3238,6 +3338,15 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				poolSet := make(map[string]struct{})
 				var exists = struct{}{}
 				for _, vol := range appVolumes {
+					// Skipping get replicaset operations for Pure DA volumes
+					isPureVol, err := Inst().V.IsPureVolume(vol)
+					if err == nil {
+						UpdateOutcome(event, err)
+					}
+					if isPureVol {
+						logrus.Warningf("Skipping get replicaset operations Pure DA Volume %s", vol.Name)
+						continue
+					}
 					replicaSets, err := Inst().V.GetReplicaSets(vol)
 					if err != nil {
 						logrus.Errorf("Got error getting replicasets:[%v]", err.Error())
@@ -3546,6 +3655,18 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 			}
 
 			for _, v := range appVolumes {
+				// Skip autofs trim status on Pure DA volumes
+				isPureVol, err := Inst().V.IsPureVolume(v)
+				if err == nil {
+					UpdateOutcome(event, err)
+				}
+				if isPureVol {
+					logrus.Warningf(
+						"Autofs Trim is not supported for Pure DA volume: [%s]",
+						"Skipping autofs trim status on pure volumes", v.Name,
+					)
+					continue
+				}
 				logrus.Infof("Getting info : %s", v.ID)
 				appVol, err := Inst().V.InspectVolume(v.ID)
 				if err != nil {

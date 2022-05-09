@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,7 +14,9 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -34,6 +37,9 @@ var (
 	disruptiveTriggers map[string]bool
 
 	triggerFunctions map[string]func(*[]*scheduler.Context, *chan *EventRecord)
+
+	// Pure Topology is disabled by default
+	pureTopologyEnabled = false
 )
 
 func TestLongevity(t *testing.T) {
@@ -87,6 +93,11 @@ var _ = Describe("{Longevity}", func() {
 			err := watchConfigMap()
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		if pureTopologyEnabled {
+			err := SetTopologyLabelsOnNodes()
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		TriggerDeployNewApps(&contexts, &triggerEventsChan)
 
@@ -243,6 +254,7 @@ func isDisruptiveTrigger(triggerType string) bool {
 
 func populateDataFromConfigMap(configData *map[string]string) error {
 	setEmailRecipients(configData)
+	setPureTopology(configData)
 	err := setSendGridEmailAPIKey(configData)
 	if err != nil {
 		return err
@@ -253,6 +265,22 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 		return err
 	}
 	return nil
+}
+
+func setPureTopology(configData *map[string]string) {
+	// Set Pure Topology Enabled value from configMap
+	var err error
+	if pureTopology, ok := (*configData)[PureTopologyField]; !ok {
+		logrus.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.\n",
+			PureTopologyField, testTriggersConfigMap, configMapNS)
+	} else {
+		pureTopologyEnabled, err = strconv.ParseBool(pureTopology)
+		if err != nil {
+			logrus.Errorf("Failed to parse [%s] field in config-map in [%s] namespace.Error:[%v]\n",
+				PureTopologyField, configMapNS, err)
+		}
+		delete(*configData, PureTopologyField)
+	}
 }
 
 func setEmailRecipients(configData *map[string]string) {
@@ -301,6 +329,61 @@ func populateTriggers(triggers *map[string]string) error {
 			RunningTriggers[triggerType] = triggerInterval[triggerType][chaosLevel]
 		}
 
+	}
+	return nil
+}
+
+// TriggerAddTopologyLabelsOnNodes distribute labels on node
+func SetTopologyLabelsOnNodes() error {
+	// Slice of FA labels
+	topologyLabels := make([]map[string]string, 0)
+	nodeUpTimeout := 5 * time.Minute
+
+	logrus.Info("Add Topology Labels on node")
+	var secret PureSecret
+	pureSecretString, err := Inst().S.GetSecretData(
+		schedops.PXNamespace, PureSecretName, PureSecretDataField,
+	)
+	if err != nil {
+		return fmt.Errorf("Failed to read pure secret [%s]. Error [%v]",
+			PureSecretName, err)
+	}
+
+	pureSecretJSON := []byte(pureSecretString)
+
+	if err = json.Unmarshal(pureSecretJSON, &secret); err != nil {
+		return fmt.Errorf("Failed to unmarshal pure secret data [%s]. Error:[%v]",
+			pureSecretJSON, err)
+	}
+
+	// Appending the labels to a list
+	for _, fa := range secret.FlashArrays {
+		topologyLabels = append(topologyLabels, fa.Labels)
+	}
+
+	topologyGroups := len(topologyLabels)
+
+	// Adding the labels on node.
+	for nodeIdx, n := range node.GetWorkerNodes() {
+		labelIdx := int32(nodeIdx % topologyGroups)
+		for key, value := range topologyLabels[labelIdx] {
+			if err = Inst().S.AddLabelOnNode(n, key, value); err != nil {
+				return fmt.Errorf("Failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
+					key, value, n.Name, err)
+			}
+		}
+	}
+
+	//Restarting the portworx driver on nodes so that csi-driver able to read the label properly
+	for _, n := range node.GetWorkerNodes() {
+		if err := Inst().V.RestartDriver(n, nil); err != nil {
+			return fmt.Errorf("Failed to restart driver on node: [%s]. Error: [%v]",
+				n.Name, err)
+		}
+		if err = Inst().V.WaitDriverUpOnNode(n, nodeUpTimeout); err != nil {
+			return fmt.Errorf("Failed to bring up the driver on a node: [%s]. Error: [%v]",
+				n.Name, err)
+		}
 	}
 	return nil
 }

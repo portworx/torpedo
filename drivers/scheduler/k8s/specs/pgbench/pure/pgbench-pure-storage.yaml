@@ -8,8 +8,4 @@ parameters:
   max_iops: "1000"
   max_bandwidth: "1G"
   csi.storage.k8s.io/fstype: ext4
-  createoptions: -b 4096
-mountOptions:
-  - nosuid
-  - discard
 allowVolumeExpansion: true
