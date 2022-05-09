@@ -6,7 +6,6 @@ metadata:
 provisioner: pxd.portworx.com
 parameters:
   backend: "pure_block"
-  max_iops: "2000"
   max_bandwidth: "2G"
   csi.storage.k8s.io/fstype: xfs
 allowVolumeExpansion: true
