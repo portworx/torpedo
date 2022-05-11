@@ -59,8 +59,6 @@ spec:
           - name: LOCAL_FILE
             value: "/local-vol/$(MY_POD_NAME)"
         volumeMounts:
-        - name: test-sv4-vol-svc
-          mountPath: /test-sv4-vol-svc
         - name: local-vol
           mountPath: /local-vol
       volumes:
