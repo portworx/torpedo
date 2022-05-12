@@ -1928,6 +1928,43 @@ func (d *portworx) IsStorageExpansionEnabled() (bool, error) {
 	return false, nil
 }
 
+func (d *portworx) IsPureVolume(volume *torpedovolume.Volume) (bool, error) {
+	name := d.schedOps.GetVolumeName(volume)
+	t := func() (interface{}, bool, error) {
+		volumeInspectResponse, err := d.getVolDriver().Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: name})
+		if err != nil && errIsNotFound(err) {
+			return 0, false, err
+		} else if err != nil {
+			return 0, true, err
+		}
+		return volumeInspectResponse.Volume.Spec.ProxySpec, false, nil
+	}
+
+	proxySpec, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval)
+	if err != nil {
+		return false, &ErrFailedToGetVolumeProxySpec{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+	if proxySpec == nil {
+		return false, nil
+	}
+	if proxySpec.(*api.ProxySpec).ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
+		logrus.Debugf("Volume is Pure Block volume: %s", volume.ID)
+		return true, nil
+	}
+
+	if proxySpec.(*api.ProxySpec).ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE {
+		logrus.Debugf("Volume is Pure File volume: %s", volume.ID)
+		return true, nil
+	}
+
+	logrus.Debugf("Volume is not Pure Block volume: %s", volume.ID)
+	return false, nil
+
+}
+
 func isAutopilotMatchStoragePoolLabels(apRule apapi.AutopilotRule, sPools []node.StoragePool) bool {
 	apRuleLabels := apRule.Spec.Selector.LabelSelector.MatchLabels
 	for k, v := range apRuleLabels {
