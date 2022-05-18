@@ -2,11 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/libopenstorage/openstorage/pkg/mount"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -144,19 +142,19 @@ var _ = Describe("{Sharedv4Functional}", func() {
 						vol.ID, apiVol.Id, ctx.App.Key, counters)
 				})
 
-				Step(fmt.Sprintf("validate device path is set as RW for %s", ctx.App.Key), func() {
-					mntList, err := mount.GetMounts()
-					Expect(err).NotTo(HaveOccurred())
-					var volumeMountRW = regexp.MustCompile(`,rw,|,rw|rw,|rw`)
+				// Step(fmt.Sprintf("validate device path is set as RW for %s", ctx.App.Key), func() {
+				// 	mntList, err := mount.GetMounts()
+				// 	Expect(err).NotTo(HaveOccurred())
+				// 	var volumeMountRW = regexp.MustCompile(`,rw,|,rw|rw,|rw`)
 
-					for _, mnt := range mntList {
-						if mnt.Mountpoint != devicePath {
-							continue
-						}
-						Expect(volumeMountRW.MatchString(mnt.Opts)).To(BeTrue())
-						Expect(volumeMountRW.MatchString(mnt.VfsOpts)).To(BeTrue())
-					}
-				})
+				// 	for _, mnt := range mntList {
+				// 		if mnt.Mountpoint != devicePath {
+				// 			continue
+				// 		}
+				// 		Expect(volumeMountRW.MatchString(mnt.Opts)).To(BeTrue())
+				// 		Expect(volumeMountRW.MatchString(mnt.VfsOpts)).To(BeTrue())
+				// 	}
+				// })
 			}
 		})
 	})

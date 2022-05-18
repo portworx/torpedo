@@ -20,7 +20,6 @@ import (
 	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	"github.com/onsi/ginkgo"
 
-	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -110,6 +109,9 @@ var isAutoFsTrimEnabled = false
 
 // isCsiVolumeSnapshotClassExist to store if snapshot class exist
 var isCsiVolumeSnapshotClassExist = false
+
+//isRelaxedReclaimEnabled to store if relaxed reclaim enalbed
+var isRelaxedReclaimEnabled = false
 
 // Event describes type of test trigger
 type Event struct {
@@ -291,6 +293,8 @@ const (
 	NodeDecommission = "nodeDecomm"
 	//NodeRejoin rejoins the decommissioned node into the PX cluster
 	NodeRejoin = "nodeRejoin"
+	// RelaxedReclaim enables RelaxedReclaim in PX cluster
+	RelaxedReclaim = "relaxedReclaim"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -3750,13 +3754,13 @@ func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) stri
 
 }
 
-// TriggerNodeDecommission decommission the node for the PX cluster
-func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerRelaxedReclaim enables Relaxed Reclaim in the PX Cluster
+func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: NodeDecommission,
+			Type: RelaxedReclaim,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -3766,149 +3770,39 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	context("Validate Relaxed Reclaim of the volumes", func() {
 
-	var workerNodes []node.Node
-	var nodeToDecomm node.Node
-
-	Step("Decommission a random node", func() {
-
-		workerNodes = node.GetWorkerNodes()
-		index := rand.Intn(len(workerNodes))
-		nodeToDecomm = workerNodes[index]
-		Step(fmt.Sprintf("decommission node %s", nodeToDecomm.Name), func() {
-			err := Inst().S.PrepareNodeToDecommission(nodeToDecomm, Inst().Provisioner)
-			if err != nil {
-				UpdateOutcome(event, err)
-			} else {
-				err = Inst().V.DecommissionNode(&nodeToDecomm)
-				if err != nil {
-					logrus.Infof("Error while decommissioning the node: %v, Error:%v", nodeToDecomm.Name, err)
-					UpdateOutcome(event, err)
-				}
-
-			}
-
-			t := func() (interface{}, bool, error) {
-				status, err := Inst().V.GetNodeStatus(nodeToDecomm)
-				if err != nil {
-					return false, true, fmt.Errorf("error getting node %v status", nodeToDecomm.Name)
-				}
-				if *status == opsapi.Status_STATUS_NONE {
-					return true, false, nil
-				}
-				return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecomm.Name)
-			}
-			_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
-
-			if err != nil {
-				UpdateOutcome(event, err)
-			} else {
-
-				decommissionedNode = nodeToDecomm
-
-			}
-
-		})
-
-	})
-
-	for _, ctx := range *contexts {
-
-		Step(fmt.Sprintf("validating context after node: [%s] decommission",
-			nodeToDecomm.Name), func() {
-			errorChan := make(chan error, errorChannelSize)
-			ctx.SkipVolumeValidation = true
-			ValidateContext(ctx, &errorChan)
-			for err := range errorChan {
-				UpdateOutcome(event, err)
-			}
-		})
-	}
-}
-
-// TriggerNodeRejoin rejoins the decommissioned node
-func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	defer ginkgo.GinkgoRecover()
-	event := &EventRecord{
-		Event: Event{
-			ID:   GenerateUUID(),
-			Type: NodeRejoin,
-		},
-		Start:   time.Now().Format(time.RFC1123),
-		Outcome: []error{},
-	}
-
-	defer func() {
-		event.End = time.Now().Format(time.RFC1123)
-		*recordChan <- event
-	}()
-
-	var decommissionedNodeName string
-
-	Step("Rejoin the node", func() {
-
-		if decommissionedNode.Name != "" {
-			decommissionedNodeName = decommissionedNode.Name
-
-			Step(fmt.Sprintf("Rejoin node %s", decommissionedNode.Name), func() {
-				err := Inst().V.RejoinNode(&decommissionedNode)
-
-				if err != nil {
-					logrus.Infof("Error while rejoining the node. error: %v", err)
-					UpdateOutcome(event, err)
-				} else {
-					logrus.Info("Waiting for node to rejoin and refresh inventory")
-					time.Sleep(90 * time.Second)
-					err = Inst().S.RefreshNodeRegistry()
+		Step("enable relaxed reclaim ",
+			func() {
+				if !isRelaxedReclaimEnabled {
+					currNode := node.GetWorkerNodes()[0]
+					err := Inst().V.SetClusterOpts(currNode, map[string]string{
+						"--relaxedreclaim-delete-seconds": "300",
+					})
 					if err != nil {
+						err = fmt.Errorf("error while enabling relaxed reclaim, Error:%v", err)
+						logrus.Error(err)
 						UpdateOutcome(event, err)
-					}
 
-					latestNodes, err := Inst().V.GetPxNodes()
-					if err != nil {
-						UpdateOutcome(event, err)
-					}
-
-					isNodeExist := false
-					for _, latestNode := range latestNodes {
-
-						logrus.Infof("Inspecting Node: %v", latestNode.Hostname)
-
-						if latestNode.Hostname == decommissionedNode.Hostname {
-							isNodeExist = true
-							break
-						}
-
-					}
-					if !isNodeExist {
-						err = fmt.Errorf("node %v rejoin failed", decommissionedNode.Hostname)
-						UpdateOutcome(event, err)
 					} else {
-						logrus.Infof("node %v rejoin is successful ", decommissionedNode.Hostname)
+						logrus.Info("RelaxedReclaim is successfully enabled")
+						isRelaxedReclaimEnabled = true
+						time.Sleep(1 * time.Minute)
 					}
-
+				} else {
+					logrus.Info("RelaxedReclaim is already enabled")
 				}
 
 			})
 
-			decommissionedNode = node.Node{}
+		if isRelaxedReclaimEnabled {
 
+			Step("Reboot attached node and validate AutoFsTrim Status ",
+				func() {
+
+				})
 		}
-
 	})
-
-	for _, ctx := range *contexts {
-
-		Step(fmt.Sprintf("validating context after node: [%s] rejoin",
-			decommissionedNodeName), func() {
-			errorChan := make(chan error, errorChannelSize)
-			ctx.SkipVolumeValidation = true
-			ValidateContext(ctx, &errorChan)
-			for err := range errorChan {
-				UpdateOutcome(event, err)
-			}
-		})
-	}
 
 }
 
