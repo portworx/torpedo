@@ -2470,11 +2470,9 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 	if err := d.EnterMaintenance(*n); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
-			Cause: fmt.Sprintf("Failed to stop driver on node: %v. Err: %v", n.Name, err),
+			Cause: fmt.Sprintf("Failed to enter maintenence mode on node: %v. Err: %v", n.Name, err),
 		}
 	}
-
-	time.Sleep(10 * time.Second)
 
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 	if err != nil {
@@ -2496,7 +2494,6 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 	}
 
 	logrus.Infof(" %v: Node remove is pending. Waiting for it to complete", nodeResp.Node.Id)
-	time.Sleep(30 * time.Second)
 
 	// update node in registry
 	n.IsStorageDriverInstalled = false
@@ -2507,29 +2504,44 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 	// force refresh endpoint
 	d.refreshEndpoint = true
 
-	latestNodes, err := d.getPxNodes()
+	t := func() (interface{}, bool, error) {
+
+		latestNodes, err := d.getPxNodes()
+		isNodeExist := false
+
+		if err != nil {
+			return nil, true, &ErrFailedToDecommissionNode{
+				Node:  n.Name,
+				Cause: err.Error(),
+			}
+
+		}
+
+		for _, latestNode := range latestNodes {
+			if latestNode.Hostname == n.Hostname {
+				isNodeExist = true
+				break
+			}
+		}
+
+		if isNodeExist {
+			return nil, true, &ErrFailedToDecommissionNode{
+				Node:  n.Name,
+				Cause: fmt.Errorf("node %s still exist in the PX cluster", n.Name).Error(),
+			}
+		}
+
+		return nil, false, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
 
 	if err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
-			Cause: err.Error(),
-		}
-
-	}
-
-	isNodeExist := false
-	for _, latestNode := range latestNodes {
-		if latestNode.Hostname == n.Hostname {
-			isNodeExist = true
-			break
-		}
-	}
-
-	if isNodeExist {
-		return &ErrFailedToDecommissionNode{
-			Node:  n.Name,
 			Cause: fmt.Errorf("node %s still exist in the PX cluster", n.Name).Error(),
 		}
+
 	}
 
 	logrus.Infof("Successfully removed node %v", nodeResp.Node.Id)
