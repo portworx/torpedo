@@ -3771,13 +3771,14 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		*recordChan <- event
 	}()
 	context("Validate Relaxed Reclaim of the volumes", func() {
+		if !isRelaxedReclaimEnabled {
 
-		Step("enable relaxed reclaim ",
-			func() {
-				if !isRelaxedReclaimEnabled {
+			Step("enable relaxed reclaim ",
+				func() {
+
 					currNode := node.GetWorkerNodes()[0]
-					err := Inst().V.SetClusterOpts(currNode, map[string]string{
-						"--relaxedreclaim-delete-seconds": "300",
+					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+						"--relaxedreclaim-delete-seconds": "600",
 					})
 					if err != nil {
 						err = fmt.Errorf("error while enabling relaxed reclaim, Error:%v", err)
@@ -3787,18 +3788,39 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 					} else {
 						logrus.Info("RelaxedReclaim is successfully enabled")
 						isRelaxedReclaimEnabled = true
-						time.Sleep(1 * time.Minute)
 					}
-				} else {
-					logrus.Info("RelaxedReclaim is already enabled")
-				}
 
-			})
+				})
+		} else {
 
-		if isRelaxedReclaimEnabled {
-
-			Step("Reboot attached node and validate AutoFsTrim Status ",
+			Step("Validating relaxed reclaim ",
 				func() {
+
+					nodes := node.GetWorkerNodes()
+					totalDeleted := 0
+					totalPending := 0
+					totalSkipped := 0
+
+					for _, n := range nodes {
+						nodeStatsMap, err := Inst().V.GetNodeStats(n)
+
+						if err != nil {
+							logrus.Errorf("error while getting node stats for node : %v, err: %v", n.Name, err)
+						} else {
+							logrus.Infof("Node [%v] relaxed reclaim stats : %v", n.Name, nodeStatsMap[n.Name])
+
+							totalDeleted += nodeStatsMap[n.Name]["deleted"]
+							totalPending += nodeStatsMap[n.Name]["pending"]
+							totalSkipped += nodeStatsMap[n.Name]["skipped"]
+						}
+					}
+
+					totalVal := totalDeleted + totalPending + totalSkipped
+
+					if totalVal == 0 {
+						err := fmt.Errorf("no stats present for relaxed reclaim")
+						UpdateOutcome(event, err)
+					}
 
 				})
 		}
