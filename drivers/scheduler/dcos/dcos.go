@@ -338,7 +338,7 @@ func (d *dcos) randomizeVolumeNames(application *marathon.Application) error {
 	return nil
 }
 
-func (d *dcos) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+func (d *dcos) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration, skipStorkChecks bool) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
 			if err := MarathonClient().WaitForApplicationStart(obj.ID); err != nil {

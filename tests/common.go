@@ -97,6 +97,10 @@ import (
 const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
 	SkipClusterScopedObjects = "skipClusterScopedObjects"
+	// SkipVolumeSnapshot describes option for skipping deletion of VolumeSnapshot objects
+	SkipVolumeSnapshot = "skipVolumeSnapshot"
+	// SkipGroupVolumeSnapshot describes option for skipping deletion of GroupVolumeSnapshot objects
+	SkipGroupVolumeSnapshot = "skipGroupVolumeSnapshot"
 )
 
 const (
@@ -379,7 +383,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
-			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval, false)
 			if err != nil {
 				processError(err, errChan...)
 				return
@@ -432,7 +436,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
-			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval, false)
 			processError(err, errChan...)
 		})
 
@@ -495,7 +499,7 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
-			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval, false)
 			processError(err, errChan...)
 		})
 
@@ -811,6 +815,8 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 	var updatedVolumeParams map[string]map[string]string
 	volOptsMap := make(map[string]bool)
 	volOptsMap[SkipClusterScopedObjects] = true
+	volOptsMap[SkipVolumeSnapshot] = true
+	volOptsMap[SkipGroupVolumeSnapshot] = true
 
 	for _, ctx := range contexts {
 		ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
@@ -824,7 +830,7 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 
 			Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 				appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-				err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
+				err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, true)
 				expect(err).NotTo(haveOccurred())
 			})
 
@@ -1571,7 +1577,7 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 		return err
 	}
 
-	err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
+	err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval, false)
 	if err != nil {
 		logrus.Errorf("Error waiting to get cluster pair in ready state: %v", err)
 		return err
@@ -1672,6 +1678,8 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 	var updatedVolumeParams map[string]map[string]string
 	volOptsMap := make(map[string]bool)
 	volOptsMap[SkipClusterScopedObjects] = true
+	volOptsMap[SkipVolumeSnapshot] = true
+	volOptsMap[SkipGroupVolumeSnapshot] = true
 
 	var wg sync.WaitGroup
 	for _, ctx := range contexts {
@@ -1684,10 +1692,16 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 			} else {
 				ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
+					var timeout time.Duration
 					Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 						appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 						volOpts := mapToVolumeOptions(volOptsMap)
-						err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, volOpts)
+						if ctx.ReadinessTimeout == time.Duration(0) {
+							timeout = appScaleFactor * defaultTimeout
+						} else {
+							timeout = appScaleFactor * ctx.ReadinessTimeout
+						}
+						err = Inst().S.ValidateVolumes(ctx, appScaleFactor*timeout, defaultRetryInterval, volOpts)
 					})
 					if err != nil {
 						bkpErrors[namespace] = err
@@ -1697,7 +1711,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 
 					Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 						appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-						err = Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
+						err = Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, true)
 					})
 					if err != nil {
 						bkpErrors[namespace] = err
@@ -3199,14 +3213,22 @@ func splitCsv(in string) ([]string, error) {
 }
 
 func mapToVolumeOptions(options map[string]bool) *scheduler.VolumeOptions {
+	SkipClusterScopedObjectsVal := false
+	SkipVolumeSnapshotVal := false
+	SkipGroupSnapshotVal := false
 	if val, ok := options[SkipClusterScopedObjects]; ok {
-		return &scheduler.VolumeOptions{
-			SkipClusterScopedObjects: val,
-		}
+		SkipClusterScopedObjectsVal = val
 	}
-
+	if val, ok := options[SkipVolumeSnapshot]; ok {
+		SkipVolumeSnapshotVal = val
+	}
+	if val, ok := options[SkipGroupVolumeSnapshot]; ok {
+		SkipGroupSnapshotVal = val
+	}
 	return &scheduler.VolumeOptions{
-		SkipClusterScopedObjects: false,
+		SkipClusterScopedObjects: SkipClusterScopedObjectsVal,
+		SkipVolumeSnapshot: SkipVolumeSnapshotVal,
+		SkipGroupVolumeSnapshot: SkipGroupSnapshotVal,
 	}
 }
 

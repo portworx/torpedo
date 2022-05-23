@@ -1908,9 +1908,9 @@ func (k *K8s) substituteNamespaceInVolumes(volumes []corev1.Volume, ns string) [
 	return updatedVolumes
 }
 
-// WaitForRunning   wait for running
-//
-func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+// WaitForRunning wait for running
+func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration,
+	skipStorkChecks bool) error {
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
 			if err := k8sApps.ValidateDeployment(obj, timeout, retryInterval); err != nil {
@@ -1941,6 +1941,13 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 
 			logrus.Infof("[%v] Validated Service: %v", ctx.App.Key, svc.Name)
 		} else if obj, ok := specObj.(*storkapi.Rule); ok {
+
+			// Skip if flag skipStorkChecks is true
+			if skipStorkChecks{
+				logrus.Infof("Skip Rule validation")
+				continue
+			}
+
 			svc, err := k8sStork.GetRule(obj.Name, obj.Namespace)
 			if err != nil {
 				return &scheduler.ErrFailedToValidateApp{
@@ -1961,6 +1968,13 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 
 			logrus.Infof("[%v] Validated pod: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.ClusterPair); ok {
+
+			// Skip if flag skipStorkChecks is true
+			if skipStorkChecks{
+				logrus.Infof("Skip ClusterPair validation")
+				continue
+			}
+
 			if err := k8sStork.ValidateClusterPair(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
@@ -1970,6 +1984,13 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated ClusterPair: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.Migration); ok {
+
+			// Skip if flag skipStorkChecks is true
+			if skipStorkChecks{
+				logrus.Infof("Skip Migration validation")
+				continue
+			}
+
 			if err := k8sStork.ValidateMigration(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
@@ -1979,6 +2000,13 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated Migration: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.MigrationSchedule); ok {
+
+			// Skip if flag skipStorkChecks is true
+			if skipStorkChecks{
+				logrus.Infof("Skip MigrationSchedule validation")
+				continue
+			}
+
 			if _, err := k8sStork.ValidateMigrationSchedule(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
@@ -1988,6 +2016,13 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated MigrationSchedule: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.BackupLocation); ok {
+
+			// Skip if flag skipStorkChecks is true
+			if skipStorkChecks{
+				logrus.Infof("Skip BackupLocation validation")
+				continue
+			}
+
 			if err := k8sStork.ValidateBackupLocation(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
@@ -1997,6 +2032,13 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated BackupLocation: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.ApplicationBackup); ok {
+
+			// Skip if flag skipStorkChecks is true
+			if skipStorkChecks{
+				logrus.Infof("Skip ApplicationBackup validation")
+				continue
+			}
+
 			if err := k8sStork.ValidateApplicationBackup(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
@@ -2006,6 +2048,13 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated ApplicationBackup: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.ApplicationRestore); ok {
+
+			// Skip if flag skipStorkChecks is true
+			if skipStorkChecks{
+				logrus.Infof("Skip ApplicationRestore validation")
+				continue
+			}
+
 			if err := k8sStork.ValidateApplicationRestore(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
@@ -2015,6 +2064,13 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated ApplicationRestore: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.ApplicationClone); ok {
+
+			// Skip if flag skipStorkChecks is true
+			if skipStorkChecks{
+				logrus.Infof("Skip ApplicationClone validation")
+				continue
+			}
+
 			if err := k8sStork.ValidateApplicationClone(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
@@ -2024,6 +2080,13 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated ApplicationClone: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.VolumeSnapshotRestore); ok {
+
+			// Skip if flag skipStorkChecks is true
+			if skipStorkChecks{
+				logrus.Infof("Skip VolumeSnapshotRestore validation")
+				continue
+			}
+
 			if err := k8sStork.ValidateVolumeSnapshotRestore(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
@@ -2033,6 +2096,13 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated VolumeSnapshotRestore: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
+
+			// Skip if flag skipStorkChecks is true
+			if skipStorkChecks{
+				logrus.Infof("Skip VolumeSnapshot validation")
+				continue
+			}
+
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
 				retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
@@ -2442,7 +2512,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 					return fmt.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
 				}
 
-				if err := k.WaitForRunning(ctx, DefaultTimeout, DefaultRetryInterval); err != nil {
+				if err := k.WaitForRunning(ctx, DefaultTimeout, DefaultRetryInterval, false); err != nil {
 					return &scheduler.ErrFailedToValidatePod{
 						App: ctx.App,
 						Cause: fmt.Sprintf("Failed to validate Pod: [%s] %s. Err: Pod is not ready %v",
@@ -2651,6 +2721,10 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				logrus.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
+			if options != nil && options.SkipVolumeSnapshot {
+				logrus.Infof("Skip VolumeSnapshot validation")
+				continue
+			}
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
 				retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
@@ -2661,6 +2735,10 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 
 			logrus.Infof("[%v] Validated snapshot: %v", ctx.App.Key, obj.Metadata.Name)
 		} else if obj, ok := specObj.(*storkapi.GroupVolumeSnapshot); ok {
+			if options != nil && options.SkipGroupVolumeSnapshot {
+				logrus.Infof("Skip GroupVolumeSnapshot %s validation", obj.Name)
+				continue
+			}
 			if err := k8sStork.ValidateGroupSnapshot(obj.Name, obj.Namespace, true, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,

@@ -2992,7 +2992,7 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 		err = Inst().S.DeleteTasks(ctx, nil)
 		UpdateOutcome(event, err)
 
-		err = Inst().S.WaitForRunning(ctx, BackupRestoreCompletionTimeoutMin, defaultRetryInterval)
+		err = Inst().S.WaitForRunning(ctx, BackupRestoreCompletionTimeoutMin, defaultRetryInterval, true)
 		UpdateOutcome(event, err)
 	})
 
@@ -3914,7 +3914,7 @@ tbody tr:last-child {
 <script>
 $('#pxtable tr td').each(function(){
   var cellValue = $(this).html();
-  
+
     if (cellValue != "STATUS_OK") {
       $(this).css('background-color','red');
     }

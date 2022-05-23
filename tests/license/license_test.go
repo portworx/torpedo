@@ -293,13 +293,13 @@ var _ = Describe("{BasicEssentialsAggrSnapLimitTest}", func() {
 			// If we are running the mysql-aggr test execute next steps.
 			if strings.Contains(ctx.App.Key, "snap") || strings.Contains(ctx.App.Key, "aggr") {
 				Step(fmt.Sprintf("Expect %s app to fail to start", ctx.App.Key), func() {
-					err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultReadynessTimeout, defaultRetryInterval)
+					err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultReadynessTimeout, defaultRetryInterval, false)
 					Expect(err).To(HaveOccurred(),
 						"app with aggregated volumes got deployed successfully when lic does not allow aggregated volumes.")
 				})
 			} else {
 				Step(fmt.Sprintf("Wait for %s app to start running", ctx.App.Key), func() {
-					err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultReadynessTimeout, defaultRetryInterval)
+					err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultReadynessTimeout, defaultRetryInterval, false)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			}

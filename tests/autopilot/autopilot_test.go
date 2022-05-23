@@ -91,7 +91,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval, false)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -155,7 +155,7 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 		})
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval, false)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -275,7 +275,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 		// schedule deletion of autopilot once the pool expansion starts
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval, false)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -365,7 +365,7 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
 		// schedule deletion of autopilot once the pool expansion starts
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval, false)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -461,7 +461,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval, false)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -536,7 +536,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName)
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval, false)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -608,7 +608,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval, false)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -688,7 +688,7 @@ var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval, false)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})

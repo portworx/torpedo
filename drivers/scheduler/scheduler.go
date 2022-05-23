@@ -146,7 +146,7 @@ type Driver interface {
 	Schedule(instanceID string, opts ScheduleOptions) ([]*Context, error)
 
 	// WaitForRunning waits for application to start running.
-	WaitForRunning(cc *Context, timeout, retryInterval time.Duration) error
+	WaitForRunning(cc *Context, timeout, retryInterval time.Duration, skipStorkChecks bool) error
 
 	// AddTasks adds tasks to an existing context
 	AddTasks(*Context, ScheduleOptions) error
@@ -343,6 +343,10 @@ type UpgradeAutopilotOptions struct {
 type VolumeOptions struct {
 	// SkipClusterScopedObjects skips volume operations on cluster scoped objects like storage class
 	SkipClusterScopedObjects bool
+	// SkipVolumeSnapshot skips volume operations on VolumeSnapshot objects
+	SkipVolumeSnapshot bool
+	// SkipGroupVolumeSnapshot skips volume operations on GroupVolumeSnapshot objects
+	SkipGroupVolumeSnapshot bool
 	// ExpectError indicates a boolean that tells the code to expect an error
 	ExpectError bool
 }

@@ -31,7 +31,7 @@ const (
 	clusterName            = "tp-cluster"
 	restoreNamePrefix      = "tp-restore"
 	configMapName          = "kubeconfigs"
-	defaultTimeout         = 5 * time.Minute
+	defaultTimeout         = 15 * time.Minute
 	defaultRetryInterval   = 10 * time.Second
 	sourceClusterName      = "source-cluster"
 	destinationClusterName = "destination-cluster"
@@ -40,7 +40,7 @@ const (
 	storkDeploymentName      = "stork"
 	storkDeploymentNamespace = "kube-system"
 
-	appReadinessTimeout = 10 * time.Minute
+	appReadinessTimeout = 15 * time.Minute
 )
 
 var (
@@ -657,7 +657,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 						ctx.SkipVolumeValidation = true
 						ctx.ReadinessTimeout = BackupRestoreCompletionTimeoutMin * time.Minute
 
-						err := Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
+						err := Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval, true)
 						Expect(err).NotTo(HaveOccurred())
 					}
 
@@ -964,7 +964,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			SetClusterContext(destClusterConfigPath)
 
 			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
+				err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval, true)
 				Expect(err).NotTo(HaveOccurred())
 			}
 			// TODO: Restored PVCs are created by stork-snapshot StorageClass
@@ -1163,6 +1163,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 
 			// Populate contexts
 			for _, ctx := range contexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
 				ctx.SkipClusterScopedObject = true
 				ctx.SkipVolumeValidation = true
 			}
@@ -1397,6 +1398,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 
 				// Populate contexts
 				for _, ctx := range remainingContexts {
+					ctx.ReadinessTimeout = appReadinessTimeout
 					ctx.SkipClusterScopedObject = true
 					ctx.SkipVolumeValidation = true
 				}
@@ -1661,6 +1663,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 
 				// Populate contexts
 				for _, ctx := range remainingContexts {
+					ctx.ReadinessTimeout = appReadinessTimeout
 					ctx.SkipClusterScopedObject = true
 					ctx.SkipVolumeValidation = true
 				}
