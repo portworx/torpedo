@@ -305,8 +305,11 @@ type Driver interface {
 	// GetPxctlCmdOutput returns the command output run on the given node and any error
 	GetPxctlCmdOutput(n node.Node, command string) (string, error)
 
-	// GetNodeStats returns the node stats of the given node and any error
+	// GetNodeStats returns the node stats of the given node and an error if any
 	GetNodeStats(n node.Node) (map[string]map[string]int, error)
+
+	// GetTrashCanVolumeIds returns the node stats of the given node and an error if any
+	GetTrashCanVolumeIds(n node.Node) ([]string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

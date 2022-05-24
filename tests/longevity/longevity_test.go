@@ -89,7 +89,6 @@ var _ = Describe("{Longevity}", func() {
 		UpgradeStork:         TriggerUpgradeStork,
 		VolumesDelete:        TriggerVolumeDelete,
 		UpgradeVolumeDriver:  TriggerUpgradeVolumeDriver,
-		AppTasksDown:         TriggerAppTasksDown,
 		AutoFsTrim:           TriggerAutoFsTrim,
 		RestartManyVolDriver: TriggerRestartManyVolDriver,
 		RebootManyNodes:      TriggerRebootManyNodes,
@@ -98,6 +97,7 @@ var _ = Describe("{Longevity}", func() {
 		CsiSnapShot:          TriggerCsiSnapShot,
 		CsiSnapRestore:       TriggerCsiSnapRestore,
 		RelaxedReclaim:       TriggerRelaxedReclaim,
+		Trashcan:             TriggerTrashcan,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -533,12 +533,12 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
 	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
-
 	triggerInterval[NodeDecommission] = make(map[int]time.Duration)
 	triggerInterval[NodeRejoin] = make(map[int]time.Duration)
 	triggerInterval[CsiSnapShot] = make(map[int]time.Duration)
 	triggerInterval[CsiSnapRestore] = make(map[int]time.Duration)
 	triggerInterval[RelaxedReclaim] = make(map[int]time.Duration)
+	triggerInterval[Trashcan] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -992,6 +992,17 @@ func populateIntervals() {
 	triggerInterval[RelaxedReclaim][3] = 21 * baseInterval
 	triggerInterval[RelaxedReclaim][2] = 24 * baseInterval
 	triggerInterval[RelaxedReclaim][1] = 27 * baseInterval
+
+	triggerInterval[Trashcan][10] = 1 * baseInterval
+	triggerInterval[Trashcan][9] = 3 * baseInterval
+	triggerInterval[Trashcan][8] = 6 * baseInterval
+	triggerInterval[Trashcan][7] = 9 * baseInterval
+	triggerInterval[Trashcan][6] = 12 * baseInterval
+	triggerInterval[Trashcan][5] = 15 * baseInterval
+	triggerInterval[Trashcan][4] = 18 * baseInterval
+	triggerInterval[Trashcan][3] = 21 * baseInterval
+	triggerInterval[Trashcan][2] = 24 * baseInterval
+	triggerInterval[Trashcan][1] = 27 * baseInterval
 
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0

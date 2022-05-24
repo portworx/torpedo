@@ -20,6 +20,7 @@ import (
 	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	"github.com/onsi/ginkgo"
 
+	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -112,6 +113,9 @@ var isCsiVolumeSnapshotClassExist = false
 
 //isRelaxedReclaimEnabled to store if relaxed reclaim enalbed
 var isRelaxedReclaimEnabled = false
+
+//isTrashcanEnabled to store if trashcan enalbed
+var isTrashcanEnabled = false
 
 // Event describes type of test trigger
 type Event struct {
@@ -295,6 +299,8 @@ const (
 	NodeRejoin = "nodeRejoin"
 	// RelaxedReclaim enables RelaxedReclaim in PX cluster
 	RelaxedReclaim = "relaxedReclaim"
+	// Trashcan enables Trashcan in PX cluster
+	Trashcan = "trashcan"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -3634,7 +3640,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 								logrus.Infof("Got error while getting node for volume %v, wait for 2 minutes to retry. Error: %v", vol.ID, err)
 								n2, err = Inst().V.GetNodeForVolume(vol, 3*time.Minute, 10*time.Second)
 								if err != nil {
-									err = fmt.Errorf("Error while getting node for volume %v, Error: %v", vol.ID, err)
+									err = fmt.Errorf("error while getting node for volume %v, Error: %v", vol.ID, err)
 									UpdateOutcome(event, err)
 								}
 
@@ -3754,6 +3760,88 @@ func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) stri
 
 }
 
+// TriggerTrashcan enables trashcan feature in the PX Cluster and validates it
+func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: Trashcan,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	context("Validate Trashcan feature of the volumes", func() {
+		if !isTrashcanEnabled {
+
+			Step("enable trashcan",
+				func() {
+					currNode := node.GetWorkerNodes()[0]
+					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+						"--volume-expiration-minutes": "600",
+					})
+					if err != nil {
+						err = fmt.Errorf("error while enabling trashcan, Error:%v", err)
+						logrus.Error(err)
+						UpdateOutcome(event, err)
+
+					} else {
+						logrus.Info("Trashcan is successfully enabled")
+						isTrashcanEnabled = true
+					}
+
+				})
+		} else {
+			var trashcanVols []string
+			var err error
+			node := node.GetWorkerNodes()[0]
+
+			Step("Validating trashcan",
+				func() {
+					trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
+					if err != nil {
+						logrus.Infof("Error While getting trashcan volumes, Err %v", err)
+					}
+
+					if len(trashcanVols) == 0 {
+						err = fmt.Errorf("no volumes present in trashcan")
+						UpdateOutcome(event, err)
+
+					}
+				})
+
+			Step("Validating trashcan restore",
+				func() {
+					if len(trashcanVols) != 0 {
+						volToRestore := trashcanVols[len(trashcanVols)-1]
+						logrus.Infof("Restoring vol [%v] from trashcan", volToRestore)
+						volName := fmt.Sprintf("%s-res", volToRestore[len(volToRestore)-4:])
+						pxctlCmdFull := fmt.Sprintf("v r %s --trashcan %s", volName, volToRestore)
+						output, err := Inst().V.GetPxctlCmdOutput(node, pxctlCmdFull)
+						if err == nil {
+							logrus.Infof("output: %v", output)
+							if !strings.Contains(output, fmt.Sprintf("Successfully restored: %s", volName)) {
+								err = fmt.Errorf("volume %v, restore from trashcan failed, Err: %v", volToRestore, output)
+								UpdateOutcome(event, err)
+							}
+						} else {
+							logrus.Infof("Error restoring: %v", err)
+							UpdateOutcome(event, err)
+						}
+
+					}
+
+				})
+		}
+	})
+
+}
+
 // TriggerRelaxedReclaim enables Relaxed Reclaim in the PX Cluster
 func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
@@ -3825,6 +3913,168 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				})
 		}
 	})
+
+}
+
+// TriggerNodeDecommission decommission the node for the PX cluster
+func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: NodeDecommission,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	var workerNodes []node.Node
+	var nodeToDecomm node.Node
+
+	Step("Decommission a random node", func() {
+
+		workerNodes = node.GetWorkerNodes()
+		index := rand.Intn(len(workerNodes))
+		nodeToDecomm = workerNodes[index]
+		Step(fmt.Sprintf("decommission node %s", nodeToDecomm.Name), func() {
+			err := Inst().S.PrepareNodeToDecommission(nodeToDecomm, Inst().Provisioner)
+			if err != nil {
+				UpdateOutcome(event, err)
+			} else {
+				err = Inst().V.DecommissionNode(&nodeToDecomm)
+				if err != nil {
+					logrus.Infof("Error while decommissioning the node: %v, Error:%v", nodeToDecomm.Name, err)
+					UpdateOutcome(event, err)
+				}
+
+			}
+
+			t := func() (interface{}, bool, error) {
+				status, err := Inst().V.GetNodeStatus(nodeToDecomm)
+				if err != nil {
+					return false, true, fmt.Errorf("error getting node %v status", nodeToDecomm.Name)
+				}
+				if *status == opsapi.Status_STATUS_NONE {
+					return true, false, nil
+				}
+				return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecomm.Name)
+			}
+			_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+
+			if err != nil {
+				UpdateOutcome(event, err)
+			} else {
+
+				decommissionedNode = nodeToDecomm
+
+			}
+
+		})
+
+	})
+
+	for _, ctx := range *contexts {
+
+		Step(fmt.Sprintf("validating context after node: [%s] decommission",
+			nodeToDecomm.Name), func() {
+			errorChan := make(chan error, errorChannelSize)
+			ctx.SkipVolumeValidation = true
+			ValidateContext(ctx, &errorChan)
+			for err := range errorChan {
+				UpdateOutcome(event, err)
+			}
+		})
+	}
+}
+
+// TriggerNodeRejoin rejoins the decommissioned node
+func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: NodeRejoin,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	var decommissionedNodeName string
+
+	Step("Rejoin the node", func() {
+
+		if decommissionedNode.Name != "" {
+			decommissionedNodeName = decommissionedNode.Name
+
+			Step(fmt.Sprintf("Rejoin node %s", decommissionedNode.Name), func() {
+				err := Inst().V.RejoinNode(&decommissionedNode)
+
+				if err != nil {
+					logrus.Infof("Error while rejoining the node. error: %v", err)
+					UpdateOutcome(event, err)
+				} else {
+					logrus.Info("Waiting for node to rejoin and refresh inventory")
+					time.Sleep(90 * time.Second)
+					err = Inst().S.RefreshNodeRegistry()
+					if err != nil {
+						UpdateOutcome(event, err)
+					}
+
+					latestNodes, err := Inst().V.GetPxNodes()
+					if err != nil {
+						UpdateOutcome(event, err)
+					}
+
+					isNodeExist := false
+					for _, latestNode := range latestNodes {
+
+						logrus.Infof("Inspecting Node: %v", latestNode.Hostname)
+
+						if latestNode.Hostname == decommissionedNode.Hostname {
+							isNodeExist = true
+							break
+						}
+
+					}
+					if !isNodeExist {
+						err = fmt.Errorf("node %v rejoin failed", decommissionedNode.Hostname)
+						UpdateOutcome(event, err)
+					} else {
+						logrus.Infof("node %v rejoin is successful ", decommissionedNode.Hostname)
+					}
+
+				}
+
+			})
+
+			decommissionedNode = node.Node{}
+
+		}
+
+	})
+
+	for _, ctx := range *contexts {
+
+		Step(fmt.Sprintf("validating context after node: [%s] rejoin",
+			decommissionedNodeName), func() {
+			errorChan := make(chan error, errorChannelSize)
+			ctx.SkipVolumeValidation = true
+			ValidateContext(ctx, &errorChan)
+			for err := range errorChan {
+				UpdateOutcome(event, err)
+			}
+		})
+	}
 
 }
 

@@ -3797,7 +3797,7 @@ func getImageList(endpointURL, pxVersion, k8sVersion string) (map[string]string,
 	return imageList, nil
 }
 
-// GetNodeStats returns the node stats of the given node and any error
+// GetNodeStats returns the node stats of the given node and an error if any
 func (d *portworx) GetNodeStats(n node.Node) (map[string]map[string]int, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
@@ -3864,8 +3864,8 @@ func (d *portworx) GetNodeStats(n node.Node) (map[string]map[string]int, error) 
 	return nodeStatsMap, nil
 }
 
-// GetNodeStats returns the node stats of the given node and any error
-func (d *portworx) GetTrashCan(n node.Node) (string, error) {
+// GetTrashCanVolumeIds returns the volume ids in the trashcan and an error if any
+func (d *portworx) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -3878,36 +3878,44 @@ func (d *portworx) GetTrashCan(n node.Node) (string, error) {
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
 		if err != nil {
-			return "", fmt.Errorf("failed to create pxctl context. cause: %v", err)
+			return nil, fmt.Errorf("failed to create pxctl context. cause: %v", err)
 		}
 	}
 
 	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s v l --trashcan -j", pxctlPath), opts)
 	if err != nil {
-		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
+		return nil, fmt.Errorf("failed to get pxctl status. cause: %v", err)
 	}
 	logrus.Info(out)
 
 	var data interface{}
 	err = json.Unmarshal([]byte(out), &data)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal pxctl status. cause: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal pxctl status. cause: %v", err)
 	}
-	logrus.Info("marshal done")
-	logrus.Info(data)
 
 	// delete context
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context delete admin", pxctlPath), opts)
 		if err != nil {
-			return "", fmt.Errorf("failed to delete pxctl context. cause: %v", err)
+			return nil, fmt.Errorf("failed to delete pxctl context. cause: %v", err)
 		}
 	}
 
-	statusMap := data.(map[string]interface{})
-	logrus.Infof("stats map : %v", statusMap)
+	res := data.([]interface{})
 
-	return "", nil
+	trashcanVols := make([]string, 50)
+
+	for _, v := range res {
+		var tp map[string]interface{} = v.(map[string]interface{})
+		str := fmt.Sprintf("%v", tp["id"])
+		trashcanVols = append(trashcanVols, strings.Trim(str, " "))
+
+	}
+
+	logrus.Infof("trash vols: %v", trashcanVols)
+
+	return trashcanVols, nil
 }
 
 func init() {

@@ -725,18 +725,26 @@ func (d *DefaultDriver) GetPxctlCmdOutput(n node.Node, command string) (string, 
 	}
 }
 
-<<<<<<< HEAD
 // IsPureVolume returns true if volume is FA/FB DA volumes else false
 func (d *DefaultDriver) IsPureVolume(volume *Volume) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "IsPureVolume()",
-=======
-// GetNodeStats returns the node stats of the given node and any error
+	}
+}
+
+// GetNodeStats returns the node stats of the given node and an error if any
 func (d *DefaultDriver) GetNodeStats(n node.Node) (map[string]map[string]int, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetNodeStats()",
->>>>>>> f04d0dd56 (:hammer: Fixing json unmarshal)
+	}
+}
+
+// GetTrashCanVolumeIds returns the volume ids in the trashcan and an error if any
+func (d *DefaultDriver) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetTrashCanVolumeIds()",
 	}
 }
