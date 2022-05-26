@@ -174,6 +174,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 						logrus.Info("wait for 1 minute for node reboot")
 						time.Sleep(defaultCommandTimeout)
 						ctx.RefreshStorageEndpoint = true
+						ctx.ReadinessTimeout = 15 * time.Minute
 						ValidateContext(ctx)
 						n2, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
 						Expect(err).NotTo(HaveOccurred())

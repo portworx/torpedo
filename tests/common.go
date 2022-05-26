@@ -1294,7 +1294,7 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
-					logrus.Info("an error occurred, collecting bundle")
+					logrus.Infof("an error occurred on node [%v], collecting bundle", n.Name)
 					CollectSupport()
 				}
 				expect(err).NotTo(haveOccurred())
