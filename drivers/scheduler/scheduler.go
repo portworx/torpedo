@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	v1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/drivers/api"
@@ -124,6 +125,8 @@ type ScheduleOptions struct {
 	Upgrade bool
 	// Namespace to schedule app installation if not empty
 	Namespace string
+	//TopoLogy Labels
+	TopologyLabels []map[string]string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -181,6 +184,9 @@ type Driver interface {
 
 	// ValidateVolumes validates storage volumes in the provided context
 	ValidateVolumes(cc *Context, timeout, retryInterval time.Duration, options *VolumeOptions) error
+
+	// ValidateTopologyLabel validate topology Labels for App
+	ValidateTopologyLabel(cc *Context) error
 
 	// GetSnapShotData retruns volumesnapshotdata
 	GetSnapShotData(ctx *Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error)
@@ -323,6 +329,27 @@ type Driver interface {
 
 	//RecyleNode deletes nodes with given node
 	RecycleNode(n node.Node) error
+
+	// DeletePXPods delete PX pods
+	DeletePXPods(nameSpace string) error
+
+	// CreateCsiSanpshotClass create csi snapshot class
+	CreateCsiSanpshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error)
+
+	// CreateCsiSnapshot create csi snapshot for given pvc
+	CreateCsiSnapshot(name string, class string, pvc string) (*v1beta1.VolumeSnapshot, error)
+
+	// CreateCsiSnapsForVolumes create csi snapshots for all volumes in a context
+	CreateCsiSnapsForVolumes(*Context, string) (map[string]*v1beta1.VolumeSnapshot, error)
+
+	// GetCsiSnapshots return snapshot lists for a volume
+	GetCsiSnapshots(string, string) ([]v1beta1.VolumeSnapshot, error)
+
+	// ValidateCsiSnapshots validate csi snapshots in the context
+	ValidateCsiSnapshots(*Context, map[string]*v1beta1.VolumeSnapshot) error
+
+	// RestoreCsiSnapAndValidate restore csi snapshot and validate the restore.
+	RestoreCsiSnapAndValidate(*Context) (map[string]corev1.PersistentVolumeClaim, error)
 }
 
 var (
