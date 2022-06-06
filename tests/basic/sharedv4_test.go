@@ -130,9 +130,14 @@ var _ = Describe("{Sharedv4Functional}", func() {
 				})
 
 				Step(fmt.Sprintf("validate counter are active for %s", ctx.App.Key), func() {
-					counters := getAppCounters(apiVol, attachedNode, counterCollectionInterval)
-					activePods := getActivePods(counters)
-					Expect(len(activePods)).To(Equal(numPods))
+					var counters map[string]appCounter
+					Eventually(func() bool {
+						counters = getAppCounters(apiVol, attachedNode, counterCollectionInterval)
+						activePods := getActivePods(counters)
+						return (len(activePods) == numPods)
+					}, 3*time.Minute, 10*time.Second).Should(BeTrue(),
+						"number of active keys did not match for volume %v (%v) for app %v. counters map: %v",
+						vol.ID, apiVol.Id, ctx.App.Key, counters)
 				})
 
 				Step(fmt.Sprintf("validate device path is set as RW for %s", ctx.App.Key), func() {
