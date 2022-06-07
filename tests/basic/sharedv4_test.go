@@ -131,11 +131,15 @@ var _ = Describe("{Sharedv4Functional}", func() {
 
 				Step(fmt.Sprintf("validate counter are active for %s", ctx.App.Key), func() {
 					var counters map[string]appCounter
+					// we are seeing a case where the application is validated and running but sharedv4 volume is
+					// not mounted/exported yet. adding the eventually here to retry to make sure we capture the
+					// counters correctly. Setting timeout of 5 minutes for now as mounting and exporting
+					// shouldn't take that long.
 					Eventually(func() bool {
 						counters = getAppCounters(apiVol, attachedNode, counterCollectionInterval)
 						activePods := getActivePods(counters)
 						return (len(activePods) == numPods)
-					}, 3*time.Minute, 10*time.Second).Should(BeTrue(),
+					}, 5*time.Minute, 20*time.Second).Should(BeTrue(),
 						"number of active keys did not match for volume %v (%v) for app %v. counters map: %v",
 						vol.ID, apiVol.Id, ctx.App.Key, counters)
 				})
