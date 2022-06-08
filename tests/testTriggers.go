@@ -1823,7 +1823,7 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 }
 
 // TriggerEmailReporter sends email with all reported errors
-func TriggerEmailReporter(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerEmailReporter() {
 	// emailRecords stores events to be notified
 
 	emailData := emailData{}
