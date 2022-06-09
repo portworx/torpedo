@@ -100,15 +100,15 @@ const (
 const (
 	k8sNodeReadyTimeout    = 5 * time.Minute
 	volDirCleanupTimeout   = 5 * time.Minute
-	k8sObjectCreateTimeout = 2 * time.Minute
-	k8sDestroyTimeout      = 5 * time.Minute
+	k8sObjectCreateTimeout = 5 * time.Minute
+	k8sDestroyTimeout      = 10 * time.Minute
 	// FindFilesOnWorkerTimeout timeout for find files on worker
 	FindFilesOnWorkerTimeout = 1 * time.Minute
-	deleteTasksWaitTimeout   = 3 * time.Minute
+	deleteTasksWaitTimeout   = 20 * time.Minute
 	// DefaultRetryInterval  Default retry interval
-	DefaultRetryInterval = 10 * time.Second
+	DefaultRetryInterval = 30 * time.Second
 	// DefaultTimeout default timeout
-	DefaultTimeout = 3 * time.Minute
+	DefaultTimeout = 10 * time.Minute
 
 	autopilotServiceName          = "autopilot"
 	autopilotDefaultNamespace     = "kube-system"

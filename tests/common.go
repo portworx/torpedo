@@ -162,7 +162,7 @@ const (
 	BackupRestoreCompletionTimeoutMin = 20
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
-	RetrySeconds                      = 10
+	RetrySeconds                      = 30
 	BackupScheduleAllName             = "-all"
 	SchedulePolicyAllName             = "schedule-policy-all"
 	SchedulePolicyScaleName           = "schedule-policy-scale"
@@ -192,13 +192,13 @@ const (
 )
 
 const (
-	waitResourceCleanup       = 2 * time.Minute
-	defaultTimeout            = 5 * time.Minute
-	defaultVolScaleTimeout    = 2 * time.Minute
-	defaultRetryInterval      = 10 * time.Second
+	waitResourceCleanup       = 30 * time.Minute
+	defaultTimeout            = 30 * time.Minute
+	defaultVolScaleTimeout    = 20 * time.Minute
+	defaultRetryInterval      = 30 * time.Second
 	defaultCmdTimeout         = 20 * time.Second
-	defaultCmdRetryInterval   = 5 * time.Second
-	defaultDriverStartTimeout = 10 * time.Minute
+	defaultCmdRetryInterval   = 20 * time.Second
+	defaultDriverStartTimeout = 20 * time.Minute
 )
 
 var (
@@ -329,7 +329,7 @@ func ValidateCleanup() {
 			return "", false, nil
 		}
 
-		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
+		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 30*time.Second)
 		if err != nil {
 			logrus.Info("an error occurred, collecting bundle")
 			CollectSupport()
@@ -1291,7 +1291,7 @@ func PerformSystemCheck() {
 				logrus.Infof("looking for core files on node %s", n.Name)
 				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
+					TimeBeforeRetry: 30 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
 					logrus.Info("an error occurred, collecting bundle")

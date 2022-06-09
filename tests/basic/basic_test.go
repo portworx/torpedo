@@ -279,7 +279,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					Step("wait for few seconds for app destroy to trigger", func() {
-						time.Sleep(10 * time.Second)
+						time.Sleep(30 * time.Second)
 					})
 				})
 

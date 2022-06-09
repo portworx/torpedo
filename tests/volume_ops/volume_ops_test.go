@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	defaultCommandRetry   = 5 * time.Second
+	defaultCommandRetry   = 30 * time.Second
 	defaultCommandTimeout = 1 * time.Minute
 	bandwidthMBps         = 1
 	// buffered BW = 1 MBps with 10% buffer speed in KBps
