@@ -28,7 +28,7 @@ spec:
           {{ if .CustomArgs }}
           args: {{ .CustomArgs | array }}
           {{ else }}
-          args: [ "-c", "mkdir -p /testdir/$(POD_NAME) && bonnie++ -d /testdir/$(POD_NAME) -x 10 -n 10:10:1:10 -b -u root"]{{ end }}
+          args: [ "-c", "mkdir -p /testdir/$(POD_NAME) && bonnie++ -d /testdir/$(POD_NAME) -x 10 -r 512  -n 10:10:1:10 -b -u root"]{{ end }}
           env:
             - name: POD_NAME
               valueFrom:
