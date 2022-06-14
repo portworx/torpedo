@@ -105,6 +105,17 @@ func GetStorageNodes() []Node {
 	return nodeList
 }
 
+// GetStorageLessNodes gets all the nodes with empty StoragePools
+func GetStorageLessNodes() []Node {
+	var nodeList []Node
+	for _, n := range nodeRegistry {
+		if !IsStorageNode(n) {
+			nodeList = append(nodeList, n)
+		}
+	}
+	return nodeList
+}
+
 // GetNodesByTopologyZoneLabel gets all the nodes with Topology Zone Value matching
 func GetNodesByTopologyZoneLabel(zone string) []Node {
 	var nodeList []Node

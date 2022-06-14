@@ -985,11 +985,22 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	var err error
 
 	Step("schedule applications", func() {
-		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
-		})
+		}
+		//if not hyper converged set up deploy apps only on storageless nodes
+		if !Inst().IsHyperConverged {
+			storagelessNodes := node.GetStorageLessNodes()
+			options = scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Inst().Provisioner,
+				Nodes:              storagelessNodes,
+			}
+
+		}
+		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		contexts, err = Inst().S.Schedule(taskName, options)
 		processError(err, errChan...)
 		if len(contexts) == 0 {
 			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
@@ -1076,6 +1087,7 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		})
 
 	})
+
 }
 
 // StopVolDriverAndWait stops volume driver on given app nodes and waits till driver is down
@@ -3100,6 +3112,7 @@ type Torpedo struct {
 	AutopilotUpgradeImage               string
 	CsiGenericDriverConfigMap           string
 	HelmValuesConfigMap                 string
+	IsHyperConverged                    bool
 }
 
 // ParseFlags parses command line flags
