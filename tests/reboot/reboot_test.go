@@ -161,6 +161,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 
 						// Workaround to avoid PWX-24277 for now.
 						Step(fmt.Sprintf("wait until volume %v status is Up", vol.ID), func() {
+							prevStatus := ""
 							Eventually(func() (string, error) {
 								connOpts := node.ConnectionOpts{
 									Timeout:         defaultCommandTimeout,
@@ -168,13 +169,17 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 									Sudo:            true,
 								}
 								cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", vol.ID)
-								output, err := Inst().N.RunCommandWithNoRetry(*n, cmd, connOpts)
+								volStatus, err := Inst().N.RunCommandWithNoRetry(*n, cmd, connOpts)
 								if err != nil {
 									logrus.Warnf("failed to get replication state of volume %v: %v", vol.ID, err)
 									return "", err
 								}
-								return output, nil
-							}, 20*time.Minute, 10*time.Second).Should(ContainSubstring("Up"),
+								if volStatus != prevStatus {
+									logrus.Warnf("volume %v: %v", vol.ID, volStatus)
+									prevStatus = volStatus
+								}
+								return volStatus, nil
+							}, 30*time.Minute, 10*time.Second).Should(ContainSubstring("Up"),
 								"volume %v status is not Up for app %v", vol.ID, ctx.App.Key)
 						})
 
