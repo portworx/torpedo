@@ -982,7 +982,6 @@ func populateIntervals() {
 	triggerInterval[CsiSnapShot][1] = 27 * baseInterval
 
 	baseInterval = 300 * time.Minute
-	baseInterval = 1 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
 	triggerInterval[UpgradeStork][9] = 2 * baseInterval

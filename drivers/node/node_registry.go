@@ -108,8 +108,11 @@ func GetStorageNodes() []Node {
 // GetStorageLessNodes gets all the nodes with empty StoragePools
 func GetStorageLessNodes() []Node {
 	var nodeList []Node
-	for _, n := range nodeRegistry {
-		if !IsStorageNode(n) {
+	workerNodes := GetWorkerNodes()
+	storageNodes := GetStorageNodes()
+	for _, n := range workerNodes {
+		isExist := Contains(storageNodes, n)
+		if !isExist {
 			nodeList = append(nodeList, n)
 		}
 	}

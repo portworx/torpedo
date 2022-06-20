@@ -805,6 +805,9 @@ func (d *DefaultDriver) IsPureFileVolume(volume *Volume) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "IsPureFileVolume()",
+	}
+}
+
 // GetKvdbMembers returns the kvdb members of the PX cluster
 func (d *DefaultDriver) GetKvdbMembers(n node.Node) (map[string]*MetadataNode, error) {
 	return nil, &errors.ErrNotSupported{
