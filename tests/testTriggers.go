@@ -348,6 +348,8 @@ const (
 	ValidateDeviceMapper = "validateDeviceMapper"
 	// AsyncDR runs Async DR between two clusters
 	AsyncDR = "asyncdr"
+	// HAIncreaseAndReboot performs repl-add
+	HAIncreaseAndReboot = "haIncreaseAndReboot"
 )
 
 // TriggerCoreChecker checks if any cores got generated
