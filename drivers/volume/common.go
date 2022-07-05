@@ -9,6 +9,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/pborman/uuid"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -698,6 +699,22 @@ func (d *DefaultDriver) IsOperatorBasedInstall() (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "IsOperatorBasedInstall()",
+	}
+}
+
+// RunSecretsLogin runs secrets login using pxctl
+func (d *DefaultDriver) RunSecretsLogin(n node.Node, secretType string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RunSecretsLogin()",
+	}
+}
+
+// GetStorageCluster returns the storageClusterSpec
+func (d *DefaultDriver) GetStorageCluster() (*v1.StorageCluster, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetStorageCluster()",
 	}
 }
 
