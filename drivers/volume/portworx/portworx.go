@@ -3521,6 +3521,7 @@ func (d *portworx) SetClusterOpts(n node.Node, clusterOpts map[string]string) er
 	}
 
 	logrus.Debugf("Successfully updated Cluster Options")
+	logrus.Info("Inside portworx.go under SANTHOSH")
 	return nil
 }
 

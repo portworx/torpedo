@@ -312,6 +312,8 @@ const (
 	AppTasksDown = "appScaleUpAndDown"
 	// AutoFsTrim enables Auto Fstrim in PX cluster
 	AutoFsTrim = "autoFsTrim"
+	//Update volume
+	UpdateVolume = "updateVolume"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
 	//NodeRejoin rejoins the decommissioned node into the PX cluster
@@ -3629,15 +3631,120 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 					} else {
 						logrus.Info("AutoFsTrim is successfully enabled")
+						logrus.Info("AutoFsTrim is enabled successfully SANTHOSH")
 						isAutoFsTrimEnabled = true
 						time.Sleep(5 * time.Minute)
 					}
 				} else {
 					logrus.Info("AutoFsTrim is already enabled")
+					logrus.Info("AutoFsTrim is checked again SANTHOSH")
 				}
 
 			})
 		Step("Validate AutoFsTrim Status ",
+			func() {
+				validateAutoFsTrim(contexts, event)
+
+			})
+
+		Step("Reboot attached node and validate AutoFsTrim Status ",
+			func() {
+
+				for _, ctx := range *contexts {
+					if strings.Contains(ctx.App.Key, "fstrim") {
+						vols, _ := Inst().S.GetVolumes(ctx)
+						for _, vol := range vols {
+
+							n, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
+							UpdateOutcome(event, err)
+							logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+							err = Inst().S.DisableSchedulingOnNode(*n)
+							UpdateOutcome(event, err)
+
+							Inst().V.StopDriver([]node.Node{*n}, false, nil)
+
+							Inst().N.RebootNode(*n, node.RebootNodeOpts{
+								Force: true,
+								ConnectionOpts: node.ConnectionOpts{
+									Timeout:         1 * time.Minute,
+									TimeBeforeRetry: 5 * time.Second,
+								},
+							})
+
+							logrus.Info("wait for a minute for node reboot")
+							time.Sleep(1 * time.Minute)
+							n2, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
+							if err != nil {
+
+								logrus.Infof("Got error while getting node for volume %v, wait for 2 minutes to retry. Error: %v", vol.ID, err)
+								n2, err = Inst().V.GetNodeForVolume(vol, 3*time.Minute, 10*time.Second)
+								if err != nil {
+									err = fmt.Errorf("error while getting node for volume %v, Error: %v", vol.ID, err)
+									UpdateOutcome(event, err)
+								}
+
+							}
+
+							logrus.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
+							StartVolDriverAndWait([]node.Node{*n})
+							Inst().S.EnableSchedulingOnNode(*n)
+
+						}
+
+					}
+
+				}
+
+				validateAutoFsTrim(contexts, event)
+
+			})
+	})
+
+}
+
+// TriggerVolumeUpdate enables to test volume update
+func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpdateVolume,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	context("Validate update of the volumes", func() {
+
+		Step("Update volume ",
+			func() {
+				if !isAutoFsTrimEnabled {
+					currNode := node.GetWorkerNodes()[0]
+					err := Inst().V.SetClusterOpts(currNode, map[string]string{
+						"--auto-fstrim": "on",
+					})
+					if err != nil {
+						err = fmt.Errorf("error while updating volume, Error:%v", err)
+						logrus.Error(err)
+						UpdateOutcome(event, err)
+
+					} else {
+						logrus.Info("update volume is successfully enabled")
+						logrus.Info("update is enabled successfully SANTHOSH")
+						isAutoFsTrimEnabled = true
+						time.Sleep(5 * time.Minute)
+					}
+				} else {
+					logrus.Info("update volume is already enabled")
+					logrus.Info("Update volume is checked again SANTHOSH")
+				}
+
+			})
+		Step("Validate update volume Status ",
 			func() {
 				validateAutoFsTrim(contexts, event)
 
