@@ -72,8 +72,8 @@ func getPTX(issueID string) {
 func createPTX(description, summary string) (string, error) {
 
 	//Hardcoding the Priority to P1
-	customfield11115 := tcontainer.NewMarshalMap()
-	customfield11115["customfield_11115"] = map[string]interface{}{
+	customFieldsMap := tcontainer.NewMarshalMap()
+	customFieldsMap["customfield_11115"] = map[string]interface{}{
 		"id":    "10936",
 		"value": "P1 (High)",
 	}
@@ -101,7 +101,7 @@ func createPTX(description, summary string) (string, error) {
 				},
 			},
 			Summary:  summary,
-			Unknowns: customfield11115,
+			Unknowns: customFieldsMap,
 		},
 	}
 	issue, resp, err := client.Issue.Create(&i)
