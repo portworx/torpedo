@@ -995,6 +995,7 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			storagelessNodes := node.GetStorageLessNodes()
 			if len(storagelessNodes) == 0 {
 				logrus.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
+				Inst().IsHyperConverged = true
 			}
 			for _, storagelessNode := range storagelessNodes {
 				if err = Inst().S.AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {

@@ -4537,7 +4537,6 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 						}
 
 						_, ok := newKvdbMembers[id]
-
 						if ok {
 							logrus.Infof("Node %v still exist as a KVDB member. Waiting for failover to happen", kvdbNode.Name)
 							time.Sleep(2 * time.Minute)
@@ -4546,7 +4545,6 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 							isKvdbMembersUpdated = true
 
 						}
-
 						waitTime--
 					}
 
@@ -4559,9 +4557,9 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 					if err != nil {
 						logrus.Error(err)
 						UpdateOutcome(event, err)
-
 					}
 					kvdbMemberStatus := validateKVDBMembers(event, newKvdbMembers, false)
+
 					errorChan = make(chan error, errorChannelSize)
 
 					if !kvdbMemberStatus {
@@ -4596,11 +4594,12 @@ func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.Meta
 	allHealthy := true
 
 	if len(kvdbMembers) == 0 {
+		err := fmt.Errorf("No KVDB membes to validate")
+		UpdateOutcome(event, err)
 		return false
 	}
 
 	for id, m := range kvdbMembers {
-		logrus.Infof("validating node : %v, is leader?: %v", id, m.Leader)
 
 		if !m.IsHealthy {
 			err := fmt.Errorf("kvdb member node: %v is not healthy", id)
@@ -4610,7 +4609,6 @@ func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.Meta
 				UpdateOutcome(event, err)
 			}
 		} else {
-			allHealthy = allHealthy && true
 			logrus.Infof("KVDB member node %v is healthy", id)
 		}
 	}
