@@ -3630,17 +3630,17 @@ func (d *portworx) UpdateStorageClusterImage(imageName string) error {
 func (d *portworx) GetPXStorageCluster() (*v1.StorageCluster, error) {
 	pxOps, err := pxOperator.ListStorageClusters(schedops.PXNamespace)
 	if err != nil {
-		er := fmt.Errorf("Error getting Storage Clusters list, Err: %v", err.Error())
-		logrus.Error(er.Error())
-		return nil, er
+		err = fmt.Errorf("Error getting Storage Clusters list, Err: %v", err.Error())
+		logrus.Error(err.Error())
+		return nil, err
 
 	}
 
 	stc, err := pxOperator.GetStorageCluster(pxOps.Items[0].Name, pxOps.Items[0].Namespace)
 	if err != nil {
-		er := fmt.Errorf("error getting Storage Clusters [%v], Namespace: [%v], Err: %v", pxOps.Items[0].Name, pxOps.Items[0].Namespace, err.Error())
-		logrus.Error(er.Error())
-		return nil, er
+		err = fmt.Errorf("error getting Storage Clusters [%v], Namespace: [%v], Err: %v", pxOps.Items[0].Name, pxOps.Items[0].Namespace, err.Error())
+		logrus.Error(err.Error())
+		return nil, err
 
 	}
 	return stc, nil

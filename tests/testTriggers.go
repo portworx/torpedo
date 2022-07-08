@@ -87,6 +87,10 @@ const (
 	errorChannelSize                 = 50
 )
 
+const (
+	pxStatusError = "ERROR GETTING PX STATUS"
+)
+
 // EmailRecipients list of email IDs to send email to
 var EmailRecipients []string
 
@@ -1886,7 +1890,7 @@ func TriggerEmailReporter() {
 		if n.StorageNode != nil {
 			status, err := Inst().V.GetNodeStatus(n)
 			if err != nil {
-				pxStatus = "ERROR GETTING STATUS"
+				pxStatus = pxStatusError
 			} else {
 				pxStatus = status.String()
 			}
