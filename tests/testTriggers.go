@@ -3704,7 +3704,6 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 // TriggerVolumeUpdate enables to test volume update
 func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -3714,7 +3713,6 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
-
 	defer func() {
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
