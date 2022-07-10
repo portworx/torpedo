@@ -260,6 +260,8 @@ type Driver interface {
 	//ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
 
+	//Update IO priority using pxctl command
+	UpdateIOPriority(volumeName string, priorityType string) error
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
 

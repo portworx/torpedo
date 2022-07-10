@@ -118,6 +118,9 @@ var jiraEvents = make(map[string][]string)
 //isAutoFsTrimEnabled to store if auto fs trim enalbed
 var isAutoFsTrimEnabled = false
 
+// set IOPriority
+var setIoPriority = true
+
 // isCsiVolumeSnapshotClassExist to store if snapshot class exist
 var isCsiVolumeSnapshotClassExist = false
 
@@ -3628,16 +3631,13 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						err = fmt.Errorf("error while enabling auto fstrim, Error:%v", err)
 						logrus.Error(err)
 						UpdateOutcome(event, err)
-
 					} else {
 						logrus.Info("AutoFsTrim is successfully enabled")
-						logrus.Info("AutoFsTrim is enabled successfully SANTHOSH")
 						isAutoFsTrimEnabled = true
 						time.Sleep(5 * time.Minute)
 					}
 				} else {
 					logrus.Info("AutoFsTrim is already enabled")
-					logrus.Info("AutoFsTrim is checked again SANTHOSH")
 				}
 
 			})
@@ -3704,6 +3704,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 // TriggerVolumeUpdate enables to test volume update
 func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -3720,89 +3721,77 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 	}()
 	context("Validate update of the volumes", func() {
 
-		Step("Update volume ",
+		Step("Update Io priority on volumes ",
 			func() {
-				if !isAutoFsTrimEnabled {
-					currNode := node.GetWorkerNodes()[0]
-					err := Inst().V.SetClusterOpts(currNode, map[string]string{
-						"--auto-fstrim": "on",
-					})
-					if err != nil {
-						err = fmt.Errorf("error while updating volume, Error:%v", err)
-						logrus.Error(err)
-						UpdateOutcome(event, err)
-
-					} else {
-						logrus.Info("update volume is successfully enabled")
-						logrus.Info("update is enabled successfully SANTHOSH")
-						isAutoFsTrimEnabled = true
-						time.Sleep(5 * time.Minute)
-					}
-				} else {
-					logrus.Info("update volume is already enabled")
-					logrus.Info("Update volume is checked again SANTHOSH")
-				}
-
-			})
-		Step("Validate update volume Status ",
-			func() {
-				validateAutoFsTrim(contexts, event)
-
-			})
-
-		Step("Reboot attached node and validate AutoFsTrim Status ",
-			func() {
-
-				for _, ctx := range *contexts {
-					if strings.Contains(ctx.App.Key, "fstrim") {
-						vols, _ := Inst().S.GetVolumes(ctx)
-						for _, vol := range vols {
-
-							n, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
-							UpdateOutcome(event, err)
-							logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
-							err = Inst().S.DisableSchedulingOnNode(*n)
-							UpdateOutcome(event, err)
-
-							Inst().V.StopDriver([]node.Node{*n}, false, nil)
-
-							Inst().N.RebootNode(*n, node.RebootNodeOpts{
-								Force: true,
-								ConnectionOpts: node.ConnectionOpts{
-									Timeout:         1 * time.Minute,
-									TimeBeforeRetry: 5 * time.Second,
-								},
-							})
-
-							logrus.Info("wait for a minute for node reboot")
-							time.Sleep(1 * time.Minute)
-							n2, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
-							if err != nil {
-
-								logrus.Infof("Got error while getting node for volume %v, wait for 2 minutes to retry. Error: %v", vol.ID, err)
-								n2, err = Inst().V.GetNodeForVolume(vol, 3*time.Minute, 10*time.Second)
-								if err != nil {
-									err = fmt.Errorf("error while getting node for volume %v, Error: %v", vol.ID, err)
-									UpdateOutcome(event, err)
-								}
-
-							}
-
-							logrus.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
-							StartVolDriverAndWait([]node.Node{*n})
-							Inst().S.EnableSchedulingOnNode(*n)
-
-						}
-
-					}
-
-				}
-
-				validateAutoFsTrim(contexts, event)
-
+				updateIOPriorityOnVolumes(contexts, event)
+				logrus.Info("Update IO priority call completed")
 			})
 	})
+}
 
+//This method is responsible for updating IO priority on Volumes if volume is labelled with
+//IO Priority. If lebelled with High and volume is updated to HIGH, next iteration it will reset
+//back to low.
+func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecord) {
+	for _, ctx := range *contexts {
+		var appVolumes []*volume.Volume
+		var err error
+		appVolumes, err = Inst().S.GetVolumes(ctx)
+		UpdateOutcome(event, err)
+		if len(appVolumes) == 0 {
+			UpdateOutcome(event, fmt.Errorf("found no volumes for app "))
+		}
+		for _, v := range appVolumes {
+			isPureVol, err := Inst().V.IsPureVolume(v)
+			if err != nil {
+				UpdateOutcome(event, err)
+			}
+			if isPureVol {
+				logrus.Warningf(
+					"Autofs Trim is not supported for Pure DA volume: [%s]",
+					"Skipping autofs trim status on pure volumes", v.Name,
+				)
+				continue
+			}
+			logrus.Infof("Getting info from volume: %s", v.ID)
+			appVol, err := Inst().V.InspectVolume(v.ID)
+			if err != nil {
+				logrus.Errorf("Error inspecting volume: %v", err)
+			}
+			if requiredPriority, ok := appVol.Spec.VolumeLabels["priority_io"]; ok {
+				if !setIoPriority {
+					if requiredPriority == "low" {
+						requiredPriority = "high"
+					} else if requiredPriority == "high" {
+						requiredPriority = "low"
+					}
+				}
+				logrus.Infof("Expected Priority %v", requiredPriority)
+				logrus.Infof("COS %v", appVol.Spec.GetCos().SimpleString())
+				if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
+					err = Inst().V.UpdateIOPriority(v.ID, requiredPriority)
+					if err != nil {
+						UpdateOutcome(event, err)
+					}
+					//Verify Volume set with required IOPriority.
+					appVol, err := Inst().V.InspectVolume(v.ID)
+					logrus.Infof("COS after update %v", appVol.Spec.GetCos().SimpleString())
+					if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
+						err = fmt.Errorf("Failed to update volume %v with expected priority %v ", v.ID, requiredPriority)
+						UpdateOutcome(event, err)
+					}
+					logrus.Infof("Update IO priority on [%v] : [%v]", v.ID, requiredPriority)
+				}
+				logrus.Infof("Completed update on %v", v.ID)
+			}
+		}
+		//if IO priority is set to High then next iteration will be run with low.
+		if setIoPriority {
+			setIoPriority = false
+		} else {
+			setIoPriority = true
+		}
+	}
 }
 
 func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {

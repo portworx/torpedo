@@ -90,7 +90,7 @@ var _ = Describe("{Longevity}", func() {
 		VolumesDelete:        TriggerVolumeDelete,
 		UpgradeVolumeDriver:  TriggerUpgradeVolumeDriver,
 		AutoFsTrim:           TriggerAutoFsTrim,
-		VolumeUpdate:         TriggerVolumeUpdate,
+		UpdateVolume:         TriggerVolumeUpdate,
 		RestartManyVolDriver: TriggerRestartManyVolDriver,
 		RebootManyNodes:      TriggerRebootManyNodes,
 		NodeDecommission:     TriggerNodeDecommission,
@@ -673,7 +673,7 @@ func populateIntervals() {
 	triggerInterval[AppTasksDown][2] = 9 * baseInterval
 	triggerInterval[AppTasksDown][1] = 10 * baseInterval
 
-	baseInterval = 1 * time.Minute
+	baseInterval = 60 * time.Minute
 
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 3 * baseInterval

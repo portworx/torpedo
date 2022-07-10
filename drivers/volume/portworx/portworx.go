@@ -1239,6 +1239,24 @@ func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
 	return nil
 }
 
+//Update io_priority
+func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) error {
+	nodes := node.GetWorkerNodes()
+	cmd := fmt.Sprintf("%s --io_priority %s  %s", pxctlVolumeUpdate, priorityType, volumeName)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(
+		nodes[0],
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		logrus.WithError(err).Error("error when setting IO priority")
+		return err
+	}
+	return nil
+}
+
 func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
 	nodes := node.GetStorageDriverNodes()
 	var strategyStr string
@@ -3519,9 +3537,7 @@ func (d *portworx) SetClusterOpts(n node.Node, clusterOpts map[string]string) er
 	if err != nil {
 		return fmt.Errorf("failed to set cluster options, Err: %v %v", err, out)
 	}
-
 	logrus.Debugf("Successfully updated Cluster Options")
-	logrus.Info("Inside portworx.go under SANTHOSH")
 	return nil
 }
 
