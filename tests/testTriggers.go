@@ -3513,7 +3513,6 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 							waitCount := 10
 							for !isUpgradeDone && !isExit {
 								err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-								UpdateOutcome(event, err)
 								if err == nil {
 									pxVersion, err := Inst().V.GetPxVersionOnNode(n)
 									UpdateOutcome(event, err)
@@ -3535,6 +3534,10 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 
 									}
 
+								} else {
+									isExit = true
+									UpdateOutcome(event, err)
+
 								}
 							}
 
@@ -3545,7 +3548,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 				}
 
 			} else {
-				logrus.Info("Initiatingdaemonset based install upgrade")
+				logrus.Info("Initiating Daemonset based install upgrade")
 				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
 					Inst().StorageDriverUpgradeEndpointVersion,
 					Inst().EnableStorkUpgrade)
@@ -4105,11 +4108,14 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 				if *status == opsapi.Status_STATUS_NONE {
 					return true, false, nil
 				}
-				return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecomm.Name)
+				return false, true, fmt.Errorf("node %s not decomissioned yet,Current Status: %v", nodeToDecomm.Name, *status)
 			}
 			_, err = task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 
 			if err != nil {
+				UpdateOutcome(event, err)
+				err = Inst().V.RecoverNode(&decommissionedNode)
+				logrus.Errorf("Error recovering node after failed decommission, Err: %v", err)
 				UpdateOutcome(event, err)
 			} else {
 

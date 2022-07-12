@@ -933,11 +933,11 @@ func (d *portworx) EnterMaintenance(n node.Node) error {
 		if apiNode.Status == api.Status_STATUS_MAINTENANCE {
 			return nil, false, nil
 		}
-		return nil, true, fmt.Errorf("node %v is not in Maintenance mode", n.Name)
+		return nil, true, fmt.Errorf("node %v, Current status: %v, Expected: %v", n.Name, apiNode.Status, api.Status_STATUS_MAINTENANCE)
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, maintenanceWaitTimeout, defaultRetryInterval); err != nil {
-		return &ErrFailedToRecoverDriver{
+		return &ErrFailedToEnterMaintenence{
 			Node:  n,
 			Cause: err.Error(),
 		}
@@ -4034,6 +4034,39 @@ func (d *portworx) GetTrashCanVolumeIds(n node.Node) ([]string, error) {
 	logrus.Infof("trash vols: %v", trashcanVols)
 
 	return trashcanVols, nil
+}
+
+func (d *portworx) RecoverNode(n *node.Node) error {
+	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXServiceLabelKey); err != nil {
+		return &ErrFailedToRecoverDriver{
+			Node:  *n,
+			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+		}
+	}
+
+	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXEnabledLabelKey); err != nil {
+		return &ErrFailedToRecoverDriver{
+			Node:  *n,
+			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+		}
+	}
+
+	if err := d.RestartDriver(*n, nil); err != nil {
+		return &ErrFailedToRecoverDriver{
+			Node:  *n,
+			Cause: err.Error(),
+		}
+
+	}
+
+	if err := k8sCore.UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
+		return &ErrFailedToRecoverDriver{
+			Node:  *n,
+			Cause: fmt.Sprintf("Failed to uncordon node: %v. Err: %v", n.Name, err),
+		}
+	}
+	return nil
+
 }
 
 func init() {
