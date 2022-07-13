@@ -100,7 +100,8 @@ TEST_SUITE='"bin/asg.test",
             "bin/sharedv4.test",
             "bin/telemetry.test",
             "bin/upgrade_cluster.test",
-            "bin/pxcentral.test",'
+            "bin/pxcentral.test",
+            "bin/secrets.test",'
 ```
 6. Add your test to the `FOCUS_TESTS`:  
    `FOCUS_TESTS=SetupTeardown,AppTasksDown,...,<YOUR_TEST_NAME>`
