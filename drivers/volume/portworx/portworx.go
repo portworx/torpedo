@@ -3596,7 +3596,7 @@ func (d *portworx) RunSecretsLogin(n node.Node, secretType string) error {
 	cmd := fmt.Sprintf("%s %s", pxctlPath, command)
 	_, err := d.nodeDriver.RunCommand(n, cmd, opts)
 	if err != nil {
-		return fmt.Errorf("failed to set secret . cause: %v", err)
+		return fmt.Errorf("failed to run secrets login for %s. cause: %v", secretType, err)
 	}
 
 	return nil

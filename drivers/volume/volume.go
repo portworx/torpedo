@@ -270,7 +270,7 @@ type Driver interface {
 	// RunSecretsLogin runs secrets login using pxctl
 	RunSecretsLogin(n node.Node, secretType string) error
 
-	//UpdateStorageClusterImage update storage cluster image version
+	//GetStorageCluster returns the storageCluster object
 	GetStorageCluster() (*v1.StorageCluster, error)
 
 	//UpdateStorageClusterImage update storage cluster image version

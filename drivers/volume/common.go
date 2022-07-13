@@ -710,7 +710,7 @@ func (d *DefaultDriver) RunSecretsLogin(n node.Node, secretType string) error {
 	}
 }
 
-// GetStorageCluster returns the storageClusterSpec
+// GetStorageCluster returns the StorageCluster object
 func (d *DefaultDriver) GetStorageCluster() (*v1.StorageCluster, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
