@@ -35,27 +35,40 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 	var contexts []*scheduler.Context
 
 	const (
-		secretsProvider = "vault"
+		secretsProvider       = "vault"
+		portworxContainerName = "portworx"
 	)
 
 	BeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		isOpBased, err := Inst().V.IsOperatorBasedInstall()
-		Expect(err).ToNot(HaveOccurred())
+		isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 		if !isOpBased {
-			labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"name": "portworx"}}
 			k8sApps := apps.Instance()
-			_, err := k8sApps.ListDeployments("kube-system", metav1.ListOptions{
-				LabelSelector: labelSelector.String(),
+			deployments, err := k8sApps.ListDaemonSets("kube-system", metav1.ListOptions{
+				LabelSelector: "name=portworx",
 			})
 			Expect(err).ToNot(HaveOccurred())
-			// deployment := deployments.Items[0].Spec.Template.
-		}
-
-		spec, err := Inst().V.GetStorageCluster()
-		Expect(err).ToNot(HaveOccurred())
-		if *spec.Spec.SecretsProvider != secretsProvider {
-			Skip(fmt.Sprintf("Skip test for not using %s", secretsProvider))
+			Expect(len(deployments)).NotTo(Equal(0))
+			Expect(deployments[0].Spec.Template.Spec.Containers).NotTo(BeEmpty())
+			usingVault := false
+			for _, container := range deployments[0].Spec.Template.Spec.Containers {
+				if container.Name == portworxContainerName {
+					for _, arg := range container.Args {
+						if arg == secretsProvider {
+							usingVault = true
+						}
+					}
+				}
+			}
+			if !usingVault {
+				Skip(fmt.Sprintf("Skip test for not using %s", secretsProvider))
+			}
+		} else {
+			spec, err := Inst().V.GetStorageCluster()
+			Expect(err).ToNot(HaveOccurred())
+			if *spec.Spec.SecretsProvider != secretsProvider {
+				Skip(fmt.Sprintf("Skip test for not using %s", secretsProvider))
+			}
 		}
 	})
 
