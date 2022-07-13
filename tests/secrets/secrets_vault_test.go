@@ -80,8 +80,6 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 
 		It("has to runs secrets login for vault", func() {
 			contexts = make([]*scheduler.Context, 0)
-			// assumes the rold id and secret id are passed in from parameters
-			// so does the
 			n := node.GetWorkerNodes()[0]
 			err := Inst().V.RunSecretsLogin(n, secretsProvider)
 			Expect(err).ToNot(HaveOccurred())
