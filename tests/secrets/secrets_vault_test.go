@@ -72,7 +72,6 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 		}
 	})
 
-	// This test performs basic test of starting an application and destroying it (along with storage)
 	var _ = Describe("{RunSecretsLogin}", func() {
 		var testrailID = 82774
 		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/82774
