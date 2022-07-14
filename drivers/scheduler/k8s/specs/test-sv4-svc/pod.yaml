@@ -37,12 +37,12 @@ spec:
               fieldRef:
                 fieldPath: metadata.name
           - name: SHARED_FILE
-            value: "/test-sv4-vol-svc/$(MY_POD_NAME)"
+            value: "/shared-vol/$(MY_POD_NAME)"
           - name: LOCAL_FILE
             value: "/local-vol/$(MY_POD_NAME)"
         volumeMounts:
         - name: test-sv4-vol-svc
-          mountPath: /test-sv4-vol-svc
+          mountPath: /shared-vol
         - name: local-vol
           mountPath: /local-vol
       - name: sv4test-reader

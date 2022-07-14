@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: test-sv4-dep-svc-enc
+  name: virt-launcher-sim-dep
 spec:
   {{ if .Replicas }}
   replicas: {{ .Replicas }}
@@ -9,11 +9,12 @@ spec:
   replicas: 3{{ end }}
   selector:
     matchLabels:
-      app: test-sv4-app-svc-enc
+      app: virt-launcher-sim-app
   template:
     metadata:
       labels:
-        app: test-sv4-app-svc-enc
+        app: virt-launcher-sim-app
+        kubevirt.io: virt-launcher
     spec:
       affinity:
         podAntiAffinity:
@@ -23,7 +24,7 @@ spec:
               - key: app
                 operator: In
                 values:
-                - test-sv4-app-svc-enc
+                - virt-launcher-sim-app
             topologyKey: "kubernetes.io/hostname"
       containers:
       - name: sv4test
@@ -41,7 +42,7 @@ spec:
           - name: LOCAL_FILE
             value: "/local-vol/$(MY_POD_NAME)"
         volumeMounts:
-        - name: test-sv4-vol-svc
+        - name: virt-launcher-sim-vol
           mountPath: /shared-vol
         - name: local-vol
           mountPath: /local-vol
@@ -62,8 +63,8 @@ spec:
         - name: local-vol
           mountPath: /local-vol
       volumes:
-      - name: test-sv4-vol-svc
+      - name: virt-launcher-sim-vol
         persistentVolumeClaim:
-          claimName: test-sv4-pvc-svc-enc
+          claimName: virt-launcher-sim-pvc
       - name: local-vol
         emptyDir: {}
