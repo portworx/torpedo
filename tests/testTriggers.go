@@ -122,7 +122,7 @@ var jiraEvents = make(map[string][]string)
 //isAutoFsTrimEnabled to store if auto fs trim enalbed
 var isAutoFsTrimEnabled = false
 
-// set IOPriority
+//setIoPriority to set IOPriority
 var setIoPriority = true
 
 // isCsiVolumeSnapshotClassExist to store if snapshot class exist
@@ -3739,9 +3739,7 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 	})
 }
 
-//This method is responsible for updating IO priority on Volumes if volume is labelled with
-//IO Priority. If lebelled with High and volume is updated to HIGH, next iteration it will reset
-//back to low.
+// updateIOPriorityOnVolumes this method is responsible for updating IO priority on Volumes.
 func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecord) {
 	for _, ctx := range *contexts {
 		var appVolumes []*volume.Volume
@@ -3795,7 +3793,7 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 				logrus.Infof("Completed update on %v", v.ID)
 			}
 		}
-		//if IO priority is set to High then next iteration will be run with low.
+		// setIoPriority if IO priority is set to High then next iteration will be run with low.
 		if setIoPriority {
 			setIoPriority = false
 		} else {

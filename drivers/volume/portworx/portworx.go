@@ -1253,7 +1253,6 @@ func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
 	return nil
 }
 
-//Update io_priority
 func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) error {
 	nodes := node.GetWorkerNodes()
 	cmd := fmt.Sprintf("%s --io_priority %s  %s", pxctlVolumeUpdate, priorityType, volumeName)

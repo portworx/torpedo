@@ -645,7 +645,7 @@ func (d *DefaultDriver) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName stri
 	}
 }
 
-//UpdateIO priority on volume
+//UpdateIOPriority update IO priority on volume
 func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
