@@ -319,7 +319,7 @@ const (
 	AppTasksDown = "appScaleUpAndDown"
 	// AutoFsTrim enables Auto Fstrim in PX cluster
 	AutoFsTrim = "autoFsTrim"
-	//UpdateVolume provides option to update volume with properties like iopriority.
+	// UpdateVolume provides option to update volume with properties like iopriority.
 	UpdateVolume = "updateVolume"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
