@@ -584,18 +584,17 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 	)
 
 	BeforeEach(func() {
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 		if !isOpBased {
 			k8sApps := apps.Instance()
-			deployments, err := k8sApps.ListDaemonSets("kube-system", metav1.ListOptions{
+			daemonSets, err := k8sApps.ListDaemonSets("kube-system", metav1.ListOptions{
 				LabelSelector: "name=portworx",
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(deployments)).NotTo(Equal(0))
-			Expect(deployments[0].Spec.Template.Spec.Containers).NotTo(BeEmpty())
+			Expect(len(daemonSets)).NotTo(Equal(0))
+			Expect(daemonSets[0].Spec.Template.Spec.Containers).NotTo(BeEmpty())
 			usingVault := false
-			for _, container := range deployments[0].Spec.Template.Spec.Containers {
+			for _, container := range daemonSets[0].Spec.Template.Spec.Containers {
 				if container.Name == portworxContainerName {
 					for _, arg := range container.Args {
 						if arg == secretsProvider {
@@ -617,19 +616,17 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 	})
 
 	var _ = Describe("{RunSecretsLogin}", func() {
-		var testrailID = 82774
+		testrailID = 82774
 		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/82774
-		var runID int
+		JustBeforeEach(func() {
+			runID = testrailuttils.AddRunsToMilestone(testrailID)
+		})
 
-		It("has to runs secrets login for vault", func() {
+		It("has to run secrets login for vault", func() {
 			contexts = make([]*scheduler.Context, 0)
 			n := node.GetWorkerNodes()[0]
 			err := Inst().V.RunSecretsLogin(n, secretsProvider)
 			Expect(err).ToNot(HaveOccurred())
-
-		})
-		JustAfterEach(func() {
-			AfterEachTest(contexts, testrailID, runID)
 		})
 	})
 
