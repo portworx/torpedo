@@ -187,7 +187,6 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/pxcentral.test",
             "bin/storage_pool.test",
             "bin/openshift.test",
-            "bin/secrets.test",
 '
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
