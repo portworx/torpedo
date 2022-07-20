@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	random "math/rand"
 	"os"
 	"path/filepath"
@@ -111,6 +112,8 @@ const (
 	PXNamespace = "kube-system"
 	// CsiProvisioner is csi provisioner
 	CsiProvisioner = "pxd.portworx.com"
+	// DefaultLoad is default load for auto scaler to start with
+	defaultLoad = 0.5
 )
 
 const (
@@ -170,6 +173,12 @@ const (
 	PvcNamespaceKey = "pvc_namespace"
 	// VolumeSnapshotKind type use for restore
 	VolumeSnapshotKind = "VolumeSnapshot"
+	// Cpu is a key for node Info
+	Cpu = "CPU"
+	// Memory is a key for node Info
+	Memory = "MEMORY"
+	// allAppResources is a key holding total resources info need for all apps
+	allAppResources = "AllApps"
 )
 
 var (
@@ -209,6 +218,15 @@ type K8s struct {
 	VaultToken              string
 	PureVolumes             bool
 	helmValuesConfigMapName string
+	totalCpu                int
+	totalMem                int
+	totalNodes              int
+}
+
+// NodeHwResources is node hardware structure
+type NodeHwResources struct {
+	Cpu float64
+	Mem int64
 }
 
 // IsNodeReady  Check whether the cluster node is ready
@@ -275,11 +293,51 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 // AddNewNode method parse and add node to node registry
 func (k *K8s) AddNewNode(newNode corev1.Node) error {
 	n := k.parseK8SNode(newNode)
+
 	if err := k.IsNodeReady(n); err != nil {
 		return err
 	}
 	if err := node.AddNode(n); err != nil {
 		return err
+	}
+	k.totalNodes += 1
+	return nil
+}
+
+// updateNodeHwResoures update node object with CPU and Mem info
+func (k *K8s) updateNodeHwResoures(n node.Node) error {
+	driver, _ := node.Get(k.NodeDriverName)
+	if k.NodeDriverName == "ssh" {
+		nInfo, err := driver.GetNodeInfo(n)
+		if err != nil {
+			return err
+		}
+		cpu, err := strconv.Atoi(nInfo[Cpu])
+		if err != nil {
+			return err
+		}
+		n.Cpu = int8(cpu)
+		k.totalCpu += int(n.Cpu)
+		mem, err := strconv.Atoi(nInfo[Memory])
+		if err != nil {
+			return err
+		}
+		n.Memory = mem * 1024
+		k.totalMem += n.Memory
+	}
+	if err := node.UpdateNode(n); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateNodesWithResources update all nodes with Hardware resources
+func (k *K8s) UpdateNodesWithResources() error {
+	nodes := node.GetWorkerNodes()
+	for _, node := range nodes {
+		if err := k.updateNodeHwResoures(node); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -750,6 +808,16 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 
 	var contexts []*scheduler.Context
 	oldOptionsNamespace := options.Namespace
+	logrus.Debugf("Autoscaling is [%v]", options.AutoScaling)
+	if options.AutoScaling {
+		if err := k.UpdateNodesWithResources(); err != nil {
+			return nil, err
+		}
+		appResourceMap := getAppsRequriement(apps)
+		if err := k.CalculateReplicasForApps(appResourceMap, &options, defaultLoad); err != nil {
+			return nil, err
+		}
+	}
 	for _, app := range apps {
 
 		appNamespace := app.GetID(instanceID)
@@ -788,6 +856,89 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	}
 
 	return contexts, nil
+}
+
+// CalculateReplicasForApps calculate replicas for Apps based on
+// load value is in percentage, example 0.5 is equal to 50%
+func (k *K8s) CalculateReplicasForApps(appsResourceMap map[string]NodeHwResources,
+	options *scheduler.ScheduleOptions, load float64) error {
+
+	// Map maintains App and it's repica counts
+	appReplicasMap := make(map[string]int)
+
+	// Number of Apps
+	nApps := len(appsResourceMap) - 1
+
+	// list of apps for which replicas not alloted
+	notAllotedAppList := make([]string, 0)
+
+	if load > 0.75 {
+		return fmt.Errorf("incorrect value %f provided for cluster load  It should not be greater than 0.75 (75 Percentage)", load)
+	}
+
+	// Calculating actual CPU and Memory remaining after allocating to portworx service
+	// By default each portworx service required minimum 4GB memory and 4 CPU
+	actualCpu := float64(k.totalCpu - (4 * k.totalNodes))
+	actualMem := k.totalMem - (k.totalNodes * 4 * 1024 * 1024 * 1024)
+
+	logrus.Infof("Cluster is having [%v] CPUs and [%v] bytes Memory", actualCpu, actualMem)
+
+	// Minimum total Cpu and Memory needed to schedule 1 replica for each app
+	minAppCpus := appsResourceMap[allAppResources].Cpu
+	minAppMem := appsResourceMap[allAppResources].Mem
+
+	// Calculating available resources needed with minimum one replica is scheduled
+	// Resources needs to be loaded based on given load
+	// Make sure atleast one replica of each app to be scheduled for a small cluster
+	cpuToBeLoaded := int(actualCpu*load) - int(minAppCpus)
+	memToBeLoaded := int(float64(actualMem)*load) - int(minAppMem)
+	logrus.Infof("Remaining CPU: [%v] and Memory: [%v] bytes after scheduling 1 replicas for each app", cpuToBeLoaded, memToBeLoaded)
+
+	if minAppCpus > float64(cpuToBeLoaded) || minAppMem > int64(memToBeLoaded) {
+		return fmt.Errorf("FATAL: Applications weight is higher than current resources in the cluster")
+	}
+
+	// Calcaulting allocated resources for each app
+	cpuAllocatedForEachApp := int(cpuToBeLoaded / nApps)
+	memAllocatedForEachApp := int(memToBeLoaded / nApps)
+
+	logrus.Infof("CPU: [%v] and Memory: [%v] bytes allocated for each app", cpuAllocatedForEachApp, memAllocatedForEachApp)
+
+	// Allocating replicas to each app
+	for appKey, res := range appsResourceMap {
+
+		// Calculating replicas for each app and updating in appReplicasMap
+		if cpuAllocatedForEachApp >= int(res.Cpu) && memAllocatedForEachApp >= int(res.Mem) {
+			cReplicas := float64(cpuAllocatedForEachApp) / res.Cpu
+			mReplicas := memAllocatedForEachApp / int(res.Mem)
+			replicas := math.Min(cReplicas, float64(mReplicas))
+
+			// Adding 1 because we already calculated resources for minimum 1 replicas
+			appReplicasMap[appKey] = int(replicas) + 1
+			logrus.Infof("Setting [%v] replica count to: %v", appKey, appReplicasMap[appKey])
+		} else {
+			appReplicasMap[appKey] = int(1)
+			notAllotedAppList = append(notAllotedAppList, appKey)
+		}
+	}
+
+	// Remaining resources can be allocated to one of the app if possible
+	cpuAllocatedForEachApp *= len(notAllotedAppList)
+	memAllocatedForEachApp *= len(notAllotedAppList)
+
+	for _, appKey := range notAllotedAppList {
+		res := appsResourceMap[appKey]
+		if cpuAllocatedForEachApp >= int(res.Cpu) && memAllocatedForEachApp >= int(res.Mem) {
+			replicas := math.Min(float64(cpuAllocatedForEachApp), float64(memAllocatedForEachApp)) / math.Max(res.Cpu, float64(res.Mem))
+			// Adding 1 because we already calculated resources for minimum 1 replicas
+			appReplicasMap[appKey] = int(replicas) + 1
+			logrus.Infof("Setting [%v] replica count to: %v", appKey, appReplicasMap[appKey])
+			break
+		}
+	}
+
+	options.AppReplicasMap = appReplicasMap
+	return nil
 }
 
 // CreateSpecObjects Create application
@@ -1627,6 +1778,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if len(options.Nodes) > 0 && len(options.Labels) > 0 {
 			obj.Spec.Template.Spec.NodeSelector = options.Labels
 		}
+
+		if len(options.AppReplicasMap) > 0 && obj.Spec.Replicas != nil {
+			*obj.Spec.Replicas = int32(options.AppReplicasMap[app.Key])
+		}
+
 		dep, err := k8sApps.CreateDeployment(obj, metav1.CreateOptions{})
 		if k8serrors.IsAlreadyExists(err) {
 			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
@@ -1695,9 +1851,15 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if secret != nil {
 			obj.Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
 		}
+
 		if len(options.Nodes) > 0 && len(options.Labels) > 0 {
 			obj.Spec.Template.Spec.NodeSelector = options.Labels
 		}
+
+		if len(options.AppReplicasMap) > 0 {
+			*obj.Spec.Replicas = int32(options.AppReplicasMap[app.Key])
+		}
+
 		ss, err := k8sApps.CreateStatefulSet(obj, metav1.CreateOptions{})
 		if k8serrors.IsAlreadyExists(err) {
 			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
@@ -1789,6 +1951,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				Cause: fmt.Sprintf("Failed to create Docker registry secret for pod: %s. Err: %v", obj.Name, err),
 			}
 		}
+
 		if secret != nil {
 			obj.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
 		}
@@ -2877,10 +3040,11 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			}
 			// Providing the scaling factor in timeout
 			scalingFactor := *obj.Spec.Replicas
+			nPvc := len(obj.Spec.VolumeClaimTemplates)
 			if *ss.Spec.Replicas > *obj.Spec.Replicas {
 				scalingFactor = int32(*ss.Spec.Replicas - *obj.Spec.Replicas)
 			}
-			if err := k8sApps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(scalingFactor), retryInterval); err != nil {
+			if err := k8sApps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(scalingFactor*int32(nPvc)), retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate PVCs for statefulset: %v. Err: %v", ss.Name, err),
@@ -5680,6 +5844,96 @@ func rotateTopologyArray(options *scheduler.ScheduleOptions) {
 		arr = append(arr, firstElem)
 		options.TopologyLabels = arr
 	}
+}
+
+// getAppResources reads the app spec and get the resource requirement
+func getAppResources(spec interface{}, app *spec.AppSpec) (float64, int64) {
+	var cpu float64
+	var mem int64
+
+	if obj, ok := spec.(*appsapi.Deployment); ok {
+		containers := obj.Spec.Template.Spec.Containers
+		for _, container := range containers {
+			if container.Resources.Limits != nil {
+				cpu += container.Resources.Limits.Cpu().AsApproximateFloat64()
+				MemQ, _ := container.Resources.Limits.Memory().AsInt64()
+				mem += MemQ
+			}
+		}
+		logrus.Infof("[%v] spec : %v CPU and %v Memory", app.Key, cpu, mem)
+		return cpu, mem
+
+	} else if obj, ok := spec.(*appsapi.StatefulSet); ok {
+		containers := obj.Spec.Template.Spec.Containers
+		for _, container := range containers {
+			if container.Resources.Limits != nil {
+				cpu += container.Resources.Limits.Cpu().AsApproximateFloat64()
+				MemQ, _ := container.Resources.Limits.Memory().AsInt64()
+				mem += MemQ
+			}
+		}
+		logrus.Infof("[%v] spec have : %v CPU and %v Memory", app.Key, cpu, mem)
+		return cpu, mem
+
+	} else if obj, ok := spec.(*corev1.Pod); ok {
+		containers := obj.Spec.Containers
+		for _, container := range containers {
+			if container.Resources.Limits != nil {
+				cpu += container.Resources.Limits.Cpu().AsApproximateFloat64()
+				MemQ, _ := container.Resources.Limits.Memory().AsInt64()
+				mem += MemQ
+			}
+		}
+		logrus.Infof("[%v] spec have : %s CPU and %s Memory", app.Key, cpu, mem)
+		return cpu, mem
+
+	}
+
+	return cpu, mem
+}
+
+// getAppsRequriement gathere the resource requirement for provided app list
+func getAppsRequriement(apps []*spec.AppSpec) map[string]NodeHwResources {
+	AppHardwareMap := make(map[string]NodeHwResources)
+	var totalCpus float64
+	var totalMem int64
+
+	for _, app := range apps {
+		var cpu float64
+		var mem int64
+		for _, appSpec := range app.SpecList {
+			appCpu, appMem := getAppResources(appSpec, app)
+			cpu += appCpu
+			mem += appMem
+		}
+
+		// Setting default value for Cpu if spec doesn't cntains the resource limit
+		if cpu == 0 {
+			cpu = 1
+		}
+
+		// Setting default value for memory if spec doesn't cntains the resource limit
+		if mem == 0 {
+			mem = 100 * 1024 * 1024
+		}
+
+		totalCpus += cpu
+		totalMem += mem
+
+		nHwR := NodeHwResources{
+			Cpu: cpu,
+			Mem: mem,
+		}
+		logrus.Infof("[%v] required : %v CPU and %v Memory", app.Key, cpu, mem)
+		AppHardwareMap[app.Key] = nHwR
+	}
+	nHwR := NodeHwResources{
+		Cpu: totalCpus,
+		Mem: totalMem,
+	}
+	AppHardwareMap[allAppResources] = nHwR
+
+	return AppHardwareMap
 }
 
 func init() {

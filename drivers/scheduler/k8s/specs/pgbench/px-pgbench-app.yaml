@@ -13,7 +13,6 @@ spec:
       maxSurge: 1
       maxUnavailable: 1
     type: RollingUpdate
-  replicas: 1
   template:
     metadata:
       labels:

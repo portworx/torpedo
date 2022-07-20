@@ -1053,6 +1053,7 @@ func ScheduleAppsInTopologyEnabledCluster(
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
 			TopologyLabels:     labels,
+			AutoScaling:        true,
 		})
 		processError(err, errChan...)
 		if len(contexts) == 0 {

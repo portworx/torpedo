@@ -130,6 +130,11 @@ type ScheduleOptions struct {
 	Namespace string
 	// TopoLogy Labels
 	TopologyLabels []map[string]string
+	// AutoScaling is flag to use auto scaler
+	AutoScaling bool
+	// AppReplicasMap maintain replica counts for apps
+	// It is calculated based on cluster size and 50% load
+	AppReplicasMap map[string]int
 }
 
 // Driver must be implemented to provide test support to various schedulers.

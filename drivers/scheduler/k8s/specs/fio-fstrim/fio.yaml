@@ -29,6 +29,13 @@ spec:
         image: portworx/fio_drv
         command: ["/bin/sh"]
         args: ["-c", "COUNTER=0;sleep $[($RANDOM % 600)+ 1]; now=$(date); echo $now;while true; do echo FIO run will start now...; fio /configs/fio.job --status-interval=1 --eta=never --output=/logs/fio.log; echo completed-fio-run; sleep 5; ls -alt /scratch/; rm -rf /scratch/*; ls -alt /scratch/; sleep 1800; COUNTER=$((COUNTER+1)); echo Completed-iteration $COUNTER;done"]
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 4Gi
         volumeMounts:
         - name: fio-config-vol
           mountPath: /configs

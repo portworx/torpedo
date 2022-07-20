@@ -73,6 +73,7 @@ spec:
             cpu: "0.5"
           limits:
             cpu: "1.0"
+            memory: 2Gi
         securityContext:
           privileged: true
           runAsUser: 1000
@@ -143,6 +144,10 @@ spec:
       - name: es-load
         image: portworx/torpedo-esload:1.1
         imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: "100m"
+            memory: 100Mi
         env:
         - name: POD_NAMESPACE
           valueFrom:

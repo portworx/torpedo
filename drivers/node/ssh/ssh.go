@@ -33,6 +33,10 @@ const (
 	DefaultSSHPort = 22
 	// DefaultSSHKey is the default public keyPath path used for ssh operations
 	DefaultSSHKey = "/home/torpedo/key4torpedo.pem"
+	// CPU key for node Info
+	Cpu = "CPU"
+	// MEMORY key for node Info
+	Memory = "MEMORY"
 )
 
 const (
@@ -115,7 +119,7 @@ func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duratio
 	// Converting the unix date to timestamp
 	thetime, err := time.Parse(time.RFC3339, upTime[0]+"T"+upTime[1]+"+00:00")
 	if err != nil {
-		return false, fmt.Errorf("Unable to parse uptime command output. Err: %s", err)
+		return false, fmt.Errorf("unable to parse uptime command output. Err: %s", err)
 	}
 
 	uptimeEpoch := thetime.Unix()
@@ -157,6 +161,53 @@ func (s *SSH) GetDeviceMapperCount(n node.Node, timerange time.Duration) (int, e
 	return count, nil
 }
 
+// GetNodeInfo return map conatining memory and cpu info for a given node
+func (s *SSH) GetNodeInfo(n node.Node) (map[string]string, error) {
+	logrus.Infof("Getting the resource info for a node %s", n.Name)
+	CpuCmd := "sudo nproc --all"
+	MemCmd := "awk '/MemTotal/ {print $2}' /proc/meminfo"
+	nodeInfo := make(map[string]string)
+
+	t1 := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}, CpuCmd, true)
+		return out, true, err
+	}
+
+	out, err := task.DoRetryWithTimeout(t1, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return nil, &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to get CPU info for a node %v", n),
+		}
+	}
+
+	nodeInfo[Cpu] = strings.Fields(strings.TrimSpace(out.(string)))[0]
+	logrus.Debugf("Node: %s is having %s CPUs", n.Name, nodeInfo[Cpu])
+
+	t2 := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}, MemCmd, true)
+		return out, true, err
+	}
+
+	out, err = task.DoRetryWithTimeout(t2, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return nil, &node.ErrFailedToRunCommand{
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to get Memory info for a node %v", n),
+		}
+	}
+	nodeInfo[Memory] = strings.Fields(strings.TrimSpace(out.(string)))[0]
+	logrus.Debugf("Node: %s is having %s KB Memory", n.Name, nodeInfo[Memory])
+
+	return nodeInfo, nil
+}
+
 // Init initializes SSH node driver
 func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	s.specDir = nodeOpts.SpecDir
@@ -196,22 +247,27 @@ func (s *SSH) initExecPod() error {
 	var err error
 	if ds, err = k8sApps.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
 		d, err := scheduler.Get(k8s_driver.SchedName)
+		if err != nil {
+			return err
+		}
 		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", s.specDir, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), d)
 		if err != nil {
-			return fmt.Errorf("Error while loading debug daemonset spec file. Err: %s", err)
+			return fmt.Errorf("error while loading debug daemonset spec file. Err: %s", err)
 		}
 		dsSpec, err := specFactory.Get(execPodDaemonSetLabel)
 		if err != nil {
-			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
+			return fmt.Errorf("error while getting debug daemonset spec. Err: %s", err)
 		}
 		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet), metav1.CreateOptions{})
 		if err != nil {
-			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
+			return fmt.Errorf("error while creating debug daemonset. Err: %s", err)
 		}
+	} else if err != nil {
+		return err
 	}
 	err = k8sApps.ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
 	if err != nil {
-		return fmt.Errorf("Error while validating debug daemonset. Err: %s", err)
+		return fmt.Errorf("error while validating debug daemonset. Err: %s", err)
 	}
 	return nil
 }
@@ -247,7 +303,7 @@ func (s *SSH) initSSH() error {
 	} else if s.keyPath != "" {
 		pubkey, err := getKeyFile(s.keyPath)
 		if err != nil {
-			return fmt.Errorf("Error getting public keyPath from keyfile")
+			return fmt.Errorf("error getting public keyPath from keyfile")
 		}
 		s.sshConfig = &ssh_pkg.ClientConfig{
 			User: s.username,
@@ -259,7 +315,7 @@ func (s *SSH) initSSH() error {
 		}
 
 	} else {
-		return fmt.Errorf("Unknown auth type")
+		return fmt.Errorf("unknown auth type")
 	}
 
 	return nil
@@ -669,7 +725,7 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 		return "", fmt.Errorf("fail to read stderr")
 	}
 
-	if ignoreErr == false && err != nil {
+	if !ignoreErr && err != nil {
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  n.UsableAddr,
 			Cause: fmt.Sprintf("failed to run command due to: %v", sterr),

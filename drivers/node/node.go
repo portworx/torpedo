@@ -54,6 +54,8 @@ type Node struct {
 	IsStorageDriverInstalled bool
 	IsMetadataNode           bool
 	StoragePools             []StoragePool
+	Cpu                      int8
+	Memory                   int
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options
@@ -205,6 +207,9 @@ type Driver interface {
 
 	// GetDeviceMapperCount return devicemapper count
 	GetDeviceMapperCount(Node, time.Duration) (int, error)
+
+	// GetNodeInfo return map conatining memory and cpu info for a given node
+	GetNodeInfo(n Node) (map[string]string, error)
 }
 
 // Register registers the given node driver
@@ -434,5 +439,13 @@ func (d *notSupportedDriver) InjectNetworkError(nodes []Node, errorInjectionType
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "InjectNetworkError()",
+	}
+}
+
+// GetNodeInfo return map conatining memory and cpu info for a given node
+func (d *notSupportedDriver) GetNodeInfo(Node) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodeInfo()",
 	}
 }
