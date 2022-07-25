@@ -105,6 +105,9 @@ var _ = Describe("{Longevity}", func() {
 		KVDBFailover:         TriggerKVDBFailover,
 		ValidateDeviceMapper: TriggerValidateDeviceMapperCleanup,
 		AsyncDR:              TriggerAsyncDR,
+		RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
+		HAIncreaseAndReboot:  TriggerHAIncreaseAndReboot,
+
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -298,7 +301,7 @@ func watchConfigMap() error {
 
 func populateDisruptiveTriggers() {
 	disruptiveTriggers = map[string]bool{
-		HAIncrease:                      true,
+		HAIncrease:                      false,
 		HADecrease:                      false,
 		RestartVolDriver:                false,
 		CrashVolDriver:                  false,
@@ -329,6 +332,7 @@ func populateDisruptiveTriggers() {
 		CsiSnapShot:                     false,
 		CsiSnapRestore:                  false,
 		KVDBFailover:                    true,
+		HAIncreaseAndReboot:             true,
 	}
 }
 
@@ -568,7 +572,11 @@ func populateIntervals() {
 	triggerInterval[Trashcan] = make(map[int]time.Duration)
 	triggerInterval[KVDBFailover] = make(map[int]time.Duration)
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
+<<<<<<< HEAD
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
+=======
+	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
+>>>>>>> b4de61b63 (:sparkles: adding ha increase and reboot nodes scenario)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -701,6 +709,7 @@ func populateIntervals() {
 	triggerInterval[AppTasksDown][2] = 9 * baseInterval
 	triggerInterval[AppTasksDown][1] = 10 * baseInterval
 
+<<<<<<< HEAD
 	triggerInterval[AsyncDR][10] = 1 * baseInterval
 	triggerInterval[AsyncDR][9] = 3 * baseInterval
 	triggerInterval[AsyncDR][8] = 6 * baseInterval
@@ -713,6 +722,9 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
 
 	baseInterval = 60 * time.Minute
+=======
+	baseInterval = 1 * time.Minute
+>>>>>>> b4de61b63 (:sparkles: adding ha increase and reboot nodes scenario)
 
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 3 * baseInterval
@@ -996,6 +1008,17 @@ func populateIntervals() {
 	triggerInterval[CsiSnapShot][2] = 24 * baseInterval
 	triggerInterval[CsiSnapShot][1] = 27 * baseInterval
 
+	triggerInterval[HAIncreaseAndReboot][10] = 1 * baseInterval
+	triggerInterval[HAIncreaseAndReboot][9] = 3 * baseInterval
+	triggerInterval[HAIncreaseAndReboot][8] = 6 * baseInterval
+	triggerInterval[HAIncreaseAndReboot][7] = 9 * baseInterval
+	triggerInterval[HAIncreaseAndReboot][6] = 12 * baseInterval
+	triggerInterval[HAIncreaseAndReboot][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[HAIncreaseAndReboot][4] = 18 * baseInterval
+	triggerInterval[HAIncreaseAndReboot][3] = 21 * baseInterval
+	triggerInterval[HAIncreaseAndReboot][2] = 24 * baseInterval
+	triggerInterval[HAIncreaseAndReboot][1] = 27 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1117,7 +1140,11 @@ func populateIntervals() {
 	triggerInterval[RelaxedReclaim][0] = 0
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
+<<<<<<< HEAD
 	triggerInterval[AsyncDR][0] = 0
+=======
+	triggerInterval[HAIncreaseAndReboot][0] = 0
+>>>>>>> b4de61b63 (:sparkles: adding ha increase and reboot nodes scenario)
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
