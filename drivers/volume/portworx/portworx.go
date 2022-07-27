@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/s3utils"
 	"io"
 	"math"
 	"net"
@@ -123,7 +124,10 @@ const (
 	asyncTimeout                      = 15 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
 )
-
+const (
+	telemetryNotEnabled = "15"
+	telemetryEnabled = "100"
+)
 const (
 	secretName      = "openstorage.io/auth-secret-name"
 	secretNamespace = "openstorage.io/auth-secret-namespace"
@@ -3231,17 +3235,40 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		if err != nil {
 			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
+		//logrus.Debug("Validating CCM health")
+		//// Change to config package.
+		//url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
+		//resp, err := http.Get(url)
+		//if err != nil {
+		//	return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+		//}
+		//defer resp.Body.Close()
 
-		logrus.Debug("Validating CCM health")
-		// Change to config package.
-		url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-		resp, err := http.Get(url)
+		pxctlPath := d.getPxctlPath(n)
+		out, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status -j | jq .telemetrystatus.connection_status.error_code", pxctlPath), opts)
 		if err != nil {
-			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+			return fmt.Errorf("failed to get pxctl status. cause: %v", err)
 		}
-		defer resp.Body.Close()
+		if out == telemetryNotEnabled{
+			logrus.Debugf("Telemetry not enabled on PX status. Skipping validation on s3")
+			return nil
+		}
+		logrus.Debugf("Status returned by pxctl %s", out)
 
-		// Check S3 bucket for diags
+		//// Check S3 bucket for diags
+		logrus.Debugf("Node name %s", n.Name)
+		objects, err := s3utils.GetS3Objects("abc", n.Name)
+		if err == nil {
+			return err
+		}
+		for _, obj := range objects {
+			logrus.Debugf("Object name is %s", obj.Key)
+		}
+		//for _, bucket := range buckets.Buckets {
+		//	if *bucket.Name == "purestorage-arcus-px-stg-logs" {
+		//		logrus.Info("Bucket found %s", bucket.Name)
+		//	}
+		//}
 
 		// TODO: Waiting for S3 credentials.
 	}

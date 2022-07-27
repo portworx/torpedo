@@ -1,0 +1,130 @@
+package s3utils
+
+import (
+	"encoding/json"
+	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+var(
+	expect        = gomega.Expect
+	haveOccurred  = gomega.HaveOccurred
+	equal         = gomega.Equal
+)
+
+const (
+	pureBucket = "purestorage-arcus-px-stg-logs"
+)
+type Object struct {
+	Key         string
+	Size         uint64
+	LastModified time.Time
+}
+
+type S3Client struct {
+	mu               *sync.Mutex
+	renewalInrogress bool
+	client           *s3.S3
+	bucket           string
+	endPoints        []string
+	accessKeyID      string
+	secretAccessKey  string
+	region           string
+	secure           bool
+	disablePathStyle bool
+	useProxy         bool
+	proxy            string
+}
+
+// GetAWSDetailsFromEnv returns AWS details
+func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
+	s3Region string, disableSSLBool bool) {
+
+	// TODO: add separate function to return cred object based on type
+	id = os.Getenv("AWS_ACCESS_KEY_ID")
+	expect(id).NotTo(equal(""),
+		"AWS_ACCESS_KEY_ID Environment variable should not be empty")
+
+	secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	expect(secret).NotTo(equal(""),
+		"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+
+	endpoint = os.Getenv("S3_ENDPOINT")
+	expect(endpoint).NotTo(equal(""),
+		"S3_ENDPOINT Environment variable should not be empty")
+
+	s3Region = os.Getenv("S3_REGION")
+	expect(s3Region).NotTo(equal(""),
+		"S3_REGION Environment variable should not be empty")
+
+	disableSSL := os.Getenv("S3_DISABLE_SSL")
+	expect(disableSSL).NotTo(equal(""),
+		"S3_DISABLE_SSL Environment variable should not be empty")
+
+	disableSSLBool, err := strconv.ParseBool(disableSSL)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("S3_DISABLE_SSL=%s is not a valid boolean value", disableSSL))
+
+	return id, secret, endpoint, s3Region, disableSSLBool
+}
+
+// GetS3Buckets lists the buckets in s3
+func GetS3Objects(clusterId string, nodeName string) ([]Object, error){
+	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+
+	S3Client := s3.New(sess)
+
+	bucket := pureBucket
+	//prefix := clusterId + "/" + nodeName + "/" + day + "/" + hour
+	dt := time.Now().String()
+	date := strings.Split(dt, " ")[0]
+	date = strings.ReplaceAll(date, "-", "_")
+	//timeNow := strings.Split(dt, " ")[1]
+	timeNow := time.Now().Round(1 * time.Minute).String()
+	timeNow = strings.ReplaceAll(timeNow, ":", "_")
+
+	newPrefix := fmt.Sprintf("%s/%s/%s/%s", clusterId, nodeName, date, timeNow)
+	logrus.Debugf("New prefix is %s", newPrefix)
+	prefix := "1b32ca7b-c5ad-4e7f-8761-600c1b4fbdc5/jose-pattern-leopard-1/2022_07_26/20_00_00"
+	input := &s3.ListObjectsInput{
+		Bucket:    &bucket,
+		Prefix: &prefix,
+	}
+	objs, err := S3Client.ListObjects(input)
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting details from S3 %v", err)
+	}
+	s, _ := json.MarshalIndent(objs, "", "\t")
+	fmt.Printf("Objs: %s\n", string(s))
+	var objects []Object
+	for _, obj := range objs.Contents{
+		object := Object{
+			Key:         aws.StringValue(obj.Key),
+			Size:         uint64(aws.Int64Value(obj.Size)),
+			LastModified: aws.TimeValue(obj.LastModified),
+		}
+		objects = append(objects, object)
+	}
+
+	return objects, nil
+}

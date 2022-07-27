@@ -85,6 +85,7 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 					OnHost:        true,
 				}
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true, Async: true})
+
 				Expect(err).NotTo(HaveOccurred())
 			})
 		}
