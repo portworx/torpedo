@@ -1,7 +1,6 @@
 package s3utils
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -11,7 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -78,7 +76,14 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
-// GetS3Buckets lists the buckets in s3
+func GetTimeStamp() string {
+	tnow := time.Now()
+	return fmt.Sprintf("%d_%02d_%02d/%02d_00_00",
+		tnow.Year(), tnow.Month(), tnow.Day(),
+		tnow.Hour())
+}
+
+// GetS3Objects lists the objects in S3
 func GetS3Objects(clusterId string, nodeName string) ([]Object, error){
 	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
@@ -96,16 +101,10 @@ func GetS3Objects(clusterId string, nodeName string) ([]Object, error){
 
 	bucket := pureBucket
 	//prefix := clusterId + "/" + nodeName + "/" + day + "/" + hour
-	dt := time.Now().String()
-	date := strings.Split(dt, " ")[0]
-	date = strings.ReplaceAll(date, "-", "_")
-	//timeNow := strings.Split(dt, " ")[1]
-	timeNow := time.Now().Round(1 * time.Minute).String()
-	timeNow = strings.ReplaceAll(timeNow, ":", "_")
-
-	newPrefix := fmt.Sprintf("%s/%s/%s/%s", clusterId, nodeName, date, timeNow)
+	newPrefix := fmt.Sprintf("%s/%s/%s", clusterId, nodeName, GetTimeStamp())
 	logrus.Debugf("New prefix is %s", newPrefix)
-	prefix := "1b32ca7b-c5ad-4e7f-8761-600c1b4fbdc5/jose-pattern-leopard-1/2022_07_26/20_00_00"
+	//prefix := "375f6ce0-f142-4716-85d4-8beb0ef0c842/jose-pattern-leopard-1/2022_07_26/20_00_00"
+	prefix := newPrefix
 	input := &s3.ListObjectsInput{
 		Bucket:    &bucket,
 		Prefix: &prefix,
@@ -114,8 +113,6 @@ func GetS3Objects(clusterId string, nodeName string) ([]Object, error){
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting details from S3 %v", err)
 	}
-	s, _ := json.MarshalIndent(objs, "", "\t")
-	fmt.Printf("Objs: %s\n", string(s))
 	var objects []Object
 	for _, obj := range objs.Contents{
 		object := Object{
@@ -125,6 +122,5 @@ func GetS3Objects(clusterId string, nodeName string) ([]Object, error){
 		}
 		objects = append(objects, object)
 	}
-
 	return objects, nil
 }

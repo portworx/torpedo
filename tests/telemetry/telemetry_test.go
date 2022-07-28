@@ -28,6 +28,13 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
+func getDiagsTimeStamp() string {
+	tnow := time.Now()
+	return fmt.Sprintf("%d%02d%02d%02d%02d%02d",
+		tnow.Year(), tnow.Month(), tnow.Day(),
+		tnow.Hour(), tnow.Minute(), tnow.Second())
+}
+
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{DiagsBasic}", func() {
 	var contexts []*scheduler.Context
@@ -45,7 +52,7 @@ var _ = Describe("{DiagsBasic}", func() {
 
 				config := &torpedovolume.DiagRequestConfig{
 					DockerHost:    "unix:///var/run/docker.sock",
-					OutputFile:    fmt.Sprintf("/var/cores/torpedo-diagsbasic-%s-%d.tar.gz", currNode.Name, time.Now().Unix()),
+					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, getDiagsTimeStamp()),
 					ContainerName: "",
 					OnHost:        true,
 				}
@@ -80,7 +87,7 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 
 				config := &torpedovolume.DiagRequestConfig{
 					DockerHost:    "unix:///var/run/docker.sock",
-					OutputFile:    fmt.Sprintf("/var/cores/torpedo-diagsasync-%s-%d.tar.gz", currNode.Name, time.Now().Unix()),
+					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, getDiagsTimeStamp()),
 					ContainerName: "",
 					OnHost:        true,
 				}
