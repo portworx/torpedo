@@ -63,16 +63,6 @@ type DiagOps struct {
 	Async bool
 }
 
-// MetadataNode TODO temporary solution until sdk supports metadataNode response
-type MetadataNode struct {
-	PeerUrls   []string `json:"PeerUrls"`
-	ClientUrls []string `json:"ClientUrls"`
-	Leader     bool     `json:"Leader"`
-	DbSize     int      `json:"DbSize"`
-	IsHealthy  bool     `json:"IsHealthy"`
-	ID         string   `json:"ID"`
-}
-
 // DefaultDriver implements defaults for Driver interface
 type DefaultDriver struct {
 }
@@ -805,13 +795,5 @@ func (d *DefaultDriver) IsPureFileVolume(volume *Volume) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "IsPureFileVolume()",
-	}
-}
-
-// GetKvdbMembers returns the kvdb members of the PX cluster
-func (d *DefaultDriver) GetKvdbMembers(n node.Node) (map[string]*MetadataNode, error) {
-	return nil, &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "GetKvdbMembers()",
 	}
 }
