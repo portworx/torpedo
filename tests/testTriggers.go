@@ -3,8 +3,6 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -236,7 +234,7 @@ func GenerateUUID() string {
 // UpdateOutcome updates outcome based on error
 func UpdateOutcome(event *EventRecord, err error) {
 
-	if err != nil {
+	if err != nil && event != nil {
 		logrus.Infof("updating event outcome for [%v]", event.Event.Type)
 		er := fmt.Errorf(err.Error() + "<br>")
 		event.Outcome = append(event.Outcome, er)
@@ -497,8 +495,6 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 						continue
 					}
 
-					logrus.Warningf("volume [%s] with size [%d] as it is less than 200Gib", v.Name, v.Size)
-
 					currRep, err := Inst().V.GetReplicationFactor(v)
 					UpdateOutcome(event, err)
 
@@ -511,7 +507,7 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 							}
 							rep := currRep
 							for rep > 1 {
-								err = Inst().V.SetReplicationFactor(v, rep-1, nil, false, opts)
+								err = Inst().V.SetReplicationFactor(v, rep-1, nil, true, opts)
 								if err != nil {
 									logrus.Errorf("There is an error decreasing repl [%v]", err.Error())
 									UpdateOutcome(event, err)
@@ -525,181 +521,13 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 					}
 
 					if err == nil {
-						haIncreaseRebootTargetNode(event, ctx, v, storageNodeMap)
-						haIncreaseRebootSourceNode(event, ctx, v, storageNodeMap)
+						HaIncreaseRebootTargetNode(event, ctx, v, storageNodeMap)
+						HaIncreaseRebootSourceNode(event, ctx, v, storageNodeMap)
 					}
 				}
 			}
 		}
 	})
-}
-
-func haIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
-
-	Step(
-		fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
-			Inst().V.String(), ctx.App.Key, v),
-		func() {
-
-			replicaSets, err := Inst().V.GetReplicaSets(v)
-			if err == nil {
-				replicaNodes := replicaSets[0].Nodes
-				var newReplID string
-				var newReplNode node.Node
-
-				//selecting the target node for repl increase
-				for nID, node := range storageNodeMap {
-					nExist := false
-					for _, id := range replicaNodes {
-						if nID == id {
-							nExist = true
-							break
-						}
-					}
-					if !nExist {
-						newReplID = nID
-						newReplNode = node
-						break
-					}
-				}
-
-				Step(
-					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
-						Inst().V.String(), ctx.App.Key, v),
-					func() {
-						logrus.Infof("Increasing repl with target node  [%v]", newReplID)
-						err = Inst().V.SetReplicationFactor(v, 2, []string{newReplID}, false)
-						if err != nil {
-							logrus.Errorf("There is an error increasing repl [%v]", err.Error())
-							UpdateOutcome(event, err)
-						}
-					})
-
-				if err == nil {
-					Step(
-						fmt.Sprintf("reboot target node %s while repl increase is in-progres",
-							newReplNode.Hostname),
-						func() {
-
-							logrus.Info("Waiting for 30 seconds for re-sync to initialize before target node reboot")
-							time.Sleep(30 * time.Second)
-
-							err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
-								Force: true,
-								ConnectionOpts: node.ConnectionOpts{
-									Timeout:         1 * time.Minute,
-									TimeBeforeRetry: 5 * time.Second,
-								},
-							})
-							if err != nil {
-								logrus.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
-								UpdateOutcome(event, err)
-							}
-
-							err = validateReplFactorUpdate(v, 2)
-							if err != nil {
-								err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
-								logrus.Error(err)
-								UpdateOutcome(event, err)
-							} else {
-								logrus.Infof("repl successfully increased to 2")
-							}
-						})
-				}
-			} else {
-				logrus.Error(err)
-				UpdateOutcome(event, err)
-
-			}
-		})
-}
-
-func haIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
-	Step(
-		fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
-			Inst().V.String(), ctx.App.Key, v),
-		func() {
-			currRep, err := Inst().V.GetReplicationFactor(v)
-			UpdateOutcome(event, err)
-
-			//if repl is 3 cannot increase repl for the volume
-			if currRep == 0 || currRep == 3 {
-				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				logrus.Error(err)
-				UpdateOutcome(event, err)
-			}
-
-			if err == nil {
-				Step(
-					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
-						Inst().V.String(), ctx.App.Key, v),
-					func() {
-						replicaSets, err := Inst().V.GetReplicaSets(v)
-						if err == nil {
-							replicaNodes := replicaSets[0].Nodes
-							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, false)
-							if err != nil {
-								logrus.Errorf("There is an error increasing repl [%v]", err.Error())
-								UpdateOutcome(event, err)
-							} else {
-								logrus.Info("Waiting for 30 seconds for re-sync to initialize before source nodes reboot")
-								time.Sleep(30 * time.Second)
-								//rebooting source nodes one by one
-								for _, nID := range replicaNodes {
-									replNodeToReboot := storageNodeMap[nID]
-									err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
-										Force: true,
-										ConnectionOpts: node.ConnectionOpts{
-											Timeout:         1 * time.Minute,
-											TimeBeforeRetry: 5 * time.Second,
-										},
-									})
-									if err != nil {
-										logrus.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
-										UpdateOutcome(event, err)
-									}
-								}
-								err = validateReplFactorUpdate(v, currRep+1)
-								if err != nil {
-									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
-									logrus.Error(err)
-									UpdateOutcome(event, err)
-								} else {
-									logrus.Infof("repl successfully increased to 3")
-								}
-							}
-						} else {
-							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
-							logrus.Error(err)
-							UpdateOutcome(event, err)
-						}
-
-					})
-			} else {
-				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
-				logrus.Error(err)
-				UpdateOutcome(event, err)
-			}
-
-		})
-}
-
-func validateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error {
-	t := func() (interface{}, bool, error) {
-		err := Inst().V.WaitForReplicationToComplete(v, expaectedReplFactor, validateReplicationUpdateTimeout)
-		if err != nil {
-			statusErr, _ := status.FromError(err)
-			if statusErr.Code() == codes.NotFound || strings.Contains(err.Error(), "code = NotFound") {
-				return nil, false, err
-			}
-			return nil, true, err
-		}
-		return 0, false, nil
-	}
-	if _, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval); err != nil {
-		return fmt.Errorf("failed to set replication factor of the volume: %v due to err: %v", v.Name, err.Error())
-	}
-	return nil
 }
 
 // TriggerHAIncrease performs repl-add on all volumes of given contexts
@@ -3602,6 +3430,9 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 				}
 
 				logrus.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
+				if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "Will not proceed with pool expansion") {
+					break
+				}
 				time.Sleep(time.Second * 90)
 				continue
 			}

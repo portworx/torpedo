@@ -2257,10 +2257,10 @@ func (d *portworx) WaitForReplicationToComplete(vol *torpedovolume.Volume, replF
 	}
 
 	quitFlag := false
-	wdt := time.After(replicationUpdateTimeout)
+	waitTime := time.After(replicationUpdateTimeout)
 	for !quitFlag && !(areRepSetsFinal(volumeInspectResponse.Volume, replFactor) && isClean(volumeInspectResponse.Volume)) {
 		select {
-		case <-wdt:
+		case <-waitTime:
 			quitFlag = true
 		default:
 			volumeInspectResponse, err = volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})

@@ -107,7 +107,6 @@ var _ = Describe("{Longevity}", func() {
 		AsyncDR:              TriggerAsyncDR,
 		RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
 		HAIncreaseAndReboot:  TriggerHAIncreaseAndReboot,
-
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -572,11 +571,8 @@ func populateIntervals() {
 	triggerInterval[Trashcan] = make(map[int]time.Duration)
 	triggerInterval[KVDBFailover] = make(map[int]time.Duration)
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
-<<<<<<< HEAD
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
-=======
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
->>>>>>> b4de61b63 (:sparkles: adding ha increase and reboot nodes scenario)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -709,7 +705,6 @@ func populateIntervals() {
 	triggerInterval[AppTasksDown][2] = 9 * baseInterval
 	triggerInterval[AppTasksDown][1] = 10 * baseInterval
 
-<<<<<<< HEAD
 	triggerInterval[AsyncDR][10] = 1 * baseInterval
 	triggerInterval[AsyncDR][9] = 3 * baseInterval
 	triggerInterval[AsyncDR][8] = 6 * baseInterval
@@ -722,9 +717,6 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
 
 	baseInterval = 60 * time.Minute
-=======
-	baseInterval = 1 * time.Minute
->>>>>>> b4de61b63 (:sparkles: adding ha increase and reboot nodes scenario)
 
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 3 * baseInterval
@@ -1140,11 +1132,8 @@ func populateIntervals() {
 	triggerInterval[RelaxedReclaim][0] = 0
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
-<<<<<<< HEAD
 	triggerInterval[AsyncDR][0] = 0
-=======
 	triggerInterval[HAIncreaseAndReboot][0] = 0
->>>>>>> b4de61b63 (:sparkles: adding ha increase and reboot nodes scenario)
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
