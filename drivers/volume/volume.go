@@ -223,6 +223,9 @@ type Driver interface {
 	// CollectDiags collects live diags on a node
 	CollectDiags(n node.Node, config *DiagRequestConfig, diagOps DiagOps) error
 
+	// ValidateDiagsOnS3 validates the Diags collection on S3
+	ValidateDiagsOnS3(n node.Node) error
+
 	// ValidateStoragePools validates all the storage pools
 	ValidateStoragePools() error
 
