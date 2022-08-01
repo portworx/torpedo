@@ -41,11 +41,10 @@ var _ = Describe("{DiagsBasic}", func() {
 	It("has to setup, validate, try to get diags on nodes and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("diagsbasic-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("diagsasyncbasic-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
-
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
 			Step(fmt.Sprintf("collect diags on node: %s | %s", currNode.Name, currNode.Type), func() {
@@ -55,13 +54,40 @@ var _ = Describe("{DiagsBasic}", func() {
 					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, getDiagsTimeStamp()),
 					ContainerName: "",
 					OnHost:        true,
-					Live: true,
+					Live:          true,
 				}
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
 				Expect(err).NotTo(HaveOccurred())
 			})
 		}
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
 
+// This test performs basic diags collection and validates them on S3 bucket
+var _ = Describe("{DiagsCCMOnS3}", func() {
+	var contexts []*scheduler.Context
+	It("has to setup, validate, try to get diags on nodes and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+		// One node at a time, collect diags and verify in S3
+		for _, currNode := range node.GetWorkerNodes() {
+			Step(fmt.Sprintf("collect diags on node: %s | %s", currNode.Name, currNode.Type), func() {
+
+				config := &torpedovolume.DiagRequestConfig{
+					DockerHost:    "unix:///var/run/docker.sock",
+					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, getDiagsTimeStamp()),
+					ContainerName: "",
+					OnHost:        true,
+					Live:          true,
+				}
+				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
+				Expect(err).NotTo(HaveOccurred(), "Diags collected successfully")
+				err = Inst().V.ValidateDiagsOnS3(currNode)
+				Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
+			})
+		}
 		for _, ctx := range contexts {
 			TearDownContext(ctx, nil)
 		}

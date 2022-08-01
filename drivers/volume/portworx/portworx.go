@@ -195,6 +195,7 @@ type portworx struct {
 	refreshEndpoint       bool
 	token                 string
 	skipPXSvcEndpoint     bool
+	DiagsFile             string
 }
 
 type statusJSON struct {
@@ -3188,7 +3189,46 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 	return collectDiags(n, config, diagOps, d)
 }
 
-func (d *portworx) GetClusterID(n node.Node, opts node.ConnectionOpts) (string, error){
+func (d *portworx) ValidateDiagsOnS3(n node.Node) error {
+	logrus.Info("Validating diags uploaded on S3")
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+	clusterUUID, err := d.GetClusterID(n, opts)
+	if err != nil {
+		return err
+	}
+
+	//// Check S3 bucket for diags
+	logrus.Debugf("Node name %s", n.Name)
+	start := time.Now()
+	for {
+		if time.Since(start) >= asyncTimeout {
+			return fmt.Errorf("waiting for async diags job timed out")
+		}
+		objects, err := s3utils.GetS3Objects(clusterUUID, n.Name)
+		if err != nil {
+			return err
+		}
+		for _, obj := range objects {
+			if strings.Contains(obj.Key, d.DiagsFile) {
+				logrus.Debugf("File validated on S3")
+				logrus.Debugf("Object Name is %s", obj.Key)
+				logrus.Debugf("Object Created on %s", obj.LastModified.String())
+				logrus.Debugf("Object Size %d", obj.Size)
+				return nil
+
+			}
+		}
+		logrus.Debugf("File %s not found in S3 yet, re-trying in 1 min", d.DiagsFile)
+		time.Sleep(1 * time.Minute)
+	}
+}
+
+func (d *portworx) GetClusterID(n node.Node, opts node.ConnectionOpts) (string, error) {
 
 	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("cat %s", clusterIDFile), opts)
 	if err != nil {
@@ -3245,15 +3285,6 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
 
-		//logrus.Debug("Validating CCM health")
-		//// Change to config package.
-		//url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
-		//resp, err := http.Get(url)
-		//if err != nil {
-		//	return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
-		//}
-		//defer resp.Body.Close()
-
 		pxctlPath := d.getPxctlPath(n)
 		out, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status -j | jq .telemetrystatus.connection_status.error_code", pxctlPath), opts)
 		if err != nil {
@@ -3265,36 +3296,35 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			return nil
 		}
 
-		clusterUUID, err := d.GetClusterID(n, opts)
-		if err != nil {
-			return err
-		}
-
 		logrus.Infof("**** DIAGS FILE EXIST: %s ****", config.OutputFile)
-		fileName := config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
-		//// Check S3 bucket for diags
-		logrus.Debugf("Node name %s", n.Name)
-		start := time.Now()
-		for {
-			if time.Since(start) >= asyncTimeout {
-				return fmt.Errorf("waiting for async diags job timed out")
-			}
-			objects, err := s3utils.GetS3Objects(clusterUUID, n.Name)
-			if err != nil {
-				return err
-			}
-			for _, obj := range objects {
-				if strings.Contains(obj.Key, fileName) {
-					logrus.Debugf("Object Name is %s", obj.Key)
-					logrus.Debugf("Object Created on %s", obj.LastModified.String())
-					logrus.Debugf("Object Size %d", obj.Size)
-					return nil
-
-				}
-			}
-			logrus.Debugf("File %s not found in S3 yet, re-trying in 1 min", fileName)
-			time.Sleep(1 * time.Minute)
-		}
+		d.DiagsFile = config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
+		//clusterUUID, err := d.GetClusterID(n, opts)
+		//if err != nil {
+		//	return err
+		//}
+		////// Check S3 bucket for diags
+		//logrus.Debugf("Node name %s", n.Name)
+		//start := time.Now()
+		//for {
+		//	if time.Since(start) >= asyncTimeout {
+		//		return fmt.Errorf("waiting for async diags job timed out")
+		//	}
+		//	objects, err := s3utils.GetS3Objects(clusterUUID, n.Name)
+		//	if err != nil {
+		//		return err
+		//	}
+		//	for _, obj := range objects {
+		//		if strings.Contains(obj.Key, fileName) {
+		//			logrus.Debugf("Object Name is %s", obj.Key)
+		//			logrus.Debugf("Object Created on %s", obj.LastModified.String())
+		//			logrus.Debugf("Object Size %d", obj.Size)
+		//			return nil
+		//
+		//		}
+		//	}
+		//	logrus.Debugf("File %s not found in S3 yet, re-trying in 1 min", fileName)
+		//	time.Sleep(1 * time.Minute)
+		//}
 	}
 
 	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)

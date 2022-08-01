@@ -516,6 +516,14 @@ func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, dia
 	}
 }
 
+// ValidateDiagsOnS3 validates the diags on S3 bucket
+func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateDiagsOnS3()",
+	}
+}
+
 // ValidateStoragePools validates all the storage pools
 func (d *DefaultDriver) ValidateStoragePools() error {
 	return &errors.ErrNotSupported{
