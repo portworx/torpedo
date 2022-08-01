@@ -206,10 +206,9 @@ func (v *vsphere) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	if _, ok := vmMap[n.Name]; !ok {
 		return fmt.Errorf("could not fetch VM for node: %s", n.Name)
 	}
-	vm := vmMap[n.Name]
 	//Reestblish connection to avoid session timeout.
 	v.connect()
-	vm = vmMap[n.Name]
+	vm := vmMap[n.Name]
 	logrus.Infof("Rebooting VM: %s  ", vm.Name())
 	err := vm.RebootGuest(v.ctx)
 	if err != nil {
