@@ -55,6 +55,7 @@ var _ = Describe("{DiagsBasic}", func() {
 					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, getDiagsTimeStamp()),
 					ContainerName: "",
 					OnHost:        true,
+					Live: true,
 				}
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
 				Expect(err).NotTo(HaveOccurred())
