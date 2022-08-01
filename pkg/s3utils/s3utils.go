@@ -14,17 +14,14 @@ import (
 	"time"
 )
 
-var(
-	expect        = gomega.Expect
-	haveOccurred  = gomega.HaveOccurred
-	equal         = gomega.Equal
+var (
+	expect       = gomega.Expect
+	haveOccurred = gomega.HaveOccurred
+	equal        = gomega.Equal
 )
 
-const (
-	pureBucket = "purestorage-arcus-px-stg-logs"
-)
 type Object struct {
-	Key         string
+	Key          string
 	Size         uint64
 	LastModified time.Time
 }
@@ -84,7 +81,7 @@ func GetTimeStamp() string {
 }
 
 // GetS3Objects lists the objects in S3
-func GetS3Objects(clusterId string, nodeName string) ([]Object, error){
+func GetS3Objects(clusterId string, nodeName string) ([]Object, error) {
 	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
@@ -98,15 +95,11 @@ func GetS3Objects(clusterId string, nodeName string) ([]Object, error){
 		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
 
 	S3Client := s3.New(sess)
-
-	bucket := pureBucket
-	//prefix := clusterId + "/" + nodeName + "/" + day + "/" + hour
-	newPrefix := fmt.Sprintf("%s/%s/%s", clusterId, nodeName, GetTimeStamp())
-	logrus.Debugf("New prefix is %s", newPrefix)
-	//prefix := "375f6ce0-f142-4716-85d4-8beb0ef0c842/jose-pattern-leopard-1/2022_07_26/20_00_00"
-	prefix := newPrefix
+	bucket := os.Getenv("DIAGS_BUCKET")
+	prefix := fmt.Sprintf("%s/%s/%s", clusterId, nodeName, GetTimeStamp())
+	logrus.Debugf("Looking for files under folder %s", prefix)
 	input := &s3.ListObjectsInput{
-		Bucket:    &bucket,
+		Bucket: &bucket,
 		Prefix: &prefix,
 	}
 	objs, err := S3Client.ListObjects(input)
@@ -114,9 +107,9 @@ func GetS3Objects(clusterId string, nodeName string) ([]Object, error){
 		return nil, fmt.Errorf("Error in getting details from S3 %v", err)
 	}
 	var objects []Object
-	for _, obj := range objs.Contents{
+	for _, obj := range objs.Contents {
 		object := Object{
-			Key:         aws.StringValue(obj.Key),
+			Key:          aws.StringValue(obj.Key),
 			Size:         uint64(aws.Int64Value(obj.Size)),
 			LastModified: aws.TimeValue(obj.LastModified),
 		}

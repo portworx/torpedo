@@ -87,7 +87,7 @@ const (
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
-	clusterIDFile = "/etc/pwx/cluster_uuid"
+	clusterIDFile                             = "/etc/pwx/cluster_uuid"
 )
 
 const (
@@ -3210,8 +3210,9 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			logrus.Debugf("Telemetry not enabled on PX status. Skipping validation on s3")
 			return nil
 		}
-		clusterUUID,err := d.GetClusterID(n, opts)
-		if err != nil{
+
+		clusterUUID, err := d.GetClusterID(n, opts)
+		if err != nil {
 			return err
 		}
 
@@ -3229,20 +3230,17 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 				return err
 			}
 			for _, obj := range objects {
-				if strings.Contains(obj.Key, fileName){
+				if strings.Contains(obj.Key, fileName) {
 					logrus.Debugf("Object Name is %s", obj.Key)
 					logrus.Debugf("Object Created on %s", obj.LastModified.String())
 					logrus.Debugf("Object Size %d", obj.Size)
 					return nil
-				}else{
-					logrus.Debugf("files found so far: %s", obj.Key)
-					logrus.Debugf("Object Created on %s", obj.LastModified.String())
-					logrus.Debugf("Object Size %d", obj.Size)
+
 				}
 			}
+			logrus.Debugf("File %s not found in S3 yet, re-trying in 1 min", fileName)
 			time.Sleep(1 * time.Minute)
 		}
-		// TODO: Waiting for S3 credentials.
 	}
 
 	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
