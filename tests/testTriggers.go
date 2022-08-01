@@ -2267,6 +2267,7 @@ func TriggerInspectBackup(contexts *[]*scheduler.Context, recordChan *chan *Even
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupToInspect.GetName(),
 		OrgId: backupToInspect.GetOrgId(),
+		Uid:   backupToInspect.GetUid(),
 	}
 	_, err = Inst().Backup.InspectBackup(ctx, backupInspectRequest)
 	desc := fmt.Sprintf("InspectBackup failed: Inspect backup %s failed", backupToInspect.GetName())
@@ -2380,7 +2381,10 @@ func TriggerRestoreNamespace(contexts *[]*scheduler.Context, recordChan *chan *E
 			Name:  restoreName,
 			OrgId: OrgID,
 		},
-		Backup:           backupToRestore.GetName(),
+		BackupRef: &api.ObjectRef{
+			Name: backupToRestore.GetName(),
+			Uid:  backupToRestore.GetUid(),
+		},
 		Cluster:          destinationClusterName,
 		NamespaceMapping: namespaceMapping,
 	}
@@ -2446,7 +2450,7 @@ func TriggerDeleteBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 	}
 
 	backupToDelete := curBackups.GetBackups()[0]
-	err = DeleteBackupAndDependencies(backupToDelete.GetName(), OrgID, backupToDelete.GetCluster())
+	err = DeleteBackupAndDependencies(backupToDelete.GetName(), backupToDelete.GetUid(), OrgID, backupToDelete.GetCluster())
 	desc := fmt.Sprintf("DeleteBackup failed: Delete backup %s on cluster %s failed",
 		backupToDelete.GetName(), backupToDelete.GetCluster())
 	ProcessErrorWithMessage(event, err, desc)
