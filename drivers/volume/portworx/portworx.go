@@ -3301,33 +3301,6 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 
 		logrus.Infof("**** DIAGS FILE EXIST: %s ****", config.OutputFile)
 		d.DiagsFile = config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
-		//clusterUUID, err := d.GetClusterID(n, opts)
-		//if err != nil {
-		//	return err
-		//}
-		////// Check S3 bucket for diags
-		//logrus.Debugf("Node name %s", n.Name)
-		//start := time.Now()
-		//for {
-		//	if time.Since(start) >= asyncTimeout {
-		//		return fmt.Errorf("waiting for async diags job timed out")
-		//	}
-		//	objects, err := s3utils.GetS3Objects(clusterUUID, n.Name)
-		//	if err != nil {
-		//		return err
-		//	}
-		//	for _, obj := range objects {
-		//		if strings.Contains(obj.Key, fileName) {
-		//			logrus.Debugf("Object Name is %s", obj.Key)
-		//			logrus.Debugf("Object Created on %s", obj.LastModified.String())
-		//			logrus.Debugf("Object Size %d", obj.Size)
-		//			return nil
-		//
-		//		}
-		//	}
-		//	logrus.Debugf("File %s not found in S3 yet, re-trying in 1 min", fileName)
-		//	time.Sleep(1 * time.Minute)
-		//}
 	}
 
 	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
