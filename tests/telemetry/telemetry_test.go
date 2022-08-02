@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,32 @@ func TestTelemetryBasic(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	InitInstance()
+})
+
+// This test auto diags on storage crash
+var _ = Describe("{telemetryPxctlHealthyStatus}", func() {
+	var contexts []*scheduler.Context
+
+	It("Validate, pxctl displays telemetry status", func() {
+		contexts = make([]*scheduler.Context, 0)
+		telemetryNodeStatus := make(map[string]bool)
+
+		for _, currNode := range node.GetWorkerNodes() {
+			Step(fmt.Sprintf("run pxctl status to check telemetry status on node %v", currNode.Name), func() {
+				output, err := runCmd("/opt/pwx/bin/pxctl status | egrep ^Telemetry:", currNode, nil)
+				Expect(err).NotTo(HaveOccurred(), "Failed to get status for nodee %v", currNode.Name)
+				logrus.Infof("node %s: %s", currNode.Name, output)
+				telemetryNodeStatus[currNode.Name], _ = regexp.MatchString(`Telemetry:.*Healthy`, output)
+			})
+		}
+		for nodeName, isHealthy := range telemetryNodeStatus {
+			Expect(isHealthy).To(BeTrue(), "Telemetry not health on node %v", nodeName)
+		}
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This test performs basic test of starting an application and destroying it (along with storage)
@@ -157,6 +184,8 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 	var err error
 
 	It("has to setup, validate, try to collect auto diags on nodes after px-storage/px crash", func() {
+		contexts = make([]*scheduler.Context, 0)
+
 		for _, pxProcessNm := range []string{"px-storage", "px"} {
 			Step(fmt.Sprintf("Reset portworx for auto diags collect test after '%s' crash\n", pxProcessNm), func() {
 				for _, currNode := range node.GetWorkerNodes() {
