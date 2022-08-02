@@ -516,8 +516,8 @@ func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, dia
 	}
 }
 
-// ValidateDiagsOnS3 validates the diags on S3 bucket
-func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node) error {
+// ValidateDiagsOnS3 validates the diags or diags file on S3 bucket
+func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateDiagsOnS3()",
