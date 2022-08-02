@@ -3135,7 +3135,7 @@ func (d *portworx) CollectDiags(n node.Node, config *torpedovolume.DiagRequestCo
 	return collectDiags(n, config, diagOps, d)
 }
 
-func (d *portworx) ValidateDiagsOnS3(n node.Node) error {
+func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 	logrus.Info("Validating diags uploaded on S3")
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
@@ -3150,6 +3150,9 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node) error {
 
 	//// Check S3 bucket for diags
 	logrus.Debugf("Node name %s", n.Name)
+	if diagsFile != "" {
+		d.DiagsFile = diagsFile
+	}
 	start := time.Now()
 	for {
 		if time.Since(start) >= asyncTimeout {
@@ -3169,8 +3172,8 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node) error {
 
 			}
 		}
-		logrus.Debugf("File %s not found in S3 yet, re-trying in 1 min", d.DiagsFile)
-		time.Sleep(1 * time.Minute)
+		logrus.Debugf("File %s not found in S3 yet, re-trying in 30s", d.DiagsFile)
+		time.Sleep(30 * time.Second)
 	}
 }
 

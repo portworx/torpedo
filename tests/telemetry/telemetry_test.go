@@ -3,9 +3,12 @@ package tests
 import (
 	"fmt"
 	"os"
+	"path"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/libopenstorage/openstorage/pkg/dbg"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -13,7 +16,26 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
+	"github.com/sirupsen/logrus"
 )
+
+const (
+	cmdRetry   = 5 * time.Second
+	cmdTimeout = 15 * time.Second
+)
+
+// Taken from SharedV4 tests...
+func runCmd(cmd string, n node.Node, cmdConnectionOpts *node.ConnectionOpts) (string, error) {
+	if cmdConnectionOpts == nil {
+		cmdConnectionOpts = &node.ConnectionOpts{
+			Timeout:         cmdTimeout,
+			TimeBeforeRetry: cmdRetry,
+			Sudo:            false,
+		}
+	}
+	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, *cmdConnectionOpts)
+	return output, err
+}
 
 func TestTelemetryBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -27,13 +49,6 @@ func TestTelemetryBasic(t *testing.T) {
 var _ = BeforeSuite(func() {
 	InitInstance()
 })
-
-func getDiagsTimeStamp() string {
-	tnow := time.Now()
-	return fmt.Sprintf("%d%02d%02d%02d%02d%02d",
-		tnow.Year(), tnow.Month(), tnow.Day(),
-		tnow.Hour(), tnow.Minute(), tnow.Second())
-}
 
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{DiagsBasic}", func() {
@@ -51,7 +66,7 @@ var _ = Describe("{DiagsBasic}", func() {
 
 				config := &torpedovolume.DiagRequestConfig{
 					DockerHost:    "unix:///var/run/docker.sock",
-					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, getDiagsTimeStamp()),
+					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, dbg.GetTimeStamp()),
 					ContainerName: "",
 					OnHost:        true,
 					Live:          true,
@@ -77,14 +92,14 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 
 				config := &torpedovolume.DiagRequestConfig{
 					DockerHost:    "unix:///var/run/docker.sock",
-					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, getDiagsTimeStamp()),
+					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, dbg.GetTimeStamp()),
 					ContainerName: "",
 					OnHost:        true,
 					Live:          true,
 				}
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
 				Expect(err).NotTo(HaveOccurred(), "Diags collected successfully")
-				err = Inst().V.ValidateDiagsOnS3(currNode)
+				err = Inst().V.ValidateDiagsOnS3(currNode, "")
 				Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
 			})
 		}
@@ -114,7 +129,7 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 
 				config := &torpedovolume.DiagRequestConfig{
 					DockerHost:    "unix:///var/run/docker.sock",
-					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, getDiagsTimeStamp()),
+					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, dbg.GetTimeStamp()),
 					ContainerName: "",
 					OnHost:        true,
 				}
@@ -124,6 +139,87 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 			})
 		}
 
+		for _, ctx := range contexts {
+			TearDownContext(ctx, nil)
+		}
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
+// This test auto diags on storage crash
+var _ = Describe("{DiagsAutoStorage}", func() {
+	var contexts []*scheduler.Context
+	var existingDiags string
+	var newDiags string
+	var err error
+
+	It("has to setup, validate, try to collect auto diags on nodes after px-storage/px crash", func() {
+		for _, pxProcessNm := range []string{"px-storage", "px"} {
+			Step(fmt.Sprintf("Reset portworx for auto diags collect test after '%s' crash\n", pxProcessNm), func() {
+				for _, currNode := range node.GetWorkerNodes() {
+					// Restart portworx to reset auto diags interval
+					err := Inst().V.StopDriver([]node.Node{currNode}, false, nil)
+					Expect(err).NotTo(HaveOccurred(), "'%s' reset: failed to stop node %v", pxProcessNm, currNode.Name)
+					err = Inst().V.StartDriver(currNode)
+					Expect(err).NotTo(HaveOccurred(), "'%s' reset: failed to stop node %v", pxProcessNm, currNode.Name)
+					logrus.Infof("Wait for driver to start on %v...", currNode.Name)
+					err = Inst().V.WaitDriverUpOnNode(currNode, Inst().DriverStartTimeout)
+					Expect(err).NotTo(HaveOccurred())
+				}
+			})
+			// One node at a time, collect diags and verify in S3
+			for _, currNode := range node.GetWorkerNodes() {
+				Step(fmt.Sprintf("'%s' reset: Check latest auto diags on node %v", pxProcessNm, currNode.Name), func() {
+					_, err = runCmd("ls -d /var/cores/auto", currNode, nil)
+					if err == nil {
+						logrus.Infof("'%s' reset: Getting latest auto  diags on %v", pxProcessNm, currNode.Name)
+						existingDiags, err = runCmd(fmt.Sprintf("ls -t /var/cores/auto/%s*.tar.gz | head -n 1", currNode.Name), currNode, nil)
+						if err == nil {
+							logrus.Infof("'%s' reset: Found latest auto diags on node %s: %s ",
+								pxProcessNm, currNode.Name, path.Base(existingDiags))
+						} else {
+							existingDiags = ""
+						}
+					}
+				})
+				Step(fmt.Sprintf("'%s' reset: Stop storage on node %v", pxProcessNm, currNode.Name), func() {
+					_, err = runCmd(fmt.Sprintf("pkill -9 %s", pxProcessNm), currNode, nil) // force stop
+					Expect(err).NotTo(HaveOccurred(), "'%s' reset: failed to stop storage on node %v", pxProcessNm, currNode.Name)
+					time.Sleep(1 * time.Second)
+				})
+				Step(fmt.Sprintf("'%s' reset: run pxctl status to check when the server has gone down on %v",
+					pxProcessNm, currNode.Name), func() {
+					Eventually(func() (string, error) {
+						output, err := runCmd("/opt/pwx/bin/pxctl status | egrep ^PX", currNode, nil)
+						return output, err
+					}, 45*time.Second, 1*time.Second).Should(ContainSubstring("PX is not running on this host"),
+						"'%s' reset: failed to forcefully stop driver on node %s", pxProcessNm, currNode.Name)
+				})
+				Step(fmt.Sprintf("'%s' reset: Get new auto diags on node %v", pxProcessNm, currNode.Name), func() {
+					Eventually(func() bool {
+						newDiags, err = runCmd(fmt.Sprintf("ls -t /var/cores/auto/%s*.tar.gz | head -n 1", currNode.Name), currNode, nil)
+						if err == nil {
+							if existingDiags != "" && existingDiags == newDiags {
+								logrus.Infof("'%s' reset: No new auto diags found...", pxProcessNm)
+								newDiags = ""
+							}
+							if len(newDiags) > 0 {
+								logrus.Infof("'%s' reset: Found new auto diags %s", pxProcessNm, newDiags)
+								return true
+							}
+						}
+						return false
+					}, 1*time.Minute, 5*time.Second).Should(BeTrue(), "'%s' reset: failed to generate auto diags on node %s",
+						pxProcessNm, currNode.Name)
+				})
+				/// Need to validate new auto diags
+				err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(newDiags)))
+				Expect(err).NotTo(HaveOccurred())
+			}
+		}
 		for _, ctx := range contexts {
 			TearDownContext(ctx, nil)
 		}
