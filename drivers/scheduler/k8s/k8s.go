@@ -2424,6 +2424,13 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		}
 	} else if value, ok = opts[scheduler.OptionsWaitForDestroy]; ok && value {
 		if err := k.WaitForDestroy(ctx, k8sDestroyTimeout); err != nil {
+			ctxDesc, ctxError := k.Describe(ctx)
+			if ctxError == nil {
+				logrus.Warnf("Describe output of %v", ctx.App.Key)
+				logrus.Warn(ctxDesc)
+			} else {
+				logrus.Errorf("Error describing %v, cause: %v", ctx.App.Key, ctxError)
+			}
 			return err
 		}
 	}
