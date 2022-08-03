@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"os"
 	"path"
 	"regexp"
@@ -110,6 +111,14 @@ var _ = Describe("{DiagsBasic}", func() {
 
 // This test performs basic diags collection and validates them on S3 bucket
 var _ = Describe("{DiagsCCMOnS3}", func() {
+	var testrailIDs = [3] int{54917, 54912, 54910}
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54917
+	var runIDs []int
+	JustBeforeEach(func() {
+		for _, testRailId := range testrailIDs{
+			runIDs = append(runIDs, testrailuttils.AddRunsToMilestone(testRailId))
+		}
+	})
 	var contexts []*scheduler.Context
 	It("has to setup, validate, try to get diags on nodes and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
@@ -135,7 +144,9 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 		}
 	})
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		for i, testRailId := range testrailIDs{
+			AfterEachTest(contexts, testRailId, runIDs[i])
+		}
 	})
 })
 
