@@ -201,47 +201,47 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 			})
 			// One node at a time, collect diags and verify in S3
 			for _, currNode := range node.GetWorkerNodes() {
-				Step(fmt.Sprintf("'%s' reset: Check latest auto diags on node %v", pxProcessNm, currNode.Name), func() {
+				Step(fmt.Sprintf("'%s': Check latest auto diags on node %v", pxProcessNm, currNode.Name), func() {
 					_, err = runCmd("ls -d /var/cores/auto", currNode, nil)
 					if err == nil {
-						logrus.Infof("'%s' reset: Getting latest auto  diags on %v", pxProcessNm, currNode.Name)
+						logrus.Infof("'%s': Getting latest auto  diags on %v", pxProcessNm, currNode.Name)
 						existingDiags, err = runCmd(fmt.Sprintf("ls -t /var/cores/auto/%s*.tar.gz | head -n 1", currNode.Name), currNode, nil)
 						if err == nil {
-							logrus.Infof("'%s' reset: Found latest auto diags on node %s: %s ",
+							logrus.Infof("'%s': Found latest auto diags on node %s: %s ",
 								pxProcessNm, currNode.Name, path.Base(existingDiags))
 						} else {
 							existingDiags = ""
 						}
 					}
 				})
-				Step(fmt.Sprintf("'%s' reset: Stop storage on node %v", pxProcessNm, currNode.Name), func() {
+				Step(fmt.Sprintf("'%s': Stop storage on node %v", pxProcessNm, currNode.Name), func() {
 					_, err = runCmd(fmt.Sprintf("pkill -9 %s", pxProcessNm), currNode, nil) // force stop
 					Expect(err).NotTo(HaveOccurred(), "'%s' reset: failed to stop storage on node %v", pxProcessNm, currNode.Name)
 					time.Sleep(1 * time.Second)
 				})
-				Step(fmt.Sprintf("'%s' reset: run pxctl status to check when the server has gone down on %v",
+				Step(fmt.Sprintf("'%s': run pxctl status to check when the server has gone down on %v",
 					pxProcessNm, currNode.Name), func() {
 					Eventually(func() (string, error) {
 						output, err := runCmd("/opt/pwx/bin/pxctl status | egrep ^PX", currNode, nil)
 						return output, err
 					}, 45*time.Second, 1*time.Second).Should(ContainSubstring("PX is not running on this host"),
-						"'%s' reset: failed to forcefully stop driver on node %s", pxProcessNm, currNode.Name)
+						"'%s': failed to forcefully stop driver on node %s", pxProcessNm, currNode.Name)
 				})
-				Step(fmt.Sprintf("'%s' reset: Get new auto diags on node %v", pxProcessNm, currNode.Name), func() {
+				Step(fmt.Sprintf("'%s': Get new auto diags on node %v", pxProcessNm, currNode.Name), func() {
 					Eventually(func() bool {
 						newDiags, err = runCmd(fmt.Sprintf("ls -t /var/cores/auto/%s*.tar.gz | head -n 1", currNode.Name), currNode, nil)
 						if err == nil {
 							if existingDiags != "" && existingDiags == newDiags {
-								logrus.Infof("'%s' reset: No new auto diags found...", pxProcessNm)
+								logrus.Infof("'%s': No new auto diags found...", pxProcessNm)
 								newDiags = ""
 							}
 							if len(newDiags) > 0 {
-								logrus.Infof("'%s' reset: Found new auto diags %s", pxProcessNm, newDiags)
+								logrus.Infof("'%s': Found new auto diags %s", pxProcessNm, newDiags)
 								return true
 							}
 						}
 						return false
-					}, 1*time.Minute, 5*time.Second).Should(BeTrue(), "'%s' reset: failed to generate auto diags on node %s",
+					}, 1*time.Minute, 5*time.Second).Should(BeTrue(), "'%s': failed to generate auto diags on node %s",
 						pxProcessNm, currNode.Name)
 				})
 				/// Need to validate new auto diags
@@ -288,7 +288,7 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 				}
 				diagsErr = Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false, PxStopped: true})
 				if diagsErr == nil {
-					diagsValErr = Inst().V.ValidateDiagsOnS3(currNode, "")
+					diagsValErr = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)))
 				}
 			})
 		}
