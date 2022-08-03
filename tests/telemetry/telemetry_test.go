@@ -315,6 +315,14 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 		// Check errors after restarting PX
 		Expect(diagsErr).NotTo(HaveOccurred(), "failed to collect Diags successfully")
 		Expect(diagsValErr).NotTo(HaveOccurred(), "diags not validated on S3")
+
+		Step(fmt.Sprintf("Check portworx restart on all the nodes..."), func() {
+			for _, currNode := range node.GetWorkerNodes() {
+				logrus.Infof("Wait for driver to start on %v...", currNode.Name)
+				err := Inst().V.WaitDriverUpOnNode(currNode, Inst().DriverStartTimeout)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
 	})
 
 	JustAfterEach(func() {
