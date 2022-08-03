@@ -138,21 +138,6 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 				err = Inst().V.ValidateDiagsOnS3(currNode, "")
 				Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
 			})
-
-			Step(fmt.Sprintf("collect profile diags on node: %s | %s", currNode.Name, currNode.Type), func() {
-
-				config := &torpedovolume.DiagRequestConfig{
-					DockerHost:    "unix:///var/run/docker.sock",
-					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, dbg.GetTimeStamp()),
-					ContainerName: "",
-					OnHost:        true,
-					Profile: true,
-				}
-				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
-				Expect(err).NotTo(HaveOccurred(), "Profile only diags collected successfully")
-				err = Inst().V.ValidateDiagsOnS3(currNode, "")
-				Expect(err).NotTo(HaveOccurred(), "Profile only diags validated on S3")
-			})
 		}
 		for _, ctx := range contexts {
 			TearDownContext(ctx, nil)
