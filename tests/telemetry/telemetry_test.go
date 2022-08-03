@@ -298,9 +298,6 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 				// Start portworx
 				err := Inst().V.StartDriver(currNode)
 				Expect(err).NotTo(HaveOccurred(), "failed to stop node %v", currNode.Name)
-				logrus.Infof("Wait for driver to start on %v...", currNode.Name)
-				err = Inst().V.WaitDriverUpOnNode(currNode, Inst().DriverStartTimeout)
-				Expect(err).NotTo(HaveOccurred())
 			}
 		})
 
