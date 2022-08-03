@@ -61,6 +61,8 @@ type DiagOps struct {
 	Validate bool
 	// Async toggle to indicate that we want to use async diags
 	Async bool
+	// PxIsStopped
+	PxStopped bool
 }
 
 // MetadataNode TODO temporary solution until sdk supports metadataNode response

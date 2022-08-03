@@ -51,8 +51,8 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-// This test auto diags on storage crash
-var _ = Describe("{telemetryPxctlHealthyStatus}", func() {
+// This test telemetry health via pxctl
+var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 	var contexts []*scheduler.Context
 
 	It("Validate, pxctl displays telemetry status", func() {
@@ -252,6 +252,61 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 		for _, ctx := range contexts {
 			TearDownContext(ctx, nil)
 		}
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
+// Stop driver and run diags
+var _ = Describe("{DiagsOnStoppedPXnode}", func() {
+	var contexts []*scheduler.Context
+	var diagsValErr error
+	var diagsErr error
+
+	It("Validate, pxctl displays telemetry status", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		Step(fmt.Sprintf("Stop portworx on all nodes..."), func() {
+			for _, currNode := range node.GetWorkerNodes() {
+				// Stop portworx
+				err := Inst().V.StopDriver([]node.Node{currNode}, false, nil)
+				Expect(err).NotTo(HaveOccurred(), "failed to stop node %v", currNode.Name)
+			}
+		})
+
+		for _, currNode := range node.GetWorkerNodes() {
+			Step(fmt.Sprintf("collect diags on node: %s | %s", currNode.Name, currNode.Type), func() {
+
+				config := &torpedovolume.DiagRequestConfig{
+					DockerHost:    "unix:///var/run/docker.sock",
+					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, dbg.GetTimeStamp()),
+					ContainerName: "",
+					OnHost:        true,
+					Live:          true,
+				}
+				diagsErr = Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false, PxStopped: true})
+				if diagsErr == nil {
+					diagsValErr = Inst().V.ValidateDiagsOnS3(currNode, "")
+				}
+			})
+		}
+
+		Step(fmt.Sprintf("Restart portworx on all the nodes..."), func() {
+			for _, currNode := range node.GetWorkerNodes() {
+				// Start portworx
+				err := Inst().V.StartDriver(currNode)
+				Expect(err).NotTo(HaveOccurred(), "failed to stop node %v", currNode.Name)
+				logrus.Infof("Wait for driver to start on %v...", currNode.Name)
+				err = Inst().V.WaitDriverUpOnNode(currNode, Inst().DriverStartTimeout)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		// Check errors after restarting PX
+		Expect(diagsErr).NotTo(HaveOccurred(), "failed to collect Diags successfully")
+		Expect(diagsValErr).NotTo(HaveOccurred(), "diags not validated on S3")
 	})
 
 	JustAfterEach(func() {
