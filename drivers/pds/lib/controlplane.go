@@ -14,29 +14,31 @@ import (
 
 // ControlPlane PDS
 type ControlPlane struct {
-	controlPlaneUrl string
+	ControlPlaneURL string
 	components      *api.Components
 }
 
+// BearerToken struct
 type BearerToken struct {
-	Access_token  string `json:"access_token"`
-	Token_type    string `json:"token_type"`
-	Expires_in    uint64 `json:"expires_in"`
-	Refresh_token string `json:"refresh_token"`
+	AccessToken  string `json:"AccessToken"`
+	TokenType    string `json:"TokenType"`
+	ExpiresIn    uint64 `json:"ExpiresIn"`
+	RefreshToken string `json:"RefreshToken"`
 }
 
+// GetBearerToken fetches the token.
 func GetBearerToken() string {
-	username := os.Getenv("PDS_USERNAME")
-	password := os.Getenv("PDS_PASSWORD")
-	clientId := os.Getenv("PDS_CLIENT_ID")
-	clientSecret := os.Getenv("PDS_CLIENT_SECRET")
-	issuer_url := os.Getenv("PDS_ISSUER_URL")
-	url := fmt.Sprintf("%s/protocol/openid-connect/token", issuer_url)
+	username := os.Getenv("PDSUsername")
+	password := os.Getenv("PDSPassword")
+	clientID := os.Getenv("PDSClientID")
+	clientSecret := os.Getenv("PDSClientSecret")
+	issuerURL := os.Getenv("PDSIssuerURL")
+	url := fmt.Sprintf("%s/protocol/openid-connect/token", issuerURL)
 	grantType := "password"
 
 	postBody, _ := json.Marshal(map[string]string{
 		"grant_type":    grantType,
-		"client_id":     clientId,
+		"client_id":     clientID,
 		"client_secret": clientSecret,
 		"username":      username,
 		"password":      password,
@@ -59,42 +61,45 @@ func GetBearerToken() string {
 		log.Fatalf("An Error Occured %v", err)
 	}
 
-	return bearerToken.Access_token
+	return bearerToken.AccessToken
 
 }
 
-func (cp *ControlPlane) GetRegistrationToken(tenantId string) string {
+// GetRegistrationToken PDS
+func (cp *ControlPlane) GetRegistrationToken(tenantID string) string {
 	log.Info("Fetch the registration token.")
 
 	saClient := cp.components.ServiceAccount
-	serviceAccounts, _ := saClient.ListServiceAccounts(tenantId)
-	var agentWriterId string
+	serviceAccounts, _ := saClient.ListServiceAccounts(tenantID)
+	var agentWriterID string
 	for _, sa := range serviceAccounts {
 		if sa.GetName() == "Default-AgentWriter" {
-			agentWriterId = sa.GetId()
+			agentWriterID = sa.GetId()
 		}
 	}
-	token, _ := saClient.GetServiceAccountToken(agentWriterId)
+	token, _ := saClient.GetServiceAccountToken(agentWriterID)
 	return token.GetToken()
 }
 
-func (cp *ControlPlane) GetDnsZone(tenantId string) string {
+// GetDNSZone fetches DNS zone for deployment.
+func (cp *ControlPlane) GetDNSZone(tenantID string) string {
 	tenantComp := cp.components.Tenant
-	tenant, err := tenantComp.GetTenant(tenantId)
+	tenant, err := tenantComp.GetTenant(tenantID)
 	if err != nil {
 		log.Panicf("Unable to fetch the tenant info.\n Error - %v", err)
 	}
 	log.Infof("Get DNS Zone for the tenant. Name -  %s, Id - %s", tenant.GetName(), tenant.GetId())
-	dnsModel, err := tenantComp.GetDns(tenantId)
+	dnsModel, err := tenantComp.GetDNS(tenantID)
 	if err != nil {
 		log.Panicf("Unable to fetch the DNSZone info. \n Error - %v", err)
 	}
 	return dnsModel.GetDnsZone()
 }
 
+// NewControlPlane to create control plane instance.
 func NewControlPlane(url string, components *api.Components) *ControlPlane {
 	return &ControlPlane{
-		controlPlaneUrl: url,
+		ControlPlaneURL: url,
 		components:      components,
 	}
 }

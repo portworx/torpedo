@@ -8,11 +8,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// DefaultTemplates struct
 type DefaultTemplates struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
+// ListApplicationConfigurationTemplates func
 func (ds *DefaultTemplates) ListApplicationConfigurationTemplates() ([]pds.ModelsApplicationConfigurationTemplate, error) {
 	dsClient := ds.apiClient.DefaultTemplatesApi
 	dsModels, res, err := dsClient.ApiDefaultTemplatesApplicationConfigurationGet(ds.context).Execute()
@@ -24,6 +26,7 @@ func (ds *DefaultTemplates) ListApplicationConfigurationTemplates() ([]pds.Model
 	return dsModels.GetData(), err
 }
 
+// ListResourceSettingTemplates func
 func (ds *DefaultTemplates) ListResourceSettingTemplates() ([]pds.ModelsResourceSettingsTemplate, error) {
 	dsClient := ds.apiClient.DefaultTemplatesApi
 	dsModels, res, err := dsClient.ApiDefaultTemplatesResourceSettingsGet(ds.context).Execute()
@@ -35,6 +38,7 @@ func (ds *DefaultTemplates) ListResourceSettingTemplates() ([]pds.ModelsResource
 	return dsModels.GetData(), err
 }
 
+// ListStorageOptionsTemplates func
 func (ds *DefaultTemplates) ListStorageOptionsTemplates() ([]pds.ModelsStorageOptionsTemplate, error) {
 	dsClient := ds.apiClient.DefaultTemplatesApi
 	dsModels, res, err := dsClient.ApiDefaultTemplatesStorageOptionsGet(ds.context).Execute()

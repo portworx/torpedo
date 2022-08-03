@@ -8,11 +8,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// DataService struct
 type DataService struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
+// ListDataServices func
 func (ds *DataService) ListDataServices() ([]pds.ModelsDataService, error) {
 	dsClient := ds.apiClient.DataServicesApi
 	dsModels, res, err := dsClient.ApiDataServicesGet(ds.context).Execute()
@@ -24,9 +26,10 @@ func (ds *DataService) ListDataServices() ([]pds.ModelsDataService, error) {
 	return dsModels.GetData(), err
 }
 
-func (ds *DataService) GetDataService(dataServiceId string) (*pds.ModelsDataService, error) {
+// GetDataService func
+func (ds *DataService) GetDataService(dataServiceID string) (*pds.ModelsDataService, error) {
 	dsClient := ds.apiClient.DataServicesApi
-	dsModel, res, err := dsClient.ApiDataServicesIdGet(ds.context, dataServiceId).Execute()
+	dsModel, res, err := dsClient.ApiDataServicesIdGet(ds.context, dataServiceID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDataServicesIdGet``: %v\n", err)

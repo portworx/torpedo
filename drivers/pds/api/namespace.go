@@ -9,14 +9,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Namespace struct
 type Namespace struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (ns *Namespace) ListNamespaces(targetId string) ([]pds.ModelsNamespace, error) {
+// ListNamespaces func
+func (ns *Namespace) ListNamespaces(targetID string) ([]pds.ModelsNamespace, error) {
 	nsClient := ns.apiClient.NamespacesApi
-	nsModels, res, err := nsClient.ApiDeploymentTargetsIdNamespacesGet(ns.context, targetId).Execute()
+	nsModels, res, err := nsClient.ApiDeploymentTargetsIdNamespacesGet(ns.context, targetID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDeploymentTargetsIdNamespacesGet``: %v\n", err)
@@ -25,11 +27,12 @@ func (ns *Namespace) ListNamespaces(targetId string) ([]pds.ModelsNamespace, err
 	return nsModels.GetData(), err
 }
 
-func (ns *Namespace) CreateNamespace(targetId string, name string) (*pds.ModelsNamespace, error) {
+// CreateNamespace func
+func (ns *Namespace) CreateNamespace(targetID string, name string) (*pds.ModelsNamespace, error) {
 	nsClient := ns.apiClient.NamespacesApi
 
 	createRequest := pds.ControllersCreateNamespace{Name: &name}
-	nsModel, res, err := nsClient.ApiDeploymentTargetsIdNamespacesPost(ns.context, targetId).Body(createRequest).Execute()
+	nsModel, res, err := nsClient.ApiDeploymentTargetsIdNamespacesPost(ns.context, targetID).Body(createRequest).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDeploymentTargetsIdNamespacesPost``: %v\n", err)
@@ -39,10 +42,11 @@ func (ns *Namespace) CreateNamespace(targetId string, name string) (*pds.ModelsN
 	return nsModel, nil
 }
 
-func (ns *Namespace) GetNamespace(namespaceId string) (*pds.ModelsNamespace, error) {
+// GetNamespace func
+func (ns *Namespace) GetNamespace(namespaceID string) (*pds.ModelsNamespace, error) {
 	nsClient := ns.apiClient.NamespacesApi
 
-	nsModel, res, err := nsClient.ApiNamespacesIdGet(ns.context, namespaceId).Execute()
+	nsModel, res, err := nsClient.ApiNamespacesIdGet(ns.context, namespaceID).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiNamespacesIdGet``: %v\n", err)
@@ -52,10 +56,11 @@ func (ns *Namespace) GetNamespace(namespaceId string) (*pds.ModelsNamespace, err
 	return nsModel, nil
 }
 
-func (ns *Namespace) DeleteNamespace(namespaceId string) (*status.Response, error) {
+// DeleteNamespace func
+func (ns *Namespace) DeleteNamespace(namespaceID string) (*status.Response, error) {
 	nsClient := ns.apiClient.NamespacesApi
 
-	res, err := nsClient.ApiNamespacesIdDelete(ns.context, namespaceId).Execute()
+	res, err := nsClient.ApiNamespacesIdDelete(ns.context, namespaceID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiNamespacesIdDelete``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)

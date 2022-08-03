@@ -8,14 +8,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Backup struct
 type Backup struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (backup *Backup) ListBackup(deploymentId string) ([]pds.ModelsBackup, error) {
+// ListBackup func
+func (backup *Backup) ListBackup(deploymentID string) ([]pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
-	backupModels, res, err := backupClient.ApiDeploymentsIdBackupsGet(backup.context, deploymentId).Execute()
+	backupModels, res, err := backupClient.ApiDeploymentsIdBackupsGet(backup.context, deploymentID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDeploymentsIdBackupsGet``: %v\n", err)
@@ -23,9 +25,11 @@ func (backup *Backup) ListBackup(deploymentId string) ([]pds.ModelsBackup, error
 	}
 	return backupModels.GetData(), err
 }
-func (backup *Backup) ListBackupsBelongToTarget(backupTargetId string) ([]pds.ModelsBackup, error) {
+
+// ListBackupsBelongToTarget func
+func (backup *Backup) ListBackupsBelongToTarget(backupTargetID string) ([]pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
-	backupModels, res, err := backupClient.ApiBackupTargetsIdBackupsGet(backup.context, backupTargetId).Execute()
+	backupModels, res, err := backupClient.ApiBackupTargetsIdBackupsGet(backup.context, backupTargetID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupTargetsIdBackupsGet``: %v\n", err)
@@ -34,9 +38,10 @@ func (backup *Backup) ListBackupsBelongToTarget(backupTargetId string) ([]pds.Mo
 	return backupModels.GetData(), err
 }
 
-func (backup *Backup) GetBackup(backupId string) (*pds.ModelsBackup, error) {
+// GetBackup func
+func (backup *Backup) GetBackup(backupID string) (*pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
-	backuptModel, res, err := backupClient.ApiBackupsIdGet(backup.context, backupId).Execute()
+	backuptModel, res, err := backupClient.ApiBackupsIdGet(backup.context, backupID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupsIdGet``: %v\n", err)
@@ -45,7 +50,8 @@ func (backup *Backup) GetBackup(backupId string) (*pds.ModelsBackup, error) {
 	return backuptModel, err
 }
 
-func (backup *Backup) CreateBackup(deploymentId string, backupTargetId string, jobHistoryLimit int32, isAdhoc bool) (*pds.ModelsBackup, error) {
+// CreateBackup func
+func (backup *Backup) CreateBackup(deploymentID string, backupTargetID string, jobHistoryLimit int32, isAdhoc bool) (*pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
 	backupType := "adhoc"
 	if !isAdhoc {
@@ -54,11 +60,11 @@ func (backup *Backup) CreateBackup(deploymentId string, backupTargetId string, j
 	backupLevel := "snapshot"
 	createRequest := pds.ControllersCreateDeploymentBackup{
 		BackupLevel:     &backupLevel,
-		BackupTargetId:  &backupTargetId,
+		BackupTargetId:  &backupTargetID,
 		BackupType:      &backupType,
 		JobHistoryLimit: &jobHistoryLimit,
 	}
-	backuptModel, res, err := backupClient.ApiDeploymentsIdBackupsPost(backup.context, deploymentId).Body(createRequest).Execute()
+	backuptModel, res, err := backupClient.ApiDeploymentsIdBackupsPost(backup.context, deploymentID).Body(createRequest).Execute()
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDeploymentsIdBackupsPost``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
@@ -67,12 +73,13 @@ func (backup *Backup) CreateBackup(deploymentId string, backupTargetId string, j
 
 }
 
-func (backup *Backup) UpdateBackup(backupId string, jobHistoryLimit int32) (*pds.ModelsBackup, error) {
+// UpdateBackup func
+func (backup *Backup) UpdateBackup(backupID string, jobHistoryLimit int32) (*pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
 	updateRequest := pds.ControllersUpdateBackupRequest{
 		JobHistoryLimit: &jobHistoryLimit,
 	}
-	backupTargetModel, res, err := backupClient.ApiBackupsIdPut(backup.context, backupId).Body(updateRequest).Execute()
+	backupTargetModel, res, err := backupClient.ApiBackupsIdPut(backup.context, backupID).Body(updateRequest).Execute()
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupsIdPut``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
@@ -80,9 +87,11 @@ func (backup *Backup) UpdateBackup(backupId string, jobHistoryLimit int32) (*pds
 	return backupTargetModel, err
 
 }
-func (backup *Backup) DeleteBackupJobs(backupId string, jobName string) (*status.Response, error) {
+
+// DeleteBackupJobs func
+func (backup *Backup) DeleteBackupJobs(backupID string, jobName string) (*status.Response, error) {
 	backupClient := backup.apiClient.BackupsApi
-	res, err := backupClient.ApiBackupsIdJobsNameDelete(backup.context, backupId, jobName).Execute()
+	res, err := backupClient.ApiBackupsIdJobsNameDelete(backup.context, backupID, jobName).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupsIdJobsNameDelete``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
@@ -91,9 +100,10 @@ func (backup *Backup) DeleteBackupJobs(backupId string, jobName string) (*status
 	return res, nil
 }
 
-func (backup *Backup) DeleteBackup(backupId string) (*status.Response, error) {
+// DeleteBackup func
+func (backup *Backup) DeleteBackup(backupID string) (*status.Response, error) {
 	backupClient := backup.apiClient.BackupsApi
-	res, err := backupClient.ApiBackupsIdDelete(backup.context, backupId).Execute()
+	res, err := backupClient.ApiBackupsIdDelete(backup.context, backupID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupsIdDelete``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)

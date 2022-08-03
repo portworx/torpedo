@@ -8,14 +8,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// BackupPolicy struct
 type BackupPolicy struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (backupPolicy *BackupPolicy) ListBackupPolicy(tenantId string) ([]pds.ModelsBackupPolicy, error) {
+// ListBackupPolicy func
+func (backupPolicy *BackupPolicy) ListBackupPolicy(tenantID string) ([]pds.ModelsBackupPolicy, error) {
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
-	backupModels, res, err := backupClient.ApiTenantsIdBackupPoliciesGet(backupPolicy.context, tenantId).Execute()
+	backupModels, res, err := backupClient.ApiTenantsIdBackupPoliciesGet(backupPolicy.context, tenantID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiTenantsIdBackupPoliciesGet``: %v\n", err)
@@ -24,9 +26,10 @@ func (backupPolicy *BackupPolicy) ListBackupPolicy(tenantId string) ([]pds.Model
 	return backupModels.GetData(), err
 }
 
-func (backupPolicy *BackupPolicy) GetBackupPolicy(backupCredId string) (*pds.ModelsBackupPolicy, error) {
+// GetBackupPolicy func
+func (backupPolicy *BackupPolicy) GetBackupPolicy(backupCredID string) (*pds.ModelsBackupPolicy, error) {
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
-	backupPolicyModel, res, err := backupClient.ApiBackupPoliciesIdGet(backupPolicy.context, backupCredId).Execute()
+	backupPolicyModel, res, err := backupClient.ApiBackupPoliciesIdGet(backupPolicy.context, backupCredID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupPoliciesIdGet``: %v\n", err)
@@ -35,7 +38,8 @@ func (backupPolicy *BackupPolicy) GetBackupPolicy(backupCredId string) (*pds.Mod
 	return backupPolicyModel, err
 }
 
-func (backupPolicy *BackupPolicy) CreateBackupPolicy(tenantId string, name string, retentionCount int32, scheduleCronExpression string, backupType string) (*pds.ModelsBackupPolicy, error) {
+// CreateBackupPolicy func
+func (backupPolicy *BackupPolicy) CreateBackupPolicy(tenantID string, name string, retentionCount int32, scheduleCronExpression string, backupType string) (*pds.ModelsBackupPolicy, error) {
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
 	modelBackupSchedule := []pds.ModelsBackupSchedule{{
 		RetentionCount: &retentionCount,
@@ -46,7 +50,7 @@ func (backupPolicy *BackupPolicy) CreateBackupPolicy(tenantId string, name strin
 		Schedules: modelBackupSchedule,
 		Name:      &name,
 	}
-	backupPolicyModel, res, err := backupClient.ApiTenantsIdBackupPoliciesPost(backupPolicy.context, tenantId).Body(createRequest).Execute()
+	backupPolicyModel, res, err := backupClient.ApiTenantsIdBackupPoliciesPost(backupPolicy.context, tenantID).Body(createRequest).Execute()
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiTenantsIdBackupPoliciesPost``: %v\n", err)
 		log.Error("Full HTTP response: %v\n", res)
@@ -54,7 +58,9 @@ func (backupPolicy *BackupPolicy) CreateBackupPolicy(tenantId string, name strin
 	return backupPolicyModel, err
 
 }
-func (backupPolicy *BackupPolicy) UpdateBackupPolicy(backupCredsId string, name string, retentionCount int32, scheduleCronExpression string, backupType string) (*pds.ModelsBackupPolicy, error) {
+
+// UpdateBackupPolicy func
+func (backupPolicy *BackupPolicy) UpdateBackupPolicy(backupCredsID string, name string, retentionCount int32, scheduleCronExpression string, backupType string) (*pds.ModelsBackupPolicy, error) {
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
 	modelBackupSchedule := []pds.ModelsBackupSchedule{{
 		RetentionCount: &retentionCount,
@@ -65,7 +71,7 @@ func (backupPolicy *BackupPolicy) UpdateBackupPolicy(backupCredsId string, name 
 		Schedules: modelBackupSchedule,
 		Name:      &name,
 	}
-	backupPolicyModel, res, err := backupClient.ApiBackupPoliciesIdPut(backupPolicy.context, backupCredsId).Body(updateRequest).Execute()
+	backupPolicyModel, res, err := backupClient.ApiBackupPoliciesIdPut(backupPolicy.context, backupCredsID).Body(updateRequest).Execute()
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupPoliciesIdPut``: %v\n", err)
 		log.Error("Full HTTP response: %v\n", res)
@@ -74,9 +80,10 @@ func (backupPolicy *BackupPolicy) UpdateBackupPolicy(backupCredsId string, name 
 
 }
 
-func (backupPolicy *BackupPolicy) DeleteBackupPolicy(backupCredsId string) (*status.Response, error) {
+// DeleteBackupPolicy func
+func (backupPolicy *BackupPolicy) DeleteBackupPolicy(backupCredsID string) (*status.Response, error) {
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
-	res, err := backupClient.ApiBackupPoliciesIdDelete(backupPolicy.context, backupCredsId).Execute()
+	res, err := backupClient.ApiBackupPoliciesIdDelete(backupPolicy.context, backupCredsID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupPoliciesIdDelete``: %v\n", err)
 		log.Error("Full HTTP response: %v\n", res)

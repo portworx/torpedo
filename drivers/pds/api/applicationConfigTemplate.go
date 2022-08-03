@@ -9,14 +9,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// AppConfigTemplate struct
 type AppConfigTemplate struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (at *AppConfigTemplate) ListTemplates(tenantId string) ([]pds.ModelsApplicationConfigurationTemplate, error) {
+// ListTemplates func
+func (at *AppConfigTemplate) ListTemplates(tenantID string) ([]pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
-	atModel, res, err := atClient.ApiTenantsIdApplicationConfigurationTemplatesGet(at.context, tenantId).Execute()
+	atModel, res, err := atClient.ApiTenantsIdApplicationConfigurationTemplatesGet(at.context, tenantID).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiTenantsIdApplicationConfigurationTemplatesGet``: %v\n", err)
@@ -26,10 +28,11 @@ func (at *AppConfigTemplate) ListTemplates(tenantId string) ([]pds.ModelsApplica
 	return atModel.GetData(), nil
 }
 
-func (at *AppConfigTemplate) GetTemplate(templateId string) (*pds.ModelsApplicationConfigurationTemplate, error) {
+// GetTemplate func
+func (at *AppConfigTemplate) GetTemplate(templateID string) (*pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
-	log.Infof("Get list of storage templates for tenant ID - %v", templateId)
-	atModel, res, err := atClient.ApiApplicationConfigurationTemplatesIdGet(at.context, templateId).Execute()
+	log.Infof("Get list of storage templates for tenant ID - %v", templateID)
+	atModel, res, err := atClient.ApiApplicationConfigurationTemplatesIdGet(at.context, templateID).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiApplicationConfigurationTemplatesIdGet``: %v\n", err)
@@ -39,11 +42,12 @@ func (at *AppConfigTemplate) GetTemplate(templateId string) (*pds.ModelsApplicat
 	return atModel, nil
 }
 
-func (at *AppConfigTemplate) CreateTemplate(tenantId string, dataServiceId string, name string, data []pds.ModelsConfigItem) (*pds.ModelsApplicationConfigurationTemplate, error) {
+// CreateTemplate func
+func (at *AppConfigTemplate) CreateTemplate(tenantID string, dataServiceID string, name string, data []pds.ModelsConfigItem) (*pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	log.Info("Create new resource template.")
-	createRequest := pds.ControllersCreateApplicationConfigurationTemplatesRequest{ConfigItems: data, DataServiceId: &dataServiceId, Name: &name}
-	atModel, res, err := atClient.ApiTenantsIdApplicationConfigurationTemplatesPost(at.context, tenantId).Body(createRequest).Execute()
+	createRequest := pds.ControllersCreateApplicationConfigurationTemplatesRequest{ConfigItems: data, DataServiceId: &dataServiceID, Name: &name}
+	atModel, res, err := atClient.ApiTenantsIdApplicationConfigurationTemplatesPost(at.context, tenantID).Body(createRequest).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiTenantsIdApplicationConfigurationTemplatesPost``: %v\n", err)
@@ -53,12 +57,13 @@ func (at *AppConfigTemplate) CreateTemplate(tenantId string, dataServiceId strin
 	return atModel, nil
 }
 
-func (at *AppConfigTemplate) UpdateTemplate(templateId string, deployTime bool, key string, value string, name string) (*pds.ModelsApplicationConfigurationTemplate, error) {
+// UpdateTemplate func
+func (at *AppConfigTemplate) UpdateTemplate(templateID string, deployTime bool, key string, value string, name string) (*pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	log.Info("Create new resource template.")
 	data := []pds.ModelsConfigItem{{DeployTime: &deployTime, Key: &key, Value: &value}}
 	updateRequest := pds.ControllersUpdateApplicationConfigurationTemplateRequest{ConfigItems: data, Name: &name}
-	atModel, res, err := atClient.ApiApplicationConfigurationTemplatesIdPut(at.context, templateId).Body(updateRequest).Execute()
+	atModel, res, err := atClient.ApiApplicationConfigurationTemplatesIdPut(at.context, templateID).Body(updateRequest).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiApplicationConfigurationTemplatesIdPut``: %v\n", err)
@@ -68,10 +73,11 @@ func (at *AppConfigTemplate) UpdateTemplate(templateId string, deployTime bool, 
 	return atModel, nil
 }
 
-func (at *AppConfigTemplate) DeleteTemplate(templateId string) (*status.Response, error) {
+// DeleteTemplate func
+func (at *AppConfigTemplate) DeleteTemplate(templateID string) (*status.Response, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
-	log.Infof("Get list of storage templates for tenant ID - %v", templateId)
-	res, err := atClient.ApiApplicationConfigurationTemplatesIdDelete(at.context, templateId).Execute()
+	log.Infof("Get list of storage templates for tenant ID - %v", templateID)
+	res, err := atClient.ApiApplicationConfigurationTemplatesIdDelete(at.context, templateID).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiApplicationConfigurationTemplatesIdDelete``: %v\n", err)

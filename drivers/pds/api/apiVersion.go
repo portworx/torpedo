@@ -9,12 +9,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type ApiVersion struct {
+// PDSVersion struct
+type PDSVersion struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (v *ApiVersion) GetHelmChartVersion() (string, error) {
+// GetHelmChartVersion func
+func (v *PDSVersion) GetHelmChartVersion() (string, error) {
 	versionClient := v.apiClient.APIVersionApi
 	versionModel, res, err := versionClient.ApiVersionGet(v.context).Execute()
 	if res.StatusCode != status.StatusOK {

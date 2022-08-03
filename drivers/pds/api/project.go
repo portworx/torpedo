@@ -8,15 +8,17 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Project struct
 type Project struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (project *Project) GetprojectsList(tenantId string) ([]pds.ModelsProject, error) {
+// GetprojectsList func
+func (project *Project) GetprojectsList(tenantID string) ([]pds.ModelsProject, error) {
 	projectClient := project.apiClient.ProjectsApi
 	log.Info("Get list of Projects.")
-	projectsModel, res, err := projectClient.ApiTenantsIdProjectsGet(project.context, tenantId).Execute()
+	projectsModel, res, err := projectClient.ApiTenantsIdProjectsGet(project.context, tenantID).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiTenantsIdProjectsGet``: %v\n", err)
@@ -26,10 +28,11 @@ func (project *Project) GetprojectsList(tenantId string) ([]pds.ModelsProject, e
 	return projectsModel.GetData(), nil
 }
 
-func (project *Project) Getproject(projectId string) (*pds.ModelsProject, error) {
+// Getproject func
+func (project *Project) Getproject(projectID string) (*pds.ModelsProject, error) {
 	projectClient := project.apiClient.ProjectsApi
 	log.Info("Get the project details.")
-	projectModel, res, err := projectClient.ApiProjectsIdGet(project.context, projectId).Execute()
+	projectModel, res, err := projectClient.ApiProjectsIdGet(project.context, projectID).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiProjectsIdGet``: %v\n", err)

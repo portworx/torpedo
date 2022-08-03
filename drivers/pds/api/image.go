@@ -8,15 +8,17 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Image struct
 type Image struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (img *Image) ListImages(versionId string) ([]pds.ModelsImage, error) {
+// ListImages func
+func (img *Image) ListImages(versionID string) ([]pds.ModelsImage, error) {
 	imgClient := img.apiClient.ImagesApi
 
-	imgModels, res, err := imgClient.ApiVersionsIdImagesGet(img.context, versionId).Execute()
+	imgModels, res, err := imgClient.ApiVersionsIdImagesGet(img.context, versionID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiVersionsIdImagesGet``: %v\n", err)
@@ -25,10 +27,11 @@ func (img *Image) ListImages(versionId string) ([]pds.ModelsImage, error) {
 	return imgModels.GetData(), err
 }
 
-func (img *Image) GetImage(imageId string) (*pds.ModelsImage, error) {
+// GetImage func
+func (img *Image) GetImage(imageID string) (*pds.ModelsImage, error) {
 	imgClient := img.apiClient.ImagesApi
 
-	imgModel, res, err := imgClient.ApiImagesIdGet(img.context, imageId).Execute()
+	imgModel, res, err := imgClient.ApiImagesIdGet(img.context, imageID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiImagesIdGet``: %v\n", err)

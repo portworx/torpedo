@@ -9,15 +9,17 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// AccountRoleBinding struct
 type AccountRoleBinding struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (accountRoleBinding *AccountRoleBinding) ListAccountsRoleBindings(accountId string) ([]pds.ModelsAccountRoleBinding, error) {
+// ListAccountsRoleBindings func
+func (accountRoleBinding *AccountRoleBinding) ListAccountsRoleBindings(accountID string) ([]pds.ModelsAccountRoleBinding, error) {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
 	log.Info("List Account Role Bindings.")
-	accountRoleBindings, res, err := client.ApiAccountsIdRoleBindingsGet(accountRoleBinding.context, accountId).Execute()
+	accountRoleBindings, res, err := client.ApiAccountsIdRoleBindingsGet(accountRoleBinding.context, accountID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiAccountsIdRoleBindingsGet``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
@@ -26,9 +28,10 @@ func (accountRoleBinding *AccountRoleBinding) ListAccountsRoleBindings(accountId
 	return accountRoleBindings.GetData(), nil
 }
 
-func (accountRoleBinding *AccountRoleBinding) ListAccountRoleBindingsOfUser(userId string) ([]pds.ModelsAccountRoleBinding, error) {
+// ListAccountRoleBindingsOfUser func
+func (accountRoleBinding *AccountRoleBinding) ListAccountRoleBindingsOfUser(userID string) ([]pds.ModelsAccountRoleBinding, error) {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
-	accRoleModels, res, err := client.ApiUsersIdAccountRoleBindingsGet(accountRoleBinding.context, userId).Execute()
+	accRoleModels, res, err := client.ApiUsersIdAccountRoleBindingsGet(accountRoleBinding.context, userID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiUsersIdAccountRoleBindingsGet``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
@@ -37,11 +40,12 @@ func (accountRoleBinding *AccountRoleBinding) ListAccountRoleBindingsOfUser(user
 	return accRoleModels.GetData(), nil
 }
 
-func (accountRoleBinding *AccountRoleBinding) UpdateAccountRoleBinding(accountId string, actorId string, actorType string, roleName string) (*pds.ModelsAccountRoleBinding, error) {
+// UpdateAccountRoleBinding func
+func (accountRoleBinding *AccountRoleBinding) UpdateAccountRoleBinding(accountID string, actorID string, actorType string, roleName string) (*pds.ModelsAccountRoleBinding, error) {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
-	updateReq := pds.ControllersUpsertAccountRoleBindingRequest{ActorId: &actorId, ActorType: &actorType, RoleName: &roleName}
+	updateReq := pds.ControllersUpsertAccountRoleBindingRequest{ActorId: &actorID, ActorType: &actorType, RoleName: &roleName}
 	log.Info("Get list of Accounts.")
-	accRoleBinding, res, err := client.ApiAccountsIdRoleBindingsPut(accountRoleBinding.context, accountId).Body(updateReq).Execute()
+	accRoleBinding, res, err := client.ApiAccountsIdRoleBindingsPut(accountRoleBinding.context, accountID).Body(updateReq).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiAccountsIdRoleBindingsPut``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
@@ -50,7 +54,8 @@ func (accountRoleBinding *AccountRoleBinding) UpdateAccountRoleBinding(accountId
 	return accRoleBinding, nil
 }
 
-func (accountRoleBinding *AccountRoleBinding) AddUser(accountId string, email string, isAdmin bool) error {
+// AddUser func
+func (accountRoleBinding *AccountRoleBinding) AddUser(accountID string, email string, isAdmin bool) error {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
 	rBinding := "account-reader"
 	if isAdmin {
@@ -58,7 +63,7 @@ func (accountRoleBinding *AccountRoleBinding) AddUser(accountId string, email st
 	}
 	invitationRequest := pds.ControllersInvitationRequest{Email: &email, RoleName: &rBinding}
 	log.Info("Get list of Accounts.")
-	res, err := client.ApiAccountsIdInvitationsPost(accountRoleBinding.context, accountId).Body(invitationRequest).Execute()
+	res, err := client.ApiAccountsIdInvitationsPost(accountRoleBinding.context, accountID).Body(invitationRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiAccountsIdInvitationsPost``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)

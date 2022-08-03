@@ -9,14 +9,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Version struct
 type Version struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (v *Version) ListDataServiceVersions(dataServiceId string) ([]pds.ModelsVersion, error) {
+// ListDataServiceVersions func
+func (v *Version) ListDataServiceVersions(dataServiceID string) ([]pds.ModelsVersion, error) {
 	versionClient := v.apiClient.VersionsApi
-	versionModels, res, err := versionClient.ApiDataServicesIdVersionsGet(v.context, dataServiceId).Execute()
+	versionModels, res, err := versionClient.ApiDataServicesIdVersionsGet(v.context, dataServiceID).Execute()
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDataServicesIdVersionsGet``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
@@ -24,9 +26,10 @@ func (v *Version) ListDataServiceVersions(dataServiceId string) ([]pds.ModelsVer
 	return versionModels.GetData(), err
 }
 
-func (v *Version) GetVersion(versionId string) (*pds.ModelsVersion, error) {
+// GetVersion func
+func (v *Version) GetVersion(versionID string) (*pds.ModelsVersion, error) {
 	versionClient := v.apiClient.VersionsApi
-	versionModel, res, err := versionClient.ApiVersionsIdGet(v.context, versionId).Execute()
+	versionModel, res, err := versionClient.ApiVersionsIdGet(v.context, versionID).Execute()
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiVersionsIdGet``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)

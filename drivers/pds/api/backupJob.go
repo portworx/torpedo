@@ -8,14 +8,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// BackupJob struct
 type BackupJob struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (backupJob *BackupJob) ListBackupJobs(backupId string) ([]pds.ControllersBackupJobStatus, error) {
+// ListBackupJobs func
+func (backupJob *BackupJob) ListBackupJobs(backupID string) ([]pds.ControllersBackupJobStatus, error) {
 	backupJobClient := backupJob.apiClient.BackupJobsApi
-	backupJobModels, res, err := backupJobClient.ApiBackupsIdJobsGet(backupJob.context, backupId).Execute()
+	backupJobModels, res, err := backupJobClient.ApiBackupsIdJobsGet(backupJob.context, backupID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupsIdJobsGet``: %v\n", err)
@@ -24,9 +26,10 @@ func (backupJob *BackupJob) ListBackupJobs(backupId string) ([]pds.ControllersBa
 	return backupJobModels.GetData(), err
 }
 
-func (backupJob *BackupJob) GetBackupJob(backupJobId string) (*pds.ModelsBackupJob, error) {
+// GetBackupJob func
+func (backupJob *BackupJob) GetBackupJob(backupJobID string) (*pds.ModelsBackupJob, error) {
 	backupJobClient := backupJob.apiClient.BackupJobsApi
-	backupJobModel, res, err := backupJobClient.ApiBackupJobsIdGet(backupJob.context, backupJobId).Execute()
+	backupJobModel, res, err := backupJobClient.ApiBackupJobsIdGet(backupJob.context, backupJobID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupJobsIdGet``: %v\n", err)

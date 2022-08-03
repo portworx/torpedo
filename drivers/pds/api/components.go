@@ -7,10 +7,7 @@ import (
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 )
 
-/*
-	Components struct comprise of all the component stuct to
-	leverage the usage of the functionality and act as entry point.
-*/
+// Components struct comprise of all the component stuct to leverage the usage of the functionality and act as entry point.
 type Components struct {
 	Account                  *Account
 	Tenant                   *Tenant
@@ -30,17 +27,11 @@ type Components struct {
 	BackupJob                *BackupJob
 	BackupTarget             *BackupTarget
 	BackupPolicy             *BackupPolicy
-	ApiVersion               *ApiVersion
+	APIVersion               *PDSVersion
 	ServiceAccount           *ServiceAccount
 }
 
-/*
-	NewComponents create a struct literal that can be leveraged to call all the components functions.
-
-	@param ctx context.Context - Context for authentication api request for the components.
-	@param apiClient *pds.APIClient - PDS api client to invoke API request.
-	@return *Component
-*/
+// NewComponents create a struct literal that can be leveraged to call all the components functions.
 func NewComponents(ctx context.Context, apiClient *pds.APIClient) *Components {
 	return &Components{
 		Account: &Account{
@@ -115,7 +106,7 @@ func NewComponents(ctx context.Context, apiClient *pds.APIClient) *Components {
 			context:   ctx,
 			apiClient: apiClient,
 		},
-		ApiVersion: &ApiVersion{
+		APIVersion: &PDSVersion{
 			context:   ctx,
 			apiClient: apiClient,
 		},

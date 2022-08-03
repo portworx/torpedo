@@ -8,15 +8,17 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// DeploymentTarget struct
 type DeploymentTarget struct {
 	context   context.Context
 	apiClient *pds.APIClient
 }
 
-func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToTenant(tenantId string) ([]pds.ModelsDeploymentTarget, error) {
+// ListDeploymentTargetsBelongsToTenant func
+func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToTenant(tenantID string) ([]pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
 
-	dtModels, res, err := dtClient.ApiTenantsIdDeploymentTargetsGet(dt.context, tenantId).Execute()
+	dtModels, res, err := dtClient.ApiTenantsIdDeploymentTargetsGet(dt.context, tenantID).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiTenantsIdDeploymentTargetsGet``: %v\n", err)
@@ -26,10 +28,11 @@ func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToTenant(tenantId string
 	return dtModels.GetData(), nil
 }
 
-func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToProject(projectId string) ([]pds.ModelsDeploymentTarget, error) {
+// ListDeploymentTargetsBelongsToProject func
+func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToProject(projectID string) ([]pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
 
-	dtModels, res, err := dtClient.ApiProjectsIdDeploymentTargetsGet(dt.context, projectId).Execute()
+	dtModels, res, err := dtClient.ApiProjectsIdDeploymentTargetsGet(dt.context, projectID).Execute()
 
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiProjectsIdDeploymentTargetsGet``: %v\n", err)
@@ -39,10 +42,11 @@ func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToProject(projectId stri
 	return dtModels.GetData(), nil
 }
 
-func (dt *DeploymentTarget) GetTarget(targetId string) (*pds.ModelsDeploymentTarget, error) {
+// GetTarget func
+func (dt *DeploymentTarget) GetTarget(targetID string) (*pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
-	log.Infof("Get cluster details having uuid - %v", targetId)
-	dtModel, res, err := dtClient.ApiDeploymentTargetsIdGet(dt.context, targetId).Execute()
+	log.Infof("Get cluster details having uuid - %v", targetID)
+	dtModel, res, err := dtClient.ApiDeploymentTargetsIdGet(dt.context, targetID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDeploymentTargetsIdGet``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
@@ -51,11 +55,12 @@ func (dt *DeploymentTarget) GetTarget(targetId string) (*pds.ModelsDeploymentTar
 	return dtModel, nil
 }
 
-func (dt *DeploymentTarget) UpdateTarget(targetId string, name string) (*pds.ModelsDeploymentTarget, error) {
+// UpdateTarget func
+func (dt *DeploymentTarget) UpdateTarget(targetID string, name string) (*pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
-	log.Infof("Get cluster details having uuid - %v", targetId)
+	log.Infof("Get cluster details having uuid - %v", targetID)
 	upateRequest := pds.ControllersUpdateDeploymentTargetRequest{Name: &name}
-	dtModel, res, err := dtClient.ApiDeploymentTargetsIdPut(dt.context, targetId).Body(upateRequest).Execute()
+	dtModel, res, err := dtClient.ApiDeploymentTargetsIdPut(dt.context, targetID).Body(upateRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDeploymentTargetsIdPut``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
@@ -64,10 +69,11 @@ func (dt *DeploymentTarget) UpdateTarget(targetId string, name string) (*pds.Mod
 	return dtModel, nil
 }
 
-func (dt *DeploymentTarget) DeleteTarget(targetId string) (*status.Response, error) {
+// DeleteTarget func
+func (dt *DeploymentTarget) DeleteTarget(targetID string) (*status.Response, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
-	log.Infof("Get cluster details having uuid - %v", targetId)
-	res, err := dtClient.ApiDeploymentTargetsIdDelete(dt.context, targetId).Execute()
+	log.Infof("Get cluster details having uuid - %v", targetID)
+	res, err := dtClient.ApiDeploymentTargetsIdDelete(dt.context, targetID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDeploymentTargetsIdDelete``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
