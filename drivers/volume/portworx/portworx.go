@@ -3187,12 +3187,21 @@ func (d *portworx) GetClusterID(n node.Node, opts node.ConnectionOpts) (string, 
 }
 
 func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps torpedovolume.DiagOps, d *portworx) error {
-	var err error
+	var hostname string
+	var status api.Status
 
-	pxNode, err := d.GetPxNode(&n)
-	if err != nil {
-		return err
+	if !diagOps.PxStopped {
+		pxNode, err := d.GetPxNode(&n)
+		if err != nil {
+			return err
+		}
+		hostname = pxNode.Hostname
+		status = pxNode.Status
+	} else {
+		hostname = n.Name
+		status = api.Status_STATUS_OFFLINE
 	}
+
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -3201,16 +3210,16 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	}
 
 	if !diagOps.Validate {
-		logrus.Infof("Collecting diags on node %v. Will skip validation", pxNode.Hostname)
+		logrus.Infof("Collecting diags on node %v. Will skip validation", hostname)
 	}
 
-	if pxNode.Status == api.Status_STATUS_OFFLINE {
-		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
+	if status == api.Status_STATUS_OFFLINE {
+		logrus.Debugf("Node %v is offline, collecting diags using pxctl", hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
 		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f --output %s", d.getPxctlPath(n), config.OutputFile), opts)
 		if err != nil {
-			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", hostname, err, out)
 		}
 	} else {
 		url := netutil.MakeURL("http://", n.Addresses[0], 9014)
@@ -3223,7 +3232,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 
 		resp := req.Do()
 		if resp.Error() != nil {
-			return fmt.Errorf("failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
+			return fmt.Errorf("failed to collect diags on node %v, Err: %v", hostname, resp.Error())
 		}
 	}
 
@@ -3231,7 +3240,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
-			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", hostname, err, out)
 		}
 
 		pxctlPath := d.getPxctlPath(n)
@@ -3249,7 +3258,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		d.DiagsFile = config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
 	}
 
-	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+	logrus.Debugf("Successfully collected diags on node %v", hostname)
 	return nil
 }
 
