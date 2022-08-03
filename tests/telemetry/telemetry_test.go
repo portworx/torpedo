@@ -241,7 +241,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 							}
 						}
 						return false
-					}, 1*time.Minute, 5*time.Second).Should(BeTrue(), "'%s': failed to generate auto diags on node %s",
+					}, 5*time.Minute, 15*time.Second).Should(BeTrue(), "'%s': failed to generate auto diags on node %s",
 						pxProcessNm, currNode.Name)
 				})
 				/// Need to validate new auto diags
