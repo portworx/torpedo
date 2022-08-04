@@ -3533,9 +3533,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 				UpdateOutcome(event, err)
 			}
 		}
-
 	}
-
 }
 
 // TriggerPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
@@ -3651,62 +3649,16 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 		Step("start the volume driver upgrade", func() {
 			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 			if IsOperatorBasedInstall {
-				logrus.Info("Initiating operator based install upgrade")
-				operatorTag, err := getOperatorLatestVersion()
-				UpdateOutcome(event, err)
-				if operatorTag != "" {
-					operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
-					logrus.Info(operatorImage)
-					err = Inst().V.UpdateStorageClusterImage(operatorImage)
+				status, err := UpgradePxStorageCluster()
+				if status {
+					logrus.Info("Volume Driver upgrade is successful")
+				} else {
+					logrus.Error("Volume Driver upgrade failed")
 					UpdateOutcome(event, err)
-					if err == nil {
-						expectedTag := strings.Split(operatorImage, "_")[1]
-						expectedVersion := fmt.Sprintf("%v-%v", Inst().StorageDriverUpgradeEndpointVersion, expectedTag)
-
-						nodes := node.GetStorageDriverNodes()
-						for _, n := range nodes {
-							isUpgradeDone := false
-							isExit := false
-							waitCount := 10
-							for !isUpgradeDone && !isExit {
-								err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-								if err == nil {
-									pxVersion, err := Inst().V.GetPxVersionOnNode(n)
-									UpdateOutcome(event, err)
-									if err == nil {
-										if pxVersion == expectedVersion {
-											isUpgradeDone = true
-											logrus.Infof("Node [%x] successfully upgraded to %v", n.Name, pxVersion)
-										} else {
-											waitCount--
-											logrus.Infof("Waiting for 2 mins for PX upgrade to initiate on node: %v", n.Name)
-											time.Sleep(2 * time.Minute)
-											if waitCount == 0 {
-												isExit = true
-												err = fmt.Errorf("node [%x] upgrade to %v failed", n.Name, expectedVersion)
-												logrus.Error(err)
-												UpdateOutcome(event, err)
-											}
-
-										}
-
-									}
-
-								} else {
-									isExit = true
-									UpdateOutcome(event, err)
-
-								}
-							}
-
-						}
-
-					}
-
 				}
 
 			} else {
-				logrus.Info("Initiating Daemonset based install upgrade")
+				logrus.Info("Initiating Daemon set based install upgrade")
 				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
 					Inst().StorageDriverUpgradeEndpointVersion,
 					Inst().EnableStorkUpgrade)

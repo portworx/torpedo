@@ -2,18 +2,21 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/sirupsen/logrus"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -55,15 +58,43 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		}
 
 		ValidateApplications(contexts)
+		var timeBeforeUpgrade time.Time
+		var timeAfterUpgrade time.Time
 
 		Step("start the upgrade of volume driver", func() {
-			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
-				Inst().StorageDriverUpgradeEndpointVersion,
-				Inst().EnableStorkUpgrade)
-			Expect(err).NotTo(HaveOccurred())
+			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
+			if IsOperatorBasedInstall {
+				timeBeforeUpgrade = time.Now()
+				status, err := UpgradePxStorageCluster()
+				timeAfterUpgrade = time.Now()
+				if status {
+					logrus.Info("Volume Driver upgrade is successful")
+				} else {
+					logrus.Error("Volume Driver upgrade failed")
+				}
+				Expect(err).NotTo(HaveOccurred())
+
+			} else {
+				timeBeforeUpgrade = time.Now()
+				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
+					Inst().StorageDriverUpgradeEndpointVersion,
+					false)
+				timeAfterUpgrade = time.Now()
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+			expectedUpgradeTime := 3 * len(node.GetStorageDriverNodes())
+			if durationInMins <= expectedUpgradeTime {
+				logrus.Infof("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+			} else {
+				logrus.Errorf("Upgreade took %d minutes to completed which is greater than expected time %d minutee", durationInMins, expectedUpgradeTime)
+				Expect(durationInMins <= expectedUpgradeTime).To(BeTrue())
+			}
 		})
 
 		Step("reinstall and validate all apps after upgrade", func() {
+			logrus.Infof("Schedulings apps after upgrade")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradedvolumedriver-%d", i))...)
 			}
