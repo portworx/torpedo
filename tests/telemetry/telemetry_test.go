@@ -111,7 +111,7 @@ var _ = Describe("{DiagsBasic}", func() {
 
 // This test performs basic diags collection and validates them on S3 bucket
 var _ = Describe("{DiagsCCMOnS3}", func() {
-	var testrailIDs = [] int{54917, 54912, 54910, 54911}
+	var testrailIDs = [] int{54917, 54912, 54910}
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54917
 	var runIDs []int
 	JustBeforeEach(func() {
@@ -147,6 +147,56 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 		for i, testRailId := range testrailIDs{
 			AfterEachTest(contexts, testRailId, runIDs[i])
 		}
+	})
+})
+
+var _ = Describe("{ProfileOnlyDiags}", func() {
+	var testrailID = 54911
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54917
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	var diagsFiles []string
+	It("has to collect, validate profile diags on S3", func() {
+		contexts = make([]*scheduler.Context, 0)
+		// One node at a time, collect diags and verify in S3
+		for _, currNode := range node.GetWorkerNodes() {
+			Step(fmt.Sprintf("collect profile diags on node: %s | %s", currNode.Name, currNode.Type), func() {
+
+				config := &torpedovolume.DiagRequestConfig{
+					DockerHost:    "unix:///var/run/docker.sock",
+					Profile: true,
+				}
+				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
+				Expect(err).NotTo(HaveOccurred(), "Profile only diags collected successfully")
+				err = Inst().V.ValidateDiagsOnS3(currNode, "")
+				Expect(err).NotTo(HaveOccurred(), "Profile only diags validated on S3")
+			})
+			Step(fmt.Sprintf("Get the profile diags collected above %s", currNode.Name), func() {
+				logrus.Infof("Getting latest profile diags on %66v", currNode.Name)
+				out, err := runCmd(fmt.Sprintf("ls -t /var/cores/%s-*.{stack,heap}.gz | head -n 2", currNode.Name), currNode, nil)
+				if err != nil{
+					logrus.Fatalf("Error in getting profile diags files on: %s, err: %v", currNode.Name, err)
+				}
+				diagsFiles = strings.Split(out, "\n")
+			})
+			Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
+				for _, file := range diagsFiles {
+					fileNameToCheck := file[strings.LastIndex(file, "/")+1:]
+					logrus.Debugf("Validating file %s", fileNameToCheck)
+					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
+					Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
+				}
+			})
+		}
+		for _, ctx := range contexts {
+			TearDownContext(ctx, nil)
+		}
+	})
+	JustAfterEach(func() {
+			AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
