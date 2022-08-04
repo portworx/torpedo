@@ -86,7 +86,8 @@ var _ = Describe("{RebootOneNode}", func() {
 		apiConf := pds.NewConfiguration()
 		apiConf.Host = endpointURL.Host
 		apiConf.Scheme = endpointURL.Scheme
-		ctx := context.WithValue(context.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: GetBearerToken(), Prefix: "Bearer"}})
+		token, err := GetBearerToken()
+		ctx := context.WithValue(context.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: token, Prefix: "Bearer"}})
 		apiClient := pds.NewAPIClient(apiConf)
 		components = api.NewComponents(ctx, apiClient)
 
@@ -127,7 +128,10 @@ var _ = Describe("{RebootOneNode}", func() {
 			version, _ := components.APIVersion.GetHelmChartVersion()
 			log.Infof("Helm chart Version : %s ", version)
 
-			err := targetCluster.RegisterToControlPlane(env.PDSControlPlaneURL, version, controlPlane.GetRegistrationToken(tenant.GetId()), tenant.GetId(), env.PDSTargetClusterType)
+			token, err := controlPlane.GetRegistrationToken(tenant.GetId())
+			Expect(err).NotTo(HaveOccurred())
+
+			err = targetCluster.RegisterToControlPlane(env.PDSControlPlaneURL, version, token, tenant.GetId(), env.PDSTargetClusterType)
 			Expect(err).NotTo(HaveOccurred())
 		})
 		Step("Create a namespace for data service deployment and add the label for PDS to identify the namespace.", func() {
@@ -156,12 +160,12 @@ var _ = Describe("{RebootOneNode}", func() {
 			)
 
 			clusterID, err := targetCluster.GetClusterID()
-			if err != nil {
-				log.Panicf("Unable to fetch the cluster Id")
-			}
+			Expect(err).NotTo(HaveOccurred())
 
 			log.Info("Get the Target cluster details")
-			targetClusters, _ := deploymentTargetComponent.ListDeploymentTargetsBelongsToTenant(tenant.GetId())
+			targetClusters, err := deploymentTargetComponent.ListDeploymentTargetsBelongsToTenant(tenant.GetId())
+			Expect(err).NotTo(HaveOccurred())
+
 			for i := 0; i < len(targetClusters); i++ {
 				if targetClusters[i].GetClusterId() == clusterID {
 					deploymentTargetID = targetClusters[i].GetId()
@@ -170,14 +174,17 @@ var _ = Describe("{RebootOneNode}", func() {
 			}
 
 			log.Infof("Get the available namespaces in the Cluster having Id: %v", clusterID)
-			namespaces, _ := nsComponent.ListNamespaces(deploymentTargetID)
+			namespaces, err := nsComponent.ListNamespaces(deploymentTargetID)
+			Expect(err).NotTo(HaveOccurred())
+
 			for i := 0; i < len(namespaces); i++ {
 				if namespaces[i].GetStatus() == "available" {
 					namespaceNameIDMap[namespaces[i].GetName()] = namespaces[i].GetId()
 					log.Infof("Available namespace - Name: %v , Id: %v , Status: %v", namespaces[i].GetName(), namespaces[i].GetId(), namespaces[i].GetStatus())
 				}
 			}
-			log.Infof("Get the storage template")
+
+			log.Info("Fetching the storage template")
 			storageTemplates, _ := storagetemplateComponent.ListTemplates(tenant.GetId())
 			for i := 0; i < len(storageTemplates); i++ {
 				if storageTemplates[i].GetName() == storageTemplateName {
@@ -191,7 +198,7 @@ var _ = Describe("{RebootOneNode}", func() {
 				}
 			}
 
-			log.Infof("Get the resource template for each data services")
+			log.Info("Get the resource template for each data services")
 			resourceTemplates, _ := resourceTemplateComponent.ListTemplates(tenant.GetId())
 			for i := 0; i < len(resourceTemplates); i++ {
 				if resourceTemplates[i].GetName() == resourceTemplateName {
@@ -210,7 +217,7 @@ var _ = Describe("{RebootOneNode}", func() {
 				}
 			}
 
-			log.Infof("Get the Versions.")
+			log.Info("Fetching the Versions.")
 			for key := range dataServiceNameIDMap {
 				versions, _ := versionComponent.ListDataServiceVersions(dataServiceNameIDMap[key])
 				for i := 0; i < len(versions); i++ {
@@ -218,7 +225,6 @@ var _ = Describe("{RebootOneNode}", func() {
 				}
 			}
 
-			log.Infof("Get the Versions.")
 			for key := range dataServiceNameVersionMap {
 				images, _ := imageComponent.ListImages(dataServiceNameVersionMap[key][0])
 				for i := 0; i < len(images); i++ {
@@ -226,7 +232,7 @@ var _ = Describe("{RebootOneNode}", func() {
 				}
 			}
 
-			log.Infof("Get the Application configuration template")
+			log.Info("Get the Application configuration template")
 			appConfigs, _ := appConfigComponent.ListTemplates(tenant.GetId())
 			for i := 0; i < len(appConfigs); i++ {
 				if appConfigs[i].GetName() == appConfigTemplateName {

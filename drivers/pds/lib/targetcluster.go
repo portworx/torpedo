@@ -64,19 +64,15 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantID=%s "+
 			"--set bearerToken=%s --set apiEndpoint=%s --kubeconfig %s", PDSNamespace, helmChartversion, tenantID, bearerToken, apiEndpoint, targetCluster.kubeconfig)
 	}
-	log.Warn(cmd)
-	time.Sleep(10 * time.Second)
+	log.Info(cmd)
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
-		log.Warn("Kindly remove the PDS chart properly and retry if that helps(or slack us for more details). CMD>> helm uninstall  pds --namespace pds-system --kubeconfig $KUBECONFIG")
+		log.Info("Kindly remove the PDS chart properly and retry if that helps(or slack us for more details). CMD>> helm uninstall  pds --namespace pds-system --kubeconfig $KUBECONFIG")
 		log.Panic(err)
 		return err
 	}
 	log.Infof("Terminal output -> %v", output)
 	err = targetCluster.ValidatePDSComponents()
-	if err != nil {
-
-	}
 	return err
 }
 

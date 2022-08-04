@@ -27,7 +27,7 @@ type BearerToken struct {
 }
 
 // GetBearerToken fetches the token.
-func GetBearerToken() string {
+func GetBearerToken() (string, error) {
 	username := os.Getenv("PDSUsername")
 	password := os.Getenv("PDSPassword")
 	clientID := os.Getenv("PDSClientID")
@@ -47,26 +47,26 @@ func GetBearerToken() string {
 	requestBody := bytes.NewBuffer(postBody)
 	resp, err := http.Post(url, "application/json", requestBody)
 	if err != nil {
-		log.Fatalf("An Error Occured %v", err)
+		return "", err
 	}
 	defer resp.Body.Close()
 	//Read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("An Error Occured %v", err)
+		return "", err
 	}
 	var bearerToken = new(BearerToken)
 	err = json.Unmarshal(body, &bearerToken)
 	if err != nil {
-		log.Fatalf("An Error Occured %v", err)
+		return "", err
 	}
 
-	return bearerToken.AccessToken
+	return bearerToken.AccessToken, nil
 
 }
 
 // GetRegistrationToken PDS
-func (cp *ControlPlane) GetRegistrationToken(tenantID string) string {
+func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 	log.Info("Fetch the registration token.")
 
 	saClient := cp.components.ServiceAccount
@@ -77,8 +77,11 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) string {
 			agentWriterID = sa.GetId()
 		}
 	}
-	token, _ := saClient.GetServiceAccountToken(agentWriterID)
-	return token.GetToken()
+	token, err := saClient.GetServiceAccountToken(agentWriterID)
+	if err != nil {
+		return "", err
+	}
+	return token.GetToken(), nil
 }
 
 // GetDNSZone fetches DNS zone for deployment.
