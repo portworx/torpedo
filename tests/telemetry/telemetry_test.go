@@ -26,6 +26,9 @@ const (
 	cmdTimeout = 15 * time.Second
 )
 
+const (
+	TelemetryEnabledStatus = "100"
+)
 // Taken from SharedV4 tests...
 func runCmd(cmd string, n node.Node, cmdConnectionOpts *node.ConnectionOpts) (string, error) {
 	if cmdConnectionOpts == nil {
@@ -112,6 +115,7 @@ var _ = Describe("{DiagsBasic}", func() {
 // This test performs basic diags collection and validates them on S3 bucket
 var _ = Describe("{DiagsCCMOnS3}", func() {
 	var testrailIDs = [] int{54917, 54912, 54910}
+
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54917
 	var runIDs []int
 	JustBeforeEach(func() {
@@ -133,10 +137,16 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 					OnHost:        true,
 					Live:          true,
 				}
-				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
+				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false})
 				Expect(err).NotTo(HaveOccurred(), "Diags collected successfully")
-				err = Inst().V.ValidateDiagsOnS3(currNode, "")
-				Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
+				out, err := runCmd("/opt/pwx/bin/pxctl status -j | jq .telemetrystatus.connection_status.error_code", currNode, nil)
+				Expect(err).NotTo(HaveOccurred(), "Error getting telemetry status for %s", currNode.Name)
+				if strings.TrimSpace(out) == TelemetryEnabledStatus{
+					err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)))
+					Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
+				}else{
+					logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+				}
 			})
 		}
 		for _, ctx := range contexts {
@@ -171,8 +181,6 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 				}
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
 				Expect(err).NotTo(HaveOccurred(), "Profile only diags collected successfully")
-				err = Inst().V.ValidateDiagsOnS3(currNode, "")
-				Expect(err).NotTo(HaveOccurred(), "Profile only diags validated on S3")
 			})
 			Step(fmt.Sprintf("Get the profile diags collected above %s", currNode.Name), func() {
 				logrus.Infof("Getting latest profile diags on %66v", currNode.Name)
@@ -184,7 +192,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 			})
 			Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
 				for _, file := range diagsFiles {
-					fileNameToCheck := file[strings.LastIndex(file, "/")+1:]
+					fileNameToCheck := path.Base(file)
 					logrus.Debugf("Validating file %s", fileNameToCheck)
 					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
 					Expect(err).NotTo(HaveOccurred(), "Files validated on s3")

@@ -73,15 +73,20 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
-func GetTimeStamp() string {
+func GetTimeStamp(getPreviousFolder bool) string {
 	tnow := time.Now()
-	return fmt.Sprintf("%d_%02d_%02d/%02d_00_00",
-		tnow.Year(), tnow.Month(), tnow.Day(),
-		tnow.Hour())
+	if getPreviousFolder{
+		if tnow.Hour() == 0{
+			return fmt.Sprintf("%d_%02d_%02d/%02d_00_00", tnow.Year(), tnow.Month(), tnow.Day()-1, 23)
+		}else{
+			return fmt.Sprintf("%d_%02d_%02d/%02d_00_00", tnow.Year(), tnow.Month(), tnow.Day(), tnow.Hour()-1)
+		}
+	}
+	return fmt.Sprintf("%d_%02d_%02d/%02d_00_00", tnow.Year(), tnow.Month(), tnow.Day(), tnow.Hour())
 }
 
 // GetS3Objects lists the objects in S3
-func GetS3Objects(clusterId string, nodeName string) ([]Object, error) {
+func GetS3Objects(clusterId string, nodeName string, getPreviousFolder bool) ([]Object, error) {
 	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
@@ -96,7 +101,7 @@ func GetS3Objects(clusterId string, nodeName string) ([]Object, error) {
 
 	S3Client := s3.New(sess)
 	bucket := os.Getenv("DIAGS_BUCKET")
-	prefix := fmt.Sprintf("%s/%s/%s", clusterId, nodeName, GetTimeStamp())
+	prefix := fmt.Sprintf("%s/%s/%s", clusterId, nodeName, GetTimeStamp(getPreviousFolder))
 	logrus.Debugf("Looking for files under folder %s", prefix)
 	input := &s3.ListObjectsInput{
 		Bucket: &bucket,
