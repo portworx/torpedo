@@ -51,6 +51,13 @@ func TestTelemetryBasic(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Telemetry", specReporters)
 }
 
+func TelemetryEnabled(currNode node.Node) bool{
+	// This returns true if telemetry is enabled
+	out, err := runCmd("/opt/pwx/bin/pxctl status -j | jq .telemetrystatus.connection_status.error_code", currNode, nil)
+	Expect(err).NotTo(HaveOccurred(), "Error getting telemetry status for %s", currNode.Name)
+	return strings.TrimSpace(out) == TelemetryEnabledStatus
+}
+
 var _ = BeforeSuite(func() {
 	InitInstance()
 })
@@ -137,11 +144,13 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 					OnHost:        true,
 					Live:          true,
 				}
+				if !TelemetryEnabled(currNode){
+					logrus.Debugf("Telemetry not enabled, sleeping for 5 mins")
+					time.Sleep(5 * time.Minute)
+				}
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false})
 				Expect(err).NotTo(HaveOccurred(), "Diags collected successfully")
-				out, err := runCmd("/opt/pwx/bin/pxctl status -j | jq .telemetrystatus.connection_status.error_code", currNode, nil)
-				Expect(err).NotTo(HaveOccurred(), "Error getting telemetry status for %s", currNode.Name)
-				if strings.TrimSpace(out) == TelemetryEnabledStatus{
+				if TelemetryEnabled(currNode) {
 					err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)))
 					Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
 				}else{
@@ -179,6 +188,10 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 					DockerHost:    "unix:///var/run/docker.sock",
 					Profile: true,
 				}
+				if !TelemetryEnabled(currNode){
+					logrus.Debugf("Telemetry not enabled, sleeping for 5 mins")
+					time.Sleep(5 * time.Minute)
+				}
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
 				Expect(err).NotTo(HaveOccurred(), "Profile only diags collected successfully")
 			})
@@ -194,8 +207,13 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 				for _, file := range diagsFiles {
 					fileNameToCheck := path.Base(file)
 					logrus.Debugf("Validating file %s", fileNameToCheck)
-					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
-					Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
+					if TelemetryEnabled(currNode){
+						err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
+						Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
+					}else{
+						logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+					}
+
 				}
 			})
 		}
