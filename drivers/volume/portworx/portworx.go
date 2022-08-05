@@ -125,6 +125,7 @@ const (
 	waitVolDriverToCrash              = 1 * time.Minute
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
 	asyncTimeout                      = 15 * time.Minute
+	timeToTryPreviousFolder = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
 )
 const (
@@ -3212,9 +3213,18 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 		if time.Since(start) >= asyncTimeout {
 			return fmt.Errorf("waiting for async diags job timed out")
 		}
-		objects, err := s3utils.GetS3Objects(clusterUUID, n.Name)
-		if err != nil {
-			return err
+		var objects []s3utils.Object
+		var err error
+		if time.Since(start) >= timeToTryPreviousFolder{
+			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, true)
+			if err != nil {
+				return err
+			}
+		} else {
+			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, false)
+			if err != nil {
+				return err
+			}
 		}
 		for _, obj := range objects {
 			if strings.Contains(obj.Key, d.DiagsFile) {
@@ -3303,7 +3313,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			return fmt.Errorf("failed to get pxctl status. cause: %v", err)
 		}
 		logrus.Debugf("Status returned by pxctl %s", out)
-		if out == telemetryNotEnabled {
+		if strings.TrimSpace(out) == telemetryNotEnabled {
 			logrus.Debugf("Telemetry not enabled on PX status. Skipping validation on s3")
 			return nil
 		}
