@@ -76,11 +76,7 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 func GetTimeStamp(getPreviousFolder bool) string {
 	tnow := time.Now()
 	if getPreviousFolder{
-		if tnow.Hour() == 0{
-			return fmt.Sprintf("%d_%02d_%02d/%02d_00_00", tnow.Year(), tnow.Month(), tnow.Day()-1, 23)
-		}else{
-			return fmt.Sprintf("%d_%02d_%02d/%02d_00_00", tnow.Year(), tnow.Month(), tnow.Day(), tnow.Hour()-1)
-		}
+		tnow = tnow.Add(-1 * time.Hour)
 	}
 	return fmt.Sprintf("%d_%02d_%02d/%02d_00_00", tnow.Year(), tnow.Month(), tnow.Day(), tnow.Hour())
 }
