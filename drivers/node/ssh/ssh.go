@@ -324,17 +324,16 @@ func (s *SSH) InjectNetworkError(nodes []node.Node, errorInjectionType string, o
 	if errorInjectionType == "delay" {
 		cmd = fmt.Sprintf("%s %s  %s %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem delay ",
 			delayInMillisescond, delayInMillisescond)
-		logrus.Infof("Delay ", delayInMillisescond)
+		logrus.Infof("Delay %s ", delayInMillisescond)
 	} else if errorInjectionType == "drop" {
 		cmd = fmt.Sprintf("%s %s  %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem loss",
 			dropInPercentage)
-		logrus.Infof("DropPercentage  ", dropInPercentage)
+		logrus.Infof("DropPercentage %s ", dropInPercentage)
 	} else {
 		return fmt.Errorf("Invalid network error injection type %s", errorInjectionType)
 	}
-	logrus.Info("Error injection type ", errorInjectionType)
-	logrus.Infof("Operation type ", operationType)
-
+	logrus.Info("Error injection type %s ", errorInjectionType)
+	logrus.Infof("Operation type %s ", operationType)
 	connectionOps := node.ConnectionOpts{
 		Timeout:         10 * time.Second,
 		TimeBeforeRetry: 10 * time.Second,
