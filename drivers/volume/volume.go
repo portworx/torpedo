@@ -207,6 +207,9 @@ type Driver interface {
 	// DecommissionNode decommissions the given node from the cluster
 	DecommissionNode(n *node.Node) error
 
+	// RecoverNode makes a given node back to normal
+	RecoverNode(n *node.Node) error
+
 	// RejoinNode rejoins a given node back to the cluster
 	RejoinNode(n *node.Node) error
 
@@ -329,6 +332,12 @@ type Driver interface {
 
 	// GetTrashCanVolumeIds returns the node stats of the given node and an error if any
 	GetTrashCanVolumeIds(n node.Node) ([]string, error)
+
+	//GetKvdbMembers returns KVDB memebers of the PX cluster
+	GetKvdbMembers(n node.Node) (map[string]*MetadataNode, error)
+
+	// GetNodePureVolumeAttachedCountMap returns map of node name and count of pure volume attached on that node
+	GetNodePureVolumeAttachedCountMap() (map[string]int, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

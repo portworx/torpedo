@@ -113,6 +113,7 @@ const (
 	scaleFactorCliFlag                   = "scale-factor"
 	minRunTimeMinsFlag                   = "minimun-runtime-mins"
 	chaosLevelFlag                       = "chaos-level"
+	hyperConvergedFlag                   = "hyper-converged"
 	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
 	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
 	provisionerFlag                      = "provisioner"
@@ -149,9 +150,14 @@ const (
 	jiraAccountIDFlag = "jira-account-id"
 
 	// Async DR
-	pairFileName   = "cluster-pair.yaml"
-	remotePairName = "remoteclusterpair"
-	remoteFilePath = "/tmp/kubeconfig"
+	pairFileName           = "cluster-pair.yaml"
+	remotePairName         = "remoteclusterpair"
+	remoteFilePath         = "/tmp/kubeconfig"
+	appReadinessTimeout    = 10 * time.Minute
+	migrationKey           = "async-dr-"
+	migrationRetryTimeout  = 10 * time.Minute
+	migrationRetryInterval = 10 * time.Second
+	defaultClusterPairDir  = "cluster-pair"
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
 )
@@ -985,11 +991,40 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	var err error
 
 	Step("schedule applications", func() {
-		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
-		})
+		}
+		//if not hyper converged set up deploy apps only on storageless nodes
+		if !Inst().IsHyperConverged {
+			logrus.Infof("Scheduling apps only on storageless nodes")
+			storagelessNodes := node.GetStorageLessNodes()
+			if len(storagelessNodes) == 0 {
+				logrus.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
+				Inst().IsHyperConverged = true
+			}
+			for _, storagelessNode := range storagelessNodes {
+				if err = Inst().S.AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {
+					err = fmt.Errorf("failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
+						"storage", "NO", storagelessNode.Name, err)
+					processError(err, errChan...)
+				}
+			}
+			storageLessNodeLabels := make(map[string]string)
+			storageLessNodeLabels["storage"] = "NO"
+
+			options = scheduler.ScheduleOptions{
+				AppKeys:            Inst().AppList,
+				StorageProvisioner: Inst().Provisioner,
+				Nodes:              storagelessNodes,
+				Labels:             storageLessNodeLabels,
+			}
+
+		} else {
+			logrus.Infof("Scheduling Apps with hyper-converged")
+		}
+		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		contexts, err = Inst().S.Schedule(taskName, options)
 		processError(err, errChan...)
 		if len(contexts) == 0 {
 			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
@@ -1076,6 +1111,7 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		})
 
 	})
+
 }
 
 // StopVolDriverAndWait stops volume driver on given app nodes and waits till driver is down
@@ -1572,23 +1608,31 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 }
 
 // SetClusterContext sets context to clusterConfigPath
-func SetClusterContext(clusterConfigPath string) {
+func SetClusterContext(clusterConfigPath string) error {
 	err := Inst().S.SetConfig(clusterConfigPath)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to switch to context. Error: [%v]", err))
-
+	if err != nil {
+		return fmt.Errorf("Failed to switch to context. Set Config Error: [%v]", err)
+	}
 	err = Inst().S.RefreshNodeRegistry()
-	expect(err).NotTo(haveOccurred())
+	if err != nil {
+		return fmt.Errorf("Failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
+	}
 
 	err = Inst().V.RefreshDriverEndpoints()
-	expect(err).NotTo(haveOccurred())
+	if err != nil {
+		return fmt.Errorf("Failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
+	}
+	return nil
 }
 
 // SetSourceKubeConfig sets current context to the kubeconfig passed as source to the torpedo test
-func SetSourceKubeConfig() {
+func SetSourceKubeConfig() error {
 	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
-	expect(err).NotTo(haveOccurred())
+	if err != nil {
+		return err
+	}
 	SetClusterContext(sourceClusterConfigPath)
+	return nil
 }
 
 // SetDestinationKubeConfig sets current context to the kubeconfig passed as destination to the torpedo test
@@ -2155,12 +2199,13 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 }
 
 // DeleteBackupAndDependencies deletes backup and dependent backups
-func DeleteBackupAndDependencies(backupName string, orgID string, clusterName string) error {
+func DeleteBackupAndDependencies(backupName string, backupUID string, orgID string, clusterName string) error {
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 
 	backupDeleteRequest := &api.BackupDeleteRequest{
 		Name:    backupName,
+		Uid:     backupUID,
 		OrgId:   orgID,
 		Cluster: clusterName,
 	}
@@ -2171,6 +2216,7 @@ func DeleteBackupAndDependencies(backupName string, orgID string, clusterName st
 
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
+		Uid:   backupUID,
 		OrgId: orgID,
 	}
 	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
@@ -2182,7 +2228,7 @@ func DeleteBackupAndDependencies(backupName string, orgID string, clusterName st
 	if backupDelStatus.GetStatus() == api.BackupInfo_StatusInfo_DeletePending {
 		reason := strings.Split(backupDelStatus.GetReason(), ": ")
 		dependency := reason[len(reason)-1]
-		err = DeleteBackupAndDependencies(dependency, orgID, clusterName)
+		err = DeleteBackupAndDependencies(dependency, backupUID, orgID, clusterName)
 		if err != nil {
 			return err
 		}
@@ -2243,7 +2289,7 @@ func SetupBackup(testName string) {
 }
 
 // DeleteBackup deletes backup
-func DeleteBackup(backupName string, orgID string) {
+func DeleteBackup(backupName string, backupUID string, orgID string) {
 
 	Step(fmt.Sprintf("Delete backup [%s] in org [%s]",
 		backupName, orgID), func() {
@@ -2252,6 +2298,7 @@ func DeleteBackup(backupName string, orgID string) {
 		bkpDeleteRequest := &api.BackupDeleteRequest{
 			Name:  backupName,
 			OrgId: orgID,
+			Uid:   backupUID,
 		}
 		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -2718,12 +2765,14 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 func GetSourceClusterConfigPath() (string, error) {
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	if kubeconfigs == "" {
-		return "", fmt.Errorf("empty KUBECONFIGS environment variable")
+		return "", fmt.Errorf("Failed to get source config path. Empty KUBECONFIGS environment variable")
 	}
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
-	expect(len(kubeconfigList)).Should(beNumerically(">=", 2),
-		"At least minimum two kubeconfigs required")
+	if len(kubeconfigList) < 2 {
+		return "", fmt.Errorf(`Failed to get source config path. 
+				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+	}
 
 	logrus.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]), nil
@@ -2737,8 +2786,10 @@ func GetDestinationClusterConfigPath() (string, error) {
 	}
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
-	expect(len(kubeconfigList)).Should(beNumerically(">=", 2),
-		"At least minimum two kubeconfigs required")
+	if len(kubeconfigList) < 2 {
+		return "", fmt.Errorf(`Failed to get source config path. 
+				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+	}
 
 	logrus.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
@@ -2890,7 +2941,7 @@ func TearDownBackupRestoreAll() {
 	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
 	backups := enumBkpResponse.GetBackups()
 	for _, bkp := range backups {
-		DeleteBackup(bkp.GetName(), OrgID)
+		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID)
 	}
 
 	logrus.Infof("Enumerating restores")
@@ -3100,6 +3151,7 @@ type Torpedo struct {
 	AutopilotUpgradeImage               string
 	CsiGenericDriverConfigMap           string
 	HelmValuesConfigMap                 string
+	IsHyperConverged                    bool
 }
 
 // ParseFlags parses command line flags
@@ -3123,7 +3175,13 @@ func ParseFlags() {
 	var meteringIntervalMins time.Duration
 	var bundleLocation string
 	var customConfigPath string
-	var customAppConfig map[string]scheduler.AppConfig
+	var hyperConverged bool
+
+	// TODO: We rely on the customAppConfig map to be passed into k8s.go and stored there.
+	// We modify this map from the tests and expect that the next RescanSpecs will pick up the new custom configs.
+	// We should make this more robust.
+	var customAppConfig map[string]scheduler.AppConfig = make(map[string]scheduler.AppConfig)
+
 	var enableStorkUpgrade bool
 	var secretType string
 	var pureVolumes bool
@@ -3177,6 +3235,7 @@ func ParseFlags() {
 	flag.StringVar(&jiraUserName, jiraUserNameFlag, "", "Username to be used for JIRA client")
 	flag.StringVar(&jiraToken, jiraTokenFlag, "", "API token for accessing the JIRA")
 	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
+	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
 	flag.Parse()
 
 	appList, err := splitCsv(appListCSV)
@@ -3252,6 +3311,7 @@ func ParseFlags() {
 				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
 				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,
 				MeteringIntervalMins:                meteringIntervalMins,
+				IsHyperConverged:                    hyperConverged,
 			}
 		})
 	}

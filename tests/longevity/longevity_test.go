@@ -44,6 +44,9 @@ var (
 	// Pure Topology is disabled by default
 	pureTopologyEnabled = false
 
+	//Default is allow deploying apps both in storage and storageless nodes
+	hyperConvergedTypeEnabled = true
+
 	// Pure Topology Label array
 	labels []map[string]string
 )
@@ -99,6 +102,9 @@ var _ = Describe("{Longevity}", func() {
 		CsiSnapRestore:       TriggerCsiSnapRestore,
 		RelaxedReclaim:       TriggerRelaxedReclaim,
 		Trashcan:             TriggerTrashcan,
+		KVDBFailover:         TriggerKVDBFailover,
+		ValidateDeviceMapper: TriggerValidateDeviceMapperCleanup,
+		AsyncDR:              TriggerAsyncDR,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -117,6 +123,8 @@ var _ = Describe("{Longevity}", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Inst().TopologyLabels = labels
 		}
+
+		Inst().IsHyperConverged = hyperConvergedTypeEnabled
 
 		TriggerDeployNewApps(&contexts, &triggerEventsChan)
 
@@ -320,6 +328,7 @@ func populateDisruptiveTriggers() {
 		NodeDecommission:                true,
 		CsiSnapShot:                     false,
 		CsiSnapRestore:                  false,
+		KVDBFailover:                    true,
 	}
 }
 
@@ -330,6 +339,7 @@ func isDisruptiveTrigger(triggerType string) bool {
 func populateDataFromConfigMap(configData *map[string]string) error {
 	setEmailRecipients(configData)
 	setPureTopology(configData)
+	setHyperConvergedType(configData)
 	err := setSendGridEmailAPIKey(configData)
 	if err != nil {
 		return err
@@ -369,6 +379,21 @@ func setPureTopology(configData *map[string]string) {
 				PureTopologyField, configMapNS, err)
 		}
 		delete(*configData, PureTopologyField)
+	}
+}
+
+func setHyperConvergedType(configData *map[string]string) {
+	var err error
+	if hyperConvergedType, ok := (*configData)[HyperConvergedTypeField]; !ok {
+		logrus.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.\n",
+			HyperConvergedTypeField, testTriggersConfigMap, configMapNS)
+	} else {
+		hyperConvergedTypeEnabled, err = strconv.ParseBool(hyperConvergedType)
+		if err != nil {
+			logrus.Errorf("Failed to parse [%s] field in config-map in [%s] namespace.Error:[%v]\n",
+				HyperConvergedTypeField, configMapNS, err)
+		}
+		delete(*configData, HyperConvergedTypeField)
 	}
 }
 
@@ -541,6 +566,9 @@ func populateIntervals() {
 	triggerInterval[CsiSnapRestore] = make(map[int]time.Duration)
 	triggerInterval[RelaxedReclaim] = make(map[int]time.Duration)
 	triggerInterval[Trashcan] = make(map[int]time.Duration)
+	triggerInterval[KVDBFailover] = make(map[int]time.Duration)
+	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
+	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
@@ -672,6 +700,17 @@ func populateIntervals() {
 	triggerInterval[AppTasksDown][3] = 8 * baseInterval
 	triggerInterval[AppTasksDown][2] = 9 * baseInterval
 	triggerInterval[AppTasksDown][1] = 10 * baseInterval
+
+	triggerInterval[AsyncDR][10] = 1 * baseInterval
+	triggerInterval[AsyncDR][9] = 3 * baseInterval
+	triggerInterval[AsyncDR][8] = 6 * baseInterval
+	triggerInterval[AsyncDR][7] = 9 * baseInterval
+	triggerInterval[AsyncDR][6] = 12 * baseInterval
+	triggerInterval[AsyncDR][5] = 15 * baseInterval
+	triggerInterval[AsyncDR][4] = 18 * baseInterval
+	triggerInterval[AsyncDR][3] = 21 * baseInterval
+	triggerInterval[AsyncDR][2] = 24 * baseInterval
+	triggerInterval[AsyncDR][1] = 27 * baseInterval
 
 	baseInterval = 60 * time.Minute
 
@@ -973,6 +1012,13 @@ func populateIntervals() {
 	triggerInterval[UpgradeVolumeDriver][6] = 5 * baseInterval
 	triggerInterval[UpgradeVolumeDriver][5] = 6 * baseInterval
 
+	triggerInterval[KVDBFailover][10] = 1 * baseInterval
+	triggerInterval[KVDBFailover][9] = 2 * baseInterval
+	triggerInterval[KVDBFailover][8] = 3 * baseInterval
+	triggerInterval[KVDBFailover][7] = 4 * baseInterval
+	triggerInterval[KVDBFailover][6] = 5 * baseInterval
+	triggerInterval[KVDBFailover][5] = 6 * baseInterval
+
 	triggerInterval[VolumesDelete][10] = 1 * baseInterval
 	triggerInterval[VolumesDelete][9] = 3 * baseInterval
 	triggerInterval[VolumesDelete][8] = 6 * baseInterval
@@ -1017,6 +1063,17 @@ func populateIntervals() {
 	triggerInterval[CsiSnapRestore][2] = 24 * baseInterval
 	triggerInterval[CsiSnapRestore][1] = 27 * baseInterval
 
+	triggerInterval[ValidateDeviceMapper][10] = 1 * baseInterval
+	triggerInterval[ValidateDeviceMapper][9] = 3 * baseInterval
+	triggerInterval[ValidateDeviceMapper][8] = 6 * baseInterval
+	triggerInterval[ValidateDeviceMapper][7] = 9 * baseInterval
+	triggerInterval[ValidateDeviceMapper][6] = 12 * baseInterval
+	triggerInterval[ValidateDeviceMapper][5] = 15 * baseInterval
+	triggerInterval[ValidateDeviceMapper][4] = 18 * baseInterval
+	triggerInterval[ValidateDeviceMapper][3] = 21 * baseInterval
+	triggerInterval[ValidateDeviceMapper][2] = 24 * baseInterval
+	triggerInterval[ValidateDeviceMapper][1] = 27 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -1058,6 +1115,9 @@ func populateIntervals() {
 	triggerInterval[CsiSnapShot][0] = 0
 	triggerInterval[CsiSnapRestore][0] = 0
 	triggerInterval[RelaxedReclaim][0] = 0
+	triggerInterval[KVDBFailover][0] = 0
+	triggerInterval[ValidateDeviceMapper][0] = 0
+	triggerInterval[AsyncDR][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
