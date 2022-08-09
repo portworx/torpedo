@@ -280,6 +280,53 @@ func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	return nil
 }
 
+// InjectNetworkError by dropping packets or introdiucing delay in packet tramission
+// nodes=> list of nodes where network injection should be done.
+// errorInjectionType => pass "delay" or "drop"
+// operationType => add/change/delete
+// dropPercentage => intger value from 1 to 100
+// delayInMilliseconds => 1 to 1000
+func (s *SSH) InjectNetworkError(nodes []node.Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error {
+	//tc qdisc add dev eth0 root netem loss 20%
+	//tc qdisc change dev eth0 root netem delay 5000ms 5000ms
+	var cmd string
+	dropInPercentage := strconv.Itoa(dropPercentage) + "%"
+	delayInMillisescond := strconv.Itoa(delayInMilliseconds) + "ms"
+	if errorInjectionType == "delay" {
+		cmd = fmt.Sprintf("%s %s  %s %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem delay ",
+			delayInMillisescond, delayInMillisescond)
+		logrus.Infof("Delay ", delayInMillisescond)
+	} else if errorInjectionType == "drop" {
+		cmd = fmt.Sprintf("%s %s  %s %s", "sudo tc qdisc", operationType, "dev eth0 root netem loss",
+			dropInPercentage)
+		logrus.Infof("DropPercentage  ", dropInPercentage)
+	} else {
+		return fmt.Errorf("Invalid network error injection type %s", errorInjectionType)
+	}
+	logrus.Info("Error injection type ", errorInjectionType)
+	logrus.Infof("Operation type ", operationType)
+
+	connectionOps := node.ConnectionOpts{
+		Timeout:         10 * time.Second,
+		TimeBeforeRetry: 10 * time.Second,
+	}
+	for _, n := range nodes {
+		logrus.Infof("Node name %s", n.Name)
+		t := func() (interface{}, bool, error) {
+			out, err := s.doCmd(n, connectionOps, cmd, true)
+			return out, true, err
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, 10*time.Second, 10*time.Second); err != nil {
+			return &node.ErrFailedToSetNetworkErrorOnNode{
+				Node:  n,
+				Cause: err.Error(),
+			}
+		}
+	}
+	return nil
+}
+
 // CrashNode crashes given node
 func (s *SSH) CrashNode(n node.Node, options node.CrashNodeOpts) error {
 	logrus.Infof("Crashing node %s", n.SchedulerNodeName)

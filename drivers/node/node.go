@@ -194,6 +194,14 @@ type Driver interface {
 
 	// IsNodeRebootedInGivenTimeRange check if node is rebooted within given time range
 	IsNodeRebootedInGivenTimeRange(Node, time.Duration) (bool, error)
+
+	// InjectNetworkError by dropping packets or introdiucing delay in packet tramission
+	// nodes=> list of nodes where network injection should be done.
+	// errorInjectionType => pass "delay" or "drop"
+	// operationType => add/change/delete
+	// dropPercentage => intger value from 1 to 100
+	// delayInMilliseconds => 1 to 1000
+	InjectNetworkError(nodes []Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error
 }
 
 // Register registers the given node driver
@@ -407,5 +415,13 @@ func (d *notSupportedDriver) IsNodeRebootedInGivenTimeRange(Node, time.Duration)
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "PowerOnVmByName()",
+	}
+}
+
+func (d *notSupportedDriver) InjectNetworkError(nodes []Node, errorInjectionType string, operationType string,
+	dropPercentage int, delayInMilliseconds int) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InjectNetworkError()",
 	}
 }
