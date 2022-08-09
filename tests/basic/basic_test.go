@@ -577,6 +577,7 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 var _ = Describe("{SecretsVaultFunctional}", func() {
 	var testrailID, runID int
 	var contexts []*scheduler.Context
+	var provider string
 
 	const (
 		vaultSecretProvider        = "vault"
@@ -600,6 +601,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 					for _, arg := range container.Args {
 						if arg == vaultSecretProvider || arg == vaultTransitSecretProvider {
 							usingVault = true
+							provider = arg
 						}
 					}
 				}
@@ -614,6 +616,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 				*spec.Spec.SecretsProvider != vaultTransitSecretProvider {
 				Skip(fmt.Sprintf("Skip test for not using %s or %s ", vaultSecretProvider, vaultTransitSecretProvider))
 			}
+			provider = *spec.Spec.SecretsProvider
 		}
 	})
 
@@ -624,10 +627,14 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			runID = testrailuttils.AddRunsToMilestone(testrailID)
 		})
 
-		It("has to run secrets login for vault", func() {
+		It("has to run secrets login for vault or vault-transit", func() {
 			contexts = make([]*scheduler.Context, 0)
 			n := node.GetWorkerNodes()[0]
-			err := Inst().V.RunSecretsLogin(n, vaultSecretProvider)
+			if provider == vaultTransitSecretProvider {
+				// vault-transit login with `pxctl secrets vaulttransit login`
+				provider = "vaulttransit"
+			}
+			err := Inst().V.RunSecretsLogin(n, provider)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
