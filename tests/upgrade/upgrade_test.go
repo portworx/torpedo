@@ -5,6 +5,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/sirupsen/logrus"
 	"os"
 	"strings"
@@ -17,7 +18,6 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -26,6 +26,7 @@ var storkLabel = map[string]string{"name": "stork"}
 const (
 	storkDeploymentName = "stork"
 	storkNamespace      = "kube-system"
+	pxctlCDListCmd      = "pxctl cd list"
 )
 
 func TestUpgrade(t *testing.T) {
@@ -53,6 +54,20 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	It("upgrade volume driver and ensure everything is running fine", func() {
 		contexts = make([]*scheduler.Context, 0)
 
+		storageNodes := node.GetStorageNodes()
+
+		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
+		Expect(err).NotTo(HaveOccurred())
+
+		if !isCloudDrive {
+			for _, storageNode := range storageNodes {
+				err := Inst().V.AddBlockDrives(&storageNode, nil)
+				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+					continue
+				}
+				Expect(err).NotTo(HaveOccurred())
+			}
+		}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
@@ -88,7 +103,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			if durationInMins <= expectedUpgradeTime {
 				logrus.Infof("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
 			} else {
-				logrus.Errorf("Upgreade took %d minutes to completed which is greater than expected time %d minutee", durationInMins, expectedUpgradeTime)
+				logrus.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutee", durationInMins, expectedUpgradeTime)
 				Expect(durationInMins <= expectedUpgradeTime).To(BeTrue())
 			}
 		})

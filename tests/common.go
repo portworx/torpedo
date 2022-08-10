@@ -209,6 +209,10 @@ const (
 	defaultDriverStartTimeout = 10 * time.Minute
 )
 
+const (
+	pxctlCDListCmd = "pxctl cd list"
+)
+
 var (
 	errPureFileSnapshotNotSupported    = errors.New("snapshot feature is not supported for pure_file volumes")
 	errPureCloudsnapNotSupported       = errors.New("cloudsnap feature is not supported for pure volumes")
@@ -1934,7 +1938,7 @@ func UpgradePxStorageCluster() (bool, error) {
 			isUpgradeDone = isNodeUpgraded
 			break
 		}
-		logrus.Infof("Volume driver upgrae not yet completed, Waiting for 2 mins and checking again.")
+		logrus.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
 		time.Sleep(2 * time.Minute)
 		waitCount--
 	}
@@ -3793,4 +3797,22 @@ func collectAndCopyAutopilotLogs(issueKey string) {
 
 func getInt64Address(x int64) *int64 {
 	return &x
+}
+
+//IsCloudDriveInitialised checks if cloud drive is initialised in the PX cluster
+func IsCloudDriveInitialised(n node.Node) (bool, error) {
+
+	_, err := Inst().N.RunCommandWithNoRetry(n, pxctlCDListCmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+
+	if err != nil && strings.Contains(err.Error(), "Cloud Drive is not initialized") {
+		logrus.Warnf("cd list error : %v", err)
+		return false, nil
+	}
+	if err == nil {
+		return true, nil
+	}
+	return false, err
 }

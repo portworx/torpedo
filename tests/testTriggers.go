@@ -350,6 +350,8 @@ const (
 	AsyncDR = "asyncdr"
 	// HAIncreaseAndReboot performs repl-add
 	HAIncreaseAndReboot = "haIncreaseAndReboot"
+	// AddDrive performs drive add for on-prem cluster
+	AddDrive = "addDrive"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -1713,7 +1715,6 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 				logrus.Infof("Namespace : %v", appNamespace)
 
 				Step(fmt.Sprintf("create schedule policy for %s app", ctx.App.Key), func() {
-
 					policyName := "intervalpolicy"
 
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
@@ -1759,8 +1760,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 					}
 					if isPureVol {
 						logrus.Warningf(
-							"Cloud snapshot is not supported for Pure DA volumes: [%s]",
-							"Skipping cloud snapshot trigger for pure volume.", v.Name,
+							"Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name,
 						)
 						continue
 					}
@@ -2012,6 +2012,7 @@ func TriggerEmailReporter() {
 
 		}
 		if n.StorageNode != nil {
+			logrus.Infof("Getting node %s status", n.Name)
 			status, err := Inst().V.GetNodeStatus(n)
 			if err != nil {
 				pxStatus = pxStatusError
@@ -2026,6 +2027,8 @@ func TriggerEmailReporter() {
 
 			emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp, NodeName: n.Name,
 				PxVersion: pxVersion, Status: pxStatus, NodeStatus: k8sNodeStatus, Cores: coresMap[n.Name]})
+		} else {
+			logrus.Infof("node %s storage is nil, %+v", n.Name, n)
 		}
 	}
 
@@ -4844,6 +4847,72 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 			}
 		}
 	})
+}
+
+// TriggerAddDrive performs add drive operation
+func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AddDrive,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step(fmt.Sprintf("Perform add drive on all the worker nodes"), func() {
+
+		storageNodes := node.GetStorageNodes()
+
+		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
+		UpdateOutcome(event, err)
+		systemOpts := node.SystemctlOpts{
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         defaultTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			},
+			Action: "start",
+		}
+		if err == nil && !isCloudDrive {
+			for _, storageNode := range storageNodes {
+				blockDrives, err := Inst().N.GetAvailableDrives(storageNode, systemOpts)
+				UpdateOutcome(event, err)
+
+				drvPaths := make([]string, 5)
+
+				for _, drv := range blockDrives {
+					if drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
+						drvPaths = append(drvPaths, drv.Path)
+						break
+					}
+				}
+				err = Inst().V.AddBlockDrives(&storageNode, drvPaths)
+				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+					continue
+				}
+				UpdateOutcome(event, err)
+			}
+
+			for _, ctx := range *contexts {
+				Step(fmt.Sprintf("validating context after add drive on storage nodes"), func() {
+					errorChan := make(chan error, errorChannelSize)
+					ctx.SkipVolumeValidation = true
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+			}
+		}
+
+	})
+
 }
 
 // TriggerAsyncDR triggers Async DR
