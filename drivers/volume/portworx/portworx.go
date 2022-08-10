@@ -308,7 +308,10 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 	if len(storageNodes) == 0 {
 		return fmt.Errorf("cluster inspect returned empty nodes")
 	}
-
+	// NOTE:
+	// Commenting out as when run on EKS this casues problems as ec2 instances
+	// on EKS can't sshed using internal IPs causing pxctl status to fail
+	/*
 	err = d.updateNodes(storageNodes)
 	if err != nil {
 		return err
@@ -318,7 +321,7 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 			return err
 		}
 	}
-
+	*/
 	logrus.Infof("The following Portworx nodes are in the cluster:")
 	for _, n := range storageNodes {
 		logrus.Infof(
