@@ -339,7 +339,7 @@ func (s *SSH) InjectNetworkError(nodes []node.Node, errorInjectionType string, o
 		TimeBeforeRetry: 10 * time.Second,
 	}
 	for _, n := range nodes {
-		logrus.Infof("Node name %s", n.Name)
+		logrus.Infof("Error injection on Node name : %s of type : %s ", n.Name, errorInjectionType)
 		t := func() (interface{}, bool, error) {
 			out, err := s.doCmd(n, connectionOps, cmd, true)
 			return out, true, err
