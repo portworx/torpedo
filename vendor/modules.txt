@@ -164,8 +164,6 @@ github.com/aws/aws-sdk-go/service/sts/stsiface
 github.com/beorn7/perks/quantile
 # github.com/blang/semver v3.5.1+incompatible
 github.com/blang/semver
-# github.com/cenkalti/backoff v2.2.1+incompatible
-github.com/cenkalti/backoff
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
 # github.com/container-storage-interface/spec v1.5.0
@@ -493,7 +491,6 @@ github.com/libopenstorage/openstorage/cluster
 github.com/libopenstorage/openstorage/objectstore
 github.com/libopenstorage/openstorage/osdconfig
 github.com/libopenstorage/openstorage/pkg/auth
-github.com/libopenstorage/openstorage/pkg/chattr
 github.com/libopenstorage/openstorage/pkg/clusterdomain
 github.com/libopenstorage/openstorage/pkg/correlation
 github.com/libopenstorage/openstorage/pkg/dbg
@@ -501,17 +498,13 @@ github.com/libopenstorage/openstorage/pkg/defaultcontext
 github.com/libopenstorage/openstorage/pkg/diags
 github.com/libopenstorage/openstorage/pkg/grpcutil
 github.com/libopenstorage/openstorage/pkg/job
-github.com/libopenstorage/openstorage/pkg/keylock
-github.com/libopenstorage/openstorage/pkg/mount
 github.com/libopenstorage/openstorage/pkg/nodedrain
-github.com/libopenstorage/openstorage/pkg/options
 github.com/libopenstorage/openstorage/pkg/parser
 github.com/libopenstorage/openstorage/pkg/sched
 github.com/libopenstorage/openstorage/pkg/storagepool
 github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
-github.com/libopenstorage/openstorage/volume
 # github.com/libopenstorage/operator v0.0.0-20220603212904-3320db3aef81
 github.com/libopenstorage/operator/drivers/storage
 github.com/libopenstorage/operator/pkg/apis/core/v1
@@ -671,6 +664,8 @@ github.com/pmezard/go-difflib/difflib
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
+# github.com/portworx/pds-api-go-client v0.0.0-20220802002005-cd7125f07a69
+github.com/portworx/pds-api-go-client/pds/v1alpha1
 # github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
 github.com/portworx/px-backup-api/pkg/apis/v1
 # github.com/portworx/sched-ops v1.20.4-rc1.0.20220327212454-cc1a88ecb579 => github.com/portworx/sched-ops v1.20.4-rc1.0.20220711165201-be5e8919faf9
@@ -866,9 +861,10 @@ golang.org/x/net/ipv6
 golang.org/x/net/proxy
 golang.org/x/net/trace
 golang.org/x/net/websocket
-# golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
+# golang.org/x/oauth2 v0.0.0-20210218202405-ba52d332ba99
 golang.org/x/oauth2
 golang.org/x/oauth2/google
+golang.org/x/oauth2/google/internal/externalaccount
 golang.org/x/oauth2/internal
 golang.org/x/oauth2/jws
 golang.org/x/oauth2/jwt

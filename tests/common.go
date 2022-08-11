@@ -190,6 +190,7 @@ const (
 	defaultLicenseExpiryTimeoutHours      = 1 * time.Hour
 	defaultMeteringIntervalMins           = 10 * time.Minute
 	authTokenParam                        = "auth-token"
+	duration                              = 10
 )
 
 const (
@@ -224,6 +225,37 @@ var (
 	beNumerically = gomega.BeNumerically
 )
 
+// //PDS const
+// const (
+// 	storageTemplateName   = "QaDefault"
+// 	resourceTemplateName  = "QaDefault"
+// 	appConfigTemplateName = "QaDefault"
+// 	deploymentName        = "automation"
+// 	templateName          = "QaDefault"
+// )
+
+// //PDS vars
+// var (
+// 	components *pdsapi.Components
+// 	//ctx                                   context1.Context
+// 	deploymentTargetID, storageTemplateID string
+// 	accountID                             string
+// 	tenantID                              string
+// 	projectID                             string
+// 	serviceType                           = "LoadBalancer"
+// 	accountName                           = "Portworx"
+
+// 	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
+// 	dataServiceNameIDMap                    = make(map[string]string)
+// 	dataServiceNameVersionMap               = make(map[string][]string)
+// 	dataServiceIDImagesMap                  = make(map[string]string)
+// 	dataServiceNameDefaultAppConfigMap      = make(map[string]string)
+// 	deployementIDNameMap                    = make(map[string]string)
+// 	namespaceNameIDMap                      = make(map[string]string)
+// 	deployementIdnameWithSchBkpMap          = make(map[string]string)
+// 	deployementIdnameWithAdhocBkpMap        = make(map[string]string)
+// )
+
 // Backup vars
 var (
 	// OrgID is pxbackup OrgID
@@ -257,6 +289,159 @@ const (
 	rootLogDir   = "/root/logs"
 	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
 )
+
+// //ExecShell to execute local command
+// func ExecShell(command string) (string, string, error) {
+// 	return ExecShellWithEnv(command)
+// }
+
+// // ExecShellWithEnv to execute local command
+// func ExecShellWithEnv(command string, envVars ...string) (string, string, error) {
+// 	var stout, sterr []byte
+// 	cmd := exec.Command("bash", "-c", command)
+// 	logrus.Debugf("Command %s ", command)
+// 	cmd.Env = append(cmd.Env, envVars...)
+// 	stdout, _ := cmd.StdoutPipe()
+// 	stderr, _ := cmd.StderrPipe()
+// 	if err := cmd.Start(); err != nil {
+// 		logrus.Debugf("Command %s failed to start. Cause: %v", command, err)
+// 		return "", "", err
+// 	}
+
+// 	var wg sync.WaitGroup
+// 	wg.Add(1)
+// 	go func() {
+// 		stout, _ = copyAndCapture(os.Stdout, stdout)
+// 		wg.Done()
+// 	}()
+
+// 	sterr, _ = copyAndCapture(os.Stderr, stderr)
+
+// 	wg.Wait()
+
+// 	err := cmd.Wait()
+// 	return string(stout), string(sterr), err
+// }
+
+// // copyAndCapture
+// func copyAndCapture(w io.Writer, r io.Reader) ([]byte, error) {
+// 	var out []byte
+// 	buf := make([]byte, 1024)
+// 	for {
+// 		n, err := r.Read(buf[:])
+// 		if n > 0 {
+// 			d := buf[:n]
+// 			out = append(out, d...)
+// 			_, err := w.Write(d)
+// 			if err != nil {
+// 				return out, err
+// 			}
+// 		}
+// 		if err != nil {
+// 			// Read returns io.EOF at the end of file, which is not an error for us
+// 			if err == io.EOF {
+// 				err = nil
+// 			}
+// 			return out, err
+// 		}
+// 	}
+// }
+
+// // GetDataServices lists data services
+// func GetDataServices(url string) {
+
+// 	endPointURL := url + "/api/data-services"
+// 	logrus.Infof("endPointURL %v", endPointURL)
+// 	accessToken := GetBearerToken()
+
+// 	req, err := http.NewRequest("GET", endPointURL, nil)
+// 	processError(err)
+// 	req.Header.Set("Content-Type", "application/json")
+// 	req.Header.Set("Authorization", "Bearer "+accessToken)
+// 	client := &http.Client{}
+// 	resp, err := client.Do(req)
+// 	processError(err)
+// 	defer resp.Body.Close()
+
+// 	// resp, err := client.R().SetHeader("Accept", "application/json").SetAuthToken("Bearer " + accessToken).Get(endPointURL)
+// 	// processError(err)
+
+// 	logrus.Infof("status %v", resp.Status)
+
+// }
+
+// // GetClusterID retruns the cluster id
+// func GetClusterID(pathToKubeconfig string) (string, error) {
+// 	logrus.Infof("Fetch Cluster id ")
+// 	cmd := fmt.Sprintf("kubectl get ns kube-system -o jsonpath={.metadata.uid} --kubeconfig %s", pathToKubeconfig)
+// 	output, _, err := ExecShell(cmd)
+// 	processError(err)
+// 	return output, nil
+// }
+
+// // SetupPDSTest returns few params required to run the test
+// func SetupPDSTest() (string, string, string, string, string) {
+// 	var err error
+// 	apiConf := pds.NewConfiguration()
+// 	endpointURL, err := url.Parse(os.Getenv("CONTROL_PLANE_URL"))
+// 	processError(err)
+// 	apiConf.Host = endpointURL.Host
+// 	apiConf.Scheme = endpointURL.Scheme
+
+// 	ctx := context1.WithValue(context1.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: GetBearerToken(), Prefix: "Bearer"}})
+// 	apiClient := pds.NewAPIClient(apiConf)
+// 	components = pdsapi.NewComponents(ctx, apiClient)
+// 	controlplane := pdslib.NewControlPlane(os.Getenv("CONTROL_PLANE_URL"), components)
+
+// 	Step("Get Dataservices")
+// 	GetDataServices(os.Getenv("CONTROL_PLANE_URL"))
+
+// 	Step("Get TargetClusterID")
+// 	clusterID, err := GetClusterID(os.Getenv("TARGET_KUBECONFIG"))
+// 	logrus.Infof("clusterID %v", clusterID)
+// 	processError(err)
+
+// 	logrus.Info("Get the Target cluster details")
+// 	targetClusters, _ := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
+// 	for i := 0; i < len(targetClusters); i++ {
+// 		if targetClusters[i].GetClusterId() == clusterID {
+// 			deploymentTargetID = targetClusters[i].GetId()
+// 			logrus.Infof("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
+// 		}
+// 	}
+
+// 	Step("Get AccountList")
+// 	acc := components.Account
+// 	accounts, _ := acc.GetAccountsList()
+
+// 	if strings.EqualFold(os.Getenv("CLUSTER_TYPE"), "onprem") || strings.EqualFold(os.Getenv("CLUSTER_TYPE"), "ocp") {
+// 		serviceType = "ClusterIP"
+// 	}
+// 	logrus.Infof("Deployment service type %s", serviceType)
+
+// 	for i := 0; i < len(accounts); i++ {
+// 		logrus.Infof("Account Name: %v", accounts[i].GetName())
+// 		if accounts[i].GetName() == accountName {
+// 			accountID = accounts[i].GetId()
+// 		}
+// 	}
+// 	logrus.Infof("Account Detail- Name: %s, UUID: %s ", accountName, accountID)
+// 	tnts := components.Tenant
+// 	tenants, _ := tnts.GetTenantsList(accountID)
+// 	tenantID = tenants[0].GetId()
+// 	tenantName := tenants[0].GetName()
+// 	logrus.Infof("Tenant Details- Name: %s, UUID: %s ", tenantName, tenantID)
+// 	dnsZone := controlplane.GetDNSZone(tenantID)
+// 	//dnsZone = "qa-staging.pds-dns.io"
+// 	logrus.Infof("DNSZone info - Name: %s, tenant: %s , account: %s", dnsZone, tenantName, accountName)
+// 	projcts := components.Project
+// 	projects, _ := projcts.GetprojectsList(tenantID)
+// 	projectID = projects[0].GetId()
+// 	projectName := projects[0].GetName()
+// 	logrus.Infof("Project Details- Name: %s, UUID: %s ", projectName, projectID)
+
+// 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID
+// }
 
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
@@ -318,6 +503,186 @@ func InitInstance() {
 		logrus.Debugf("Not all information to connect to JIRA is provided.")
 	}
 }
+
+// // BearerToken struct
+// type BearerToken struct {
+// 	AccessToken  string `json:"access_token"`
+// 	TokenType    string `json:"token_type"`
+// 	ExpiresIn    uint64 `json:"expires_in"`
+// 	RefreshToken string `json:"refresh_token"`
+// }
+
+// // GetBearerToken fetches the token to run the tests
+// func GetBearerToken() string {
+// 	username := os.Getenv("PDS_USERNAME")
+// 	password := os.Getenv("PDS_PASSWORD")
+// 	clientID := os.Getenv("PDS_CLIENT_ID")
+// 	clientSecret := os.Getenv("PDS_CLIENT_SECRET")
+// 	issuerURL := os.Getenv("PDS_ISSUER_URL")
+// 	url := fmt.Sprintf("%s/protocol/openid-connect/token", issuerURL)
+// 	grantType := "password"
+// 	logrus.Info("Getting accesstoken")
+
+// 	postBody, _ := json.Marshal(map[string]string{
+// 		"grant_type":    grantType,
+// 		"client_id":     clientID,
+// 		"client_secret": clientSecret,
+// 		"username":      username,
+// 		"password":      password,
+// 	})
+
+// 	requestBody := bytes.NewBuffer(postBody)
+// 	resp, err := http.Post(url, "application/json", requestBody)
+// 	processError(err)
+// 	defer resp.Body.Close()
+// 	//Read the response body
+// 	body, err := ioutil.ReadAll(resp.Body)
+// 	processError(err)
+// 	var bearerToken = new(BearerToken)
+// 	err = json.Unmarshal(body, &bearerToken)
+// 	processError(err)
+// 	logrus.Infof("accesstoken %v", bearerToken.AccessToken)
+
+// 	return bearerToken.AccessToken
+
+// }
+
+// //GetStorageTemplate gets the template id
+// func GetStorageTemplate(tenantID string) string {
+// 	logrus.Infof("Get the storage template")
+// 	storageTemplates, _ := components.StorageSettingsTemplate.ListTemplates(tenantID)
+// 	for i := 0; i < len(storageTemplates); i++ {
+// 		if storageTemplates[i].GetName() == storageTemplateName {
+// 			logrus.Infof("Storage template details -----> Name %v,Repl %v , Fg %v , Fs %v",
+// 				storageTemplates[i].GetName(),
+// 				storageTemplates[i].GetRepl(),
+// 				storageTemplates[i].GetFg(),
+// 				storageTemplates[i].GetFs())
+// 			storageTemplateID = storageTemplates[i].GetId()
+// 			logrus.Infof("Storage Id: %v", storageTemplateID)
+// 		}
+// 	}
+// 	return storageTemplateID
+// }
+
+// // GetResourceTemplate get the resource template id
+// func GetResourceTemplate(tenantID string) (map[string]string, map[string]string) {
+// 	logrus.Infof("Get the resource template for each data services")
+// 	resourceTemplates, _ := components.ResourceSettingsTemplate.ListTemplates(tenantID)
+// 	for i := 0; i < len(resourceTemplates); i++ {
+// 		if resourceTemplates[i].GetName() == resourceTemplateName {
+// 			dataService, _ := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
+// 			logrus.Infof("Data service name: %v", dataService.GetName())
+// 			logrus.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
+// 				resourceTemplates[i].GetName(),
+// 				resourceTemplates[i].GetId(),
+// 				resourceTemplates[i].GetDataServiceId(),
+// 				resourceTemplates[i].GetStorageRequest(),
+// 				resourceTemplates[i].GetMemoryRequest())
+
+// 			dataServiceDefaultResourceTemplateIDMap[dataService.GetName()] =
+// 				resourceTemplates[i].GetId()
+// 			dataServiceNameIDMap[dataService.GetName()] = dataService.GetId()
+// 		}
+// 	}
+// 	return dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap
+// }
+
+// // GetVersions returns the versions of dataservice
+// func GetVersions(dataServiceNameIDMap map[string]string) (map[string][]string, map[string]string) {
+// 	for key := range dataServiceNameIDMap {
+// 		versions, _ := components.Version.ListDataServiceVersions(dataServiceNameIDMap[key])
+// 		for i := 0; i < len(versions); i++ {
+// 			dataServiceNameVersionMap[key] = append(dataServiceNameVersionMap[key], versions[i].GetId())
+// 		}
+// 	}
+
+// 	for key := range dataServiceNameVersionMap {
+// 		images, _ := components.Image.ListImages(dataServiceNameVersionMap[key][0])
+// 		for i := 0; i < len(images); i++ {
+// 			dataServiceIDImagesMap[images[i].GetDataServiceId()] = images[i].GetId()
+// 		}
+// 	}
+
+// 	return dataServiceNameVersionMap, dataServiceIDImagesMap
+// }
+
+// // GetAppConfTemplate returns the app config templates
+// func GetAppConfTemplate(tenantID string) map[string]string {
+// 	appConfigs, _ := components.AppConfigTemplate.ListTemplates(tenantID)
+// 	for i := 0; i < len(appConfigs); i++ {
+// 		if appConfigs[i].GetName() == appConfigTemplateName {
+// 			for key := range dataServiceNameIDMap {
+// 				if dataServiceNameIDMap[key] == appConfigs[i].GetDataServiceId() {
+// 					dataServiceNameDefaultAppConfigMap[key] = appConfigs[i].GetId()
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return dataServiceNameDefaultAppConfigMap
+// }
+
+// // GetnameSpaceID returns the namespace ID
+// func GetnameSpaceID(namespace string) string {
+// 	var namespaceID string
+// 	namespaces, _ := components.Namespace.ListNamespaces(deploymentTargetID)
+// 	for i := 0; i < len(namespaces); i++ {
+// 		if namespaces[i].GetStatus() == "available" {
+// 			if namespaces[i].GetName() == namespace {
+// 				namespaceID = namespaces[i].GetId()
+// 			}
+// 			namespaceNameIDMap[namespaces[i].GetName()] = namespaces[i].GetId()
+// 			logrus.Infof("Available namespace - Name: %v , Id: %v , Status: %v", namespaces[i].GetName(), namespaces[i].GetId(), namespaces[i].GetStatus())
+// 		}
+// 	}
+// 	return namespaceID
+// }
+
+// // DeployDataServices deploys the dataservice
+// func DeployDataServices(projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
+// 	namespaceID string, dataServiceNameDefaultAppConfig string, dataServiceID string, replicas int32,
+// 	serviceType string, dataServiceDefaultResourceTemplateID string, storageTemplateID string) *pds.ModelsDeployment {
+
+// 	deployment, err := components.DataServiceDeployment.CreateDeployment(projectID,
+// 		deploymentTargetID,
+// 		dnsZone,
+// 		deploymentName,
+// 		namespaceID,
+// 		dataServiceNameDefaultAppConfig,
+// 		dataServiceID,
+// 		replicas,
+// 		serviceType,
+// 		dataServiceDefaultResourceTemplateID,
+// 		storageTemplateID)
+
+// 	processError(err)
+// 	k8sApps := apps.Instance()
+// 	//get the list of statefulsets in particular namespace
+// 	ss, err := k8sApps.GetStatefulSet(deploymentName, "test1")
+// 	processError(err)
+
+// 	//validate the statefulset deployed in the namespace
+// 	err = k8sApps.ValidateStatefulSet(ss, defaultRetryInterval)
+// 	processError(err)
+
+// 	status, _ := components.DataServiceDeployment.GetDeploymentSatus(deployment.GetId())
+// 	sleeptime := 0
+// 	for status.GetHealth() != "Healthy" && sleeptime < duration {
+// 		if sleeptime > 30 && len(status.GetHealth()) < 2 {
+// 			logrus.Infof("Deployment details: Health status -  %v, procceeding with next deployment", status.GetHealth())
+// 			break
+// 		}
+// 		time.Sleep(10 * time.Second)
+// 		sleeptime += 10
+// 		status, _ = components.DataServiceDeployment.GetDeploymentSatus(deployment.GetId())
+// 		logrus.Infof("Health status -  %v", status.GetHealth())
+// 	}
+// 	if status.GetHealth() == "Healthy" {
+// 		deployementIDNameMap[deployment.GetId()] = deployment.GetName()
+// 	}
+// 	logrus.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+// 	return deployment
+// }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {

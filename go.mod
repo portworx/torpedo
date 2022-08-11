@@ -14,6 +14,7 @@ require (
 	github.com/fatih/color v1.9.0
 	github.com/frankban/quicktest v1.14.2 // indirect
 	github.com/gambol99/go-marathon v0.7.1
+	github.com/go-resty/resty/v2 v2.7.0 // indirect
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-version v1.2.1
@@ -31,6 +32,7 @@ require (
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
+	github.com/portworx/pds-api-go-client v0.0.0-20220802002005-cd7125f07a69
 	github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20220327212454-cc1a88ecb579
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
@@ -44,6 +46,7 @@ require (
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
 	google.golang.org/genproto v0.0.0-20210921142501-181ce0d877f6
 	google.golang.org/grpc v1.40.0
+	gopkg.in/resty.v1 v1.12.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
 	k8s.io/api v0.21.4
