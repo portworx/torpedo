@@ -24,7 +24,7 @@ func (e *ErrFailedToRebootNode) Error() string {
 	return fmt.Sprintf("Failed to reboot node: %v. Cause: %v", e.Node.Name, e.Cause)
 }
 
-// ErrFailedToSetPacketLossNode error type when failing to reboot a node
+// ErrFailedToSetNetworkErrorOnNode error type when failing to reboot a node
 type ErrFailedToSetNetworkErrorOnNode struct {
 	Node  Node
 	Cause string
