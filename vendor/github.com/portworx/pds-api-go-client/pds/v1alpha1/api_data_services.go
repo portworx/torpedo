@@ -36,14 +36,12 @@ type ApiApiDataServicesGetRequest struct {
 	id *string
 	name *string
 	shortName *string
-	kind *string
-	resourceType *string
 	hasIncrementalBackup *bool
 	hasFullBackup *bool
 	comingSoon *bool
 }
 
-// A given Data Service attribute to sort results by (one of: id, name, short_name, kind, resource_type, created_at)
+// A given Data Service attribute to sort results by (one of: id, name, short_name, created_at)
 func (r ApiApiDataServicesGetRequest) SortBy(sortBy string) ApiApiDataServicesGetRequest {
 	r.sortBy = &sortBy
 	return r
@@ -71,16 +69,6 @@ func (r ApiApiDataServicesGetRequest) Name(name string) ApiApiDataServicesGetReq
 // Filter results by Data Service short name
 func (r ApiApiDataServicesGetRequest) ShortName(shortName string) ApiApiDataServicesGetRequest {
 	r.shortName = &shortName
-	return r
-}
-// Filter results by Data Service kind
-func (r ApiApiDataServicesGetRequest) Kind(kind string) ApiApiDataServicesGetRequest {
-	r.kind = &kind
-	return r
-}
-// Filter results by Data Service resource type
-func (r ApiApiDataServicesGetRequest) ResourceType(resourceType string) ApiApiDataServicesGetRequest {
-	r.resourceType = &resourceType
 	return r
 }
 // Filter results based on incremental backup eligibility
@@ -156,12 +144,6 @@ func (a *DataServicesApiService) ApiDataServicesGetExecute(r ApiApiDataServicesG
 	}
 	if r.shortName != nil {
 		localVarQueryParams.Add("short_name", parameterToString(*r.shortName, ""))
-	}
-	if r.kind != nil {
-		localVarQueryParams.Add("kind", parameterToString(*r.kind, ""))
-	}
-	if r.resourceType != nil {
-		localVarQueryParams.Add("resource_type", parameterToString(*r.resourceType, ""))
 	}
 	if r.hasIncrementalBackup != nil {
 		localVarQueryParams.Add("has_incremental_backup", parameterToString(*r.hasIncrementalBackup, ""))

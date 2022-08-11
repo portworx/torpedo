@@ -32,7 +32,7 @@ require (
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
-	github.com/portworx/pds-api-go-client v0.0.0-20220802002005-cd7125f07a69
+	github.com/portworx/pds-api-go-client v0.0.0-20220810014203-e9b075efe9b0
 	github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20220327212454-cc1a88ecb579
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0

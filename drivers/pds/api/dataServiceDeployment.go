@@ -84,6 +84,26 @@ func (ds *DataServiceDeployment) CreateDeploymentWithScehduleBackup(projectID st
 	return dsModel, err
 }
 
+//UpdateDeployment func
+func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID string) (*pds.ModelsDeployment, error) {
+	dsClient := ds.apiClient.DeploymentsApi
+	createRequest := pds.ControllersUpdateDeploymentRequest{
+		// ApplicationConfigurationOverrides:  &appConfigOverride,
+		ApplicationConfigurationTemplateId: &appConfigID,
+		ImageId:                            &imageID,
+		// LoadBalancerSourceRanges: lbSourceRange,
+		NodeCount: &nodeCount,
+		// ScheduledBackup:                    &scheduledBackup,
+		ResourceSettingsTemplateId: &resourceTemplateID,
+	}
+	dsModel, res, err := dsClient.ApiDeploymentsIdPut(ds.context, deploymentID).Body(createRequest).Execute()
+	if res.StatusCode != status.StatusOK {
+		log.Errorf("Error when calling `ApiDeploymentsIdGet``: %v\n", err)
+		log.Errorf("Full HTTP response: %v\n", res)
+	}
+	return dsModel, err
+}
+
 // GetDeployment func
 func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi

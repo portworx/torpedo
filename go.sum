@@ -1354,6 +1354,8 @@ github.com/portworx/pds-api-go-client v0.0.0-20220428002431-5b264e51b5e3 h1:IHc3
 github.com/portworx/pds-api-go-client v0.0.0-20220428002431-5b264e51b5e3/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
 github.com/portworx/pds-api-go-client v0.0.0-20220802002005-cd7125f07a69 h1:xgtaHQWTseYRGWWmIBa/ddSk/4MajEzgwtFaMggYYwE=
 github.com/portworx/pds-api-go-client v0.0.0-20220802002005-cd7125f07a69/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
+github.com/portworx/pds-api-go-client v0.0.0-20220810014203-e9b075efe9b0 h1:d/J/Pvvse/BVpnY/98aK4WMhiqcPkYQizulAUQ5M5iQ=
+github.com/portworx/pds-api-go-client v0.0.0-20220810014203-e9b075efe9b0/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
 github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af h1:1I9DWXuBZcp5byguYc1yKr2q0JwcZHeiKHcGtYHnMSg=
 github.com/portworx/px-backup-api v1.2.2-0.20210917042806-f2b0725444af/go.mod h1:3+gfGSSmuF1pO9qkOuKiLWpiTKDXpijSg4VNgluGUX0=

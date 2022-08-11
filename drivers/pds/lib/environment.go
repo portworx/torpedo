@@ -2,6 +2,7 @@ package lib
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/onsi/gomega"
 )
@@ -23,4 +24,20 @@ func GetAndExpectStringEnvVar(varName string) string {
 	varValue := os.Getenv(varName)
 	gomega.Expect(varValue).NotTo(gomega.BeEmpty(), "ENV "+varName+" is not set")
 	return varValue
+}
+
+// GetAndExpectIntEnvVar parses an int from env variable.
+func GetAndExpectIntEnvVar(varName string) int {
+	varValue := GetAndExpectStringEnvVar(varName)
+	varIntValue, err := strconv.Atoi(varValue)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Error Parsing "+varName)
+	return varIntValue
+}
+
+// GetAndExpectBoolEnvVar parses a boolean from env variable.
+func GetAndExpectBoolEnvVar(varName string) bool {
+	varValue := GetAndExpectStringEnvVar(varName)
+	varBoolValue, err := strconv.ParseBool(varValue)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Error Parsing "+varName)
+	return varBoolValue
 }

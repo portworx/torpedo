@@ -30,7 +30,7 @@ type ModelsDeployment struct {
 	DataServiceId *string `json:"data_service_id,omitempty"`
 	// DeploymentTargetID on which target the data service is deployed (models.DeploymentTarget).
 	DeploymentTargetId *string `json:"deployment_target_id,omitempty"`
-	// DNSZone domain which this deployment should be a part of (eg pds-eap.io).
+	// DNSZone domain which this deployment should be a part of (eg pds-dns.io).
 	DnsZone *string `json:"dns_zone,omitempty"`
 	Error *ModelsErrorData `json:"error,omitempty"`
 	// ID is auto generated on creation
