@@ -190,7 +190,6 @@ func SetupPDSTest() (string, string, string, string, string) {
 	tenantName := tenants[0].GetName()
 	logrus.Infof("Tenant Details- Name: %s, UUID: %s ", tenantName, tenantID)
 	dnsZone := controlplane.GetDNSZone(tenantID)
-	//dnsZone = "qa-staging.pds-dns.io"
 	logrus.Infof("DNSZone info - Name: %s, tenant: %s , account: %s", dnsZone, tenantName, accountName)
 	projcts := components.Project
 	projects, _ := projcts.GetprojectsList(tenantID)

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/pborman/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -81,7 +82,9 @@ func GetMasterNodes() []Node {
 // driver is installed
 func GetStorageDriverNodes() []Node {
 	var nodeList []Node
+	logrus.Infof("length of nodeRegistry %v", len(nodeRegistry))
 	for _, n := range nodeRegistry {
+		logrus.Infof("type %v, is-installed %v", string(n.Type), n.IsStorageDriverInstalled)
 		if n.Type == TypeWorker && n.IsStorageDriverInstalled {
 			nodeList = append(nodeList, n)
 		}

@@ -3,11 +3,13 @@ package tests
 import (
 	"os"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/torpedo/drivers/node"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
@@ -55,6 +57,7 @@ func TestBasicDeployment(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	InitInstance()
 	logrus.Info("Starting the test in before suite...")
 	Step("get prerequisite params to run the pds tests")
 	tenantID, dnsZone, projectID, serviceType, deploymentTargetID = pdslib.SetupPDSTest()
@@ -85,11 +88,9 @@ var _ = BeforeSuite(func() {
 
 	})
 
-	//InitInstance()
 })
 
 //This test deploys dataservices and validates the health and cleans up the deployed dataservice
-
 var _ = Describe("{DeployDataService}", func() {
 	JustBeforeEach(func() {
 		Step("Get Namespace and NamespaceID", func() {
@@ -98,12 +99,58 @@ var _ = Describe("{DeployDataService}", func() {
 		})
 	})
 
+	It("restart portworx and validate dataservice", func() {
+		Step("deploy dataservices", func() {
+			for i := range supportedDataServices {
+				Step("Deploy Dataservices", func() {
+					logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
+					logrus.Infof(`Request params:
+				projectID- %v deploymentTargetID - %v,
+				dnsZone - %v,deploymentName - %v,namespaceID - %v
+				App config ID - %v,
+				num pods- %v, service-type - %v
+				Resource template id - %v, storageTemplateID - %v`,
+						projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
+						replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
+					deployment = pdslib.DeployDataServices(projectID,
+						deploymentTargetID,
+						dnsZone,
+						deploymentName,
+						namespaceID,
+						dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
+						dataServiceIDImagesMap,
+						replicas,
+						serviceType,
+						dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
+						storageTemplateID,
+					)
+					deploymentIDs = append(deploymentIDs, deployment.GetId())
+				})
+				Step("restart portworx on worker nodes", func() {
+					nodesToRestartPortworx := node.GetWorkerNodes()
+					for _, workerNodes := range nodesToRestartPortworx {
+						logrus.Infof("worker nodes %v", workerNodes.Name)
+						err := Inst().N.Systemctl(workerNodes, "portworx.service", node.SystemctlOpts{
+							Action: "restart",
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         5 * time.Minute,
+								TimeBeforeRetry: 10 * time.Second,
+							}})
+						Expect(err).NotTo(HaveOccurred())
+					}
+				})
+				Step("Validate Deployments after restarting portworx")
+				pdslib.ValidateDataServiceDeployment(deployment)
+			}
+		})
+	})
+
 	It("deploy dataservcies", func() {
 		logrus.Info("Create dataservices without backup.")
 		for i := range supportedDataServices {
 			logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
-			logrus.Infof(`Request params: 
-			projectID- %v deploymentTargetID - %v, 
+			logrus.Infof(`Request params:
+			projectID- %v deploymentTargetID - %v,
 			dnsZone - %v,deploymentName - %v,namespaceID - %v
 			App config ID - %v,
 			num pods- %v, service-type - %v
@@ -126,44 +173,13 @@ var _ = Describe("{DeployDataService}", func() {
 		}
 	})
 
-	It("trigger Workload on dataServices", func() {
-		for i := range supportedDataServices {
-			Step("Deploy Dataservices", func() {
-				logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
-				logrus.Infof(`Request params: 
-			projectID- %v deploymentTargetID - %v, 
-			dnsZone - %v,deploymentName - %v,namespaceID - %v
-			App config ID - %v,
-			num pods- %v, service-type - %v
-			Resource template id - %v, storageTemplateID - %v`,
-					projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-					replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
-				deployment = pdslib.DeployDataServices(projectID,
-					deploymentTargetID,
-					dnsZone,
-					deploymentName,
-					namespaceID,
-					dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-					dataServiceIDImagesMap,
-					replicas,
-					serviceType,
-					dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
-					storageTemplateID,
-				)
-				deploymentIDs = append(deploymentIDs, deployment.GetId())
-			})
-		}
-		Step("Trigger workload generation for PostgreSQL")
-
-	})
-
 	It("scaleUp dataservices", func() {
 		logrus.Info("Scale Test for dataservices")
 		for i := range supportedDataServices {
 			Step("Deploy Dataservices", func() {
 				logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
-				logrus.Infof(`Request params: 
-			projectID- %v deploymentTargetID - %v, 
+				logrus.Infof(`Request params:
+			projectID- %v deploymentTargetID - %v,
 			dnsZone - %v,deploymentName - %v,namespaceID - %v
 			App config ID - %v,
 			num pods- %v, service-type - %v
@@ -187,7 +203,7 @@ var _ = Describe("{DeployDataService}", func() {
 		}
 
 		Step("Scaling up the dataservice replicas", func() {
-			replicas = 2
+			replicas = 5
 			for index := range deploymentIDs {
 				deployment = pdslib.UpdateDataServices(deploymentIDs[index],
 					dataServiceNameDefaultAppConfigMap[supportedDataServices[index]],
