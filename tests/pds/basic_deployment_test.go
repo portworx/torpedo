@@ -99,8 +99,36 @@ var _ = Describe("{DeployDataService}", func() {
 		})
 	})
 
+	It("delete pds pods and validate if its coming back online and dataserices are not affected", func() {
+		logrus.Info("Create dataservices without backup.")
+		for i := range supportedDataServices {
+			logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
+			logrus.Infof(`Request params:
+			projectID- %v deploymentTargetID - %v,
+			dnsZone - %v,deploymentName - %v,namespaceID - %v
+			App config ID - %v,
+			num pods- %v, service-type - %v
+			Resource template id - %v, storageTemplateID - %v`,
+				projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
+				replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
+			deployment := pdslib.DeployDataServices(projectID,
+				deploymentTargetID,
+				dnsZone,
+				deploymentName,
+				namespaceID,
+				dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
+				dataServiceIDImagesMap,
+				replicas,
+				serviceType,
+				dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
+				storageTemplateID,
+			)
+			logrus.Infof("data service id %v", deployment.GetDataServiceId())
+		}
+	})
+
 	It("restart portworx and validate dataservice", func() {
-		Step("deploy dataservices", func() {
+		Step("deploy dataservices and restart portworx on worker nodes", func() {
 			for i := range supportedDataServices {
 				Step("Deploy Dataservices", func() {
 					logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
