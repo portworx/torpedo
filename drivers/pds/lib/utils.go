@@ -14,8 +14,11 @@ import (
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 //PDS const
@@ -26,10 +29,15 @@ const (
 	deploymentName        = "automation"
 	defaultRetryInterval  = 10 * time.Minute
 	duration              = 900
+	timeOut               = 5 * time.Minute
+	timeInterval          = 10 * time.Second
 )
 
 //PDS vars
 var (
+	k8sCore = core.Instance()
+	k8sApps = apps.Instance()
+
 	components                            *pdsapi.Components
 	deploymentTargetID, storageTemplateID string
 	accountID                             string
@@ -303,15 +311,6 @@ func GetAllVersions(dataServiceNameIDMap map[string]string) (map[string][]string
 		}
 	}
 
-	// for key := range dataServiceNameVersionMap {
-	// 	for j := range dataServiceNameVersionMap[key] {
-	// 		images, _ := components.Image.ListImages(dataServiceNameVersionMap[key][j])
-	// 		for i := 0; i < len(images); i++ {
-	// 			dataServiceIDImagesMap[] = append(dataServiceIDImagesMap[images[i].GetDataServiceId()], images[i].GetId())
-	// 		}
-	// 	}
-	// }
-
 	for key := range dataServiceNameVersionMap {
 		logrus.Infof("DS Version name- %v,id- %v", key, dataServiceNameVersionMap[key])
 	}
@@ -338,6 +337,47 @@ func GetAppConfTemplate(tenantID string, dataServiceNameIDMap map[string]string)
 	return dataServiceNameDefaultAppConfigMap
 }
 
+// DeleteDeploymentPods deletes the given pods
+func DeleteDeploymentPods(podList *v1.PodList) error {
+	var pods, newPods []corev1.Pod
+	k8sOps := k8sCore
+
+	pods = append(pods, podList.Items...)
+	err := k8sOps.DeletePods(pods, true)
+	if err != nil {
+		return err
+	}
+
+	//get the newly created pods
+	time.Sleep(10 * time.Second)
+	newPodList, err := GetPods("pds-system")
+	if err != nil {
+		return err
+	}
+	//reinitializing the pods
+	newPods = append(newPods, newPodList.Items...)
+
+	//validate deployment pods are up and running after deletion
+	for _, pod := range newPods {
+		logrus.Infof("pds system pod name %v", pod.Name)
+		err = k8sOps.ValidatePod(&pod, timeOut, timeInterval)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetPods returns the list of pods in namespace
+func GetPods(namespace string) (*v1.PodList, error) {
+	k8sOps := k8sCore
+	podList, err := k8sOps.GetPods(namespace, nil)
+	if err != nil {
+		return nil, err
+	}
+	return podList, err
+}
+
 // GetnameSpaceID returns the namespace ID
 func GetnameSpaceID(namespace string) string {
 	var namespaceID string
@@ -362,7 +402,6 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) {
 	//To get the list of statefulsets in particular namespace
 	time.Sleep(30 * time.Second)
 
-	k8sApps := apps.Instance()
 	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), GetAndExpectStringEnvVar("NAMESPACE"))
 	if err != nil {
 		logrus.Warnf("An Error Occured %v", err)
