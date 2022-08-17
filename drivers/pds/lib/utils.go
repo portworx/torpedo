@@ -17,8 +17,9 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 //PDS const
@@ -47,6 +48,7 @@ var (
 	accountName                           = "Portworx"
 	deployment                            *pds.ModelsDeployment
 	err                                   error
+	isavailable                           bool
 
 	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
 	dataServiceNameIDMap                    = make(map[string]string)
@@ -339,7 +341,7 @@ func GetAppConfTemplate(tenantID string, dataServiceNameIDMap map[string]string)
 
 // DeleteDeploymentPods deletes the given pods
 func DeleteDeploymentPods(podList *v1.PodList) error {
-	var pods, newPods []corev1.Pod
+	var pods, newPods []v1.Pod
 	k8sOps := k8sCore
 
 	pods = append(pods, podList.Items...)
@@ -366,6 +368,79 @@ func DeleteDeploymentPods(podList *v1.PodList) error {
 		}
 	}
 	return nil
+}
+
+//ValidateNamespaces validates the namespace is available for pds
+func ValidateNamespaces(deploymentTargetID string, ns string, status string) error {
+	isavailable = false
+	waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
+		pdsNamespaces, err := components.Namespace.ListNamespaces(deploymentTargetID)
+		if err != nil {
+			return false, err
+		}
+		for _, pdsNamespace := range pdsNamespaces {
+			logrus.Infof("namespace name %v and status %v", *pdsNamespace.Name, *pdsNamespace.Status)
+			if *pdsNamespace.Name == ns && *pdsNamespace.Status == status {
+				isavailable = true
+			}
+		}
+		if isavailable {
+			return true, nil
+		}
+
+		return false, nil
+	})
+	return waitErr
+}
+
+//DeletePDSNamespace deletes the given namespace
+func DeletePDSNamespace(namespace string) error {
+	k8sOps := k8sCore
+	err := k8sOps.DeleteNamespace(namespace)
+	return err
+}
+
+//UpdatePDSNamespce updates the namespace
+func UpdatePDSNamespce(name string, nsLables map[string]string) (*v1.Namespace, error) {
+	k8sOps := k8sCore
+	nsSpec := &v1.Namespace{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Namespace",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: nsLables,
+		},
+	}
+	ns, err := k8sOps.UpdateNamespace(nsSpec)
+	time.Sleep(10 * time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return ns, nil
+}
+
+//CreatePDSNamespace creates pds namespace
+func CreatePDSNamespace(name string) (*v1.Namespace, error) {
+	k8sOps := k8sCore
+	nsSpec := &v1.Namespace{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Namespace",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"name": name,
+			},
+		},
+	}
+	ns, err := k8sOps.CreateNamespace(nsSpec)
+	if err != nil {
+		return nil, err
+	}
+	return ns, nil
 }
 
 // GetPods returns the list of pods in namespace

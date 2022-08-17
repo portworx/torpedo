@@ -44,6 +44,7 @@ var (
 	dataServiceNameIDMap                    map[string]string
 	deploymentIDs                           []string
 	deployment                              *pds.ModelsDeployment
+	namespaceService                        *pds.NamespacesApiService
 )
 
 func TestBasicDeployment(t *testing.T) {
@@ -97,6 +98,47 @@ var _ = Describe("{Validate DataService}", func() {
 		Step("Get Namespace and NamespaceID", func() {
 			namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
 			namespaceID = pdslib.GetnameSpaceID(namespace)
+		})
+	})
+
+	It("enable/disable namespace by giving labels to the namespace", func() {
+		Step("Enable/Disable PDS Namespace", func() {
+			pdsNamespace := "test-ns"
+			ns, err := pdslib.CreatePDSNamespace(pdsNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			logrus.Infof("PDS Namespace created %v", ns)
+
+			// Modifies the namespace multiple times
+			for i := 0; i < 10; i++ {
+				nsLables := map[string]string{
+					"pds.portworx.com/available": "true",
+				}
+				ns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("PDS Namespace Updated %v", ns)
+
+				//Validate Namespace is available for pds
+				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "available")
+				Expect(err).NotTo(HaveOccurred())
+
+				nsLables = map[string]string{
+					"pds.portworx.com/available": "false",
+				}
+				ns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("PDS Namespace Updated %v", ns)
+
+				//Validate Namespace is available for pds
+				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "unavailable")
+				Expect(err).NotTo(HaveOccurred())
+
+			}
+
+			defer func() {
+				err := pdslib.DeletePDSNamespace(pdsNamespace)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
 		})
 	})
 
