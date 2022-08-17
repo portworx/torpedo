@@ -1,6 +1,7 @@
 package snapshotutils
 
 import (
+	"fmt"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -18,7 +19,7 @@ const (
 	snapshotScheduleRetryTimeout  = 5 * time.Minute
 )
 
-// ValidateSnapshotSchedule
+// ValidateSnapshotSchedule validates the scheduled snapshots
 func ValidateSnapshotSchedule(snapshotScheduleName string, appNamespace string) error {
 	logrus.Infof("snapshotScheduleName : %s", snapshotScheduleName)
 	logrus.Infof("Namespace : %v", appNamespace)
@@ -29,19 +30,22 @@ func ValidateSnapshotSchedule(snapshotScheduleName string, appNamespace string) 
 	if err != nil {
 		logrus.Errorf("Got error while getting volume snapshot status :%v", err.Error())
 		return err
-	} else {
-		for k, v := range snapStatuses {
-			logrus.Infof("Policy Type: %v", k)
-			for _, e := range v {
-				logrus.Infof("ScheduledVolumeSnapShot Name: %v", e.Name)
-				logrus.Infof("ScheduledVolumeSnapShot status: %v", e.Status)
-			}
+	}
+	if len(snapStatuses) == 0 {
+		err = fmt.Errorf("No cloud snaps available in %s ", appNamespace)
+		return err
+	}
+	for k, v := range snapStatuses {
+		logrus.Infof("Policy Type: %v", k)
+		for _, e := range v {
+			logrus.Infof("ScheduledVolumeSnapShot Name: %v", e.Name)
+			logrus.Infof("ScheduledVolumeSnapShot status: %v", e.Status)
 		}
 	}
 	return nil
 }
 
-// SchedulePolicy
+// SchedulePolicy create schedulePolicy on default namespace
 func SchedulePolicyInDefaultNamespace(policyName string, interval int, retain int) error {
 	//Create snapshot schedule interval.
 	logrus.Infof("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
