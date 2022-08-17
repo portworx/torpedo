@@ -226,6 +226,53 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 	})
 })
 
+// Runs cluster wide diags collection and validates on S3
+var _ = Describe("{DiagsClusterWide}", func() {
+	var testrailID = 54916
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54916
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	var diagFile string
+	var err error
+	It("has to collect diags on entire cluster, validate diags on S3", func() {
+		contexts = make([]*scheduler.Context, 0)
+		// One node at a time, collect diags and verify in S3
+		for _, currNode := range node.GetWorkerNodes() {
+			Step(fmt.Sprintf("run pxctl sv diags to collect cluster wide diags  %v", currNode.Name), func() {
+				_, err := runCmd("/opt/pwx/bin/pxctl sv diags -a -c", currNode, nil)
+				Expect(err).NotTo(HaveOccurred(), "Error running diags on Node: %s", currNode.Name)
+			})
+			Step(fmt.Sprintf("Get the svc diags collected above %s", currNode.Name), func() {
+				logrus.Infof("Getting latest svc diags on %66v", currNode.Name)
+				diagFile, err = runCmd(fmt.Sprintf("ls -t /var/cores/%s-*.tar.gz | head -n 1", currNode.Name), currNode, nil)
+				if err != nil{
+					logrus.Fatalf("Error in getting cluster wide diags files on: %s, err: %v", currNode.Name, err)
+				}
+			})
+			Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
+				fileNameToCheck := path.Base(strings.TrimSuffix(diagFile, "\n"))
+				logrus.Debugf("Validating file %s", fileNameToCheck)
+				if TelemetryEnabled(currNode){
+					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
+					Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
+				}else{
+					logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+				}
+			})
+			break
+		}
+		for _, ctx := range contexts {
+			TearDownContext(ctx, nil)
+		}
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{DiagsAsyncBasic}", func() {
 	var contexts []*scheduler.Context
