@@ -45,7 +45,7 @@ func ValidateSnapshotSchedule(snapshotScheduleName string, appNamespace string) 
 	return nil
 }
 
-// SchedulePolicyInDefaultNamespace create schedulePolicy on default namespace
+// SchedulePolicyInDefaultNamespace creates schedulePolicy
 func SchedulePolicyInDefaultNamespace(policyName string, interval int, retain int) error {
 	//Create snapshot schedule interval.
 	logrus.Infof("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
