@@ -2,16 +2,17 @@ package s3utils
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
-	"os"
-	"strconv"
-	"sync"
-	"time"
 )
 
 var (
@@ -20,12 +21,14 @@ var (
 	equal        = gomega.Equal
 )
 
+// Object S3 bucket object
 type Object struct {
 	Key          string
 	Size         uint64
 	LastModified time.Time
 }
 
+// S3Client client information
 type S3Client struct {
 	mu               *sync.Mutex
 	renewalInrogress bool
@@ -73,16 +76,17 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
+// GetTimeStamp date/time path
 func GetTimeStamp(getPreviousFolder bool) string {
 	tnow := time.Now()
-	if getPreviousFolder{
+	if getPreviousFolder {
 		tnow = tnow.Add(-1 * time.Hour)
 	}
 	return fmt.Sprintf("%d_%02d_%02d/%02d_00_00", tnow.Year(), tnow.Month(), tnow.Day(), tnow.Hour())
 }
 
 // GetS3Objects lists the objects in S3
-func GetS3Objects(clusterId string, nodeName string, getPreviousFolder bool) ([]Object, error) {
+func GetS3Objects(clusterID string, nodeName string, getPreviousFolder bool) ([]Object, error) {
 	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
@@ -97,7 +101,7 @@ func GetS3Objects(clusterId string, nodeName string, getPreviousFolder bool) ([]
 
 	S3Client := s3.New(sess)
 	bucket := os.Getenv("DIAGS_BUCKET")
-	prefix := fmt.Sprintf("%s/%s/%s", clusterId, nodeName, GetTimeStamp(getPreviousFolder))
+	prefix := fmt.Sprintf("%s/%s/%s", clusterID, nodeName, GetTimeStamp(getPreviousFolder))
 	logrus.Debugf("Looking for files under folder %s", prefix)
 	input := &s3.ListObjectsInput{
 		Bucket: &bucket,

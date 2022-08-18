@@ -2,13 +2,14 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"os"
 	"path"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	"github.com/libopenstorage/openstorage/pkg/dbg"
 	. "github.com/onsi/ginkgo"
@@ -29,6 +30,7 @@ const (
 const (
 	TelemetryEnabledStatus = "100"
 )
+
 // Taken from SharedV4 tests...
 func runCmd(cmd string, n node.Node, cmdConnectionOpts *node.ConnectionOpts) (string, error) {
 	if cmdConnectionOpts == nil {
@@ -51,7 +53,7 @@ func TestTelemetryBasic(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Telemetry", specReporters)
 }
 
-func TelemetryEnabled(currNode node.Node) bool{
+func TelemetryEnabled(currNode node.Node) bool {
 	// This returns true if telemetry is enabled
 	out, err := runCmd("/opt/pwx/bin/pxctl status -j | jq .telemetrystatus.connection_status.error_code", currNode, nil)
 	Expect(err).NotTo(HaveOccurred(), "Error getting telemetry status for %s", currNode.Name)
@@ -65,6 +67,12 @@ var _ = BeforeSuite(func() {
 // This test telemetry health via pxctl
 var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 	var contexts []*scheduler.Context
+	var runID int
+
+	testrailID := 54907
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 
 	It("Validate, pxctl displays telemetry status", func() {
 		contexts = make([]*scheduler.Context, 0)
@@ -84,7 +92,7 @@ var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 	})
 
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
@@ -121,13 +129,13 @@ var _ = Describe("{DiagsBasic}", func() {
 
 // This test performs basic diags collection and validates them on S3 bucket
 var _ = Describe("{DiagsCCMOnS3}", func() {
-	var testrailIDs = [] int{54917, 54912, 54910}
+	var testrailIDs = []int{54917, 54912, 54910}
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54917
 	var runIDs []int
 	JustBeforeEach(func() {
-		for _, testRailId := range testrailIDs{
-			runIDs = append(runIDs, testrailuttils.AddRunsToMilestone(testRailId))
+		for _, testRailID := range testrailIDs {
+			runIDs = append(runIDs, testrailuttils.AddRunsToMilestone(testRailID))
 		}
 	})
 	var contexts []*scheduler.Context
@@ -144,7 +152,7 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 					OnHost:        true,
 					Live:          true,
 				}
-				if !TelemetryEnabled(currNode){
+				if !TelemetryEnabled(currNode) {
 					logrus.Debugf("Telemetry not enabled, sleeping for 5 mins")
 					time.Sleep(5 * time.Minute)
 				}
@@ -153,7 +161,7 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 				if TelemetryEnabled(currNode) {
 					err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)))
 					Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
-				}else{
+				} else {
 					logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
 				}
 			})
@@ -163,8 +171,8 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 		}
 	})
 	JustAfterEach(func() {
-		for i, testRailId := range testrailIDs{
-			AfterEachTest(contexts, testRailId, runIDs[i])
+		for i, testRailID := range testrailIDs {
+			AfterEachTest(contexts, testRailID, runIDs[i])
 		}
 	})
 })
@@ -185,10 +193,10 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 			Step(fmt.Sprintf("collect profile diags on node: %s | %s", currNode.Name, currNode.Type), func() {
 
 				config := &torpedovolume.DiagRequestConfig{
-					DockerHost:    "unix:///var/run/docker.sock",
-					Profile: true,
+					DockerHost: "unix:///var/run/docker.sock",
+					Profile:    true,
 				}
-				if !TelemetryEnabled(currNode){
+				if !TelemetryEnabled(currNode) {
 					logrus.Debugf("Telemetry not enabled, sleeping for 5 mins")
 					time.Sleep(5 * time.Minute)
 				}
@@ -198,7 +206,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 			Step(fmt.Sprintf("Get the profile diags collected above %s", currNode.Name), func() {
 				logrus.Infof("Getting latest profile diags on %66v", currNode.Name)
 				out, err := runCmd(fmt.Sprintf("ls -t /var/cores/%s-*.{stack,heap}.gz | head -n 2", currNode.Name), currNode, nil)
-				if err != nil{
+				if err != nil {
 					logrus.Fatalf("Error in getting profile diags files on: %s, err: %v", currNode.Name, err)
 				}
 				diagsFiles = strings.Split(out, "\n")
@@ -207,10 +215,10 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 				for _, file := range diagsFiles {
 					fileNameToCheck := path.Base(file)
 					logrus.Debugf("Validating file %s", fileNameToCheck)
-					if TelemetryEnabled(currNode){
+					if TelemetryEnabled(currNode) {
 						err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
 						Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
-					}else{
+					} else {
 						logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
 					}
 
@@ -222,7 +230,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 		}
 	})
 	JustAfterEach(func() {
-			AfterEachTest(contexts, testrailID, runID)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
@@ -248,17 +256,17 @@ var _ = Describe("{DiagsClusterWide}", func() {
 			Step(fmt.Sprintf("Get the svc diags collected above %s", currNode.Name), func() {
 				logrus.Infof("Getting latest svc diags on %66v", currNode.Name)
 				diagFile, err = runCmd(fmt.Sprintf("ls -t /var/cores/%s-*.tar.gz | head -n 1", currNode.Name), currNode, nil)
-				if err != nil{
+				if err != nil {
 					logrus.Fatalf("Error in getting cluster wide diags files on: %s, err: %v", currNode.Name, err)
 				}
 			})
 			Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
 				fileNameToCheck := path.Base(strings.TrimSuffix(diagFile, "\n"))
 				logrus.Debugf("Validating file %s", fileNameToCheck)
-				if TelemetryEnabled(currNode){
+				if TelemetryEnabled(currNode) {
 					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
 					Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
-				}else{
+				} else {
 					logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
 				}
 			})
@@ -314,13 +322,26 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 var _ = Describe("{DiagsAutoStorage}", func() {
 	var contexts []*scheduler.Context
 	var existingDiags string
+	var pxProcessNm string
 	var newDiags string
 	var err error
+
+	testProcNmsTestRailIDs := map[string]int{
+		"px-storage": 54922,
+		"px":         54923,
+	}
+
+	runIDs := map[int]int{}
+	JustBeforeEach(func() {
+		for _, testRailID := range testProcNmsTestRailIDs {
+			runIDs[testRailID] = testrailuttils.AddRunsToMilestone(testRailID)
+		}
+	})
 
 	It("has to setup, validate, try to collect auto diags on nodes after px-storage/px crash", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		for _, pxProcessNm := range []string{"px-storage", "px"} {
+		for pxProcessNm = range testProcNmsTestRailIDs {
 			Step(fmt.Sprintf("Reset portworx for auto diags collect test after '%s' crash\n", pxProcessNm), func() {
 				for _, currNode := range node.GetWorkerNodes() {
 					// Restart portworx to reset auto diags interval
@@ -382,6 +403,19 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 				err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(newDiags)))
 				Expect(err).NotTo(HaveOccurred())
 			}
+			driverVersion, err := Inst().V.GetDriverVersion()
+			if err != nil {
+				driverVersion = "Error in getting driver version"
+				logrus.Errorf(driverVersion)
+			}
+			testRailID := testProcNmsTestRailIDs[pxProcessNm]
+			testrailObject := testrailuttils.Testrail{
+				Status:        "Pass",
+				TestID:        testRailID,
+				RunID:         runIDs[testRailID],
+				DriverVersion: driverVersion,
+			}
+			testrailuttils.AddTestEntry(testrailObject)
 		}
 		for _, ctx := range contexts {
 			TearDownContext(ctx, nil)
@@ -389,7 +423,8 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 	})
 
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		testRailID := testProcNmsTestRailIDs[pxProcessNm]
+		AfterEachTest(contexts, testRailID, runIDs[testRailID])
 	})
 })
 
@@ -398,6 +433,12 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 	var contexts []*scheduler.Context
 	var diagsValErr error
 	var diagsErr error
+	var runID int
+
+	testrailID := 54918
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
 
 	It("Validate, pxctl displays telemetry status", func() {
 		contexts = make([]*scheduler.Context, 0)
@@ -449,7 +490,7 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 	})
 
 	JustAfterEach(func() {
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
