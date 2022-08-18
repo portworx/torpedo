@@ -334,7 +334,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 	runIDs := map[int]int{}
 	JustBeforeEach(func() {
 		for _, testRailID := range testProcNmsTestRailIDs {
-			runIDs[testRailId] = testrailuttils.AddRunsToMilestone(testRailID)
+			runIDs[testRailID] = testrailuttils.AddRunsToMilestone(testRailID)
 		}
 	})
 
