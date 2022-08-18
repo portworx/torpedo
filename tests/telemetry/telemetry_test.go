@@ -134,8 +134,8 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54917
 	var runIDs []int
 	JustBeforeEach(func() {
-		for _, testRailId := range testrailIDs {
-			runIDs = append(runIDs, testrailuttils.AddRunsToMilestone(testRailId))
+		for _, testRailID := range testrailIDs {
+			runIDs = append(runIDs, testrailuttils.AddRunsToMilestone(testRailID))
 		}
 	})
 	var contexts []*scheduler.Context
@@ -171,8 +171,8 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 		}
 	})
 	JustAfterEach(func() {
-		for i, testRailId := range testrailIDs {
-			AfterEachTest(contexts, testRailId, runIDs[i])
+		for i, testRailID := range testrailIDs {
+			AfterEachTest(contexts, testRailID, runIDs[i])
 		}
 	})
 })
@@ -256,17 +256,17 @@ var _ = Describe("{DiagsClusterWide}", func() {
 			Step(fmt.Sprintf("Get the svc diags collected above %s", currNode.Name), func() {
 				logrus.Infof("Getting latest svc diags on %66v", currNode.Name)
 				diagFile, err = runCmd(fmt.Sprintf("ls -t /var/cores/%s-*.tar.gz | head -n 1", currNode.Name), currNode, nil)
-				if err != nil{
+				if err != nil {
 					logrus.Fatalf("Error in getting cluster wide diags files on: %s, err: %v", currNode.Name, err)
 				}
 			})
 			Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
 				fileNameToCheck := path.Base(strings.TrimSuffix(diagFile, "\n"))
 				logrus.Debugf("Validating file %s", fileNameToCheck)
-				if TelemetryEnabled(currNode){
+				if TelemetryEnabled(currNode) {
 					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
 					Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
-				}else{
+				} else {
 					logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
 				}
 			})
@@ -333,15 +333,15 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 
 	runIDs := map[int]int{}
 	JustBeforeEach(func() {
-		for _, testRailId := range testProcNmsTestRailIDs {
-			runIDs[testRailId] = testrailuttils.AddRunsToMilestone(testRailId)
+		for _, testRailID := range testProcNmsTestRailIDs {
+			runIDs[testRailId] = testrailuttils.AddRunsToMilestone(testRailID)
 		}
 	})
 
 	It("has to setup, validate, try to collect auto diags on nodes after px-storage/px crash", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		for pxProcessNm, _ = range testProcNmsTestRailIDs {
+		for pxProcessNm = range testProcNmsTestRailIDs {
 			Step(fmt.Sprintf("Reset portworx for auto diags collect test after '%s' crash\n", pxProcessNm), func() {
 				for _, currNode := range node.GetWorkerNodes() {
 					// Restart portworx to reset auto diags interval
