@@ -216,8 +216,8 @@ type Driver interface {
 	// GetDeviceMapperCount return devicemapper count
 	GetDeviceMapperCount(Node, time.Duration) (int, error)
 
-	//GetAvailableDrives returns the block drives on the node
-	GetAvailableDrives(n Node, options SystemctlOpts) (map[string]*BlockDrive, error)
+	//GetBlockDrives returns the block drives on the node
+	GetBlockDrives(n Node, options SystemctlOpts) (map[string]*BlockDrive, error)
 }
 
 // Register registers the given node driver
@@ -307,10 +307,10 @@ func (d *notSupportedDriver) Systemctl(node Node, service string, options System
 	}
 }
 
-func (d *notSupportedDriver) GetAvailableDrives(n Node, options SystemctlOpts) (map[string]*BlockDrive, error) {
+func (d *notSupportedDriver) GetBlockDrives(n Node, options SystemctlOpts) (map[string]*BlockDrive, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "GetAvailableDrives()",
+		Operation: "GetBlockDrives()",
 	}
 }
 

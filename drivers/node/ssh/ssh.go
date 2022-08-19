@@ -722,8 +722,8 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 	return file, nil
 }
 
-//GetAvailableDrives returns the block drives on the node
-func (s *SSH) GetAvailableDrives(n node.Node, options node.SystemctlOpts) (map[string]*node.BlockDrive, error) {
+//GetBlockDrives returns the block drives on the node
+func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[string]*node.BlockDrive, error) {
 	drives := make(map[string]*node.BlockDrive)
 	driveCmd := fmt.Sprintf("sudo /bin/lsblk -P -s -d -p -o NAME,SIZE,MOUNTPOINT,FSTYPE,TYPE")
 	t := func() (interface{}, bool, error) {
@@ -735,7 +735,7 @@ func (s *SSH) GetAvailableDrives(n node.Node, options node.SystemctlOpts) (map[s
 	}
 	out, err := task.DoRetryWithTimeout(t, options.ConnectionOpts.Timeout, options.ConnectionOpts.TimeBeforeRetry)
 	if err != nil {
-		return drives, &node.ErrFailedToRunSystemctlOnNode{
+		return drives, &node.ErrFailedToRunCommand{
 			Node:  n,
 			Cause: err.Error(),
 		}

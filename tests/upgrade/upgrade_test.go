@@ -99,7 +99,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			}
 
 			durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
-			expectedUpgradeTime := 3 * len(node.GetStorageDriverNodes())
+			expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
 			if durationInMins <= expectedUpgradeTime {
 				logrus.Infof("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
 			} else {

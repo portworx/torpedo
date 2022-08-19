@@ -131,6 +131,11 @@ const (
 	DeviceMapper = "mapper"
 )
 
+const (
+	driveAddSuccessStatus = "Drive add done"
+	driveExitsStatus      = "Device already exists"
+)
+
 // Provisioners types of supported provisioners
 var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
 	PortworxStorage: "kubernetes.io/portworx-volume",
@@ -4189,7 +4194,7 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 		Action: "start",
 	}
 	logrus.Infof("Getting available block drives on %s.", n.Name)
-	blockDrives, err := d.nodeDriver.GetAvailableDrives(*n, systemOpts)
+	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
 
 	if err != nil {
 		return err
@@ -4198,7 +4203,7 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 	eligibleDrives := make(map[string]*node.BlockDrive)
 
 	for _, drv := range blockDrives {
-		if drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
+		if !strings.Contains(drv.Path, "pxd") && drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
 			eligibleDrives[drv.Path] = drv
 		}
 	}
@@ -4260,7 +4265,7 @@ func addDrive(n node.Node, drivePath string, d *portworx) error {
 		return fmt.Errorf("failed to add drive %s in node %s", drivePath, n.Name)
 	}
 
-	if !strings.Contains(addDriveStatus.Status, "Drive add done") {
+	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) {
 		return fmt.Errorf("failed to add drive %s in node %s,AddDrive Status : %+v ", drivePath, n.Name, addDriveStatus)
 
 	}
@@ -4272,7 +4277,7 @@ func addDrive(n node.Node, drivePath string, d *portworx) error {
 
 func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error {
 
-	waitCount := 40
+	waitCount := 180
 
 	for {
 		out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStatus, d.getPxctlPath(n), drivePath), node.ConnectionOpts{
@@ -4281,7 +4286,7 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 		})
 		if err != nil {
 
-			if strings.Contains(err.Error(), "Device already exists") {
+			if strings.Contains(err.Error(), driveExitsStatus) {
 				return nil
 			}
 			err = fmt.Errorf("error while getting add drive status for path %s in node %s using PXCTL, Cause: %v", drivePath, n.Name, err)
@@ -4306,7 +4311,7 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 		}
 		waitCount--
 		logrus.Info("Waiting for 30 seconds to check the status again")
-		time.Sleep(30 * time.Second)
+		time.Sleep(60 * time.Second)
 	}
 	logrus.Infof("Added drive %s to node %s completed", drivePath, n.Name)
 	return nil

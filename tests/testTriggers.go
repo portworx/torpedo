@@ -4881,7 +4881,7 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		}
 		if err == nil && !isCloudDrive {
 			for _, storageNode := range storageNodes {
-				blockDrives, err := Inst().N.GetAvailableDrives(storageNode, systemOpts)
+				blockDrives, err := Inst().N.GetBlockDrives(storageNode, systemOpts)
 				UpdateOutcome(event, err)
 
 				drvPaths := make([]string, 5)
