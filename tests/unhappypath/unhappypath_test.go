@@ -33,6 +33,7 @@ const (
 	errorPersistTimeInMinutes     = 60 * time.Minute
 	snapshotScheduleRetryInterval = 10 * time.Second
 	snapshotScheduleRetryTimeout  = 5 * time.Minute
+	waitTimeForPXAfterError       = 20 * time.Minute
 )
 
 func TestBasic(t *testing.T) {
@@ -46,36 +47,6 @@ func TestBasic(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	InitInstance()
-	if Inst().N.IsUsingSSH() {
-		for _, anode := range node.GetWorkerNodes() {
-			// TODO need to remove tcpdump installation using yum
-			// once https://portworx.atlassian.net/browse/PTX-12174 is resolved.
-			logrus.Infof("installing tcpdump on node %s", anode.Name)
-			cmd := "yum install -y tcpdump"
-			_, err := Inst().N.RunCommandWithNoRetry(anode, cmd, node.ConnectionOpts{
-				Timeout:         1 * time.Minute,
-				TimeBeforeRetry: 5 * time.Second,
-				Sudo:            true,
-			})
-			if err != nil {
-				logrus.Warnf("failed to install tcpdump on node %s: %v", anode.Name, err)
-				break
-			}
-			//Check tcpdump command
-			cmd = "compgen -c | grep tcpdump"
-			out, errInSSH := Inst().N.RunCommandWithNoRetry(anode, cmd, node.ConnectionOpts{
-				Timeout:         1 * time.Minute,
-				TimeBeforeRetry: 5 * time.Second,
-				Sudo:            true,
-			})
-			if err != nil {
-				logrus.Warnf("failed to install tcpdump on node %s: %v", anode.Name, errInSSH)
-			}
-			if !strings.Contains(out, "tcpdump") {
-				logrus.Warnf("TCP dump is not avaiable in %s:", anode.Name)
-			}
-		}
-	}
 })
 
 // This test is to verify stability of the system when there  is  a network error on the system.
@@ -97,9 +68,7 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("applicationscaleup-%d", i))...)
 		}
 		currentTime := time.Now()
-		timeToExecuteTest := time.Now().Local().Add(time.Hour*time.Duration(totalTimeInHours) +
-			time.Minute*time.Duration(0) +
-			time.Second*time.Duration(0))
+		timeToExecuteTest := time.Now().Local().Add(time.Hour * time.Duration(totalTimeInHours))
 
 		// Set Autofs trim
 		currNode := node.GetWorkerNodes()[0]
@@ -155,8 +124,8 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 					injectionType = "drop"
 				}
 			})
-			logrus.Infof("Wait 20 minutes before checking px status ")
-			time.Sleep(20 * time.Minute)
+			logrus.Infof("Wait %d minutes before checking application status ", waitTimeForPXAfterError/(time.Minute))
+			time.Sleep(waitTimeForPXAfterError)
 			Step("Verify application after clearing error", func() {
 				for _, ctx := range contexts {
 					ValidateContext(ctx)
