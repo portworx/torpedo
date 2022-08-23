@@ -47,7 +47,7 @@ var (
 	namespaceService                        *pds.NamespacesApiService
 )
 
-func TestBasicDeployment(t *testing.T) {
+func TestDataService(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	var specReporters []Reporter
@@ -58,12 +58,15 @@ func TestBasicDeployment(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	//InitInstance()
+
 	logrus.Info("Starting the test in before suite...")
 	Step("get prerequisite params to run the pds tests")
 	tenantID, dnsZone, projectID, serviceType, deploymentTargetID = pdslib.SetupPDSTest()
 
 	supportedDataServices = append(supportedDataServices, pdslib.GetAndExpectStringEnvVar(envDataService))
+	for _, ds := range supportedDataServices {
+		logrus.Infof("supported dataservices %v", ds)
+	}
 
 	Step("Get StorageTemplateID, App ConfigID, ResourceTemplateID, Replicas and Supported Dataservice", func() {
 		storageTemplateID = pdslib.GetStorageTemplate(tenantID)
@@ -91,54 +94,69 @@ var _ = BeforeSuite(func() {
 
 })
 
-//This test deploys dataservices and validates the health and cleans up the deployed dataservice
-var _ = Describe("{Validate DataService}", func() {
-
+var _ = Describe("{RestartPortworx}", func() {
 	JustBeforeEach(func() {
+		InitInstance()
 		Step("Get Namespace and NamespaceID", func() {
 			namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
 			namespaceID = pdslib.GetnameSpaceID(namespace)
 		})
 	})
 
-	It("enable/disable namespace by giving labels to the namespace", func() {
-		Step("Enable/Disable PDS Namespace", func() {
-			pdsNamespace := "test-ns"
-			ns, err := pdslib.CreatePDSNamespace(pdsNamespace)
-			Expect(err).NotTo(HaveOccurred())
-			logrus.Infof("PDS Namespace created %v", ns)
-
-			// Modifies the namespace multiple times
-			for i := 0; i < 10; i++ {
-				nsLables := map[string]string{
-					"pds.portworx.com/available": "true",
-				}
-				ns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
-				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("PDS Namespace Updated %v", ns)
-
-				//Validate Namespace is available for pds
-				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "available")
-				Expect(err).NotTo(HaveOccurred())
-
-				nsLables = map[string]string{
-					"pds.portworx.com/available": "false",
-				}
-				ns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
-				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("PDS Namespace Updated %v", ns)
-
-				//Validate Namespace is available for pds
-				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "unavailable")
-				Expect(err).NotTo(HaveOccurred())
-
+	It("restart portworx and validate dataservice", func() {
+		Step("deploy dataservices and restart portworx on worker nodes", func() {
+			for i := range supportedDataServices {
+				Step("Deploy Dataservices", func() {
+					logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
+					logrus.Infof(`Request params:
+				projectID- %v deploymentTargetID - %v,
+				dnsZone - %v,deploymentName - %v,namespaceID - %v
+				App config ID - %v,
+				num pods- %v, service-type - %v
+				Resource template id - %v, storageTemplateID - %v`,
+						projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
+						replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
+					deployment = pdslib.DeployDataServices(projectID,
+						deploymentTargetID,
+						dnsZone,
+						deploymentName,
+						namespaceID,
+						dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
+						dataServiceIDImagesMap,
+						replicas,
+						serviceType,
+						dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
+						storageTemplateID,
+					)
+					deploymentIDs = append(deploymentIDs, deployment.GetId())
+				})
+				Step("restart portworx on worker nodes", func() {
+					nodesToRestartPortworx := node.GetWorkerNodes()
+					Expect(nodesToRestartPortworx).NotTo(BeEmpty())
+					for _, workerNodes := range nodesToRestartPortworx {
+						logrus.Infof("worker nodes %v", workerNodes.Name)
+						err := Inst().N.Systemctl(workerNodes, "portworx.service", node.SystemctlOpts{
+							Action: "restart",
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         5 * time.Minute,
+								TimeBeforeRetry: 10 * time.Second,
+							}})
+						Expect(err).NotTo(HaveOccurred())
+					}
+				})
+				Step("Validate Deployments after restarting portworx")
+				pdslib.ValidateDataServiceDeployment(deployment)
 			}
+		})
+	})
 
-			defer func() {
-				err := pdslib.DeletePDSNamespace(pdsNamespace)
-				Expect(err).NotTo(HaveOccurred())
-			}()
+})
 
+var _ = Describe("{DeletePDSPods}", func() {
+	JustBeforeEach(func() {
+		Step("Get Namespace and NamespaceID", func() {
+			namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
+			namespaceID = pdslib.GetnameSpaceID(namespace)
 		})
 	})
 
@@ -187,52 +205,112 @@ var _ = Describe("{Validate DataService}", func() {
 
 	})
 
-	It("restart portworx and validate dataservice", func() {
-		Step("deploy dataservices and restart portworx on worker nodes", func() {
+})
+
+var _ = Describe("{Enable/DisableNamespace}", func() {
+	JustBeforeEach(func() {
+		Step("Get Namespace and NamespaceID", func() {
+			namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
+			namespaceID = pdslib.GetnameSpaceID(namespace)
+		})
+	})
+
+	It("enable/disable namespace by giving labels to the namespace", func() {
+		Step("Enable/Disable PDS Namespace", func() {
+			pdsNamespace := "test-ns"
+			ns, err := pdslib.CreatePDSNamespace(pdsNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			logrus.Infof("PDS Namespace created %v", ns)
+
+			// Modifies the namespace multiple times
+			for i := 0; i < 10; i++ {
+				nsLables := map[string]string{
+					"pds.portworx.com/available": "true",
+				}
+				ns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("PDS Namespace Updated %v", ns)
+
+				//Validate Namespace is available for pds
+				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "available")
+				Expect(err).NotTo(HaveOccurred())
+
+				nsLables = map[string]string{
+					"pds.portworx.com/available": "false",
+				}
+				ns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("PDS Namespace Updated %v", ns)
+
+				//Validate Namespace is available for pds
+				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "unavailable")
+				Expect(err).NotTo(HaveOccurred())
+
+			}
+
+			defer func() {
+				err := pdslib.DeletePDSNamespace(pdsNamespace)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+		})
+	})
+
+})
+
+var _ = Describe("{RunWorkloads}", func() {
+	JustBeforeEach(func() {
+		Step("Get Namespace and NamespaceID", func() {
+			namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
+			namespaceID = pdslib.GetnameSpaceID(namespace)
+		})
+	})
+	It("Start workloads on deployed dataservices", func() {
+		Step("Run Workload on Dataservice Deployments", func() {
 			for i := range supportedDataServices {
-				Step("Deploy Dataservices", func() {
-					logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
-					logrus.Infof(`Request params:
+				logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
+				logrus.Infof(`Request params:
 				projectID- %v deploymentTargetID - %v,
 				dnsZone - %v,deploymentName - %v,namespaceID - %v
 				App config ID - %v,
 				num pods- %v, service-type - %v
 				Resource template id - %v, storageTemplateID - %v`,
-						projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-						replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
-					deployment = pdslib.DeployDataServices(projectID,
-						deploymentTargetID,
-						dnsZone,
-						deploymentName,
-						namespaceID,
-						dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-						dataServiceIDImagesMap,
-						replicas,
-						serviceType,
-						dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
-						storageTemplateID,
-					)
-					deploymentIDs = append(deploymentIDs, deployment.GetId())
-				})
-				Step("restart portworx on worker nodes", func() {
-					nodesToRestartPortworx := node.GetWorkerNodes()
-					for _, workerNodes := range nodesToRestartPortworx {
-						logrus.Infof("worker nodes %v", workerNodes.Name)
-						err := Inst().N.Systemctl(workerNodes, "portworx.service", node.SystemctlOpts{
-							Action: "restart",
-							ConnectionOpts: node.ConnectionOpts{
-								Timeout:         5 * time.Minute,
-								TimeBeforeRetry: 10 * time.Second,
-							}})
-						Expect(err).NotTo(HaveOccurred())
-					}
-				})
-				Step("Validate Deployments after restarting portworx")
-				pdslib.ValidateDataServiceDeployment(deployment)
+					projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
+					replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
+				deployment := pdslib.DeployDataServices(projectID,
+					deploymentTargetID,
+					dnsZone,
+					deploymentName,
+					namespaceID,
+					dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
+					dataServiceIDImagesMap,
+					replicas,
+					serviceType,
+					dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
+					storageTemplateID,
+				)
+				logrus.Infof("data service id %v", deployment.GetDataServiceId())
+
+				if supportedDataServices[i] == "PostgreSQL" {
+					deploymentName := "pgload"
+					pdslib.CreateDataServiceWorkloads(supportedDataServices[i], *deployment.Id, "100", "1", deploymentName, namespace)
+				}
+				if supportedDataServices[i] == "RabbitMQ" {
+					pdslib.CreateDataServiceWorkloads(supportedDataServices[i], *deployment.Id, "", "", "", namespace)
+				}
 			}
 		})
 	})
 
+})
+
+var _ = Describe("{ScaleDataServices}", func() {
+	JustBeforeEach(func() {
+		Step("Get Namespace and NamespaceID", func() {
+			namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
+			namespaceID = pdslib.GetnameSpaceID(namespace)
+		})
+	})
 	It("scaleUp dataservices", func() {
 		logrus.Info("Scale Test for dataservices")
 		for i := range supportedDataServices {
@@ -275,7 +353,18 @@ var _ = Describe("{Validate DataService}", func() {
 		})
 	})
 
-	It("deploy dataservcies", func() {
+})
+
+var _ = Describe("{DeployDataServices}", func() {
+
+	JustBeforeEach(func() {
+		Step("Get Namespace and NamespaceID", func() {
+			namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
+			namespaceID = pdslib.GetnameSpaceID(namespace)
+		})
+	})
+
+	It("deploy Dataservices", func() {
 		logrus.Info("Create dataservices without backup.")
 		for i := range supportedDataServices {
 			logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
@@ -302,6 +391,7 @@ var _ = Describe("{Validate DataService}", func() {
 			logrus.Infof("data service id %v", deployment.GetDataServiceId())
 		}
 	})
+
 })
 
 func TestMain(m *testing.M) {

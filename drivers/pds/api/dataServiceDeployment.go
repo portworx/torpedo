@@ -151,8 +151,8 @@ func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (
 	return dsModel, err
 }
 
-// GetConnectionDetails func
-func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.DeploymentsConnectionDetails, error) {
+// GetConnectionDetails func returns information about the host and connection string
+func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.DeploymentsConnectionDetails, map[string]interface{}, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	dsModel, res, err := dsClient.ApiDeploymentsIdConnectionInfoGet(ds.context, deploymentID).Execute()
 
@@ -160,7 +160,7 @@ func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.
 		log.Errorf("Error when calling `ApiDeploymentsIdConnectionInfoGet``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
 	}
-	return dsModel.GetConnectionDetails(), err
+	return dsModel.GetConnectionDetails(), dsModel.GetClusterDetails(), err
 }
 
 // DeleteDeployment func

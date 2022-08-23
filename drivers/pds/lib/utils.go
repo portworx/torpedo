@@ -17,6 +17,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -506,43 +508,6 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) {
 	logrus.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 }
 
-// DeployDataServices deploys the dataservice
-// func UpdateDataServicesNew(projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
-// 	namespaceID string, dataServiceNameDefaultAppConfig string, dataServiceImageMap map[string][]string, replicas int32,
-// 	serviceType string, dataServiceDefaultResourceTemplateID string, storageTemplateID string) *pds.ModelsDeployment {
-
-// 	for version := range dataServiceImageMap {
-// 		for index := range dataServiceImageMap[version] {
-// 			imageID := dataServiceImageMap[version][index]
-// 			logrus.Infof("Version %v ImageID %v", version, imageID)
-// 			deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
-// 				deploymentTargetID,
-// 				dnsZone,
-// 				deploymentName,
-// 				namespaceID,
-// 				dataServiceNameDefaultAppConfig,
-// 				imageID,
-// 				replicas,
-// 				serviceType,
-// 				dataServiceDefaultResourceTemplateID,
-// 				storageTemplateID)
-
-// 			if err != nil {
-// 				logrus.Warnf("An Error Occured %v", err)
-// 			}
-// 			//To get the list of statefulsets in particular namespace
-// 			time.Sleep(1 * time.Minute)
-// 			ValidateDataServiceDeployment(deployment)
-// 			deployment, err = components.DataServiceDeployment.UpdateDeployment(deployment.GetClusterResourceName(), dataServiceNameDefaultAppConfig, imageID, replicas, dataServiceDefaultResourceTemplateID)
-// 			if err != nil {
-// 				logrus.Fatalf("An Error Occured %v", err)
-// 			}
-// 			ValidateDataServiceDeployment(deployment)
-// 		}
-// 	}
-// 	return deployment
-// }
-
 //UpdateDataServices modifies the existing deployment
 func UpdateDataServices(deploymentID string, appConfigID string, dataServiceImageMap map[string][]string, nodeCount int32, resourceTemplateID string) *pds.ModelsDeployment {
 
@@ -557,9 +522,7 @@ func UpdateDataServices(deploymentID string, appConfigID string, dataServiceImag
 			}
 			ValidateDataServiceDeployment(deployment)
 		}
-
 	}
-
 	return deployment
 }
 
@@ -585,11 +548,211 @@ func DeployDataServices(projectID string, deploymentTargetID string, dnsZone str
 				storageTemplateID)
 
 			if err != nil {
-				logrus.Warnf("An Error Occured %v", err)
+				logrus.Warnf("An Error Occured while creating deployment %v", err)
 			}
-
 			ValidateDataServiceDeployment(deployment)
 		}
 	}
 	return deployment
+}
+
+// func CreateKubernetesClientFromConfig(kubeConfigPath string) (clientset.Interface, error) {
+// 	cfg, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	client, err := clientset.NewForConfig(cfg)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return client, nil
+// }
+
+// func Getk8sClient() clientset.Interface {
+// 	var err error
+// 	var k8sClient clientset.Interface
+// 	if k8sClient == nil {
+// 		if k8senv := os.Getenv("TARGET_KUBECONFIG"); k8senv != "" {
+// 			k8sClient, err = CreateKubernetesClientFromConfig(k8senv)
+// 			if err != nil {
+// 				log.Panicf("Unable to get the client")
+// 			}
+// 		}
+// 	}
+// 	return k8sClient
+// }
+
+// func WaitForDeployment(ctx context.Context, client clientset.Interface, deployment *appsv1.Deployment, namespace string, replicas int32) error {
+// 	var err error
+// 	waitErr := wait.PollImmediate(timeInterval, timeOut, func() (bool, error) {
+// 		log.Info("waiting for the deployment to complete")
+// 		deployment, err = client.AppsV1().Deployments(namespace).Get(ctx, deployment.Name, metav1.GetOptions{})
+// 		if err != nil {
+// 			return false, nil
+// 		}
+// 		if deployment.Status.ReadyReplicas == replicas {
+// 			return true, nil
+// 		}
+// 		return true, nil
+// 	})
+// 	return waitErr
+// }
+
+//GetDeploymentConnectionInfo returns the dns endpoint
+func GetDeploymentConnectionInfo(deploymentID string) string {
+	var isfound bool
+	var dnsEndpoint string
+
+	dataServiceDeployment := components.DataServiceDeployment
+	deploymentConnectionDetails, clusterDetails, err := dataServiceDeployment.GetConnectionDetails(deploymentID)
+	deploymentConnectionDetails.MarshalJSON()
+	if err != nil {
+		log.Fatalf("An Error Occured %v", err)
+	}
+	deploymentNodes := deploymentConnectionDetails.GetNodes()
+	log.Infof("Deployment nodes %v", deploymentNodes)
+	isfound = false
+	for key, value := range clusterDetails {
+		logrus.Infof("host details key %v value %v", key, value)
+		if key == "host" {
+			dnsEndpoint = fmt.Sprint(value)
+			isfound = true
+		}
+	}
+	if !isfound {
+		log.Fatal("No connection string found")
+	}
+
+	return dnsEndpoint
+}
+
+//GetDeploymentCredentials returns the password to connect to the dataservice
+func GetDeploymentCredentials(deploymentID string) string {
+	dataServiceDeployment := components.DataServiceDeployment
+	dataServicePassword, err := dataServiceDeployment.GetDeploymentCredentials(deploymentID)
+	if err != nil {
+		logrus.Fatalf("An Error Occured %v", err)
+	}
+	pdsPassword := dataServicePassword.GetPassword()
+	return pdsPassword
+}
+
+//CreateDataServiceWorkloads func
+func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) {
+	dnsEndpoint := GetDeploymentConnectionInfo(deploymentID)
+	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
+
+	pdsPassword := GetDeploymentCredentials(deploymentID)
+
+	switch dataServiceName {
+	case "PostgreSQL":
+		CreatepostgresqlWorkload(dnsEndpoint, pdsPassword, scalefactor, iterations, deploymentName, namespace)
+
+	case "RabbitMQ":
+		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
+		CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env)
+	}
+
+}
+
+//CreatepostgresqlWorkload generate workloads on the pg db
+func CreatepostgresqlWorkload(dnsEndpoint string, pdsPassword string, scalefactor string, iterations string, deploymentName string, namespace string) (*appsv1.Deployment, error) {
+	var replicas int32 = 1
+	deploymentSpec := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": deploymentName},
+			},
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": deploymentName},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:    "pgbench",
+							Image:   "madan19/pgbench:pgloadTest1",
+							Command: []string{"/pgloadgen.sh"},
+							Args:    []string{dnsEndpoint, pdsPassword, scalefactor, iterations},
+						},
+					},
+					RestartPolicy: v1.RestartPolicyAlways,
+				},
+			},
+		},
+	}
+	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
+	if err != nil {
+		logrus.Fatalf("An Error Occured while creating deployment %v", err)
+	}
+	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
+	if err != nil {
+		logrus.Fatalf("An Error Occured while validating the pod %v", err)
+	}
+	//run workload for few min and terminate the deployment
+	time.Sleep(1 * time.Minute)
+	err = k8sApps.DeleteDeployment(deployment.Name, namespace)
+	if err != nil {
+		logrus.Fatalf("An Error Occured while deleting the deployment %v", err)
+	}
+	return deployment, err
+}
+
+//CreateRmqWorkload generate workloads for rmq
+func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string) (*v1.Pod, error) {
+	var value []string
+	podSpec := &v1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "rmq-perf-",
+			Namespace:    namespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:    "rmqperf",
+					Image:   "pivotalrabbitmq/perf-test:latest",
+					Command: []string{"/bin/sh", "-c", "while true; do bin/runjava com.rabbitmq.perf.PerfTest --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 30; done"},
+					Env:     make([]v1.EnvVar, 3),
+				},
+			},
+			RestartPolicy: v1.RestartPolicyOnFailure,
+		},
+	}
+
+	value = append(value, dnsEndpoint)
+	value = append(value, "pds")
+	value = append(value, pdsPassword)
+
+	for index := range env {
+		podSpec.Spec.Containers[0].Env[index].Name = env[index]
+		podSpec.Spec.Containers[0].Env[index].Value = value[index]
+	}
+
+	pod, err := k8sCore.CreatePod(podSpec)
+	if err != nil {
+		logrus.Fatalf("An Error Occured while creating %v", err)
+	}
+
+	err = k8sCore.ValidatePod(pod, timeOut, timeInterval)
+	if err != nil {
+		logrus.Fatalf("An Error Occured while validating the pod %v", err)
+	}
+
+	time.Sleep(1 * time.Minute)
+	err = k8sCore.DeletePod(pod.Name, pod.Namespace, true)
+	if err != nil {
+		logrus.Fatalf("An Error Occured while deleting namespace %v", err)
+	}
+
+	return pod, nil
 }
