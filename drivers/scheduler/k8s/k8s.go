@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	random "math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -5047,12 +5048,189 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 					volSnapMap[pvc.Spec.VolumeName] = volSnapshot
 				}
 			}
+
 		}
 	}
 
 	return volSnapMap, nil
 }
 
+func (k *K8s) CreateCsiSnapsAndValidate(ctx *scheduler.Context, snapClass string) error {
+	// This test will validate the content of the snapshot as opposed to just verify creation of snapshot.
+	namespace := "fada-basic-snapshot-and-restore-test-" + strconv.Itoa(int(time.Now().Unix()))
+	clientset, err := getKubeClient("")
+	if err != nil {
+		logrus.Errorf("Failed to get kube client for FADA snapshot and restore test: %s", err)
+		return err
+	}
+
+	// create a namespace for snapshot and restore test for FADA
+	nsSpec := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+	_, err = k8sCore.CreateNamespace(nsSpec)
+	if err != nil {
+		logrus.Errorf("Failed to create new namespace %s FADA snapshot and restore test: %s", namespace, err)
+		return err
+	}
+
+	elasticsearchSC := "elasticsearch-sc"
+	originalPVCName := "fada-basic-pvc"
+	snapName := "fada-basic-pvc-snapshot"
+	restoredPVCName := "fada-basic-pvc-restored"
+	dirtyData := "thisIsJustSomeRandomText" + strconv.Itoa(int(time.Now().Unix()))
+
+	logrus.Info("Create original PVC: %s", originalPVCName)
+	originalPVCSpec := MakePVC(namespace, originalPVCName, "", elasticsearchSC)
+	originalPVC, err := k8sCore.CreatePersistentVolumeClaim(originalPVCSpec)
+
+	// create pod and write dirty data
+	logrus.Info("Mounting PVC %s to Pod and write data to it", originalPVCName)
+	cmd := fmt.Sprintf("/bin/echo %s > /mnt/volume1/aaaa.txt", dirtyData)
+	originalPodSpec := MakePod(originalPVCSpec.Namespace, []*v1.PersistentVolumeClaim{originalPVC}, cmd, false)
+
+	originalPod, err := clientset.CoreV1().Pods(namespace).Create(context.TODO(), originalPodSpec, metav1.CreateOptions{})
+	if err != nil {
+		logrus.Errorf("Failed to create original pod: err")
+		return err
+	}
+
+	if err = k.waitForPodToBeReady(originalPod.Name, originalPod.Namespace); err != nil {
+		return &scheduler.ErrFailedToSchedulePod{
+			App: nil,
+			Cause:   fmt.Sprintf("Original pod is not ready. Error: %v", err),
+		}
+	}
+
+	// Sync the data, wait 10 secs and then proceed to snapshot the volume
+	cmdArgs1 := []string{"exec", "-it", originalPod.Name, "-n", namespace, "--", "/bin/sync"}
+	command1 := exec.Command("kubectl", cmdArgs1...)
+	_ , err = command1.Output()
+	if err != nil {
+		logrus.Errorf("Failed to sync: err")
+	}
+	fmt.Println("Sleep for 10 secs to let data write through")
+	time.Sleep(time.Second * 10)
+
+	// creating the snapshot
+	volSnapshot, err := k.CreateCsiSnapshot(snapName, namespace, snapClass, originalPVC.Name)
+	if err != nil {
+		logrus.Errorf("Failed to create snapshot %s for volume %s", snapName, originalPVC.Name)
+		return err
+	}
+
+	logrus.Infof("Successfully created snapshot: [%s] for pvc: %s", volSnapshot.Name, originalPVCSpec.Name)
+	restoredPVCSpec := MakePVC(namespace, restoredPVCName, volSnapshot.Name,elasticsearchSC)
+	restoredPVC, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+	if err != nil {
+		logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err )
+		return err
+	}
+	logrus.Info("Successfully restored PVC %s, proceed to mount to a new pod", restoredPVC.Name)
+	restoredPodSpec := MakePod(namespace, []*v1.PersistentVolumeClaim{restoredPVC}, "ls", false)
+	restoredPod, err := clientset.CoreV1().Pods(namespace).Create(context.TODO(), restoredPodSpec, metav1.CreateOptions{})
+	if err != nil {
+		logrus.Errorf("Error creating restored pod: %s", err)
+		return err
+	}
+
+	if err = k.waitForPodToBeReady(restoredPod.Name, namespace); err != nil {
+		return &scheduler.ErrFailedToSchedulePod{
+			App: nil,
+			Cause:   fmt.Sprintf("restored pod is not ready. Error: %v", err),
+		}
+	}
+	// Run a cat command from within the pod to verify the content of dirtydata
+	cmdArgs := []string{"exec", "-it", restoredPod.Name, "-n", namespace, "--", "bin/cat", "/mnt/volume1/aaaa.txt"}
+	command := exec.Command("kubectl", cmdArgs...)
+	fileConent, err := command.Output()
+	if strings.Contains(string(fileConent), dirtyData) {
+		logrus.Infof("Validation complete")
+		return nil
+	} else {
+		return fmt.Errorf("restored volume does NOT contain data from original volume")
+	}
+}
+
+// MakePod Returns a pod definition based on the namespace. The pod references the PVC's
+// name.  A slice of BASH commands can be supplied as args to be run by the pod
+func MakePod(ns string, pvclaims []*v1.PersistentVolumeClaim, command string, privileged bool) *v1.Pod {
+	var cmd = "while true; do sleep 1; done"
+	if 0 < len(command) {
+		cmd = command + " && " + cmd
+	}
+
+	podSpec := &v1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "testMountSnapshotToPod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "testpod-",
+			Namespace:    ns,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:            "test-pod",
+					Image:           "alpine:3.10",
+					Command:         []string{"/bin/sh", "-c"},
+					Args:            []string{cmd},
+					SecurityContext: &v1.SecurityContext{Privileged: &privileged},
+				},
+			},
+			RestartPolicy: v1.RestartPolicyOnFailure,
+		},
+	}
+	var volumeMounts = make([]v1.VolumeMount, 0)
+	var volumeDevices = make([]v1.VolumeDevice, 0)
+	var volumes = make([]v1.Volume, len(pvclaims))
+	for index, pvclaim := range pvclaims {
+		if pvclaim.Spec.VolumeMode != nil {
+			fmt.Printf("mount pvc %s as %s\n", pvclaim.Name, *pvclaim.Spec.VolumeMode)
+		} else {
+			fmt.Printf("mount pvc %s, volume mode is nil\n", pvclaim.Name)
+		}
+		volumename := fmt.Sprintf("volume%v", index+1)
+
+		if pvclaim.Spec.VolumeMode == nil || *pvclaim.Spec.VolumeMode == v1.PersistentVolumeFilesystem {
+			volumeMounts = append(volumeMounts, v1.VolumeMount{Name: volumename, MountPath: "/mnt/" + volumename})
+			volumes[index] = v1.Volume{Name: volumename, VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvclaim.Name, ReadOnly: false}}}
+		} else {
+			// Raw block device
+			volumeDevices = append(volumeDevices, v1.VolumeDevice{Name: volumename, DevicePath: fmt.Sprintf("/dev/xvda%d", index)})
+			volumes[index] = v1.Volume{Name: volumename, VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvclaim.Name, ReadOnly: false}}}
+		}
+	}
+	podSpec.Spec.Containers[0].VolumeMounts = volumeMounts
+	podSpec.Spec.Containers[0].VolumeDevices = volumeDevices
+	podSpec.Spec.Volumes = volumes
+	return podSpec
+}
+
+func MakePVC(ns string, name string, sourceSnapshotName string, storageClass string) *v1.PersistentVolumeClaim {
+	snapshotAPIGroup := "snapshot.storage.k8s.io"
+	PVCSpec := &v1.PersistentVolumeClaim{
+		Spec: v1.PersistentVolumeClaimSpec{
+			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+			StorageClassName: &storageClass,
+		},
+	}
+	PVCSpec.ObjectMeta.Name = name
+	PVCSpec.Namespace = ns
+	PVCSpec.ObjectMeta.Namespace = ns
+	if sourceSnapshotName != "" {
+		PVCSpec.Spec.DataSource = &v1.TypedLocalObjectReference{
+			APIGroup: &snapshotAPIGroup,
+			Kind:     "VolumeSnapshot",
+			Name:     sourceSnapshotName,
+		}
+	}
+	return PVCSpec
+}
 // DeleteCsiSnapsForVolumes delete csi snapshots for Apps
 func (k *K8s) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) error {
 	// Only FA (pure_block) volume is supported
@@ -5342,6 +5520,35 @@ func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
 		return err
 	}
 	logrus.Infof("Snapshot is ready to use: %s", snap.Name)
+	return nil
+}
+
+// waitForCsiSnapToBeReady wait for snapshot status to be ready
+func (k *K8s) waitForPodToBeReady(podname string, namespace string) error {
+	var pod *v1.Pod
+	var err error
+	kubeClient, err := getKubeClient("")
+	if err != nil {
+		logrus.Error("Failed to get Kube client")
+		return err
+	}
+	logrus.Infof("Waiting for pod [%s] to be ready in namespace: %s ", podname, namespace)
+	t := func() (interface{}, bool, error) {
+		if pod, err = kubeClient.CoreV1().Pods(namespace).Get(context.TODO(), podname, metav1.GetOptions{}); err != nil {
+			return "", true, err
+		}
+		if pod.Status.Phase != v1.PodRunning {
+			return "", true, &scheduler.ErrFailedToSchedulePod{
+				App:  nil,
+				Cause: fmt.Sprintf("pod [%s] is not ready", podname),
+			}
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval); err != nil {
+		return err
+	}
+	logrus.Infof("Pod is up and running: %s", pod.Name)
 	return nil
 }
 
