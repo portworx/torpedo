@@ -494,6 +494,63 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 	})
 })
 
+// Runs cluster wide diags collection and validates on S3
+var _ = Describe("{DiagsSpecificNode}", func() {
+	var testrailID = 54915
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54916
+	var runID int
+	JustBeforeEach(func() {
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	var diagFile string
+	var existingDiags string
+	var err error
+
+	It("has to collect diags on specific node from another node, validate diags on S3", func() {
+		contexts = make([]*scheduler.Context, 0)
+		nodes := node.GetWorkerNodes()
+		currNode := nodes[0]
+		diagNode := nodes[1]
+
+		Step(fmt.Sprintf("Check latest diags on node %v", diagNode.Name), func() {
+			logrus.Infof("Getting latest diags on %v", diagNode.Name)
+			existingDiags, err = runCmd(fmt.Sprintf("ls -t /var/cores%s*.tar.gz | head -n 1", diagNode.Name), diagNode, nil)
+			if err == nil {
+				logrus.Infof("Found latest auto diags on node %s: %s ", diagNode.Name, path.Base(existingDiags))
+			} else {
+				existingDiags = ""
+			}
+		})
+
+		Step(fmt.Sprintf("run pxctl sv diags on node %s to collect diags on specific node %v", currNode.Name, diagNode.Name), func() {
+			_, err := runCmd(fmt.Sprintf("/opt/pwx/bin/pxctl sv diags -a -n %s", diagNode.VolDriverNodeID), currNode, nil)
+			Expect(err).NotTo(HaveOccurred(), "Error running diags on Node %s to %s", currNode.Name, diagNode.Name)
+		})
+
+		Step(fmt.Sprintf("Get new diags on node %v", diagNode.Name), func() {
+			diagFile, err = runCmd(fmt.Sprintf("ls -t /var/cores/%s-*.tar.gz | head -n 1", diagNode.Name), diagNode, nil)
+			Expect(err).NotTo(HaveOccurred(), "Error getting new diags on Node %s", diagNode.Name)
+			if existingDiags != diagFile {
+				logrus.Infof("Found new diags %s", diagFile)
+				/// Need to validate new diags
+				err = Inst().V.ValidateDiagsOnS3(diagNode, path.Base(strings.TrimSpace(diagFile)))
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				err = fmt.Errorf("Failed to find new diags on Node %s", diagNode.Name)
+			}
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, nil)
+		}
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
 	ValidateCleanup()
