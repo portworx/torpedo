@@ -515,7 +515,7 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 
 		Step(fmt.Sprintf("Check latest diags on node %v", diagNode.Name), func() {
 			logrus.Infof("Getting latest diags on %v", diagNode.Name)
-			existingDiags, err = runCmd(fmt.Sprintf("ls -t /var/cores%s*.tar.gz | head -n 1", diagNode.Name), diagNode, nil)
+			existingDiags, err = runCmd(fmt.Sprintf("ls -t /var/cores/%s*.tar.gz | head -n 1", diagNode.Name), diagNode, nil)
 			if err == nil {
 				logrus.Infof("Found latest auto diags on node %s: %s ", diagNode.Name, path.Base(existingDiags))
 			} else {
