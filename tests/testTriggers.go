@@ -348,6 +348,8 @@ const (
 	ValidateDeviceMapper = "validateDeviceMapper"
 	// AsyncDR runs Async DR between two clusters
 	AsyncDR = "asyncdr"
+	// MetroDR runs Async DR between two clusters
+	MetroDR = "metrodr"
 	// HAIncreaseAndReboot performs repl-add
 	HAIncreaseAndReboot = "haIncreaseAndReboot"
 	// AddDrive performs drive add for on-prem cluster
@@ -4947,6 +4949,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		if err != nil {
 			logrus.Errorf("Failed to write kubeconfig: %v", err)
 		}
+		UpdateOutcome(event, err)
 
 		err = SetSourceKubeConfig()
 		if err != nil {
@@ -4967,7 +4970,11 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			}
 			Step("Create cluster pair between source and destination clusters", func() {
 				// Set cluster context to cluster where torpedo is running
-				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+				err = ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+				if err != nil {
+					logrus.Errorf("clusterpair creation failed: %v", err)
+					UpdateOutcome(event, err)
+				}
 			})
 		}
 
@@ -4997,6 +5004,124 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			UpdateOutcome(event, err)
 		}
 	}
+}
+
+// TriggerMetroDR triggers Async DR
+func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	logrus.Infof("Metro DR triggered at: %v", time.Now())
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppTasksDown,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	chaosLevel := ChaosMap[MetroDR]
+	err := verifyClusterDomains()
+	if err != nil {
+		logrus.Error(err)
+	}
+	UpdateOutcome(event, err)
+	var (
+		migrationNamespaces   []string
+		taskNamePrefix        = "async-dr-mig"
+		allMigrations         []*storkapi.Migration
+		includeResourcesFlag  = true
+		startApplicationsFlag = false
+	)
+
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+
+		if err != nil {
+			logrus.Errorf("Failed to write kubeconfig: %v", err)
+		}
+		UpdateOutcome(event, err)
+
+		err = SetSourceKubeConfig()
+		if err != nil {
+			logrus.Errorf("Failed to Set source kubeconfig: %v", err)
+		}
+		UpdateOutcome(event, err)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			logrus.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
+			}
+			Step("Create cluster pair between source and destination clusters", func() {
+				// Set cluster context to cluster where torpedo is running
+				err = ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+				if err != nil {
+					logrus.Errorf("clusterpair creation failed: %v", err)
+					UpdateOutcome(event, err)
+				}
+			})
+		}
+
+		logrus.Infof("Migration Namespaces: %v", migrationNamespaces)
+
+	})
+	time.Sleep(5 * time.Minute)
+	logrus.Info("Start migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := migrationKey + fmt.Sprintf("%d", i)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+		} else {
+			allMigrations = append(allMigrations, currMig)
+		}
+	}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+		} else {
+			UpdateOutcome(event, err)
+		}
+	}
+}
+
+func verifyClusterDomains() error {
+	var cdsName string
+	listCdsTask := func() (interface{}, bool, error) {
+		// Fetch the cluster domains
+		cdses, err := storkops.Instance().ListClusterDomainStatuses()
+		if err != nil || len(cdses.Items) == 0 {
+			logrus.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+
+		cds := cdses.Items[0]
+		cdsName = cds.Name
+		logrus.Infof("Cluster domain: %s", cdsName)
+		if len(cds.Status.ClusterDomainInfos) == 0 {
+			logrus.Infof("Found 0 cluster domain info objects in cluster domain status.")
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+		return "", false, nil
+
+	}
+	_, err := task.DoRetryWithTimeout(listCdsTask, clusterDomainRetryTimeout, clusterDomainRetryInterval)
+	if err != nil {
+		return fmt.Errorf("failed to list cluster domains. Cannot proceed with Metro DR")
+	}
+	return nil
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {
