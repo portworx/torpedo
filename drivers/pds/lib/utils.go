@@ -40,18 +40,20 @@ var (
 	k8sApps = apps.Instance()
 
 	components                            *pdsapi.Components
+	deployment                            *pds.ModelsDeployment
+	apiClient                             *pds.APIClient
 	deploymentTargetID, storageTemplateID string
 	accountID                             string
 	tenantID                              string
 	projectID                             string
 	serviceType                           = "LoadBalancer"
 	accountName                           = "Portworx"
-	deployment                            *pds.ModelsDeployment
-	err                                   error
-	isavailable                           bool
-	isVersionAvailable                    bool
-	isBuildAvailable                      bool
-	currentReplicas                       int32
+
+	err                error
+	isavailable        bool
+	isVersionAvailable bool
+	isBuildAvailable   bool
+	currentReplicas    int32
 
 	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
 	dataServiceNameIDMap                    = make(map[string]string)
@@ -143,7 +145,7 @@ func SetupPDSTest() (string, string, string, string, string) {
 
 	//ctx := context.WithValue(context.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: GetAndExpectStringEnvVar("BEARER_TOKEN"), Prefix: "Bearer"}})
 	ctx := context.WithValue(context.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: GetBearerToken(), Prefix: "Bearer"}})
-	apiClient := pds.NewAPIClient(apiConf)
+	apiClient = pds.NewAPIClient(apiConf)
 	components = pdsapi.NewComponents(ctx, apiClient)
 	controlplane := NewControlPlane(GetAndExpectStringEnvVar(envControlPlaneURL), components)
 
@@ -456,6 +458,8 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 			for index := range dataServiceImageMap[version] {
 				imageID := dataServiceImageMap[version][index]
 				logrus.Infof("VersionID %v ImageID %v", version, imageID)
+				ctx := context.WithValue(context.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: GetBearerToken(), Prefix: "Bearer"}})
+				components = pdsapi.NewComponents(ctx, apiClient)
 				deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
 					deploymentTargetID,
 					dnsZone,
