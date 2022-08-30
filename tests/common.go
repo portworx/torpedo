@@ -7,8 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -19,6 +17,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -160,6 +161,10 @@ const (
 	migrationRetryTimeout  = 10 * time.Minute
 	migrationRetryInterval = 10 * time.Second
 	defaultClusterPairDir  = "cluster-pair"
+
+	// Metro DR
+	clusterDomainRetryTimeout  = 5 * time.Minute
+	clusterDomainRetryInterval = 10 * time.Second
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
 )
