@@ -293,6 +293,7 @@ func InitInstance() {
 		VaultAddress:            Inst().VaultAddress,
 		VaultToken:              Inst().VaultToken,
 		PureVolumes:             Inst().PureVolumes,
+		PureRunCloneMany:        Inst().PureRunCloneMany,
 		HelmValuesConfigMapName: Inst().HelmValuesConfigMap,
 	})
 	expect(err).NotTo(haveOccurred())
@@ -453,40 +454,23 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateResizePurePVC(ctx, errChan...)
-			}
-		})
-
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("validate %s app's volumes statistics ", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidatePureVolumeStatisticsDynamicUpdate(ctx, errChan...)
-			}
-		})
-
-		Step(fmt.Sprintf("validate %s app's pure volumes has no replicaset", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidatePureVolumeNoReplicaSet(ctx, errChan...)
-			}
-		})
-
-		Step(fmt.Sprintf("validate %s app's pure volumes cloning", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateCSIVolumeClone(ctx, errChan...)
-			}
-		})
 
 		Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidateCSISnapshotAndRestore(ctx, errChan...)
 			}
 		})
+
+		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
+			fmt.Println("testing cloning large number of clones")
+			ValidatePureVolumeLargeNumOfClones(ctx, errChan...)
+		})
+
 
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 			if ctx.SkipVolumeValidation {
@@ -528,45 +512,21 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			}
 		})
 
-		Step(fmt.Sprintf("validate %s app's snapshots for pxctl", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidatePureSnapshotsPXCTL(ctx, errChan...)
-			}
-		})
-
-		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateResizePurePVC(ctx, errChan...)
-			}
-		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("validate %s app's volumes statistics ", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidatePureVolumeStatisticsDynamicUpdate(ctx, errChan...)
-			}
-		})
-
-		Step(fmt.Sprintf("validate %s app's pure volumes has no replicaset", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidatePureVolumeNoReplicaSet(ctx, errChan...)
-			}
-		})
-
-		Step(fmt.Sprintf("validate %s app's pure volumes cloning", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateCSIVolumeClone(ctx, errChan...)
-			}
-		})
-
 		Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidateCSISnapshotAndRestore(ctx, errChan...)
 			}
+		})
+
+		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
+			fmt.Println("testing cloning large number of clones")
+			ValidatePureVolumeLargeNumOfClones(ctx, errChan...)
 		})
 
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
@@ -879,6 +839,40 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 
 			err = Inst().S.CSICloneTest(ctx, request)
+			processError(err, errChan...)
+		}
+	})
+}
+
+// ValidatePureVolumeLargeNumOfClones is the ginkgo spec for cloning a volume and verifying the content
+func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an restoring large number from a snapshot", func() {
+		var err error
+		timestamp := strconv.Itoa(int(time.Now().Unix()))
+		snapShotClassName := PureSnapShotClass + "." + timestamp
+		if _, err := Inst().S.CreateCsiSanpshotClass(snapShotClassName, "Delete"); err != nil {
+			logrus.Errorf("Create volume snapshot class failed with error: [%v]", err)
+			expect(err).NotTo(haveOccurred(), "failed to create snapshot class")
+		}
+
+		var vols []*volume.Volume
+		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
+			vols, err = Inst().S.GetPureVolumes(ctx, "pure_block")
+			processError(err, errChan...)
+		})
+		if len(vols) == 0 {
+			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
+			processError(err, errChan...)
+		} else {
+			request := scheduler.CSISnapshotRequest {
+				Namespace: vols[0].Namespace,
+				Timestamp: timestamp,
+				OriginalPVCName: vols[0].Name,
+				SnapName: "basic-csi-snapshot-many" + timestamp,
+				RestoredPVCName: "csi-restored-many" + timestamp,
+				SnapshotclassName: snapShotClassName,
+			}
+			err = Inst().S.CSISnapshotAndRestoreMany(ctx, request)
 			processError(err, errChan...)
 		}
 	})
@@ -3485,6 +3479,7 @@ type Torpedo struct {
 	Backup                              backup.Driver
 	SecretType                          string
 	PureVolumes                         bool
+	PureRunCloneMany                    bool
 	VaultAddress                        string
 	VaultToken                          string
 	SchedUpgradeHops                    string
@@ -3525,6 +3520,7 @@ func ParseFlags() {
 	var enableStorkUpgrade bool
 	var secretType string
 	var pureVolumes bool
+	var pureRunCloneMany bool
 	var vaultAddress string
 	var vaultToken string
 	var schedUpgradeHops string
@@ -3560,6 +3556,7 @@ func ParseFlags() {
 	flag.StringVar(&customConfigPath, "custom-config", "", "Path to custom configuration files")
 	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
 	flag.BoolVar(&pureVolumes, "pure-volumes", false, "To enable using Pure backend for shared volumes")
+	flag.StringVar(&pureRunCloneMany, "pure-fa-clone-many-test", "false", "If using Pure volumes, to enable Pure clone many tests")
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")

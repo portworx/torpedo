@@ -907,6 +907,14 @@ func (d *dcos) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnap
 	}
 }
 
+func (d *dcos) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
+	//CSISnapshotAndRestoreMany is not supported for DCOS
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CSISnapshotAndRestoreMany()",
+	}
+}
+
 func (d *dcos) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.VolumeSnapshot, error) {
 	// GetCsiSnapshots is not supported
 	return nil, &errors.ErrNotSupported{

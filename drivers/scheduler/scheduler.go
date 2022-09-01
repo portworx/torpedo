@@ -102,6 +102,8 @@ type InitOptions struct {
 	VaultToken string
 	// PureVolumes identifies if this setup is using Pure backend
 	PureVolumes bool
+	// PureRunCloneMany identifies if Pure clone many test is enabled
+	PureRunCloneMany bool
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
@@ -350,6 +352,10 @@ type Driver interface {
 	// At the same time, there's also other validation functions in this interface as well. So we should look into ways
 	// to make the interface consistent
 	CSISnapshotTest(*Context, CSISnapshotRequest) error
+
+	// CSISnapshotAndRestoreMany create a single snapshot and try to restore many volumes
+	CSISnapshotAndRestoreMany(*Context, CSISnapshotRequest) error
+
 
 	// CSICloneTest clones a volume and validate the content
 	CSICloneTest(*Context, CSICloneRequest) error

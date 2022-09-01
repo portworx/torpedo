@@ -210,6 +210,7 @@ type K8s struct {
 	VaultAddress            string
 	VaultToken              string
 	PureVolumes             bool
+	PureRunCloneMany        bool
 	helmValuesConfigMapName string
 }
 
@@ -248,6 +249,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.VaultToken = schedOpts.VaultToken
 	k.eventsStorage = make(map[string][]scheduler.Event)
 	k.PureVolumes = schedOpts.PureVolumes
+	k.PureRunCloneMany = schedOpts.PureRunCloneMany
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -1273,6 +1275,12 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		}
 		logrus.Infof("Setting provisioner of %v to %v", obj.Name, obj.Provisioner)
 
+		if k.PureVolumes {
+			volumeBindingModeImmediate := storageapi.VolumeBindingImmediate
+			if k.PureRunCloneMany {
+				obj.VolumeBindingMode = &volumeBindingModeImmediate
+			}
+		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
 			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
@@ -5176,6 +5184,55 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 	return nil
 }
 
+// CSISnapshotAndRestoreMany create CSI snapshot and restore to many PVCs, and we validate the PVCs are up and bound
+// (Testrail cases C58775, 58091)
+func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
+	// This test will validate the content of the volume as opposed to just verify creation of volume.
+	if !k.PureRunCloneMany {
+		logrus.Info("PureRunCloneMany job disabled, skipping")
+		return nil
+	}
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
+	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
+
+	if err != nil {
+		logrus.Errorf("Failed to retrieve PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return err
+	}
+	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	if err != nil {
+		logrus.Errorf("Failed to retrieve SC for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return err
+	}
+	storageClassName := originalStorageClass.Name
+	logrus.Infof("Procedding with SC %s", storageClassName)
+
+	// creating the snapshot
+	volSnapshot, err := k.CreateCsiSnapshot(request.SnapName, pvcObj.Namespace, request.SnapshotclassName, pvcObj.Name)
+	if err != nil {
+		logrus.Errorf("Failed to create snapshot %s for volume %s", request.SnapName, pvcObj.Name)
+		return err
+	}
+
+	logrus.Infof("Successfully created snapshot: [%s] for pvc: %s", volSnapshot.Name, pvcObj.Name)
+	for i := 0; i < 10; i++ {
+		restoredPVCName := fmt.Sprint(request.RestoredPVCName, i)
+		restoredPVCSpec := MakePVCFromSnapshot(size, pvcObj.Namespace, restoredPVCName, volSnapshot.Name, storageClassName)
+		_, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+		if err != nil {
+			logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err )
+			return err
+		}
+
+		if err = k.waitForPVCToBound(restoredPVCName, pvcObj.Namespace); err != nil {
+			return fmt.Errorf("PVC %s did not go into bound after 2 mins", restoredPVCName)
+		}
+	}
+
+	return nil
+}
+
+
 // CSICloneTest create new PVC by cloning an existing PVC and make sure the contents of volume are same
 // (Testrail cases C58509)
 func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRequest)  error {
@@ -5726,6 +5783,32 @@ func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
 		return err
 	}
 	logrus.Infof("Snapshot is ready to use: %s", snap.Name)
+	return nil
+}
+
+// waitForPVCToBound wait for PVC status to be bound
+func (k *K8s) waitForPVCToBound(pvcName string, namespace string) error {
+	var pvc *v1.PersistentVolumeClaim
+	var err error
+	kubeClient, err := getKubeClient("")
+	if err != nil {
+		logrus.Error("Failed to get Kube client")
+		return err
+	}
+	logrus.Infof("Waiting for pvc [%s] to be bound in namespace: %s ", pvcName, namespace)
+	t := func() (interface{}, bool, error) {
+		if pvc, err = kubeClient.CoreV1().PersistentVolumeClaims(namespace).Get(context.TODO(), pvcName, metav1.GetOptions{}); err != nil {
+			return "", true, err
+		}
+		if pvc.Status.Phase != v1.ClaimBound {
+			return "", true, fmt.Errorf("PVC %s not bound yet", pvcName)
+		}
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval); err != nil {
+		return err
+	}
+	logrus.Infof("PVC is in bound: %s", pvc.Name)
 	return nil
 }
 
