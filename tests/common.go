@@ -478,13 +478,13 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 
 		Step(fmt.Sprintf("validate %s app's pure volumes cloning", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidatePureVolumeClone(ctx, errChan...)
+				ValidateCSIVolumeClone(ctx, errChan...)
 			}
 		})
 
 		Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidatePureVolumeSnapshotAndRestore(ctx, errChan...)
+				ValidateCSISnapshotAndRestore(ctx, errChan...)
 			}
 		})
 
@@ -559,13 +559,13 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 
 		Step(fmt.Sprintf("validate %s app's pure volumes cloning", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidatePureVolumeClone(ctx, errChan...)
+				ValidateCSIVolumeClone(ctx, errChan...)
 			}
 		})
 
 		Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidatePureVolumeSnapshotAndRestore(ctx, errChan...)
+				ValidateCSISnapshotAndRestore(ctx, errChan...)
 			}
 		})
 
@@ -823,8 +823,8 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 	})
 }
 
-// ValidatePureVolumeSnapshotAndRestore is the ginkgo spec for validating actually creating a FADA snapshot, restoring and verifying the content
-func ValidatePureVolumeSnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan error) {
+// ValidateCSISnapshotAndRestore is the ginkgo spec for validating actually creating a FADA snapshot, restoring and verifying the content
+func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an snapshot and restoring", func() {
 		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
@@ -840,7 +840,7 @@ func ValidatePureVolumeSnapshotAndRestore(ctx *scheduler.Context, errChan ...*ch
 			processError(err, errChan...)
 		})
 		if len(vols) == 0 {
-			logrus.Warnf("No FADA volumes, skipping")
+			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
 			request := scheduler.CSISnapshotRequest {
@@ -857,8 +857,8 @@ func ValidatePureVolumeSnapshotAndRestore(ctx *scheduler.Context, errChan ...*ch
 	})
 }
 
-// ValidatePureVolumeClone is the ginkgo spec for cloning a volume and verifying the content
-func ValidatePureVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
+// ValidateCSIVolumeClone is the ginkgo spec for cloning a volume and verifying the content
+func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an cloning", func() {
 		var err error
 		var vols []*volume.Volume
@@ -867,7 +867,7 @@ func ValidatePureVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 			processError(err, errChan...)
 		})
 		if len(vols) == 0 {
-			logrus.Warnf("No FADA volumes, skipping")
+			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
 			timestamp := strconv.Itoa(int(time.Now().Unix()))
