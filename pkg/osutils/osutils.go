@@ -2,10 +2,11 @@ package osutils
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Wget runs wget command
@@ -109,6 +110,20 @@ func Cat(filename string) ([]byte, error) {
 	return output, nil
 }
 
+// KubectlExec run kubectl comamnd with arguments and returns the output
+func KubectlExec(arguments []string) (string, error) {
+	if len(arguments) == 0 {
+		return "", fmt.Errorf("no arguments supplied for kubectl command")
+	}
+	cmd := exec.Command("kubectl", arguments...)
+	output, err := cmd.Output()
+	logrus.Debugf("command output for '%s': %s", cmd.String(), string(output))
+	if err != nil {
+		return "", fmt.Errorf("error on executing kubectl command, Err: %+v", err)
+	}
+	return string(output), nil
+}
+
 // Kubectl run kubectl comamnd with arguments
 func Kubectl(arguments []string) error {
 	if len(arguments) == 0 {
@@ -120,6 +135,5 @@ func Kubectl(arguments []string) error {
 	if err != nil {
 		return fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}
-
 	return nil
 }

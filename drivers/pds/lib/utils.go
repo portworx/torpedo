@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	state "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -28,18 +29,21 @@ import (
 const (
 	storageTemplateName   = "Volume replication (best-effort spread)"
 	resourceTemplateName  = "Small"
-	appConfigTemplateName = "Default"
-	deploymentName        = "automation"
+	appConfigTemplateName = "QaDefault"
 	defaultRetryInterval  = 10 * time.Minute
 	duration              = 900
 	timeOut               = 5 * time.Minute
 	timeInterval          = 10 * time.Second
+	envDsVersion          = "DS_VERSION"
+	envDsBuild            = "DS_BUILD"
+	envDeployAllVersions  = "DEPLOY_ALL_VERSIONS"
 )
 
 //PDS vars
 var (
 	k8sCore = core.Instance()
 	k8sApps = apps.Instance()
+	resp    *state.Response
 
 	components                            *pdsapi.Components
 	deploymentTargetID, storageTemplateID string
@@ -51,6 +55,7 @@ var (
 	deployment                            *pds.ModelsDeployment
 	err                                   error
 	isavailable                           bool
+	currentReplicas                       int32
 
 	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
 	dataServiceNameIDMap                    = make(map[string]string)
@@ -118,32 +123,10 @@ func copyAndCapture(w io.Writer, r io.Reader) ([]byte, error) {
 	}
 }
 
-// GetDataServices lists data services
-func GetDataServices(url string) {
-	endPointURL := url + "/api/data-services"
-	logrus.Infof("endPointURL %v", endPointURL)
-	accessToken := "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImlzcyI6Imh0dHBzOi8vYXBpY2VudHJhbC5wb3J0d29yeC5jb20vYXBpIn0.eyJhdWQiOiI2IiwianRpIjoiN2MwMDVkMGQwZmYwMDNiYzk1NGQ2YjVlODgyZmY2YzZlZDdiZjcwMjdjN2Q2ZWQxNTg1MTliNWY3MmRjM2EyNDg3MTJkZjc4ZDNlZjUwMjQiLCJpYXQiOjE2NTk2NzQ1ODguODY4Njc1LCJuYmYiOjE2NTk2NzQyODguODY4Njc1LCJleHAiOjE2NTk2NzYzODguODI2MTg5LCJzdWIiOiIyMTk5NiIsImlzcyI6Imh0dHBzOi8vYXBpY2VudHJhbC5wb3J0d29yeC5jb20vYXBpIiwibmFtZSI6Ik1hZGFuYWdvcGFsIEFydW5hY2hhbGFtIiwiZW1haWwiOiJtYXJ1bmFjaGFsYW1AcHVyZXN0b3JhZ2UuY29tIiwic2NvcGVzIjpbXX0.oKrTnVr871h4WmKnmrKXBn4jEp-ndaxiz16v4manzpxuFoZiUJC8b5GZFL4jSgke6Jis0baAhLi19sE86waQmA5jl67zWDEL4LfPXyxWplIwmb-voWqhmroxOYqIegjaiWq_Okrf1rNUyavIdnERfOrMEiWh-FfkHEJ6UBwZ_3ZCBNL42dD0wyf5634lD_a6oR3UxaPHuoG_ejW79sDPSpxn5sz9Q5QaSG2MfnACeKmfWUsFfifIixGzj8DQSxb2igRtQkgKD34kuyBIkRXmu0I-7105wx3rstTswTBrOjACUHA3kpgYtoFnrVx6hIuYqzGHDtfOFDWCV7nH0kiJlfzk05Y-uyQodDNYBTTbIjcDhlboS5dhsQw5g0gilrDjaHH6grmZC3O4q8dwIdq5F9KsU5ZVJRqf0f3bAeARNZsOHxQixGxmPMLOoIHkla_fHch7ftOaxZ5YLvkj4JIis8_JQ2rkjlJqRsFC4Ma-j9ZVUlF5VRJ5UAKCLe_EJF5X9SjtgO9cQTIJNQ-CHS7xYTfpBnSLqbOWajI3MsUMeEhfCcvaZVZ4e1c7mtTuJnhI5h20S1qZx_t-d3lZ7YXrj0iR4-SO1r5CcJ5qkuXVCZryWNpp6RPf67b9GxVpBzh6iAsiBO8EBbv2TgYgpnmxlA0Lt7SiPz8XTb4G2BeSsZM"
-	req, err := http.NewRequest("GET", endPointURL, nil)
-	if err != nil {
-		logrus.Fatalf("An Error Occured %v", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		logrus.Fatalf("An Error Occured %v", err)
-	}
-	defer resp.Body.Close()
-	logrus.Infof("status %v", resp.Status)
-}
-
 // GetClusterID retruns the cluster id
 func GetClusterID(pathToKubeconfig string) (string, error) {
 	logrus.Infof("Fetch Cluster id ")
 	cmd := fmt.Sprintf("kubectl get ns kube-system -o jsonpath={.metadata.uid} --kubeconfig %s", pathToKubeconfig)
-	// cmdArgs := []string{"get ns kube-system -o jsonpath={.metadata.uid"}
-	// err := osutils.Kubectl(cmdArgs)
 	output, _, err := ExecShell(cmd)
 	if err != nil {
 		logrus.Fatalf("An Error Occured %v", err)
@@ -167,9 +150,6 @@ func SetupPDSTest() (string, string, string, string, string) {
 	apiClient := pds.NewAPIClient(apiConf)
 	components = pdsapi.NewComponents(ctx, apiClient)
 	controlplane := NewControlPlane(GetAndExpectStringEnvVar(envControlPlaneURL), components)
-
-	//Test methods - Remove me
-	//GetDataServices(GetAndExpectStringEnvVar(envControlPlaneURL))
 
 	clusterID, err := GetClusterID(GetAndExpectStringEnvVar(envTargetKubeconfig))
 	logrus.Infof("clusterID %v", clusterID)
@@ -239,6 +219,20 @@ func GetStorageTemplate(tenantID string) string {
 	return storageTemplateID
 }
 
+//GetAllSupportedDataServices get the supported datasservices and returns the map
+func GetAllSupportedDataServices() map[string]string {
+	dataService, _ := components.DataService.ListDataServices()
+	for _, ds := range dataService {
+		if !*ds.ComingSoon {
+			dataServiceNameIDMap[ds.GetName()] = ds.GetId()
+		}
+	}
+	for key, value := range dataServiceNameIDMap {
+		log.Infof("dsKey %v dsValue %v", key, value)
+	}
+	return dataServiceNameIDMap
+}
+
 // GetResourceTemplate get the resource template id and forms supported dataserviceNameIdMap
 func GetResourceTemplate(tenantID string, supportedDataServices []string) (map[string]string, map[string]string) {
 	logrus.Infof("Get the resource template for each data services")
@@ -266,63 +260,85 @@ func GetResourceTemplate(tenantID string, supportedDataServices []string) (map[s
 	return dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap
 }
 
-// GetVersions returns the required versions and build ID of dataservices
-func GetVersions(dsVersion string, dsBuild string, dataServiceNameIDMap map[string]string) (map[string][]string, map[string][]string) {
+// GetVersionsAllImages returns all the Images of dataservice version
+func GetVersionsAllImages(dsVersion string, dataServiceID string) (map[string][]string, map[string][]string) {
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
-	for key := range dataServiceNameIDMap {
-		versions, _ = components.Version.ListDataServiceVersions(dataServiceNameIDMap[key])
-		for i := 0; i < len(versions); i++ {
-			if (*versions[i].Enabled) && (*versions[i].Name == dsVersion) {
-				dataServiceNameVersionMap[key] = append(dataServiceNameVersionMap[key], versions[i].GetId())
-				images, _ = components.Image.ListImages(versions[i].GetId())
-				for j := 0; j < len(images); j++ {
-					if *images[j].Build == dsBuild {
-						dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
-						break //remove this break to deploy all images for selected version
-					} else {
-						dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
-					}
-				}
-				break
+
+	versions, _ = components.Version.ListDataServiceVersions(dataServiceID)
+	for i := 0; i < len(versions); i++ {
+		if (*versions[i].Enabled) && (*versions[i].Name == dsVersion) {
+			dataServiceNameVersionMap[dataServiceID] = append(dataServiceNameVersionMap[dataServiceID], versions[i].GetId())
+			images, _ = components.Image.ListImages(versions[i].GetId())
+			for j := 0; j < len(images); j++ {
+				dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
 			}
+			break
 		}
 	}
+
 	for key := range dataServiceNameVersionMap {
-		logrus.Infof("DS Version name- %v,id- %v", key, dataServiceNameVersionMap[key])
+		logrus.Infof("DS name- %v,version ids- %v", key, dataServiceNameVersionMap[key])
 	}
 
 	for key := range dataServiceIDImagesMap {
-		logrus.Infof("DS Image name- %v,id- %v", key, dataServiceIDImagesMap[key])
+		logrus.Infof("DS Verion id - %v, DS Image id - %v", key, dataServiceIDImagesMap[key])
 	}
 	return dataServiceNameVersionMap, dataServiceIDImagesMap
 }
 
-// GetAllVersions returns all the versions and build ID of dataservices
-func GetAllVersions(dataServiceNameIDMap map[string]string) (map[string][]string, map[string][]string) {
+// GetVersionsImage returns the required Image of dataservice version
+func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (map[string][]string, map[string][]string) {
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
-	for key := range dataServiceNameIDMap {
-		versions, _ = components.Version.ListDataServiceVersions(dataServiceNameIDMap[key])
-		for i := 0; i < len(versions); i++ {
-			if *versions[i].Enabled {
-				dataServiceNameVersionMap[key] = append(dataServiceNameVersionMap[key], versions[i].GetId())
-				images, _ = components.Image.ListImages(versions[i].GetId())
-				for j := 0; j < len(images); j++ {
+
+	versions, _ = components.Version.ListDataServiceVersions(dataServiceID)
+	for i := 0; i < len(versions); i++ {
+		if (*versions[i].Enabled) && (*versions[i].Name == dsVersion) {
+			dataServiceNameVersionMap[dataServiceID] = append(dataServiceNameVersionMap[dataServiceID], versions[i].GetId())
+			images, _ = components.Image.ListImages(versions[i].GetId())
+			for j := 0; j < len(images); j++ {
+				if *images[j].Build == dsBuild {
 					dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
+					break //remove this break to deploy all images for selected version
 				}
+			}
+			break
+		}
+	}
+
+	for key := range dataServiceNameVersionMap {
+		logrus.Infof("DS name- %v,version ids- %v", key, dataServiceNameVersionMap[key])
+	}
+
+	for key := range dataServiceIDImagesMap {
+		logrus.Infof("DS Verion id - %v, DS Image id - %v", key, dataServiceIDImagesMap[key])
+	}
+	return dataServiceNameVersionMap, dataServiceIDImagesMap
+}
+
+// GetAllVersionsImages returns all the versions and Images of dataservice
+func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string][]string) {
+	var versions []pds.ModelsVersion
+	var images []pds.ModelsImage
+
+	versions, _ = components.Version.ListDataServiceVersions(dataServiceID)
+	for i := 0; i < len(versions); i++ {
+		if *versions[i].Enabled {
+			dataServiceNameVersionMap[dataServiceID] = append(dataServiceNameVersionMap[dataServiceID], versions[i].GetId())
+			images, _ = components.Image.ListImages(versions[i].GetId())
+			for j := 0; j < len(images); j++ {
+				dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
 			}
 		}
 	}
 
 	for key := range dataServiceNameVersionMap {
-		logrus.Infof("DS Version name- %v,id- %v", key, dataServiceNameVersionMap[key])
+		logrus.Infof("DS name- %v, version ids- %v", key, dataServiceNameVersionMap[key])
 	}
-
 	for key := range dataServiceIDImagesMap {
-		logrus.Infof("DS Image name- %v,id- %v", key, dataServiceIDImagesMap[key])
+		logrus.Infof("DS Verion id - %v,DS Image id - %v", key, dataServiceIDImagesMap[key])
 	}
-
 	return dataServiceNameVersionMap, dataServiceIDImagesMap
 }
 
@@ -490,7 +506,14 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) {
 		logrus.Fatalf("An Error Occured %v", err)
 	}
 
-	status, _ := components.DataServiceDeployment.GetDeploymentSatus(deployment.GetId())
+	status, res, err := components.DataServiceDeployment.GetDeploymentSatus(deployment.GetId())
+	if err != nil {
+		logrus.Fatalf("An Error Occured while get the deployment status %v", err)
+	}
+	if res.StatusCode != state.StatusOK {
+		log.Errorf("Error when calling `ApiDeploymentsIdStatusGet``: %v\n", err)
+		log.Errorf("Full HTTP response: %v\n", res)
+	}
 	sleeptime := 0
 	for status.GetHealth() != "Healthy" && sleeptime < duration {
 		if sleeptime > 30 && len(status.GetHealth()) < 2 {
@@ -499,8 +522,15 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) {
 		}
 		time.Sleep(10 * time.Second)
 		sleeptime += 10
-		status, _ = components.DataServiceDeployment.GetDeploymentSatus(deployment.GetId())
+		status, res, err = components.DataServiceDeployment.GetDeploymentSatus(deployment.GetId())
 		logrus.Infof("Health status -  %v", status.GetHealth())
+		if err != nil {
+			log.Fatalf("Error occured while getting deployment status %v", err)
+		}
+		if res.StatusCode != state.StatusOK {
+			log.Errorf("Error when calling `ApiDeploymentsIdCredentialsGet``: %v\n", err)
+			log.Errorf("Full HTTP response: %v\n", res)
+		}
 	}
 	if status.GetHealth() == "Healthy" {
 		deployementIDNameMap[deployment.GetId()] = deployment.GetName()
@@ -526,23 +556,95 @@ func UpdateDataServices(deploymentID string, appConfigID string, dataServiceImag
 	return deployment
 }
 
-// DeployDataServices deploys the dataservice
-func DeployDataServices(projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
+// DeployAllDataServices deploys all dataservices, versions and images that are supported
+func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
+	namespaceID string, dataServiceNameDefaultAppConfigMap map[string]string, replicas int32,
+	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) *pds.ModelsDeployment {
+
+	currentReplicas = replicas
+	var dataServiceImageMap map[string][]string
+
+	for ds, id := range supportedDataServicesMap {
+		logrus.Infof("Key: %v, Value %v", ds, dataServiceNameDefaultAppConfigMap[ds])
+		logrus.Infof(`Request params:
+				projectID- %v deploymentTargetID - %v,
+				dnsZone - %v,deploymentName - %v,namespaceID - %v
+				App config ID - %v,
+				num pods- %v, service-type - %v
+				Resource template id - %v, storageTemplateID - %v`,
+			projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[ds],
+			replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[ds], storageTemplateID)
+
+		if ds == "ZooKeeper" && replicas != 3 {
+			logrus.Warnf("Zookeeper replicas cannot be %v, it should be 3", replicas)
+			currentReplicas = 3
+		}
+
+		//clearing up the previous entries of dataServiceImageMap
+		for ds := range dataServiceImageMap {
+			delete(dataServiceImageMap, ds)
+		}
+
+		if !GetAndExpectBoolEnvVar(envDeployAllVersions) {
+			dsVersion := GetAndExpectStringEnvVar(envDsVersion)
+			dsBuild := GetAndExpectStringEnvVar(envDsBuild)
+			logrus.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
+			_, dataServiceImageMap = GetVersionsImage(dsVersion, dsBuild, id)
+		} else {
+			_, dataServiceImageMap = GetAllVersionsImages(id)
+		}
+
+		for version := range dataServiceImageMap {
+			for index := range dataServiceImageMap[version] {
+				imageID := dataServiceImageMap[version][index]
+				logrus.Infof("Version %v ImageID %v", version, imageID)
+				deployment, resp, err = components.DataServiceDeployment.CreateDeployment(projectID,
+					deploymentTargetID,
+					dnsZone,
+					deploymentName,
+					namespaceID,
+					dataServiceNameDefaultAppConfigMap[ds],
+					imageID,
+					currentReplicas,
+					serviceType,
+					dataServiceDefaultResourceTemplateIDMap[ds],
+					storageTemplateID)
+
+				if err != nil {
+					logrus.Warnf("An Error Occured while creating deployment %v", err)
+				}
+
+				if resp.StatusCode != state.StatusCreated {
+					//call the method to create access token
+					log.Errorf("Error when calling `ApiProjectsIdDeploymentsPost``: %v\n", err)
+					log.Errorf("Full HTTP response: %v\n", resp)
+				}
+
+				ValidateDataServiceDeployment(deployment)
+			}
+		}
+	}
+	return deployment
+}
+
+//DeployDataServices deploys the dataservice
+func DeployDataServices(supportedDataServices string, projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
 	namespaceID string, dataServiceNameDefaultAppConfig string, dataServiceImageMap map[string][]string, replicas int32,
 	serviceType string, dataServiceDefaultResourceTemplateID string, storageTemplateID string) *pds.ModelsDeployment {
+	currentReplicas = replicas
 
 	for version := range dataServiceImageMap {
 		for index := range dataServiceImageMap[version] {
 			imageID := dataServiceImageMap[version][index]
 			logrus.Infof("Version %v ImageID %v", version, imageID)
-			deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
+			deployment, resp, err := components.DataServiceDeployment.CreateDeployment(projectID,
 				deploymentTargetID,
 				dnsZone,
 				deploymentName,
 				namespaceID,
 				dataServiceNameDefaultAppConfig,
 				imageID,
-				replicas,
+				currentReplicas,
 				serviceType,
 				dataServiceDefaultResourceTemplateID,
 				storageTemplateID)
@@ -550,54 +652,17 @@ func DeployDataServices(projectID string, deploymentTargetID string, dnsZone str
 			if err != nil {
 				logrus.Warnf("An Error Occured while creating deployment %v", err)
 			}
+			if resp.StatusCode != state.StatusCreated {
+				//call the method to create access token
+				log.Errorf("Error when calling `ApiProjectsIdDeploymentsPost``: %v\n", err)
+				log.Errorf("Full HTTP response: %v\n", resp)
+			}
 			ValidateDataServiceDeployment(deployment)
 		}
 	}
+
 	return deployment
 }
-
-// func CreateKubernetesClientFromConfig(kubeConfigPath string) (clientset.Interface, error) {
-// 	cfg, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	client, err := clientset.NewForConfig(cfg)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return client, nil
-// }
-
-// func Getk8sClient() clientset.Interface {
-// 	var err error
-// 	var k8sClient clientset.Interface
-// 	if k8sClient == nil {
-// 		if k8senv := os.Getenv("TARGET_KUBECONFIG"); k8senv != "" {
-// 			k8sClient, err = CreateKubernetesClientFromConfig(k8senv)
-// 			if err != nil {
-// 				log.Panicf("Unable to get the client")
-// 			}
-// 		}
-// 	}
-// 	return k8sClient
-// }
-
-// func WaitForDeployment(ctx context.Context, client clientset.Interface, deployment *appsv1.Deployment, namespace string, replicas int32) error {
-// 	var err error
-// 	waitErr := wait.PollImmediate(timeInterval, timeOut, func() (bool, error) {
-// 		log.Info("waiting for the deployment to complete")
-// 		deployment, err = client.AppsV1().Deployments(namespace).Get(ctx, deployment.Name, metav1.GetOptions{})
-// 		if err != nil {
-// 			return false, nil
-// 		}
-// 		if deployment.Status.ReadyReplicas == replicas {
-// 			return true, nil
-// 		}
-// 		return true, nil
-// 	})
-// 	return waitErr
-// }
 
 //GetDeploymentConnectionInfo returns the dns endpoint
 func GetDeploymentConnectionInfo(deploymentID string) string {
@@ -615,7 +680,7 @@ func GetDeploymentConnectionInfo(deploymentID string) string {
 	isfound = false
 	for key, value := range clusterDetails {
 		logrus.Infof("host details key %v value %v", key, value)
-		if key == "host" {
+		if strings.Contains(key, "host") {
 			dnsEndpoint = fmt.Sprint(value)
 			isfound = true
 		}
@@ -651,9 +716,16 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 
 	case "RabbitMQ":
 		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
-		CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env)
-	}
+		//CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env)
+		command := "while true; do bin/runjava com.rabbitmq.perf.PerfTest --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 30; done"
+		CreateRedisWorkload(deploymentName, "pivotalrabbitmq/perf-test:latest", dnsEndpoint, pdsPassword, namespace, env, command)
 
+	case "Redis":
+		env := []string{"REDIS_HOST", "PDS_USER", "PDS_PASS"}
+		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster"
+		CreateRedisWorkload(deploymentName, "redis:latest", dnsEndpoint, pdsPassword, namespace, env, command)
+
+	}
 }
 
 //CreatepostgresqlWorkload generate workloads on the pg db
@@ -702,6 +774,58 @@ func CreatepostgresqlWorkload(dnsEndpoint string, pdsPassword string, scalefacto
 		logrus.Fatalf("An Error Occured while deleting the deployment %v", err)
 	}
 	return deployment, err
+}
+
+// CreateRedisWorkload func runs traffic on the Redis deployments
+func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassword string, namespace string, env []string, command string) (*v1.Pod, error) {
+	var value []string
+	podSpec := &v1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: name + "-",
+			Namespace:    namespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:    name,
+					Image:   image,
+					Command: []string{"/bin/sh", "-c", command},
+					Env:     make([]v1.EnvVar, 3),
+				},
+			},
+			RestartPolicy: v1.RestartPolicyOnFailure,
+		},
+	}
+
+	value = append(value, dnsEndpoint)
+	value = append(value, "pds")
+	value = append(value, pdsPassword)
+
+	for index := range env {
+		podSpec.Spec.Containers[0].Env[index].Name = env[index]
+		podSpec.Spec.Containers[0].Env[index].Value = value[index]
+	}
+
+	pod, err := k8sCore.CreatePod(podSpec)
+	if err != nil {
+		logrus.Errorf("An Error Occured while creating %v", err)
+	}
+
+	err = k8sCore.ValidatePod(pod, timeOut, timeInterval)
+	if err != nil {
+		logrus.Errorf("An Error Occured while validating the pod %v", err)
+	}
+
+	time.Sleep(1 * time.Minute)
+	err = k8sCore.DeletePod(pod.Name, pod.Namespace, true)
+	if err != nil {
+		logrus.Errorf("An Error Occured while deleting namespace %v", err)
+	}
+	return pod, err
 }
 
 //CreateRmqWorkload generate workloads for rmq
@@ -755,4 +879,28 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 	}
 
 	return pod, nil
+}
+
+//ValidateDataServiceVolumes validates the volumes
+func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment) {
+	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), GetAndExpectStringEnvVar("NAMESPACE"))
+	if err != nil {
+		logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+	}
+
+	err = k8sApps.ValidatePVCsForStatefulSet(ss, timeOut, timeInterval)
+	if err != nil {
+		logrus.Errorf("An error occured while validating pvcs of statefulsets %v ", err)
+	}
+
+	// pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+	// if err != nil {
+	// 	logrus.Warnf("An Error Occured while getting pvcs of statefulsets %v", err)
+	// }
+	// for _, pvc := range pvcList.Items {
+	// 	_, err := k8sCore.GetPersistentVolumeClaimParams(&pvc)
+	// 	if err != nil {
+	// 		logrus.Errorf("Error Occured while getting volume params %v", err)
+	// 	}
+	// }
 }

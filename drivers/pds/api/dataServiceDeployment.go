@@ -29,7 +29,7 @@ func (ds *DataServiceDeployment) ListDeployments(projectID string) ([]pds.Models
 }
 
 // CreateDeployment func
-func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string) (*pds.ModelsDeployment, error) {
+func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string) (*pds.ModelsDeployment, *status.Response, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	createRequest := pds.ControllersCreateProjectDeployment{
 		// ApplicationConfigurationOverrides:  &appConfigOverride,
@@ -48,11 +48,11 @@ func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTa
 	}
 	dsModel, res, err := dsClient.ApiProjectsIdDeploymentsPost(ds.context, projectID).Body(createRequest).Execute()
 
-	if res.StatusCode != status.StatusCreated {
-		log.Errorf("Error when calling `ApiProjectsIdDeploymentsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
-	}
-	return dsModel, err
+	// if res.StatusCode != status.StatusCreated {
+	// 	log.Errorf("Error when calling `ApiProjectsIdDeploymentsPost``: %v\n", err)
+	// 	log.Errorf("Full HTTP response: %v\n", res)
+	// }
+	return dsModel, res, err
 }
 
 // CreateDeploymentWithScehduleBackup func
@@ -116,7 +116,7 @@ func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.Models
 }
 
 // GetDeploymentSatus func
-func (ds *DataServiceDeployment) GetDeploymentSatus(deploymentID string) (*pds.ControllersStatusResponse, error) {
+func (ds *DataServiceDeployment) GetDeploymentSatus(deploymentID string) (*pds.ControllersStatusResponse, *status.Response, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	dsModel, res, err := dsClient.ApiDeploymentsIdStatusGet(ds.context, deploymentID).Execute()
 
@@ -124,7 +124,7 @@ func (ds *DataServiceDeployment) GetDeploymentSatus(deploymentID string) (*pds.C
 		log.Errorf("Error when calling `ApiDeploymentsIdStatusGet``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
 	}
-	return dsModel, err
+	return dsModel, res, err
 }
 
 // GetDeploymentEvents func

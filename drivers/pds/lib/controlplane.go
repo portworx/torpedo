@@ -60,11 +60,7 @@ func GetBearerToken() string {
 	if err != nil {
 		log.Fatalf("An Error Occured %v", err)
 	}
-
-	log.Infof("Bearer token %s", bearerToken.AccessToken)
-
 	return bearerToken.AccessToken
-
 }
 
 // GetRegistrationToken PDS

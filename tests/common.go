@@ -225,37 +225,6 @@ var (
 	beNumerically = gomega.BeNumerically
 )
 
-// //PDS const
-// const (
-// 	storageTemplateName   = "QaDefault"
-// 	resourceTemplateName  = "QaDefault"
-// 	appConfigTemplateName = "QaDefault"
-// 	deploymentName        = "automation"
-// 	templateName          = "QaDefault"
-// )
-
-// //PDS vars
-// var (
-// 	components *pdsapi.Components
-// 	//ctx                                   context1.Context
-// 	deploymentTargetID, storageTemplateID string
-// 	accountID                             string
-// 	tenantID                              string
-// 	projectID                             string
-// 	serviceType                           = "LoadBalancer"
-// 	accountName                           = "Portworx"
-
-// 	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
-// 	dataServiceNameIDMap                    = make(map[string]string)
-// 	dataServiceNameVersionMap               = make(map[string][]string)
-// 	dataServiceIDImagesMap                  = make(map[string]string)
-// 	dataServiceNameDefaultAppConfigMap      = make(map[string]string)
-// 	deployementIDNameMap                    = make(map[string]string)
-// 	namespaceNameIDMap                      = make(map[string]string)
-// 	deployementIdnameWithSchBkpMap          = make(map[string]string)
-// 	deployementIdnameWithAdhocBkpMap        = make(map[string]string)
-// )
-
 // Backup vars
 var (
 	// OrgID is pxbackup OrgID
@@ -289,159 +258,6 @@ const (
 	rootLogDir   = "/root/logs"
 	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
 )
-
-// //ExecShell to execute local command
-// func ExecShell(command string) (string, string, error) {
-// 	return ExecShellWithEnv(command)
-// }
-
-// // ExecShellWithEnv to execute local command
-// func ExecShellWithEnv(command string, envVars ...string) (string, string, error) {
-// 	var stout, sterr []byte
-// 	cmd := exec.Command("bash", "-c", command)
-// 	logrus.Debugf("Command %s ", command)
-// 	cmd.Env = append(cmd.Env, envVars...)
-// 	stdout, _ := cmd.StdoutPipe()
-// 	stderr, _ := cmd.StderrPipe()
-// 	if err := cmd.Start(); err != nil {
-// 		logrus.Debugf("Command %s failed to start. Cause: %v", command, err)
-// 		return "", "", err
-// 	}
-
-// 	var wg sync.WaitGroup
-// 	wg.Add(1)
-// 	go func() {
-// 		stout, _ = copyAndCapture(os.Stdout, stdout)
-// 		wg.Done()
-// 	}()
-
-// 	sterr, _ = copyAndCapture(os.Stderr, stderr)
-
-// 	wg.Wait()
-
-// 	err := cmd.Wait()
-// 	return string(stout), string(sterr), err
-// }
-
-// // copyAndCapture
-// func copyAndCapture(w io.Writer, r io.Reader) ([]byte, error) {
-// 	var out []byte
-// 	buf := make([]byte, 1024)
-// 	for {
-// 		n, err := r.Read(buf[:])
-// 		if n > 0 {
-// 			d := buf[:n]
-// 			out = append(out, d...)
-// 			_, err := w.Write(d)
-// 			if err != nil {
-// 				return out, err
-// 			}
-// 		}
-// 		if err != nil {
-// 			// Read returns io.EOF at the end of file, which is not an error for us
-// 			if err == io.EOF {
-// 				err = nil
-// 			}
-// 			return out, err
-// 		}
-// 	}
-// }
-
-// // GetDataServices lists data services
-// func GetDataServices(url string) {
-
-// 	endPointURL := url + "/api/data-services"
-// 	logrus.Infof("endPointURL %v", endPointURL)
-// 	accessToken := GetBearerToken()
-
-// 	req, err := http.NewRequest("GET", endPointURL, nil)
-// 	processError(err)
-// 	req.Header.Set("Content-Type", "application/json")
-// 	req.Header.Set("Authorization", "Bearer "+accessToken)
-// 	client := &http.Client{}
-// 	resp, err := client.Do(req)
-// 	processError(err)
-// 	defer resp.Body.Close()
-
-// 	// resp, err := client.R().SetHeader("Accept", "application/json").SetAuthToken("Bearer " + accessToken).Get(endPointURL)
-// 	// processError(err)
-
-// 	logrus.Infof("status %v", resp.Status)
-
-// }
-
-// // GetClusterID retruns the cluster id
-// func GetClusterID(pathToKubeconfig string) (string, error) {
-// 	logrus.Infof("Fetch Cluster id ")
-// 	cmd := fmt.Sprintf("kubectl get ns kube-system -o jsonpath={.metadata.uid} --kubeconfig %s", pathToKubeconfig)
-// 	output, _, err := ExecShell(cmd)
-// 	processError(err)
-// 	return output, nil
-// }
-
-// // SetupPDSTest returns few params required to run the test
-// func SetupPDSTest() (string, string, string, string, string) {
-// 	var err error
-// 	apiConf := pds.NewConfiguration()
-// 	endpointURL, err := url.Parse(os.Getenv("CONTROL_PLANE_URL"))
-// 	processError(err)
-// 	apiConf.Host = endpointURL.Host
-// 	apiConf.Scheme = endpointURL.Scheme
-
-// 	ctx := context1.WithValue(context1.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: GetBearerToken(), Prefix: "Bearer"}})
-// 	apiClient := pds.NewAPIClient(apiConf)
-// 	components = pdsapi.NewComponents(ctx, apiClient)
-// 	controlplane := pdslib.NewControlPlane(os.Getenv("CONTROL_PLANE_URL"), components)
-
-// 	Step("Get Dataservices")
-// 	GetDataServices(os.Getenv("CONTROL_PLANE_URL"))
-
-// 	Step("Get TargetClusterID")
-// 	clusterID, err := GetClusterID(os.Getenv("TARGET_KUBECONFIG"))
-// 	logrus.Infof("clusterID %v", clusterID)
-// 	processError(err)
-
-// 	logrus.Info("Get the Target cluster details")
-// 	targetClusters, _ := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
-// 	for i := 0; i < len(targetClusters); i++ {
-// 		if targetClusters[i].GetClusterId() == clusterID {
-// 			deploymentTargetID = targetClusters[i].GetId()
-// 			logrus.Infof("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
-// 		}
-// 	}
-
-// 	Step("Get AccountList")
-// 	acc := components.Account
-// 	accounts, _ := acc.GetAccountsList()
-
-// 	if strings.EqualFold(os.Getenv("CLUSTER_TYPE"), "onprem") || strings.EqualFold(os.Getenv("CLUSTER_TYPE"), "ocp") {
-// 		serviceType = "ClusterIP"
-// 	}
-// 	logrus.Infof("Deployment service type %s", serviceType)
-
-// 	for i := 0; i < len(accounts); i++ {
-// 		logrus.Infof("Account Name: %v", accounts[i].GetName())
-// 		if accounts[i].GetName() == accountName {
-// 			accountID = accounts[i].GetId()
-// 		}
-// 	}
-// 	logrus.Infof("Account Detail- Name: %s, UUID: %s ", accountName, accountID)
-// 	tnts := components.Tenant
-// 	tenants, _ := tnts.GetTenantsList(accountID)
-// 	tenantID = tenants[0].GetId()
-// 	tenantName := tenants[0].GetName()
-// 	logrus.Infof("Tenant Details- Name: %s, UUID: %s ", tenantName, tenantID)
-// 	dnsZone := controlplane.GetDNSZone(tenantID)
-// 	//dnsZone = "qa-staging.pds-dns.io"
-// 	logrus.Infof("DNSZone info - Name: %s, tenant: %s , account: %s", dnsZone, tenantName, accountName)
-// 	projcts := components.Project
-// 	projects, _ := projcts.GetprojectsList(tenantID)
-// 	projectID = projects[0].GetId()
-// 	projectName := projects[0].GetName()
-// 	logrus.Infof("Project Details- Name: %s, UUID: %s ", projectName, projectID)
-
-// 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID
-// }
 
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
@@ -3417,7 +3233,7 @@ func ParseFlags() {
 	} else if nodeDriver, err = node.Get(n); err != nil {
 		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
 	} else if err = os.MkdirAll(logLoc, os.ModeDir); err != nil {
-		logrus.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
+		logrus.Errorf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 	} else {
 		if _, err = os.Stat(customConfigPath); err == nil {
 			var data []byte

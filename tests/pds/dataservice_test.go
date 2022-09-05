@@ -16,13 +16,14 @@ import (
 )
 
 const (
-	deploymentName       = "qa"
-	envDsVersion         = "DS_VERSION"
-	envDsBuild           = "DS_BUILD"
-	envReplicas          = "NO_OF_NODES"
-	envNamespace         = "NAMESPACE"
-	envDataService       = "DATA_SERVICE"
-	envDeployAllVersions = "DEPLOY_ALL_VERSIONS"
+	deploymentName          = "qa"
+	envDsVersion            = "DS_VERSION"
+	envDsBuild              = "DS_BUILD"
+	envReplicas             = "NO_OF_NODES"
+	envNamespace            = "NAMESPACE"
+	envDataService          = "DATA_SERVICE"
+	envDeployAllVersions    = "DEPLOY_ALL_VERSIONS"
+	envDeployAllDataService = "DEPLOY_ALL_DATASERVICE"
 )
 
 var (
@@ -32,8 +33,6 @@ var (
 	projectID                               string
 	serviceType                             string
 	deploymentTargetID                      string
-	dsVersion                               string
-	dsBuild                                 string
 	replicas                                int32
 	supportedDataServices                   []string
 	dataServiceIDImagesMap                  map[string][]string
@@ -44,7 +43,7 @@ var (
 	dataServiceNameIDMap                    map[string]string
 	deploymentIDs                           []string
 	deployment                              *pds.ModelsDeployment
-	namespaceService                        *pds.NamespacesApiService
+	supportedDataServicesNameIDMap          map[string]string
 )
 
 func TestDataService(t *testing.T) {
@@ -63,33 +62,19 @@ var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests")
 	tenantID, dnsZone, projectID, serviceType, deploymentTargetID = pdslib.SetupPDSTest()
 
-	supportedDataServices = append(supportedDataServices, pdslib.GetAndExpectStringEnvVar(envDataService))
-	for _, ds := range supportedDataServices {
-		logrus.Infof("supported dataservices %v", ds)
-	}
-
 	Step("Get StorageTemplateID, App ConfigID, ResourceTemplateID, Replicas and Supported Dataservice", func() {
 		storageTemplateID = pdslib.GetStorageTemplate(tenantID)
 		logrus.Infof("storageTemplateID %v", storageTemplateID)
-
 		replicas = int32(pdslib.GetAndExpectIntEnvVar(envReplicas))
-
-		dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap = pdslib.GetResourceTemplate(tenantID, supportedDataServices)
-		dataServiceNameDefaultAppConfigMap = pdslib.GetAppConfTemplate(tenantID, dataServiceNameIDMap)
-
-	})
-
-	Step("Get Versions and Builds of Dataservice and form supported dataServiceIDImagesMap", func() {
-		deployallDataServiceVersion := pdslib.GetAndExpectStringEnvVar(envDeployAllVersions)
-		if deployallDataServiceVersion != "true" {
-			dsVersion = pdslib.GetAndExpectStringEnvVar(envDsVersion)
-			dsBuild = pdslib.GetAndExpectStringEnvVar(envDsBuild)
-			logrus.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
-			_, dataServiceIDImagesMap = pdslib.GetVersions(dsVersion, dsBuild, dataServiceNameIDMap)
-		} else {
-			_, dataServiceIDImagesMap = pdslib.GetAllVersions(dataServiceNameIDMap)
+		if !pdslib.GetAndExpectBoolEnvVar(envDeployAllDataService) {
+			supportedDataServices = append(supportedDataServices, pdslib.GetAndExpectStringEnvVar(envDataService))
+			for _, ds := range supportedDataServices {
+				logrus.Infof("supported dataservices %v", ds)
+			}
+			Step("Get the resource and app config template for supported dataservice")
+			dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap = pdslib.GetResourceTemplate(tenantID, supportedDataServices)
+			dataServiceNameDefaultAppConfigMap = pdslib.GetAppConfTemplate(tenantID, dataServiceNameIDMap)
 		}
-
 	})
 
 })
@@ -116,7 +101,7 @@ var _ = Describe("{RestartPortworx}", func() {
 				Resource template id - %v, storageTemplateID - %v`,
 						projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
 						replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
-					deployment = pdslib.DeployDataServices(projectID,
+					deployment = pdslib.DeployDataServices(supportedDataServices[i], projectID,
 						deploymentTargetID,
 						dnsZone,
 						deploymentName,
@@ -162,46 +147,38 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 	It("delete pds pods and validate if its coming back online and dataserices are not affected", func() {
 		Step("Create dataservices without backup.")
-		for i := range supportedDataServices {
-			logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
-			logrus.Infof(`Request params:
-			projectID- %v deploymentTargetID - %v,
-			dnsZone - %v,deploymentName - %v,namespaceID - %v
-			App config ID - %v,
-			num pods- %v, service-type - %v
-			Resource template id - %v, storageTemplateID - %v`,
-				projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-				replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
-			deployment := pdslib.DeployDataServices(projectID,
+		//for i := range supportedDataServices {
+		Step("Deploy All Supported Data Services", func() {
+			deployment = pdslib.DeployAllDataServices(supportedDataServicesNameIDMap, projectID,
 				deploymentTargetID,
 				dnsZone,
 				deploymentName,
 				namespaceID,
-				dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-				dataServiceIDImagesMap,
+				dataServiceNameDefaultAppConfigMap,
 				replicas,
 				serviceType,
-				dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
+				dataServiceDefaultResourceTemplateIDMap,
 				storageTemplateID,
 			)
-			logrus.Infof("data service id %v", deployment.GetDataServiceId())
+		})
+		logrus.Infof("data service id %v", deployment.GetDataServiceId())
 
-			Step("get pods from pds-system namespace")
-			podList, err := pdslib.GetPods("pds-system")
-			Expect(err).NotTo(HaveOccurred())
+		Step("get pods from pds-system namespace")
+		podList, err := pdslib.GetPods("pds-system")
+		Expect(err).NotTo(HaveOccurred())
 
-			logrus.Info("PDS System Pods")
-			for _, pod := range podList.Items {
-				logrus.Infof("%v", pod.Name)
-			}
-
-			Step("delete pods from pds-system namespace")
-			err = pdslib.DeleteDeploymentPods(podList)
-			Expect(err).NotTo(HaveOccurred())
-
-			Step("Validate Deployments after restarting portworx")
-			pdslib.ValidateDataServiceDeployment(deployment)
+		logrus.Info("PDS System Pods")
+		for _, pod := range podList.Items {
+			logrus.Infof("%v", pod.Name)
 		}
+
+		Step("delete pods from pds-system namespace")
+		err = pdslib.DeleteDeploymentPods(podList)
+		Expect(err).NotTo(HaveOccurred())
+
+		Step("Validate Deployments after restarting portworx")
+		pdslib.ValidateDataServiceDeployment(deployment)
+		//}
 
 	})
 
@@ -277,18 +254,31 @@ var _ = Describe("{RunWorkloads}", func() {
 				Resource template id - %v, storageTemplateID - %v`,
 					projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
 					replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
-				deployment := pdslib.DeployDataServices(projectID,
-					deploymentTargetID,
-					dnsZone,
-					deploymentName,
-					namespaceID,
-					dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-					dataServiceIDImagesMap,
-					replicas,
-					serviceType,
-					dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
-					storageTemplateID,
-				)
+				// deployment := pdslib.DeployDataServices(supportedDataServices[i], projectID,
+				// 	deploymentTargetID,
+				// 	dnsZone,
+				// 	deploymentName,
+				// 	namespaceID,
+				// 	dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
+				// 	dataServiceIDImagesMap,
+				// 	replicas,
+				// 	serviceType,
+				// 	dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
+				// 	storageTemplateID,
+				// )
+				Step("Deploy All Supported Data Services", func() {
+					deployment = pdslib.DeployAllDataServices(dataServiceNameIDMap, projectID,
+						deploymentTargetID,
+						dnsZone,
+						deploymentName,
+						namespaceID,
+						dataServiceNameDefaultAppConfigMap,
+						replicas,
+						serviceType,
+						dataServiceDefaultResourceTemplateIDMap,
+						storageTemplateID,
+					)
+				})
 				logrus.Infof("data service id %v", deployment.GetDataServiceId())
 
 				if supportedDataServices[i] == "PostgreSQL" {
@@ -296,7 +286,12 @@ var _ = Describe("{RunWorkloads}", func() {
 					pdslib.CreateDataServiceWorkloads(supportedDataServices[i], *deployment.Id, "100", "1", deploymentName, namespace)
 				}
 				if supportedDataServices[i] == "RabbitMQ" {
-					pdslib.CreateDataServiceWorkloads(supportedDataServices[i], *deployment.Id, "", "", "", namespace)
+					deploymentName := "rmq"
+					pdslib.CreateDataServiceWorkloads(supportedDataServices[i], *deployment.Id, "", "", deploymentName, namespace)
+				}
+				if supportedDataServices[i] == "Redis" {
+					deploymentName := "redisbench"
+					pdslib.CreateDataServiceWorkloads(supportedDataServices[i], *deployment.Id, "", "", deploymentName, namespace)
 				}
 			}
 		})
@@ -313,32 +308,23 @@ var _ = Describe("{ScaleDataServices}", func() {
 	})
 	It("scaleUp dataservices", func() {
 		logrus.Info("Scale Test for dataservices")
-		for i := range supportedDataServices {
-			Step("Deploy Dataservices", func() {
-				logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
-				logrus.Infof(`Request params:
-			projectID- %v deploymentTargetID - %v,
-			dnsZone - %v,deploymentName - %v,namespaceID - %v
-			App config ID - %v,
-			num pods- %v, service-type - %v
-			Resource template id - %v, storageTemplateID - %v`,
-					projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-					replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
-				deployment = pdslib.DeployDataServices(projectID,
+		It("deploy Dataservices", func() {
+			logrus.Info("Create dataservices without backup.")
+			Step("Deploy Data Services", func() {
+				deployment = pdslib.DeployAllDataServices(dataServiceNameIDMap, projectID,
 					deploymentTargetID,
 					dnsZone,
 					deploymentName,
 					namespaceID,
-					dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-					dataServiceIDImagesMap,
+					dataServiceNameDefaultAppConfigMap,
 					replicas,
 					serviceType,
-					dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
+					dataServiceDefaultResourceTemplateIDMap,
 					storageTemplateID,
 				)
-				deploymentIDs = append(deploymentIDs, deployment.GetId())
+				logrus.Infof("data service id %v", deployment.GetDataServiceId())
 			})
-		}
+		})
 
 		Step("Scaling up the dataservice replicas", func() {
 			replicas = 5
@@ -355,6 +341,53 @@ var _ = Describe("{ScaleDataServices}", func() {
 
 })
 
+var _ = Describe("{DeployAllDataServices}", func() {
+
+	JustBeforeEach(func() {
+		Step("Check the required env param is available to run this test", func() {
+			if !pdslib.GetAndExpectBoolEnvVar(envDeployAllDataService) && pdslib.GetAndExpectBoolEnvVar(envDeployAllVersions) {
+				logrus.Fatal("Env Var are not set as expected")
+			}
+		})
+		Step("Get Namespace and NamespaceID", func() {
+			namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
+			namespaceID = pdslib.GetnameSpaceID(namespace)
+			logrus.Infof("namespace %v namespaceID %v", namespace, namespaceID)
+
+		})
+		Step("Get All Supported Dataservices and Versions", func() {
+			supportedDataServicesNameIDMap = pdslib.GetAllSupportedDataServices()
+			for dsName := range supportedDataServicesNameIDMap {
+				supportedDataServices = append(supportedDataServices, dsName)
+			}
+			for index := range supportedDataServices {
+				logrus.Infof("supported data service %v ", supportedDataServices[index])
+			}
+			Step("Get the resource and app config template for supported dataservice")
+			dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap = pdslib.GetResourceTemplate(tenantID, supportedDataServices)
+			dataServiceNameDefaultAppConfigMap = pdslib.GetAppConfTemplate(tenantID, dataServiceNameIDMap)
+		})
+
+	})
+
+	It("Deploy All SupportedDataServices", func() {
+		Step("Deploy All Supported Data Services", func() {
+			deployment := pdslib.DeployAllDataServices(supportedDataServicesNameIDMap, projectID,
+				deploymentTargetID,
+				dnsZone,
+				deploymentName,
+				namespaceID,
+				dataServiceNameDefaultAppConfigMap,
+				replicas,
+				serviceType,
+				dataServiceDefaultResourceTemplateIDMap,
+				storageTemplateID,
+			)
+			logrus.Infof("data service id %v", deployment.GetDataServiceId())
+		})
+	})
+})
+
 var _ = Describe("{DeployDataServices}", func() {
 
 	JustBeforeEach(func() {
@@ -366,36 +399,26 @@ var _ = Describe("{DeployDataServices}", func() {
 
 	It("deploy Dataservices", func() {
 		logrus.Info("Create dataservices without backup.")
-		for i := range supportedDataServices {
-			logrus.Infof("Key: %v, Value %v", supportedDataServices[i], dataServiceNameDefaultAppConfigMap[supportedDataServices[i]])
-			logrus.Infof(`Request params:
-			projectID- %v deploymentTargetID - %v,
-			dnsZone - %v,deploymentName - %v,namespaceID - %v
-			App config ID - %v,
-			num pods- %v, service-type - %v
-			Resource template id - %v, storageTemplateID - %v`,
-				projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-				replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]], storageTemplateID)
-			deployment := pdslib.DeployDataServices(projectID,
+		Step("Deploy Data Services", func() {
+			deployment := pdslib.DeployAllDataServices(dataServiceNameIDMap, projectID,
 				deploymentTargetID,
 				dnsZone,
 				deploymentName,
 				namespaceID,
-				dataServiceNameDefaultAppConfigMap[supportedDataServices[i]],
-				dataServiceIDImagesMap,
+				dataServiceNameDefaultAppConfigMap,
 				replicas,
 				serviceType,
-				dataServiceDefaultResourceTemplateIDMap[supportedDataServices[i]],
+				dataServiceDefaultResourceTemplateIDMap,
 				storageTemplateID,
 			)
 			logrus.Infof("data service id %v", deployment.GetDataServiceId())
-		}
+		})
 	})
 
 })
 
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
+	//ParseFlags()
 	os.Exit(m.Run())
 }
