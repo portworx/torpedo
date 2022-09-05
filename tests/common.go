@@ -844,12 +844,12 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
-			request := scheduler.CSISnapshotRequest {
-				Namespace: vols[0].Namespace,
-				Timestamp: timestamp,
-				OriginalPVCName: vols[0].Name,
-				SnapName: "basic-csi-snapshot-" + timestamp,
-				RestoredPVCName: "csi-restored-" + timestamp,
+			request := scheduler.CSISnapshotRequest{
+				Namespace:         vols[0].Namespace,
+				Timestamp:         timestamp,
+				OriginalPVCName:   vols[0].Name,
+				SnapName:          "basic-csi-snapshot-" + timestamp,
+				RestoredPVCName:   "csi-restored-" + timestamp,
 				SnapshotclassName: snapShotClassName,
 			}
 			err = Inst().S.CSISnapshotTest(ctx, request)
@@ -873,8 +873,8 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 		} else {
 			timestamp := strconv.Itoa(int(time.Now().Unix()))
 			request := scheduler.CSICloneRequest{
-				Timestamp: timestamp,
-				Namespace: vols[0].Namespace,
+				Timestamp:       timestamp,
+				Namespace:       vols[0].Namespace,
 				OriginalPVCName: vols[0].Name,
 				RestoredPVCName: "csi-cloned-" + timestamp,
 			}
