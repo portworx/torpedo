@@ -1,7 +1,6 @@
 package aetosutil
 
 import (
-	"encoding/json"
 	"fmt"
 	rest "github.com/portworx/torpedo/pkg/restutil"
 	"github.com/sirupsen/logrus"
@@ -114,6 +113,43 @@ func TestSetBegin(testSet *TestSet) {
 }
 
 // TestSetUpdate update test set  to dashboard DB
+func TestSetEnd() {
+
+	if TestSetID == 0 {
+		logrus.Fatal("TestSetID is empty")
+	}
+
+	updateTestSetURL := fmt.Sprintf("%s/testset/%d/end", dashBoardBaseURL, TestSetID)
+	resp, respStatusCode, err := rest.PUT(updateTestSetURL, nil, nil, nil)
+
+	if err != nil {
+		logrus.Errorf("Error in updating TestSet, Caose: %v", err)
+	} else if respStatusCode != http.StatusOK {
+		logrus.Errorf("Failed to end TestSet, Resp : %s", string(resp))
+	} else {
+		logrus.Infof("TestSetId %d update successfully", TestSetID)
+	}
+}
+
+func TestCaseEnd() {
+
+	if TestCaseID == 0 {
+		logrus.Fatal("TestCaseID is empty")
+	}
+
+	url := fmt.Sprintf("%s/testcase/%d/end", dashBoardBaseURL, TestCaseID)
+	resp, respStatusCode, err := rest.PUT(url, nil, nil, nil)
+
+	if err != nil {
+		logrus.Errorf("Error in updating TestCase, Caose: %v", err)
+	} else if respStatusCode != http.StatusOK {
+		logrus.Errorf("Failed to end TestCase, Resp : %s", string(resp))
+	} else {
+		logrus.Infof("TestCase %d ended successfully", TestSetID)
+	}
+}
+
+// TestSetUpdate update test set  to dashboard DB
 func TestSetUpdate(testSet *TestSet) {
 
 	if TestSetID == 0 {
@@ -130,40 +166,6 @@ func TestSetUpdate(testSet *TestSet) {
 	} else {
 		logrus.Infof("TestSetId %d update successfully", TestSetID)
 	}
-}
-
-// GetTestSet returns testset from dashboard DB
-func GetTestSet(testSetId int) *TestSet {
-
-	if testSetId == 0 {
-		testSetId = TestSetID
-	}
-
-	if testSetId == 0 {
-		logrus.Fatal("TestSetID is empty")
-	}
-
-	getTestSetURL := fmt.Sprintf("%s/testset/%d", dashBoardBaseURL, testSetId)
-	resp, respStatusCode, err := rest.Get(getTestSetURL, nil, nil)
-
-	if err != nil {
-		logrus.Errorf("Error in gettting TestSet: %d, Cause: %v", testSetId, err)
-		return nil
-	}
-
-	if respStatusCode != http.StatusOK {
-		logrus.Errorf("Error in gettting TestSet: %d, Resp: %v", testSetId, string(resp))
-		return nil
-	}
-
-	var testSet TestSet
-	err = json.Unmarshal(resp, &testSet)
-	if err != nil {
-		logrus.Errorf("Error un marshalling testset get, Resp :%s", string(resp))
-		return nil
-	}
-
-	return &testSet
 }
 
 // TestCaseBegin start the test case and push data to dashboard DB
@@ -221,173 +223,6 @@ func TestCaseBegin(moduleName, description, testRepoId string, tags []string) {
 			logrus.Errorf("TestCase creation failed. Cause : %v", err)
 		}
 	}
-}
-
-func GetTestCase(testCaseID int) *TestCase {
-	if testCaseID == 0 {
-		testCaseID = TestCaseID
-	}
-
-	if testCaseID == 0 {
-		logrus.Fatal("TestCaseID is empty")
-
-	}
-
-	getTestCaseURL := fmt.Sprintf("%s/testcase/%d", dashBoardBaseURL, testCaseID)
-	resp, respStatusCode, err := rest.Get(getTestCaseURL, nil, nil)
-
-	if err != nil {
-		logrus.Infof("Error in gettting TestCase: %d, Cause: %v", testCaseID, err)
-		return nil
-	}
-
-	if respStatusCode != http.StatusOK {
-		logrus.Errorf("Error in gettting TestCase: %d, Resp: %v", testCaseID, string(resp))
-		return nil
-	}
-
-	var testCase TestCase
-	err = json.Unmarshal(resp, &testCase)
-	if err != nil {
-		logrus.Errorf("Error un marshalling testcase get, Resp :%s,Cause : %v ", string(resp), err)
-		return nil
-	}
-
-	return &testCase
-}
-
-func TestCaseUpdate(testCase *TestCase) {
-	if TestCaseID == 0 {
-		logrus.Fatal("TestCaseID is empty")
-	}
-
-	updateTestCaseURL := fmt.Sprintf("%s/testcase/%d", dashBoardBaseURL, TestCaseID)
-	resp, respStatusCode, err := rest.PUT(updateTestCaseURL, testCase, nil, nil)
-
-	if err != nil {
-		logrus.Infof("Error in updating TestCase, Cause: %v", err)
-	} else if respStatusCode != http.StatusOK {
-		logrus.Errorf("Error updating test case, Resp : %s", string(resp))
-	} else {
-		logrus.Infof("TestCaseId %d update successfully", TestCaseID)
-	}
-}
-
-func TestCaseEnd(status string) {
-	time.Sleep(10 * time.Second)
-
-	testCaseStatus := PASS
-
-	if TestCaseID == 0 {
-		logrus.Fatal("TestCaseID is empty")
-	}
-
-	testcase := GetTestCase(TestCaseID)
-
-	endTime := time.Now()
-	duration := endTime.Sub(testCaseStartTime)
-	testcase.Duration = fmt.Sprint(duration.Minutes())
-	fmt.Printf("Duration : %v\n", duration.Minutes())
-	//testcase.EndTime = endTime
-	//errors, verifications
-	if status != "" {
-		testcase.Status = status
-	} else {
-		for _, r := range verifications {
-			if !r.ResultStatus {
-				testCaseStatus = FAIL
-				break
-			}
-		}
-		logrus.Infof("Updating testcase status as %s", testCaseStatus)
-		testcase.Status = testCaseStatus
-	}
-
-	logrus.Infof("test case before update : %v", testcase)
-
-	TestCaseUpdate(testcase)
-
-}
-
-func getAllTestCases() []TestCase {
-
-	if TestSetID == 0 {
-		logrus.Fatal("TestCaseID is empty")
-
-	}
-
-	getTestCaseURL := fmt.Sprintf("%s/testcases/%d", dashBoardBaseURL, TestSetID)
-	resp, respStatusCode, err := rest.Get(getTestCaseURL, nil, nil)
-
-	if err != nil {
-		logrus.Infof("Error in getting TestCases for TestSet: %d, Cause: %v", TestSetID, err)
-		return nil
-	}
-
-	if respStatusCode != http.StatusOK {
-		logrus.Errorf("Error in getting TestCases: %d, Resp: %v", TestSetID, string(resp))
-		return nil
-	}
-
-	var testCases []TestCase
-	err = json.Unmarshal(resp, &testCases)
-	if err != nil {
-		logrus.Errorf("Error un marshalling testcases get, Resp :%s", string(resp))
-		return nil
-	}
-
-	return testCases
-}
-
-func TestSetEnd() {
-
-	testcases := getAllTestCases()
-	overallStatus := PASS
-
-	for _, t := range testcases {
-		if t.Status == IN_PROGRESS || t.Status == NOT_STARTED {
-			overallStatus = t.Status
-			break
-		}
-	}
-
-	for _, t := range testcases {
-		logrus.Infof("Verification : %v", t)
-		if isFailure(t.Status) {
-			overallStatus = t.Status
-			break
-		}
-	}
-
-	testSet := GetTestSet(0)
-	logrus.Infof("Updating testset status as %s", overallStatus)
-	testSet.Status = overallStatus
-	TestSetUpdate(testSet)
-
-}
-
-func getFailureArray() []string {
-	failureArray := make([]string, 0)
-
-	for _, v := range workflowStatuses {
-		if v != PASS && v != NOT_STARTED && v != IN_PROGRESS {
-			failureArray = append(failureArray, v)
-		}
-	}
-
-	return failureArray
-}
-
-func isFailure(status string) bool {
-
-	failureArray := getFailureArray()
-
-	for _, v := range failureArray {
-		if status == v {
-			return true
-		}
-	}
-	return false
 }
 
 func verify(r result) {

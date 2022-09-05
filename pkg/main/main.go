@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"time"
 )
 
 func main() {
@@ -29,7 +30,9 @@ func main() {
 	aetosutil.VerifyFatal(2, 2, "harding equating 2")
 	aetosutil.VerifyFatal(2, 3, "harding equating 3")
 	aetosutil.Error("This is error string")
-	aetosutil.TestCaseEnd("")
+	time.Sleep(10 * time.Second)
+	aetosutil.Error("came out of sleep")
+	aetosutil.TestCaseEnd()
 	aetosutil.TestSetEnd()
 
 }
