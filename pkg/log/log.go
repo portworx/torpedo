@@ -1,7 +1,10 @@
 package log
 
 import (
+	"io"
+	"os"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 	"github.com/sirupsen/logrus"
@@ -18,6 +21,9 @@ var (
 	heading  colorizer
 	plain    colorizer
 )
+
+var log *logrus.Logger
+var lock = &sync.Mutex{}
 
 // We are logging to file, strip colors to make the output more readable
 var txtFormatter = &logrus.TextFormatter{DisableColors: true}
@@ -118,4 +124,19 @@ func init() {
 	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
 	logrus.SetFormatter(customFormatter)
 	customFormatter.FullTimestamp = true
+}
+
+//GetLogInstance returns the logrus instance
+func GetLogInstance() *logrus.Logger {
+
+	if log == nil {
+		lock.Lock()
+		defer lock.Unlock()
+		if log == nil {
+			log = logrus.New()
+			log.SetFormatter(&logrus.TextFormatter{})
+			log.Out = io.MultiWriter(os.Stdout)
+		}
+	}
+	return log
 }

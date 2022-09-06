@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/sirupsen/logrus"
 	"os"
 	"strings"
@@ -20,6 +21,9 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
+
+var tpLog *logrus.Logger
+var testSet aetosutil.TestSet
 
 var storkLabel = map[string]string{"name": "stork"}
 
@@ -39,7 +43,60 @@ func TestUpgrade(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	tpLog = Inst().Logger
+	testSet = aetosutil.TestSet{
+		CommitID:    "2.12.0-serfdf",
+		User:        "lsrinivas",
+		Product:     "PxEnp",
+		Description: "Torpedo : Upgrade",
+		Branch:      "master",
+		TestType:    "SystemTest",
+		Tags:        []string{"upgrade"},
+		Status:      aetosutil.NOTSTARTED,
+	}
+	aetosutil.TestSetBegin(&testSet)
 	InitInstance()
+})
+
+var _ = Describe("{SampleTest}", func() {
+
+	var testrailID = 35269
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
+	var runID int
+	var f *os.File
+	JustBeforeEach(func() {
+		f = CreateLogFile("SampleTest.log")
+		if f != nil {
+			SetTorpedoFileOutput(tpLog, f)
+		}
+
+		aetosutil.TestCaseBegin("upgrade: sample test", "validating logs in tests", "", nil)
+
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		tpLog.Infof("runid: %d", runID)
+	})
+
+	It("upgrade volume driver and ensure everything is running fine", func() {
+		tpLog.Infof("Inside upgrade test")
+
+		Step("start the upgrade of volume driver", func() {
+			tpLog.Infof("starting upgrade")
+		})
+
+		Step("reinstall and validate all apps after upgrade", func() {
+			tpLog.Info("Scheduling apps after upgrade")
+
+		})
+
+		Step("destroy apps", func() {
+			tpLog.Debug("Destroying apps")
+		})
+	})
+	JustAfterEach(func() {
+		defer CloseLogFile(tpLog, f)
+		aetosutil.TestCaseEnd()
+		tpLog.Debug("just after each")
+	})
 })
 
 var _ = Describe("{UpgradeVolumeDriver}", func() {
@@ -231,7 +288,9 @@ var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 */
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
-	ValidateCleanup()
+	//ValidateCleanup()
+	aetosutil.TestSetEnd()
+	CloseLogFile(tpLog, nil)
 })
 
 func TestMain(m *testing.M) {

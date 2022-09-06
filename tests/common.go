@@ -7,6 +7,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+<<<<<<< HEAD
+=======
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"io"
+>>>>>>> 52d75f386 (:sparkles: adding generic log changes)
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -185,7 +191,7 @@ const (
 	defaultScheduler                      = "k8s"
 	defaultNodeDriver                     = "ssh"
 	defaultStorageDriver                  = "pxd"
-	defaultLogLocation                    = "/mnt/torpedo_support_dir"
+	defaultLogLocation                    = "/testresults/"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
 	defaultAppScaleFactor                 = 1
@@ -272,15 +278,19 @@ const (
 	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
 )
 
+var tpLog *logrus.Logger
+var tpLogPath string
+var tpLogFile *os.File
+
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
 	var token string
 	if Inst().ConfigMap != "" {
-		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		tpLog.Infof("Using Config Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 		expect(err).NotTo(haveOccurred())
-		logrus.Infof("Token used for initializing: %s ", token)
+		tpLog.Infof("Token used for initializing: %s ", token)
 	} else {
 		token = ""
 	}
@@ -322,15 +332,15 @@ func InitInstance() {
 			testrailuttils.CreateMilestone()
 		}
 	} else {
-		logrus.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
+		tpLog.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
 	}
 
 	if jiraUserName != "" && jiraToken != "" {
-		logrus.Info("Initializing JIRA connection")
+		tpLog.Info("Initializing JIRA connection")
 		jirautils.Init(jiraUserName, jiraToken)
 
 	} else {
-		logrus.Debugf("Not all information to connect to JIRA is provided.")
+		tpLog.Debugf("Not all information to connect to JIRA is provided.")
 	}
 }
 
@@ -1491,14 +1501,14 @@ func PerformSystemCheck() {
 				if !n.IsStorageDriverInstalled {
 					continue
 				}
-				logrus.Infof("looking for core files on node %s", n.Name)
+				tpLog.Infof("looking for core files on node %s", n.Name)
 				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
-					logrus.Info("an error occurred, collecting bundle")
-					CollectSupport()
+					tpLog.Info("an error occurred, collecting bundle")
+					//CollectSupport()
 				}
 				expect(err).NotTo(haveOccurred())
 				expect(file).To(beEmpty())
@@ -3483,6 +3493,7 @@ type Torpedo struct {
 	AppList                             []string
 	LogLoc                              string
 	LogLevel                            string
+	Logger                              *logrus.Logger
 	GlobalScaleFactor                   int
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
@@ -3599,42 +3610,52 @@ func ParseFlags() {
 	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
 	flag.Parse()
 
+	tpLog = log.GetLogInstance()
+	tpLog.Out = io.MultiWriter(tpLog.Out)
+	setLoglevel(tpLog, logLevel)
+	tpLogPath = fmt.Sprintf("%s/%s", logLoc, "torpedo.log")
+	tpLogFile = CreateLogFile(tpLogPath)
+	if tpLogFile != nil {
+		SetTorpedoFileOutput(tpLog, tpLogFile)
+		tpLog.Info("Log location: ", tpLogPath)
+	}
+
 	appList, err := splitCsv(appListCSV)
 	if err != nil {
-		logrus.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
+		tpLog.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
 	}
 
 	sched.Init(time.Second)
 
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
-		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
+		tpLog.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
 	} else if volumeDriver, err = volume.Get(v); err != nil {
-		logrus.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
+		tpLog.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
 	} else if nodeDriver, err = node.Get(n); err != nil {
-		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
+		tpLog.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
 	} else if err = os.MkdirAll(logLoc, os.ModeDir); err != nil {
-		logrus.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
+		tpLog.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 	} else {
 		if _, err = os.Stat(customConfigPath); err == nil {
 			var data []byte
 
-			logrus.Infof("Using custom app config file %s", customConfigPath)
+			tpLog.Infof("Using custom app config file %s", customConfigPath)
 			data, err = ioutil.ReadFile(customConfigPath)
 			if err != nil {
-				logrus.Fatalf("Cannot read file %s. Error: %v", customConfigPath, err)
+				tpLog.Fatalf("Cannot read file %s. Error: %v", customConfigPath, err)
 			}
 			err = yaml.Unmarshal(data, &customAppConfig)
 			if err != nil {
-				logrus.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
+				tpLog.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
 			}
-			logrus.Infof("Parsed custom app config file: %+v", customAppConfig)
+			tpLog.Infof("Parsed custom app config file: %+v", customAppConfig)
 		}
-		logrus.Infof("Backup driver name %s", backupDriverName)
+		tpLog.Infof("Backup driver name %s", backupDriverName)
 		if backupDriverName != "" {
 			if backupDriver, err = backup.Get(backupDriverName); err != nil {
-				logrus.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
+				tpLog.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
 			} else {
-				logrus.Infof("Backup driver found %v", backupDriver)
+				tpLog.Infof("Backup driver found %v", backupDriver)
 			}
 		}
 
@@ -3647,6 +3668,7 @@ func ParseFlags() {
 				SpecDir:                             specDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
+				Logger:                              tpLog,
 				GlobalScaleFactor:                   appScaleFactor,
 				MinRunTimeMins:                      minRunTimeMins,
 				ChaosLevel:                          chaosLevel,
@@ -3678,12 +3700,65 @@ func ParseFlags() {
 		})
 	}
 
-	// Set log level
-	logLvl, err := logrus.ParseLevel(instance.LogLevel)
-	if err != nil {
-		logrus.Fatalf("Failed to set log level due to Err: %v", err)
+}
+
+func setLoglevel(tpLog *logrus.Logger, logLevel string) {
+	switch logLevel {
+	case "debug":
+		tpLog.Level = logrus.DebugLevel
+	case "info":
+		tpLog.Level = logrus.InfoLevel
+	case "error":
+		tpLog.Level = logrus.ErrorLevel
+	case "warn":
+		tpLog.Level = logrus.WarnLevel
+	case "trace":
+		tpLog.Level = logrus.TraceLevel
+	default:
+		tpLog.Level = logrus.DebugLevel
+
 	}
-	logrus.SetLevel(logLvl)
+}
+
+//SetTorpedoFileOutput adds output destination for logging
+func SetTorpedoFileOutput(tpLog *logrus.Logger, f *os.File) {
+	fmt.Println(f)
+	fmt.Println(tpLog.Out)
+	tpLog.Out = io.MultiWriter(tpLog.Out, f)
+}
+
+//CreateLogFile creates file and return the file object
+func CreateLogFile(filename string) *os.File {
+	var filePath string
+	if strings.Contains(filename, "/") {
+		filePath = filename
+	} else {
+		filePath = fmt.Sprintf("%s/%s", Inst().LogLoc, filename)
+	}
+
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Println("Failed to create logfile torpedo.log")
+		fmt.Println("Error: ", err)
+	}
+	return f
+
+}
+
+//CloseLogFile ends testcase file object
+func CloseLogFile(tpLog *logrus.Logger, f *os.File) {
+	if f != nil {
+		f.Close()
+		tpLogFile.Close()
+		tpFile, err := os.OpenFile(tpLogPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Failed to create logfile torpedo.log")
+			fmt.Println("Error: ", err)
+		}
+		tpLog.Out = io.MultiWriter(os.Stdout, tpFile)
+	} else {
+		tpLogFile.Close()
+	}
 
 }
 

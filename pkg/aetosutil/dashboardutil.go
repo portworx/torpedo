@@ -2,6 +2,7 @@ package aetosutil
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	rest "github.com/portworx/torpedo/pkg/restutil"
 	"github.com/sirupsen/logrus"
 	"net/http"
@@ -13,7 +14,9 @@ import (
 )
 
 var (
-	TestSetID  int
+	//TestSetID test set id
+	TestSetID int
+	//TestCaseID test case id
 	TestCaseID int
 )
 
@@ -26,17 +29,25 @@ const (
 )
 
 const (
-	PASS        = "PASS"
-	FAIL        = "FAIL"
-	ABORT       = "ABORT"
-	TIMEOUT     = "TIMEOUT"
-	ERROR       = "ERROR"
-	NOT_STARTED = "NOT_STARTED"
-	IN_PROGRESS = "IN_PROGRESS"
+	//PASS status for testset/testcase
+	PASS = "PASS"
+	//FAIL status for testset/testcase
+	FAIL = "FAIL"
+	//ABORT status for testset/testcase
+	ABORT = "ABORT"
+	//TIMEOUT status for testset/testcase
+	TIMEOUT = "TIMEOUT"
+	//ERROR status for testset/testcase
+	ERROR = "ERROR"
+	// NOTSTARTED  status for testset/testcase
+	NOTSTARTED = "NOT_STARTED"
+	// INPROGRESS  status for testset/testcase
+	INPROGRESS = "IN_PROGRESS"
 )
 
-var workflowStatuses = []string{PASS, FAIL, ABORT, ERROR, TIMEOUT, NOT_STARTED, IN_PROGRESS}
+var workflowStatuses = []string{PASS, FAIL, ABORT, ERROR, TIMEOUT, NOTSTARTED, INPROGRESS}
 
+//TestSet struct
 type TestSet struct {
 	CommitID    string   `json:"commitId"`
 	User        string   `json:"user"`
@@ -49,6 +60,7 @@ type TestSet struct {
 	Status      string   `json:"status"`
 }
 
+//TestCase struct
 type TestCase struct {
 	Name       string `json:"name"`
 	ShortName  string `json:"shortName"`
@@ -75,15 +87,19 @@ type result struct {
 	ResultStatus bool   `json:"result"`
 }
 
+var tpLog *logrus.Logger
+
 // TestSetBegin start testset and push data to dashboard DB
 func TestSetBegin(testSet *TestSet) {
 
+	tpLog = log.GetLogInstance()
+
 	if testSet.Branch == "" {
-		logrus.Warn("Branch should not be empty")
+		tpLog.Warn("Branch should not be empty")
 	}
 
 	if testSet.Description == "" {
-		logrus.Warn("Description should not be empty")
+		tpLog.Warn("Description should not be empty")
 	}
 
 	if testSet.Product == "" {
@@ -98,16 +114,17 @@ func TestSetBegin(testSet *TestSet) {
 
 	resp, respStatusCode, err := rest.POST(createTestSetURL, testSet, nil, nil)
 	if err != nil {
-		logrus.Errorf("Error in starting TestSet, Cause: %v", err)
+		tpLog.Errorf("Error in starting TestSet, Cause: %v", err)
 	} else if respStatusCode != http.StatusOK {
-		logrus.Errorf("Failed to create TestSet, resp : %s", string(resp))
+		tpLog.Errorf("Failed to create TestSet, resp : %s", string(resp))
 	} else {
 		TestSetID, err = strconv.Atoi(string(resp))
 		if err == nil {
-			logrus.Infof("TestSetId created : %d", TestSetID)
+			tpLog.Infof("TestSetId created : %d", TestSetID)
 		} else {
-			logrus.Errorf("TestSetId creation failed. Cause : %v", err)
+			tpLog.Errorf("TestSetId creation failed. Cause : %v", err)
 		}
+		tpLog.Infof("Dashbaord URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", TestSetID))
 	}
 
 }
@@ -116,36 +133,39 @@ func TestSetBegin(testSet *TestSet) {
 func TestSetEnd() {
 
 	if TestSetID == 0 {
-		logrus.Fatal("TestSetID is empty")
+		tpLog.Errorf("TestSetID is empty")
+		return
 	}
 
 	updateTestSetURL := fmt.Sprintf("%s/testset/%d/end", dashBoardBaseURL, TestSetID)
 	resp, respStatusCode, err := rest.PUT(updateTestSetURL, nil, nil, nil)
 
 	if err != nil {
-		logrus.Errorf("Error in updating TestSet, Caose: %v", err)
+		tpLog.Errorf("Error in updating TestSet, Caose: %v", err)
 	} else if respStatusCode != http.StatusOK {
-		logrus.Errorf("Failed to end TestSet, Resp : %s", string(resp))
+		tpLog.Errorf("Failed to end TestSet, Resp : %s", string(resp))
 	} else {
-		logrus.Infof("TestSetId %d update successfully", TestSetID)
+		tpLog.Infof("TestSetId %d update successfully", TestSetID)
 	}
 }
 
+// TestCaseEnd update testcase  to dashboard DB
 func TestCaseEnd() {
 
 	if TestCaseID == 0 {
-		logrus.Fatal("TestCaseID is empty")
+		tpLog.Error("TestCaseID is empty")
+		return
 	}
 
 	url := fmt.Sprintf("%s/testcase/%d/end", dashBoardBaseURL, TestCaseID)
 	resp, respStatusCode, err := rest.PUT(url, nil, nil, nil)
 
 	if err != nil {
-		logrus.Errorf("Error in updating TestCase, Caose: %v", err)
+		tpLog.Errorf("Error in updating TestCase, Caose: %v", err)
 	} else if respStatusCode != http.StatusOK {
-		logrus.Errorf("Failed to end TestCase, Resp : %s", string(resp))
+		tpLog.Errorf("Failed to end TestCase, Resp : %s", string(resp))
 	} else {
-		logrus.Infof("TestCase %d ended successfully", TestSetID)
+		tpLog.Infof("TestCase %d ended successfully", TestSetID)
 	}
 }
 
@@ -153,26 +173,27 @@ func TestCaseEnd() {
 func TestSetUpdate(testSet *TestSet) {
 
 	if TestSetID == 0 {
-		logrus.Fatal("TestSetID is empty")
+		tpLog.Error("TestSetID is empty")
 	}
 
 	updateTestSetURL := fmt.Sprintf("%s/testset/%d", dashBoardBaseURL, TestSetID)
 	resp, respStatusCode, err := rest.PUT(updateTestSetURL, testSet, nil, nil)
 
 	if err != nil {
-		logrus.Errorf("Error in updating TestSet, Caose: %v", err)
+		tpLog.Errorf("Error in updating TestSet, Caose: %v", err)
 	} else if respStatusCode != http.StatusOK {
-		logrus.Errorf("Failed to update TestSet, Resp : %s", string(resp))
+		tpLog.Errorf("Failed to update TestSet, Resp : %s", string(resp))
 	} else {
-		logrus.Infof("TestSetId %d update successfully", TestSetID)
+		tpLog.Infof("TestSetId %d update successfully", TestSetID)
 	}
 }
 
 // TestCaseBegin start the test case and push data to dashboard DB
-func TestCaseBegin(moduleName, description, testRepoId string, tags []string) {
+func TestCaseBegin(moduleName, description, testRepoID string, tags []string) {
 
 	if TestSetID == 0 {
-		logrus.Fatal("TestSetID is empty, cannot update update testcase")
+		tpLog.Errorf("TestSetID is empty, cannot update update testcase")
+		return
 	}
 
 	t := TestCase{}
@@ -198,11 +219,11 @@ func TestCaseBegin(moduleName, description, testRepoId string, tags []string) {
 
 	}
 	//t.StartTime = time.Now().Format(time.RFC3339)
-	t.Status = IN_PROGRESS
+	t.Status = INPROGRESS
 	t.Description = description
 	t.HostOs = runtime.GOOS
 	t.TestSetID = TestSetID
-	t.TestRepoID = testRepoId
+	t.TestRepoID = testRepoID
 	if tags != nil {
 		t.Tags = tags
 	}
@@ -212,15 +233,15 @@ func TestCaseBegin(moduleName, description, testRepoId string, tags []string) {
 
 	resp, respStatusCode, err := rest.POST(createTestCaseURL, t, nil, nil)
 	if err != nil {
-		logrus.Infof("Error in starting TesteCase, Cause: %v", err)
+		tpLog.Infof("Error in starting TesteCase, Cause: %v", err)
 	} else if respStatusCode != http.StatusOK {
-		logrus.Errorf("Error creating test case, resp :%s", string(resp))
+		tpLog.Errorf("Error creating test case, resp :%s", string(resp))
 	} else {
 		TestCaseID, err = strconv.Atoi(string(resp))
 		if err == nil {
-			logrus.Infof("TestCaseID created : %d", TestCaseID)
+			tpLog.Infof("TestCaseID created : %d", TestCaseID)
 		} else {
-			logrus.Errorf("TestCase creation failed. Cause : %v", err)
+			tpLog.Errorf("TestCase creation failed. Cause : %v", err)
 		}
 	}
 }
@@ -228,18 +249,18 @@ func TestCaseBegin(moduleName, description, testRepoId string, tags []string) {
 func verify(r result) {
 
 	if r.TestCaseID == 0 {
-		logrus.Fatal("TestcaseId should not be empty for updating result")
+		tpLog.Errorf("TestcaseId should not be empty for updating result")
 	}
 
 	commentURL := fmt.Sprintf("%s/result", dashBoardBaseURL)
 
 	resp, respStatusCode, err := rest.POST(commentURL, r, nil, nil)
 	if err != nil {
-		logrus.Infof("Error in verifying, Cause: %v", err)
+		tpLog.Infof("Error in verifying, Cause: %v", err)
 	} else if respStatusCode != http.StatusOK {
-		logrus.Errorf("Error updating the vrify comment, resp : %s", string(resp))
+		tpLog.Errorf("Error updating the vrify comment, resp : %s", string(resp))
 	} else {
-		logrus.Infof("verify response : %s", string(resp))
+		tpLog.Infof("verify response : %s", string(resp))
 	}
 }
 
@@ -255,8 +276,8 @@ func VerifySafely(actual, expected interface{}, description string) {
 	res.Description = description
 	res.TestCaseID = TestCaseID
 
-	logrus.Infof("Verfy Safely: Description : %s", description)
-	logrus.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
+	tpLog.Infof("Verfy Safely: Description : %s", description)
+	tpLog.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
 
 	if actualVal == expectedVal {
 		res.ResultType = "info"
@@ -282,8 +303,8 @@ func VerifyFatal(actual, expected interface{}, description string) error {
 	res.Description = description
 	res.TestCaseID = TestCaseID
 
-	logrus.Infof("Verify Fatal: Description : %s", description)
-	logrus.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
+	tpLog.Infof("Verify Fatal: Description : %s", description)
+	tpLog.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
 
 	if actualVal == expectedVal {
 		res.ResultType = "info"
