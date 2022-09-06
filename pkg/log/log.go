@@ -131,6 +131,7 @@ func GetLogInstance() *logrus.Logger {
 
 	//To-DO: add rolling file appender
 	//max: 50MB and 10 files
+
 	if log == nil {
 		lock.Lock()
 		defer lock.Unlock()

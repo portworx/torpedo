@@ -24,6 +24,7 @@ import (
 
 var tpLog *logrus.Logger
 var testSet aetosutil.TestSet
+
 var dash *aetosutil.Dashboard
 
 var storkLabel = map[string]string{"name": "stork"}
@@ -60,6 +61,7 @@ var _ = BeforeSuite(func() {
 		}
 		dash.TestSetBegin(&testSet)
 	}
+
 	InitInstance()
 })
 
@@ -68,6 +70,8 @@ var _ = Describe("{SampleTest}", func() {
 	var testrailID = 35269
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
 	var runID int
+
+	var f *os.File
 
 	JustBeforeEach(func() {
 		f = CreateLogFile("SampleTest.log")
@@ -99,6 +103,7 @@ var _ = Describe("{SampleTest}", func() {
 		})
 
 		Step("destroy apps", func() {
+
 			dash.Info("Destroying apps")
 		})
 	})
@@ -315,7 +320,6 @@ var _ = AfterSuite(func() {
 	defer CloseLogFile(tpLog, nil)
 	PerformSystemCheck()
 	ValidateCleanup()
-
 })
 
 func TestMain(m *testing.M) {

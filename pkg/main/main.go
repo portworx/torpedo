@@ -26,7 +26,8 @@ func main() {
 	//aetosutil.TestCaseBegin("Aetos", "Aetos dashboard integration", "", nil)
 	//
 	//aetosutil.Info("This is info message")
-	//aetosutil.Warn("This is warning message")
+	//aetosutil.Warning("This is warning message")
+
 	//aetosutil.VerifySafely("true", "true", "Equating true")
 	//aetosutil.VerifySafely("true", "false", "Equating false")
 	//aetosutil.VerifyFatal(2, 2, "harding equating 2")

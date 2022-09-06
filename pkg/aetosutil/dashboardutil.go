@@ -13,6 +13,13 @@ import (
 	"time"
 )
 
+var (
+	//TestSetID test set id
+	TestSetID int
+	//TestCaseID test case id
+	TestCaseID int
+)
+
 var testCasesStack = make([]TestCase, 0)
 var verifications = make([]result, 0)
 var testCaseStartTime time.Time
@@ -105,6 +112,8 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 
 	tpLog = log.GetLogInstance()
 
+	tpLog = log.GetLogInstance()
+
 	if testSet.Branch == "" {
 		tpLog.Warn("Branch should not be empty")
 	}
@@ -131,11 +140,13 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 	} else {
 		d.TestsetID, err = strconv.Atoi(string(resp))
 		if err == nil {
+
 			tpLog.Infof("TestSetId created : %d", d.TestsetID)
 		} else {
 			tpLog.Errorf("TestSetId creation failed. Cause : %v", err)
 		}
 		tpLog.Infof("Dashbaord URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestsetID))
+
 	}
 
 }
@@ -144,6 +155,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 func (d *Dashboard) TestSetEnd() {
 
 	if d.TestsetID == 0 {
+
 		tpLog.Errorf("TestSetID is empty")
 		return
 	}
@@ -156,14 +168,18 @@ func (d *Dashboard) TestSetEnd() {
 	} else if respStatusCode != http.StatusOK {
 		tpLog.Errorf("Failed to end TestSet, Resp : %s", string(resp))
 	} else {
+
 		tpLog.Infof("TestSetId %d update successfully", d.TestsetID)
+
 	}
 }
 
 // TestCaseEnd update testcase  to dashboard DB
+
 func (d *Dashboard) TestCaseEnd() {
 
 	if d.testcaseID == 0 {
+
 		tpLog.Error("TestCaseID is empty")
 		return
 	}
@@ -176,7 +192,9 @@ func (d *Dashboard) TestCaseEnd() {
 	} else if respStatusCode != http.StatusOK {
 		tpLog.Errorf("Failed to end TestCase, Resp : %s", string(resp))
 	} else {
+
 		tpLog.Infof("TestCase %d ended successfully", d.testcaseID)
+
 	}
 }
 
@@ -184,6 +202,7 @@ func (d *Dashboard) TestCaseEnd() {
 func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 
 	if d.TestsetID == 0 {
+
 		tpLog.Error("TestSetID is empty")
 	}
 
@@ -196,13 +215,16 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 		tpLog.Errorf("Failed to update TestSet, Resp : %s", string(resp))
 	} else {
 		tpLog.Infof("TestSetId %d update successfully", d.TestsetID)
+
 	}
 }
 
 // TestCaseBegin start the test case and push data to dashboard DB
+
 func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, tags []string) {
 
 	if d.TestsetID == 0 {
+
 		tpLog.Errorf("TestSetID is empty, cannot update update testcase")
 		return
 	}
@@ -231,7 +253,9 @@ func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, ta
 	t.Status = INPROGRESS
 	t.Description = description
 	t.HostOs = runtime.GOOS
+
 	t.TestSetID = d.TestsetID
+
 	t.TestRepoID = testRepoID
 	if tags != nil {
 		t.Tags = tags
@@ -270,6 +294,7 @@ func (d *Dashboard) verify(r result) {
 		tpLog.Errorf("Error updating the vrify comment, resp : %s", string(resp))
 	} else {
 		tpLog.Tracef("verify response : %s", string(resp))
+
 	}
 }
 
