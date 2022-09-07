@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -53,10 +54,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		Expect(len(pools)).NotTo(Equal(0))
 
 		// pick a random pool from a pools list and resize it
-		for _, pool := range pools {
-			poolIDToResize = pool.Uuid
-			break
-		}
+		poolIDToResize = getRandomPoolID(pools)
 		Expect(poolIDToResize).ShouldNot(BeEmpty(), "Expected poolIDToResize to not be empty")
 
 		poolToBeResized := pools[poolIDToResize]
@@ -131,10 +129,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		Expect(len(pools)).NotTo(Equal(0))
 
 		// pick a random pool from a pools list and resize it
-		for _, pool := range pools {
-			poolIDToResize = pool.Uuid
-			break
-		}
+		poolIDToResize = getRandomPoolID(pools)
 		Expect(poolIDToResize).ShouldNot(BeEmpty(), "Expected poolIDToResize to not be empty")
 
 		poolToBeResized := pools[poolIDToResize]
@@ -208,10 +203,8 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 		Expect(len(pools)).NotTo(Equal(0))
 
 		// pick a random pool from a pools list and resize it
-		for _, pool := range pools {
-			poolIDToResize = pool.Uuid
-			break
-		}
+		poolIDToResize = getRandomPoolID(pools)
+
 		Expect(poolIDToResize).ShouldNot(BeEmpty(), "Expected poolIDToResize to not be empty")
 
 		poolToBeResized := pools[poolIDToResize]
@@ -293,10 +286,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 		Expect(len(pools)).NotTo(Equal(0))
 
 		// pick a random pool from a pools list and resize it
-		for _, pool := range pools {
-			poolIDToResize = pool.Uuid
-			break
-		}
+		poolIDToResize = getRandomPoolID(pools)
 		Expect(poolIDToResize).ShouldNot(BeEmpty(), "Expected poolIDToResize to not be empty")
 
 		poolToBeResized := pools[poolIDToResize]
@@ -432,6 +422,19 @@ func isJournalEnabled() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func getRandomPoolID(pools map[string]*api.StoragePool) string {
+	// pick a random pool from a pools list and resize it
+	randomIndex := rand.Intn(len(pools))
+	for _, pool := range pools {
+		if randomIndex == 0 {
+			return pool.Uuid
+
+		}
+		randomIndex--
+	}
+	return ""
 }
 
 var _ = AfterSuite(func() {
