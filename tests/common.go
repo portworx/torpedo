@@ -596,7 +596,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			vols, err := Inst().S.GetVolumes(ctx)
 			if err != nil {
-				logrus.Errorf("failed to get app %s's volumes", ctx.App.Key)
+				logrus.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
 			volScaleFactor := 1
@@ -606,6 +606,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				// GlobalScaleFactor is 1, high number of volumes in a single app instance
 				// may slow things down.
 				volScaleFactor = len(vols) / 10
+				logrus.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
 			}
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
