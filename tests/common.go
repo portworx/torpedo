@@ -7,8 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -19,6 +17,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -593,8 +594,21 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				logrus.Errorf("failed to get app %s's volumes", ctx.App.Key)
+				processError(err, errChan...)
+			}
+			volScaleFactor := 1
+			if len(vols) > 10 {
+				// Take into account the number of volumes in the app. More volumes will
+				// take longer to format if the backend storage has limited bandwidth. Even if the
+				// GlobalScaleFactor is 1, high number of volumes in a single app instance
+				// may slow things down.
+				volScaleFactor = len(vols) / 10
+			}
+			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
+			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
 			if err != nil {
 				processError(err, errChan...)
 			}
@@ -844,12 +858,12 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
-			request := scheduler.CSISnapshotRequest {
-				Namespace: vols[0].Namespace,
-				Timestamp: timestamp,
-				OriginalPVCName: vols[0].Name,
-				SnapName: "basic-csi-snapshot-" + timestamp,
-				RestoredPVCName: "csi-restored-" + timestamp,
+			request := scheduler.CSISnapshotRequest{
+				Namespace:         vols[0].Namespace,
+				Timestamp:         timestamp,
+				OriginalPVCName:   vols[0].Name,
+				SnapName:          "basic-csi-snapshot-" + timestamp,
+				RestoredPVCName:   "csi-restored-" + timestamp,
 				SnapshotclassName: snapShotClassName,
 			}
 			err = Inst().S.CSISnapshotTest(ctx, request)
@@ -873,8 +887,8 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 		} else {
 			timestamp := strconv.Itoa(int(time.Now().Unix()))
 			request := scheduler.CSICloneRequest{
-				Timestamp: timestamp,
-				Namespace: vols[0].Namespace,
+				Timestamp:       timestamp,
+				Namespace:       vols[0].Namespace,
 				OriginalPVCName: vols[0].Name,
 				RestoredPVCName: "csi-cloned-" + timestamp,
 			}
@@ -2919,7 +2933,7 @@ func GetSourceClusterConfigPath() (string, error) {
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	if len(kubeconfigList) < 2 {
-		return "", fmt.Errorf(`Failed to get source config path. 
+		return "", fmt.Errorf(`Failed to get source config path.
 				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
@@ -2936,7 +2950,7 @@ func GetDestinationClusterConfigPath() (string, error) {
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	if len(kubeconfigList) < 2 {
-		return "", fmt.Errorf(`Failed to get source config path. 
+		return "", fmt.Errorf(`Failed to get source config path.
 				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
