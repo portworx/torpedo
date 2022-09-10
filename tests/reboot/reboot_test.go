@@ -187,44 +187,37 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 						Expect(err).NotTo(HaveOccurred())
 						err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
 						Expect(err).NotTo(HaveOccurred())
-						err = Inst().N.RebootNode(*n, node.RebootNodeOpts{
-							Force: true,
-							ConnectionOpts: node.ConnectionOpts{
-								Timeout:         defaultCommandTimeout,
-								TimeBeforeRetry: defaultCommandRetry,
-							},
-						})
-						Expect(err).NotTo(HaveOccurred())
 
-						// as we keep the storage driver down on node until we check if the volume, we wait a minute for
-						// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
-						logrus.Infof("wait for %v for node reboot", defaultCommandTimeout)
-						time.Sleep(defaultCommandTimeout)
+						logrus.Infof("==== SKIPPING NODE REBOOT TO SPEED THINGS UP")
 
-						// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
-						err = Inst().N.Systemctl(*n, "nfs-server.service", node.SystemctlOpts{
-							Action: "start",
-							ConnectionOpts: node.ConnectionOpts{
-								Timeout:         5 * time.Minute,
-								TimeBeforeRetry: 10 * time.Second,
-							}})
-						Expect(err).NotTo(HaveOccurred())
+						logrus.Infof("waiting for failover...")
+						var attachedNodeNow *node.Node
+						Eventually(func() (string, error) {
+							err := Inst().V.RefreshDriverEndpoints()
+							if err != nil {
+								return "", err
+							}
+							attachedNodeNow, err = Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
+							if err != nil {
+								return "", err
+							}
+							return attachedNodeNow.Name, nil
+						}, 15*time.Minute, 30*time.Second).ShouldNot(Equal(n.Name),
+							"volume %v for app %v did not fail over", vol.ID, ctx.App.Key)
 
 						ctx.RefreshStorageEndpoint = true
+						ctx.SkipVolumeValidation = true
 						ValidateContext(ctx)
-						n2, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-						Expect(err).NotTo(HaveOccurred())
-						// the mount should move to another node otherwise fail
-						Expect(n2.SchedulerNodeName).NotTo(Equal(n.SchedulerNodeName))
-						logrus.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
+
 						StartVolDriverAndWait([]node.Node{*n})
 						err = Inst().S.EnableSchedulingOnNode(*n)
 						Expect(err).NotTo(HaveOccurred())
-						ValidateApplications(contexts)
 					}
 				}
 			}
 		})
+
+		ValidateApplications(contexts)
 
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)

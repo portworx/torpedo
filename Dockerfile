@@ -23,7 +23,7 @@ COPY .git .git
 
 # Compile
 RUN mkdir bin && \
-    make build
+    GINKGO_BUILD_ONE=reboot make build
 
 # Install aws-iam-authenticator
 # This is needed by test running inside EKS cluster and creating aws entities like bucket etc.
