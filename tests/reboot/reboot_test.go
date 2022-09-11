@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -154,64 +155,92 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 				Expect(err).NotTo(HaveOccurred())
 				for _, vol := range vols {
 					if vol.Shared {
+						for failoverAttempt := 0; failoverAttempt < 10; failoverAttempt++ {
+							logrus.Infof("==== failover attempt %v for volume %v", failoverAttempt, vol.ID)
+							n, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
+							Expect(err).NotTo(HaveOccurred())
+							logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
 
-						n, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-						Expect(err).NotTo(HaveOccurred())
-						logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+							// Workaround to avoid PWX-24277 for now.
+							Step(fmt.Sprintf("wait until volume %v status is Up", vol.ID), func() {
+								prevStatus := ""
+								Eventually(func() (string, error) {
+									connOpts := node.ConnectionOpts{
+										Timeout:         defaultCommandTimeout,
+										TimeBeforeRetry: defaultCommandRetry,
+										Sudo:            true,
+									}
+									cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", vol.ID)
+									volStatus, err := Inst().N.RunCommandWithNoRetry(*n, cmd, connOpts)
+									if err != nil {
+										logrus.Warnf("failed to get replication state of volume %v: %v", vol.ID, err)
+										return "", err
+									}
+									if volStatus != prevStatus {
+										logrus.Warnf("volume %v: %v", vol.ID, volStatus)
+										prevStatus = volStatus
+									}
+									return volStatus, nil
+								}, 30*time.Minute, 10*time.Second).Should(ContainSubstring("Up"),
+									"volume %v status is not Up for app %v", vol.ID, ctx.App.Key)
+							})
 
-						// Workaround to avoid PWX-24277 for now.
-						Step(fmt.Sprintf("wait until volume %v status is Up", vol.ID), func() {
-							prevStatus := ""
-							Eventually(func() (string, error) {
-								connOpts := node.ConnectionOpts{
-									Timeout:         defaultCommandTimeout,
-									TimeBeforeRetry: defaultCommandRetry,
-									Sudo:            true,
+							err = Inst().S.DisableSchedulingOnNode(*n)
+							Expect(err).NotTo(HaveOccurred())
+
+							// get pods on the node and delete all but one
+							pods, err := core.Instance().GetPodsUsingPV(vol.ID)
+							Expect(err).NotTo(HaveOccurred())
+
+							podsOnAttachedNode := []string{}
+							podNamespace := ""
+							for _, pod := range pods {
+								podNamespace = pod.Namespace
+								if pod.Spec.NodeName == n.Name {
+									podsOnAttachedNode = append(podsOnAttachedNode, pod.Name)
 								}
-								cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", vol.ID)
-								volStatus, err := Inst().N.RunCommandWithNoRetry(*n, cmd, connOpts)
+							}
+							for i, podName := range podsOnAttachedNode {
+								if i == 0 {
+									// skip 1 pod so that the volume stays attached
+									continue
+								}
+								logrus.Infof("==== deleting pod %v for volume %v", podName, vol.ID)
+								err = core.Instance().DeletePod(podName, podNamespace, false)
+								Expect(err).NotTo(HaveOccurred())
+							}
+
+							ctx.SkipVolumeValidation = true
+							ValidateContext(ctx)
+
+							err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
+							Expect(err).NotTo(HaveOccurred())
+
+							logrus.Infof("==== SKIPPING NODE REBOOT TO SPEED THINGS UP")
+
+							logrus.Infof("waiting for failover...")
+							var attachedNodeNow *node.Node
+							Eventually(func() (string, error) {
+								err := Inst().V.RefreshDriverEndpoints()
 								if err != nil {
-									logrus.Warnf("failed to get replication state of volume %v: %v", vol.ID, err)
 									return "", err
 								}
-								if volStatus != prevStatus {
-									logrus.Warnf("volume %v: %v", vol.ID, volStatus)
-									prevStatus = volStatus
+								attachedNodeNow, err = Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
+								if err != nil {
+									return "", err
 								}
-								return volStatus, nil
-							}, 30*time.Minute, 10*time.Second).Should(ContainSubstring("Up"),
-								"volume %v status is not Up for app %v", vol.ID, ctx.App.Key)
-						})
+								return attachedNodeNow.Name, nil
+							}, 15*time.Minute, 30*time.Second).ShouldNot(Equal(n.Name),
+								"volume %v for app %v did not fail over", vol.ID, ctx.App.Key)
 
-						err = Inst().S.DisableSchedulingOnNode(*n)
-						Expect(err).NotTo(HaveOccurred())
-						err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
-						Expect(err).NotTo(HaveOccurred())
+							ctx.RefreshStorageEndpoint = true
+							ctx.SkipVolumeValidation = true
+							ValidateContext(ctx)
 
-						logrus.Infof("==== SKIPPING NODE REBOOT TO SPEED THINGS UP")
-
-						logrus.Infof("waiting for failover...")
-						var attachedNodeNow *node.Node
-						Eventually(func() (string, error) {
-							err := Inst().V.RefreshDriverEndpoints()
-							if err != nil {
-								return "", err
-							}
-							attachedNodeNow, err = Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-							if err != nil {
-								return "", err
-							}
-							return attachedNodeNow.Name, nil
-						}, 15*time.Minute, 30*time.Second).ShouldNot(Equal(n.Name),
-							"volume %v for app %v did not fail over", vol.ID, ctx.App.Key)
-
-						ctx.RefreshStorageEndpoint = true
-						ctx.SkipVolumeValidation = true
-						ValidateContext(ctx)
-
-						StartVolDriverAndWait([]node.Node{*n})
-						err = Inst().S.EnableSchedulingOnNode(*n)
-						Expect(err).NotTo(HaveOccurred())
+							StartVolDriverAndWait([]node.Node{*n})
+							err = Inst().S.EnableSchedulingOnNode(*n)
+							Expect(err).NotTo(HaveOccurred())
+						}
 					}
 				}
 			}
