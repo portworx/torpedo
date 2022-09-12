@@ -7,12 +7,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-<<<<<<< HEAD
-=======
+
+	"github.com/portworx/torpedo/pkg/aetosutil"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
->>>>>>> 52d75f386 (:sparkles: adding generic log changes)
+
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -28,9 +29,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -171,6 +169,8 @@ const (
 	defaultClusterPairDir  = "cluster-pair"
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
+
+	enableDashBoardFlag = "enable-dash"
 )
 
 // Backup constants
@@ -308,15 +308,17 @@ func InitInstance() {
 		PureVolumes:             Inst().PureVolumes,
 		PureSANType:             Inst().PureSANType,
 		HelmValuesConfigMapName: Inst().HelmValuesConfigMap,
+		Logger:                  Inst().Logger,
 	})
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
+		Logger:  Inst().Logger,
 	})
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap, Inst().Logger)
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().Backup != nil {
@@ -357,7 +359,7 @@ func ValidateCleanup() {
 
 		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
 		if err != nil {
-			logrus.Info("an error occurred, collecting bundle")
+			tpLog.Info("an error occurred, collecting bundle")
 			CollectSupport()
 		}
 		expect(err).NotTo(haveOccurred())
@@ -608,7 +610,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			vols, err := Inst().S.GetVolumes(ctx)
 			if err != nil {
-				logrus.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+				tpLog.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
 			volScaleFactor := 1
@@ -618,7 +620,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				// GlobalScaleFactor is 1, high number of volumes in a single app instance
 				// may slow things down.
 				volScaleFactor = len(vols) / 10
-				logrus.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
+				tpLog.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
 			}
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
@@ -1470,7 +1472,7 @@ func runCmd(cmd string, n node.Node) error {
 		Sudo:            true,
 	})
 	if err != nil {
-		logrus.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+		tpLog.Warnf("failed to run cmd: %s. err: %v", cmd, err)
 	}
 
 	return err
@@ -1683,7 +1685,7 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	logrus.Debugf("contexts: %v", contexts)
+	tpLog.Debugf("contexts: %v", contexts)
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		logrus.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
@@ -3522,6 +3524,7 @@ type Torpedo struct {
 	CsiGenericDriverConfigMap           string
 	HelmValuesConfigMap                 string
 	IsHyperConverged                    bool
+	Dash                                *aetosutil.Dashboard
 }
 
 // ParseFlags parses command line flags
@@ -3546,6 +3549,7 @@ func ParseFlags() {
 	var bundleLocation string
 	var customConfigPath string
 	var hyperConverged bool
+	var enableDash bool
 
 	// TODO: We rely on the customAppConfig map to be passed into k8s.go and stored there.
 	// We modify this map from the tests and expect that the next RescanSpecs will pick up the new custom configs.
@@ -3608,6 +3612,7 @@ func ParseFlags() {
 	flag.StringVar(&jiraToken, jiraTokenFlag, "", "API token for accessing the JIRA")
 	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
 	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
+	flag.BoolVar(&enableDash, enableDashBoardFlag, true, "To enable/disable aetos dashboard reporting")
 	flag.Parse()
 
 	tpLog = log.GetLogInstance()
@@ -3658,6 +3663,9 @@ func ParseFlags() {
 				tpLog.Infof("Backup driver found %v", backupDriver)
 			}
 		}
+		dash := aetosutil.Get()
+		//To-Do : automatically enable/disable
+		dash.IsEnabled = enableDash
 
 		once.Do(func() {
 			instance = &Torpedo{
@@ -3696,6 +3704,7 @@ func ParseFlags() {
 				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,
 				MeteringIntervalMins:                meteringIntervalMins,
 				IsHyperConverged:                    hyperConverged,
+				Dash:                                dash,
 			}
 		})
 	}
@@ -3722,8 +3731,6 @@ func setLoglevel(tpLog *logrus.Logger, logLevel string) {
 
 //SetTorpedoFileOutput adds output destination for logging
 func SetTorpedoFileOutput(tpLog *logrus.Logger, f *os.File) {
-	fmt.Println(f)
-	fmt.Println(tpLog.Out)
 	tpLog.Out = io.MultiWriter(tpLog.Out, f)
 }
 
@@ -3970,7 +3977,7 @@ func IsCloudDriveInitialised(n node.Node) (bool, error) {
 	})
 
 	if err != nil && strings.Contains(err.Error(), "Cloud Drive is not initialized") {
-		logrus.Warnf("cd list error : %v", err)
+		tpLog.Warnf("cd list error : %v", err)
 		return false, nil
 	}
 	if err == nil {

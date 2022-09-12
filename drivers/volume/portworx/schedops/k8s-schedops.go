@@ -118,7 +118,9 @@ func (e *errLabelAbsent) Error() string {
 	return fmt.Sprintf("label %s is absent on node %s", e.label, e.node)
 }
 
-type k8sSchedOps struct{}
+type k8sSchedOps struct {
+	tpLog *logrus.Logger
+}
 
 func (k *k8sSchedOps) GetKubernetesVersion() (*version.Info, error) {
 	return k8sCore.GetVersion()
@@ -686,7 +688,7 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	t := func() (interface{}, bool, error) {
 		node, err := k8sCore.GetNodeByName(n.Name)
 		if err != nil {
-			logrus.Errorf("Failed to get node %v", err)
+			k.tpLog.Errorf("Failed to get node %v", err)
 			return nil, true, err
 		}
 		return node, false, nil
@@ -694,7 +696,7 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 
 	node, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
 	if err != nil {
-		logrus.Errorf("Failed to get node %v", err)
+		k.tpLog.Errorf("Failed to get node %v", err)
 		return false, err
 	}
 
@@ -702,7 +704,7 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	// if node has px/enabled label set to false or node-type public or
 	// has any taints then px is disabled on node
 	if kubeNode.Labels[PXEnabledLabelKey] == "false" || kubeNode.Labels[dcosNodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
-		logrus.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
+		k.tpLog.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
 		return false, nil
 	}
 
@@ -711,14 +713,14 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	if nodeLabelValue, hasKey := kubeNode.Labels[k8sRoleNodeInfraLabelKey]; hasKey {
 		if nodeLabelValue == "true" {
 			if _, hasKey := kubeNode.Labels[k8sRoleNodeComputeLabelKey]; !hasKey {
-				logrus.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
+				k.tpLog.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
 				return false, nil
 			}
 		}
 
 	}
 
-	logrus.Infof("PX is enabled on node %v.", n.Name)
+	k.tpLog.Infof("PX is enabled on node %v.", n.Name)
 	return true, nil
 }
 
@@ -895,4 +897,8 @@ func printStatus(pods ...corev1.Pod) {
 func init() {
 	k := &k8sSchedOps{}
 	Register("k8s", k)
+}
+
+func (k *k8sSchedOps) Init(tpLog *logrus.Logger) {
+	k.tpLog = tpLog
 }

@@ -30,8 +30,8 @@ func (d *gce) String() string {
 	return string(GceStorage)
 }
 
-func (d *gce) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	logrus.Infof("Using the GCE volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *gce) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, tpLog *logrus.Logger) error {
+	tpLog.Infof("Using the GCE volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {

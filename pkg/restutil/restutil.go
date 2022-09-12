@@ -3,6 +3,7 @@ package restutil
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
@@ -69,17 +70,17 @@ func validateURL(url string) error {
 }
 
 func getResponse(httpMethod, url string, payload interface{}, auth *Auth, headers map[string]string) ([]byte, int, error) {
-
+	tpLog := log.GetLogInstance()
 	var err error
 	err = validateURL(url)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	logrus.Infof("%s: %s", httpMethod, url)
+	tpLog.Tracef("%s: %s", httpMethod, url)
 	var req *http.Request
 	if payload != nil {
-		logrus.Infof("Payload: %s", payload)
+		tpLog.Tracef("Payload: %s", payload)
 		var j []byte
 		j, err = json.Marshal(payload)
 
@@ -108,14 +109,13 @@ func getResponse(httpMethod, url string, payload interface{}, auth *Auth, header
 	if err != nil {
 		return nil, 0, err
 	}
-	logrus.Infof("Response Status Code: %d", resp.StatusCode)
+	tpLog.Tracef("Response Status Code: %d", resp.StatusCode)
 
 	respBody, err := getBody(resp.Body)
 	if err != nil {
 		return nil, 0, err
 	}
 	return respBody, resp.StatusCode, err
-
 }
 
 func setBasicAuthAndHeaders(req *http.Request, auth *Auth, headers map[string]string) *http.Request {

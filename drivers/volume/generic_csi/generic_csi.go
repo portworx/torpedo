@@ -49,8 +49,8 @@ func (d *genericCsi) ValidateStorageCluster(endpointURL, endpointVersion string)
 	}
 }
 
-func (d *genericCsi) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	logrus.Infof("Using the generic CSI volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *genericCsi) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, tpLog *logrus.Logger) error {
+	tpLog.Infof("Using the generic CSI volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo, from
 	if storageProvisioner == string(CsiStorage) {

@@ -46,8 +46,8 @@ func (d *azure) ValidateStorageCluster(endpointURL, endpointVersion string) erro
 	}
 }
 
-func (d *azure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	logrus.Infof("Using the Azure volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *azure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, tpLog *logrus.Logger) error {
+	tpLog.Infof("Using the Azure volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {

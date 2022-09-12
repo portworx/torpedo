@@ -188,6 +188,7 @@ type portworx struct {
 	refreshEndpoint       bool
 	token                 string
 	skipPXSvcEndpoint     bool
+	tpLog                 *logrus.Logger
 }
 
 type statusJSON struct {
@@ -278,8 +279,9 @@ func (d *portworx) String() string {
 }
 
 // init is all the functionality of Init, but allowing you to set a custom driver name
-func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, driverName string) error {
-	logrus.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, driverName string, tpLog *logrus.Logger) error {
+	d.tpLog = tpLog
+	d.tpLog.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
 
 	if skipStr := os.Getenv(envSkipPXServiceEndpoint); skipStr != "" {
@@ -295,6 +297,7 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 	if d.schedOps, err = schedops.Get(sched); err != nil {
 		return fmt.Errorf("failed to get scheduler operator for portworx. Err: %v", err)
 	}
+	d.schedOps.Init(d.tpLog)
 
 	if err = d.setDriver(); err != nil {
 		return err
@@ -319,9 +322,9 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 		}
 	}
 
-	logrus.Infof("The following Portworx nodes are in the cluster:")
+	d.tpLog.Infof("The following Portworx nodes are in the cluster:")
 	for _, n := range storageNodes {
-		logrus.Infof(
+		d.tpLog.Infof(
 			"Node UID: %v Node IP: %v Node Status: %v",
 			n.Id,
 			n.DataIp,
@@ -343,8 +346,8 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 	return nil
 }
 
-func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	return d.init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, DriverName)
+func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, tpLog *logrus.Logger) error {
+	return d.init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, DriverName, tpLog)
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
@@ -377,9 +380,9 @@ func (d *portworx) updateNodes(pxNodes []*api.StorageNode) error {
 }
 
 func (d *portworx) printNodes(pxnodes []*api.StorageNode) {
-	logrus.Infof("The following Portworx nodes are in the cluster:")
+	d.tpLog.Infof("The following Portworx nodes are in the cluster:")
 	for _, n := range pxnodes {
-		logrus.Infof(
+		d.tpLog.Infof(
 			"Node UID: %v Node IP: %v Node Status: %v",
 			n.Id,
 			n.DataIp,
@@ -585,7 +588,7 @@ func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
 }
 
 func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
-	logrus.Infof("Updating node: %+v", *n)
+	d.tpLog.Infof("Updating node: %+v", *n)
 	isPX, err := d.schedOps.IsPXEnabled(*n)
 	if err != nil {
 		return err
@@ -598,7 +601,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
-			logrus.Tracef("Checking PX node %+v for address %s", pxNode, address)
+			d.tpLog.Tracef("Checking PX node %+v for address %s", pxNode, address)
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.SchedulerNodeName {
 				if len(pxNode.Id) > 0 {
 					n.StorageNode = pxNode
@@ -607,7 +610,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 					// TODO: PTX-2445 Replace isMetadataNode API call with SDK call
 					isMetadataNode, err := d.isMetadataNode(*n, address)
 					if err != nil {
-						logrus.Warnf("can not check if %v is metadata node", *n)
+						d.tpLog.Warnf("can not check if %v is metadata node", *n)
 					}
 					n.IsMetadataNode = isMetadataNode
 
@@ -1071,7 +1074,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				Cause: fmt.Sprintf("Failed to validate device path [%s]", vol.DevicePath),
 			}
 		}
-		logrus.Debugf("Successfully validated the device path for a volume: %s", volumeName)
+		d.tpLog.Debugf("Successfully validated the device path for a volume: %s", volumeName)
 	}
 
 	// If CSI Topology key is set in param, validate volume attached on right node
@@ -1119,7 +1122,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	// TODO check why PX-Backup does not copy group params correctly after restore
 	checkVolSpecGroup := true
 	if _, ok := params["backupGroupCheckSkip"]; ok {
-		logrus.Infof("Skipping group/label check, specifically for PX-Backup")
+		d.tpLog.Infof("Skipping group/label check, specifically for PX-Backup")
 		checkVolSpecGroup = false
 	}
 	for k, v := range params {
@@ -1206,7 +1209,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		}
 	}
 
-	logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
+	d.tpLog.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
 	return nil
 }
 
@@ -1740,9 +1743,9 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 }
 
 func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
-	logrus.Debugf("waiting for PX node to be up: %s", n.Name)
+	d.tpLog.Debugf("waiting for PX node to be up: %s", n.Name)
 	t := func() (interface{}, bool, error) {
-		logrus.Debugf("Getting node info for node: [%s]", n.Name)
+		d.tpLog.Debugf("Getting node info for node: [%s]", n.Name)
 		nodeInspectResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 
 		if err != nil {
@@ -1752,7 +1755,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 			}
 		}
 
-		logrus.Debugf("checking PX status on node: %s", n.Name)
+		d.tpLog.Debugf("checking PX status on node: %s", n.Name)
 		pxNode := nodeInspectResponse.Node
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
@@ -1791,7 +1794,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 			}
 		}
 
-		logrus.Infof("px on node: %s is now up. status: %v", n.Name, pxNode.Status)
+		d.tpLog.Infof("px on node: %s is now up. status: %v", n.Name, pxNode.Status)
 
 		return "", false, nil
 	}
@@ -1800,7 +1803,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	}
 
 	// Check if PX pod is up
-	logrus.Debugf("checking if PX pod is up on node: %s", n.Name)
+	d.tpLog.Debugf("checking if PX pod is up on node: %s", n.Name)
 	t = func() (interface{}, bool, error) {
 		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
@@ -1815,7 +1818,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		return fmt.Errorf("PX pod failed to come up on node : [%s]. Error: [%v]", n.Name, err)
 	}
 
-	logrus.Debugf("px is fully operational on node: %s", n.Name)
+	d.tpLog.Debugf("px is fully operational on node: %s", n.Name)
 	return nil
 }
 
@@ -2355,7 +2358,7 @@ func (d *portworx) setDriver() error {
 				d.refreshEndpoint = false
 				return nil
 			}
-			logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
+			d.tpLog.Warnf("testAndSetEndpoint failed for %v: %v", endpoint, err)
 		} else if err != nil && len(node.GetWorkerNodes()) == 0 {
 			return err
 		}
@@ -2366,11 +2369,11 @@ func (d *portworx) setDriver() error {
 	// and working driver if the endpoint we are hooked onto goes
 	// down
 	d.refreshEndpoint = true
-	logrus.Infof("Getting new driver.")
+	d.tpLog.Infof("Getting new driver.")
 	for _, n := range node.GetWorkerNodes() {
 		for _, addr := range n.Addresses {
 			if err := d.testAndSetEndpointUsingNodeIP(addr); err != nil {
-				logrus.Infof("testAndSetEndpoint failed for %v: %v", addr, err)
+				d.tpLog.Warnf("testAndSetEndpoint failed for %v: %v", addr, err)
 				continue
 			}
 			return nil
@@ -2439,7 +2442,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	} else {
 		return err
 	}
-	logrus.Infof("Using %v as endpoint for portworx volume driver", pxEndpoint)
+	d.tpLog.Infof("Using %v as endpoint for portworx volume driver", pxEndpoint)
 
 	return nil
 }
@@ -3148,7 +3151,7 @@ func (d *portworx) GetKvdbMembers(n node.Node) (map[string]*torpedovolume.Metada
 		url = netutil.MakeURL("http://", endpoint, int(pxdRestPort))
 	}
 	// TODO replace by sdk call whenever it is available
-	logrus.Infof("Url to call %v", url)
+	d.tpLog.Infof("Url to call %v", url)
 	c, err := client.NewClient(url, "", "")
 	if err != nil {
 		return nil, err
@@ -3196,11 +3199,11 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	}
 
 	if !diagOps.Validate {
-		logrus.Infof("Collecting diags on node %v. Will skip validation", pxNode.Hostname)
+		d.tpLog.Infof("Collecting diags on node %v. Will skip validation", pxNode.Hostname)
 	}
 
 	if pxNode.Status == api.Status_STATUS_OFFLINE {
-		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
+		d.tpLog.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
 		out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s sv diags -a -f", d.getPxctlPath(n)), opts)
@@ -3208,7 +3211,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
 
-		logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+		d.tpLog.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
 		return nil
 	}
 
@@ -3232,7 +3235,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
 
-		logrus.Debug("Validating CCM health")
+		d.tpLog.Debug("Validating CCM health")
 		// Change to config package.
 		url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
 		resp, err := http.Get(url)
@@ -3246,7 +3249,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		// TODO: Waiting for S3 credentials.
 	}
 
-	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+	d.tpLog.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
 	return nil
 }
 
@@ -3320,7 +3323,7 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
 
-		logrus.Debug("Validating CCM health")
+		d.tpLog.Debug("Validating CCM health")
 		// Change to config package.
 		url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
 		ccmresp, err := http.Get(url)
@@ -3334,7 +3337,7 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 		// TODO: Waiting for S3 credentials.
 
 	}
-	logrus.Debugf("Successfully collected diags on node %v", n.Name)
+	d.tpLog.Debugf("Successfully collected diags on node %v", n.Name)
 	return nil
 }
 
@@ -4193,7 +4196,7 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 		},
 		Action: "start",
 	}
-	logrus.Infof("Getting available block drives on %s.", n.Name)
+	d.tpLog.Infof("Getting available block drives on %s.", n.Name)
 	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
 
 	if err != nil {
@@ -4213,7 +4216,7 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 	}
 
 	if drivePath == nil || len(drivePath) == 0 {
-		logrus.Infof("Adding all the available drives")
+		d.tpLog.Infof("Adding all the available drives")
 		for _, drv := range eligibleDrives {
 			err := addDrive(*n, drv.Path, d)
 			if err != nil {
@@ -4269,7 +4272,7 @@ func addDrive(n node.Node, drivePath string, d *portworx) error {
 		return fmt.Errorf("failed to add drive %s in node %s,AddDrive Status : %+v ", drivePath, n.Name, addDriveStatus)
 
 	}
-	logrus.Infof("Added drive %s to node %s successfully", drivePath, n.Name)
+	d.tpLog.Infof("Added drive %s to node %s successfully", drivePath, n.Name)
 
 	return nil
 
@@ -4301,7 +4304,7 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 		if &addDriveStatus == nil {
 			return fmt.Errorf("failed to get add drive status for path %s in node %s", drivePath, n.Name)
 		}
-		logrus.Infof("Current add drive for path %s status : %+v", drivePath, addDriveStatus)
+		d.tpLog.Infof("Current add drive for path %s status : %+v", drivePath, addDriveStatus)
 
 		if strings.Contains(addDriveStatus.Status, "Drive add: Storage rebalance complete") || strings.Contains(addDriveStatus.Status, "Device already exists") {
 			break
@@ -4310,10 +4313,10 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 			return fmt.Errorf("failed to  add drive for path %s in node %s, status: %+v", drivePath, n.Name, addDriveStatus)
 		}
 		waitCount--
-		logrus.Info("Waiting for 30 seconds to check the status again")
+		d.tpLog.Info("Waiting for 30 seconds to check the status again")
 		time.Sleep(60 * time.Second)
 	}
-	logrus.Infof("Added drive %s to node %s completed", drivePath, n.Name)
+	d.tpLog.Infof("Added drive %s to node %s completed", drivePath, n.Name)
 	return nil
 
 }

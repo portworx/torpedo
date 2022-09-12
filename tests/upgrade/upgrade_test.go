@@ -24,8 +24,10 @@ import (
 
 var tpLog *logrus.Logger
 var testSet aetosutil.TestSet
+var dash *aetosutil.Dashboard
 
 var storkLabel = map[string]string{"name": "stork"}
+var f *os.File
 
 const (
 	storkDeploymentName = "stork"
@@ -44,17 +46,20 @@ func TestUpgrade(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	tpLog = Inst().Logger
-	testSet = aetosutil.TestSet{
-		CommitID:    "2.12.0-serfdf",
-		User:        "lsrinivas",
-		Product:     "PxEnp",
-		Description: "Torpedo : Upgrade",
-		Branch:      "master",
-		TestType:    "SystemTest",
-		Tags:        []string{"upgrade"},
-		Status:      aetosutil.NOTSTARTED,
+	dash = Inst().Dash
+	if dash.TestsetID == 0 {
+		testSet = aetosutil.TestSet{
+			CommitID:    "2.12.0-serfdf",
+			User:        "lsrinivas",
+			Product:     "PxEnp",
+			Description: "Torpedo : Upgrade",
+			Branch:      "master",
+			TestType:    "SystemTest",
+			Tags:        []string{"upgrade"},
+			Status:      aetosutil.NOTSTARTED,
+		}
+		dash.TestSetBegin(&testSet)
 	}
-	aetosutil.TestSetBegin(&testSet)
 	InitInstance()
 })
 
@@ -63,39 +68,43 @@ var _ = Describe("{SampleTest}", func() {
 	var testrailID = 35269
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
 	var runID int
-	var f *os.File
+
 	JustBeforeEach(func() {
 		f = CreateLogFile("SampleTest.log")
 		if f != nil {
 			SetTorpedoFileOutput(tpLog, f)
 		}
 
-		aetosutil.TestCaseBegin("upgrade: sample test", "validating logs in tests", "", nil)
+		dash.TestCaseBegin("upgrade: sample test", "validating logs in tests", "", nil)
 
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		tpLog.Infof("runid: %d", runID)
+		dash.Infof("runid: %d", runID)
 	})
 
 	It("upgrade volume driver and ensure everything is running fine", func() {
-		tpLog.Infof("Inside upgrade test")
+
+		dash.Info("Inside upgrade test")
 
 		Step("start the upgrade of volume driver", func() {
-			tpLog.Infof("starting upgrade")
+
+			dash.Info("starting upgrade")
+			dash.VerifySafely("2.12.0", "2.12.0", "validating PX version")
+			Expect("test").To(BeEmpty())
 		})
 
 		Step("reinstall and validate all apps after upgrade", func() {
-			tpLog.Info("Scheduling apps after upgrade")
+			dash.Info("Scheduling apps after upgrade")
+			tpLog.Info("Apps Scheduled")
 
 		})
 
 		Step("destroy apps", func() {
-			tpLog.Debug("Destroying apps")
+			dash.Info("Destroying apps")
 		})
 	})
 	JustAfterEach(func() {
+		defer dash.TestCaseEnd()
 		defer CloseLogFile(tpLog, f)
-		aetosutil.TestCaseEnd()
-		tpLog.Debug("just after each")
 	})
 })
 
@@ -104,6 +113,12 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
 	var runID int
 	JustBeforeEach(func() {
+		f = CreateLogFile("UpgradeVolumeDriver.log")
+		if f != nil {
+			SetTorpedoFileOutput(tpLog, f)
+		}
+
+		dash.TestCaseBegin("upgrade: sample test", "validating logs in tests", "", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -140,9 +155,9 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				status, err := UpgradePxStorageCluster()
 				timeAfterUpgrade = time.Now()
 				if status {
-					logrus.Info("Volume Driver upgrade is successful")
+					tpLog.Info("Volume Driver upgrade is successful")
 				} else {
-					logrus.Error("Volume Driver upgrade failed")
+					tpLog.Error("Volume Driver upgrade failed")
 				}
 				Expect(err).NotTo(HaveOccurred())
 
@@ -158,15 +173,15 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
 			expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
 			if durationInMins <= expectedUpgradeTime {
-				logrus.Infof("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+				tpLog.Infof("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
 			} else {
-				logrus.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutee", durationInMins, expectedUpgradeTime)
+				tpLog.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutee", durationInMins, expectedUpgradeTime)
 				Expect(durationInMins <= expectedUpgradeTime).To(BeTrue())
 			}
 		})
 
 		Step("reinstall and validate all apps after upgrade", func() {
-			logrus.Infof("Schedulings apps after upgrade")
+			tpLog.Infof("Schedulings apps after upgrade")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradedvolumedriver-%d", i))...)
 			}
@@ -234,6 +249,8 @@ var _ = Describe("{UpgradeStork}", func() {
 		})
 	}
 	JustAfterEach(func() {
+		defer dash.TestCaseEnd()
+		defer CloseLogFile(tpLog, f)
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -287,10 +304,11 @@ var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 })
 */
 var _ = AfterSuite(func() {
+	defer dash.TestSetEnd()
+	defer CloseLogFile(tpLog, nil)
 	PerformSystemCheck()
-	//ValidateCleanup()
-	aetosutil.TestSetEnd()
-	CloseLogFile(tpLog, nil)
+	ValidateCleanup()
+
 })
 
 func TestMain(m *testing.M) {

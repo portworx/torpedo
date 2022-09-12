@@ -46,6 +46,8 @@ const (
 	defaultRetryInterval = 10 * time.Second
 )
 
+var tpLog *logrus.Logger
+
 // SSH ssh node driver
 type SSH struct {
 	node.Driver
@@ -160,6 +162,7 @@ func (s *SSH) GetDeviceMapperCount(n node.Node, timerange time.Duration) (int, e
 
 // Init initializes SSH node driver
 func (s *SSH) Init(nodeOpts node.InitOptions) error {
+	tpLog = nodeOpts.Logger
 	s.specDir = nodeOpts.SpecDir
 
 	nodes := node.GetWorkerNodes()
@@ -562,7 +565,7 @@ func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error)
 	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
 	allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, execPodDefaultNamespace)
 	if err != nil {
-		logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
+		tpLog.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 		return "", err
 	}
 	var debugPod *v1.Pod
