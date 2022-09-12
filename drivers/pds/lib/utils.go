@@ -2,6 +2,7 @@ package lib
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -19,6 +20,80 @@ import (
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/sirupsen/logrus"
 )
+
+//ResourceSettingTemplate struct used to store template values
+type ResourceSettingTemplate struct {
+	Resources struct {
+		Limits struct {
+			CPU    string `json:"cpu"`
+			Memory string `json:"memory"`
+		} `json:"limits"`
+		Requests struct {
+			CPU     string `json:"cpu"`
+			Memory  string `json:"memory"`
+			Storage string `json:"storage"`
+		} `json:"requests"`
+	} `json:"resources"`
+}
+
+//StorageOptions struct used to store template values
+type StorageOptions struct {
+	Filesystem  string
+	ForceSpread string
+	Replicas    int32
+	VolumeGroup bool
+}
+
+//StorageClassConfig struct used to unmarshal
+type StorageClassConfig struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Metadata   struct {
+		Annotations struct {
+		} `json:"annotations"`
+		Labels struct {
+			Name              string `json:"name"`
+			Namespace         string `json:"namespace"`
+			PdsDeploymentID   string `json:"pds/deployment-id"`
+			PdsDeploymentName string `json:"pds/deployment-name"`
+			PdsEnvironment    string `json:"pds/environment"`
+			PdsProjectID      string `json:"pds/project-id"`
+		} `json:"labels"`
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+	} `json:"metadata"`
+	Spec struct {
+		DNSZone          string `json:"dnsZone"`
+		Image            string `json:"image"`
+		ImagePullSecrets []struct {
+			Name string `json:"name"`
+		} `json:"imagePullSecrets"`
+		Initialize string `json:"initialize"`
+		Nodes      int32  `json:"nodes"`
+		Resources  struct {
+			Limits struct {
+				CPU    string `json:"cpu"`
+				Memory string `json:"memory"`
+			} `json:"limits"`
+			Requests struct {
+				CPU     string `json:"cpu"`
+				Memory  string `json:"memory"`
+				Storage string `json:"storage"`
+			} `json:"requests"`
+		} `json:"resources"`
+		ServiceType  string `json:"serviceType"`
+		StorageClass struct {
+			Provisioner string `json:"provisioner"`
+		} `json:"storageClass"`
+		StorageOptions struct {
+			Filesystem  string `json:"filesystem"`
+			ForceSpread string `json:"forceSpread"`
+			Replicas    string `json:"replicas"`
+			Secure      string `json:"secure"`
+		} `json:"storageOptions"`
+		Version string `json:"version"`
+	} `json:"spec"`
+}
 
 //PDS const
 const (
@@ -46,6 +121,7 @@ var (
 	accountID                             string
 	tenantID                              string
 	projectID                             string
+	deployments                           []*pds.ModelsDeployment
 	serviceType                           = "LoadBalancer"
 	accountName                           = "Portworx"
 
@@ -60,8 +136,8 @@ var (
 	dataServiceNameVersionMap               = make(map[string][]string)
 	dataServiceIDImagesMap                  = make(map[string][]string)
 	dataServiceNameDefaultAppConfigMap      = make(map[string]string)
-	deployementIDNameMap                    = make(map[string]string)
-	namespaceNameIDMap                      = make(map[string]string)
+
+	namespaceNameIDMap = make(map[string]string)
 )
 
 //ExecShell to execute local command
@@ -394,7 +470,7 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) {
 		}
 	}
 	if status.GetHealth() == "Healthy" {
-		deployementIDNameMap[deployment.GetId()] = deployment.GetName()
+		deployments = append(deployments, deployment)
 	}
 	logrus.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 
@@ -415,7 +491,7 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 // DeployDataServices deploys all dataservices, versions and images that are supported
 func DeployDataServices(supportedDataServicesMap map[string]string, projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
 	namespaceID string, dataServiceNameDefaultAppConfigMap map[string]string, replicas int32,
-	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) map[string]string {
+	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) []*pds.ModelsDeployment {
 
 	currentReplicas = replicas
 	var dataServiceImageMap map[string][]string
@@ -476,12 +552,12 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 					logrus.Warnf("An Error Occured while creating deployment %v", err)
 				}
 				ValidateDataServiceDeployment(deployment)
-				deployementIDNameMap[deployment.GetId()] = deployment.GetName()
+				deployments = append(deployments, deployment)
 
 			}
 		}
 	}
-	return deployementIDNameMap
+	return deployments
 }
 
 //GetAllSupportedDataServices get the supported datasservices and returns the map
@@ -496,4 +572,63 @@ func GetAllSupportedDataServices() map[string]string {
 		logrus.Infof("dsKey %v dsValue %v", key, value)
 	}
 	return dataServiceNameIDMap
+}
+
+//ValidateDataServiceVolumes validates the volumes
+func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) (ResourceSettingTemplate, StorageOptions, StorageClassConfig) {
+	var config StorageClassConfig
+	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), GetAndExpectStringEnvVar("NAMESPACE"))
+	if err != nil {
+		logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+	}
+	err = k8sApps.ValidatePVCsForStatefulSet(ss, timeOut, timeInterval)
+	if err != nil {
+		logrus.Errorf("An error occured while validating pvcs of statefulsets %v ", err)
+	}
+	pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+	if err != nil {
+		logrus.Warnf("An Error Occured while getting pvcs of statefulsets %v", err)
+	}
+
+	for _, pvc := range pvcList.Items {
+		sc, err := k8sCore.GetStorageClassForPVC(&pvc)
+		if err != nil {
+			logrus.Errorf("Error Occured while getting storage class for pvc %v", err)
+		}
+		scAnnotation := sc.Annotations
+		for k, v := range scAnnotation {
+			if k == "kubectl.kubernetes.io/last-applied-configuration" {
+				logrus.Infof("Storage Options Values %v", v)
+				data := []byte(v)
+				err := json.Unmarshal(data, &config)
+				if err != nil {
+					logrus.Errorf("Error Occured while getting volume params %v", err)
+				}
+			}
+		}
+	}
+
+	var resourceTemp ResourceSettingTemplate
+	var storageOp StorageOptions
+
+	rt, err := components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateIDMap[dataService])
+	if err != nil {
+		logrus.Errorf("Error Occured while getting resource setting template %v", err)
+	}
+	resourceTemp.Resources.Requests.CPU = *rt.CpuRequest
+	resourceTemp.Resources.Requests.Memory = *rt.MemoryRequest
+	resourceTemp.Resources.Requests.Storage = *rt.StorageRequest
+	resourceTemp.Resources.Limits.CPU = *rt.CpuLimit
+	resourceTemp.Resources.Limits.Memory = *rt.MemoryLimit
+
+	st, err := components.StorageSettingsTemplate.GetTemplate(storageTemplateID)
+	if err != nil {
+		logrus.Errorf("Error Occured while getting storage template %v", err)
+	}
+	storageOp.Filesystem = st.GetFs()
+	storageOp.Replicas = st.GetRepl()
+	storageOp.VolumeGroup = st.GetFg()
+
+	return resourceTemp, storageOp, config
+
 }

@@ -1,12 +1,12 @@
 package tests
 
 import (
+	"strconv"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
@@ -32,14 +32,11 @@ var (
 	deploymentTargetID                      string
 	replicas                                int32
 	supportedDataServices                   []string
-	dataServiceIDImagesMap                  map[string][]string
 	dataServiceNameDefaultAppConfigMap      map[string]string
 	namespaceID                             string
 	storageTemplateID                       string
 	dataServiceDefaultResourceTemplateIDMap map[string]string
 	dataServiceNameIDMap                    map[string]string
-	deploymentIDs                           []string
-	deployment                              *pds.ModelsDeployment
 	supportedDataServicesNameIDMap          map[string]string
 )
 
@@ -91,7 +88,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	It("deploy Dataservices", func() {
 		logrus.Info("Create dataservices without backup.")
 		Step("Deploy Data Services", func() {
-			deployementIDNameMap := pdslib.DeployDataServices(dataServiceNameIDMap, projectID,
+			deployements := pdslib.DeployDataServices(dataServiceNameIDMap, projectID,
 				deploymentTargetID,
 				dnsZone,
 				deploymentName,
@@ -102,11 +99,33 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				dataServiceDefaultResourceTemplateIDMap,
 				storageTemplateID,
 			)
+			Step("Validate Storage Configurations", func() {
+				for _, deployment := range deployements {
+					resourceTemp, storageOp, config := pdslib.ValidateDataServiceVolumes(deployment, pdslib.GetAndExpectStringEnvVar(envDataService), dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
+					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+					logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+					logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+					logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+					logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+					logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
+					logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+
+					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+					Expect(config.Spec.Nodes).Should(Equal(replicas))
+				}
+			})
 			defer func() {
 				Step("Delete created deployments")
-				for depID := range deployementIDNameMap {
-					logrus.Infof("deplymentID %v ", depID)
-					_, err := pdslib.DeleteDeployment(depID)
+				for _, dep := range deployements {
+					_, err := pdslib.DeleteDeployment(dep.GetId())
 					Expect(err).NotTo(HaveOccurred())
 				}
 			}()
@@ -139,7 +158,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 
 	It("Deploy All SupportedDataServices", func() {
 		Step("Deploy All Supported Data Services", func() {
-			deployementIDNameMap := pdslib.DeployDataServices(supportedDataServicesNameIDMap, projectID,
+			deployements := pdslib.DeployDataServices(supportedDataServicesNameIDMap, projectID,
 				deploymentTargetID,
 				dnsZone,
 				deploymentName,
@@ -152,9 +171,9 @@ var _ = Describe("{DeployAllDataServices}", func() {
 			)
 			defer func() {
 				Step("Delete created deployments")
-				for depID := range deployementIDNameMap {
-					logrus.Infof("deplymentID %v ", depID)
-					_, err := pdslib.DeleteDeployment(depID)
+				for _, dep := range deployements {
+					logrus.Infof("deplymentID %v ", dep.GetId())
+					_, err := pdslib.DeleteDeployment(dep.GetId())
 					Expect(err).NotTo(HaveOccurred())
 				}
 			}()
