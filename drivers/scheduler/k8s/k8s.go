@@ -254,8 +254,10 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.eventsStorage = make(map[string][]scheduler.Event)
 	k.PureVolumes = schedOpts.PureVolumes
 	k.PureSANType = schedOpts.PureSANType
-	tpLog = schedOpts.Logger
+
 	k.RunCSISnapshotAndRestoreManyTest = schedOpts.RunCSISnapshotAndRestoreManyTest
+
+	tpLog = schedOpts.Logger
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {

@@ -13,13 +13,6 @@ import (
 	"time"
 )
 
-var (
-	//TestSetID test set id
-	TestSetID int
-	//TestCaseID test case id
-	TestCaseID int
-)
-
 var testCasesStack = make([]TestCase, 0)
 var verifications = make([]result, 0)
 var testCaseStartTime time.Time

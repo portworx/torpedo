@@ -105,10 +105,10 @@ type InitOptions struct {
 	PureVolumes bool
 	// PureSANType identifies which SAN type is being used for Pure volumes
 	PureSANType string
-	//Logger log the output
-	Logger *logrus.Logger
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
+	//Logger log the output
+	Logger *logrus.Logger
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

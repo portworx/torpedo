@@ -3337,11 +3337,11 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		}
 		d.tpLog.Debugf("Status returned by pxctl %s", out)
 		if strings.TrimSpace(out) == telemetryNotEnabled {
-			logrus.Debugf("Telemetry not enabled on PX status. Skipping validation on s3")
+			d.tpLog.Debugf("Telemetry not enabled on PX status. Skipping validation on s3")
 			return nil
 		}
 
-		logrus.Infof("**** DIAGS FILE EXIST: %s ****", config.OutputFile)
+		d.tpLog.Infof("**** DIAGS FILE EXIST: %s ****", config.OutputFile)
 		d.DiagsFile = config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
 	}
 
