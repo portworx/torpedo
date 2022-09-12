@@ -136,6 +136,7 @@ var (
 	dataServiceNameVersionMap               = make(map[string][]string)
 	dataServiceIDImagesMap                  = make(map[string][]string)
 	dataServiceNameDefaultAppConfigMap      = make(map[string]string)
+	deploymentsMap                          = make(map[string][]*pds.ModelsDeployment)
 
 	namespaceNameIDMap = make(map[string]string)
 )
@@ -469,11 +470,7 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) {
 			logrus.Errorf("Full HTTP response: %v\n", res)
 		}
 	}
-	if status.GetHealth() == "Healthy" {
-		deployments = append(deployments, deployment)
-	}
 	logrus.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
-
 }
 
 // DeleteDeployment deletes the given deployment
@@ -491,7 +488,7 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 // DeployDataServices deploys all dataservices, versions and images that are supported
 func DeployDataServices(supportedDataServicesMap map[string]string, projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
 	namespaceID string, dataServiceNameDefaultAppConfigMap map[string]string, replicas int32,
-	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) []*pds.ModelsDeployment {
+	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) map[string][]*pds.ModelsDeployment {
 
 	currentReplicas = replicas
 	var dataServiceImageMap map[string][]string
@@ -513,7 +510,7 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 		}
 		if ds == "Redis" {
 			logrus.Infof("Replicas passed %v", replicas)
-			logrus.Warn("Redis deployment replicas should be any one of the following values 1, 6, 8 and 10")
+			logrus.Warnf("Redis deployment replicas should be any one of the following values 1, 6, 8 and 10")
 		}
 
 		//clearing up the previous entries of dataServiceImageMap
@@ -553,11 +550,11 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 				}
 				ValidateDataServiceDeployment(deployment)
 				deployments = append(deployments, deployment)
-
+				deploymentsMap[ds] = append(deploymentsMap[ds], deployment)
 			}
 		}
 	}
-	return deployments
+	return deploymentsMap
 }
 
 //GetAllSupportedDataServices get the supported datasservices and returns the map

@@ -100,33 +100,39 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				storageTemplateID,
 			)
 			Step("Validate Storage Configurations", func() {
-				for _, deployment := range deployements {
-					resourceTemp, storageOp, config := pdslib.ValidateDataServiceVolumes(deployment, pdslib.GetAndExpectStringEnvVar(envDataService), dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
-					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+				for ds, deployment := range deployements {
+					for index := range deployment {
+						logrus.Infof("data service deployed %v ", ds)
+						resourceTemp, storageOp, config := pdslib.ValidateDataServiceVolumes(deployment[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
+						logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+						logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+						logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+						logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+						logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+						logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
+						logrus.Infof("volume group %v ", storageOp.VolumeGroup)
 
-					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-					Expect(config.Spec.Nodes).Should(Equal(replicas))
+						Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+						Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+						Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+						Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+						Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+						repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+						Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+						Expect(config.Spec.Nodes).Should(Equal(replicas))
+
+					}
 				}
 			})
 			defer func() {
 				Step("Delete created deployments")
 				for _, dep := range deployements {
-					_, err := pdslib.DeleteDeployment(dep.GetId())
-					Expect(err).NotTo(HaveOccurred())
+					for index := range dep {
+						_, err := pdslib.DeleteDeployment(dep[index].GetId())
+						Expect(err).NotTo(HaveOccurred())
+					}
 				}
 			}()
 		})
@@ -169,12 +175,39 @@ var _ = Describe("{DeployAllDataServices}", func() {
 				dataServiceDefaultResourceTemplateIDMap,
 				storageTemplateID,
 			)
+			Step("Validate Storage Configurations", func() {
+				for ds, deployment := range deployements {
+					for index := range deployment {
+						logrus.Infof("data service deployed %v ", ds)
+						resourceTemp, storageOp, config := pdslib.ValidateDataServiceVolumes(deployment[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
+						logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+						logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+						logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+						logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+						logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+						logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
+						logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+
+						Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+						Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+						Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+						Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+						Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+						repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+						Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+						Expect(config.Spec.Nodes).Should(Equal(replicas))
+					}
+				}
+			})
 			defer func() {
 				Step("Delete created deployments")
 				for _, dep := range deployements {
-					logrus.Infof("deplymentID %v ", dep.GetId())
-					_, err := pdslib.DeleteDeployment(dep.GetId())
-					Expect(err).NotTo(HaveOccurred())
+					for index := range dep {
+						_, err := pdslib.DeleteDeployment(dep[index].GetId())
+						Expect(err).NotTo(HaveOccurred())
+					}
 				}
 			}()
 		})
