@@ -115,6 +115,7 @@ const (
 	backupCliFlag                        = "backup-driver"
 	specDirCliFlag                       = "spec-dir"
 	appListCliFlag                       = "app-list"
+	secureAppsCliFlag                    = "secure-apps"
 	logLocationCliFlag                   = "log-location"
 	logLevelCliFlag                      = "log-level"
 	scaleFactorCliFlag                   = "scale-factor"
@@ -301,6 +302,7 @@ func InitInstance() {
 		PureSANType:                      Inst().PureSANType,
 		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
+		SecureApps:                       Inst().SecureAppList,
 	})
 	expect(err).NotTo(haveOccurred())
 
@@ -3542,6 +3544,7 @@ type Torpedo struct {
 	N                                   node.Driver
 	SpecDir                             string
 	AppList                             []string
+	SecureAppList                       []string
 	LogLoc                              string
 	LogLevel                            string
 	GlobalScaleFactor                   int
@@ -3578,7 +3581,7 @@ type Torpedo struct {
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+	var s, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -3631,6 +3634,7 @@ func ParseFlags() {
 		"Endpoint version which will be used for checking version after upgrade storage driver")
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
+	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
@@ -3666,6 +3670,21 @@ func ParseFlags() {
 	appList, err := splitCsv(appListCSV)
 	if err != nil {
 		logrus.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
+	}
+
+	secureAppList := make([]string, 0)
+
+	if secureAppsCSV == "all" {
+		secureAppList = append(secureAppList, appList...)
+	}
+
+	if len(secureAppsCSV) > 0 {
+		apl, err := splitCsv(secureAppsCSV)
+		if err != nil {
+			logrus.Fatalf("failed to parse secure app list: %v. err: %v", secureAppsCSV, err)
+		}
+		secureAppList = append(secureAppList, apl...)
+		logrus.Infof("Secure apps : %+v", secureAppList)
 	}
 
 	sched.Init(time.Second)
@@ -3718,6 +3737,7 @@ func ParseFlags() {
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
+				SecureAppList:                       secureAppList,
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
