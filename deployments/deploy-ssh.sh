@@ -506,6 +506,8 @@ spec:
       value: "${VSPHERE_HOST_IP}"
     - name: IBMCLOUD_API_KEY
       value: "${IBMCLOUD_API_KEY}"
+    - name: CONTROL_PLANE_URL
+      value: "${CONTROL_PLANE_URL}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
