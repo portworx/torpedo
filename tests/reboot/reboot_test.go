@@ -155,7 +155,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 				Expect(err).NotTo(HaveOccurred())
 				for _, vol := range vols {
 					if vol.Shared {
-						for failoverAttempt := 0; failoverAttempt < 10; failoverAttempt++ {
+						for failoverAttempt := 0; failoverAttempt < 100; failoverAttempt++ {
 							logrus.Infof("==== failover attempt %v for volume %v", failoverAttempt, vol.ID)
 							n, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
 							Expect(err).NotTo(HaveOccurred())
@@ -263,8 +263,10 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 							err = Inst().S.EnableSchedulingOnNode(*n)
 							Expect(err).NotTo(HaveOccurred())
 						}
+						break
 					}
 				}
+				break
 			}
 		})
 
