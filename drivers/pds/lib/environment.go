@@ -17,6 +17,7 @@ const (
 	envPDSClientID        = "PDS_CLIENT_ID"
 	envPDSISSUERURL       = "PDS_ISSUER_URL"
 	envClusterType        = "CLUSTER_TYPE"
+	envTargetClusterName  = "TARGET_CLUSTER_NAME"
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable.

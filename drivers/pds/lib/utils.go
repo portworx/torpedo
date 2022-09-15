@@ -3,7 +3,6 @@ package lib
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -198,17 +197,6 @@ func copyAndCapture(w io.Writer, r io.Reader) ([]byte, error) {
 	}
 }
 
-// GetClusterID retruns the cluster id
-func GetClusterID(pathToKubeconfig string) (string, error) {
-	logrus.Infof("Fetch Cluster id ")
-	cmd := fmt.Sprintf("kubectl get ns kube-system -o jsonpath={.metadata.uid} --kubeconfig %s", pathToKubeconfig)
-	output, _, err := ExecShell(cmd)
-	if err != nil {
-		logrus.Fatalf("An Error Occured %v", err)
-	}
-	return output, nil
-}
-
 // SetupPDSTest returns few params required to run the test
 func SetupPDSTest() (string, string, string, string, string) {
 	var err error
@@ -226,11 +214,11 @@ func SetupPDSTest() (string, string, string, string, string) {
 	components = pdsapi.NewComponents(ctx, apiClient)
 	controlplane := NewControlPlane(GetAndExpectStringEnvVar(envControlPlaneURL), components)
 
-	clusterID, err := GetClusterID(GetAndExpectStringEnvVar(envTargetKubeconfig))
-	logrus.Infof("clusterID %v", clusterID)
-	if err != nil {
-		logrus.Fatalf("An Error Occured %v", err)
-	}
+	// clusterID, err := GetClusterID(GetAndExpectStringEnvVar(envTargetKubeconfig))
+	// logrus.Infof("clusterID %v", clusterID)
+	// if err != nil {
+	// 	logrus.Fatalf("An Error Occured %v", err)
+	// }
 
 	if strings.EqualFold(GetAndExpectStringEnvVar(envClusterType), "onprem") || strings.EqualFold(GetAndExpectStringEnvVar(envClusterType), "ocp") {
 		serviceType = "ClusterIP"
@@ -264,6 +252,13 @@ func SetupPDSTest() (string, string, string, string, string) {
 	projectName := projects[0].GetName()
 	logrus.Infof("Project Details- Name: %s, UUID: %s ", projectName, projectID)
 
+	clusterID := GetClusterID(projectID, GetAndExpectStringEnvVar(envTargetClusterName))
+	if len(clusterID) > 0 {
+		logrus.Infof("clusterID %v", clusterID)
+	} else {
+		logrus.Fatalf("Cluster ID is empty %v", clusterID)
+	}
+
 	logrus.Info("Get the Target cluster details")
 	targetClusters, _ := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 	for i := 0; i < len(targetClusters); i++ {
@@ -273,6 +268,26 @@ func SetupPDSTest() (string, string, string, string, string) {
 		}
 	}
 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID
+}
+
+// GetClusterID retruns the cluster id
+func GetClusterID(projectID string, targetClusterName string) string {
+	deploymentTargets, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToProject(projectID)
+	if err != nil {
+		logrus.Fatalf("An Error Occured while listing deployment targets %v", err)
+	}
+	// logrus.Infof("Fetch Cluster id ")
+	// cmd := fmt.Sprintf("kubectl get ns kube-system -o jsonpath={.metadata.uid} --kubeconfig %s", pathToKubeconfig)
+	// output, _, err := ExecShell(cmd)
+	// if err != nil {
+	// 	logrus.Fatalf("An Error Occured %v", err)
+	// }
+	for index := range deploymentTargets {
+		if deploymentTargets[index].GetName() == targetClusterName {
+			return deploymentTargets[index].GetClusterId()
+		}
+	}
+	return ""
 }
 
 //GetStorageTemplate return the storage template id

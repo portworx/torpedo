@@ -534,6 +534,8 @@ spec:
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG
       value: "${TARGET_KUBECONFIG}"
+    - name: TARGET_CLUSTER_NAME
+      value: "${TARGET_CLUSTER_NAME}"
     
   volumes: [${VOLUMES}]
   restartPolicy: Never
