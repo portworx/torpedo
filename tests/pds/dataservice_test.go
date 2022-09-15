@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"os"
 	"strconv"
 	"testing"
 
@@ -217,8 +218,8 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-// func TestMain(m *testing.M) {
-// 	// call flag.Parse() here if TestMain uses flags
-// 	ParseFlags()
-// 	os.Exit(m.Run())
-// }
+func TestMain(m *testing.M) {
+	// call flag.Parse() here if TestMain uses flags
+	ParseFlags()
+	os.Exit(m.Run())
+}
