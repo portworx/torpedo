@@ -89,7 +89,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	It("deploy Dataservices", func() {
 		logrus.Info("Create dataservices without backup.")
 		Step("Deploy Data Services", func() {
-			deployements := pdslib.DeployDataServices(dataServiceNameIDMap, projectID,
+			deployements, err := pdslib.DeployDataServices(dataServiceNameIDMap, projectID,
 				deploymentTargetID,
 				dnsZone,
 				deploymentName,
@@ -100,6 +100,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				dataServiceDefaultResourceTemplateIDMap,
 				storageTemplateID,
 			)
+			Expect(err).NotTo(HaveOccurred())
 			Step("Validate Storage Configurations", func() {
 				for ds, deployment := range deployements {
 					for index := range deployment {
@@ -165,7 +166,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 
 	It("Deploy All SupportedDataServices", func() {
 		Step("Deploy All Supported Data Services", func() {
-			deployements := pdslib.DeployDataServices(supportedDataServicesNameIDMap, projectID,
+			deployements, err := pdslib.DeployDataServices(supportedDataServicesNameIDMap, projectID,
 				deploymentTargetID,
 				dnsZone,
 				deploymentName,
@@ -176,6 +177,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 				dataServiceDefaultResourceTemplateIDMap,
 				storageTemplateID,
 			)
+			Expect(err).NotTo(HaveOccurred())
 			Step("Validate Storage Configurations", func() {
 				for ds, deployment := range deployements {
 					for index := range deployment {

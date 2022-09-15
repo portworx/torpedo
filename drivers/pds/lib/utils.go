@@ -14,6 +14,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 //ResourceSettingTemplate struct used to store template values
@@ -116,7 +118,6 @@ var (
 	accountID                             string
 	tenantID                              string
 	projectID                             string
-	deployments                           []*pds.ModelsDeployment
 	serviceType                           = "LoadBalancer"
 	accountName                           = "Portworx"
 
@@ -371,48 +372,49 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 }
 
 //ValidateDataServiceDeployment checks if deployment is healthy and running
-func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) {
-	//To get the list of statefulsets in particular namespace
-	time.Sleep(30 * time.Second)
+func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) error {
+	var ss *v1.StatefulSet
+	namespace := GetAndExpectStringEnvVar("NAMESPACE")
 
-	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), GetAndExpectStringEnvVar("NAMESPACE"))
+	err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+		if err != nil {
+			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
 	if err != nil {
-		logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+		logrus.Errorf("An Error Occured while getting statefulsets %v", err)
+		return err
 	}
-
 	//validate the statefulset deployed in the namespace
 	err = k8sApps.ValidateStatefulSet(ss, defaultRetryInterval)
 	if err != nil {
-		logrus.Fatalf("An Error Occured while validating statefulsets %v", err)
+		logrus.Errorf("An Error Occured while validating statefulsets %v", err)
+		return err
 	}
 
-	status, res, err := components.DataServiceDeployment.GetDeploymentSatus(deployment.GetId())
-	if err != nil {
-		logrus.Fatalf("An Error Occured while get the deployment status %v", err)
-	}
-	if res.StatusCode != state.StatusOK {
-		logrus.Errorf("Error when calling `ApiDeploymentsIdStatusGet``: %v\n", err)
-		logrus.Errorf("Full HTTP response: %v\n", res)
-	}
-	sleeptime := 0
-	for status.GetHealth() != "Healthy" && sleeptime < duration {
-		if sleeptime > 30 && len(status.GetHealth()) < 2 {
-			logrus.Infof("Deployment details: Health status -  %v, procceeding with next deployment", status.GetHealth())
-			break
-		}
-		time.Sleep(10 * time.Second)
-		sleeptime += 10
-		status, res, err = components.DataServiceDeployment.GetDeploymentSatus(deployment.GetId())
+	err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
+		status, res, err := components.DataServiceDeployment.GetDeploymentSatus(deployment.GetId())
 		logrus.Infof("Health status -  %v", status.GetHealth())
 		if err != nil {
-			logrus.Fatalf("Error occured while getting deployment status %v", err)
+			logrus.Errorf("Error occured while getting deployment status %v", err)
+			return false, nil
 		}
 		if res.StatusCode != state.StatusOK {
 			logrus.Errorf("Error when calling `ApiDeploymentsIdCredentialsGet``: %v\n", err)
 			logrus.Errorf("Full HTTP response: %v\n", res)
+			return false, err
 		}
-	}
-	logrus.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+		if status.GetHealth() != "Healthy" {
+			return false, nil
+		}
+		logrus.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+		return true, nil
+
+	})
+	return err
 }
 
 // DeleteDeployment deletes the given deployment
@@ -430,7 +432,7 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 // DeployDataServices deploys all dataservices, versions and images that are supported
 func DeployDataServices(supportedDataServicesMap map[string]string, projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
 	namespaceID string, dataServiceNameDefaultAppConfigMap map[string]string, replicas int32,
-	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) map[string][]*pds.ModelsDeployment {
+	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) (map[string][]*pds.ModelsDeployment, error) {
 
 	currentReplicas = replicas
 	var dataServiceImageMap map[string][]string
@@ -489,14 +491,17 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 
 				if err != nil {
 					logrus.Warnf("An Error Occured while creating deployment %v", err)
+					return deploymentsMap, err
 				}
-				ValidateDataServiceDeployment(deployment)
-				deployments = append(deployments, deployment)
+				err = ValidateDataServiceDeployment(deployment)
+				if err != nil {
+					return deploymentsMap, err
+				}
 				deploymentsMap[ds] = append(deploymentsMap[ds], deployment)
 			}
 		}
 	}
-	return deploymentsMap
+	return deploymentsMap, nil
 }
 
 //GetAllSupportedDataServices get the supported datasservices and returns the map
