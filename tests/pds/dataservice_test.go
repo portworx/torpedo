@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"os"
 	"strconv"
 	"testing"
 
@@ -63,9 +62,10 @@ var _ = BeforeSuite(func() {
 
 	})
 
-	Step("Get Namespace and NamespaceID", func() {
+	Step("Create/Get Namespace and NamespaceID", func() {
 		namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
-		namespaceID = pdslib.GetnameSpaceID(namespace)
+		namespaceID = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
+		Expect(namespaceID).NotTo(BeEmpty())
 	})
 })
 
@@ -217,8 +217,8 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
+// func TestMain(m *testing.M) {
+// 	// call flag.Parse() here if TestMain uses flags
+// 	ParseFlags()
+// 	os.Exit(m.Run())
+// }

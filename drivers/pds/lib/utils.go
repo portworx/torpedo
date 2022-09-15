@@ -291,7 +291,7 @@ func GetAppConfTemplate(tenantID string, dataServiceNameIDMap map[string]string)
 }
 
 // GetnameSpaceID returns the namespace ID
-func GetnameSpaceID(namespace string) string {
+func GetnameSpaceID(namespace string, deploymentTargetID string) string {
 	var namespaceID string
 	namespaces, err := components.Namespace.ListNamespaces(deploymentTargetID)
 	for i := 0; i < len(namespaces); i++ {
@@ -304,7 +304,7 @@ func GetnameSpaceID(namespace string) string {
 		}
 	}
 	if err != nil {
-		logrus.Fatalf("An Error Occured %v", err)
+		logrus.Errorf("An Error Occured while listing namespaces %v", err)
 	}
 	return namespaceID
 }
