@@ -520,6 +520,8 @@ spec:
       value: "${DATA_SERVICE}"
     - name: DEPLOY_ALL_VERSIONS
       value: "${DEPLOY_ALL_VERSIONS}"
+    - name: DEPLOY_ALL_DATASERVICE
+      value: "${DEPLOY_ALL_DATASERVICE}"
     - name: PDS_USERNAME
       value: "${PDS_USERNAME}"
     - name: PDS_PASSWORD
