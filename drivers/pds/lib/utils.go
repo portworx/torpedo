@@ -3,12 +3,8 @@ package lib
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/url"
-	"os"
-	"os/exec"
 	"strings"
-	"sync"
 	"time"
 
 	state "net/http"
@@ -140,63 +136,6 @@ var (
 	namespaceNameIDMap = make(map[string]string)
 )
 
-//ExecShell to execute local command
-func ExecShell(command string) (string, string, error) {
-	return ExecShellWithEnv(command)
-}
-
-// ExecShellWithEnv to execute local command
-func ExecShellWithEnv(command string, envVars ...string) (string, string, error) {
-	var stout, sterr []byte
-	cmd := exec.Command("bash", "-c", command)
-	logrus.Debugf("Command %s ", command)
-	cmd.Env = append(cmd.Env, envVars...)
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
-	if err := cmd.Start(); err != nil {
-		logrus.Debugf("Command %s failed to start. Cause: %v", command, err)
-		return "", "", err
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		stout, _ = copyAndCapture(os.Stdout, stdout)
-		wg.Done()
-	}()
-
-	sterr, _ = copyAndCapture(os.Stderr, stderr)
-
-	wg.Wait()
-
-	err := cmd.Wait()
-	return string(stout), string(sterr), err
-}
-
-// copyAndCapture
-func copyAndCapture(w io.Writer, r io.Reader) ([]byte, error) {
-	var out []byte
-	buf := make([]byte, 1024)
-	for {
-		n, err := r.Read(buf[:])
-		if n > 0 {
-			d := buf[:n]
-			out = append(out, d...)
-			_, err := w.Write(d)
-			if err != nil {
-				return out, err
-			}
-		}
-		if err != nil {
-			// Read returns io.EOF at the end of file, which is not an error for us
-			if err == io.EOF {
-				err = nil
-			}
-			return out, err
-		}
-	}
-}
-
 // SetupPDSTest returns few params required to run the test
 func SetupPDSTest() (string, string, string, string, string) {
 	var err error
@@ -213,12 +152,6 @@ func SetupPDSTest() (string, string, string, string, string) {
 	apiClient = pds.NewAPIClient(apiConf)
 	components = pdsapi.NewComponents(ctx, apiClient)
 	controlplane := NewControlPlane(GetAndExpectStringEnvVar(envControlPlaneURL), components)
-
-	// clusterID, err := GetClusterID(GetAndExpectStringEnvVar(envTargetKubeconfig))
-	// logrus.Infof("clusterID %v", clusterID)
-	// if err != nil {
-	// 	logrus.Fatalf("An Error Occured %v", err)
-	// }
 
 	if strings.EqualFold(GetAndExpectStringEnvVar(envClusterType), "onprem") || strings.EqualFold(GetAndExpectStringEnvVar(envClusterType), "ocp") {
 		serviceType = "ClusterIP"
@@ -270,18 +203,12 @@ func SetupPDSTest() (string, string, string, string, string) {
 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID
 }
 
-// GetClusterID retruns the cluster id
+// GetClusterID retruns the cluster id for given targetClusterName
 func GetClusterID(projectID string, targetClusterName string) string {
 	deploymentTargets, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToProject(projectID)
 	if err != nil {
 		logrus.Fatalf("An Error Occured while listing deployment targets %v", err)
 	}
-	// logrus.Infof("Fetch Cluster id ")
-	// cmd := fmt.Sprintf("kubectl get ns kube-system -o jsonpath={.metadata.uid} --kubeconfig %s", pathToKubeconfig)
-	// output, _, err := ExecShell(cmd)
-	// if err != nil {
-	// 	logrus.Fatalf("An Error Occured %v", err)
-	// }
 	for index := range deploymentTargets {
 		if deploymentTargets[index].GetName() == targetClusterName {
 			return deploymentTargets[index].GetClusterId()
