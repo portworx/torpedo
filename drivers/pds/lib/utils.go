@@ -296,25 +296,26 @@ func GetAppConfTemplate(tenantID string, dataServiceNameIDMap map[string]string)
 		return nil, err
 	}
 	isavailable = false
+	isTemplateavailable = false
 	for i := 0; i < len(appConfigs); i++ {
 		if appConfigs[i].GetName() == appConfigTemplateName {
+			isTemplateavailable = true
 			for key := range dataServiceNameIDMap {
 				if dataServiceNameIDMap[key] == appConfigs[i].GetDataServiceId() {
 					dataServiceNameDefaultAppConfigMap[key] = appConfigs[i].GetId()
 					isavailable = true
 				}
 			}
-			isavailable = true
 		}
 	}
-	if !isavailable {
+	if !(isavailable && isTemplateavailable) {
 		logrus.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
 	}
 	return dataServiceNameDefaultAppConfigMap, nil
 }
 
 // GetnameSpaceID returns the namespace ID
-func GetnameSpaceID(namespace string, deploymentTargetID string) string {
+func GetnameSpaceID(namespace string, deploymentTargetID string) (string, error) {
 	var namespaceID string
 	namespaces, err := components.Namespace.ListNamespaces(deploymentTargetID)
 	for i := 0; i < len(namespaces); i++ {
@@ -328,8 +329,9 @@ func GetnameSpaceID(namespace string, deploymentTargetID string) string {
 	}
 	if err != nil {
 		logrus.Errorf("An Error Occured while listing namespaces %v", err)
+		return "", err
 	}
-	return namespaceID
+	return namespaceID, nil
 }
 
 // GetVersionsImage returns the required Image of dataservice version

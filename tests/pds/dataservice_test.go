@@ -91,7 +91,8 @@ var _ = BeforeSuite(func() {
 	Step("Create/Get Namespace and NamespaceID", func() {
 		namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
 		Expect(namespace).NotTo(BeEmpty(), "ENV "+envNamespace+" is not set")
-		namespaceID = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
+		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(namespaceID).NotTo(BeEmpty())
 	})
 })
