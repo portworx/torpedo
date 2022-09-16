@@ -43,6 +43,8 @@ var (
 	dataServiceDefaultResourceTemplateIDMap map[string]string
 	dataServiceNameIDMap                    map[string]string
 	supportedDataServicesNameIDMap          map[string]string
+	DeployAllDataService                    bool
+	DeployAllVersions                       bool
 )
 
 func TestDataService(t *testing.T) {
@@ -65,6 +67,12 @@ var _ = BeforeSuite(func() {
 
 		TargetClusterName := pdslib.GetAndExpectStringEnvVar(envTargetClusterName)
 		Expect(TargetClusterName).NotTo(BeEmpty(), "ENV "+envTargetClusterName+" is not set")
+
+		DeployAllDataService, err = pdslib.GetAndExpectBoolEnvVar(envDeployAllDataService)
+		Expect(err).NotTo(HaveOccurred())
+
+		DeployAllVersions, err = pdslib.GetAndExpectBoolEnvVar(envDeployAllVersions)
+		Expect(err).NotTo(HaveOccurred())
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName)
 		Expect(err).NotTo(HaveOccurred())
@@ -91,7 +99,7 @@ var _ = BeforeSuite(func() {
 var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 	JustBeforeEach(func() {
-		if !pdslib.GetAndExpectBoolEnvVar(envDeployAllDataService) {
+		if !DeployAllDataService {
 			supportedDataServices = append(supportedDataServices, pdslib.GetAndExpectStringEnvVar(envDataService))
 			for _, ds := range supportedDataServices {
 				logrus.Infof("supported dataservices %v", ds)
@@ -105,7 +113,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
 			})
 		} else {
-			Expect(pdslib.GetAndExpectBoolEnvVar(envDeployAllDataService)).To(Equal(true))
+			Expect(DeployAllDataService).To(Equal(true))
 		}
 	})
 
@@ -122,6 +130,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				serviceType,
 				dataServiceDefaultResourceTemplateIDMap,
 				storageTemplateID,
+				DeployAllVersions,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(deployements).NotTo(BeEmpty())
@@ -171,7 +180,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 
 	JustBeforeEach(func() {
 		Step("Check the required env param is available to run this test", func() {
-			if !pdslib.GetAndExpectBoolEnvVar(envDeployAllDataService) && pdslib.GetAndExpectBoolEnvVar(envDeployAllVersions) {
+			if !DeployAllDataService && DeployAllVersions {
 				logrus.Fatal("Env Var are not set as expected")
 			}
 		})
@@ -211,6 +220,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 				serviceType,
 				dataServiceDefaultResourceTemplateIDMap,
 				storageTemplateID,
+				DeployAllVersions,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Step("Validate Storage Configurations", func() {

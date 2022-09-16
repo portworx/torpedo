@@ -459,7 +459,7 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 // DeployDataServices deploys all dataservices, versions and images that are supported
 func DeployDataServices(supportedDataServicesMap map[string]string, projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
 	namespaceID string, dataServiceNameDefaultAppConfigMap map[string]string, replicas int32,
-	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) (map[string][]*pds.ModelsDeployment, error) {
+	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string, deployAllVersions bool) (map[string][]*pds.ModelsDeployment, error) {
 
 	currentReplicas = replicas
 	var dataServiceImageMap map[string][]string
@@ -489,7 +489,7 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 			delete(dataServiceImageMap, ds)
 		}
 
-		if !GetAndExpectBoolEnvVar(envDeployAllVersions) {
+		if !deployAllVersions {
 			dsVersion := GetAndExpectStringEnvVar(envDsVersion)
 			dsBuild := GetAndExpectStringEnvVar(envDsBuild)
 			logrus.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)

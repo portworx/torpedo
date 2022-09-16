@@ -68,11 +68,15 @@ func GetBearerToken() string {
 }
 
 // GetRegistrationToken PDS
-func (cp *ControlPlane) GetRegistrationToken(tenantID string) string {
+func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 	log.Info("Fetch the registration token.")
 
 	saClient := cp.components.ServiceAccount
-	serviceAccounts, _ := saClient.ListServiceAccounts(tenantID)
+	serviceAccounts, err := saClient.ListServiceAccounts(tenantID)
+	if err != nil {
+		log.Errorf("Unable to list service accounts.\n Error - %v", err)
+		return "", err
+	}
 	var agentWriterID string
 	for _, sa := range serviceAccounts {
 		if sa.GetName() == defaultAgentWriter {
@@ -80,7 +84,7 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) string {
 		}
 	}
 	token, _ := saClient.GetServiceAccountToken(agentWriterID)
-	return token.GetToken()
+	return token.GetToken(), nil
 }
 
 // GetDNSZone fetches DNS zone for deployment.
