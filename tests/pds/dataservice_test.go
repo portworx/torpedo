@@ -25,6 +25,7 @@ const (
 	envControlPlaneURL      = "CONTROL_PLANE_URL"
 	envClusterType          = "CLUSTER_TYPE"
 	envTargetClusterName    = "TARGET_CLUSTER_NAME"
+	envDeployAllImages      = "DEPLOY_ALL_IMAGES"
 )
 
 var (
@@ -45,6 +46,7 @@ var (
 	supportedDataServicesNameIDMap          map[string]string
 	DeployAllDataService                    bool
 	DeployAllVersions                       bool
+	DeployAllImages                         bool
 )
 
 func TestDataService(t *testing.T) {
@@ -72,6 +74,9 @@ var _ = BeforeSuite(func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		DeployAllVersions, err = pdslib.GetAndExpectBoolEnvVar(envDeployAllVersions)
+		Expect(err).NotTo(HaveOccurred())
+
+		DeployAllImages, err = pdslib.GetAndExpectBoolEnvVar(envDeployAllImages)
 		Expect(err).NotTo(HaveOccurred())
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName)
@@ -132,6 +137,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				dataServiceDefaultResourceTemplateIDMap,
 				storageTemplateID,
 				DeployAllVersions,
+				DeployAllImages,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(deployements).NotTo(BeEmpty())
@@ -222,6 +228,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 				dataServiceDefaultResourceTemplateIDMap,
 				storageTemplateID,
 				DeployAllVersions,
+				DeployAllImages,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Step("Validate Storage Configurations", func() {

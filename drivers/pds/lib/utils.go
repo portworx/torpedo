@@ -335,7 +335,7 @@ func GetnameSpaceID(namespace string, deploymentTargetID string) (string, error)
 }
 
 // GetVersionsImage returns the required Image of dataservice version
-func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (map[string][]string, map[string][]string, error) {
+func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string, getAllImages bool) (map[string][]string, map[string][]string, error) {
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
 
@@ -350,10 +350,13 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (m
 			dataServiceNameVersionMap[dataServiceID] = append(dataServiceNameVersionMap[dataServiceID], versions[i].GetId())
 			images, _ = components.Image.ListImages(versions[i].GetId())
 			for j := 0; j < len(images); j++ {
-				if *images[j].Build == dsBuild {
+				if !getAllImages && *images[j].Build == dsBuild {
 					dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
 					isBuildAvailable = true
 					break //remove this break to deploy all images for selected version
+				} else if getAllImages {
+					dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
+					isBuildAvailable = true
 				}
 			}
 			isVersionAvailable = true
@@ -461,7 +464,8 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 // DeployDataServices deploys all dataservices, versions and images that are supported
 func DeployDataServices(supportedDataServicesMap map[string]string, projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
 	namespaceID string, dataServiceNameDefaultAppConfigMap map[string]string, replicas int32,
-	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string, deployAllVersions bool) (map[string][]*pds.ModelsDeployment, error) {
+	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string,
+	deployAllVersions bool, getAllImages bool) (map[string][]*pds.ModelsDeployment, error) {
 
 	currentReplicas = replicas
 	var dataServiceImageMap map[string][]string
@@ -495,7 +499,7 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 			dsVersion := GetAndExpectStringEnvVar(envDsVersion)
 			dsBuild := GetAndExpectStringEnvVar(envDsBuild)
 			logrus.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
-			_, dataServiceImageMap, err = GetVersionsImage(dsVersion, dsBuild, id)
+			_, dataServiceImageMap, err = GetVersionsImage(dsVersion, dsBuild, id, getAllImages)
 			if err != nil {
 				return nil, err
 			}
