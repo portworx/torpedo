@@ -196,12 +196,15 @@ type portworx struct {
 	token                 string
 	skipPXSvcEndpoint     bool
 	DiagsFile             string
+<<<<<<< HEAD
 }
 
 type statusJSON struct {
 	Status string
 	Error  string
 	Cmd    string
+=======
+>>>>>>> cb7d6caf26b9adb250be23a6a2f9e86a78046fcb
 }
 
 // ExpandPool resizes a pool of a given ID
