@@ -104,6 +104,8 @@ const (
 	envDsVersion          = "DS_VERSION"
 	envDsBuild            = "DS_BUILD"
 	envDeployAllVersions  = "DEPLOY_ALL_VERSIONS"
+	zookeeper             = "ZooKeeper"
+	redis                 = "Redis"
 )
 
 //PDS vars
@@ -121,11 +123,12 @@ var (
 	serviceType                           = "LoadBalancer"
 	accountName                           = "Portworx"
 
-	err                error
-	isavailable        bool
-	isVersionAvailable bool
-	isBuildAvailable   bool
-	currentReplicas    int32
+	err                 error
+	isavailable         bool
+	isTemplateavailable bool
+	isVersionAvailable  bool
+	isBuildAvailable    bool
+	currentReplicas     int32
 
 	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
 	dataServiceNameIDMap                    = make(map[string]string)
@@ -138,23 +141,23 @@ var (
 )
 
 // SetupPDSTest returns few params required to run the test
-func SetupPDSTest() (string, string, string, string, string) {
+func SetupPDSTest(ControlPlaneURL string, ClusterType string, TargetClusterName string) (string, string, string, string, string, error) {
 	var err error
 	apiConf := pds.NewConfiguration()
-	endpointURL, err := url.Parse(GetAndExpectStringEnvVar(envControlPlaneURL))
+	endpointURL, err := url.Parse(ControlPlaneURL)
 	if err != nil {
-		logrus.Fatalf("An Error Occured %v", err)
+		logrus.Errorf("An Error Occured while parsing the URL %v", err)
+		return "", "", "", "", "", err
 	}
 	apiConf.Host = endpointURL.Host
 	apiConf.Scheme = endpointURL.Scheme
 
-	//ctx := context.WithValue(context.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: GetAndExpectStringEnvVar("BEARER_TOKEN"), Prefix: "Bearer"}})
 	ctx := context.WithValue(context.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: GetBearerToken(), Prefix: "Bearer"}})
 	apiClient = pds.NewAPIClient(apiConf)
 	components = pdsapi.NewComponents(ctx, apiClient)
-	controlplane := NewControlPlane(GetAndExpectStringEnvVar(envControlPlaneURL), components)
+	controlplane := NewControlPlane(ControlPlaneURL, components)
 
-	if strings.EqualFold(GetAndExpectStringEnvVar(envClusterType), "onprem") || strings.EqualFold(GetAndExpectStringEnvVar(envClusterType), "ocp") {
+	if strings.EqualFold(ClusterType, "onprem") || strings.EqualFold(ClusterType, "ocp") {
 		serviceType = "ClusterIP"
 	}
 	logrus.Infof("Deployment service type %s", serviceType)
@@ -162,9 +165,9 @@ func SetupPDSTest() (string, string, string, string, string) {
 	acc := components.Account
 	accounts, err := acc.GetAccountsList()
 	if err != nil {
-		logrus.Fatalf("An Error Occured %v", err)
+		logrus.Errorf("An Error Occured while getting account list %v", err)
+		return "", "", "", "", "", err
 	}
-	logrus.Infof("length of account %v", len(accounts))
 
 	for i := 0; i < len(accounts); i++ {
 		logrus.Infof("Account Name: %v", accounts[i].GetName())
@@ -178,7 +181,11 @@ func SetupPDSTest() (string, string, string, string, string) {
 	tenantID = tenants[0].GetId()
 	tenantName := tenants[0].GetName()
 	logrus.Infof("Tenant Details- Name: %s, UUID: %s ", tenantName, tenantID)
-	dnsZone := controlplane.GetDNSZone(tenantID)
+	dnsZone, err := controlplane.GetDNSZone(tenantID)
+	if err != nil {
+		logrus.Errorf("Error while getting DNS Zone %v ", err)
+		return "", "", "", "", "", err
+	}
 	logrus.Infof("DNSZone info - Name: %s, tenant: %s , account: %s", dnsZone, tenantName, accountName)
 	projcts := components.Project
 	projects, _ := projcts.GetprojectsList(tenantID)
@@ -186,36 +193,42 @@ func SetupPDSTest() (string, string, string, string, string) {
 	projectName := projects[0].GetName()
 	logrus.Infof("Project Details- Name: %s, UUID: %s ", projectName, projectID)
 
-	clusterID := GetClusterID(projectID, GetAndExpectStringEnvVar(envTargetClusterName))
+	clusterID, err := GetClusterID(projectID, TargetClusterName)
 	if len(clusterID) > 0 {
 		logrus.Infof("clusterID %v", clusterID)
 	} else {
-		logrus.Fatalf("Cluster ID is empty %v", clusterID)
+		logrus.Errorf("Cluster ID is empty %v", clusterID)
+		return "", "", "", "", "", err
 	}
 
 	logrus.Info("Get the Target cluster details")
-	targetClusters, _ := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
+	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
+	if err != nil {
+		logrus.Errorf("Error while listing deployments %v", err)
+		return "", "", "", "", "", err
+	}
 	for i := 0; i < len(targetClusters); i++ {
 		if targetClusters[i].GetClusterId() == clusterID {
 			deploymentTargetID = targetClusters[i].GetId()
 			logrus.Infof("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
 		}
 	}
-	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID
+	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
 }
 
 // GetClusterID retruns the cluster id for given targetClusterName
-func GetClusterID(projectID string, targetClusterName string) string {
+func GetClusterID(projectID string, targetClusterName string) (string, error) {
 	deploymentTargets, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToProject(projectID)
 	if err != nil {
-		logrus.Fatalf("An Error Occured while listing deployment targets %v", err)
+		logrus.Errorf("An Error Occured while listing deployment targets %v", err)
+		return "", err
 	}
 	for index := range deploymentTargets {
 		if deploymentTargets[index].GetName() == targetClusterName {
-			return deploymentTargets[index].GetClusterId()
+			return deploymentTargets[index].GetClusterId(), nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
 //GetStorageTemplate return the storage template id
@@ -237,13 +250,21 @@ func GetStorageTemplate(tenantID string) string {
 }
 
 // GetResourceTemplate get the resource template id and forms supported dataserviceNameIdMap
-func GetResourceTemplate(tenantID string, supportedDataServices []string) (map[string]string, map[string]string) {
+func GetResourceTemplate(tenantID string, supportedDataServices []string) (map[string]string, map[string]string, error) {
 	logrus.Infof("Get the resource template for each data services")
-	resourceTemplates, _ := components.ResourceSettingsTemplate.ListTemplates(tenantID)
+	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return nil, nil, err
+	}
 	isavailable = false
+	isTemplateavailable = false
 	for i := 0; i < len(resourceTemplates); i++ {
 		if resourceTemplates[i].GetName() == resourceTemplateName {
-			dataService, _ := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
+			isTemplateavailable = true
+			dataService, err := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
+			if err != nil {
+				return nil, nil, err
+			}
 			for dataKey := range supportedDataServices {
 				if dataService.GetName() == supportedDataServices[dataKey] {
 					logrus.Infof("Data service name: %v", dataService.GetName())
@@ -260,18 +281,20 @@ func GetResourceTemplate(tenantID string, supportedDataServices []string) (map[s
 					isavailable = true
 				}
 			}
-			isavailable = true
 		}
 	}
-	if !isavailable {
+	if !(isavailable && isTemplateavailable) {
 		logrus.Errorf("Template with Name %v does not exis", resourceTemplateName)
 	}
-	return dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap
+	return dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap, nil
 }
 
 // GetAppConfTemplate returns the app config templates
-func GetAppConfTemplate(tenantID string, dataServiceNameIDMap map[string]string) map[string]string {
-	appConfigs, _ := components.AppConfigTemplate.ListTemplates(tenantID)
+func GetAppConfTemplate(tenantID string, dataServiceNameIDMap map[string]string) (map[string]string, error) {
+	appConfigs, err := components.AppConfigTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return nil, err
+	}
 	isavailable = false
 	for i := 0; i < len(appConfigs); i++ {
 		if appConfigs[i].GetName() == appConfigTemplateName {
@@ -287,7 +310,7 @@ func GetAppConfTemplate(tenantID string, dataServiceNameIDMap map[string]string)
 	if !isavailable {
 		logrus.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
 	}
-	return dataServiceNameDefaultAppConfigMap
+	return dataServiceNameDefaultAppConfigMap, nil
 }
 
 // GetnameSpaceID returns the namespace ID
@@ -310,11 +333,14 @@ func GetnameSpaceID(namespace string, deploymentTargetID string) string {
 }
 
 // GetVersionsImage returns the required Image of dataservice version
-func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (map[string][]string, map[string][]string) {
+func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (map[string][]string, map[string][]string, error) {
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
 
-	versions, _ = components.Version.ListDataServiceVersions(dataServiceID)
+	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
+	if err != nil {
+		return nil, nil, err
+	}
 	isVersionAvailable = false
 	isBuildAvailable = false
 	for i := 0; i < len(versions); i++ {
@@ -333,7 +359,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (m
 		}
 	}
 	if !(isVersionAvailable && isBuildAvailable) {
-		logrus.Fatal("Version/Build passed is not available")
+		logrus.Errorf("Version/Build passed is not available")
 	}
 
 	for key := range dataServiceNameVersionMap {
@@ -343,15 +369,18 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (m
 	for key := range dataServiceIDImagesMap {
 		logrus.Infof("DS Verion id - %v, DS Image id - %v", key, dataServiceIDImagesMap[key])
 	}
-	return dataServiceNameVersionMap, dataServiceIDImagesMap
+	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
 }
 
 // GetAllVersionsImages returns all the versions and Images of dataservice
-func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string][]string) {
+func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string][]string, error) {
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
 
-	versions, _ = components.Version.ListDataServiceVersions(dataServiceID)
+	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
+	if err != nil {
+		return nil, nil, err
+	}
 	for i := 0; i < len(versions); i++ {
 		if *versions[i].Enabled {
 			dataServiceNameVersionMap[dataServiceID] = append(dataServiceNameVersionMap[dataServiceID], versions[i].GetId())
@@ -368,7 +397,7 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 	for key := range dataServiceIDImagesMap {
 		logrus.Infof("DS Verion id - %v,DS Image id - %v", key, dataServiceIDImagesMap[key])
 	}
-	return dataServiceNameVersionMap, dataServiceIDImagesMap
+	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
 }
 
 //ValidateDataServiceDeployment checks if deployment is healthy and running
@@ -422,11 +451,9 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 	resp, err := components.DataServiceDeployment.DeleteDeployment(deploymentID)
 	if err != nil {
 		logrus.Errorf("An Error Occured while deleting deployment %v", err)
+		return nil, err
 	}
-	if resp.StatusCode != state.StatusAccepted {
-		logrus.Errorf("HTTP response failed: %v\n", resp)
-	}
-	return resp, err
+	return resp, nil
 }
 
 // DeployDataServices deploys all dataservices, versions and images that are supported
@@ -448,11 +475,11 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 			projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[ds],
 			replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[ds], storageTemplateID)
 
-		if ds == "ZooKeeper" && replicas != 3 {
+		if ds == zookeeper && replicas != 3 {
 			logrus.Warnf("Zookeeper replicas cannot be %v, it should be 3", replicas)
 			currentReplicas = 3
 		}
-		if ds == "Redis" {
+		if ds == redis {
 			logrus.Infof("Replicas passed %v", replicas)
 			logrus.Warnf("Redis deployment replicas should be any one of the following values 1, 6, 8 and 10")
 		}
@@ -466,9 +493,15 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 			dsVersion := GetAndExpectStringEnvVar(envDsVersion)
 			dsBuild := GetAndExpectStringEnvVar(envDsBuild)
 			logrus.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
-			_, dataServiceImageMap = GetVersionsImage(dsVersion, dsBuild, id)
+			_, dataServiceImageMap, err = GetVersionsImage(dsVersion, dsBuild, id)
+			if err != nil {
+				return nil, err
+			}
 		} else {
-			_, dataServiceImageMap = GetAllVersionsImages(id)
+			_, dataServiceImageMap, err = GetAllVersionsImages(id)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		for version := range dataServiceImageMap {
@@ -491,11 +524,11 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 
 				if err != nil {
 					logrus.Warnf("An Error Occured while creating deployment %v", err)
-					return deploymentsMap, err
+					return nil, err
 				}
 				err = ValidateDataServiceDeployment(deployment)
 				if err != nil {
-					return deploymentsMap, err
+					return nil, err
 				}
 				deploymentsMap[ds] = append(deploymentsMap[ds], deployment)
 			}
@@ -519,8 +552,10 @@ func GetAllSupportedDataServices() map[string]string {
 }
 
 //ValidateDataServiceVolumes validates the volumes
-func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) (ResourceSettingTemplate, StorageOptions, StorageClassConfig) {
+func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string) (ResourceSettingTemplate, StorageOptions, StorageClassConfig, error) {
 	var config StorageClassConfig
+	var resourceTemp ResourceSettingTemplate
+	var storageOp StorageOptions
 	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), GetAndExpectStringEnvVar("NAMESPACE"))
 	if err != nil {
 		logrus.Warnf("An Error Occured while getting statefulsets %v", err)
@@ -552,9 +587,6 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 		}
 	}
 
-	var resourceTemp ResourceSettingTemplate
-	var storageOp StorageOptions
-
 	rt, err := components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateIDMap[dataService])
 	if err != nil {
 		logrus.Errorf("Error Occured while getting resource setting template %v", err)
@@ -568,11 +600,12 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	st, err := components.StorageSettingsTemplate.GetTemplate(storageTemplateID)
 	if err != nil {
 		logrus.Errorf("Error Occured while getting storage template %v", err)
+		return resourceTemp, storageOp, config, err
 	}
 	storageOp.Filesystem = st.GetFs()
 	storageOp.Replicas = st.GetRepl()
 	storageOp.VolumeGroup = st.GetFg()
 
-	return resourceTemp, storageOp, config
+	return resourceTemp, storageOp, config, nil
 
 }

@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	envControlPlaneURL    = "CONTROL_PLANE_URL"
 	envPDSTestAccountName = "TEST_ACCOUNT_NAME"
 	envTargetKubeconfig   = "TARGET_KUBECONFIG"
 	envUsername           = "PDS_USERNAME"
@@ -16,23 +15,19 @@ const (
 	envPDSClientSecret    = "PDS_CLIENT_SECRET"
 	envPDSClientID        = "PDS_CLIENT_ID"
 	envPDSISSUERURL       = "PDS_ISSUER_URL"
-	envClusterType        = "CLUSTER_TYPE"
-	envTargetClusterName  = "TARGET_CLUSTER_NAME"
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable.
 func GetAndExpectStringEnvVar(varName string) string {
 	varValue := os.Getenv(varName)
-	gomega.Expect(varValue).NotTo(gomega.BeEmpty(), "ENV "+varName+" is not set")
 	return varValue
 }
 
 // GetAndExpectIntEnvVar parses an int from env variable.
-func GetAndExpectIntEnvVar(varName string) int {
+func GetAndExpectIntEnvVar(varName string) (int, error) {
 	varValue := GetAndExpectStringEnvVar(varName)
 	varIntValue, err := strconv.Atoi(varValue)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Error Parsing "+varName)
-	return varIntValue
+	return varIntValue, err
 }
 
 // GetAndExpectBoolEnvVar parses a boolean from env variable.

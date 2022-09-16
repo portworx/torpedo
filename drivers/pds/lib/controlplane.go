@@ -26,6 +26,10 @@ type BearerToken struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+const (
+	defaultAgentWriter = "Default-AgentWriter"
+)
+
 // GetBearerToken fetches the token.
 func GetBearerToken() string {
 	username := GetAndExpectStringEnvVar(envUsername)
@@ -71,7 +75,7 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) string {
 	serviceAccounts, _ := saClient.ListServiceAccounts(tenantID)
 	var agentWriterID string
 	for _, sa := range serviceAccounts {
-		if sa.GetName() == "Default-AgentWriter" {
+		if sa.GetName() == defaultAgentWriter {
 			agentWriterID = sa.GetId()
 		}
 	}
@@ -80,18 +84,20 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) string {
 }
 
 // GetDNSZone fetches DNS zone for deployment.
-func (cp *ControlPlane) GetDNSZone(tenantID string) string {
+func (cp *ControlPlane) GetDNSZone(tenantID string) (string, error) {
 	tenantComp := cp.components.Tenant
 	tenant, err := tenantComp.GetTenant(tenantID)
 	if err != nil {
-		log.Panicf("Unable to fetch the tenant info.\n Error - %v", err)
+		log.Errorf("Unable to fetch the tenant info.\n Error - %v", err)
+		return "", err
 	}
 	log.Infof("Get DNS Zone for the tenant. Name -  %s, Id - %s", tenant.GetName(), tenant.GetId())
 	dnsModel, err := tenantComp.GetDNS(tenantID)
 	if err != nil {
-		log.Panicf("Unable to fetch the DNSZone info. \n Error - %v", err)
+		log.Errorf("Unable to fetch the DNSZone info. \n Error - %v", err)
+		return "", err
 	}
-	return dnsModel.GetDnsZone()
+	return dnsModel.GetDnsZone(), nil
 }
 
 // NewControlPlane to create control plane instance.

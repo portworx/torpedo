@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"os"
+	"net/http"
 	"strconv"
 	"testing"
 
@@ -22,6 +22,9 @@ const (
 	envDataService          = "DATA_SERVICE"
 	envDeployAllVersions    = "DEPLOY_ALL_VERSIONS"
 	envDeployAllDataService = "DEPLOY_ALL_DATASERVICE"
+	envControlPlaneURL      = "CONTROL_PLANE_URL"
+	envClusterType          = "CLUSTER_TYPE"
+	envTargetClusterName    = "TARGET_CLUSTER_NAME"
 )
 
 var (
@@ -32,6 +35,7 @@ var (
 	serviceType                             string
 	deploymentTargetID                      string
 	replicas                                int32
+	err                                     error
 	supportedDataServices                   []string
 	dataServiceNameDefaultAppConfigMap      map[string]string
 	namespaceID                             string
@@ -52,19 +56,33 @@ func TestDataService(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	logrus.Info("Starting the test in before suite...")
-	Step("get prerequisite params to run the pds tests")
-	tenantID, dnsZone, projectID, serviceType, deploymentTargetID = pdslib.SetupPDSTest()
+	Step("get prerequisite params to run the pds tests", func() {
+		ControlPlaneURL := pdslib.GetAndExpectStringEnvVar(envControlPlaneURL)
+		Expect(ControlPlaneURL).NotTo(BeEmpty(), "ENV "+envControlPlaneURL+" is not set")
+
+		ClusterType := pdslib.GetAndExpectStringEnvVar(envClusterType)
+		Expect(ClusterType).NotTo(BeEmpty(), "ENV "+envClusterType+" is not set")
+
+		TargetClusterName := pdslib.GetAndExpectStringEnvVar(envTargetClusterName)
+		Expect(TargetClusterName).NotTo(BeEmpty(), "ENV "+envTargetClusterName+" is not set")
+
+		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName)
+		Expect(err).NotTo(HaveOccurred())
+
+	})
 
 	Step("Get StorageTemplateID and Replicas", func() {
 		storageTemplateID = pdslib.GetStorageTemplate(tenantID)
 		logrus.Infof("storageTemplateID %v", storageTemplateID)
-		replicas = int32(pdslib.GetAndExpectIntEnvVar(envReplicas))
+		rep, err := pdslib.GetAndExpectIntEnvVar(envReplicas)
+		Expect(err).NotTo(HaveOccurred())
+		replicas = int32(rep)
 
 	})
 
 	Step("Create/Get Namespace and NamespaceID", func() {
 		namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
+		Expect(namespace).NotTo(BeEmpty(), "ENV "+envNamespace+" is not set")
 		namespaceID = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
 		Expect(namespaceID).NotTo(BeEmpty())
 	})
@@ -79,8 +97,12 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				logrus.Infof("supported dataservices %v", ds)
 			}
 			Step("Get the resource and app config template for supported dataservice", func() {
-				dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap = pdslib.GetResourceTemplate(tenantID, supportedDataServices)
-				dataServiceNameDefaultAppConfigMap = pdslib.GetAppConfTemplate(tenantID, dataServiceNameIDMap)
+				dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap, err = pdslib.GetResourceTemplate(tenantID, supportedDataServices)
+				Expect(err).NotTo(HaveOccurred())
+
+				dataServiceNameDefaultAppConfigMap, err = pdslib.GetAppConfTemplate(tenantID, dataServiceNameIDMap)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
 			})
 		} else {
 			Expect(pdslib.GetAndExpectBoolEnvVar(envDeployAllDataService)).To(Equal(true))
@@ -102,11 +124,13 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				storageTemplateID,
 			)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(deployements).NotTo(BeEmpty())
 			Step("Validate Storage Configurations", func() {
 				for ds, deployment := range deployements {
 					for index := range deployment {
 						logrus.Infof("data service deployed %v ", ds)
-						resourceTemp, storageOp, config := pdslib.ValidateDataServiceVolumes(deployment[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
+						resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
+						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
 						logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
 						logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
@@ -133,8 +157,9 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				Step("Delete created deployments")
 				for _, dep := range deployements {
 					for index := range dep {
-						_, err := pdslib.DeleteDeployment(dep[index].GetId())
+						resp, err := pdslib.DeleteDeployment(dep[index].GetId())
 						Expect(err).NotTo(HaveOccurred())
+						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
 					}
 				}
 			}()
@@ -158,9 +183,18 @@ var _ = Describe("{DeployAllDataServices}", func() {
 			for index := range supportedDataServices {
 				logrus.Infof("supported data service %v ", supportedDataServices[index])
 			}
-			Step("Get the resource and app config template for supported dataservice")
-			dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap = pdslib.GetResourceTemplate(tenantID, supportedDataServices)
-			dataServiceNameDefaultAppConfigMap = pdslib.GetAppConfTemplate(tenantID, dataServiceNameIDMap)
+			Step("Get the resource and app config template for supported dataservice", func() {
+				dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap, err = pdslib.GetResourceTemplate(tenantID, supportedDataServices)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataServiceDefaultResourceTemplateIDMap).NotTo(BeEmpty())
+				Expect(dataServiceNameIDMap).NotTo(BeEmpty())
+
+				dataServiceNameDefaultAppConfigMap, err = pdslib.GetAppConfTemplate(tenantID, dataServiceNameIDMap)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
+
+			})
+
 		})
 
 	})
@@ -183,7 +217,8 @@ var _ = Describe("{DeployAllDataServices}", func() {
 				for ds, deployment := range deployements {
 					for index := range deployment {
 						logrus.Infof("data service deployed %v ", ds)
-						resourceTemp, storageOp, config := pdslib.ValidateDataServiceVolumes(deployment[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
+						resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
+						Expect(err).NotTo(HaveOccurred())
 						logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
 						logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
 						logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
@@ -218,8 +253,8 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
+// func TestMain(m *testing.M) {
+// 	// call flag.Parse() here if TestMain uses flags
+// 	ParseFlags()
+// 	os.Exit(m.Run())
+// }

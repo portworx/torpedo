@@ -5075,7 +5075,6 @@ func (k *K8s) CreateCsiSnapsAndValidate(ctx *scheduler.Context, snapClass string
 		return err
 	}
 
-
 	originalPVCName := "fada-basic-pvc"
 	snapName := "fada-basic-pvc-snapshot" + timestamp
 	restoredPVCName := "fada-basic-pvc-restored" + timestamp
@@ -5096,12 +5095,12 @@ func (k *K8s) CreateCsiSnapsAndValidate(ctx *scheduler.Context, snapClass string
 
 	if err = k.waitForPodToBeReady(originalPod.Name, originalPod.Namespace); err != nil {
 		return &scheduler.ErrFailedToSchedulePod{
-			App: nil,
-			Cause:   fmt.Sprintf("Original pod is not ready. Error: %v", err),
+			App:   nil,
+			Cause: fmt.Sprintf("Original pod is not ready. Error: %v", err),
 		}
 	}
 	fmt.Println("Original pod up and running, creating multiple snapshots and verify")
-	for i :=0; i < 3; i++ {
+	for i := 0; i < 3; i++ {
 		data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
 		err = k.createSnapshotAndVerify(data, fmt.Sprint(snapName, i), namespace, snapClass, fmt.Sprint(restoredPVCName, i), originalPod.Name, originalPVC.Name)
 		if err != nil {
@@ -5122,7 +5121,7 @@ func (k *K8s) createSnapshotAndVerify(data, snapName, namespace, snapClass, rest
 	}
 	cmdArgs2 := []string{"exec", "-it", originalPod, "-n", namespace, "--", "/bin/sh", "-c", fmt.Sprintf("echo -n %s >>  /mnt/volume1/aaaa.txt", data)}
 	command2 := exec.Command("kubectl", cmdArgs2...)
-	_ , err = command2.Output()
+	_, err = command2.Output()
 	if err != nil {
 		logrus.Errorf("Failed to write data to pod: %s", err)
 		return err
@@ -5131,7 +5130,7 @@ func (k *K8s) createSnapshotAndVerify(data, snapName, namespace, snapClass, rest
 	// Sync the data, wait 10 secs and then proceed to snapshot the volume
 	cmdArgs3 := []string{"exec", "-it", originalPod, "-n", namespace, "--", "/bin/sync"}
 	command3 := exec.Command("kubectl", cmdArgs3...)
-	_ , err = command3.Output()
+	_, err = command3.Output()
 	if err != nil {
 		logrus.Errorf("Failed to sync: err")
 		return err
@@ -5149,7 +5148,7 @@ func (k *K8s) createSnapshotAndVerify(data, snapName, namespace, snapClass, rest
 	restoredPVCSpec := MakePVCFromSnapshot(namespace, restoredPVCName, volSnapshot.Name, elasticsearchSC)
 	restoredPVC, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
 	if err != nil {
-		logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err )
+		logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err)
 		return err
 	}
 	logrus.Infof("Successfully restored PVC %s, proceed to mount to a new pod", restoredPVC.Name)
@@ -5162,8 +5161,8 @@ func (k *K8s) createSnapshotAndVerify(data, snapName, namespace, snapClass, rest
 
 	if err = k.waitForPodToBeReady(restoredPod.Name, namespace); err != nil {
 		return &scheduler.ErrFailedToSchedulePod{
-			App: nil,
-			Cause:   fmt.Sprintf("restored pod is not ready. Error: %v", err),
+			App:   nil,
+			Cause: fmt.Sprintf("restored pod is not ready. Error: %v", err),
 		}
 	}
 	// Run a cat command from within the pod to verify the content of dirtydata
@@ -5176,7 +5175,6 @@ func (k *K8s) createSnapshotAndVerify(data, snapName, namespace, snapClass, rest
 	logrus.Info("Validation complete")
 	return nil
 }
-
 
 // MakePod Returns a pod definition based on the namespace. The pod references the PVC's
 // name.  A slice of BASH commands can be supplied as args to be run by the pod
