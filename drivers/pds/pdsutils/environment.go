@@ -31,7 +31,7 @@ type Environment struct {
 	PDSTargetClusterType string
 }
 
-// MustHaveEnvVariables ljsas
+// MustHaveEnvVariables return emnvironment variables.
 func MustHaveEnvVariables() Environment {
 	return Environment{
 		PDSControlPlaneURL:   mustGetEnvVariable(envControlPlaneURL),
@@ -46,7 +46,7 @@ func MustHaveEnvVariables() Environment {
 	}
 }
 
-// mustGetEnvVariable jasljla
+// mustGetEnvVariable return environment variable.
 func mustGetEnvVariable(key string) string {
 	value, isExist := os.LookupEnv(key)
 	if !isExist {

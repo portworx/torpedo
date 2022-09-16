@@ -14,7 +14,7 @@ type PDSVersion struct {
 	apiClient *pds.APIClient
 }
 
-// GetHelmChartVersion func
+// GetHelmChartVersion function return latest pds helm chart version.
 func (v *PDSVersion) GetHelmChartVersion() (string, error) {
 	versionClient := v.apiClient.APIVersionApi
 	ctx, err := pdsutils.GetContext()

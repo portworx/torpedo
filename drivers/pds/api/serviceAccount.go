@@ -13,7 +13,7 @@ type ServiceAccount struct {
 	apiClient *pds.APIClient
 }
 
-// ListServiceAccounts func
+// ListServiceAccounts return service accounts models for a tenant.
 func (sa *ServiceAccount) ListServiceAccounts(tenantID string) ([]pds.ModelsServiceAccount, error) {
 	saClient := sa.apiClient.ServiceAccountsApi
 	ctx, err := pdsutils.GetContext()
@@ -30,7 +30,7 @@ func (sa *ServiceAccount) ListServiceAccounts(tenantID string) ([]pds.ModelsServ
 	return saModels.GetData(), nil
 }
 
-// GetServiceAccount func
+// GetServiceAccount return service account model.
 func (sa *ServiceAccount) GetServiceAccount(serviceAccountID string) (*pds.ControllersServiceAccountResponse, error) {
 	saClient := sa.apiClient.ServiceAccountsApi
 	ctx, err := pdsutils.GetContext()
@@ -47,7 +47,7 @@ func (sa *ServiceAccount) GetServiceAccount(serviceAccountID string) (*pds.Contr
 	return saModel, nil
 }
 
-// CreateServiceAccountToken func
+// CreateServiceAccountToken return newly created service account.
 func (sa *ServiceAccount) CreateServiceAccountToken(tenantID string, name string) (*pds.ModelsServiceAccount, error) {
 	saClient := sa.apiClient.ServiceAccountsApi
 	createRequest := pds.ControllersCreateServiceAccountRequest{Name: &name}
@@ -66,7 +66,7 @@ func (sa *ServiceAccount) CreateServiceAccountToken(tenantID string, name string
 	return saModel, nil
 }
 
-// GetServiceAccountToken func
+// GetServiceAccountToken return service account token.
 func (sa *ServiceAccount) GetServiceAccountToken(serviceAccountID string) (*pds.ControllersServiceAccountTokenResponse, error) {
 	saClient := sa.apiClient.ServiceAccountsApi
 	ctx, err := pdsutils.GetContext()
@@ -84,7 +84,7 @@ func (sa *ServiceAccount) GetServiceAccountToken(serviceAccountID string) (*pds.
 	return saModel, nil
 }
 
-// DeleteServiceAccount func
+// DeleteServiceAccount delete service account and return status.
 func (sa *ServiceAccount) DeleteServiceAccount(serviceAccountID string) (*status.Response, error) {
 	saClient := sa.apiClient.ServiceAccountsApi
 	ctx, err := pdsutils.GetContext()

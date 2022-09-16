@@ -13,7 +13,7 @@ type Backup struct {
 	apiClient *pds.APIClient
 }
 
-// ListBackup func
+// ListBackup return pds backup models.
 func (backup *Backup) ListBackup(deploymentID string) ([]pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
 	ctx, err := pdsutils.GetContext()
@@ -30,7 +30,7 @@ func (backup *Backup) ListBackup(deploymentID string) ([]pds.ModelsBackup, error
 	return backupModels.GetData(), err
 }
 
-// ListBackupsBelongToTarget func
+// ListBackupsBelongToTarget return pds backup models specific to a backup target.
 func (backup *Backup) ListBackupsBelongToTarget(backupTargetID string) ([]pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
 	ctx, err := pdsutils.GetContext()
@@ -47,7 +47,7 @@ func (backup *Backup) ListBackupsBelongToTarget(backupTargetID string) ([]pds.Mo
 	return backupModels.GetData(), err
 }
 
-// GetBackup func
+// GetBackup return pds backup model.
 func (backup *Backup) GetBackup(backupID string) (*pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
 	ctx, err := pdsutils.GetContext()
@@ -64,7 +64,7 @@ func (backup *Backup) GetBackup(backupID string) (*pds.ModelsBackup, error) {
 	return backuptModel, err
 }
 
-// CreateBackup func
+// CreateBackup create adhoc/schedule backup and return the newly create backup model.
 func (backup *Backup) CreateBackup(deploymentID string, backupTargetID string, jobHistoryLimit int32, isAdhoc bool) (*pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
 	backupType := "adhoc"
@@ -92,7 +92,7 @@ func (backup *Backup) CreateBackup(deploymentID string, backupTargetID string, j
 
 }
 
-// UpdateBackup func
+// UpdateBackup return updated backup model.
 func (backup *Backup) UpdateBackup(backupID string, jobHistoryLimit int32) (*pds.ModelsBackup, error) {
 	backupClient := backup.apiClient.BackupsApi
 	updateRequest := pds.ControllersUpdateBackupRequest{
@@ -112,7 +112,7 @@ func (backup *Backup) UpdateBackup(backupID string, jobHistoryLimit int32) (*pds
 
 }
 
-// DeleteBackupJobs func
+// DeleteBackupJobs delete the backup job and return the status.
 func (backup *Backup) DeleteBackupJobs(backupID string, jobName string) (*status.Response, error) {
 	backupClient := backup.apiClient.BackupsApi
 	ctx, err := pdsutils.GetContext()
@@ -129,7 +129,7 @@ func (backup *Backup) DeleteBackupJobs(backupID string, jobName string) (*status
 	return res, nil
 }
 
-// DeleteBackup func
+// DeleteBackup delete the backup and return the status.
 func (backup *Backup) DeleteBackup(backupID string) (*status.Response, error) {
 	backupClient := backup.apiClient.BackupsApi
 	ctx, err := pdsutils.GetContext()

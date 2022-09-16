@@ -13,7 +13,7 @@ type BackupTarget struct {
 	apiClient *pds.APIClient
 }
 
-// ListBackupTarget func
+// ListBackupTarget return backup targets models.
 func (backupTarget *BackupTarget) ListBackupTarget(tenantID string) ([]pds.ModelsBackupTarget, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	ctx, err := pdsutils.GetContext()
@@ -30,7 +30,7 @@ func (backupTarget *BackupTarget) ListBackupTarget(tenantID string) ([]pds.Model
 	return backupTargetModels.GetData(), err
 }
 
-// LisBackupsStateBelongToBackupTarget func
+// LisBackupsStateBelongToBackupTarget return backup targets state models w.r.t to particular target.
 func (backupTarget *BackupTarget) LisBackupsStateBelongToBackupTarget(backuptargetID string) ([]pds.ModelsBackupTargetState, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	ctx, err := pdsutils.GetContext()
@@ -47,7 +47,7 @@ func (backupTarget *BackupTarget) LisBackupsStateBelongToBackupTarget(backuptarg
 	return backupTargetModel.GetData(), err
 }
 
-// GetBackupTarget func
+// GetBackupTarget return backup target model.
 func (backupTarget *BackupTarget) GetBackupTarget(backupTargetID string) (*pds.ModelsBackupTarget, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	ctx, err := pdsutils.GetContext()
@@ -64,7 +64,7 @@ func (backupTarget *BackupTarget) GetBackupTarget(backupTargetID string) (*pds.M
 	return backupTargetModel, err
 }
 
-// CreateBackupTarget func
+// CreateBackupTarget return newly created backup target model.
 func (backupTarget *BackupTarget) CreateBackupTarget(tenantID string, name string, backupCredentialsID string, bucket string, region string, backupType string) (*pds.ModelsBackupTarget, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	createRequest := pds.ControllersCreateTenantBackupTarget{
@@ -88,7 +88,7 @@ func (backupTarget *BackupTarget) CreateBackupTarget(tenantID string, name strin
 
 }
 
-// UpdateBackupTarget func
+// UpdateBackupTarget return updated backup target model.
 func (backupTarget *BackupTarget) UpdateBackupTarget(backupTaregetID string, name string) (*pds.ModelsBackupTarget, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	updateRequest := pds.ControllersUpdateBackupTargetRequest{
@@ -108,7 +108,7 @@ func (backupTarget *BackupTarget) UpdateBackupTarget(backupTaregetID string, nam
 
 }
 
-// SyncToBackupLocation func
+// SyncToBackupLocation returned synced backup target model.
 func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string, name string) (*pds.ModelsBackupTarget, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	updateRequest := pds.ControllersUpdateBackupTargetRequest{
@@ -127,7 +127,7 @@ func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string, n
 	return backupTargetModel, err
 }
 
-// DeleteBackupTarget func
+// DeleteBackupTarget delete backup target and return status.
 func (backupTarget *BackupTarget) DeleteBackupTarget(backupTaregetID string) (*status.Response, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	ctx, err := pdsutils.GetContext()

@@ -15,7 +15,7 @@ type Account struct {
 	apiClient *pds.APIClient
 }
 
-// GetAccountsList func
+// GetAccountsList return pds accounts model.
 func (account *Account) GetAccountsList() ([]pds.ModelsAccount, error) {
 	client := account.apiClient.AccountsApi
 	log.Info("Get list of Accounts.")
@@ -34,7 +34,7 @@ func (account *Account) GetAccountsList() ([]pds.ModelsAccount, error) {
 	return accountsModel.GetData(), nil
 }
 
-// GetAccount func
+// GetAccount return pds account model.
 func (account *Account) GetAccount(accountID string) (*pds.ModelsAccount, error) {
 	client := account.apiClient.AccountsApi
 	log.Infof("Get the account detail having UUID: %v", accountID)
@@ -53,7 +53,7 @@ func (account *Account) GetAccount(accountID string) (*pds.ModelsAccount, error)
 	return accountModel, nil
 }
 
-// GetAccountUsers func
+// GetAccountUsers return pds user model.
 func (account *Account) GetAccountUsers(accountID string) ([]pds.ModelsUser, error) {
 	client := account.apiClient.AccountsApi
 	accountInfo, _ := account.GetAccount(accountID)
@@ -72,7 +72,7 @@ func (account *Account) GetAccountUsers(accountID string) ([]pds.ModelsUser, err
 	return usersModel.GetData(), nil
 }
 
-// AcceptEULA func
+// AcceptEULA function accept the license for newly created account.
 func (account *Account) AcceptEULA(accountID string, eulaVersion string) error {
 	client := account.apiClient.AccountsApi
 	accountInfo, _ := account.GetAccount(accountID)

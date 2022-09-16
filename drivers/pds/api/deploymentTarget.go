@@ -13,7 +13,7 @@ type DeploymentTarget struct {
 	apiClient *pds.APIClient
 }
 
-// ListDeploymentTargetsBelongsToTenant func
+// ListDeploymentTargetsBelongsToTenant return deployment targets models for a tenant.
 func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToTenant(tenantID string) ([]pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	ctx, err := pdsutils.GetContext()
@@ -31,7 +31,7 @@ func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToTenant(tenantID string
 	return dtModels.GetData(), nil
 }
 
-// ListDeploymentTargetsBelongsToProject func
+// ListDeploymentTargetsBelongsToProject return deployment targets models for a project.
 func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToProject(projectID string) ([]pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	ctx, err := pdsutils.GetContext()
@@ -49,7 +49,7 @@ func (dt *DeploymentTarget) ListDeploymentTargetsBelongsToProject(projectID stri
 	return dtModels.GetData(), nil
 }
 
-// GetTarget func
+// GetTarget return deployment target model.
 func (dt *DeploymentTarget) GetTarget(targetID string) (*pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	log.Infof("Get cluster details having uuid - %v", targetID)
@@ -67,7 +67,7 @@ func (dt *DeploymentTarget) GetTarget(targetID string) (*pds.ModelsDeploymentTar
 	return dtModel, nil
 }
 
-// UpdateTarget func
+// UpdateTarget return updated deployment target model.
 func (dt *DeploymentTarget) UpdateTarget(targetID string, name string) (*pds.ModelsDeploymentTarget, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	log.Infof("Get cluster details having uuid - %v", targetID)
@@ -86,7 +86,7 @@ func (dt *DeploymentTarget) UpdateTarget(targetID string, name string) (*pds.Mod
 	return dtModel, nil
 }
 
-// DeleteTarget func
+// DeleteTarget delete the deployment target and return status.
 func (dt *DeploymentTarget) DeleteTarget(targetID string) (*status.Response, error) {
 	dtClient := dt.apiClient.DeploymentTargetsApi
 	log.Infof("Get cluster details having uuid - %v", targetID)

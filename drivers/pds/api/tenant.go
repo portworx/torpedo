@@ -13,7 +13,7 @@ type Tenant struct {
 	apiClient *pds.APIClient
 }
 
-// GetTenantsList func
+// GetTenantsList return pds tenants models.
 func (tenant *Tenant) GetTenantsList(accountID string) ([]pds.ModelsTenant, error) {
 	tenantClient := tenant.apiClient.TenantsApi
 	log.Info("Get list of tenants.")
@@ -32,7 +32,7 @@ func (tenant *Tenant) GetTenantsList(accountID string) ([]pds.ModelsTenant, erro
 	return tenantsModel.GetData(), nil
 }
 
-// GetTenant func
+// GetTenant return tenant model.
 func (tenant *Tenant) GetTenant(tenantID string) (*pds.ModelsTenant, error) {
 	tenantClient := tenant.apiClient.TenantsApi
 	log.Info("Get tenant.")
@@ -51,7 +51,7 @@ func (tenant *Tenant) GetTenant(tenantID string) (*pds.ModelsTenant, error) {
 	return tenantModel, nil
 }
 
-// GetDNS func
+// GetDNS return DNS details for the tenant.
 func (tenant *Tenant) GetDNS(tenantID string) (*pds.ModelsDNSDetails, error) {
 	tenantClient := tenant.apiClient.TenantsApi
 	log.Info("Get tenant.")

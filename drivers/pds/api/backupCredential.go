@@ -13,7 +13,7 @@ type BackupCredential struct {
 	apiClient *pds.APIClient
 }
 
-// ListBackupCredentials func
+// ListBackupCredentials return backup credentials model.
 func (backupCredential *BackupCredential) ListBackupCredentials(tenantID string) ([]pds.ModelsBackupCredentials, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
 	ctx, err := pdsutils.GetContext()
@@ -30,7 +30,7 @@ func (backupCredential *BackupCredential) ListBackupCredentials(tenantID string)
 	return backupModels.GetData(), err
 }
 
-// GetBackupCredential func
+// GetBackupCredential return back upo credential model.
 func (backupCredential *BackupCredential) GetBackupCredential(backupCredID string) (*pds.ModelsBackupCredentials, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
 	ctx, err := pdsutils.GetContext()

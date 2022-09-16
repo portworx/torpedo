@@ -14,7 +14,7 @@ type Version struct {
 	apiClient *pds.APIClient
 }
 
-// ListDataServiceVersions func
+// ListDataServiceVersions return pds versions models.
 func (v *Version) ListDataServiceVersions(dataServiceID string) ([]pds.ModelsVersion, error) {
 	versionClient := v.apiClient.VersionsApi
 	ctx, err := pdsutils.GetContext()
@@ -30,7 +30,7 @@ func (v *Version) ListDataServiceVersions(dataServiceID string) ([]pds.ModelsVer
 	return versionModels.GetData(), err
 }
 
-// GetVersion func
+// GetVersion return pds version model.
 func (v *Version) GetVersion(versionID string) (*pds.ModelsVersion, error) {
 	versionClient := v.apiClient.VersionsApi
 	ctx, err := pdsutils.GetContext()

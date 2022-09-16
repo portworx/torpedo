@@ -13,7 +13,7 @@ type DataService struct {
 	apiClient *pds.APIClient
 }
 
-// ListDataServices func
+// ListDataServices return data services models.
 func (ds *DataService) ListDataServices() ([]pds.ModelsDataService, error) {
 	dsClient := ds.apiClient.DataServicesApi
 	ctx, err := pdsutils.GetContext()
@@ -30,7 +30,7 @@ func (ds *DataService) ListDataServices() ([]pds.ModelsDataService, error) {
 	return dsModels.GetData(), err
 }
 
-// GetDataService func
+// GetDataService return data service model.
 func (ds *DataService) GetDataService(dataServiceID string) (*pds.ModelsDataService, error) {
 	dsClient := ds.apiClient.DataServicesApi
 	ctx, err := pdsutils.GetContext()

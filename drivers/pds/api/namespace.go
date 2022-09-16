@@ -14,7 +14,7 @@ type Namespace struct {
 	apiClient *pds.APIClient
 }
 
-// ListNamespaces func
+// ListNamespaces return namespaces models in a target cluster.
 func (ns *Namespace) ListNamespaces(targetID string) ([]pds.ModelsNamespace, error) {
 	nsClient := ns.apiClient.NamespacesApi
 	ctx, err := pdsutils.GetContext()
@@ -31,7 +31,7 @@ func (ns *Namespace) ListNamespaces(targetID string) ([]pds.ModelsNamespace, err
 	return nsModels.GetData(), err
 }
 
-// CreateNamespace func
+// CreateNamespace return newly created namespaces model in the target cluster.
 func (ns *Namespace) CreateNamespace(targetID string, name string) (*pds.ModelsNamespace, error) {
 	nsClient := ns.apiClient.NamespacesApi
 
@@ -51,7 +51,7 @@ func (ns *Namespace) CreateNamespace(targetID string, name string) (*pds.ModelsN
 	return nsModel, nil
 }
 
-// GetNamespace func
+// GetNamespace return namespaces model in the target cluster.
 func (ns *Namespace) GetNamespace(namespaceID string) (*pds.ModelsNamespace, error) {
 	nsClient := ns.apiClient.NamespacesApi
 	ctx, err := pdsutils.GetContext()
@@ -69,7 +69,7 @@ func (ns *Namespace) GetNamespace(namespaceID string) (*pds.ModelsNamespace, err
 	return nsModel, nil
 }
 
-// DeleteNamespace func
+// DeleteNamespace delete the namespace and return status.
 func (ns *Namespace) DeleteNamespace(namespaceID string) (*status.Response, error) {
 	nsClient := ns.apiClient.NamespacesApi
 	ctx, err := pdsutils.GetContext()

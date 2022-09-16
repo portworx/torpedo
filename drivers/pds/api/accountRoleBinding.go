@@ -14,7 +14,7 @@ type AccountRoleBinding struct {
 	apiClient *pds.APIClient
 }
 
-// ListAccountsRoleBindings func
+// ListAccountsRoleBindings function return pds account role bindings model.
 func (accountRoleBinding *AccountRoleBinding) ListAccountsRoleBindings(accountID string) ([]pds.ModelsAccountRoleBinding, error) {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
 	log.Info("List Account Role Bindings.")
@@ -32,7 +32,7 @@ func (accountRoleBinding *AccountRoleBinding) ListAccountsRoleBindings(accountID
 	return accountRoleBindings.GetData(), nil
 }
 
-// ListAccountRoleBindingsOfUser func
+// ListAccountRoleBindingsOfUser function return pds account role bindings model for a given user.
 func (accountRoleBinding *AccountRoleBinding) ListAccountRoleBindingsOfUser(userID string) ([]pds.ModelsAccountRoleBinding, error) {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
 	ctx, err := pdsutils.GetContext()
@@ -49,7 +49,7 @@ func (accountRoleBinding *AccountRoleBinding) ListAccountRoleBindingsOfUser(user
 	return accRoleModels.GetData(), nil
 }
 
-// UpdateAccountRoleBinding func
+// UpdateAccountRoleBinding function return the updated pds account role binding model.
 func (accountRoleBinding *AccountRoleBinding) UpdateAccountRoleBinding(accountID string, actorID string, actorType string, roleName string) (*pds.ModelsAccountRoleBinding, error) {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
 	updateReq := pds.ControllersUpsertAccountRoleBindingRequest{ActorId: &actorID, ActorType: &actorType, RoleName: &roleName}
@@ -68,7 +68,7 @@ func (accountRoleBinding *AccountRoleBinding) UpdateAccountRoleBinding(accountID
 	return accRoleBinding, nil
 }
 
-// AddUser func
+// AddUser function add new user with admin/nonadmin role.
 func (accountRoleBinding *AccountRoleBinding) AddUser(accountID string, email string, isAdmin bool) error {
 	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
 	rBinding := "account-reader"

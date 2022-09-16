@@ -14,7 +14,7 @@ type DataServiceDeployment struct {
 	apiClient *pds.APIClient
 }
 
-// ListDeployments func
+// ListDeployments return deployments models for a given project.
 func (ds *DataServiceDeployment) ListDeployments(projectID string) ([]pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
@@ -32,23 +32,20 @@ func (ds *DataServiceDeployment) ListDeployments(projectID string) ([]pds.Models
 	return dsModels.GetData(), err
 }
 
-// CreateDeployment func
+// CreateDeployment return newly created deployment model.
 func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	createRequest := pds.ControllersCreateProjectDeployment{
-		// ApplicationConfigurationOverrides:  &appConfigOverride,
 		ApplicationConfigurationTemplateId: &appConfigID,
 		DeploymentTargetId:                 &deploymentTargetID,
 		DnsZone:                            &dnsZone,
 		ImageId:                            &imageID,
-		// LoadBalancerSourceRanges: lbSourceRange,
-		Name:        &name,
-		NamespaceId: &namespaceID,
-		NodeCount:   &nodeCount,
-		// ScheduledBackup:                    &scheduledBackup,
-		ResourceSettingsTemplateId: &resourceTemplateID,
-		ServiceType:                &serviceType,
-		StorageOptionsTemplateId:   &storageTemplateID,
+		Name:                               &name,
+		NamespaceId:                        &namespaceID,
+		NodeCount:                          &nodeCount,
+		ResourceSettingsTemplateId:         &resourceTemplateID,
+		ServiceType:                        &serviceType,
+		StorageOptionsTemplateId:           &storageTemplateID,
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
@@ -64,7 +61,7 @@ func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTa
 	return dsModel, err
 }
 
-// CreateDeploymentWithScehduleBackup func
+// CreateDeploymentWithScehduleBackup return newly created deployment model with schedule backup enabled.
 func (ds *DataServiceDeployment) CreateDeploymentWithScehduleBackup(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string, backupPolicyID string, backupTargetID string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	scheduledBackup := pds.ControllersCreateDeploymentScheduledBackup{
@@ -98,7 +95,7 @@ func (ds *DataServiceDeployment) CreateDeploymentWithScehduleBackup(projectID st
 	return dsModel, err
 }
 
-// GetDeployment func
+// GetDeployment return deployment model.
 func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
@@ -114,7 +111,7 @@ func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.Models
 	return dsModel, err
 }
 
-// GetDeploymentSatus func
+// GetDeploymentSatus return deployment status.
 func (ds *DataServiceDeployment) GetDeploymentSatus(deploymentID string) (*pds.ControllersStatusResponse, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
@@ -131,7 +128,7 @@ func (ds *DataServiceDeployment) GetDeploymentSatus(deploymentID string) (*pds.C
 	return dsModel, err
 }
 
-// GetDeploymentEvents func
+// GetDeploymentEvents return events on the given deployment.
 func (ds *DataServiceDeployment) GetDeploymentEvents(deploymentID string) (*pds.ControllersEventsResponse, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
@@ -148,7 +145,7 @@ func (ds *DataServiceDeployment) GetDeploymentEvents(deploymentID string) (*pds.
 	return dsModel, err
 }
 
-// GetDeploymentCredentials func
+// GetDeploymentCredentials return deployment credentials.
 func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (*pds.DeploymentsCredentials, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
@@ -165,7 +162,7 @@ func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (
 	return dsModel, err
 }
 
-// GetConnectionDetails func
+// GetConnectionDetails return connection details for the given deployment.
 func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.DeploymentsConnectionDetails, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
@@ -182,7 +179,7 @@ func (ds *DataServiceDeployment) GetConnectionDetails(deploymentID string) (pds.
 	return dsModel.GetConnectionDetails(), err
 }
 
-// DeleteDeployment func
+// DeleteDeployment delete deployment and return status.
 func (ds *DataServiceDeployment) DeleteDeployment(deploymentID string) (*status.Response, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()

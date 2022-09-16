@@ -47,7 +47,7 @@ type TargetCluster struct {
 	kubeconfig string
 }
 
-// RegisterToControlPlane PDS
+// RegisterToControlPlane register the target cluster to control plane.
 func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL string, helmChartversion string, bearerToken string, tenantID string, clusterType string) error {
 	log.Info("Test control plane url connectivity.")
 	_, err := isReachbale(controlPlaneURL)
@@ -67,8 +67,7 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 	log.Info(cmd)
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
-		log.Info("Kindly remove the PDS chart properly and retry if that helps(or slack us for more details). CMD>> helm uninstall  pds --namespace pds-system --kubeconfig $KUBECONFIG")
-		log.Panic(err)
+		log.Info("Kindly remove the PDS chart properly and retry if that helps. CMD>> helm uninstall  pds --namespace pds-system --kubeconfig $KUBECONFIG")
 		return err
 	}
 	log.Infof("Terminal output -> %v", output)
@@ -79,6 +78,7 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 	return err
 }
 
+// isReachbale verify if the control plane is accessable.
 func isReachbale(url string) (bool, error) {
 	timeout := time.Duration(15 * time.Second)
 	client := http.Client{
@@ -143,7 +143,7 @@ func (targetCluster *TargetCluster) GetClusterID() (string, error) {
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
 		log.Error(err)
-		return "Connection Refused!!", err
+		return "Unable to fetch the cluster ID.", err
 	}
 	return output, nil
 }

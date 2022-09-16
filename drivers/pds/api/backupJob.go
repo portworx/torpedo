@@ -13,7 +13,7 @@ type BackupJob struct {
 	apiClient *pds.APIClient
 }
 
-// ListBackupJobs func
+// ListBackupJobs return back up jobs models.
 func (backupJob *BackupJob) ListBackupJobs(backupID string) ([]pds.ControllersBackupJobStatus, error) {
 	backupJobClient := backupJob.apiClient.BackupJobsApi
 	ctx, err := pdsutils.GetContext()
@@ -30,7 +30,7 @@ func (backupJob *BackupJob) ListBackupJobs(backupID string) ([]pds.ControllersBa
 	return backupJobModels.GetData(), err
 }
 
-// GetBackupJob func
+// GetBackupJob return backup job model.
 func (backupJob *BackupJob) GetBackupJob(backupJobID string) (*pds.ModelsBackupJob, error) {
 	backupJobClient := backupJob.apiClient.BackupJobsApi
 	ctx, err := pdsutils.GetContext()

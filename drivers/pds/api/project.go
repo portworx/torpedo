@@ -13,7 +13,7 @@ type Project struct {
 	apiClient *pds.APIClient
 }
 
-// GetprojectsList func
+// GetprojectsList return pds projects models.
 func (project *Project) GetprojectsList(tenantID string) ([]pds.ModelsProject, error) {
 	projectClient := project.apiClient.ProjectsApi
 	log.Info("Get list of Projects.")
@@ -32,7 +32,7 @@ func (project *Project) GetprojectsList(tenantID string) ([]pds.ModelsProject, e
 	return projectsModel.GetData(), nil
 }
 
-// Getproject func
+// Getproject return project model.
 func (project *Project) Getproject(projectID string) (*pds.ModelsProject, error) {
 	projectClient := project.apiClient.ProjectsApi
 	log.Info("Get the project details.")

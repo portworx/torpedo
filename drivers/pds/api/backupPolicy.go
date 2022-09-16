@@ -13,7 +13,7 @@ type BackupPolicy struct {
 	apiClient *pds.APIClient
 }
 
-// ListBackupPolicy func
+// ListBackupPolicy return backup policy models.
 func (backupPolicy *BackupPolicy) ListBackupPolicy(tenantID string) ([]pds.ModelsBackupPolicy, error) {
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
 	ctx, err := pdsutils.GetContext()
@@ -30,7 +30,7 @@ func (backupPolicy *BackupPolicy) ListBackupPolicy(tenantID string) ([]pds.Model
 	return backupModels.GetData(), err
 }
 
-// GetBackupPolicy func
+// GetBackupPolicy return backup policy model.
 func (backupPolicy *BackupPolicy) GetBackupPolicy(backupCredID string) (*pds.ModelsBackupPolicy, error) {
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
 	ctx, err := pdsutils.GetContext()
@@ -47,7 +47,7 @@ func (backupPolicy *BackupPolicy) GetBackupPolicy(backupCredID string) (*pds.Mod
 	return backupPolicyModel, err
 }
 
-// CreateBackupPolicy func
+// CreateBackupPolicy return newly created backup policy model.
 func (backupPolicy *BackupPolicy) CreateBackupPolicy(tenantID string, name string, retentionCount int32, scheduleCronExpression string, backupType string) (*pds.ModelsBackupPolicy, error) {
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
 	modelBackupSchedule := []pds.ModelsBackupSchedule{{
@@ -73,7 +73,7 @@ func (backupPolicy *BackupPolicy) CreateBackupPolicy(tenantID string, name strin
 
 }
 
-// UpdateBackupPolicy func
+// UpdateBackupPolicy return updated backup policy model.
 func (backupPolicy *BackupPolicy) UpdateBackupPolicy(backupCredsID string, name string, retentionCount int32, scheduleCronExpression string, backupType string) (*pds.ModelsBackupPolicy, error) {
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
 	modelBackupSchedule := []pds.ModelsBackupSchedule{{
@@ -99,7 +99,7 @@ func (backupPolicy *BackupPolicy) UpdateBackupPolicy(backupCredsID string, name 
 
 }
 
-// DeleteBackupPolicy func
+// DeleteBackupPolicy delete backup policy.
 func (backupPolicy *BackupPolicy) DeleteBackupPolicy(backupCredsID string) (*status.Response, error) {
 	backupClient := backupPolicy.apiClient.BackupPoliciesApi
 	ctx, err := pdsutils.GetContext()

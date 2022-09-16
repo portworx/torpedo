@@ -14,7 +14,7 @@ type AppConfigTemplate struct {
 	apiClient *pds.APIClient
 }
 
-// ListTemplates func
+// ListTemplates return app configuration templates model.
 func (at *AppConfigTemplate) ListTemplates(tenantID string) ([]pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	ctx, err := pdsutils.GetContext()
@@ -32,7 +32,7 @@ func (at *AppConfigTemplate) ListTemplates(tenantID string) ([]pds.ModelsApplica
 	return atModel.GetData(), nil
 }
 
-// GetTemplate func
+// GetTemplate return app configurationtemplate model.
 func (at *AppConfigTemplate) GetTemplate(templateID string) (*pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	log.Infof("Get list of storage templates for tenant ID - %v", templateID)
@@ -51,7 +51,7 @@ func (at *AppConfigTemplate) GetTemplate(templateID string) (*pds.ModelsApplicat
 	return atModel, nil
 }
 
-// CreateTemplate func
+// CreateTemplate function create app configuration template and return pds application template model.
 func (at *AppConfigTemplate) CreateTemplate(tenantID string, dataServiceID string, name string, data []pds.ModelsConfigItem) (*pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	log.Info("Create new resource template.")
@@ -71,7 +71,7 @@ func (at *AppConfigTemplate) CreateTemplate(tenantID string, dataServiceID strin
 	return atModel, nil
 }
 
-// UpdateTemplate func
+// UpdateTemplate function return updated pds application template model.
 func (at *AppConfigTemplate) UpdateTemplate(templateID string, deployTime bool, key string, value string, name string) (*pds.ModelsApplicationConfigurationTemplate, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	log.Info("Create new resource template.")
@@ -92,7 +92,7 @@ func (at *AppConfigTemplate) UpdateTemplate(templateID string, deployTime bool, 
 	return atModel, nil
 }
 
-// DeleteTemplate func
+// DeleteTemplate function delete app configuration template and return the api statusresponse.
 func (at *AppConfigTemplate) DeleteTemplate(templateID string) (*status.Response, error) {
 	atClient := at.apiClient.ApplicationConfigurationTemplatesApi
 	log.Infof("Get list of storage templates for tenant ID - %v", templateID)

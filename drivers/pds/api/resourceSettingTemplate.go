@@ -14,7 +14,7 @@ type ResourceSettingsTemplate struct {
 	apiClient *pds.APIClient
 }
 
-// ListTemplates func
+// ListTemplates return pds resource setting templates models.
 func (rt *ResourceSettingsTemplate) ListTemplates(tenantID string) ([]pds.ModelsResourceSettingsTemplate, error) {
 	rtClient := rt.apiClient.ResourceSettingsTemplatesApi
 	ctx, err := pdsutils.GetContext()
@@ -32,7 +32,7 @@ func (rt *ResourceSettingsTemplate) ListTemplates(tenantID string) ([]pds.Models
 	return rtModel.GetData(), nil
 }
 
-// GetTemplate func
+// GetTemplate return pds resource setting template model.
 func (rt *ResourceSettingsTemplate) GetTemplate(templateID string) (*pds.ModelsResourceSettingsTemplate, error) {
 	rtClient := rt.apiClient.ResourceSettingsTemplatesApi
 	ctx, err := pdsutils.GetContext()
@@ -50,7 +50,7 @@ func (rt *ResourceSettingsTemplate) GetTemplate(templateID string) (*pds.ModelsR
 	return rtModel, nil
 }
 
-// CreateTemplate func
+// CreateTemplate return newly created pds resource setting template model.
 func (rt *ResourceSettingsTemplate) CreateTemplate(tenantID string, cpuLimit string, cpuRequest string, dataServiceID string, memoryLimit string, memoryRequest string, name string, storageRequest string) (*pds.ModelsResourceSettingsTemplate, error) {
 	rtClient := rt.apiClient.ResourceSettingsTemplatesApi
 	createRequest := pds.ControllersCreateResourceSettingsTemplatesRequest{CpuLimit: &cpuLimit, CpuRequest: &cpuRequest, DataServiceId: &dataServiceID, MemoryLimit: &memoryLimit, MemoryRequest: &memoryRequest, Name: &name, StorageRequest: &storageRequest}
@@ -69,7 +69,7 @@ func (rt *ResourceSettingsTemplate) CreateTemplate(tenantID string, cpuLimit str
 	return rtModel, nil
 }
 
-// UpdateTemplate func
+// UpdateTemplate return updated created pds resource setting template model.
 func (rt *ResourceSettingsTemplate) UpdateTemplate(templateID string, cpuLimit string, cpuRequest string, memoryLimit string, memoryRequest string, name string, storageRequest string) (*pds.ModelsResourceSettingsTemplate, error) {
 	rtClient := rt.apiClient.ResourceSettingsTemplatesApi
 	updateRequest := pds.ControllersUpdateResourceSettingsTemplateRequest{CpuLimit: &cpuLimit, CpuRequest: &cpuRequest, MemoryLimit: &memoryLimit, MemoryRequest: &memoryRequest, Name: &name, StorageRequest: &storageRequest}
@@ -88,7 +88,7 @@ func (rt *ResourceSettingsTemplate) UpdateTemplate(templateID string, cpuLimit s
 	return rtModel, nil
 }
 
-// DeleteTemplate func
+// DeleteTemplate delete resource setting template and return status.
 func (rt *ResourceSettingsTemplate) DeleteTemplate(templateID string) (*status.Response, error) {
 	rtClient := rt.apiClient.ResourceSettingsTemplatesApi
 	ctx, err := pdsutils.GetContext()

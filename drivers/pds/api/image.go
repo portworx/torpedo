@@ -13,7 +13,7 @@ type Image struct {
 	apiClient *pds.APIClient
 }
 
-// ListImages func
+// ListImages return images models for given version.
 func (img *Image) ListImages(versionID string) ([]pds.ModelsImage, error) {
 	imgClient := img.apiClient.ImagesApi
 	ctx, err := pdsutils.GetContext()
@@ -30,7 +30,7 @@ func (img *Image) ListImages(versionID string) ([]pds.ModelsImage, error) {
 	return imgModels.GetData(), err
 }
 
-// GetImage func
+// GetImage return image model.
 func (img *Image) GetImage(imageID string) (*pds.ModelsImage, error) {
 	imgClient := img.apiClient.ImagesApi
 	ctx, err := pdsutils.GetContext()

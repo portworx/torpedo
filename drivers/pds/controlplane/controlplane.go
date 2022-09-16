@@ -12,7 +12,7 @@ type ControlPlane struct {
 	components      *api.Components
 }
 
-// GetRegistrationToken PDS
+// GetRegistrationToken return token to register a target cluster.
 func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 	log.Info("Fetch the registration token.")
 
@@ -32,7 +32,7 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 }
 
 // GetDNSZone fetches DNS zone for deployment.
-func (cp *ControlPlane) GetDNSZone(tenantID string) string {
+func (cp *ControlPlane) GetDNSZone(tenantID string) (string, error) {
 	tenantComp := cp.components.Tenant
 	tenant, err := tenantComp.GetTenant(tenantID)
 	if err != nil {
@@ -41,9 +41,9 @@ func (cp *ControlPlane) GetDNSZone(tenantID string) string {
 	log.Infof("Get DNS Zone for the tenant. Name -  %s, Id - %s", tenant.GetName(), tenant.GetId())
 	dnsModel, err := tenantComp.GetDNS(tenantID)
 	if err != nil {
-		log.Panicf("Unable to fetch the DNSZone info. \n Error - %v", err)
+		log.Infof("Unable to fetch the DNSZone info. \n Error - %v", err)
 	}
-	return dnsModel.GetDnsZone()
+	return dnsModel.GetDnsZone(), err
 }
 
 // NewControlPlane to create control plane instance.

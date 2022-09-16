@@ -13,7 +13,7 @@ type StorageSettingsTemplate struct {
 	apiClient *pds.APIClient
 }
 
-// ListTemplates func
+// ListTemplates return storage options templates models.
 func (st *StorageSettingsTemplate) ListTemplates(tenantID string) ([]pds.ModelsStorageOptionsTemplate, error) {
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Infof("Get list of storage templates for tenant ID - %v", tenantID)
@@ -32,7 +32,7 @@ func (st *StorageSettingsTemplate) ListTemplates(tenantID string) ([]pds.ModelsS
 	return pdsStorageTemplates.GetData(), nil
 }
 
-// GetTemplate func
+// GetTemplate return storage options templates models.
 func (st *StorageSettingsTemplate) GetTemplate(templateID string) (*pds.ModelsStorageOptionsTemplate, error) {
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Infof("Get storage template details for UUID - %v", templateID)
@@ -51,7 +51,7 @@ func (st *StorageSettingsTemplate) GetTemplate(templateID string) (*pds.ModelsSt
 	return stModel, nil
 }
 
-// CreateTemplate func
+// CreateTemplate return newly created storage option template model.
 func (st *StorageSettingsTemplate) CreateTemplate(tenantID string, fg bool, fs string, name string, repl int32, secure bool) (*pds.ModelsStorageOptionsTemplate, error) {
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Info("Create new storage template.")
@@ -71,7 +71,7 @@ func (st *StorageSettingsTemplate) CreateTemplate(tenantID string, fg bool, fs s
 	return stModel, nil
 }
 
-// UpdateTemplate func
+// UpdateTemplate return updatedd@12 storage option template model.
 func (st *StorageSettingsTemplate) UpdateTemplate(templateID string, fg bool, fs string, name string, repl int32, secure bool) (*pds.ModelsStorageOptionsTemplate, error) {
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Info("Create new storage template.")
@@ -91,7 +91,7 @@ func (st *StorageSettingsTemplate) UpdateTemplate(templateID string, fg bool, fs
 	return stModel, nil
 }
 
-// DeleteTemplate func
+// DeleteTemplate delete the storage option template and return the status
 func (st *StorageSettingsTemplate) DeleteTemplate(templateID string) (*status.Response, error) {
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Infof("Delete strogae template: %v", templateID)
