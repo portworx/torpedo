@@ -140,145 +140,147 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 
 	It("has to schedule apps and reboot node(s) with shared volume mounts", func() {
 
-		//var err error
-		contexts = make([]*scheduler.Context, 0)
+		for deployAttempt := 0; deployAttempt < 20; deployAttempt++ {
 
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("reallocate-mount-%d", i))...)
-		}
+			//var err error
+			contexts = make([]*scheduler.Context, 0)
 
-		ValidateApplications(contexts)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("reallocate-mount-%d", i))...)
+			}
 
-		Step("get nodes with shared mount and reboot them", func() {
-			for _, ctx := range contexts {
-				vols, err := Inst().S.GetVolumes(ctx)
-				Expect(err).NotTo(HaveOccurred())
-				for _, vol := range vols {
-					if vol.Shared {
-						for failoverAttempt := 0; failoverAttempt < 100; failoverAttempt++ {
-							logrus.Infof("==== failover attempt %v for volume %v", failoverAttempt, vol.ID)
-							n, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-							Expect(err).NotTo(HaveOccurred())
-							logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+			ValidateApplications(contexts)
 
-							// Workaround to avoid PWX-24277 for now.
-							Step(fmt.Sprintf("wait until volume %v status is Up", vol.ID), func() {
-								prevStatus := ""
-								Eventually(func() (string, error) {
-									connOpts := node.ConnectionOpts{
+			Step("get nodes with shared mount and reboot them", func() {
+				for _, ctx := range contexts {
+					vols, err := Inst().S.GetVolumes(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					for _, vol := range vols {
+						if vol.Shared {
+							for failoverAttempt := 0; failoverAttempt < 10; failoverAttempt++ {
+								logrus.Infof("==== deploy #%v: failover #%v for volume %v", deployAttempt, failoverAttempt, vol.ID)
+								n, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
+								Expect(err).NotTo(HaveOccurred())
+								logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+
+								// Workaround to avoid PWX-24277 for now.
+								Step(fmt.Sprintf("wait until volume %v status is Up", vol.ID), func() {
+									prevStatus := ""
+									Eventually(func() (string, error) {
+										connOpts := node.ConnectionOpts{
+											Timeout:         defaultCommandTimeout,
+											TimeBeforeRetry: defaultCommandRetry,
+											Sudo:            true,
+										}
+										cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", vol.ID)
+										volStatus, err := Inst().N.RunCommandWithNoRetry(*n, cmd, connOpts)
+										if err != nil {
+											logrus.Warnf("failed to get replication state of volume %v: %v", vol.ID, err)
+											return "", err
+										}
+										if volStatus != prevStatus {
+											logrus.Warnf("volume %v: %v", vol.ID, volStatus)
+											prevStatus = volStatus
+										}
+										return volStatus, nil
+									}, 30*time.Minute, 10*time.Second).Should(ContainSubstring("Up"),
+										"volume %v status is not Up for app %v", vol.ID, ctx.App.Key)
+								})
+
+								err = Inst().S.DisableSchedulingOnNode(*n)
+								Expect(err).NotTo(HaveOccurred())
+
+								// get pods on the node and delete all but one
+								pods, err := core.Instance().GetPodsUsingPV(vol.ID)
+								Expect(err).NotTo(HaveOccurred())
+
+								podsOnAttachedNode := []string{}
+								podNamespace := ""
+								for _, pod := range pods {
+									podNamespace = pod.Namespace
+									if pod.Spec.NodeName == n.Name {
+										podsOnAttachedNode = append(podsOnAttachedNode, pod.Name)
+									}
+								}
+								for i, podName := range podsOnAttachedNode {
+									if i == 0 {
+										// skip 1 pod so that the volume stays attached
+										continue
+									}
+									logrus.Infof("==== deleting pod %v for volume %v", podName, vol.ID)
+									err = core.Instance().DeletePod(podName, podNamespace, false)
+									Expect(err).NotTo(HaveOccurred())
+								}
+
+								ctx.SkipVolumeValidation = true
+								ValidateContext(ctx)
+
+								err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
+								Expect(err).NotTo(HaveOccurred())
+
+								err = Inst().N.RebootNode(*n, node.RebootNodeOpts{
+									Force: true,
+									ConnectionOpts: node.ConnectionOpts{
 										Timeout:         defaultCommandTimeout,
 										TimeBeforeRetry: defaultCommandRetry,
-										Sudo:            true,
-									}
-									cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", vol.ID)
-									volStatus, err := Inst().N.RunCommandWithNoRetry(*n, cmd, connOpts)
+									},
+								})
+								Expect(err).NotTo(HaveOccurred())
+
+								// as we keep the storage driver down on node until we check if the volume, we wait a minute for
+								// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
+								logrus.Infof("wait for %v for node reboot", defaultCommandTimeout)
+								time.Sleep(defaultCommandTimeout)
+
+								// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
+								err = Inst().N.Systemctl(*n, "nfs-server.service", node.SystemctlOpts{
+									Action: "start",
+									ConnectionOpts: node.ConnectionOpts{
+										Timeout:         5 * time.Minute,
+										TimeBeforeRetry: 10 * time.Second,
+									}})
+								Expect(err).NotTo(HaveOccurred())
+
+								logrus.Infof("waiting for failover...")
+								var attachedNodeNow *node.Node
+								Eventually(func() (string, error) {
+									err := Inst().V.RefreshDriverEndpoints()
 									if err != nil {
-										logrus.Warnf("failed to get replication state of volume %v: %v", vol.ID, err)
 										return "", err
 									}
-									if volStatus != prevStatus {
-										logrus.Warnf("volume %v: %v", vol.ID, volStatus)
-										prevStatus = volStatus
+									attachedNodeNow, err = Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
+									if err != nil {
+										return "", err
 									}
-									return volStatus, nil
-								}, 30*time.Minute, 10*time.Second).Should(ContainSubstring("Up"),
-									"volume %v status is not Up for app %v", vol.ID, ctx.App.Key)
-							})
+									return attachedNodeNow.Name, nil
+								}, 15*time.Minute, 30*time.Second).ShouldNot(Equal(n.Name),
+									"volume %v for app %v did not fail over", vol.ID, ctx.App.Key)
 
-							err = Inst().S.DisableSchedulingOnNode(*n)
-							Expect(err).NotTo(HaveOccurred())
+								ctx.RefreshStorageEndpoint = true
+								//							ctx.SkipVolumeValidation = true
+								ValidateContext(ctx)
 
-							// get pods on the node and delete all but one
-							pods, err := core.Instance().GetPodsUsingPV(vol.ID)
-							Expect(err).NotTo(HaveOccurred())
-
-							podsOnAttachedNode := []string{}
-							podNamespace := ""
-							for _, pod := range pods {
-								podNamespace = pod.Namespace
-								if pod.Spec.NodeName == n.Name {
-									podsOnAttachedNode = append(podsOnAttachedNode, pod.Name)
-								}
-							}
-							for i, podName := range podsOnAttachedNode {
-								if i == 0 {
-									// skip 1 pod so that the volume stays attached
-									continue
-								}
-								logrus.Infof("==== deleting pod %v for volume %v", podName, vol.ID)
-								err = core.Instance().DeletePod(podName, podNamespace, false)
+								StartVolDriverAndWait([]node.Node{*n})
+								err = Inst().S.EnableSchedulingOnNode(*n)
 								Expect(err).NotTo(HaveOccurred())
 							}
-
-							ctx.SkipVolumeValidation = true
-							ValidateContext(ctx)
-
-							err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
-							Expect(err).NotTo(HaveOccurred())
-
-							err = Inst().N.RebootNode(*n, node.RebootNodeOpts{
-								Force: true,
-								ConnectionOpts: node.ConnectionOpts{
-									Timeout:         defaultCommandTimeout,
-									TimeBeforeRetry: defaultCommandRetry,
-								},
-							})
-							Expect(err).NotTo(HaveOccurred())
-
-							// as we keep the storage driver down on node until we check if the volume, we wait a minute for
-							// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
-							logrus.Infof("wait for %v for node reboot", defaultCommandTimeout)
-							time.Sleep(defaultCommandTimeout)
-
-							// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
-							err = Inst().N.Systemctl(*n, "nfs-server.service", node.SystemctlOpts{
-								Action: "start",
-								ConnectionOpts: node.ConnectionOpts{
-									Timeout:         5 * time.Minute,
-									TimeBeforeRetry: 10 * time.Second,
-								}})
-							Expect(err).NotTo(HaveOccurred())
-
-
-							logrus.Infof("waiting for failover...")
-							var attachedNodeNow *node.Node
-							Eventually(func() (string, error) {
-								err := Inst().V.RefreshDriverEndpoints()
-								if err != nil {
-									return "", err
-								}
-								attachedNodeNow, err = Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-								if err != nil {
-									return "", err
-								}
-								return attachedNodeNow.Name, nil
-							}, 15*time.Minute, 30*time.Second).ShouldNot(Equal(n.Name),
-								"volume %v for app %v did not fail over", vol.ID, ctx.App.Key)
-
-							ctx.RefreshStorageEndpoint = true
-//							ctx.SkipVolumeValidation = true
-							ValidateContext(ctx)
-
-							StartVolDriverAndWait([]node.Node{*n})
-							err = Inst().S.EnableSchedulingOnNode(*n)
-							Expect(err).NotTo(HaveOccurred())
+							break
 						}
-						break
 					}
+					break
 				}
-				break
-			}
-		})
+			})
 
-		ValidateApplications(contexts)
+			ValidateApplications(contexts)
 
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
+			Step("destroy apps", func() {
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for _, ctx := range contexts {
+					TearDownContext(ctx, opts)
+				}
+			})
+		}
 	})
 	JustAfterEach(func() {
 		AfterEachTest(contexts, testrailID, runID)
