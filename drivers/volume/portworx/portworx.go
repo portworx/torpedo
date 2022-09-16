@@ -92,7 +92,6 @@ const (
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
-	clusterIDFile = "/etc/pwx/cluster_uuid"
 	clusterIDFile                             = "/etc/pwx/cluster_uuid"
 )
 
