@@ -118,7 +118,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			SetTorpedoFileOutput(tpLog, f)
 		}
 
-		dash.TestCaseBegin("upgrade: sample test", "validating logs in tests", "", nil)
+		dash.TestCaseBegin("upgrade: UpgradeVolumeDriver", "validating volume driver upgrade", "", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -129,6 +129,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		storageNodes := node.GetStorageNodes()
 
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
+		dash.VerifyFatal(err, nil, "Validate cloud drive installation")
 		Expect(err).NotTo(HaveOccurred())
 
 		if !isCloudDrive {
@@ -137,6 +138,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
 					continue
 				}
+				dash.VerifyFatal(err, nil, "Verify adding block drive(s)")
 				Expect(err).NotTo(HaveOccurred())
 			}
 		}
@@ -159,6 +161,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				} else {
 					tpLog.Error("Volume Driver upgrade failed")
 				}
+				dash.VerifyFatal(err, nil, "Verify volume drive upgrade for operator based set up")
 				Expect(err).NotTo(HaveOccurred())
 
 			} else {
@@ -167,11 +170,13 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 					Inst().StorageDriverUpgradeEndpointVersion,
 					false)
 				timeAfterUpgrade = time.Now()
+				dash.VerifyFatal(err, nil, "Verify volume drive upgrade for daemon set based set up")
 				Expect(err).NotTo(HaveOccurred())
 			}
 
 			durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
 			expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+			dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
 			if durationInMins <= expectedUpgradeTime {
 				tpLog.Infof("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
 			} else {
@@ -197,6 +202,8 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer dash.TestCaseEnd()
+		defer CloseLogFile(tpLog, f)
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })

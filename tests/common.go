@@ -1098,10 +1098,10 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 		}
 		//if not hyper converged set up deploy apps only on storageless nodes
 		if !Inst().IsHyperConverged {
-			logrus.Infof("Scheduling apps only on storageless nodes")
+			tpLog.Infof("Scheduling apps only on storageless nodes")
 			storagelessNodes := node.GetStorageLessNodes()
 			if len(storagelessNodes) == 0 {
-				logrus.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
+				tpLog.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
 				Inst().IsHyperConverged = true
 			}
 			for _, storagelessNode := range storagelessNodes {
@@ -1122,7 +1122,7 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			}
 
 		} else {
-			logrus.Infof("Scheduling Apps with hyper-converged")
+			tpLog.Infof("Scheduling Apps with hyper-converged")
 		}
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, options)
