@@ -79,6 +79,25 @@ func (o *oracle) GetZones() ([]string, error) {
 	return asgInfo.Zones, nil
 }
 
+func (o *oracle) SetClusterVersion(version string, timeout time.Duration) error {
+	logrus.Info("[Torpedo] Setting cluster version to :", version)
+	err := o.ops.SetClusterVersion(version, timeout)
+	if err != nil {
+		logrus.Errorf("failed to set version for cluster. Error: %v", err)
+		return err
+	}
+	logrus.Info("[Torpedo] Cluster version set successfully. Setting up node group version now ...")
+
+	err = o.ops.SetInstanceGroupVersion(o.instanceGroupName, version, timeout)
+	if err != nil {
+		logrus.Errorf("failed to set version for instance group %s. Error: %v", o.instanceGroupName, err)
+		return err
+	}
+	logrus.Info("[Torpedo] Node group version set successfully.")
+
+	return nil
+}
+
 func init() {
 	i := &oracle{
 		SSH: *ssh.New(),
