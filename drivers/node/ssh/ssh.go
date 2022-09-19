@@ -689,30 +689,22 @@ func (s *SSH) getConnection(n node.Node, options node.ConnectionOpts) (*ssh_pkg.
 }
 
 func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
+	var sshErr error
+	var cli interface{}
 	for _, addr := range n.Addresses {
 		t := func() (interface{}, bool, error) {
-			logrus.Infof("Node on getConnectionOnUsableAddr: %+v", n)
 			// check if address is responding on port 22
 			endpoint := net.JoinHostPort(addr, strconv.Itoa(int(DefaultSSHPort)))
-			logrus.Infof("endpoint on  getConnectionOnUsableAddr: %s", endpoint)
-			logrus.Infof("n.UsableAddr on  getConnectionOnUsableAddr: %s", n.UsableAddr)
-			logrus.Infof("n.Addresses on  getConnectionOnUsableAddr: %+v", n.Addresses)
-			logrus.Infof("s.sshConfig on  getConnectionOnUsableAddr: %+v", s.sshConfig)
-
 			conn, err := ssh_pkg.Dial("tcp", endpoint, s.sshConfig)
-
-			if err != nil {
-				logrus.Errorf("Error while trying ssh to address %s, Err: %v", addr, err)
-			}
 			return conn, true, err
 		}
-		if cli, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
+		if cli, sshErr = task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); sshErr == nil {
 			n.UsableAddr = addr
 			return cli.(*ssh_pkg.Client), nil
 		}
 	}
-	return nil, fmt.Errorf("no usable address found. Tried: %v. "+
-		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses)
+	return nil, fmt.Errorf("no usable address found. Tried: %v. Error: %v"+
+		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses, sshErr)
 }
 
 // SystemCheck check if any cores are generated on given node
