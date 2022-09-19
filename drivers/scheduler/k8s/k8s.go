@@ -128,7 +128,7 @@ const (
 	// DefaultTimeout default timeout
 	DefaultTimeout = 3 * time.Minute
 	// SnapshotReadyTimeout timeout for snapshot to be ready
-	SnapshotReadyTimeout = 5 * time.Minute
+	SnapshotReadyTimeout             = 5 * time.Minute
 	numOfRestoredPVCForCloneManyTest = 500
 
 	autopilotServiceName          = "autopilot"
@@ -201,16 +201,16 @@ var (
 
 // K8s  The kubernetes structure
 type K8s struct {
-	SpecFactory             *spec.Factory
-	NodeDriverName          string
-	VolDriverName           string
-	secretConfigMapName     string
-	customConfig            map[string]scheduler.AppConfig
-	eventsStorage           map[string][]scheduler.Event
-	SecretType              string
-	VaultAddress            string
-	VaultToken              string
-	PureVolumes             bool
+	SpecFactory                      *spec.Factory
+	NodeDriverName                   string
+	VolDriverName                    string
+	secretConfigMapName              string
+	customConfig                     map[string]scheduler.AppConfig
+	eventsStorage                    map[string][]scheduler.Event
+	SecretType                       string
+	VaultAddress                     string
+	VaultToken                       string
+	PureVolumes                      bool
 	PureSANType                      string
 	RunCSISnapshotAndRestoreManyTest bool
 	helmValuesConfigMapName          string
@@ -5178,7 +5178,7 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 	mountPath, _ := pureutils.GetAppDataDir(podsUsingPVC[0].Namespace)
 	dirtyData := "thisIsJustSomeRandomText"
 	snapName := request.SnapName
-	for i :=0; i < 3; i++ {
+	for i := 0; i < 3; i++ {
 		data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
 		err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
 		if err != nil {
@@ -5197,7 +5197,7 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 
 // CSICloneTest create new PVC by cloning an existing PVC and make sure the contents of volume are same
 // (Testrail cases C58509)
-func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRequest)  error {
+func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRequest) error {
 	// This test will validate the content of the volume as opposed to just verify creation of volume.
 	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
 	if err != nil {
@@ -5222,7 +5222,7 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 	mountPath, _ := pureutils.GetAppDataDir(podsUsingPVC[0].Namespace)
 	dirtyData := "thisIsJustSomeRandomText"
 
-	for i :=0; i < 3; i++ {
+	for i := 0; i < 3; i++ {
 		data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
 		err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
 		if err != nil {
@@ -5279,7 +5279,7 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 		}
 		_, err = k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
 		if err != nil {
-			logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err )
+			logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err)
 			return err
 		}
 
@@ -5287,20 +5287,17 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 	logrus.Info("Finished issueing PVC creation request, proceed to validate")
 
 	if err = k.waitForRestoredPVCsToBound(request.RestoredPVCName, pvcObj.Namespace); err != nil {
-		logrus.Errorf("failed to wait %d pvcs go into bound", numOfRestoredPVCForCloneManyTest )
+		logrus.Errorf("failed to wait %d pvcs go into bound", numOfRestoredPVCForCloneManyTest)
 		return fmt.Errorf("%d PVCs did not go into bound after 30 mins", numOfRestoredPVCForCloneManyTest)
 	}
-
-
 
 	return nil
 }
 
-
 func (k *K8s) writeDataToPod(data, podName, podNamespace, mountPath string) error {
 	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sh", "-c", fmt.Sprintf("echo -n %s >>  %s/aaaa.txt", data, mountPath)}
 	command := exec.Command("kubectl", cmdArgs...)
-	_ , err := command.Output()
+	_, err := command.Output()
 	if err != nil {
 		logrus.Errorf("Failed to write data to pod: %s", err)
 		return err
@@ -5308,7 +5305,7 @@ func (k *K8s) writeDataToPod(data, podName, podNamespace, mountPath string) erro
 	// Sync the data, wait 10 secs and then proceed to snapshot the volume
 	cmdArgs2 := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sync"}
 	command2 := exec.Command("kubectl", cmdArgs2...)
-	_ , err = command2.Output()
+	_, err = command2.Output()
 	if err != nil {
 		logrus.Errorf("Failed to sync: %s", err)
 		return err
@@ -5342,7 +5339,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 	}
 	restoredPVC, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
 	if err != nil {
-		logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err )
+		logrus.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err)
 		return err
 	}
 	logrus.Infof("Successfully restored PVC %s, proceed to mount to a new pod", restoredPVC.Name)
@@ -5355,8 +5352,8 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 
 	if err = k.waitForPodToBeReady(restoredPod.Name, namespace); err != nil {
 		return &scheduler.ErrFailedToSchedulePod{
-			App: nil,
-			Cause:   fmt.Sprintf("restored pod is not ready. Error: %v", err),
+			App:   nil,
+			Cause: fmt.Sprintf("restored pod is not ready. Error: %v", err),
 		}
 	}
 	// Run a cat command from within the pod to verify the content of dirtydata
@@ -5386,7 +5383,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 	}
 	clonedPVC, err := k8sCore.CreatePersistentVolumeClaim(clonedPVCSpec)
 	if err != nil {
-		logrus.Errorf("Failed to clone PVC from source PVC %s: %s", originalPVC, err )
+		logrus.Errorf("Failed to clone PVC from source PVC %s: %s", originalPVC, err)
 		return err
 	}
 	logrus.Infof("Successfully clone PVC %s, proceed to mount to a new pod", clonedPVC.Name)
@@ -5399,8 +5396,8 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 
 	if err = k.waitForPodToBeReady(restoredPod.Name, namespace); err != nil {
 		return &scheduler.ErrFailedToSchedulePod{
-			App: nil,
-			Cause:   fmt.Sprintf("restored pod is not ready. Error: %v", err),
+			App:   nil,
+			Cause: fmt.Sprintf("restored pod is not ready. Error: %v", err),
 		}
 	}
 	// Run a cat command from within the pod to verify the content of dirtydata
@@ -5413,7 +5410,6 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 	logrus.Info("Validation complete")
 	return nil
 }
-
 
 // MakePod Returns a pod definition based on the namespace. The pod references the PVC's
 // name.  A slice of BASH commands can be supplied as args to be run by the pod
@@ -5521,8 +5517,8 @@ func GeneratePVCCloneSpec(size resource.Quantity, ns string, name string, source
 	}
 
 	PVCSpec.Spec.DataSource = &v1.TypedLocalObjectReference{
-		Kind:     "PersistentVolumeClaim",
-		Name:     sourcePVCName,
+		Kind: "PersistentVolumeClaim",
+		Name: sourcePVCName,
 	}
 
 	return PVCSpec, nil
@@ -5869,7 +5865,7 @@ func (k *K8s) waitForRestoredPVCsToBound(pvcNamePrefix string, namespace string)
 		return "", false, nil
 
 	}
-	if _, err := task.DoRetryWithTimeout(t, 30 * time.Minute, 30 * time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second); err != nil {
 		return err
 	}
 	logrus.Infof("PVC is in bound: %s", pvc.Name)
