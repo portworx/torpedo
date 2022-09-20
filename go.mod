@@ -22,7 +22,7 @@ require (
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
-	github.com/libopenstorage/cloudops v0.0.0-20220420143942-8bdd341e5b41
+	github.com/libopenstorage/cloudops v0.0.0-20220909060939-0cbeca281dfd
 	github.com/libopenstorage/openstorage v8.0.1-0.20211105030910-665c2f474186+incompatible
 	github.com/libopenstorage/operator v0.0.0-20220914214053-b7951f0cd10a
 	github.com/libopenstorage/stork v1.4.1-0.20220323180113-0ea773109d05
