@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
@@ -48,6 +49,8 @@ var (
 	DeployAllDataService                    bool
 	DeployAllVersions                       bool
 	DeployAllImages                         bool
+	deployements                            map[string][]*pds.ModelsDeployment
+	dataServiceImageMap                     map[string][]string
 )
 
 func TestDataService(t *testing.T) {
@@ -82,6 +85,9 @@ var _ = BeforeSuite(func() {
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName)
 		Expect(err).NotTo(HaveOccurred())
+
+		DataService := pdslib.GetAndExpectStringEnvVar(envDataService)
+		Expect(DataService).NotTo(BeEmpty(), "ENV "+envDataService+" is not set")
 
 	})
 
@@ -127,7 +133,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	It("deploy Dataservices", func() {
 		logrus.Info("Create dataservices without backup.")
 		Step("Deploy Data Services", func() {
-			deployements, err := pdslib.DeployDataServices(dataServiceNameIDMap, projectID,
+			deployements, _, err := pdslib.DeployDataServices(dataServiceNameIDMap, projectID,
 				deploymentTargetID,
 				dnsZone,
 				deploymentName,
@@ -218,7 +224,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 
 	It("Deploy All SupportedDataServices", func() {
 		Step("Deploy All Supported Data Services", func() {
-			deployements, err := pdslib.DeployDataServices(supportedDataServicesNameIDMap, projectID,
+			deployements, _, err := pdslib.DeployDataServices(supportedDataServicesNameIDMap, projectID,
 				deploymentTargetID,
 				dnsZone,
 				deploymentName,

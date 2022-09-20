@@ -465,7 +465,7 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 func DeployDataServices(supportedDataServicesMap map[string]string, projectID string, deploymentTargetID string, dnsZone string, deploymentName string,
 	namespaceID string, dataServiceNameDefaultAppConfigMap map[string]string, replicas int32,
 	serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string,
-	deployAllVersions bool, getAllImages bool) (map[string][]*pds.ModelsDeployment, error) {
+	deployAllVersions bool, getAllImages bool) (map[string][]*pds.ModelsDeployment, map[string][]string, error) {
 
 	currentReplicas = replicas
 	var dataServiceImageMap map[string][]string
@@ -501,12 +501,12 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 			logrus.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
 			_, dataServiceImageMap, err = GetVersionsImage(dsVersion, dsBuild, id, getAllImages)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		} else {
 			_, dataServiceImageMap, err = GetAllVersionsImages(id)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 
@@ -530,17 +530,17 @@ func DeployDataServices(supportedDataServicesMap map[string]string, projectID st
 
 				if err != nil {
 					logrus.Warnf("An Error Occured while creating deployment %v", err)
-					return nil, err
+					return nil, nil, err
 				}
 				err = ValidateDataServiceDeployment(deployment)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				deploymentsMap[ds] = append(deploymentsMap[ds], deployment)
 			}
 		}
 	}
-	return deploymentsMap, nil
+	return deploymentsMap, dataServiceImageMap, nil
 }
 
 //GetAllSupportedDataServices get the supported datasservices and returns the map
