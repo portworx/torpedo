@@ -30,6 +30,8 @@ const (
 	IBM = "ibm"
 	// Pure provider
 	Pure = "pure"
+	// Oracle provider
+	Oracle = "oracle"
 )
 
 // CloudResourceInfo provides metadata information on a cloud resource.
