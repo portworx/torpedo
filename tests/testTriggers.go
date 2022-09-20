@@ -240,6 +240,7 @@ func UpdateOutcome(event *EventRecord, err error) {
 		event.Outcome = append(event.Outcome, er)
 		createLongevityJiraIssue(event, er)
 	}
+	logrus.Infof("Event updation check successful for %s", event.Event.Type)
 }
 
 // ProcessErrorWithMessage updates outcome and expects no error
@@ -2039,6 +2040,7 @@ func TriggerEmailReporter() {
 	for k, v := range RunningTriggers {
 		emailData.TriggersInfo = append(emailData.TriggersInfo, triggerInfo{Name: k, Duration: v})
 	}
+	logrus.Infof("Event ring length : %d", eventRing.Len())
 	for i := 0; i < eventRing.Len(); i++ {
 		record := eventRing.Value
 		if record != nil {
@@ -3155,6 +3157,7 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 			expect(err).NotTo(haveOccurred())
 			UpdateOutcome(event, err)
 		})
+		logrus.Info("Reboot successful for node: %s", nodes[nodeIndex].Name)
 
 		Step(fmt.Sprintf("wait for node: [%s] to be back up", nodes[nodeIndex].Name), func() {
 			err := Inst().N.TestConnection(nodes[nodeIndex], node.ConnectionOpts{

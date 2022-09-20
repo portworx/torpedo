@@ -294,9 +294,11 @@ func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	if options.Force {
 		rebootCmd = rebootCmd + " -f"
 	}
+	logrus.Infof("Running command : %s with options: %+v", rebootCmd, options)
 
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, options.ConnectionOpts, rebootCmd, true)
+		logrus.Infof("Got output: %s", out)
 		return out, true, err
 	}
 
@@ -307,6 +309,7 @@ func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 		}
 	}
 
+	logrus.Infof("Rebooting node  %s is successful", n.SchedulerNodeName)
 	return nil
 }
 
@@ -553,6 +556,7 @@ func (s *SSH) SystemctlUnitExist(n node.Node, service string, options node.Syste
 func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 
 	if s.IsUsingSSH() {
+		logrus.Infof("Using SSH")
 		return s.doCmdSSH(n, options, cmd, ignoreErr)
 	}
 	return s.doCmdUsingPod(n, options, cmd, ignoreErr)
@@ -635,6 +639,7 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 			Cause: fmt.Sprintf("failed to dial: %v", err),
 		}
 	}
+	logrus.Infof("Got the connection")
 
 	session, err := connection.NewSession()
 	if err != nil {
@@ -643,6 +648,7 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 			Cause: fmt.Sprintf("failed to create session: %s", err),
 		}
 	}
+	logrus.Infof("Got the session")
 	defer session.Close()
 
 	stderr, err := session.StderrPipe()
@@ -662,15 +668,18 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	if resp, err1 := ioutil.ReadAll(stdout); err1 == nil {
 		out = string(resp)
 	} else {
+		logrus.Errorf("Got the error while reading stdout, Err : %v", err1)
 		return "", fmt.Errorf("fail to read stdout")
 	}
 	if resp, err1 := ioutil.ReadAll(stderr); err1 == nil {
 		sterr = string(resp)
 	} else {
+		logrus.Errorf("Got the error while reading stderr, Err : %v", err1)
 		return "", fmt.Errorf("fail to read stderr")
 	}
 
 	if ignoreErr == false && err != nil {
+		logrus.Errorf("Got the error while running command, Err : %v", err)
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  n.UsableAddr,
 			Cause: fmt.Sprintf("failed to run command due to: %v", sterr),

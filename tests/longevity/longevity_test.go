@@ -199,6 +199,7 @@ func testTrigger(wg *sync.WaitGroup,
 			logrus.Infof("Waiting for lock for trigger [%s]\n", triggerType)
 			triggerLoc.Lock()
 			logrus.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+			logrus.Infof("Length of event chan before trigger : %d", len(*triggerEventsChan))
 			/* PTX-2667: check no other disruptive trigger is happening at same time
 			if isDisruptiveTrigger(triggerType) {
 			   // At a give point in time, only single disruptive trigger is allowed to run.
@@ -215,6 +216,7 @@ func testTrigger(wg *sync.WaitGroup,
 
 			triggerFunc(contexts, triggerEventsChan)
 			logrus.Infof("Trigger Function completed for [%s]\n", triggerType)
+			logrus.Infof("Length of event chan after trigger : %d", len(*triggerEventsChan))
 
 			//if isDisruptiveTrigger(triggerType) {
 			triggerLoc.Unlock()
