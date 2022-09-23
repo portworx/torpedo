@@ -69,14 +69,6 @@ if [ -z "${IS_PURE_VOLUMES}" ]; then
     IS_PURE_VOLUMES=false
 fi
 
-if [ -z "${PURE_FA_CLONE_MANY_TEST}" ]; then
-    PURE_FA_CLONE_MANY_TEST=false
-fi
-
-if [ -z "${PURE_SAN_TYPE}" ]; then
-    PURE_SAN_TYPE=ISCSI
-fi
-
 if [ -n "${PROVISIONER}" ]; then
     PROVISIONER="$PROVISIONER"
 fi
@@ -432,8 +424,6 @@ spec:
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
             "--pure-volumes=$IS_PURE_VOLUMES",
-            "--pure-fa-snapshot-restore-to-many-test=$PURE_FA_CLONE_MANY_TEST",
-            "--pure-san-type=$PURE_SAN_TYPE",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
@@ -498,8 +488,6 @@ spec:
       value: "${S3_REGION}"
     - name: S3_DISABLE_SSL
       value: "${S3_DISABLE_SSL}"
-    - name: DIAGS_BUCKET
-      value: "${DIAGS_BUCKET}"
     - name: PROVIDERS
       value: "${PROVIDERS}"
     - name: INTERNAL_DOCKER_REGISTRY
@@ -518,6 +506,45 @@ spec:
       value: "${VSPHERE_HOST_IP}"
     - name: IBMCLOUD_API_KEY
       value: "${IBMCLOUD_API_KEY}"
+    - name: CONTROL_PLANE_URL
+      value: "${CONTROL_PLANE_URL}"
+    - name: DS_VERSION
+      value: "${DS_VERSION}"
+    - name: DS_BUILD
+      value: "${DS_BUILD}"
+    - name: VERSION_TO_UPDATE
+      value: "${VERSION_TO_UPDATE}"
+    - name: IMAGE_TO_UPDATE
+      value: "${IMAGE_TO_UPDATE}"
+    - name: NAMESPACE
+      value: "${NAMESPACE}"
+    - name: NO_OF_NODES
+      value: "${NO_OF_NODES}"
+    - name: DATA_SERVICE
+      value: "${DATA_SERVICE}"
+    - name: DEPLOY_ALL_VERSIONS
+      value: "${DEPLOY_ALL_VERSIONS}"
+    - name: DEPLOY_ALL_IMAGES
+      value: "${DEPLOY_ALL_IMAGES}"
+    - name: DEPLOY_ALL_DATASERVICE
+      value: "${DEPLOY_ALL_DATASERVICE}"
+    - name: PDS_USERNAME
+      value: "${PDS_USERNAME}"
+    - name: PDS_PASSWORD
+      value: "${PDS_PASSWORD}"
+    - name: PDS_CLIENT_SECRET
+      value: "${PDS_CLIENT_SECRET}"
+    - name: PDS_CLIENT_ID
+      value: "${PDS_CLIENT_ID}"
+    - name: PDS_ISSUER_URL
+      value: "${PDS_ISSUER_URL}"
+    - name: CLUSTER_TYPE
+      value: "${CLUSTER_TYPE}"
+    - name: TARGET_KUBECONFIG
+      value: "${TARGET_KUBECONFIG}"
+    - name: TARGET_CLUSTER_NAME
+      value: "${TARGET_CLUSTER_NAME}"
+    
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
