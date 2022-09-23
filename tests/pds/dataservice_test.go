@@ -2,6 +2,7 @@ package tests
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 	"testing"
 
@@ -12,6 +13,8 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -49,6 +52,7 @@ var (
 	supportedDataServicesNameIDMap          map[string]string
 	DeployAllDataService                    bool
 	DeployAllVersions                       bool
+	DataService                             string
 	DeployAllImages                         bool
 	dsVersion                               string
 	dsBuild                                 string
@@ -57,6 +61,8 @@ var (
 	deployments                             map[string][]*pds.ModelsDeployment
 	dataServiceVersionBuildMap              map[string][]string
 	dataServiceImageMap                     map[string][]string
+	dep                                     *v1.Deployment
+	pod                                     *corev1.Pod
 )
 
 func TestDataService(t *testing.T) {
@@ -92,7 +98,7 @@ var _ = BeforeSuite(func() {
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName)
 		Expect(err).NotTo(HaveOccurred())
 
-		DataService := pdslib.GetAndExpectStringEnvVar(envDataService)
+		DataService = pdslib.GetAndExpectStringEnvVar(envDataService)
 		Expect(DataService).NotTo(BeEmpty(), "ENV "+envDataService+" is not set")
 
 		dsVersion = pdslib.GetAndExpectStringEnvVar(envDsVersion)
@@ -125,7 +131,7 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 
 	JustBeforeEach(func() {
 		if !DeployAllDataService {
-			supportedDataServices = append(supportedDataServices, pdslib.GetAndExpectStringEnvVar(envDataService))
+			supportedDataServices = append(supportedDataServices, DataService)
 			for _, ds := range supportedDataServices {
 				logrus.Infof("supported dataservices %v", ds)
 			}
@@ -201,22 +207,22 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 				for index := range deployment {
 					if ds == "PostgreSQL" {
 						deploymentName := "pgload"
-						err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "100", "1", deploymentName, namespace)
+						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "100", "1", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
 					if ds == "RabbitMQ" {
 						deploymentName := "rmq"
-						err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
+						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
 					if ds == "Redis" {
 						deploymentName := "redisbench"
-						err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
+						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
 					if ds == "Cassandra" {
 						deploymentName := "cassandra-stress"
-						err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
+						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
 				}
@@ -260,32 +266,26 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 				}
 			}
 		})
-		Step("Run Workloads after updating the dataservice version", func() {
-			for ds, deployment := range deployments {
-				for index := range deployment {
-					if ds == "PostgreSQL" {
-						deploymentName := "pgload"
-						err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "100", "1", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
-					}
-					if ds == "RabbitMQ" {
-						deploymentName := "rmq"
-						err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
-					}
-					if ds == "Redis" {
-						deploymentName := "redisbench"
-						err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
-					}
-					if ds == "Cassandra" {
-						deploymentName := "cassandra-stress"
-						err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
-					}
+
+		defer func() {
+			Step("Delete the worload generating deployments", func() {
+				if DataService == "Cassandra" || DataService == "PostgreSQL" {
+					err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+				} else {
+					err = pdslib.DeleteK8sPods(pod.Name, namespace)
+				}
+				Expect(err).NotTo(HaveOccurred())
+
+			})
+			Step("Delete created deployments")
+			for _, dep := range deployments {
+				for index := range dep {
+					resp, err := pdslib.DeleteDeployment(dep[index].GetId())
+					Expect(err).NotTo(HaveOccurred())
+					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
 				}
 			}
-		})
+		}()
 	})
 
 })
@@ -461,8 +461,8 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-// func TestMain(m *testing.M) {
-// 	// call flag.Parse() here if TestMain uses flags
-// 	ParseFlags()
-// 	os.Exit(m.Run())
-// }
+func TestMain(m *testing.M) {
+	// call flag.Parse() here if TestMain uses flags
+	ParseFlags()
+	os.Exit(m.Run())
+}

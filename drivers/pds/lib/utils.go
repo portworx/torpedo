@@ -479,6 +479,18 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) error {
 	return err
 }
 
+//DeleteK8sPods deletes the pods in given namespace
+func DeleteK8sPods(pod string, namespace string) error {
+	err := k8sCore.DeletePod(pod, namespace, true)
+	return err
+}
+
+//DeleteK8sDeployments deletes the deployments in given namespace
+func DeleteK8sDeployments(deployment string, namespace string) error {
+	err := k8sApps.DeleteDeployment(deployment, namespace)
+	return err
+}
+
 // DeleteDeployment deletes the given deployment
 func DeleteDeployment(deploymentID string) (*state.Response, error) {
 	resp, err := components.DataServiceDeployment.DeleteDeployment(deploymentID)
@@ -532,7 +544,7 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 }
 
 //CreatecassandraWorkload generate workloads on the cassandra db
-func CreatecassandraWorkload(cassCommand string, deploymentName string, namespace string) error {
+func CreatecassandraWorkload(cassCommand string, deploymentName string, namespace string) (*v1.Deployment, error) {
 
 	var replicas int32 = 1
 	deploymentSpec := &v1.Deployment{
@@ -566,26 +578,19 @@ func CreatecassandraWorkload(cassCommand string, deploymentName string, namespac
 	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
 		logrus.Errorf("An Error Occured while creating deployment %v", err)
-		return err
+		return nil, err
 	}
 
 	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
 	if err != nil {
 		logrus.Errorf("An Error Occured while validating the pod %v", err)
-		return err
+		return nil, err
 	}
 
 	//TODO: Remove static sleep and verify the injected data
 	time.Sleep(1 * time.Minute)
 
-	//Delete Deployment
-	err = k8sApps.DeleteDeployment(deployment.Name, namespace)
-	if err != nil {
-		logrus.Errorf("An Error Occured while deleting the deployment %v", err)
-		return err
-	}
-
-	return nil
+	return deployment, nil
 }
 
 //CreatepostgresqlWorkload generate workloads on the pg db
@@ -632,11 +637,7 @@ func CreatepostgresqlWorkload(dnsEndpoint string, pdsPassword string, scalefacto
 
 	//TODO: Remove static sleep and verify the injected data
 	time.Sleep(2 * time.Minute)
-	err = k8sApps.DeleteDeployment(deployment.Name, namespace)
-	if err != nil {
-		logrus.Errorf("An Error Occured while deleting the deployment %v", err)
-		return nil, err
-	}
+
 	return deployment, err
 }
 
@@ -689,11 +690,6 @@ func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassw
 	//TODO: Remove static sleep and verify the injected data
 	time.Sleep(1 * time.Minute)
 
-	err = k8sCore.DeletePod(pod.Name, pod.Namespace, true)
-	if err != nil {
-		logrus.Errorf("An Error Occured while deleting namespace %v", err)
-		return nil, err
-	}
 	return pod, nil
 }
 
@@ -746,65 +742,63 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 	//TODO: Remove static sleep and verify the injected data
 	time.Sleep(1 * time.Minute)
 
-	err = k8sCore.DeletePod(pod.Name, pod.Namespace, true)
-	if err != nil {
-		logrus.Errorf("An Error Occured while deleting namespace %v", err)
-		return nil, err
-	}
 	return pod, nil
 }
 
 //CreateDataServiceWorkloads func
-func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) error {
+func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (*corev1.Pod, *v1.Deployment, error) {
+	var dep *v1.Deployment
+	var pod *corev1.Pod
+
 	dnsEndpoint, err := GetDeploymentConnectionInfo(deploymentID)
 	if err != nil {
 		logrus.Errorf("An Error Occured while getting connection info %v", err)
-		return err
+		return nil, nil, err
 	}
 	logrus.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 
 	pdsPassword, err := GetDeploymentCredentials(deploymentID)
 	if err != nil {
 		logrus.Errorf("An Error Occured while getting credentials info %v", err)
-		return err
+		return nil, nil, err
 	}
 
 	switch dataServiceName {
 	case "PostgreSQL":
-		_, err := CreatepostgresqlWorkload(dnsEndpoint, pdsPassword, scalefactor, iterations, deploymentName, namespace)
+		dep, err = CreatepostgresqlWorkload(dnsEndpoint, pdsPassword, scalefactor, iterations, deploymentName, namespace)
 		if err != nil {
 			logrus.Errorf("An Error Occured while creating postgresql workload %v", err)
-			return err
+			return nil, nil, err
 		}
 
 	case "RabbitMQ":
 		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
 		command := "while true; do java -jar perf-test.jar com.rabbitmq.perf.PerfTest --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 30; done"
-		_, err := CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env, command)
+		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env, command)
 		if err != nil {
 			logrus.Errorf("An Error Occured while creating rabbitmq workload %v", err)
-			return err
+			return nil, nil, err
 		}
 
 	case "Redis":
 		env := []string{"REDIS_HOST", "PDS_USER", "PDS_PASS"}
 		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster"
-		_, err := CreateRedisWorkload(deploymentName, "redis:latest", dnsEndpoint, pdsPassword, namespace, env, command)
+		pod, err = CreateRedisWorkload(deploymentName, "redis:latest", dnsEndpoint, pdsPassword, namespace, env, command)
 		if err != nil {
 			logrus.Errorf("An Error Occured while creating redis workload %v", err)
-			return err
+			return nil, nil, err
 		}
 
 	case "Cassandra":
 		cassCommand := deploymentName + " write no-warmup n=1000000 cl=ONE -mode user=pds password=" + pdsPassword + " native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node " + dnsEndpoint + " -port native=9042 -rate auto -log file=/tmp/" + deploymentName + ".load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/" + deploymentName + ".load.data"
-		err := CreatecassandraWorkload(cassCommand, deploymentName, namespace)
+		dep, err = CreatecassandraWorkload(cassCommand, deploymentName, namespace)
 		if err != nil {
 			logrus.Errorf("An Error Occured while creating cassandra workload %v", err)
-			return err
+			return nil, nil, err
 		}
 
 	}
-	return nil
+	return pod, dep, nil
 }
 
 // DeployDataServices deploys all dataservices, versions and images that are supported
