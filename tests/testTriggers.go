@@ -3417,7 +3417,7 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 	poolResizePossible := false
 	if poolToBeResized != nil && poolToBeResized.LastOperation != nil {
 		logrus.Infof("Validating pool :%v to expand", poolToBeResized.Uuid)
-		waitCount := getWaitCount(poolToBeResized.TotalSize)
+		waitCount := GetPoolExpansionWaitCount(poolToBeResized.TotalSize)
 		for {
 			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
 
@@ -3454,21 +3454,6 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 		poolResizePossible = true
 	}
 	return poolResizePossible, nil
-}
-
-func getWaitCount(poolSize uint64) int {
-	poolSizeUnits := poolSize / units.GiB
-
-	switch {
-	case poolSizeUnits <= 300:
-		return 180
-	case poolSizeUnits <= 600:
-		return 240
-	case poolSizeUnits <= 1000:
-		return 360
-	default:
-		return 480
-	}
 }
 
 func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {

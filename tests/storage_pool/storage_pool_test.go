@@ -359,7 +359,7 @@ func roundUpValue(toRound uint64) uint64 {
 
 func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 	poolSizeHasBeenChanged := false
-	waitCount := getWaitCount(poolToBeResized.TotalSize)
+	waitCount := GetPoolExpansionWaitCount(poolToBeResized.TotalSize)
 	if poolToBeResized.LastOperation != nil {
 		for {
 			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
@@ -369,7 +369,7 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 
 			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
 			Expect(updatedPoolToBeResized).ShouldNot(BeNil())
-			Expect(waitCount).ShouldNot(BeEquivalentTo(0), fmt.Sprintf("timeed out waiting for pool resize to finish"))
+			Expect(waitCount).ShouldNot(BeEquivalentTo(0), fmt.Sprintf("timed out waiting for pool resize to finish"))
 			if updatedPoolToBeResized.LastOperation.Status != api.SdkStoragePool_OPERATION_SUCCESSFUL {
 				Expect(updatedPoolToBeResized.LastOperation.Status).ShouldNot(BeEquivalentTo(api.SdkStoragePool_OPERATION_FAILED), fmt.Sprintf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation))
 				logrus.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
@@ -384,21 +384,6 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 	return poolSizeHasBeenChanged
 }
 
-func getWaitCount(poolSize uint64) int {
-	poolSizeUnits := poolSize / units.GiB
-
-	switch {
-	case poolSizeUnits <= 300:
-		return 180
-	case poolSizeUnits <= 600:
-		return 240
-	case poolSizeUnits <= 1000:
-		return 360
-	default:
-		return 480
-	}
-}
-
 func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJournalEnabled bool) error {
 
 	f := func() (interface{}, bool, error) {
@@ -409,6 +394,7 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 			return nil, false, fmt.Errorf("expanded pool value is nil")
 		}
 		if expandedPool.LastOperation != nil {
+			logrus.Infof("Pool Resize Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
 			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED {
 				return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
 			}

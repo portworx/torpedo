@@ -4075,3 +4075,18 @@ func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 
 	return pool, nil
 }
+
+func GetPoolExpansionWaitCount(poolSize uint64) int {
+	poolSizeUnits := poolSize / units.GiB
+
+	switch {
+	case poolSizeUnits <= 300:
+		return 180
+	case poolSizeUnits <= 600:
+		return 240
+	case poolSizeUnits <= 1000:
+		return 360
+	default:
+		return 480
+	}
+}
