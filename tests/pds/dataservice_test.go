@@ -32,6 +32,7 @@ const (
 	envDeployAllImages      = "DEPLOY_ALL_IMAGES"
 	ImageToBeUpdated        = "IMAGE_TO_UPDATE"
 	VersionToBeUpdated      = "VERSION_TO_UPDATE"
+	envPDSTestAccountName   = "TEST_ACCOUNT_NAME"
 )
 
 var (
@@ -95,7 +96,10 @@ var _ = BeforeSuite(func() {
 		DeployAllImages, err = pdslib.GetAndExpectBoolEnvVar(envDeployAllImages)
 		Expect(err).NotTo(HaveOccurred())
 
-		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName)
+		AccountName := pdslib.GetAndExpectStringEnvVar(envPDSTestAccountName)
+		Expect(AccountName).NotTo(BeEmpty(), "ENV "+AccountName+" is not set")
+
+		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName, AccountName)
 		Expect(err).NotTo(HaveOccurred())
 
 		DataService = pdslib.GetAndExpectStringEnvVar(envDataService)

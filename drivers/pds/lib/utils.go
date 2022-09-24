@@ -109,10 +109,12 @@ const (
 	maxtimeInterval       = 30 * time.Second
 	envDsVersion          = "DS_VERSION"
 	envDsBuild            = "DS_BUILD"
-	envDeployAllVersions  = "DEPLOY_ALL_VERSIONS"
 	zookeeper             = "ZooKeeper"
 	redis                 = "Redis"
-	envPDSTestAccountName = "TEST_ACCOUNT_NAME"
+	cassandraStresImage   = "scylladb/scylla:4.1.11"
+	postgresqlStressImage = "madan19/pgbench:pgloadTest1"
+	redisStressImage      = "redis:latest"
+	rmqStressImage        = "pivotalrabbitmq/perf-test:latest"
 )
 
 //PDS vars
@@ -134,7 +136,6 @@ var (
 	tenantID                              string
 	projectID                             string
 	serviceType                           = "LoadBalancer"
-	accountName                           = GetAndExpectStringEnvVar(envPDSTestAccountName)
 
 	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
 	dataServiceNameIDMap                    = make(map[string]string)
@@ -167,7 +168,7 @@ func GetAndExpectBoolEnvVar(varName string) (bool, error) {
 }
 
 // SetupPDSTest returns few params required to run the test
-func SetupPDSTest(ControlPlaneURL string, ClusterType string, TargetClusterName string) (string, string, string, string, string, error) {
+func SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName, AccountName string) (string, string, string, string, string, error) {
 	var err error
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
@@ -196,11 +197,11 @@ func SetupPDSTest(ControlPlaneURL string, ClusterType string, TargetClusterName 
 
 	for i := 0; i < len(accounts); i++ {
 		logrus.Infof("Account Name: %v", accounts[i].GetName())
-		if accounts[i].GetName() == accountName {
+		if accounts[i].GetName() == AccountName {
 			accountID = accounts[i].GetId()
 		}
 	}
-	logrus.Infof("Account Detail- Name: %s, UUID: %s ", accountName, accountID)
+	logrus.Infof("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
 	tnts := components.Tenant
 	tenants, _ := tnts.GetTenantsList(accountID)
 	tenantID = tenants[0].GetId()
@@ -211,7 +212,7 @@ func SetupPDSTest(ControlPlaneURL string, ClusterType string, TargetClusterName 
 		logrus.Errorf("Error while getting DNS Zone %v ", err)
 		return "", "", "", "", "", err
 	}
-	logrus.Infof("DNSZone info - Name: %s, tenant: %s , account: %s", dnsZone, tenantName, accountName)
+	logrus.Infof("DNSZone info - Name: %s, tenant: %s , account: %s", dnsZone, tenantName, AccountName)
 	projcts := components.Project
 	projects, _ := projcts.GetprojectsList(tenantID)
 	projectID = projects[0].GetId()
@@ -371,8 +372,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string, ge
 	isVersionAvailable = false
 	isBuildAvailable = false
 	for i := 0; i < len(versions); i++ {
-		//if (*versions[i].Enabled) && (*versions[i].Name == dsVersion) {
-		if *versions[i].Name == dsVersion {
+		if (*versions[i].Enabled) && (*versions[i].Name == dsVersion) {
 			images, _ = components.Image.ListImages(versions[i].GetId())
 			for j := 0; j < len(images); j++ {
 				if !getAllImages && *images[j].Build == dsBuild {
@@ -415,7 +415,6 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 	}
 	for i := 0; i < len(versions); i++ {
 		if *versions[i].Enabled {
-			//dataServiceNameVersionMap[dataServiceID] = append(dataServiceNameVersionMap[dataServiceID], versions[i].GetId())
 			images, _ = components.Image.ListImages(versions[i].GetId())
 			for j := 0; j < len(images); j++ {
 				dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
@@ -614,7 +613,7 @@ func CreatepostgresqlWorkload(dnsEndpoint string, pdsPassword string, scalefacto
 					Containers: []corev1.Container{
 						{
 							Name:    "pgbench",
-							Image:   "madan19/pgbench:pgloadTest1",
+							Image:   postgresqlStressImage,
 							Command: []string{"/pgloadgen.sh"},
 							Args:    []string{dnsEndpoint, pdsPassword, scalefactor, iterations},
 						},
@@ -709,7 +708,7 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 			Containers: []corev1.Container{
 				{
 					Name:    "rmqperf",
-					Image:   "pivotalrabbitmq/perf-test:latest",
+					Image:   rmqStressImage,
 					Command: []string{command},
 					Env:     make([]corev1.EnvVar, 3),
 				},
@@ -783,7 +782,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 	case "Redis":
 		env := []string{"REDIS_HOST", "PDS_USER", "PDS_PASS"}
 		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster"
-		pod, err = CreateRedisWorkload(deploymentName, "redis:latest", dnsEndpoint, pdsPassword, namespace, env, command)
+		pod, err = CreateRedisWorkload(deploymentName, redisStressImage, dnsEndpoint, pdsPassword, namespace, env, command)
 		if err != nil {
 			logrus.Errorf("An Error Occured while creating redis workload %v", err)
 			return nil, nil, err

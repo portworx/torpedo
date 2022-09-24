@@ -175,10 +175,8 @@ func (ds *DataServiceDeployment) UpdateDeployment(deploymentID string, appConfig
 		ApplicationConfigurationOverrides:  &appConfigOverride,
 		ApplicationConfigurationTemplateId: &appConfigID,
 		ImageId:                            &imageID,
-		// LoadBalancerSourceRanges: lbSourceRange,
-		NodeCount: &nodeCount,
-		//ScheduledBackup:            &scheduledBackup,
-		ResourceSettingsTemplateId: &resourceTemplateID,
+		NodeCount:                          &nodeCount,
+		ResourceSettingsTemplateId:         &resourceTemplateID,
 	}
 	dsModel, res, err := dsClient.ApiDeploymentsIdPut(ctx, deploymentID).Body(createRequest).Execute()
 	if res.StatusCode != status.StatusOK {

@@ -69,6 +69,14 @@ if [ -z "${IS_PURE_VOLUMES}" ]; then
     IS_PURE_VOLUMES=false
 fi
 
+if [ -z "${PURE_FA_CLONE_MANY_TEST}" ]; then
+    PURE_FA_CLONE_MANY_TEST=false
+fi
+
+if [ -z "${PURE_SAN_TYPE}" ]; then
+    PURE_SAN_TYPE=ISCSI
+fi
+
 if [ -n "${PROVISIONER}" ]; then
     PROVISIONER="$PROVISIONER"
 fi
@@ -424,6 +432,8 @@ spec:
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
             "--pure-volumes=$IS_PURE_VOLUMES",
+            "--pure-fa-snapshot-restore-to-many-test=$PURE_FA_CLONE_MANY_TEST",
+            "--pure-san-type=$PURE_SAN_TYPE",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
@@ -488,6 +498,8 @@ spec:
       value: "${S3_REGION}"
     - name: S3_DISABLE_SSL
       value: "${S3_DISABLE_SSL}"
+    - name: DIAGS_BUCKET
+      value: "${DIAGS_BUCKET}"
     - name: PROVIDERS
       value: "${PROVIDERS}"
     - name: INTERNAL_DOCKER_REGISTRY
@@ -512,10 +524,6 @@ spec:
       value: "${DS_VERSION}"
     - name: DS_BUILD
       value: "${DS_BUILD}"
-    - name: VERSION_TO_UPDATE
-      value: "${VERSION_TO_UPDATE}"
-    - name: IMAGE_TO_UPDATE
-      value: "${IMAGE_TO_UPDATE}"
     - name: NAMESPACE
       value: "${NAMESPACE}"
     - name: NO_OF_NODES
