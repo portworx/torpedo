@@ -3276,7 +3276,6 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	}
 
 	if !diagOps.Validate {
-
 		d.tpLog.Infof("Collecting diags on node %v. Will skip validation", hostname)
 	}
 
@@ -3316,6 +3315,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			return err
 		}
 		req := c.Post().Resource(pxDiagPath).Body(config)
+
 		resp := req.Do()
 		if resp.Error() != nil {
 			return fmt.Errorf("failed to collect diags on node %v, Err: %v", hostname, resp.Error())
@@ -3346,7 +3346,6 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	}
 
 	d.tpLog.Debugf("Successfully collected diags on node %v", hostname)
-
 	return nil
 }
 
@@ -3422,6 +3421,19 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 
 		d.tpLog.Infof("**** ASYNC DIAGS FILE EXIST: %s ****", config.OutputFile)
 		/*
+									logrus.Debug("Validating CCM health")
+									// Change to config package.
+									url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
+									ccmresp, err := http.Get(url)
+									if err != nil {
+										return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+									}
+						>>>>>>> 261b8e726 (Topic/aghodke/ptx 11487 (#872))
+
+									defer ccmresp.Body.Close()
+			=======
+					logrus.Infof("**** ASYNC DIAGS FILE EXIST: %s ****", config.OutputFile)
+					/*
 						logrus.Debug("Validating CCM health")
 						// Change to config package.
 						url := "http://" + net.JoinHostPort(n.MgmtIp, "1970") + "/1.0/status/troubleshoot-cloud-connection"
@@ -3429,9 +3441,9 @@ func collectAsyncDiags(n node.Node, config *torpedovolume.DiagRequestConfig, dia
 						if err != nil {
 							return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
 						}
-			>>>>>>> 261b8e726 (Topic/aghodke/ptx 11487 (#872))
 
 						defer ccmresp.Body.Close()
+			>>>>>>> master
 		*/
 		// Check S3 bucket for diags
 		// TODO: Waiting for S3 credentials.

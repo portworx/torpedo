@@ -107,6 +107,7 @@ type InitOptions struct {
 	PureSANType string
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
+
 	//Logger log the output
 	Logger *logrus.Logger
 }
