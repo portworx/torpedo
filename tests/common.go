@@ -10,8 +10,6 @@ import (
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 
-	"github.com/portworx/torpedo/pkg/aetosutil"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"

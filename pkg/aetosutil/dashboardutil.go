@@ -168,7 +168,6 @@ func (d *Dashboard) TestSetEnd() {
 }
 
 // TestCaseEnd update testcase  to dashboard DB
-
 func (d *Dashboard) TestCaseEnd() {
 
 	if d.testcaseID == 0 {
@@ -213,9 +212,7 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 }
 
 // TestCaseBegin start the test case and push data to dashboard DB
-
 func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, tags []string) {
-
 	if d.TestsetID == 0 {
 
 		tpLog.Errorf("TestSetID is empty, cannot update update testcase")

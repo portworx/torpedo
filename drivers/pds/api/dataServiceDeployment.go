@@ -111,7 +111,7 @@ func (ds *DataServiceDeployment) GetDeployment(deploymentID string) (*pds.Models
 	return dsModel, err
 }
 
-// GetDeploymentSatus return deployment status.
+// GetDeploymentStatus return deployment status.
 func (ds *DataServiceDeployment) GetDeploymentStatus(deploymentID string) (*pds.ControllersStatusResponse, *status.Response, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := pdsutils.GetContext()
