@@ -63,51 +63,6 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-var _ = Describe("{SampleTest}", func() {
-
-	var testrailID = 35269
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
-	var runID int
-
-	JustBeforeEach(func() {
-		f = CreateLogFile("SampleTest.log")
-		if f != nil {
-			SetTorpedoFileOutput(tpLog, f)
-		}
-
-		dash.TestCaseBegin("upgrade: sample test", "validating logs in tests", "", nil)
-
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		dash.Infof("runid: %d", runID)
-	})
-
-	It("upgrade volume driver and ensure everything is running fine", func() {
-
-		dash.Info("Inside upgrade test")
-
-		Step("start the upgrade of volume driver", func() {
-
-			dash.Info("starting upgrade")
-			dash.VerifySafely("2.12.0", "2.12.0", "validating PX version")
-			Expect("test").To(BeEmpty())
-		})
-
-		Step("reinstall and validate all apps after upgrade", func() {
-			dash.Info("Scheduling apps after upgrade")
-			tpLog.Info("Apps Scheduled")
-
-		})
-
-		Step("destroy apps", func() {
-			dash.Info("Destroying apps")
-		})
-	})
-	JustAfterEach(func() {
-		defer dash.TestCaseEnd()
-		defer CloseLogFile(tpLog, f)
-	})
-})
-
 var _ = Describe("{UpgradeVolumeDriver}", func() {
 	var testrailID = 35269
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
@@ -118,7 +73,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 			SetTorpedoFileOutput(tpLog, f)
 		}
 
-		dash.TestCaseBegin("upgrade: UpgradeVolumeDriver", "validating volume driver upgrade", "", nil)
+		dash.TestCaseBegin("Upgrade: UpgradeVolumeDriver", "validating volume driver upgrade", "", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -130,7 +85,6 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
 		dash.VerifyFatal(err, nil, "Validate cloud drive installation")
-		Expect(err).NotTo(HaveOccurred())
 
 		if !isCloudDrive {
 			for _, storageNode := range storageNodes {
@@ -139,9 +93,9 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 					continue
 				}
 				dash.VerifyFatal(err, nil, "Verify adding block drive(s)")
-				Expect(err).NotTo(HaveOccurred())
 			}
 		}
+		dash.Infof("Scheduling applicayions and validating")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
@@ -151,18 +105,18 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		var timeAfterUpgrade time.Time
 
 		Step("start the upgrade of volume driver", func() {
+
 			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 			if IsOperatorBasedInstall {
 				timeBeforeUpgrade = time.Now()
 				status, err := UpgradePxStorageCluster()
 				timeAfterUpgrade = time.Now()
 				if status {
-					tpLog.Info("Volume Driver upgrade is successful")
+					dash.Info("Volume Driver upgrade is successful")
 				} else {
-					tpLog.Error("Volume Driver upgrade failed")
+					dash.Error("Volume Driver upgrade failed")
 				}
 				dash.VerifyFatal(err, nil, "Verify volume drive upgrade for operator based set up")
-				Expect(err).NotTo(HaveOccurred())
 
 			} else {
 				timeBeforeUpgrade = time.Now()
@@ -171,22 +125,21 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 					false)
 				timeAfterUpgrade = time.Now()
 				dash.VerifyFatal(err, nil, "Verify volume drive upgrade for daemon set based set up")
-				Expect(err).NotTo(HaveOccurred())
 			}
 
 			durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
 			expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
 			dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
 			if durationInMins <= expectedUpgradeTime {
-				tpLog.Infof("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+				dash.Infof("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
 			} else {
-				tpLog.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutee", durationInMins, expectedUpgradeTime)
-				Expect(durationInMins <= expectedUpgradeTime).To(BeTrue())
+				dash.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutes", durationInMins, expectedUpgradeTime)
+				dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Upgrade took more than expected time to complete")
 			}
 		})
 
 		Step("reinstall and validate all apps after upgrade", func() {
-			tpLog.Infof("Schedulings apps after upgrade")
+			dash.Infof("Scheduling apps after upgrade")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradedvolumedriver-%d", i))...)
 			}
@@ -194,6 +147,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		})
 
 		Step("destroy apps", func() {
+			dash.Infof("Destroying apps")
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {

@@ -3,6 +3,9 @@ package log
 import (
 	"io"
 	"os"
+	"path"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -137,7 +140,12 @@ func GetLogInstance() *logrus.Logger {
 		defer lock.Unlock()
 		if log == nil {
 			log = logrus.New()
-			log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
+			log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true, TimestampFormat: "2006-01-02 15:04:05",
+				CallerPrettyfier: func(frame *runtime.Frame) (function string, file string) {
+					fileName := path.Base(frame.File) + ":" + strconv.Itoa(frame.Line)
+					//return frame.Function, fileName
+					return "", fileName
+				}})
 			log.ReportCaller = true
 			log.Out = io.MultiWriter(os.Stdout)
 		}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 
@@ -285,6 +286,7 @@ const (
 var tpLog *logrus.Logger
 var tpLogPath string
 var tpLogFile *os.File
+var dash *aetosutil.Dashboard
 
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
@@ -1148,6 +1150,7 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 	var err error
 	var vols []*volume.Volume
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
+		tpLog.Infof("destroy the %s app's volumes", ctx.App.Key)
 		vols, err = Inst().S.DeleteVolumes(ctx, options)
 		expect(err).NotTo(haveOccurred())
 	})
@@ -1159,6 +1162,8 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 	for _, vol := range vols {
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
+			tpLog.Infof("validate %s app's volume %s has been deleted in the volume driver",
+				appName, vol.Name)
 			err := Inst().V.ValidateDeleteVolume(vol)
 			expect(err).NotTo(haveOccurred(), "unexpected error validating app volumes deleted")
 		})
@@ -2060,15 +2065,14 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 
 //UpgradePxStorageCluster perform storage cluster upgrade
 func UpgradePxStorageCluster() (bool, error) {
-
-	logrus.Info("Initiating operator based install upgrade")
+	dash.Info("Initiating operator based install upgrade")
 	operatorTag, err := getOperatorLatestVersion()
 
 	if err != nil {
 		return false, fmt.Errorf("error getting latest operator version. Cause: %v", err)
 	}
 	operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
-	logrus.Info(operatorImage)
+	dash.Infof("OCI-Monitor Image: %s", operatorImage)
 
 	err = Inst().V.UpdateStorageClusterImage(operatorImage)
 	if err != nil {
@@ -2082,7 +2086,7 @@ func UpgradePxStorageCluster() (bool, error) {
 		checkTag = true
 	}
 
-	logrus.Infof("Expected version %s", expectedVersion)
+	dash.Infof("Expected PX version %s", expectedVersion)
 
 	nodes := node.GetStorageDriverNodes()
 	nodesUpgradeMap := make(map[string]bool)
@@ -2112,10 +2116,10 @@ func UpgradePxStorageCluster() (bool, error) {
 					return false, fmt.Errorf("error getting PX version for node %s. Cause: %v", k, err)
 				}
 				pxVersion := fmt.Sprintf("%v", versionVal)
-				logrus.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
+				tpLog.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
 
 				if (checkTag && pxVersion == expectedVersion) || strings.Contains(pxVersion, expectedVersion) {
-					logrus.Infof("Node %s successfully upgraded to version %s", k, pxVersion)
+					dash.Infof("Node %s successfully upgraded to version %s", k, pxVersion)
 					nodesUpgradeMap[k] = true
 				}
 			}
@@ -2128,7 +2132,7 @@ func UpgradePxStorageCluster() (bool, error) {
 			isUpgradeDone = isNodeUpgraded
 			break
 		}
-		logrus.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
+		tpLog.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
 		time.Sleep(2 * time.Minute)
 		waitCount--
 	}
@@ -3729,8 +3733,11 @@ func ParseFlags() {
 				tpLog.Infof("Backup driver found %v", backupDriver)
 			}
 		}
-		dash := aetosutil.Get()
-		//To-Do : automatically enable/disable
+		dash = aetosutil.Get()
+		if enableDash && !isDashboardReachable() {
+			enableDash = false
+			tpLog.Warn("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
+		}
 		dash.IsEnabled = enableDash
 
 		once.Do(func() {
@@ -3775,7 +3782,25 @@ func ParseFlags() {
 			}
 		})
 	}
+	printFlags()
+}
 
+func printFlags() {
+	tpLog.Info("Parsed Args:")
+	flag.VisitAll(func(f *flag.Flag) {
+		tpLog.Infof("%s: %s\n", f.Name, f.Value)
+	})
+	tpLog.Info("Parsed OS Args:")
+	tpLog.Info(os.Args)
+}
+
+func isDashboardReachable() bool {
+	timeout := 5 * time.Second
+	_, err := net.DialTimeout("tcp", aetosutil.DashBoardBaseURL, timeout)
+	if err == nil {
+		return true
+	}
+	return false
 }
 
 func setLoglevel(tpLog *logrus.Logger, logLevel string) {
@@ -3799,6 +3824,7 @@ func setLoglevel(tpLog *logrus.Logger, logLevel string) {
 //SetTorpedoFileOutput adds output destination for logging
 func SetTorpedoFileOutput(tpLog *logrus.Logger, f *os.File) {
 	tpLog.Out = io.MultiWriter(tpLog.Out, f)
+	tpLog.Infof("Log Dir: %s", f.Name())
 }
 
 //CreateLogFile creates file and return the file object

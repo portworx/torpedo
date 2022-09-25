@@ -2526,7 +2526,7 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string, ena
 			return err
 		}
 	} else {
-		logrus.Infof("stork upgrade is disabled, skipping...")
+		d.tpLog.Infof("stork upgrade is disabled, skipping...")
 	}
 	return nil
 }
@@ -2544,7 +2544,7 @@ func (d *portworx) upgradePortworx(endpointURL string, endpointVersion string) e
 	upgradeFileName := "/upgrade.sh"
 	fullEndpointURL := fmt.Sprintf("%s/%s/upgrade", endpointURL, endpointVersion)
 
-	logrus.Infof("upgrading portworx from %s URL and %s endpoint version", endpointURL, endpointVersion)
+	d.tpLog.Infof("upgrading portworx from %s URL and %s endpoint version", endpointURL, endpointVersion)
 	// Getting upgrade script
 	if err := osutils.Wget(fullEndpointURL, upgradeFileName, true); err != nil {
 		return fmt.Errorf("%+v", err)
@@ -2574,7 +2574,7 @@ func (d *portworx) upgradePortworx(endpointURL string, endpointVersion string) e
 		return err
 	}
 
-	logrus.Infof("Portworx cluster upgraded successfully")
+	d.tpLog.Infof("Portworx cluster upgraded successfully")
 
 	for _, n := range node.GetStorageDriverNodes() {
 		if err := d.WaitForUpgrade(n, endpointVersion); err != nil {
@@ -3816,7 +3816,7 @@ func (d *portworx) UpdateStorageClusterImage(imageName string) error {
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Current Storage Cluster Image: %v", stc.Spec.Image)
+	d.tpLog.Infof("Current Storage Cluster Image: %v", stc.Spec.Image)
 	stc.Spec.Image = imageName
 	_, err = pxOperator.UpdateStorageCluster(stc)
 	if err != nil {
@@ -3825,7 +3825,7 @@ func (d *portworx) UpdateStorageClusterImage(imageName string) error {
 		return er
 
 	}
-	logrus.Infof("Storage Cluster Image updated to [%v]", imageName)
+	d.tpLog.Infof("Storage Cluster Image updated to [%v]", imageName)
 	return nil
 
 }

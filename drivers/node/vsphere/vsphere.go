@@ -47,6 +47,7 @@ type vsphere struct {
 	vsphereHostIP   string
 	ctx             context.Context
 	cancel          context.CancelFunc
+	tpLog           *logrus.Logger
 }
 
 var (
@@ -59,7 +60,8 @@ func (v *vsphere) String() string {
 
 // InitVsphere initializes the vsphere driver for ssh
 func (v *vsphere) Init(nodeOpts node.InitOptions) error {
-	logrus.Infof("Using the vsphere node driver")
+	v.tpLog = nodeOpts.Logger
+	v.tpLog.Infof("Using the vsphere node driver")
 
 	v.vsphereUsername = DefaultUsername
 	username := os.Getenv(vsphereUname)
@@ -122,7 +124,7 @@ func (v *vsphere) TestConnection(n node.Node, options node.ConnectionOpts) error
 // getVMFinder return find.Finder instance
 func (v *vsphere) getVMFinder() (*find.Finder, error) {
 	login := fmt.Sprintf("%s%s:%s@%s/sdk", Protocol, v.vsphereUsername, v.vspherePassword, v.vsphereHostIP)
-	logrus.Infof("Logging in to Virtual Center using: %s", login)
+	v.tpLog.Infof("Logging in to Virtual Center using: %s", login)
 	u, err := url.Parse(login)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing url %s", login)
@@ -135,7 +137,7 @@ func (v *vsphere) getVMFinder() (*find.Finder, error) {
 	if err != nil {
 		return nil, fmt.Errorf("logging in error: %s", err.Error())
 	}
-	logrus.Infof("Log in successful to vsphere:  %s:\n", v.vsphereHostIP)
+	v.tpLog.Infof("Log in successful to vsphere:  %s:\n", v.vsphereHostIP)
 
 	f := find.NewFinder(c.Client, true)
 
