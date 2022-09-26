@@ -114,7 +114,8 @@ var _ = BeforeSuite(func() {
 	})
 
 	Step("Get StorageTemplateID and Replicas", func() {
-		storageTemplateID = pdslib.GetStorageTemplate(tenantID)
+		storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
+		Expect(err).NotTo(HaveOccurred())
 		logrus.Infof("storageTemplateID %v", storageTemplateID)
 		rep, err := pdslib.GetAndExpectIntEnvVar(envReplicas)
 		Expect(err).NotTo(HaveOccurred())

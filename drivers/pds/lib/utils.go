@@ -112,7 +112,7 @@ const (
 	zookeeper             = "ZooKeeper"
 	redis                 = "Redis"
 	cassandraStresImage   = "scylladb/scylla:4.1.11"
-	postgresqlStressImage = "madan19/pgbench:pgloadTest1"
+	postgresqlStressImage = "portworx/torpedo-pgbench:pdsloadTest"
 	redisStressImage      = "redis:latest"
 	rmqStressImage        = "pivotalrabbitmq/perf-test:latest"
 )
@@ -258,9 +258,13 @@ func GetClusterID(projectID string, targetClusterName string) (string, error) {
 }
 
 //GetStorageTemplate return the storage template id
-func GetStorageTemplate(tenantID string) string {
+func GetStorageTemplate(tenantID string) (string, error) {
 	logrus.Infof("Get the storage template")
-	storageTemplates, _ := components.StorageSettingsTemplate.ListTemplates(tenantID)
+	storageTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
+	if err != nil {
+		logrus.Errorf("Error while listing storage template %v", err)
+		return "", err
+	}
 	for i := 0; i < len(storageTemplates); i++ {
 		if storageTemplates[i].GetName() == storageTemplateName {
 			logrus.Infof("Storage template details -----> Name %v,Repl %v , Fg %v , Fs %v",
@@ -272,7 +276,7 @@ func GetStorageTemplate(tenantID string) string {
 			logrus.Infof("Storage Id: %v", storageTemplateID)
 		}
 	}
-	return storageTemplateID
+	return storageTemplateID, nil
 }
 
 // GetResourceTemplate get the resource template id and forms supported dataserviceNameIdMap
