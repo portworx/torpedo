@@ -33,6 +33,10 @@ const (
 	ImageToBeUpdated        = "IMAGE_TO_UPDATE"
 	VersionToBeUpdated      = "VERSION_TO_UPDATE"
 	envPDSTestAccountName   = "TEST_ACCOUNT_NAME"
+	postgresql              = "PostgreSQL"
+	cassandra               = "Cassandra"
+	redis                   = "Redis"
+	rabbitmq                = "RabbitMQ"
 )
 
 var (
@@ -210,22 +214,22 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 		Step("Running Workloads before scaling up of dataservices ", func() {
 			for ds, deployment := range deployments {
 				for index := range deployment {
-					if ds == "PostgreSQL" {
+					if ds == postgresql {
 						deploymentName := "pgload"
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "100", "1", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
-					if ds == "RabbitMQ" {
+					if ds == rabbitmq {
 						deploymentName := "rmq"
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
-					if ds == "Redis" {
+					if ds == redis {
 						deploymentName := "redisbench"
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
-					if ds == "Cassandra" {
+					if ds == cassandra {
 						deploymentName := "cassandra-stress"
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds, deployment[index].GetId(), "", "", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())

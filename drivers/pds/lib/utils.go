@@ -908,7 +908,7 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 	}
 
 	if !(isBuildAvailable) {
-		logrus.Errorf("Version/Build passed is not available")
+		logrus.Fatalf("Version/Build passed is not available")
 	}
 
 	deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, dsImageID, nodeCount, resourceTemplateID, nil)
