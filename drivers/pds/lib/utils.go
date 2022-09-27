@@ -115,6 +115,9 @@ const (
 	postgresqlStressImage = "portworx/torpedo-pgbench:pdsloadTest"
 	redisStressImage      = "redis:latest"
 	rmqStressImage        = "pivotalrabbitmq/perf-test:latest"
+	postgresql            = "PostgreSQL"
+	cassandra             = "Cassandra"
+	rabbitmq              = "RabbitMQ"
 )
 
 //PDS vars
@@ -767,14 +770,14 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 	}
 
 	switch dataServiceName {
-	case "PostgreSQL":
+	case postgresql:
 		dep, err = CreatepostgresqlWorkload(dnsEndpoint, pdsPassword, scalefactor, iterations, deploymentName, namespace)
 		if err != nil {
 			logrus.Errorf("An Error Occured while creating postgresql workload %v", err)
 			return nil, nil, err
 		}
 
-	case "RabbitMQ":
+	case rabbitmq:
 		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
 		command := "while true; do java -jar perf-test.jar com.rabbitmq.perf.PerfTest --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 30; done"
 		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env, command)
@@ -783,7 +786,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 			return nil, nil, err
 		}
 
-	case "Redis":
+	case redis:
 		env := []string{"REDIS_HOST", "PDS_USER", "PDS_PASS"}
 		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster"
 		pod, err = CreateRedisWorkload(deploymentName, redisStressImage, dnsEndpoint, pdsPassword, namespace, env, command)
@@ -792,7 +795,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 			return nil, nil, err
 		}
 
-	case "Cassandra":
+	case cassandra:
 		cassCommand := deploymentName + " write no-warmup n=1000000 cl=ONE -mode user=pds password=" + pdsPassword + " native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node " + dnsEndpoint + " -port native=9042 -rate auto -log file=/tmp/" + deploymentName + ".load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/" + deploymentName + ".load.data"
 		dep, err = CreatecassandraWorkload(cassCommand, deploymentName, namespace)
 		if err != nil {
