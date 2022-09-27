@@ -552,6 +552,10 @@ spec:
       value: "${TARGET_KUBECONFIG}"
     - name: TARGET_CLUSTER_NAME
       value: "${TARGET_CLUSTER_NAME}"
+    - name: IMAGE_TO_UPDATE
+      value: "${IMAGE_TO_UPDATE}"
+    - name: VERSION_TO_UPDATE
+      value: "${VERSION_TO_UPDATE}"
     
   volumes: [${VOLUMES}]
   restartPolicy: Never
