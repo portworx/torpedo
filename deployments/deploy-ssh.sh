@@ -556,6 +556,8 @@ spec:
       value: "${IMAGE_TO_UPDATE}"
     - name: VERSION_TO_UPDATE
       value: "${VERSION_TO_UPDATE}"
+    - name: UPDATE_REPLICAS
+      value: "${UPDATE_REPLICAS}"
     
   volumes: [${VOLUMES}]
   restartPolicy: Never

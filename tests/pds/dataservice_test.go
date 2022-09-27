@@ -163,7 +163,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 	})
 
-	It("upgrade dataservice version", func() {
+	It("scale up dataservice nodes", func() {
 		Step("Deploy Data Services", func() {
 			deployments, dataServiceImageMap, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataServiceNameIDMap, projectID,
 				deploymentTargetID,
