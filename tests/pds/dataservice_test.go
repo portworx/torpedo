@@ -103,7 +103,7 @@ var _ = BeforeSuite(func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		AccountName := pdslib.GetAndExpectStringEnvVar(envPDSTestAccountName)
-		Expect(AccountName).NotTo(BeEmpty(), "ENV "+AccountName+" is not set")
+		Expect(AccountName).NotTo(BeEmpty(), "ENV "+envPDSTestAccountName+" is not set")
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName, AccountName)
 		Expect(err).NotTo(HaveOccurred())

@@ -558,6 +558,8 @@ spec:
       value: "${VERSION_TO_UPDATE}"
     - name: UPDATE_REPLICAS
       value: "${UPDATE_REPLICAS}"
+    - name: TEST_ACCOUNT_NAME
+      value: "${TEST_ACCOUNT_NAME}"
     
   volumes: [${VOLUMES}]
   restartPolicy: Never
