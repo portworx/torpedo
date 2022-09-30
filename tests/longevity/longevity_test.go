@@ -109,6 +109,7 @@ var _ = Describe("{Longevity}", func() {
 		HAIncreaseAndReboot:  TriggerHAIncreaseAndReboot,
 		AddDiskAndReboot:     TriggerPoolAddDiskAndReboot,
 		ResizeDiskAndReboot:  TriggerPoolResizeDiskAndReboot,
+		AddDrive:             TriggerAddDrive,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){

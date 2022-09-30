@@ -356,6 +356,8 @@ const (
 	AddDiskAndReboot = "addDiskAndReboot"
 	// ResizeDiskAndReboot performs  resize-disk and reboots node
 	ResizeDiskAndReboot = "resizeDiskAndReboot"
+	// StoragelessConv performs storage less to storage node conversion
+	StoragelessConv = "storagelessConv"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -4975,33 +4977,14 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
 		UpdateOutcome(event, err)
-		systemOpts := node.SystemctlOpts{
-			ConnectionOpts: node.ConnectionOpts{
-				Timeout:         defaultTimeout,
-				TimeBeforeRetry: defaultRetryInterval,
-			},
-			Action: "start",
-		}
 		if err == nil && !isCloudDrive {
 			for _, storageNode := range storageNodes {
-				blockDrives, err := Inst().N.GetBlockDrives(storageNode, systemOpts)
-				UpdateOutcome(event, err)
-
-				drvPaths := make([]string, 5)
-
-				for _, drv := range blockDrives {
-					if drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
-						drvPaths = append(drvPaths, drv.Path)
-						break
-					}
-				}
-				err = Inst().V.AddBlockDrives(&storageNode, drvPaths)
+				err = performLocalAddDrive(storageNode)
 				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
 					continue
 				}
 				UpdateOutcome(event, err)
 			}
-
 			for _, ctx := range *contexts {
 				Step(fmt.Sprintf("validating context after add drive on storage nodes"), func() {
 					errorChan := make(chan error, errorChannelSize)
@@ -5100,6 +5083,127 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			UpdateOutcome(event, err)
 		}
 	}
+}
+
+func TriggerStroagelessToStorgeConversion(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: StoragelessConv,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	context("convert storageless node to storage node", func() {
+		Step("Get storageless node and convert to storage node", func() {
+
+			storagelessNodes := node.GetStorageLessNodes()
+			storageNodes := node.GetStorageNodes()
+
+			if len(storagelessNodes) > 0 {
+
+				nodeIndex := rand.Intn(len(storagelessNodes))
+				nodeToConvert := storagelessNodes[nodeIndex]
+
+				isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
+				UpdateOutcome(event, err)
+
+				if isCloudDrive {
+
+					addDriveSpec := getAddDriveStorageSpec(Inst().N.String(), "300")
+
+				out:
+					for _, ctx := range *contexts {
+						var appVolumes []*volume.Volume
+						var err error
+						Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+							appVolumes, err = Inst().S.GetVolumes(ctx)
+							UpdateOutcome(event, err)
+							if len(appVolumes) == 0 {
+								UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+							}
+						})
+
+						for _, v := range appVolumes {
+							// Check if volumes are Pure FA/FB DA volumes
+							isPureVol, err := Inst().V.IsPureVolume(v)
+							UpdateOutcome(event, err)
+							if isPureVol {
+								addDriveSpec = getAddDriveStorageSpec("FA", "300")
+								break out
+							}
+						}
+
+					}
+					logrus.Infof("Using spec to add drive : %s", addDriveSpec)
+					//ToDo : Logic to perform add drive
+				} else {
+					err = performLocalAddDrive(nodeToConvert)
+					if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+						logrus.Warnf("Node : %s has no block drives available to add", nodeToConvert.Name)
+
+					} else {
+						UpdateOutcome(event, err)
+					}
+				}
+
+			} else {
+				logrus.Infof("Not storage less nodes found, skipping the test.")
+			}
+
+		})
+	})
+
+}
+
+func performLocalAddDrive(storageNode node.Node) error {
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         defaultTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	blockDrives, err := Inst().N.GetBlockDrives(storageNode, systemOpts)
+	if err != nil {
+		return err
+	}
+
+	drvPaths := make([]string, 5)
+
+	for _, drv := range blockDrives {
+		if drv.MountPoint == "" && drv.FSType == "" && drv.Type == "disk" {
+			drvPaths = append(drvPaths, drv.Path)
+			break
+		}
+	}
+	err = Inst().V.AddBlockDrives(&storageNode, drvPaths)
+
+	return err
+}
+
+func getAddDriveStorageSpec(nodeDriver, driveSize string) string {
+
+	specString := ""
+
+	switch nodeDriver {
+	case "FA":
+		specString = fmt.Sprintf("size=%s", driveSize)
+	case "aws":
+		specString = fmt.Sprintf("type=gp3,size=%s", driveSize)
+	case "gke":
+		specString = fmt.Sprintf("type=pd-ssd,size=%s", driveSize)
+	case "aks":
+		specString = fmt.Sprintf("type=Premium_LRS,size=%s", driveSize)
+	}
+	return specString
+
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {

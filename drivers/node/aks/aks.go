@@ -1,13 +1,13 @@
 package aks
 
 import (
+	"github.com/portworx/torpedo/drivers/node/ssh"
 	"os"
 	"time"
 
 	"github.com/libopenstorage/cloudops"
 	"github.com/libopenstorage/cloudops/azure"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/sirupsen/logrus"
 )
 
