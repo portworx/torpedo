@@ -291,7 +291,7 @@ func (s *SSH) TestConnection(n node.Node, options node.ConnectionOpts) error {
 
 // RebootNode reboots given node
 func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
-	logrus.Infof("Rebooting node %s", n.SchedulerNodeName)
+	s.tpLog.Infof("Rebooting node %s", n.SchedulerNodeName)
 	rebootCmd := "sudo reboot"
 	if options.Force {
 		rebootCmd = rebootCmd + " -f"

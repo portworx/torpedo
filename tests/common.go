@@ -174,8 +174,18 @@ const (
 	defaultClusterPairDir  = "cluster-pair"
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
+)
 
+//Dashboard params
+const (
 	enableDashBoardFlag = "enable-dash"
+	userFlag            = "user"
+	testTypeFlag        = "test-type"
+	testDescriptionFlag = "test-desc"
+	testTagsFlag        = "test-tags"
+	testSetIDFlag       = "testset-id"
+	testBranchFlag      = "branch"
+	testProductFlag     = "product"
 )
 
 // Backup constants
@@ -284,6 +294,8 @@ const (
 )
 
 var tpLog *logrus.Logger
+
+//TpLogPath torpedo log path
 var tpLogPath string
 var tpLogFile *os.File
 var dash *aetosutil.Dashboard
@@ -378,9 +390,10 @@ func processError(err error, errChan ...*chan error) {
 	// Useful for frameworks like longevity that must continue
 	// execution and must not not fail immidiately
 	if len(errChan) > 0 {
-		logrus.Error(err)
+		tpLog.Error(err)
 		updateChannel(err, errChan...)
 	} else {
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Err: %v", err))
 		expect(err).NotTo(haveOccurred())
 	}
 }
@@ -3634,6 +3647,9 @@ func ParseFlags() {
 	var schedUpgradeHops string
 	var autopilotUpgradeImage string
 	var csiGenericDriverConfigMapName string
+	//dashboard fields
+	var user, testBranch, testProduct, testType, testDescription, testTags string
+	var testsetID int
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -3683,6 +3699,13 @@ func ParseFlags() {
 	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
 	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
 	flag.BoolVar(&enableDash, enableDashBoardFlag, true, "To enable/disable aetos dashboard reporting")
+	flag.StringVar(&user, userFlag, "no-user", "user name running the tests")
+	flag.StringVar(&testDescription, testDescriptionFlag, "Running Torpedo test-suiter", "test suite description")
+	flag.StringVar(&testType, testTypeFlag, "system-test", "test types like system-test,functional,integration")
+	flag.StringVar(&testTags, testTagsFlag, "", "tags running the tests")
+	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
+	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
+	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
 	flag.Parse()
 
 	tpLog = log.GetLogInstance()
@@ -3692,7 +3715,6 @@ func ParseFlags() {
 	tpLogFile = CreateLogFile(tpLogPath)
 	if tpLogFile != nil {
 		SetTorpedoFileOutput(tpLog, tpLogFile)
-		tpLog.Info("Log location: ", tpLogPath)
 	}
 
 	appList, err := splitCsv(appListCSV)
@@ -3739,6 +3761,20 @@ func ParseFlags() {
 			tpLog.Warn("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
 		}
 		dash.IsEnabled = enableDash
+		testSet := aetosutil.TestSet{
+			User:        user,
+			Product:     testProduct,
+			Description: testDescription,
+			Branch:      testBranch,
+			TestType:    testType,
+			Status:      aetosutil.NOTSTARTED,
+		}
+		if testTags != "" {
+			tags := strings.Split(testTags, ",")
+			testSet.Tags = tags
+		}
+		dash.TestSetID = testsetID
+		dash.TestSet = &testSet
 
 		once.Do(func() {
 			instance = &Torpedo{
@@ -3846,18 +3882,9 @@ func CreateLogFile(filename string) *os.File {
 }
 
 //CloseLogFile ends testcase file object
-func CloseLogFile(tpLog *logrus.Logger, f *os.File) {
+func CloseLogFile(f *os.File) {
 	if f != nil {
 		f.Close()
-		tpLogFile.Close()
-		tpFile, err := os.OpenFile(tpLogPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-		if err != nil {
-			fmt.Println("Failed to create logfile torpedo.log")
-			fmt.Println("Error: ", err)
-		}
-		tpLog.Out = io.MultiWriter(os.Stdout, tpFile)
-	} else {
-		tpLogFile.Close()
 	}
 
 }

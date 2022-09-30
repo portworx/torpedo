@@ -47,7 +47,9 @@ type Dashboard struct {
 	//IsEnabled enable/disable dashboard logging
 	IsEnabled bool
 	//TestSetID test set ID to post the test logs and results
-	TestsetID         int
+	TestSetID int
+	//TestSet object created during initialization
+	TestSet           *TestSet
 	testcaseID        int
 	verifications     []result
 	testsetStartTime  time.Time
@@ -130,13 +132,13 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 		} else if respStatusCode != http.StatusOK {
 			tpLog.Errorf("Failed to create TestSet, resp : %s", string(resp))
 		} else {
-			d.TestsetID, err = strconv.Atoi(string(resp))
+			d.TestSetID, err = strconv.Atoi(string(resp))
 			if err == nil {
-				tpLog.Infof("TestSetId created : %d", d.TestsetID)
+				tpLog.Infof("TestSetId created : %d", d.TestSetID)
 			} else {
 				tpLog.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
-			tpLog.Infof("Dashbaord URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestsetID))
+			tpLog.Infof("Dashbaord URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
 
 		}
 	}
@@ -147,12 +149,12 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 func (d *Dashboard) TestSetEnd() {
 
 	if d.IsEnabled {
-		if d.TestsetID == 0 {
+		if d.TestSetID == 0 {
 			tpLog.Errorf("TestSetID is empty")
 			return
 		}
 
-		updateTestSetURL := fmt.Sprintf("%s/testset/%d/end", DashBoardBaseURL, d.TestsetID)
+		updateTestSetURL := fmt.Sprintf("%s/testset/%d/end", DashBoardBaseURL, d.TestSetID)
 		resp, respStatusCode, err := rest.PUT(updateTestSetURL, nil, nil, nil)
 
 		if err != nil {
@@ -161,7 +163,7 @@ func (d *Dashboard) TestSetEnd() {
 			tpLog.Errorf("Failed to end TestSet, Resp : %s", string(resp))
 		} else {
 
-			tpLog.Infof("TestSetId %d update successfully", d.TestsetID)
+			tpLog.Infof("TestSetId %d update successfully", d.TestSetID)
 
 		}
 	}
@@ -211,11 +213,11 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 
 	if d.IsEnabled {
 
-		if d.TestsetID == 0 {
+		if d.TestSetID == 0 {
 			tpLog.Error("TestSetID is empty")
 		}
 
-		updateTestSetURL := fmt.Sprintf("%s/testset/%d", DashBoardBaseURL, d.TestsetID)
+		updateTestSetURL := fmt.Sprintf("%s/testset/%d", DashBoardBaseURL, d.TestSetID)
 		resp, respStatusCode, err := rest.PUT(updateTestSetURL, testSet, nil, nil)
 
 		if err != nil {
@@ -223,7 +225,7 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 		} else if respStatusCode != http.StatusOK {
 			tpLog.Errorf("Failed to update TestSet, Resp : %s", string(resp))
 		} else {
-			tpLog.Infof("TestSetId %d update successfully", d.TestsetID)
+			tpLog.Infof("TestSetId %d update successfully", d.TestSetID)
 
 		}
 	}
@@ -232,7 +234,7 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 // TestCaseBegin start the test case and push data to dashboard DB
 func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, tags []string) {
 	if d.IsEnabled {
-		if d.TestsetID == 0 {
+		if d.TestSetID == 0 {
 			tpLog.Errorf("TestSetID is empty, cannot update update testcase")
 			return
 		}
@@ -262,7 +264,7 @@ func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, ta
 		testCase.Description = description
 		testCase.HostOs = runtime.GOOS
 
-		testCase.TestSetID = d.TestsetID
+		testCase.TestSetID = d.TestSetID
 
 		testCase.TestRepoID = testRepoID
 		if tags != nil {
@@ -368,6 +370,7 @@ func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string
 		}
 		verifications = append(verifications, res)
 		d.verify(res)
+		tpLog.Fatalf("verification for %s has failed", description)
 
 		//if !res.ResultStatus {
 		//	return fmt.Errorf("verification for %s has failed", description)

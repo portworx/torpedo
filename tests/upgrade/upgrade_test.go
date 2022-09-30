@@ -23,7 +23,6 @@ import (
 )
 
 var tpLog *logrus.Logger
-var testSet aetosutil.TestSet
 var dash *aetosutil.Dashboard
 
 var storkLabel = map[string]string{"name": "stork"}
@@ -47,18 +46,8 @@ func TestUpgrade(t *testing.T) {
 var _ = BeforeSuite(func() {
 	tpLog = Inst().Logger
 	dash = Inst().Dash
-	if dash.TestsetID == 0 {
-		testSet = aetosutil.TestSet{
-			CommitID:    "2.12.0-serfdf",
-			User:        "lsrinivas",
-			Product:     "PxEnp",
-			Description: "Torpedo : Upgrade",
-			Branch:      "master",
-			TestType:    "SystemTest",
-			Tags:        []string{"upgrade"},
-			Status:      aetosutil.NOTSTARTED,
-		}
-		dash.TestSetBegin(&testSet)
+	if dash.TestSetID == 0 {
+		dash.TestSetBegin(dash.TestSet)
 	}
 	InitInstance()
 })
@@ -157,7 +146,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	})
 	JustAfterEach(func() {
 		defer dash.TestCaseEnd()
-		defer CloseLogFile(tpLog, f)
+		defer CloseLogFile(f)
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -168,6 +157,12 @@ var _ = Describe("{UpgradeStork}", func() {
 	var runID int
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
+		f = CreateLogFile("UpgradeStork.log")
+		if f != nil {
+			SetTorpedoFileOutput(tpLog, f)
+		}
+
+		dash.TestCaseBegin("Upgrade: UpgradeStork", "validating stork upgrade", "", nil)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
@@ -211,7 +206,7 @@ var _ = Describe("{UpgradeStork}", func() {
 	}
 	JustAfterEach(func() {
 		defer dash.TestCaseEnd()
-		defer CloseLogFile(tpLog, f)
+		defer CloseLogFile(f)
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
@@ -266,7 +261,6 @@ var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 */
 var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
-	defer CloseLogFile(tpLog, nil)
 	PerformSystemCheck()
 	ValidateCleanup()
 
