@@ -318,28 +318,31 @@ func (d *Dashboard) verify(r result) {
 
 //VerifySafely verify test without aborting the execution
 func (d *Dashboard) VerifySafely(actual, expected interface{}, description string) {
+
+	actualVal := fmt.Sprintf("%s", actual)
+	expectedVal := fmt.Sprintf("%s", expected)
+	res := result{}
+
+	res.Actual = actualVal
+	res.Expected = expectedVal
+	res.Description = description
+	res.TestCaseID = d.testcaseID
+
+	tpLog.Infof("Verfy Safely: Description : %s", description)
+	tpLog.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
+
+	if actualVal == expectedVal {
+		res.ResultType = "info"
+		res.ResultStatus = true
+		tpLog.Infof("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
+	} else {
+		res.ResultType = "error"
+		res.ResultStatus = false
+		tpLog.Errorf("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
+	}
+	verifications = append(verifications, res)
+
 	if d.IsEnabled {
-
-		actualVal := fmt.Sprintf("%s", actual)
-		expectedVal := fmt.Sprintf("%s", expected)
-		res := result{}
-
-		res.Actual = actualVal
-		res.Expected = expectedVal
-		res.Description = description
-		res.TestCaseID = d.testcaseID
-
-		tpLog.Infof("Verfy Safely: Description : %s", description)
-		tpLog.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
-
-		if actualVal == expectedVal {
-			res.ResultType = "info"
-			res.ResultStatus = true
-		} else {
-			res.ResultType = "error"
-			res.ResultStatus = false
-		}
-		verifications = append(verifications, res)
 		d.verify(res)
 	}
 
@@ -347,42 +350,43 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 
 //VerifyFatal verify test and abort operation upon failure
 func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string) {
-	if d.IsEnabled {
 
-		actualVal := fmt.Sprintf("%s", actual)
-		expectedVal := fmt.Sprintf("%s", expected)
-		res := result{}
+	actualVal := fmt.Sprintf("%s", actual)
+	expectedVal := fmt.Sprintf("%s", expected)
+	res := result{}
 
-		res.Actual = actualVal
-		res.Expected = expectedVal
-		res.Description = description
-		res.TestCaseID = d.testcaseID
+	res.Actual = actualVal
+	res.Expected = expectedVal
+	res.Description = description
+	res.TestCaseID = d.testcaseID
 
-		tpLog.Infof("Verify Fatal: Description : %s", description)
-		tpLog.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
+	tpLog.Infof("Verify Fatal: Description : %s", description)
+	tpLog.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
 
-		if actualVal == expectedVal {
-			res.ResultType = "info"
-			res.ResultStatus = true
-		} else {
-			res.ResultType = "error"
-			res.ResultStatus = false
-		}
-		verifications = append(verifications, res)
-		d.verify(res)
-		tpLog.Fatalf("verification for %s has failed", description)
-
-		//if !res.ResultStatus {
-		//	return fmt.Errorf("verification for %s has failed", description)
-		//}
-
+	if actualVal == expectedVal {
+		res.ResultType = "info"
+		res.ResultStatus = true
+		tpLog.Infof("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
+	} else {
+		res.ResultType = "error"
+		res.ResultStatus = false
+		tpLog.Errorf("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
 	}
+	verifications = append(verifications, res)
+	if d.IsEnabled {
+		d.verify(res)
+	}
+	tpLog.Fatalf("verification for %s has failed", description)
+
+	//if !res.ResultStatus {
+	//	return fmt.Errorf("verification for %s has failed", description)
+	//}
 
 }
 
 // Info logging info message
 func (d *Dashboard) Info(message string) {
-
+	tpLog.Infof(message)
 	if d.IsEnabled {
 		res := comment{}
 		res.TestCaseID = d.testcaseID
@@ -394,9 +398,9 @@ func (d *Dashboard) Info(message string) {
 
 // Infof logging info with formated message
 func (d *Dashboard) Infof(message string, args ...interface{}) {
+	tpLog.Infof(message, args)
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
-
 		res := comment{}
 		res.TestCaseID = d.testcaseID
 		res.Description = fmtMsg
@@ -407,6 +411,7 @@ func (d *Dashboard) Infof(message string, args ...interface{}) {
 
 // Warnf logging formatted warn message
 func (d *Dashboard) Warnf(message string, args ...interface{}) {
+	tpLog.Warnf(message, args)
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}
@@ -419,6 +424,7 @@ func (d *Dashboard) Warnf(message string, args ...interface{}) {
 
 // Warn logging warn message
 func (d *Dashboard) Warn(message string) {
+	tpLog.Warn(message)
 	if d.IsEnabled {
 		res := comment{}
 		res.TestCaseID = d.testcaseID
@@ -430,6 +436,7 @@ func (d *Dashboard) Warn(message string) {
 
 // Error logging error message
 func (d *Dashboard) Error(message string) {
+	tpLog.Error(message)
 	if d.IsEnabled {
 		res := comment{}
 		res.TestCaseID = d.testcaseID
@@ -441,6 +448,7 @@ func (d *Dashboard) Error(message string) {
 
 // Errorf logging formatted error message
 func (d *Dashboard) Errorf(message string, args ...interface{}) {
+	tpLog.Errorf(message, args)
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}

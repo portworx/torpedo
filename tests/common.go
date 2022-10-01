@@ -1158,6 +1158,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		// Tear down application
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
 			err = Inst().S.Destroy(ctx, opts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Error while destroying app %s, Err: %v", ctx.App.Key, err))
 			expect(err).NotTo(haveOccurred())
 		})
 
@@ -1182,6 +1183,7 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
 		tpLog.Infof("destroy the %s app's volumes", ctx.App.Key)
 		vols, err = Inst().S.DeleteVolumes(ctx, options)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Error while deleting app %s's volumes, Err: %v", ctx.App.Key, err))
 		expect(err).NotTo(haveOccurred())
 	})
 	return vols
@@ -1195,6 +1197,7 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 			tpLog.Infof("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
 			err := Inst().V.ValidateDeleteVolume(vol)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Error while deleting app %s's volume %s, Err: %v", appName, vol.Name, err))
 			expect(err).NotTo(haveOccurred(), "unexpected error validating app volumes deleted")
 		})
 	}
@@ -1477,10 +1480,10 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
 				namespaceDescription, err := Inst().S.Describe(ctx)
 				if err != nil {
-					logrus.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
+					tpLog.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
 				}
 				if err = ioutil.WriteFile(filename, []byte(namespaceDescription), 0755); err != nil {
-					logrus.Errorf("failed to save file %s. Cause: %v", filename, err)
+					tpLog.Errorf("failed to save file %s. Cause: %v", filename, err)
 				}
 			}
 		})
@@ -1545,7 +1548,7 @@ func CollectSupport() {
 		skipStr := os.Getenv(envSkipDiagCollection)
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
-				logrus.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
+				tpLog.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
 				return
 			}
 		}
@@ -1557,6 +1560,7 @@ func CollectSupport() {
 				continue
 			}
 			Step(fmt.Sprintf("save all useful logs on node %s", n.SchedulerNodeName), func() {
+				tpLog.Infof("save all useful logs on node %s", n.SchedulerNodeName)
 
 				// Moves this out to deal with diag testing.
 				r := &volume.DiagRequestConfig{
@@ -1626,6 +1630,7 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
 	context("checking for core files...", func() {
+		tpLog.Info("checking for core files...")
 		Step("verifying if core files are present on each node", func() {
 			nodes := node.GetNodes()
 			expect(nodes).NotTo(beEmpty())
@@ -1642,7 +1647,9 @@ func PerformSystemCheck() {
 					tpLog.Info("an error occurred, collecting bundle")
 					//CollectSupport()
 				}
+				dash.VerifySafely(err, nil, fmt.Sprintf("an error occurred, collecting bundle,Err: %v", err))
 				expect(err).NotTo(haveOccurred())
+				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
 				expect(file).To(beEmpty())
 			}
 		})
@@ -1818,7 +1825,7 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	tpLog.Debugf("contexts: %v", contexts)
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
-		logrus.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+		tpLog.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 		CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
@@ -1826,7 +1833,7 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	if len(ids) >= 1 {
 		driverVersion, err := Inst().V.GetDriverVersion()
 		if err != nil {
-			logrus.Errorf("Error in getting driver version")
+			tpLog.Errorf("Error in getting driver version")
 		}
 		testrailObject := testrailuttils.Testrail{
 			Status:        testStatus,
@@ -3839,20 +3846,26 @@ func ParseFlags() {
 }
 
 func printFlags() {
-	tpLog.Info("Parsed Args:")
+
+	dash.Info("********Torpedo Command********")
+	dash.Info(strings.Join(os.Args, " "))
+	dash.Info("******************************")
+
+	tpLog.Info("*********Parsed Args**********")
 	flag.VisitAll(func(f *flag.Flag) {
-		tpLog.Infof("%s: %s\n", f.Name, f.Value)
+		tpLog.Infof("   %s: %s", f.Name, f.Value)
 	})
-	tpLog.Info("Parsed OS Args:")
-	tpLog.Info(os.Args)
+	tpLog.Info("******************************")
 }
 
 func isDashboardReachable() bool {
 	timeout := 5 * time.Second
-	_, err := net.DialTimeout("tcp", aetosutil.DashBoardBaseURL, timeout)
+	dashUrlSplice := strings.Split(aetosutil.DashBoardBaseURL, "/")
+	_, err := net.DialTimeout("tcp", fmt.Sprintf("%s:80", dashUrlSplice[2]), timeout)
 	if err == nil {
 		return true
 	}
+	tpLog.Warn(err.Error())
 	return false
 }
 
@@ -3902,6 +3915,14 @@ func CreateLogFile(filename string) *os.File {
 func CloseLogFile(f *os.File) {
 	if f != nil {
 		f.Close()
+		//Below steps are performed to remove current file from log output
+		tpLogFile.Close()
+		tpFile, err := os.OpenFile(tpLogPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Failed to create logfile torpedo.log")
+			fmt.Println("Error: ", err)
+		}
+		tpLog.Out = io.MultiWriter(os.Stdout, tpFile)
 	}
 
 }
