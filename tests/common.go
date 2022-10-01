@@ -329,19 +329,23 @@ func InitInstance() {
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
 		Logger:                           Inst().Logger,
 	})
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Scheduler Driver Initialization, Err: %v", err))
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
 		Logger:  Inst().Logger,
 	})
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Node Driver Initialization, Err: %v", err))
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap, Inst().Logger)
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Volume Driver Initialization, Err: %v", err))
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Backup Driver Initialization, Err: %v", err))
 		expect(err).NotTo(haveOccurred())
 	}
 	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {

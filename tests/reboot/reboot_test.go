@@ -42,9 +42,7 @@ func TestReboot(t *testing.T) {
 var _ = BeforeSuite(func() {
 	tpLog = Inst().Logger
 	dash = Inst().Dash
-	if dash.TestSetID == 0 {
-		dash.TestSetBegin(dash.TestSet)
-	}
+	dash.TestSetBegin(dash.TestSet)
 	InitInstance()
 })
 

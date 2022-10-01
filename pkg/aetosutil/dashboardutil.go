@@ -106,7 +106,7 @@ var tpLog *logrus.Logger
 
 // TestSetBegin start testset and push data to dashboard DB
 func (d *Dashboard) TestSetBegin(testSet *TestSet) {
-	if d.IsEnabled {
+	if d.IsEnabled && d.TestSetID == 0 {
 		tpLog = log.GetLogInstance()
 
 		if testSet.Branch == "" {
