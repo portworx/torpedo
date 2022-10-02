@@ -329,23 +329,31 @@ func InitInstance() {
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
 		Logger:                           Inst().Logger,
 	})
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Scheduler Driver Initialization, Err: %v", err))
+	if err != nil {
+		tpLog.Errorf("Error occured while Scheduler Driver Initialization, Err: %v", err)
+	}
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
 		Logger:  Inst().Logger,
 	})
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Node Driver Initialization, Err: %v", err))
+	if err != nil {
+		tpLog.Errorf("Error occured while Node Driver Initialization, Err: %v", err)
+	}
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap, Inst().Logger)
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Volume Driver Initialization, Err: %v", err))
+	if err != nil {
+		tpLog.Errorf("Error occured while Volume Driver Initialization, Err: %v", err)
+	}
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Backup Driver Initialization, Err: %v", err))
+		if err != nil {
+			tpLog.Errorf("Error occured while Backup Driver Initialization, Err: %v", err)
+		}
 		expect(err).NotTo(haveOccurred())
 	}
 	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
@@ -392,7 +400,7 @@ func ValidateCleanup() {
 func processError(err error, errChan ...*chan error) {
 	// if errChan is provided then just push err to on channel
 	// Useful for frameworks like longevity that must continue
-	// execution and must not not fail immidiately
+	// execution and must not fail immediately
 	if len(errChan) > 0 {
 		tpLog.Error(err)
 		updateChannel(err, errChan...)
@@ -3784,6 +3792,7 @@ func ParseFlags() {
 			}
 		}
 		dash = aetosutil.Get()
+		dash.TpLog = tpLog
 		if enableDash && !isDashboardReachable() {
 			enableDash = false
 			tpLog.Warn("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
@@ -3795,11 +3804,12 @@ func ParseFlags() {
 			Description: testDescription,
 			Branch:      testBranch,
 			TestType:    testType,
+			Tags:        make([]string, 0),
 			Status:      aetosutil.NOTSTARTED,
 		}
 		if testTags != "" {
 			tags := strings.Split(testTags, ",")
-			testSet.Tags = tags
+			testSet.Tags = append(testSet.Tags, tags...)
 		}
 		dash.TestSetID = testsetID
 		dash.TestSet = &testSet
@@ -3850,10 +3860,9 @@ func ParseFlags() {
 }
 
 func printFlags() {
-
-	dash.Info("********Torpedo Command********")
-	dash.Info(strings.Join(os.Args, " "))
-	dash.Info("******************************")
+	tpLog.Info("********Torpedo Command********")
+	tpLog.Info(strings.Join(os.Args, " "))
+	tpLog.Info("******************************")
 
 	tpLog.Info("*********Parsed Args**********")
 	flag.VisitAll(func(f *flag.Flag) {
