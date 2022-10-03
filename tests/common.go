@@ -360,7 +360,9 @@ func InitInstance() {
 		err = testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
 		if err == nil {
 			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
-				processError(fmt.Errorf("not all details provided to update testrail"))
+				err = fmt.Errorf("not all details provided to update testrail")
+				tpLog.Errorf("Err: %v", err)
+				expect(err).NotTo(haveOccurred())
 			}
 			testrailuttils.CreateMilestone()
 		}
@@ -375,6 +377,16 @@ func InitInstance() {
 	} else {
 		tpLog.Debugf("Not all information to connect to JIRA is provided.")
 	}
+
+	pxVersion, err := Inst().V.GetDriverVersion()
+	if err != nil {
+		tpLog.Errorf(err.Error())
+		expect(err).NotTo(haveOccurred())
+	}
+	commitID := strings.Split(pxVersion, "-")[1]
+	t := Inst().Dash.TestSet
+	t.CommitID = commitID
+	t.Tags = append(t.Tags, pxVersion)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -1660,7 +1672,6 @@ func PerformSystemCheck() {
 					//CollectSupport()
 				}
 				dash.VerifySafely(err, nil, fmt.Sprintf("an error occurred, collecting bundle,Err: %v", err))
-				expect(err).NotTo(haveOccurred())
 				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
 				expect(file).To(beEmpty())
 			}

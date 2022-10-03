@@ -42,8 +42,8 @@ func TestReboot(t *testing.T) {
 var _ = BeforeSuite(func() {
 	tpLog = Inst().Logger
 	dash = Inst().Dash
-	dash.TestSetBegin(dash.TestSet)
 	InitInstance()
+	dash.TestSetBegin(dash.TestSet)
 })
 
 var _ = Describe("{RebootOneNode}", func() {
