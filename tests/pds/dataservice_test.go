@@ -90,9 +90,6 @@ var _ = BeforeSuite(func() {
 		ClusterType := pdslib.GetAndExpectStringEnvVar(envClusterType)
 		Expect(ClusterType).NotTo(BeEmpty(), "ENV "+envClusterType+" is not set")
 
-		TargetClusterName := pdslib.GetAndExpectStringEnvVar(envTargetClusterName)
-		Expect(TargetClusterName).NotTo(BeEmpty(), "ENV "+envTargetClusterName+" is not set")
-
 		DeployAllDataService, err = pdslib.GetAndExpectBoolEnvVar(envDeployAllDataService)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -105,7 +102,7 @@ var _ = BeforeSuite(func() {
 		AccountName := pdslib.GetAndExpectStringEnvVar(envPDSTestAccountName)
 		Expect(AccountName).NotTo(BeEmpty(), "ENV "+envPDSTestAccountName+" is not set")
 
-		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName, AccountName)
+		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, AccountName)
 		Expect(err).NotTo(HaveOccurred())
 
 		DataService = pdslib.GetAndExpectStringEnvVar(envDataService)

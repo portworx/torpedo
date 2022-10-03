@@ -173,7 +173,7 @@ func GetAndExpectBoolEnvVar(varName string) (bool, error) {
 }
 
 // SetupPDSTest returns few params required to run the test
-func SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName, AccountName string) (string, string, string, string, string, error) {
+func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, string, string, string, string, error) {
 	var err error
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
@@ -224,7 +224,13 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName, AccountName s
 	projectName := projects[0].GetName()
 	logrus.Infof("Project Details- Name: %s, UUID: %s ", projectName, projectID)
 
-	clusterID, err := GetClusterID(projectID, TargetClusterName)
+	k8sNamespace := "kube-system"
+	ns, err := k8sCore.GetNamespace(k8sNamespace)
+	if err != nil {
+		logrus.Errorf("Error while getting k8s namespace %v", err)
+		return "", "", "", "", "", err
+	}
+	clusterID := ns.GetObjectMeta().GetUID()
 	if len(clusterID) > 0 {
 		logrus.Infof("clusterID %v", clusterID)
 	} else {
@@ -239,27 +245,13 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName, AccountName s
 		return "", "", "", "", "", err
 	}
 	for i := 0; i < len(targetClusters); i++ {
-		if targetClusters[i].GetClusterId() == clusterID {
+		if targetClusters[i].GetClusterId() == string(clusterID) {
 			deploymentTargetID = targetClusters[i].GetId()
+			logrus.Infof("Deployment TargetID: %v", deploymentTargetID)
 			logrus.Infof("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
 		}
 	}
 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
-}
-
-// GetClusterID retruns the cluster id for given targetClusterName
-func GetClusterID(projectID string, targetClusterName string) (string, error) {
-	deploymentTargets, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToProject(projectID)
-	if err != nil {
-		logrus.Errorf("An Error Occured while listing deployment targets %v", err)
-		return "", err
-	}
-	for index := range deploymentTargets {
-		if deploymentTargets[index].GetName() == targetClusterName {
-			return deploymentTargets[index].GetClusterId(), nil
-		}
-	}
-	return "", nil
 }
 
 // GetStorageTemplate return the storage template id

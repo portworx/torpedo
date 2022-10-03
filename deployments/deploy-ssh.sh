@@ -550,8 +550,6 @@ spec:
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG
       value: "${TARGET_KUBECONFIG}"
-    - name: TARGET_CLUSTER_NAME
-      value: "${TARGET_CLUSTER_NAME}"
     - name: IMAGE_TO_UPDATE
       value: "${IMAGE_TO_UPDATE}"
     - name: VERSION_TO_UPDATE
