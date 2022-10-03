@@ -124,7 +124,7 @@ const (
 	waitVolDriverToCrash              = 1 * time.Minute
 	waitDriverDownOnNodeRetryInterval = 2 * time.Second
 	asyncTimeout                      = 15 * time.Minute
-	timeToTryPreviousFolder = 10 * time.Minute
+	timeToTryPreviousFolder           = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
 )
 const (
@@ -196,7 +196,6 @@ type portworx struct {
 	token                 string
 	skipPXSvcEndpoint     bool
 	DiagsFile             string
-
 }
 
 type statusJSON struct {
@@ -3215,7 +3214,7 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 		}
 		var objects []s3utils.Object
 		var err error
-		if time.Since(start) >= timeToTryPreviousFolder{
+		if time.Since(start) >= timeToTryPreviousFolder {
 			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, true)
 			if err != nil {
 				return err
@@ -3286,7 +3285,27 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", hostname, err, out)
 		}
 	} else {
-		url := netutil.MakeURL("http://", n.Addresses[0], 9014)
+		diagsPort := 9014
+		// Need to get the diags server port based on the px mgmnt port for OCP its not the standard 9001
+		out, err := d.nodeDriver.RunCommand(n, "cat /etc/pwx/px_env", opts)
+		if err == nil {
+			envVars := map[string]string{}
+			for _, line := range strings.Split(out, "\n") {
+				splits := strings.Split(line, "=")
+				if len(splits) > 1 {
+					envVars[splits[0]] = splits[1]
+				}
+			}
+			pxMgmntPort, err := strconv.Atoi(envVars["PWX_MGMT_PORT"])
+			if err == nil {
+				if pxMgmntPort != 9001 {
+					diagsPort = pxMgmntPort + 10
+				}
+			}
+		}
+
+		url := netutil.MakeURL("http://", n.Addresses[0], diagsPort)
+		logrus.Infof("Diags server url: %s", url)
 
 		c, err := client.NewClient(url, "", "")
 		if err != nil {

@@ -290,7 +290,7 @@ func InitInstance() {
 	}
 
 	err = Inst().S.Init(scheduler.InitOptions{
-		SpecDir:                 Inst().SpecDir,
+		SpecDir:                          Inst().SpecDir,
 		VolDriverName:                    Inst().V.String(),
 		NodeDriverName:                   Inst().N.String(),
 		SecretConfigMapName:              Inst().ConfigMap,
@@ -508,7 +508,6 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 				ValidatePoolExpansionWithPureVolumes(ctx, errChan...)
 			}
 		})
-
 
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 			if ctx.SkipVolumeValidation {
@@ -901,6 +900,23 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			}
 			err = Inst().S.CSISnapshotTest(ctx, request)
 			processError(err, errChan...)
+			// the snap name shown in pxctl isn't the CSI snapshot name, it's original PV name + "-snap"
+			var volMap map[string]map[string]string
+			Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
+				volMap, err = Inst().S.GetVolumeParameters(ctx)
+				processError(err, errChan...)
+			})
+			for k, v := range volMap {
+				if v["pvc_name"] == vols[0].Name && v["pvc_namespace"] == vols[0].Namespace {
+					Step(fmt.Sprintf("get %s app's snapshot: %s then check that it appears in pxctl", ctx.App.Key, k), func() {
+						err = Inst().V.ValidateVolumeInPxctlList(fmt.Sprint(k, "-snap"))
+						expect(err).To(beNil(), "unexpected error validating snapshot appears in pxctl list")
+					})
+					break
+				}
+
+			}
+
 		}
 	})
 }
@@ -952,12 +968,12 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
-			request := scheduler.CSISnapshotRequest {
-				Namespace: vols[0].Namespace,
-				Timestamp: timestamp,
-				OriginalPVCName: vols[0].Name,
-				SnapName: "basic-csi-snapshot-many" + timestamp,
-				RestoredPVCName: "csi-restored-many" + timestamp,
+			request := scheduler.CSISnapshotRequest{
+				Namespace:         vols[0].Namespace,
+				Timestamp:         timestamp,
+				OriginalPVCName:   vols[0].Name,
+				SnapName:          "basic-csi-snapshot-many" + timestamp,
+				RestoredPVCName:   "csi-restored-many" + timestamp,
 				SnapshotclassName: snapShotClassName,
 			}
 			err = Inst().S.CSISnapshotAndRestoreMany(ctx, request)
@@ -2784,9 +2800,6 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 	})
 }
 
-
-
-
 // CreateS3BackupLocation creates backuplocation for S3
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string) {
 	time.Sleep(60 * time.Second)
@@ -3570,9 +3583,9 @@ type Torpedo struct {
 	Backup                              backup.Driver
 	SecretType                          string
 	PureVolumes                         bool
-	PureSANType                      string
-	RunCSISnapshotAndRestoreManyTest bool
-	VaultAddress                     string
+	PureSANType                         string
+	RunCSISnapshotAndRestoreManyTest    bool
+	VaultAddress                        string
 	VaultToken                          string
 	SchedUpgradeHops                    string
 	AutopilotUpgradeImage               string
@@ -3726,25 +3739,25 @@ func ParseFlags() {
 				AppList:                             appList,
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
-				DestroyAppTimeout:                destroyAppTimeout,
-				DriverStartTimeout:               driverStartTimeout,
-				AutoStorageNodeRecoveryTimeout:   autoStorageNodeRecoveryTimeout,
-				ConfigMap:                        configMapName,
-				BundleLocation:                   bundleLocation,
-				CustomAppConfig:                  customAppConfig,
-				Backup:                           backupDriver,
-				SecretType:                       secretType,
-				PureVolumes:                      pureVolumes,
-				PureSANType:                      pureSANType,
-				RunCSISnapshotAndRestoreManyTest: runCSISnapshotAndRestoreManyTest,
-				VaultAddress:                     vaultAddress,
-				VaultToken:                       vaultToken,
-				SchedUpgradeHops:                 schedUpgradeHops,
-				AutopilotUpgradeImage:            autopilotUpgradeImage,
-				CsiGenericDriverConfigMap:        csiGenericDriverConfigMapName,
-				LicenseExpiryTimeoutHours:        licenseExpiryTimeoutHours,
-				MeteringIntervalMins:             meteringIntervalMins,
-				IsHyperConverged:                 hyperConverged,
+				DestroyAppTimeout:                   destroyAppTimeout,
+				DriverStartTimeout:                  driverStartTimeout,
+				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
+				ConfigMap:                           configMapName,
+				BundleLocation:                      bundleLocation,
+				CustomAppConfig:                     customAppConfig,
+				Backup:                              backupDriver,
+				SecretType:                          secretType,
+				PureVolumes:                         pureVolumes,
+				PureSANType:                         pureSANType,
+				RunCSISnapshotAndRestoreManyTest:    runCSISnapshotAndRestoreManyTest,
+				VaultAddress:                        vaultAddress,
+				VaultToken:                          vaultToken,
+				SchedUpgradeHops:                    schedUpgradeHops,
+				AutopilotUpgradeImage:               autopilotUpgradeImage,
+				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
+				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,
+				MeteringIntervalMins:                meteringIntervalMins,
+				IsHyperConverged:                    hyperConverged,
 			}
 		})
 	}
