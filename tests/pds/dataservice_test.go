@@ -132,6 +132,9 @@ var _ = BeforeSuite(func() {
 	Step("Create/Get Namespace and NamespaceID", func() {
 		namespace = pdslib.GetAndExpectStringEnvVar(envNamespace)
 		Expect(namespace).NotTo(BeEmpty(), "ENV "+envNamespace+" is not set")
+		isavailabbe, err := pdslib.CheckNamespace(namespace)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(isavailabbe).To(BeTrue())
 		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(namespaceID).NotTo(BeEmpty())
@@ -177,8 +180,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				storageTemplateID,
 				DeployAllVersions,
 				DeployAllImages,
-				oldDSVersion,
-				oldDSImage,
+				dsVersion,
+				dsBuild,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(deployments).NotTo(BeEmpty())

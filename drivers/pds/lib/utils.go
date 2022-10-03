@@ -118,6 +118,7 @@ const (
 	postgresql            = "PostgreSQL"
 	cassandra             = "Cassandra"
 	rabbitmq              = "RabbitMQ"
+	pxLabel               = "pds.portworx.com/available"
 )
 
 // PDS vars
@@ -128,6 +129,7 @@ var (
 	components                            *pdsapi.Components
 	deployment                            *pds.ModelsDeployment
 	apiClient                             *pds.APIClient
+	ns                                    *corev1.Namespace
 	err                                   error
 	isavailable                           bool
 	isTemplateavailable                   bool
@@ -347,23 +349,67 @@ func GetAppConfTemplate(tenantID string, dataServiceNameIDMap map[string]string)
 	return dataServiceNameDefaultAppConfigMap, nil
 }
 
+// CheckNamespace checks if the namespace is available in the cluster and pds is enabled on it
+func CheckNamespace(namespace string) (bool, error) {
+	ns, err = k8sCore.GetNamespace(namespace)
+	isavailable = false
+	if err != nil {
+		logrus.Warnf("Namespace not found %v", err)
+		if strings.Contains(err.Error(), "not found") {
+			nsName := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   namespace,
+					Labels: map[string]string{pxLabel: "true"},
+				},
+			}
+			logrus.Infof("Creating namespace %v", namespace)
+			ns, err = k8sCore.CreateNamespace(nsName)
+			if err != nil {
+				logrus.Errorf("Error while creating namespace %v", err)
+				return false, err
+			}
+			isavailable = true
+		}
+		if !isavailable {
+			return false, err
+		}
+	}
+	isavailable = false
+	for key, value := range ns.Labels {
+		logrus.Infof("key: %v values: %v", key, value)
+		if key == pxLabel && value == "true" {
+			isavailable = true
+			break
+		}
+	}
+	if !isavailable {
+		return false, nil
+	}
+	return true, nil
+}
+
 // GetnameSpaceID returns the namespace ID
 func GetnameSpaceID(namespace string, deploymentTargetID string) (string, error) {
 	var namespaceID string
-	namespaces, err := components.Namespace.ListNamespaces(deploymentTargetID)
-	for i := 0; i < len(namespaces); i++ {
-		if namespaces[i].GetStatus() == "available" {
+
+	err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
+		namespaces, err := components.Namespace.ListNamespaces(deploymentTargetID)
+		for i := 0; i < len(namespaces); i++ {
 			if namespaces[i].GetName() == namespace {
-				namespaceID = namespaces[i].GetId()
+				if namespaces[i].GetStatus() == "available" {
+					namespaceID = namespaces[i].GetId()
+					namespaceNameIDMap[namespaces[i].GetName()] = namespaces[i].GetId()
+					logrus.Infof("Namespace Status - Name: %v , Id: %v , Status: %v", namespaces[i].GetName(), namespaces[i].GetId(), namespaces[i].GetStatus())
+					return true, nil
+				}
 			}
-			namespaceNameIDMap[namespaces[i].GetName()] = namespaces[i].GetId()
-			logrus.Infof("Available namespace - Name: %v , Id: %v , Status: %v", namespaces[i].GetName(), namespaces[i].GetId(), namespaces[i].GetStatus())
 		}
-	}
-	if err != nil {
-		logrus.Errorf("An Error Occured while listing namespaces %v", err)
-		return "", err
-	}
+		if err != nil {
+			logrus.Errorf("An Error Occured while listing namespaces %v", err)
+			return false, err
+		}
+		return false, nil
+	})
 	return namespaceID, nil
 }
 
