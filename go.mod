@@ -71,7 +71,7 @@ replace (
 
 	// Stork dependencies
 	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20220826160831-d630f1478d0e
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220725231657-5a6a43c6a5b3
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.6.0
 
 	// Replacing k8s.io dependencies is required if a dependency or any dependency of a dependency
