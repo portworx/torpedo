@@ -98,7 +98,7 @@ func (o *oracle) SetClusterVersion(version string, timeout time.Duration) error 
 		logrus.Errorf("failed to set version for instance group %s. Error: %v", o.instanceGroupName, err)
 		return err
 	}
-	logrus.Info("[Torpedo] Node group version set successfully.")
+	logrus.Info("[Torpedo] Node group version set successfully for group ", o.instanceGroupName)
 
 	return nil
 }
