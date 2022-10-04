@@ -418,7 +418,6 @@ func processError(err error, errChan ...*chan error) {
 		updateChannel(err, errChan...)
 	} else {
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Err: %v", err))
-		expect(err).NotTo(haveOccurred())
 	}
 }
 
@@ -1183,7 +1182,6 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
 			err = Inst().S.Destroy(ctx, opts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Error while destroying app %s, Err: %v", ctx.App.Key, err))
-			expect(err).NotTo(haveOccurred())
 		})
 
 		if !ctx.SkipVolumeValidation {
@@ -1208,7 +1206,6 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 		tpLog.Infof("destroy the %s app's volumes", ctx.App.Key)
 		vols, err = Inst().S.DeleteVolumes(ctx, options)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Error while deleting app %s's volumes, Err: %v", ctx.App.Key, err))
-		expect(err).NotTo(haveOccurred())
 	})
 	return vols
 }
@@ -1222,7 +1219,6 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 				appName, vol.Name)
 			err := Inst().V.ValidateDeleteVolume(vol)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Error while deleting app %s's volume %s, Err: %v", appName, vol.Name, err))
-			expect(err).NotTo(haveOccurred(), "unexpected error validating app volumes deleted")
 		})
 	}
 }
@@ -1673,7 +1669,6 @@ func PerformSystemCheck() {
 				}
 				dash.VerifySafely(err, nil, fmt.Sprintf("an error occurred, collecting bundle,Err: %v", err))
 				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
-				expect(file).To(beEmpty())
 			}
 		})
 	})
@@ -3808,6 +3803,7 @@ func ParseFlags() {
 			enableDash = false
 			tpLog.Warn("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
 		}
+
 		dash.IsEnabled = enableDash
 		testSet := aetosutil.TestSet{
 			User:        user,
@@ -3822,7 +3818,19 @@ func ParseFlags() {
 			tags := strings.Split(testTags, ",")
 			testSet.Tags = append(testSet.Tags, tags...)
 		}
-		dash.TestSetID = testsetID
+
+		val, ok := os.LookupEnv("TESTSET-ID")
+		if ok {
+			testsetID, err = strconv.Atoi(val)
+			if err != nil {
+				tpLog.Warnf("Failed to convert environment testset id  %v to int, err: %v", val, err)
+			}
+		}
+		if testsetID != 0 {
+			dash.TestSetID = testsetID
+			os.Setenv("TESTSET-ID", string(testsetID))
+		}
+
 		dash.TestSet = &testSet
 
 		once.Do(func() {
@@ -3871,6 +3879,7 @@ func ParseFlags() {
 }
 
 func printFlags() {
+
 	tpLog.Info("********Torpedo Command********")
 	tpLog.Info(strings.Join(os.Args, " "))
 	tpLog.Info("******************************")
@@ -3884,8 +3893,8 @@ func printFlags() {
 
 func isDashboardReachable() bool {
 	timeout := 5 * time.Second
-	dashUrlSplice := strings.Split(aetosutil.DashBoardBaseURL, "/")
-	_, err := net.DialTimeout("tcp", fmt.Sprintf("%s:80", dashUrlSplice[2]), timeout)
+	dashURLSplice := strings.Split(aetosutil.DashBoardBaseURL, "/")
+	_, err := net.DialTimeout("tcp", fmt.Sprintf("%s:80", dashURLSplice[2]), timeout)
 	if err == nil {
 		return true
 	}

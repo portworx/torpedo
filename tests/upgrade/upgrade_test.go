@@ -66,6 +66,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	var contexts []*scheduler.Context
 
 	It("upgrade volume driver and ensure everything is running fine", func() {
+		dash.Info("upgrade volume driver and ensure everything is running fine")
 		contexts = make([]*scheduler.Context, 0)
 
 		storageNodes := node.GetStorageNodes()
@@ -82,7 +83,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				dash.VerifyFatal(err, nil, "Verify adding block drive(s)")
 			}
 		}
-		dash.Infof("Scheduling applicayions and validating")
+		dash.Info("Scheduling applicayions and validating")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
@@ -92,6 +93,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		var timeAfterUpgrade time.Time
 
 		Step("start the upgrade of volume driver", func() {
+			dash.Info("start the upgrade of volume driver")
 
 			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 			if IsOperatorBasedInstall {
@@ -126,15 +128,15 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		})
 
 		Step("reinstall and validate all apps after upgrade", func() {
-			dash.Infof("Scheduling apps after upgrade")
+			dash.Info("reinstall and validate all apps after upgrade")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradedvolumedriver-%d", i))...)
 			}
 			ValidateApplications(contexts)
 		})
 
-		Step("destroy apps", func() {
-			dash.Infof("Destroying apps")
+		Step("Destroy apps", func() {
+			dash.Info("Destroy apps")
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
@@ -167,24 +169,28 @@ var _ = Describe("{UpgradeStork}", func() {
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
 
 		It("upgrade volume driver and ensure everything is running fine", func() {
+			dash.Info("upgrade volume driver and ensure everything is running fine")
 			contexts = make([]*scheduler.Context, 0)
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradestorkdeployment-%d", i))...)
 
 			ValidateApplications(contexts)
 
 			Step("start the upgrade of stork deployment", func() {
+				dash.Info("start the upgrade of stork deployment")
 				err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
 					Inst().StorageDriverUpgradeEndpointVersion)
-				Expect(err).NotTo(HaveOccurred())
+				dash.VerifyFatal(err, nil, "Verify stork upgrade")
 			})
 
 			Step("validate all apps after upgrade", func() {
+				dash.Info("validate all apps after upgrade")
 				for _, ctx := range contexts {
 					ValidateContext(ctx)
 				}
 			})
 
 			Step("destroy apps", func() {
+				dash.Info("Destroy apps")
 				opts := make(map[string]bool)
 				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 				for _, ctx := range contexts {
@@ -193,11 +199,12 @@ var _ = Describe("{UpgradeStork}", func() {
 			})
 
 			Step("validate stork pods after upgrade", func() {
+				dash.Info("validate stork pods after upgrade")
 				k8sApps := apps.Instance()
 				storkDeploy, err := k8sApps.GetDeployment(storkDeploymentName, storkNamespace)
-				Expect(err).NotTo(HaveOccurred())
+				dash.VerifyFatal(err, nil, "Verify Get Stork deployment")
 				err = k8sApps.ValidateDeployment(storkDeploy, k8s.DefaultTimeout, k8s.DefaultRetryInterval)
-				Expect(err).NotTo(HaveOccurred())
+				dash.VerifyFatal(err, nil, "Verify stork deployment")
 			})
 
 		})

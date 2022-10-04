@@ -2,20 +2,30 @@ package aetosutil
 
 import (
 	"fmt"
+	"github.com/onsi/gomega"
 	rest "github.com/portworx/torpedo/pkg/restutil"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"os"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
-var testCasesStack = make([]TestCase, 0)
-var verifications = make([]result, 0)
-var testCaseStartTime time.Time
-var testCase TestCase
+var (
+	testCasesStack    = make([]int, 0)
+	verifications     = make([]result, 0)
+	testCaseStartTime time.Time
+	testCase          TestCase
+
+	dash         *Dashboard
+	lock         = &sync.Mutex{}
+	expect       = gomega.Expect
+	haveOccurred = gomega.HaveOccurred
+)
 
 const (
 	//DashBoardBaseURL for posting logs
@@ -136,6 +146,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 				d.TpLog.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
 			d.TpLog.Infof("Dashbaord URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
+			os.Setenv("TESTSET-ID", string(d.TestSetID))
 
 		}
 	}
@@ -161,6 +172,15 @@ func (d *Dashboard) TestSetEnd() {
 		} else {
 
 			d.TpLog.Infof("TestSetId %d update successfully", d.TestSetID)
+
+		}
+
+		if len(testCasesStack) > 0 {
+			for _, v := range testCasesStack {
+				d.testcaseID = v
+				d.TestCaseEnd()
+			}
+			testCasesStack = nil
 
 		}
 	}
@@ -202,7 +222,25 @@ func (d *Dashboard) TestCaseEnd() {
 		d.TpLog.Infof("#Resuly: %s ", result)
 		d.TpLog.Info("------------------------")
 		verifications = nil
+		removeTestCaseFromStack(d.testcaseID)
+
 	}
+}
+
+func removeTestCaseFromStack(testcaseID int) {
+
+	removeIndex := -1
+	for i, v := range testCasesStack {
+		if v == testcaseID {
+			removeIndex = i
+			break
+		}
+	}
+
+	if removeIndex != -1 {
+		testCasesStack = append(testCasesStack[:removeIndex], testCasesStack[removeIndex+1:]...)
+	}
+
 }
 
 // TestSetUpdate update test set  to dashboard DB
@@ -289,6 +327,8 @@ func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, ta
 		d.TpLog.Infof("#Description: %s ", description)
 		d.TpLog.Info("------------------------")
 
+		testCasesStack = append(testCasesStack, d.testcaseID)
+
 	}
 }
 
@@ -305,7 +345,7 @@ func (d *Dashboard) verify(r result) {
 		if err != nil {
 			d.TpLog.Errorf("Error in verifying, Cause: %v", err)
 		} else if respStatusCode != http.StatusOK {
-			d.TpLog.Errorf("Error updating the vrify comment, resp : %s", string(resp))
+			d.TpLog.Errorf("Error updating the verify comment, resp : %s", string(resp))
 		} else {
 			d.TpLog.Tracef("verify response : %s", string(resp))
 
@@ -351,6 +391,7 @@ func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string
 	actualVal := fmt.Sprintf("%s", actual)
 	expectedVal := fmt.Sprintf("%s", expected)
 	res := result{}
+	var err error
 
 	res.Actual = actualVal
 	res.Expected = expectedVal
@@ -367,17 +408,14 @@ func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string
 	} else {
 		res.ResultType = "error"
 		res.ResultStatus = false
-		d.TpLog.Errorf("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
+		err = fmt.Errorf("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
+		d.TpLog.Errorf(err.Error())
 	}
 	verifications = append(verifications, res)
 	if d.IsEnabled {
 		d.verify(res)
 	}
-	d.TpLog.Fatalf("verification for %s has failed", description)
-
-	//if !res.ResultStatus {
-	//	return fmt.Errorf("verification for %s has failed", description)
-	//}
+	expect(err).NotTo(haveOccurred())
 
 }
 
@@ -395,7 +433,7 @@ func (d *Dashboard) Info(message string) {
 
 // Infof logging info with formated message
 func (d *Dashboard) Infof(message string, args ...interface{}) {
-	d.TpLog.Infof(message, args)
+	d.TpLog.Infof(message, args...)
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}
@@ -408,7 +446,7 @@ func (d *Dashboard) Infof(message string, args ...interface{}) {
 
 // Warnf logging formatted warn message
 func (d *Dashboard) Warnf(message string, args ...interface{}) {
-	d.TpLog.Warnf(message, args)
+	d.TpLog.Warnf(message, args...)
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}
@@ -445,7 +483,7 @@ func (d *Dashboard) Error(message string) {
 
 // Errorf logging formatted error message
 func (d *Dashboard) Errorf(message string, args ...interface{}) {
-	d.TpLog.Errorf(message, args)
+	d.TpLog.Errorf(message, args...)
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}
@@ -478,5 +516,14 @@ func (d *Dashboard) addComment(c comment) {
 
 //Get returns the dashboard struct instance
 func Get() *Dashboard {
-	return &Dashboard{}
+
+	if dash == nil {
+		lock.Lock()
+		defer lock.Unlock()
+		if dash == nil {
+			fmt.Println("Creating new Dashboard instance.")
+			dash = &Dashboard{}
+		}
+	}
+	return dash
 }
