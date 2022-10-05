@@ -2294,7 +2294,19 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 					Type:  obj,
 				}
 			}
+
 			k.tpLog.Infof("[%v] Validated Job: %v", ctx.App.Key, obj.Name)
+
+		} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
+			if err := k8sStork.ValidateResourceTransformation(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate ResourceTransformation: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			k.tpLog.Infof("[%v] Validated ResourceTransformation: %v", ctx.App.Key, obj.Name)
+
 		}
 	}
 
@@ -4053,6 +4065,17 @@ func (k *K8s) createMigrationObjects(
 		}
 		k.tpLog.Infof("[%v] Created SchedulePolicy: %v", app.Key, schedPolicy.Name)
 		return schedPolicy, nil
+	} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
+		obj.Namespace = ns.Name
+		transform, err := k8sOps.CreateResourceTransformation(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create ResourceTransformation: %v/%v. Obj: %v, Err: %v", obj.Name, obj.Namespace, obj, err),
+			}
+		}
+		logrus.Infof("[%v] Created ResourceTransformation: %v", app.Key, transform.Name)
+		return transform, nil
 	}
 
 	return nil, nil
@@ -4142,7 +4165,18 @@ func (k *K8s) destroyMigrationObject(
 				Cause: fmt.Sprintf("Failed to delete SchedulePolicy: %v. Err: %v", obj.Name, err),
 			}
 		}
+
 		k.tpLog.Infof("[%v] Destroyed SchedulePolicy: %v", app.Key, obj.Name)
+
+	} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
+		err := k8sOps.DeleteResourceTransformation(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete ResourceTransformation: %v. Err: %v", obj.Name, err),
+			}
+		}
+
 	}
 	return nil
 }
