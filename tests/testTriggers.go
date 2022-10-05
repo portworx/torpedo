@@ -1384,8 +1384,8 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 
 				if isPureFileVol {
 					logrus.Warningf(
-						"Clone is not supported for FB volumes: [%s]. " +
-						"Skipping clone create for FB volume.", vol.Name,
+						"Clone is not supported for FB volumes: [%s]. "+
+							"Skipping clone create for FB volume.", vol.Name,
 					)
 					continue
 				}
@@ -3979,8 +3979,8 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 			}
 			if isPureVol {
 				logrus.Warningf(
-					"Autofs Trim is not supported for Pure DA volume: [%s]. " +
-					"Skipping autofs trim status on pure volumes", v.Name,
+					"Autofs Trim is not supported for Pure DA volume: [%s]. "+
+						"Skipping autofs trim status on pure volumes", v.Name,
 				)
 				continue
 			}
@@ -4044,8 +4044,8 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 				}
 				if isPureVol {
 					logrus.Warningf(
-						"Autofs Trim is not supported for Pure DA volume: [%s]. " +
-						"Skipping autofs trim status on pure volumes", v.Name,
+						"Autofs Trim is not supported for Pure DA volume: [%s]. "+
+							"Skipping autofs trim status on pure volumes", v.Name,
 					)
 					continue
 				}

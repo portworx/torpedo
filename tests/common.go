@@ -392,6 +392,7 @@ func InitInstance() {
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
 	Step("validate cleanup of resources used by the test suite", func() {
+		dash.Info("validate cleanup of resources used by the test suite")
 		t := func() (interface{}, bool, error) {
 			if err := Inst().V.ValidateVolumeCleanup(); err != nil {
 				return "", true, err
@@ -405,7 +406,7 @@ func ValidateCleanup() {
 			tpLog.Info("an error occurred, collecting bundle")
 			CollectSupport()
 		}
-		expect(err).NotTo(haveOccurred())
+		dash.VerifyFatal(err, nil, "verify if an error occurred while validating clean up")
 	})
 }
 
@@ -417,7 +418,7 @@ func processError(err error, errChan ...*chan error) {
 		tpLog.Error(err)
 		updateChannel(err, errChan...)
 	} else {
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Err: %v", err))
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verify if error occured.Err: %v", err))
 	}
 }
 
@@ -1181,7 +1182,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		// Tear down application
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
 			err = Inst().S.Destroy(ctx, opts)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Error while destroying app %s, Err: %v", ctx.App.Key, err))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", ctx.App.Key, err))
 		})
 
 		if !ctx.SkipVolumeValidation {
@@ -1205,7 +1206,7 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
 		tpLog.Infof("destroy the %s app's volumes", ctx.App.Key)
 		vols, err = Inst().S.DeleteVolumes(ctx, options)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Error while deleting app %s's volumes, Err: %v", ctx.App.Key, err))
+		dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volumes, Err: %v", ctx.App.Key, err))
 	})
 	return vols
 }
@@ -1218,7 +1219,7 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 			tpLog.Infof("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
 			err := Inst().V.ValidateDeleteVolume(vol)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Error while deleting app %s's volume %s, Err: %v", appName, vol.Name, err))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volume %s, Err: %v", appName, vol.Name, err))
 		})
 	}
 }
@@ -1565,6 +1566,7 @@ func GetStorageNodes() ([]node.Node, error) {
 // CollectSupport creates a support bundle
 func CollectSupport() {
 	context("generating support bundle...", func() {
+		dash.Info("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
@@ -1573,7 +1575,7 @@ func CollectSupport() {
 			}
 		}
 		nodes := node.GetWorkerNodes()
-		expect(nodes).NotTo(beEmpty())
+		dash.VerifyFatal(len(nodes) > 0, true, "Verify Get Worker nodes")
 
 		for _, n := range nodes {
 			if !n.IsStorageDriverInstalled {
@@ -1652,22 +1654,23 @@ func PerformSystemCheck() {
 	context("checking for core files...", func() {
 		tpLog.Info("checking for core files...")
 		Step("verifying if core files are present on each node", func() {
+			dash.Info("verifying if core files are present on each node")
 			nodes := node.GetNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
 					continue
 				}
-				tpLog.Infof("looking for core files on node %s", n.Name)
+				dash.Infof("looking for core files on node %s", n.Name)
 				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
 					tpLog.Info("an error occurred, collecting bundle")
-					//CollectSupport()
+					CollectSupport()
 				}
-				dash.VerifySafely(err, nil, fmt.Sprintf("an error occurred, collecting bundle,Err: %v", err))
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verify if an error occurred, Err: %v", err))
 				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
 			}
 		})
@@ -3828,7 +3831,7 @@ func ParseFlags() {
 		}
 		if testsetID != 0 {
 			dash.TestSetID = testsetID
-			os.Setenv("TESTSET-ID", string(testsetID))
+			os.Setenv("TESTSET-ID", fmt.Sprint(testsetID))
 		}
 
 		dash.TestSet = &testSet

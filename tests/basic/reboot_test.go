@@ -192,7 +192,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 									return "", err
 								}
 								if volStatus != prevStatus {
-									dash.Warnf("volume %v: %v", vol.ID, volStatus)
+									dash.Infof("volume %v: %v", vol.ID, volStatus)
 									prevStatus = volStatus
 								}
 								return volStatus, nil

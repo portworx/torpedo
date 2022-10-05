@@ -145,8 +145,8 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 			} else {
 				d.TpLog.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
-			d.TpLog.Infof("Dashbaord URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
-			os.Setenv("TESTSET-ID", string(d.TestSetID))
+			d.TpLog.Infof("Dashboard URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
+			os.Setenv("TESTSET-ID", fmt.Sprint(d.TestSetID))
 
 		}
 	}
@@ -356,8 +356,8 @@ func (d *Dashboard) verify(r result) {
 //VerifySafely verify test without aborting the execution
 func (d *Dashboard) VerifySafely(actual, expected interface{}, description string) {
 
-	actualVal := fmt.Sprintf("%s", actual)
-	expectedVal := fmt.Sprintf("%s", expected)
+	actualVal := fmt.Sprintf("%v", actual)
+	expectedVal := fmt.Sprintf("%v", expected)
 	res := result{}
 
 	res.Actual = actualVal
@@ -365,7 +365,7 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 	res.Description = description
 	res.TestCaseID = d.testcaseID
 
-	d.TpLog.Infof("Verfy Safely: Description : %s", description)
+	d.TpLog.Infof("Verifying : Description : %s", description)
 	d.TpLog.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
 
 	if actualVal == expectedVal {
@@ -388,35 +388,13 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 //VerifyFatal verify test and abort operation upon failure
 func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string) {
 
-	actualVal := fmt.Sprintf("%s", actual)
-	expectedVal := fmt.Sprintf("%s", expected)
-	res := result{}
+	d.TpLog.Info("Verify Fatal")
+	d.VerifySafely(actual, expected, description)
 	var err error
-
-	res.Actual = actualVal
-	res.Expected = expectedVal
-	res.Description = description
-	res.TestCaseID = d.testcaseID
-
-	d.TpLog.Infof("Verify Fatal: Description : %s", description)
-	d.TpLog.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
-
-	if actualVal == expectedVal {
-		res.ResultType = "info"
-		res.ResultStatus = true
-		d.TpLog.Infof("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
-	} else {
-		res.ResultType = "error"
-		res.ResultStatus = false
+	if actual != expected {
 		err = fmt.Errorf("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
-		d.TpLog.Errorf(err.Error())
-	}
-	verifications = append(verifications, res)
-	if d.IsEnabled {
-		d.verify(res)
 	}
 	expect(err).NotTo(haveOccurred())
-
 }
 
 // Info logging info message

@@ -57,7 +57,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				dash.VerifyFatal(err, nil, "Verify adding block drive(s)")
 			}
 		}
-		dash.Info("Scheduling applicayions and validating")
+		dash.Info("Scheduling applications and validating")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
