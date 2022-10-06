@@ -224,9 +224,6 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		if !isTelemetryOperatorEnabled {
-			Skip("Skip test because telemetry is not enabled...")
-		}
 	})
 	var contexts []*scheduler.Context
 	var diagsFiles []string
