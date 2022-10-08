@@ -163,6 +163,14 @@ if [ -z "$AWS_REGION" ]; then
     echo "Using default AWS_REGION of ${AWS_REGION}"
 fi
 
+if [ -z "$TORPEDO_JOB_TYPE"]; then
+    TORPEDO_JOB_TYPE="functional"
+fi
+
+if [ -z "$TORPEDO_JOB_NAME"]; then
+    TORPEDO_JOB_NAME="torpedo-daily-job"
+fi
+
 for i in $@
 do
 case $i in
@@ -432,6 +440,8 @@ spec:
             "--jira-username=$JIRA_USERNAME",
             "--jira-token=$JIRA_TOKEN",
             "--jira-account-id=$JIRA_ACCOUNT_ID",
+            "--torpedo-job-name=$TORPEDO_JOB_NAME",
+            "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "$APP_DESTROY_TIMEOUT_ARG",
     ]
     tty: true

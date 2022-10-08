@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -32,6 +33,7 @@ import (
 	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor/prometheus"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -155,6 +157,21 @@ var pureStorageClassMap map[string]*storageapi.StorageClass
 // DefaultSnapshotRetainCount is default snapshot retain count
 var DefaultSnapshotRetainCount = 10
 
+// TotalTriggerCount is counter metric for test trigger
+var TotalTriggerCount = prometheus.TorpedoTestTotalTriggerCount
+
+// TestRunningState is gauage metric for test method running
+var TestRunningState = prometheus.TorpedoTestRunning
+
+// TestFailedCount is counter metric for test failed
+var TestFailedCount = prometheus.TorpedoTestFailCount
+
+// TestPassedCount is counter metric for test passed
+var TestPassedCount = prometheus.TorpedoTestPassCount
+
+//  FailedTestAlert is a flag to alert test failed
+var FailedTestAlert = prometheus.TorpedoAlertTestFailed
+
 // Event describes type of test trigger
 type Event struct {
 	ID   string
@@ -234,9 +251,13 @@ func GenerateUUID() string {
 // UpdateOutcome updates outcome based on error
 func UpdateOutcome(event *EventRecord, err error) {
 
+	logrus.Infof("Hit Error: %s in event %v", err.Error(), event)
 	if err != nil && event != nil {
+		Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
 		logrus.Infof("updating event outcome for [%v]", event.Event.Type)
 		er := fmt.Errorf(err.Error() + "<br>")
+		error_string := err.Error()
+		Inst().M.IncrementGaugeMetricsUsingAdditionalLabel(FailedTestAlert, event.Event.Type, error_string)
 		event.Outcome = append(event.Outcome, er)
 		createLongevityJiraIssue(event, er)
 	}
@@ -375,6 +396,9 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	}()
 	coresMap = nil
 	coresMap = make(map[string]string)
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	context("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
@@ -422,6 +446,10 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	errorChan := make(chan error, errorChannelSize)
 	labels := Inst().TopologyLabels
 	Step("Deploy applications", func() {
@@ -443,12 +471,15 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 			logrus.Infof("Validating context: %v", ctx.App.Key)
 			ctx.SkipVolumeValidation = false
 			ValidateContext(ctx, &errorChan)
+			// BUG: Execution doesn't resume here after ValidateContext called
+			// Below code is never executed
 			for err := range errorChan {
 				logrus.Infof("Error: %v", err)
 				UpdateOutcome(event, err)
 			}
 		}
 	})
+
 }
 
 // TriggerHAIncreaseAndReboot triggers repl increase and reboots target and source nodes
@@ -467,6 +498,10 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	//Reboot target node and source node while repl increase is in progress
 	Step("get a volume to  increase replication factor and reboot source  and target node", func() {
@@ -533,6 +568,8 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 				}
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -552,6 +589,9 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	expReplMap := make(map[*volume.Volume]int64)
 	Step("get volumes for all apps in test and increase replication factor", func() {
@@ -656,6 +696,8 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			})
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -675,6 +717,9 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	expReplMap := make(map[*volume.Volume]int64)
 	Step("get volumes for all apps in test and decrease replication factor", func() {
@@ -757,6 +802,8 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			})
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -776,6 +823,9 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	for _, ctx := range *contexts {
 		Step(fmt.Sprintf("delete tasks for app: [%s]", ctx.App.Key), func() {
@@ -793,6 +843,8 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			}
 		})
 	}
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 // TriggerCrashVolDriver crashes vol driver
@@ -811,6 +863,9 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 	Step("crash volume driver in all nodes", func() {
 		for _, appNode := range node.GetStorageDriverNodes() {
 			Step(
@@ -827,6 +882,8 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 					}
 				})
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -846,6 +903,10 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	Step("get nodes bounce volume driver", func() {
 		for _, appNode := range node.GetStorageDriverNodes() {
 			Step(
@@ -891,6 +952,8 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 				})
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -910,6 +973,11 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver)
 	var wg sync.WaitGroup
 	Step("get nodes bounce volume driver", func() {
@@ -967,6 +1035,8 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 				}
 			})
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 	})
 }
@@ -987,6 +1057,11 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	Step("get kvdb nodes bounce volume driver", func() {
 		for _, appNode := range node.GetMetadataNodes() {
 			Step(
@@ -1032,6 +1107,8 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 				})
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -1051,6 +1128,10 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	Step("get all nodes and reboot one by one", func() {
 		nodesToReboot := node.GetWorkerNodes()
@@ -1115,6 +1196,8 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					})
 				}
 			}
+			Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+			Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 		})
 	})
 }
@@ -1135,6 +1218,10 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	Step("get all nodes and reboot one by one", func() {
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
@@ -1215,6 +1302,8 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				}
 			})
 		})
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -1361,6 +1450,11 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	Step("get volumes for all apps in test and clone them", func() {
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
@@ -1384,8 +1478,8 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 
 				if isPureFileVol {
 					logrus.Warningf(
-						"Clone is not supported for FB volumes: [%s]. " +
-						"Skipping clone create for FB volume.", vol.Name,
+						"Clone is not supported for FB volumes: [%s]. "+
+							"Skipping clone create for FB volume.", vol.Name,
 					)
 					continue
 				}
@@ -1412,6 +1506,8 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					})
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -1431,6 +1527,10 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+
 	Step("get volumes for all apps in test and update size", func() {
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
@@ -1470,6 +1570,8 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 					}
 				})
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -1491,6 +1593,10 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	Step("Create and Validate LocalSnapshots", func() {
 
@@ -1596,6 +1702,8 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 			}
 
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 	})
 
@@ -1618,6 +1726,10 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	Step("Delete Schedule Policy and LocalSnapshots and Validate", func() {
 
@@ -1682,6 +1794,8 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 				})
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 	})
 
@@ -1704,6 +1818,10 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	snapshotScheduleRetryInterval := 10 * time.Second
 	snapshotScheduleRetryTimeout := 3 * time.Minute
@@ -1791,6 +1909,8 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 			}
 
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 	})
 
@@ -1814,6 +1934,10 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	Step("Validate Delete Volumes", func() {
 		opts := make(map[string]bool)
 
@@ -1835,6 +1959,8 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 		}
 		*contexts = nil
 		TriggerDeployNewApps(contexts, recordChan)
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -2089,6 +2215,11 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -2148,6 +2279,8 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			})
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -2167,6 +2300,10 @@ func TriggerScheduledBackupAll(contexts *[]*scheduler.Context, recordChan *chan 
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -2222,6 +2359,8 @@ func TriggerScheduledBackupAll(contexts *[]*scheduler.Context, recordChan *chan 
 			ProcessErrorWithMessage(event, err, "Scheduled backup backed up wrong namespaces")
 		}
 	}
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 // TriggerBackupSpecificResource backs up a specific resource in a namespace
@@ -2236,6 +2375,11 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	namespaceResourceMap := make(map[string][]string)
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -2357,6 +2501,8 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 				}
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -2376,6 +2522,10 @@ func TriggerInspectBackup(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	logrus.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
@@ -2399,6 +2549,8 @@ func TriggerInspectBackup(contexts *[]*scheduler.Context, recordChan *chan *Even
 	_, err = Inst().Backup.InspectBackup(ctx, backupInspectRequest)
 	desc := fmt.Sprintf("InspectBackup failed: Inspect backup %s failed", backupToInspect.GetName())
 	ProcessErrorWithMessage(event, err, desc)
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 }
 
@@ -2418,6 +2570,10 @@ func TriggerInspectRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	logrus.Infof("Enumerating restores")
 	restoreEnumerateReq := &api.RestoreEnumerateRequest{
@@ -2440,6 +2596,8 @@ func TriggerInspectRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	_, err = Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
 	desc := fmt.Sprintf("InspectRestore failed: Inspect restore %s failed", restoreToInspect.GetName())
 	ProcessErrorWithMessage(event, err, desc)
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 // TriggerRestoreNamespace restores a namespace to a new namespace
@@ -2453,6 +2611,10 @@ func TriggerRestoreNamespace(contexts *[]*scheduler.Context, recordChan *chan *E
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	defer func() {
 		sourceClusterConfigPath, err := GetSourceClusterConfigPath()
@@ -2545,6 +2707,8 @@ func TriggerRestoreNamespace(contexts *[]*scheduler.Context, recordChan *chan *E
 		err = fmt.Errorf("namespace %s not found", restoredNs)
 		ProcessErrorWithMessage(event, err, "RestoreNamespace restored incorrect namespaces")
 	}
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 // TriggerDeleteBackup deletes a backup
@@ -2564,6 +2728,10 @@ func TriggerDeleteBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	logrus.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
@@ -2581,6 +2749,8 @@ func TriggerDeleteBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 	desc := fmt.Sprintf("DeleteBackup failed: Delete backup %s on cluster %s failed",
 		backupToDelete.GetName(), backupToDelete.GetCluster())
 	ProcessErrorWithMessage(event, err, desc)
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 }
 
@@ -2600,6 +2770,11 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	if err != nil {
@@ -2679,6 +2854,8 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 				}
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -2732,6 +2909,11 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	if err != nil {
@@ -2855,6 +3037,8 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 				UpdateOutcome(event, err)
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -2874,6 +3058,10 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -3007,6 +3195,8 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 			UpdateOutcome(event, err)
 		}
 	}
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 //TriggerBackupRestartPX backs up an application and restarts Portworx during the backup
@@ -3025,6 +3215,10 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
@@ -3090,6 +3284,8 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				}
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -3109,6 +3305,11 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -3228,6 +3429,8 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 				}
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -3247,6 +3450,10 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
@@ -3308,6 +3515,8 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 				UpdateOutcome(event, err)
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -3327,6 +3536,10 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
@@ -3410,6 +3623,8 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 				UpdateOutcome(event, err)
 			}
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 }
 
@@ -3576,6 +3791,11 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 
 	Step(fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel), func() {
@@ -3603,6 +3823,8 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		for _, ctx := range *contexts {
 			ValidateContext(ctx)
 		}
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 	})
 
 }
@@ -3623,6 +3845,11 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 
 	Step(fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel), func() {
@@ -3646,6 +3873,8 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 			ValidateContext(ctx)
 		}
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 }
 
@@ -3665,6 +3894,11 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 	Step(fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel), func() {
 		poolsToBeResized, err := getStoragePoolsToExpand()
@@ -3692,7 +3926,8 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			ValidateContext(ctx)
 		}
 	})
-
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 // TriggerPoolAddDiskAndReboot performs add-disk and reboots the node
@@ -3711,6 +3946,11 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 	Step(fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel), func() {
 		poolsToBeResized, err := getStoragePoolsToExpand()
@@ -3732,6 +3972,8 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			ValidateContext(ctx)
 		}
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 }
 
@@ -3750,6 +3992,10 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	context("upgrade volume driver to the latest version", func() {
 		Step("start the volume driver upgrade", func() {
@@ -3784,6 +4030,8 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 			}
 		})
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 func getOperatorLatestVersion() (string, error) {
@@ -3828,6 +4076,11 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	Step("Upgrading stork to latest version based on the compatible PX and storage driver upgrade version ",
 		func() {
 			err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
@@ -3835,6 +4088,8 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 			UpdateOutcome(event, err)
 
 		})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 // TriggerAutoFsTrim enables Auto Fstrim in the PX Cluster
@@ -3853,6 +4108,11 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	context("Validate AutoFsTrim of the volumes", func() {
 
 		Step("enable auto fstrim ",
@@ -3934,6 +4194,8 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 			})
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 }
 
@@ -3952,6 +4214,11 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	context("Validate update of the volumes", func() {
 
 		Step("Update Io priority on volumes ",
@@ -3960,6 +4227,8 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 				logrus.Info("Update IO priority call completed")
 			})
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 // updateIOPriorityOnVolumes this method is responsible for updating IO priority on Volumes.
@@ -3979,8 +4248,8 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 			}
 			if isPureVol {
 				logrus.Warningf(
-					"Autofs Trim is not supported for Pure DA volume: [%s]. " +
-					"Skipping autofs trim status on pure volumes", v.Name,
+					"Autofs Trim is not supported for Pure DA volume: [%s]. "+
+						"Skipping autofs trim status on pure volumes", v.Name,
 				)
 				continue
 			}
@@ -4044,8 +4313,8 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 				}
 				if isPureVol {
 					logrus.Warningf(
-						"Autofs Trim is not supported for Pure DA volume: [%s]. " +
-						"Skipping autofs trim status on pure volumes", v.Name,
+						"Autofs Trim is not supported for Pure DA volume: [%s]. "+
+							"Skipping autofs trim status on pure volumes", v.Name,
 					)
 					continue
 				}
@@ -4138,6 +4407,11 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	context("Validate Trashcan feature of the volumes", func() {
 		if !isTrashcanEnabled {
 
@@ -4201,6 +4475,8 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 				})
 		}
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 }
 
@@ -4220,6 +4496,11 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	context("Validate Relaxed Reclaim of the volumes", func() {
 		if !isRelaxedReclaimEnabled {
 
@@ -4275,6 +4556,8 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				})
 		}
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 }
 
@@ -4294,6 +4577,10 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	var workerNodes []node.Node
 	var nodeToDecomm node.Node
@@ -4340,6 +4627,8 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			}
 
 		})
+		Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+		Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 	})
 
@@ -4373,6 +4662,10 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	var decommissionedNodeName string
 
@@ -4444,6 +4737,8 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			}
 		})
 	}
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 }
 
@@ -4467,6 +4762,12 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		*recordChan <- event
 	}()
 
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
+	err = fmt.Errorf("Testing failure alerts")
+	UpdateOutcome(event, err)
 	// Keeping retainSnapCount
 	retainSnapCount := DefaultSnapshotRetainCount
 	Step("Create and Validate snapshots for FA DA volumes", func() {
@@ -4521,6 +4822,8 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			})
 		}
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 // TriggerCsiSnapRestore create pvc from snapshot and validate the restored PVC
@@ -4541,6 +4844,10 @@ func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	var err error
 
@@ -4572,6 +4879,8 @@ func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			})
 		}
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 func getPoolExpandPercentage(triggerType string) uint64 {
@@ -4714,6 +5023,10 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	context("perform kvdb failover in a cyclic manner", func() {
 		Step("Get KVDB nodes and perform failover", func() {
 			nodes := node.GetWorkerNodes()
@@ -4835,6 +5148,8 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 		})
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.MetadataNode, isDestuctive bool) bool {
@@ -4882,6 +5197,10 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	chaosLevel := ChaosMap[AppTasksDown]
 	context("deletes all pods from a given app and validate if they recover", func() {
 		for _, ctx := range *contexts {
@@ -4898,6 +5217,8 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 			}
 		}
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 // TriggerValidateDeviceMapperCleanup validate device mapper device cleaned up for FA setup
@@ -4915,6 +5236,11 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	logrus.Infof("Validating the deviceMapper devices cleaned up or not")
 	Step("Match the devicemapper devices in each node if it matches the expected count or not ", func() {
 		pureVolAttachedMap, err := Inst().V.GetNodePureVolumeAttachedCountMap()
@@ -4950,6 +5276,8 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 			}
 		}
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 // TriggerAddDrive performs add drive operation
@@ -4968,6 +5296,10 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	Step(fmt.Sprintf("Perform add drive on all the worker nodes"), func() {
 
@@ -5015,6 +5347,8 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		}
 
 	})
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 
 }
 
@@ -5034,6 +5368,11 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
 	chaosLevel := ChaosMap[AsyncDR]
 	var (
 		migrationNamespaces   []string
@@ -5100,6 +5439,8 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			UpdateOutcome(event, err)
 		}
 	}
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {
@@ -5166,6 +5507,20 @@ func createPureStorageClass(name string, params map[string]string) (*storageapi.
 		return nil, fmt.Errorf("failed to create CsiSnapshot storage class: %s.Error: %v", name, err)
 	}
 	return sc, err
+}
+
+func trace() (string, int, string) {
+	pc, file, line, ok := runtime.Caller(1)
+	if !ok {
+		return "?", 0, "?"
+	}
+
+	fn := runtime.FuncForPC(pc)
+	if fn == nil {
+		return file, line, "?"
+	}
+
+	return file, line, fn.Name()
 }
 
 var htmlTemplate = `<!DOCTYPE html>
