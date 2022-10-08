@@ -595,6 +595,16 @@ func (d *portworx) WaitForNodeIDToBePickedByAnotherNode(
 	return result.(*api.StorageNode), nil
 }
 
+//IsPxInstalled returns if Px is installed on a node
+func (d *portworx) IsPxInstalled(n node.Node) (bool, error) {
+	logrus.Infof("Checking if px is installed on %s", n.Name)
+	pxInstalled, err := d.schedOps.IsPXEnabled(n)
+	if err != nil {
+		return false, fmt.Errorf("Error in checking for portworx installed on %s", n.Name)
+	}
+	return pxInstalled, nil
+}
+
 func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 	d.tpLog.Infof("Updating node: %+v", *n)
 	isPX, err := d.schedOps.IsPXEnabled(*n)
@@ -3337,7 +3347,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		}
 		d.tpLog.Debugf("Status returned by pxctl %s", out)
 		if strings.TrimSpace(out) == telemetryNotEnabled {
-			d.tpLog.Debugf("Telemetry not enabled on PX status. Skipping validation on s3")
+			d.tpLog.Debugf("Telemetry not enabled in PX Status on node %s. Skipping validation on s3", n.Name)
 			return nil
 		}
 
