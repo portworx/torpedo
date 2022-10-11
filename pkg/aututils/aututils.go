@@ -417,7 +417,7 @@ func WaitForActionApprovalsObjects(namespace, name string) error {
 func PoolRuleRebalanceAbsolute(provisionedValLimit, usedValLimit int, approvalRequired bool) apapi.AutopilotRule {
 	apRuleObject := apapi.AutopilotRule{
 		ObjectMeta: meta_v1.ObjectMeta{
-			Name: fmt.Sprintf("pool-rebalance-absolute-prov-%d-used=%d", provisionedValLimit, usedValLimit),
+			Name: fmt.Sprintf("pool-rebalance-absolute-prov-%d-used-%d", provisionedValLimit, usedValLimit),
 		},
 		Spec: apapi.AutopilotRuleSpec{
 			Conditions: apapi.RuleConditions{

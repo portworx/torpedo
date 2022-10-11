@@ -3723,9 +3723,12 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		var wg sync.WaitGroup
 
 		for _, pool := range poolsToBeResized {
-			//Initiating multiple pool expansions by resize-disk
-			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
-			wg.Add(1)
+			//Skipping pool resize if pool rebalance is enabled for the pool
+			if !isPoolRebalanceEnabled(pool.Uuid) {
+				//Initiating multiple pool expansions by resize-disk
+				go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
+				wg.Add(1)
+			}
 
 		}
 		wg.Wait()
@@ -3770,8 +3773,16 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 			logrus.Error(err)
 			UpdateOutcome(event, err)
 		}
+		var poolToBeResized *opsapi.StoragePool
 		if len(poolsToBeResized) > 0 {
-			poolToBeResized := poolsToBeResized[0]
+			for _, pool := range poolsToBeResized {
+
+				if !isPoolRebalanceEnabled(pool.Uuid) {
+					poolToBeResized = pool
+				}
+
+			}
+
 			logrus.Infof("Pool to resize-disk [%v]", poolToBeResized)
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 2, true)
 		}
@@ -3819,10 +3830,13 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		var wg sync.WaitGroup
 
 		for _, pool := range poolsToBeResized {
-			//Initiating multiple pool expansions by add-disk
-			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1, false)
-			wg.Add(1)
+			//Skipping pool resize if pool rebalance is enabled for the pool
+			if !isPoolRebalanceEnabled(pool.Uuid) {
+				//Initiating multiple pool expansions by add-disk
+				go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1, false)
+				wg.Add(1)
 
+			}
 		}
 		wg.Wait()
 
@@ -3863,8 +3877,15 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			logrus.Error(err)
 			UpdateOutcome(event, err)
 		}
+		var poolToBeResized *opsapi.StoragePool
 		if len(poolsToBeResized) > 0 {
-			poolToBeResized := poolsToBeResized[0]
+			for _, pool := range poolsToBeResized {
+				if !isPoolRebalanceEnabled(pool.Uuid) {
+					poolToBeResized = pool
+				}
+
+			}
+
 			logrus.Infof("Pool to resize-disk [%v]", poolToBeResized)
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 1, true)
 		}
@@ -3950,9 +3971,9 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 			UpdateOutcome(event, err)
 
 			if err == nil {
-
 				for _, ruleEvent := range ruleEvents.Items {
-					if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-20 {
+					//checking the events triggered in last 60 mins
+					if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-3600 {
 						continue
 					}
 					logrus.Infof("autopilot rule event reason : %s and message: %s ", ruleEvent.Reason, ruleEvent.Message)
@@ -3963,9 +3984,93 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 				}
 
 			}
+
+		})
+
+		Step("validate Px on the rebalanced node", func() {
+			logrus.Infof("Validating PX on node : %s", autLabelNode.Name)
+			err := Inst().V.WaitDriverUpOnNode(autLabelNode, 1*time.Minute)
+			UpdateOutcome(event, err)
+
+			rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+			UpdateOutcome(event, err)
+			if err == nil {
+
+				for _, job := range rebalanceJobs {
+					jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
+					UpdateOutcome(event, err)
+					if err == nil {
+
+						previousDone := uint64(0)
+						jobState := jobResponse.GetJob().GetState()
+						if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
+							UpdateOutcome(event, fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary()))
+
+						}
+
+						if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
+							logrus.Infof("Job %v is in paused/pending state", job.GetId())
+						}
+
+						if jobState == opsapi.StorageRebalanceJobState_DONE {
+							logrus.Infof("Job %v is in DONE state", job.GetId())
+						}
+
+						if jobState == opsapi.StorageRebalanceJobState_RUNNING {
+							logrus.Infof("Job %v is in Running state", job.GetId())
+
+							currentDone, total := getReblanceWorkSummary(jobResponse)
+							//checking for rebalance progress
+							for currentDone < total && previousDone < currentDone {
+								time.Sleep(2 * time.Minute)
+								logrus.Infof("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
+								jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
+								UpdateOutcome(event, err)
+								if err == nil {
+									previousDone = currentDone
+									currentDone, total = getReblanceWorkSummary(jobResponse)
+								} else {
+									break
+								}
+							}
+
+							if previousDone == currentDone {
+								UpdateOutcome(event, fmt.Errorf("job %v is in running state but not progressing further", job.GetId()))
+							}
+							if currentDone == total {
+								logrus.Infof("Rebalance for job %v completed,", job.GetId())
+							}
+
+						}
+
+					}
+				}
+			}
 		})
 	}
 
+}
+
+func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse) (uint64, uint64) {
+	status := jobResponse.GetJob().GetStatus()
+	if status != "" {
+		logrus.Infof(" Job Status: %s", status)
+	}
+
+	currentDone := uint64(0)
+	currentPending := uint64(0)
+	total := uint64(0)
+	rebalWorkSummary := jobResponse.GetSummary().GetWorkSummary()
+
+	for _, summary := range rebalWorkSummary {
+		currentDone += summary.GetDone()
+		currentPending += summary.GetPending()
+		logrus.Infof("WorkSummary --> Type: %v,Done : %v, Pending: %v", summary.GetType(), currentDone, currentPending)
+
+	}
+	total = currentDone + currentPending
+
+	return currentDone, total
 }
 
 // TriggerUpgradeVolumeDriver upgrades volume driver version to the latest build
@@ -5464,6 +5569,17 @@ func setMetrics(event EventRecord) {
 func updateMetrics(event EventRecord) {
 	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
 	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
+}
+
+func isPoolRebalanceEnabled(poolUUID string) bool {
+	if autLabelNode.Name != "" {
+		for _, pool := range autLabelNode.Pools {
+			if pool.Uuid == poolUUID {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 var htmlTemplate = `<!DOCTYPE html>
