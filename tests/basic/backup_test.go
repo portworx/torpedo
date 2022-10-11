@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,6 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -52,6 +54,18 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
 }
+
+//This testcase verifies if the backup pods are in Ready state or not
+var _ = Describe("{BackupClusterVerification}", func() {
+	It("Backup Cluster Verification", func() {
+		Step("Check the status of backup pods", func() {
+			status := validateBackupCluster()
+			Expect(status).NotTo(Equal(false),
+				fmt.Sprintf("All pods are not in Ready state in Backup cluster"))
+		})
+		//Will add CRD verification here
+	})
+})
 
 // This test performs basic test of starting an application, backing it up and killing stork while
 // performing backup.
@@ -1935,4 +1949,32 @@ func getBackupUID(orgID, backupName string) string {
 		fmt.Sprintf("Failed to get backup uid for org %s backup %s ctx: [%v]",
 			orgID, backupName, err))
 	return backupUID
+}
+
+func validateBackupCluster() bool {
+	labelSelectors := make(map[string]string)
+	ns := backup.GetPxBackupNamespace()
+	pods, err := core.Instance().GetPods(ns, labelSelectors)
+	if err != nil {
+		logrus.Warnf("Unable to fetch the pods from backup namespace\n Error : [%v]\n",
+			err)
+		return false
+	}
+	for _, pod := range pods.Items {
+		matched, _ := regexp.MatchString("^pxcentral-post-install-hook", pod.GetName())
+		if !matched {
+			logrus.Info("Checking if all the containers are up or not")
+			res := core.Instance().IsPodRunning(pod)
+			if !res {
+				logrus.Warnf("All the containers are not Up for pod %s", pod.GetName())
+				return false
+			}
+			err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
+			if err != nil {
+				logrus.Errorf("An Error Occured while validating the pod %s,ERROR: %v", pod.GetName(), err)
+				return false
+			}
+		}
+	}
+	return true
 }
