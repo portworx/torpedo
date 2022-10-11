@@ -3,6 +3,8 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	"github.com/portworx/torpedo/pkg/aututils"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -193,6 +195,9 @@ var eventRing *ring.Ring
 //decommissionedNode for rejoin test
 var decommissionedNode = node.Node{}
 
+//node with auti pilot rule enabled
+var autLabelNode node.Node
+
 // emailRecords stores events for rendering
 // email template
 type emailRecords struct {
@@ -375,6 +380,8 @@ const (
 	AddDiskAndReboot = "addDiskAndReboot"
 	// ResizeDiskAndReboot performs  resize-disk and reboots node
 	ResizeDiskAndReboot = "resizeDiskAndReboot"
+	// AutopilotRebalance performs  pool rebalance
+	AutopilotRebalance = "autopilotRebalance"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -3870,6 +3877,94 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 		}
 	})
 	updateMetrics(*event)
+
+}
+
+func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AutopilotRebalance,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	poolLabel := map[string]string{"autopilot": "rebalance"}
+	apRule := aututils.PoolRuleRebalanceAbsolute(120, 70, false)
+	apRule.Spec.ActionsCoolDownPeriod = int64(3600)
+	apRule.Spec.Selector = apapi.RuleObjectSelector{
+		LabelSelector: meta_v1.LabelSelector{
+			MatchLabels: poolLabel,
+		},
+	}
+
+	if autLabelNode.Name == "" {
+
+		Step("Create autopilot rule", func() {
+			logrus.Infof("Creating autopilot rule ; %+v", apRule)
+
+			storageNodes := node.GetStorageDriverNodes()
+			maxUsed := uint64(0)
+			for _, sNode := range storageNodes {
+				totalSize := uint64(0)
+				for _, p := range sNode.StoragePools {
+					totalSize += p.StoragePool.Used
+				}
+				if totalSize > maxUsed {
+					autLabelNode = sNode
+					maxUsed = totalSize
+				}
+			}
+
+			logrus.Infof("Adding label %s to the node %s", poolLabel, autLabelNode.Name)
+			err := AddLabelsOnNode(autLabelNode, poolLabel)
+			UpdateOutcome(event, err)
+			if err == nil {
+				_, err = Inst().S.CreateAutopilotRule(apRule)
+				UpdateOutcome(event, err)
+				//Removing the label if autopilot rule creation is failed
+				if err != nil {
+					for k := range poolLabel {
+						Inst().S.RemoveLabelOnNode(autLabelNode, k)
+						autLabelNode = node.Node{}
+					}
+				}
+			} else {
+				logrus.Warn("Skipping autopilot rule creation as node is not labelled")
+			}
+
+		})
+	} else {
+
+		Step("validate the  autopilot events", func() {
+			logrus.Infof("validate the  autopilot events for %s", apRule.Name)
+			ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+				FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
+			})
+			UpdateOutcome(event, err)
+
+			if err == nil {
+
+				for _, ruleEvent := range ruleEvents.Items {
+					if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-20 {
+						continue
+					}
+					logrus.Infof("autopilot rule event reason : %s and message: %s ", ruleEvent.Reason, ruleEvent.Message)
+					if strings.Contains(ruleEvent.Reason, "FailedAction") {
+						UpdateOutcome(event, fmt.Errorf("autopilot rule %s failed, Reason: %s, Message; %s", apRule.Name, ruleEvent.Reason, ruleEvent.Message))
+					}
+
+				}
+
+			}
+		})
+	}
 
 }
 
