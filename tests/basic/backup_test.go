@@ -61,7 +61,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 		Step("Check the status of backup pods", func() {
 			status := validateBackupCluster()
 			Expect(status).NotTo(Equal(false),
-				fmt.Sprintf("All pods are not in Ready state in Backup cluster"))
+				fmt.Sprintf("Backup pods are not in expected state"))
 		})
 		//Will add CRD verification here
 	})
@@ -1956,23 +1956,43 @@ func validateBackupCluster() bool {
 	ns := backup.GetPxBackupNamespace()
 	pods, err := core.Instance().GetPods(ns, labelSelectors)
 	if err != nil {
-		logrus.Warnf("Unable to fetch the pods from backup namespace\n Error : [%v]\n",
+		logrus.Errorf("Unable to fetch the pods from backup namespace\n Error : [%v]\n",
 			err)
 		return false
 	}
 	for _, pod := range pods.Items {
 		matched, _ := regexp.MatchString("^pxcentral-post-install-hook", pod.GetName())
-		if !matched {
-			logrus.Info("Checking if all the containers are up or not")
-			res := core.Instance().IsPodRunning(pod)
-			if !res {
-				logrus.Warnf("All the containers are not Up for pod %s", pod.GetName())
+		if matched {
+			logrus.Info("Checking if the pxcentral-post-install-hook pod is in Completed state or not")
+			bkp_pod, err := core.Instance().GetPodByName(pod.GetName(), ns)
+			if err != nil {
+				logrus.Errorf("An Error Occured while getting the pxcentral-post-install-hook pod details")
 				return false
 			}
-			err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
-			if err != nil {
-				logrus.Errorf("An Error Occured while validating the pod %s,ERROR: %v", pod.GetName(), err)
-				return false
+			container_list := bkp_pod.Status.ContainerStatuses
+			for i := 0; i < len(container_list); i++ {
+				status := container_list[i].State.Terminated.Reason
+				if status != "Completed" {
+					logrus.Errorf("Container %s is not in Completed state", container_list[i].Name)
+					return false
+				}
+			}
+		} else {
+			equal, _ := regexp.MatchString("^full-maintenance-repo || ^quick-maintenance-repo", pod.GetName())
+			if !equal {
+				logrus.Info("Checking if all the containers are up or not")
+				res := core.Instance().IsPodRunning(pod)
+				if !res {
+					logrus.Errorf("All the containers are not Up")
+					return false
+				}
+				err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
+				logrus.Warnf(" ERR is %s", err)
+				if err != nil {
+					logrus.Errorf("An Error Occured while validating the pod %v", err)
+					return false
+
+				}
 			}
 		}
 	}
