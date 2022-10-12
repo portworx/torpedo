@@ -58,10 +58,10 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 //This testcase verifies if the backup pods are in Ready state or not
 var _ = Describe("{BackupClusterVerification}", func() {
 	It("Backup Cluster Verification", func() {
-		Step("Check the status of backup pods", func() {
+		Step("Check the status of pxcentral-post-install-hook pods", func() {
 			status := validateBackupCluster()
 			Expect(status).NotTo(Equal(false),
-				fmt.Sprintf("All pods are not in Ready state in Backup cluster"))
+				fmt.Sprintf("pxcentral-post-install-hook pod is not in Completed state"))
 		})
 		//Will add CRD verification here
 	})
@@ -1956,24 +1956,28 @@ func validateBackupCluster() bool {
 	ns := backup.GetPxBackupNamespace()
 	pods, err := core.Instance().GetPods(ns, labelSelectors)
 	if err != nil {
-		logrus.Warnf("Unable to fetch the pods from backup namespace\n Error : [%v]\n",
+		logrus.Errorf("Unable to fetch the pods from backup namespace\n Error : [%v]\n",
 			err)
 		return false
 	}
 	for _, pod := range pods.Items {
 		matched, _ := regexp.MatchString("^pxcentral-post-install-hook", pod.GetName())
-		if !matched {
-			logrus.Info("Checking if all the containers are up or not")
-			res := core.Instance().IsPodRunning(pod)
-			if !res {
-				logrus.Warnf("All the containers are not Up for pod %s", pod.GetName())
-				return false
-			}
-			err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
+		if matched {
+			logrus.Info("Checking if the pxcentral-post-install-hook pod is in Completed state or not")
+			bkp_pod, err := core.Instance().GetPodByName(pod.GetName(), ns)
 			if err != nil {
-				logrus.Errorf("An Error Occured while validating the pod %s,ERROR: %v", pod.GetName(), err)
+				logrus.Errorf("An Error Occured while getting the pxcentral-post-install-hook pod details")
 				return false
 			}
+			container_list := bkp_pod.Status.ContainerStatuses
+			for i := 0; i < len(container_list); i++ {
+				status := container_list[i].State.Terminated.Reason
+				if status != "Completed" {
+					logrus.Errorf("Container %s is not in Completed state", container_list[i].Name)
+					return false
+				}
+			}
+			return true
 		}
 	}
 	return true
