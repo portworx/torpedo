@@ -58,10 +58,14 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 //This testcase verifies if the backup pods are in Ready state or not
 var _ = Describe("{BackupClusterVerification}", func() {
 	It("Backup Cluster Verification", func() {
-		Step("Check the status of backup pods", func() {
+		Step("Check the status of pxcentral-post-install-hook pods", func() {
 			status := validateBackupCluster()
 			Expect(status).NotTo(Equal(false),
+<<<<<<< HEAD
 				fmt.Sprintf("Backup pods are not in expected state"))
+=======
+				fmt.Sprintf("pxcentral-post-install-hook pod is not in Completed state"))
+>>>>>>> d249ad66048c80ba3ed99e05a8997634c96185de
 		})
 		//Will add CRD verification here
 	})
@@ -1977,6 +1981,7 @@ func validateBackupCluster() bool {
 					return false
 				}
 			}
+<<<<<<< HEAD
 		} else {
 			equal, _ := regexp.MatchString("^full-maintenance-repo || ^quick-maintenance-repo", pod.GetName())
 			if !equal {
@@ -1994,6 +1999,9 @@ func validateBackupCluster() bool {
 
 				}
 			}
+=======
+			return true
+>>>>>>> d249ad66048c80ba3ed99e05a8997634c96185de
 		}
 	}
 	return true
