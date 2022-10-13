@@ -1987,7 +1987,6 @@ func validateBackupCluster() bool {
 					return false
 				}
 				err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
-				logrus.Warnf(" ERR is %s", err)
 				if err != nil {
 					logrus.Errorf("An Error Occured while validating the pod %v", err)
 					return false
