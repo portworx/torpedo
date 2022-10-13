@@ -3788,7 +3788,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 
 func getOperatorLatestVersion() (string, error) {
 	url := fmt.Sprintf("%s/%s/version", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-	tpLog.Infof("URL is : %v", url)
+	log.Infof("URL is : %v", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to send GET request to %s, Err: %v", url, err)

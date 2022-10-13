@@ -2,7 +2,7 @@ package spec
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
+	logInstance "github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"path"
 
@@ -65,7 +65,7 @@ func NewFactory(specDir, storageProvisioner string, parser Parser) (*Factory, er
 		specDir:    specDir,
 		specParser: parser,
 	}
-	tpLog := log.GetLogInstance()
+	log := logInstance.GetLogInstance()
 
 	appDirList, err := ioutil.ReadDir(f.specDir)
 	if err != nil {
@@ -78,8 +78,8 @@ func NewFactory(specDir, storageProvisioner string, parser Parser) (*Factory, er
 			specID := file.Name()
 
 			specToParse := path.Join(f.specDir, specID)
-			tpLog.Tracef("Parsing: %v...", path.Join(f.specDir, specID))
-			tpLog.Tracef("Storage provisioner %s", storageProvisioner)
+			log.Tracef("Parsing: %v...", path.Join(f.specDir, specID))
+			log.Tracef("Storage provisioner %s", storageProvisioner)
 			specs, err := f.specParser.ParseSpecs(specToParse, storageProvisioner)
 			if err != nil {
 				return nil, err

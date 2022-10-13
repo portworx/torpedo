@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	logInstance "github.com/portworx/torpedo/pkg/log"
 	"net"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
@@ -97,12 +98,10 @@ import (
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/aws"
 	// import azure driver to invoke it's init
+	context1 "context"
 	_ "github.com/portworx/torpedo/drivers/volume/azure"
 	// import generic csi driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
-	"github.com/portworx/torpedo/pkg/log"
-
-	context1 "context"
 
 	"github.com/pborman/uuid"
 	yaml "gopkg.in/yaml.v2"
@@ -293,7 +292,7 @@ const (
 	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
 )
 
-var tpLog *logrus.Logger
+var log *logrus.Logger
 
 //TpLogPath torpedo log path
 var tpLogPath string
@@ -305,10 +304,10 @@ func InitInstance() {
 	var err error
 	var token string
 	if Inst().ConfigMap != "" {
-		tpLog.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 		expect(err).NotTo(haveOccurred())
-		tpLog.Infof("Token used for initializing: %s ", token)
+		log.Infof("Token used for initializing: %s ", token)
 	} else {
 		token = ""
 	}
@@ -330,7 +329,7 @@ func InitInstance() {
 		Logger:                           Inst().Logger,
 	})
 	if err != nil {
-		tpLog.Errorf("Error occured while Scheduler Driver Initialization, Err: %v", err)
+		log.Errorf("Error occured while Scheduler Driver Initialization, Err: %v", err)
 	}
 	expect(err).NotTo(haveOccurred())
 
@@ -339,20 +338,20 @@ func InitInstance() {
 		Logger:  Inst().Logger,
 	})
 	if err != nil {
-		tpLog.Errorf("Error occured while Node Driver Initialization, Err: %v", err)
+		log.Errorf("Error occured while Node Driver Initialization, Err: %v", err)
 	}
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap, Inst().Logger)
 	if err != nil {
-		tpLog.Errorf("Error occured while Volume Driver Initialization, Err: %v", err)
+		log.Errorf("Error occured while Volume Driver Initialization, Err: %v", err)
 	}
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		if err != nil {
-			tpLog.Errorf("Error occured while Backup Driver Initialization, Err: %v", err)
+			log.Errorf("Error occured while Backup Driver Initialization, Err: %v", err)
 		}
 		expect(err).NotTo(haveOccurred())
 	}
@@ -361,26 +360,26 @@ func InitInstance() {
 		if err == nil {
 			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
 				err = fmt.Errorf("not all details provided to update testrail")
-				tpLog.Errorf("Err: %v", err)
+				log.Errorf("Err: %v", err)
 				expect(err).NotTo(haveOccurred())
 			}
 			testrailuttils.CreateMilestone()
 		}
 	} else {
-		tpLog.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
+		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
 	}
 
 	if jiraUserName != "" && jiraToken != "" {
-		tpLog.Info("Initializing JIRA connection")
+		log.Info("Initializing JIRA connection")
 		jirautils.Init(jiraUserName, jiraToken)
 
 	} else {
-		tpLog.Debugf("Not all information to connect to JIRA is provided.")
+		log.Debugf("Not all information to connect to JIRA is provided.")
 	}
 
 	pxVersion, err := Inst().V.GetDriverVersion()
 	if err != nil {
-		tpLog.Errorf(err.Error())
+		log.Errorf(err.Error())
 		expect(err).NotTo(haveOccurred())
 	}
 	commitID := strings.Split(pxVersion, "-")[1]
@@ -403,7 +402,7 @@ func ValidateCleanup() {
 
 		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
 		if err != nil {
-			tpLog.Info("an error occurred, collecting bundle")
+			log.Info("an error occurred, collecting bundle")
 			CollectSupport()
 		}
 		dash.VerifyFatal(err, nil, "verify if an error occurred while validating clean up")
@@ -415,7 +414,7 @@ func processError(err error, errChan ...*chan error) {
 	// Useful for frameworks like longevity that must continue
 	// execution and must not fail immediately
 	if len(errChan) > 0 {
-		tpLog.Error(err)
+		log.Error(err)
 		updateChannel(err, errChan...)
 	} else {
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Verify if error occured.Err: %v", err))
@@ -678,7 +677,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			vols, err := Inst().S.GetVolumes(ctx)
 			if err != nil {
-				tpLog.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
 			volScaleFactor := 1
@@ -688,7 +687,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				// GlobalScaleFactor is 1, high number of volumes in a single app instance
 				// may slow things down.
 				volScaleFactor = len(vols) / 10
-				tpLog.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
+				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
 			}
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
@@ -1204,7 +1203,7 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 	var err error
 	var vols []*volume.Volume
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
-		tpLog.Infof("destroy the %s app's volumes", ctx.App.Key)
+		log.Infof("destroy the %s app's volumes", ctx.App.Key)
 		vols, err = Inst().S.DeleteVolumes(ctx, options)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volumes, Err: %v", ctx.App.Key, err))
 	})
@@ -1216,7 +1215,7 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 	for _, vol := range vols {
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
-			tpLog.Infof("validate %s app's volume %s has been deleted in the volume driver",
+			log.Infof("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
 			err := Inst().V.ValidateDeleteVolume(vol)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volume %s, Err: %v", appName, vol.Name, err))
@@ -1252,10 +1251,10 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 		}
 		//if not hyper converged set up deploy apps only on storageless nodes
 		if !Inst().IsHyperConverged {
-			tpLog.Infof("Scheduling apps only on storageless nodes")
+			log.Infof("Scheduling apps only on storageless nodes")
 			storagelessNodes := node.GetStorageLessNodes()
 			if len(storagelessNodes) == 0 {
-				tpLog.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
+				log.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
 				Inst().IsHyperConverged = true
 			}
 			for _, storagelessNode := range storagelessNodes {
@@ -1276,7 +1275,7 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			}
 
 		} else {
-			tpLog.Infof("Scheduling Apps with hyper-converged")
+			log.Infof("Scheduling Apps with hyper-converged")
 		}
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, options)
@@ -1501,10 +1500,10 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
 				namespaceDescription, err := Inst().S.Describe(ctx)
 				if err != nil {
-					tpLog.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
+					log.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
 				}
 				if err = ioutil.WriteFile(filename, []byte(namespaceDescription), 0755); err != nil {
-					tpLog.Errorf("failed to save file %s. Cause: %v", filename, err)
+					log.Errorf("failed to save file %s. Cause: %v", filename, err)
 				}
 			}
 		})
@@ -1570,7 +1569,7 @@ func CollectSupport() {
 		skipStr := os.Getenv(envSkipDiagCollection)
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
-				tpLog.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
+				log.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
 				return
 			}
 		}
@@ -1582,7 +1581,7 @@ func CollectSupport() {
 				continue
 			}
 			Step(fmt.Sprintf("save all useful logs on node %s", n.SchedulerNodeName), func() {
-				tpLog.Infof("save all useful logs on node %s", n.SchedulerNodeName)
+				log.Infof("save all useful logs on node %s", n.SchedulerNodeName)
 
 				// Moves this out to deal with diag testing.
 				r := &volume.DiagRequestConfig{
@@ -1628,7 +1627,7 @@ func runCmd(cmd string, n node.Node) error {
 		Sudo:            true,
 	})
 	if err != nil {
-		tpLog.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
 	}
 
 	return err
@@ -1652,7 +1651,7 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
 	context("checking for core files...", func() {
-		tpLog.Info("checking for core files...")
+		log.Info("checking for core files...")
 		Step("verifying if core files are present on each node", func() {
 			dash.Info("verifying if core files are present on each node")
 			nodes := node.GetNodes()
@@ -1667,7 +1666,7 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
-					tpLog.Info("an error occurred, collecting bundle")
+					log.Info("an error occurred, collecting bundle")
 					CollectSupport()
 				}
 				dash.VerifySafely(err, nil, fmt.Sprintf("Verify if an error occurred, Err: %v", err))
@@ -1843,10 +1842,10 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	tpLog.Debugf("contexts: %v", contexts)
+	log.Debugf("contexts: %v", contexts)
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
-		tpLog.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 		CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
@@ -1854,7 +1853,7 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	if len(ids) >= 1 {
 		driverVersion, err := Inst().V.GetDriverVersion()
 		if err != nil {
-			tpLog.Errorf("Error in getting driver version")
+			log.Errorf("Error in getting driver version")
 		}
 		testrailObject := testrailuttils.Testrail{
 			Status:        testStatus,
@@ -2174,7 +2173,7 @@ func UpgradePxStorageCluster() (bool, error) {
 					return false, fmt.Errorf("error getting PX version for node %s. Cause: %v", k, err)
 				}
 				pxVersion := fmt.Sprintf("%v", versionVal)
-				tpLog.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
+				log.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
 
 				if (checkTag && pxVersion == expectedVersion) || strings.Contains(pxVersion, expectedVersion) {
 					dash.Infof("Node %s successfully upgraded to version %s", k, pxVersion)
@@ -2190,7 +2189,7 @@ func UpgradePxStorageCluster() (bool, error) {
 			isUpgradeDone = isNodeUpgraded
 			break
 		}
-		tpLog.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
+		log.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
 		time.Sleep(2 * time.Minute)
 		waitCount--
 	}
@@ -3753,58 +3752,58 @@ func ParseFlags() {
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
 	flag.Parse()
 
-	tpLog = log.GetLogInstance()
-	tpLog.Out = io.MultiWriter(tpLog.Out)
-	setLoglevel(tpLog, logLevel)
+	log = logInstance.GetLogInstance()
+	log.Out = io.MultiWriter(log.Out)
+	setLoglevel(log, logLevel)
 	tpLogPath = fmt.Sprintf("%s/%s", logLoc, "torpedo.log")
 	tpLogFile = CreateLogFile(tpLogPath)
 	if tpLogFile != nil {
-		SetTorpedoFileOutput(tpLog, tpLogFile)
+		SetTorpedoFileOutput(log, tpLogFile)
 	}
 
 	appList, err := splitCsv(appListCSV)
 	if err != nil {
-		tpLog.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
+		log.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
 	}
 
 	sched.Init(time.Second)
 
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
-		tpLog.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
+		log.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
 	} else if volumeDriver, err = volume.Get(v); err != nil {
-		tpLog.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
+		log.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
 	} else if nodeDriver, err = node.Get(n); err != nil {
-		tpLog.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
+		log.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
 	} else if err = os.MkdirAll(logLoc, os.ModeDir); err != nil {
-		tpLog.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
+		log.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 	} else {
 		if _, err = os.Stat(customConfigPath); err == nil {
 			var data []byte
 
-			tpLog.Infof("Using custom app config file %s", customConfigPath)
+			log.Infof("Using custom app config file %s", customConfigPath)
 			data, err = ioutil.ReadFile(customConfigPath)
 			if err != nil {
-				tpLog.Fatalf("Cannot read file %s. Error: %v", customConfigPath, err)
+				log.Fatalf("Cannot read file %s. Error: %v", customConfigPath, err)
 			}
 			err = yaml.Unmarshal(data, &customAppConfig)
 			if err != nil {
-				tpLog.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
+				log.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
 			}
-			tpLog.Infof("Parsed custom app config file: %+v", customAppConfig)
+			log.Infof("Parsed custom app config file: %+v", customAppConfig)
 		}
-		tpLog.Infof("Backup driver name %s", backupDriverName)
+		log.Infof("Backup driver name %s", backupDriverName)
 		if backupDriverName != "" {
 			if backupDriver, err = backup.Get(backupDriverName); err != nil {
-				tpLog.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
+				log.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
 			} else {
-				tpLog.Infof("Backup driver found %v", backupDriver)
+				log.Infof("Backup driver found %v", backupDriver)
 			}
 		}
 		dash = aetosutil.Get()
-		dash.TpLog = tpLog
+		dash.Log = log
 		if enableDash && !isDashboardReachable() {
 			enableDash = false
-			tpLog.Warn("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
+			log.Warn("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
 		}
 
 		dash.IsEnabled = enableDash
@@ -3826,7 +3825,7 @@ func ParseFlags() {
 		if ok {
 			testsetID, err = strconv.Atoi(val)
 			if err != nil {
-				tpLog.Warnf("Failed to convert environment testset id  %v to int, err: %v", val, err)
+				log.Warnf("Failed to convert environment testset id  %v to int, err: %v", val, err)
 			}
 		}
 		if testsetID != 0 {
@@ -3845,7 +3844,7 @@ func ParseFlags() {
 				SpecDir:                             specDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
-				Logger:                              tpLog,
+				Logger:                              log,
 				GlobalScaleFactor:                   appScaleFactor,
 				MinRunTimeMins:                      minRunTimeMins,
 				ChaosLevel:                          chaosLevel,
@@ -3883,15 +3882,15 @@ func ParseFlags() {
 
 func printFlags() {
 
-	tpLog.Info("********Torpedo Command********")
-	tpLog.Info(strings.Join(os.Args, " "))
-	tpLog.Info("******************************")
+	log.Info("********Torpedo Command********")
+	log.Info(strings.Join(os.Args, " "))
+	log.Info("******************************")
 
-	tpLog.Info("*********Parsed Args**********")
+	log.Info("*********Parsed Args**********")
 	flag.VisitAll(func(f *flag.Flag) {
-		tpLog.Infof("   %s: %s", f.Name, f.Value)
+		log.Infof("   %s: %s", f.Name, f.Value)
 	})
-	tpLog.Info("******************************")
+	log.Info("******************************")
 }
 
 func isDashboardReachable() bool {
@@ -3901,7 +3900,7 @@ func isDashboardReachable() bool {
 	if err == nil {
 		return true
 	}
-	tpLog.Warn(err.Error())
+	log.Warn(err.Error())
 	return false
 }
 
@@ -3958,7 +3957,7 @@ func CloseLogFile(f *os.File) {
 			fmt.Println("Failed to create logfile torpedo.log")
 			fmt.Println("Error: ", err)
 		}
-		tpLog.Out = io.MultiWriter(os.Stdout, tpFile)
+		log.Out = io.MultiWriter(os.Stdout, tpFile)
 	}
 
 }
@@ -3989,7 +3988,7 @@ func mapToVolumeOptions(options map[string]bool) *scheduler.VolumeOptions {
 
 func init() {
 	logrus.SetLevel(logrus.InfoLevel)
-	logrus.StandardLogger().Hooks.Add(log.NewHook())
+	logrus.StandardLogger().Hooks.Add(logInstance.NewHook())
 	logrus.SetOutput(os.Stdout)
 }
 
@@ -4171,7 +4170,7 @@ func IsCloudDriveInitialised(n node.Node) (bool, error) {
 	})
 
 	if err != nil && strings.Contains(err.Error(), "Cloud Drive is not initialized") {
-		tpLog.Warnf("cd list error : %v", err)
+		log.Warnf("cd list error : %v", err)
 		return false, nil
 	}
 	if err == nil {

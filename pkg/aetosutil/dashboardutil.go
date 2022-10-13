@@ -63,7 +63,7 @@ type Dashboard struct {
 	verifications     []result
 	testSetStartTime  time.Time
 	testCaseStartTime time.Time
-	TpLog             *logrus.Logger
+	Log               *logrus.Logger
 }
 
 //TestSet struct
@@ -117,11 +117,11 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 	if d.IsEnabled && d.TestSetID == 0 {
 
 		if testSet.Branch == "" {
-			d.TpLog.Warn("Branch should not be empty")
+			d.Log.Warn("Branch should not be empty")
 		}
 
 		if testSet.Description == "" {
-			d.TpLog.Warn("Description should not be empty")
+			d.Log.Warn("Description should not be empty")
 		}
 
 		if testSet.Product == "" {
@@ -135,17 +135,17 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 		createTestSetURL := fmt.Sprintf("%s/testset", DashBoardBaseURL)
 		resp, respStatusCode, err := rest.POST(createTestSetURL, testSet, nil, nil)
 		if err != nil {
-			d.TpLog.Errorf("Error in starting TestSet, Cause: %v", err)
+			d.Log.Errorf("Error in starting TestSet, Cause: %v", err)
 		} else if respStatusCode != http.StatusOK {
-			d.TpLog.Errorf("Failed to create TestSet, resp : %s", string(resp))
+			d.Log.Errorf("Failed to create TestSet, resp : %s", string(resp))
 		} else {
 			d.TestSetID, err = strconv.Atoi(string(resp))
 			if err == nil {
-				d.TpLog.Infof("TestSetId created : %d", d.TestSetID)
+				d.Log.Infof("TestSetId created : %d", d.TestSetID)
 			} else {
-				d.TpLog.Errorf("TestSetId creation failed. Cause : %v", err)
+				d.Log.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
-			d.TpLog.Infof("Dashboard URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
+			d.Log.Infof("Dashboard URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
 			os.Setenv("TESTSET-ID", fmt.Sprint(d.TestSetID))
 
 		}
@@ -158,7 +158,7 @@ func (d *Dashboard) TestSetEnd() {
 
 	if d.IsEnabled {
 		if d.TestSetID == 0 {
-			d.TpLog.Errorf("TestSetID is empty")
+			d.Log.Errorf("TestSetID is empty")
 			return
 		}
 
@@ -166,13 +166,11 @@ func (d *Dashboard) TestSetEnd() {
 		resp, respStatusCode, err := rest.PUT(updateTestSetURL, nil, nil, nil)
 
 		if err != nil {
-			d.TpLog.Errorf("Error in updating TestSet, Caose: %v", err)
+			d.Log.Errorf("Error in updating TestSet, Caose: %v", err)
 		} else if respStatusCode != http.StatusOK {
-			d.TpLog.Errorf("Failed to end TestSet, Resp : %s", string(resp))
+			d.Log.Errorf("Failed to end TestSet, Resp : %s", string(resp))
 		} else {
-
-			d.TpLog.Infof("TestSetId %d update successfully", d.TestSetID)
-
+			d.Log.Infof("TestSetId %d update successfully", d.TestSetID)
 		}
 
 		if len(testCasesStack) > 0 {
@@ -191,7 +189,7 @@ func (d *Dashboard) TestCaseEnd() {
 	if d.IsEnabled {
 
 		if d.testcaseID == 0 {
-			d.TpLog.Error("TestCaseID is empty")
+			d.Log.Error("TestCaseID is empty")
 			return
 		}
 
@@ -199,11 +197,11 @@ func (d *Dashboard) TestCaseEnd() {
 		resp, respStatusCode, err := rest.PUT(url, nil, nil, nil)
 
 		if err != nil {
-			d.TpLog.Errorf("Error in updating TestCase, Caose: %v", err)
+			d.Log.Errorf("Error in updating TestCase, Caose: %v", err)
 		} else if respStatusCode != http.StatusOK {
-			d.TpLog.Errorf("Failed to end TestCase, Resp : %s", string(resp))
+			d.Log.Errorf("Failed to end TestCase, Resp : %s", string(resp))
 		} else {
-			d.TpLog.Infof("TestCase %d ended successfully", d.testcaseID)
+			d.Log.Infof("TestCase %d ended successfully", d.testcaseID)
 		}
 
 		result := "PASS"
@@ -216,11 +214,11 @@ func (d *Dashboard) TestCaseEnd() {
 			}
 		}
 
-		d.TpLog.Info("--------Test End------")
-		d.TpLog.Infof("#Test: %s ", testCase.ShortName)
-		d.TpLog.Infof("#Description: %s ", testCase.Description)
-		d.TpLog.Infof("#Resuly: %s ", result)
-		d.TpLog.Info("------------------------")
+		d.Log.Info("--------Test End------")
+		d.Log.Infof("#Test: %s ", testCase.ShortName)
+		d.Log.Infof("#Description: %s ", testCase.Description)
+		d.Log.Infof("#Resuly: %s ", result)
+		d.Log.Info("------------------------")
 		verifications = nil
 		removeTestCaseFromStack(d.testcaseID)
 
@@ -249,18 +247,18 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 	if d.IsEnabled {
 
 		if d.TestSetID == 0 {
-			d.TpLog.Error("TestSetID is empty")
+			d.Log.Error("TestSetID is empty")
 		}
 
 		updateTestSetURL := fmt.Sprintf("%s/testset/%d", DashBoardBaseURL, d.TestSetID)
 		resp, respStatusCode, err := rest.PUT(updateTestSetURL, testSet, nil, nil)
 
 		if err != nil {
-			d.TpLog.Errorf("Error in updating TestSet, Caose: %v", err)
+			d.Log.Errorf("Error in updating TestSet, Caose: %v", err)
 		} else if respStatusCode != http.StatusOK {
-			d.TpLog.Errorf("Failed to update TestSet, Resp : %s", string(resp))
+			d.Log.Errorf("Failed to update TestSet, Resp : %s", string(resp))
 		} else {
-			d.TpLog.Infof("TestSetId %d update successfully", d.TestSetID)
+			d.Log.Infof("TestSetId %d update successfully", d.TestSetID)
 
 		}
 	}
@@ -270,7 +268,7 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, tags []string) {
 	if d.IsEnabled {
 		if d.TestSetID == 0 {
-			d.TpLog.Errorf("TestSetID is empty, cannot update update testcase")
+			d.Log.Errorf("TestSetID is empty, cannot update update testcase")
 			return
 		}
 
@@ -288,7 +286,7 @@ func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, ta
 				files := strings.Split(fp, "/")
 				testCase.ShortName = files[len(files)-1]
 
-				d.TpLog.Infof("Running test from file %s, module: %s", fp, moduleName)
+				d.Log.Infof("Running test from file %s, module: %s", fp, moduleName)
 
 			}
 			testCase.ModuleName = moduleName
@@ -311,21 +309,21 @@ func (d *Dashboard) TestCaseBegin(moduleName, description, testRepoID string, ta
 
 		resp, respStatusCode, err := rest.POST(createTestCaseURL, testCase, nil, nil)
 		if err != nil {
-			d.TpLog.Infof("Error in starting TesteCase, Cause: %v", err)
+			d.Log.Infof("Error in starting TesteCase, Cause: %v", err)
 		} else if respStatusCode != http.StatusOK {
-			d.TpLog.Errorf("Error creating test case, resp :%s", string(resp))
+			d.Log.Errorf("Error creating test case, resp :%s", string(resp))
 		} else {
 			d.testcaseID, err = strconv.Atoi(string(resp))
 			if err == nil {
-				d.TpLog.Infof("TestCaseID created : %d", d.testcaseID)
+				d.Log.Infof("TestCaseID created : %d", d.testcaseID)
 			} else {
-				d.TpLog.Errorf("TestCase creation failed. Cause : %v", err)
+				d.Log.Errorf("TestCase creation failed. Cause : %v", err)
 			}
 		}
-		d.TpLog.Info("--------Test Start------")
-		d.TpLog.Infof("#Test: %s ", testCase.ShortName)
-		d.TpLog.Infof("#Description: %s ", description)
-		d.TpLog.Info("------------------------")
+		d.Log.Info("--------Test Start------")
+		d.Log.Infof("#Test: %s ", testCase.ShortName)
+		d.Log.Infof("#Description: %s ", description)
+		d.Log.Info("------------------------")
 
 		testCasesStack = append(testCasesStack, d.testcaseID)
 
@@ -336,18 +334,18 @@ func (d *Dashboard) verify(r result) {
 	if d.IsEnabled {
 
 		if r.TestCaseID == 0 {
-			d.TpLog.Errorf("TestcaseId should not be empty for updating result")
+			d.Log.Errorf("TestcaseId should not be empty for updating result")
 		}
 
 		commentURL := fmt.Sprintf("%s/result", DashBoardBaseURL)
 
 		resp, respStatusCode, err := rest.POST(commentURL, r, nil, nil)
 		if err != nil {
-			d.TpLog.Errorf("Error in verifying, Cause: %v", err)
+			d.Log.Errorf("Error in updating verification to dashboard, Cause: %v", err)
 		} else if respStatusCode != http.StatusOK {
-			d.TpLog.Errorf("Error updating the verify comment, resp : %s", string(resp))
+			d.Log.Errorf("Error updating the verify comment, resp : %s", string(resp))
 		} else {
-			d.TpLog.Tracef("verify response : %s", string(resp))
+			d.Log.Tracef("verify response : %s", string(resp))
 
 		}
 	}
@@ -365,17 +363,17 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 	res.Description = description
 	res.TestCaseID = d.testcaseID
 
-	d.TpLog.Infof("Verifying : Description : %s", description)
-	d.TpLog.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
+	d.Log.Infof("Verifying : Description : %s", description)
+	d.Log.Infof("Actual: %v, Expected : %v", actualVal, expectedVal)
 
 	if actualVal == expectedVal {
 		res.ResultType = "info"
 		res.ResultStatus = true
-		d.TpLog.Infof("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
+		d.Log.Infof("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
 	} else {
 		res.ResultType = "error"
 		res.ResultStatus = false
-		d.TpLog.Errorf("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
+		d.Log.Errorf("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
 	}
 	verifications = append(verifications, res)
 
@@ -388,7 +386,7 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 //VerifyFatal verify test and abort operation upon failure
 func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string) {
 
-	d.TpLog.Info("Verify Fatal")
+	d.Log.Info("Verify Fatal")
 	d.VerifySafely(actual, expected, description)
 	var err error
 	if actual != expected {
@@ -399,7 +397,7 @@ func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string
 
 // Info logging info message
 func (d *Dashboard) Info(message string) {
-	d.TpLog.Infof(message)
+	d.Log.Infof(message)
 	if d.IsEnabled {
 		res := comment{}
 		res.TestCaseID = d.testcaseID
@@ -411,7 +409,7 @@ func (d *Dashboard) Info(message string) {
 
 // Infof logging info with formated message
 func (d *Dashboard) Infof(message string, args ...interface{}) {
-	d.TpLog.Infof(message, args...)
+	d.Log.Infof(message, args...)
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}
@@ -424,7 +422,7 @@ func (d *Dashboard) Infof(message string, args ...interface{}) {
 
 // Warnf logging formatted warn message
 func (d *Dashboard) Warnf(message string, args ...interface{}) {
-	d.TpLog.Warnf(message, args...)
+	d.Log.Warnf(message, args...)
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}
@@ -437,7 +435,7 @@ func (d *Dashboard) Warnf(message string, args ...interface{}) {
 
 // Warn logging warn message
 func (d *Dashboard) Warn(message string) {
-	d.TpLog.Warn(message)
+	d.Log.Warn(message)
 	if d.IsEnabled {
 		res := comment{}
 		res.TestCaseID = d.testcaseID
@@ -449,7 +447,7 @@ func (d *Dashboard) Warn(message string) {
 
 // Error logging error message
 func (d *Dashboard) Error(message string) {
-	d.TpLog.Error(message)
+	d.Log.Error(message)
 	if d.IsEnabled {
 		res := comment{}
 		res.TestCaseID = d.testcaseID
@@ -461,7 +459,7 @@ func (d *Dashboard) Error(message string) {
 
 // Errorf logging formatted error message
 func (d *Dashboard) Errorf(message string, args ...interface{}) {
-	d.TpLog.Errorf(message, args...)
+	d.Log.Errorf(message, args...)
 	if d.IsEnabled {
 		fmtMsg := fmt.Sprintf(message, args...)
 		res := comment{}
@@ -476,18 +474,18 @@ func (d *Dashboard) addComment(c comment) {
 	if d.IsEnabled {
 
 		if c.TestCaseID == 0 {
-			d.TpLog.Errorf("TestcaseId should not be empty for updating result")
+			d.Log.Errorf("TestcaseId should not be empty for updating result")
 		}
 
 		commentURL := fmt.Sprintf("%s/result", DashBoardBaseURL)
 
 		resp, respStatusCode, err := rest.POST(commentURL, c, nil, nil)
 		if err != nil {
-			d.TpLog.Errorf("Error in verifying, Cause: %v", err)
+			d.Log.Errorf("Error in adding log message to dashboard, Cause: %v", err)
 		} else if respStatusCode != http.StatusOK {
-			d.TpLog.Errorf("Error updating the vrify comment, resp : %s", string(resp))
+			d.Log.Errorf("Error updating the vrify comment, resp : %s", string(resp))
 		} else {
-			d.TpLog.Tracef("verify response : %s", string(resp))
+			d.Log.Tracef("verify response : %s", string(resp))
 		}
 	}
 }

@@ -6,7 +6,7 @@ import "github.com/sirupsen/logrus"
 // This is needed to differentiate k8s and OCP scheduler
 type ocpSchedOps struct {
 	k8sSchedOps
-	tpLog *logrus.Logger
+	log *logrus.Logger
 }
 
 func init() {
@@ -14,6 +14,6 @@ func init() {
 	Register("openshift", k)
 }
 
-func (o *ocpSchedOps) Init(tpLog *logrus.Logger) {
-	o.tpLog = tpLog
+func (o *ocpSchedOps) Init(logger *logrus.Logger) {
+	o.log = logger
 }

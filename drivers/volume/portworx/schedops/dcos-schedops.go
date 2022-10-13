@@ -11,7 +11,7 @@ import (
 )
 
 type dcosSchedOps struct {
-	tpLog *logrus.Logger
+	log *logrus.Logger
 }
 
 func (d *dcosSchedOps) GetKubernetesVersion() (*version.Info, error) {
@@ -113,5 +113,5 @@ func init() {
 }
 
 func (d *dcosSchedOps) Init(tpLog *logrus.Logger) {
-	d.tpLog = tpLog
+	d.log = tpLog
 }

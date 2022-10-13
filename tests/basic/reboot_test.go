@@ -28,7 +28,7 @@ var _ = Describe("{RebootOneNode}", func() {
 	JustBeforeEach(func() {
 		f = CreateLogFile("RebootOneNode.log")
 		if f != nil {
-			SetTorpedoFileOutput(tpLog, f)
+			SetTorpedoFileOutput(log, f)
 		}
 
 		dash.TestCaseBegin("RebootOneNode", "validating Px and apps after node reboot", "", nil)
@@ -139,7 +139,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 	JustBeforeEach(func() {
 		f = CreateLogFile("ReallocateSharedMount.log")
 		if f != nil {
-			SetTorpedoFileOutput(tpLog, f)
+			SetTorpedoFileOutput(log, f)
 		}
 
 		dash.TestCaseBegin("ReallocateSharedMount", "validating Px and apps after reallocating shared mounts", "", nil)

@@ -31,7 +31,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	JustBeforeEach(func() {
 		f = CreateLogFile("UpgradeVolumeDriver.log")
 		if f != nil {
-			SetTorpedoFileOutput(tpLog, f)
+			SetTorpedoFileOutput(log, f)
 		}
 
 		dash.TestCaseBegin("Upgrade: UpgradeVolumeDriver", "validating volume driver upgrade", "", nil)
@@ -133,7 +133,7 @@ var _ = Describe("{UpgradeStork}", func() {
 	JustBeforeEach(func() {
 		f = CreateLogFile("UpgradeStork.log")
 		if f != nil {
-			SetTorpedoFileOutput(tpLog, f)
+			SetTorpedoFileOutput(log, f)
 		}
 
 		dash.TestCaseBegin("Upgrade: UpgradeStork", "validating stork upgrade", "", nil)

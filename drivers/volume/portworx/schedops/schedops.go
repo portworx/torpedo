@@ -15,7 +15,7 @@ import (
 // Driver is the interface for portworx operations under various schedulers
 type Driver interface {
 	// Init initializes the sched-ops
-	Init(tpLog *logrus.Logger)
+	Init(logger *logrus.Logger)
 	//GetKubernetesVersion returns kubernetes version
 	GetKubernetesVersion() (*version.Info, error)
 	// StartPxOnNode enables portworx service on given node

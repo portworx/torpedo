@@ -36,7 +36,7 @@ var (
 	wantAfterSuiteValidateCleanup bool = false
 )
 
-var tpLog *logrus.Logger
+var log *logrus.Logger
 var dash *aetosutil.Dashboard
 var f *os.File
 
@@ -50,9 +50,9 @@ func TestBasic(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	tpLog = Inst().Logger
+	log = Inst().Logger
 	dash = Inst().Dash
-	tpLog.Infof("Init instance")
+	log.Infof("Init instance")
 	InitInstance()
 	dash.TestSetBegin(dash.TestSet)
 })
@@ -63,7 +63,7 @@ var _ = AfterSuite(func() {
 	defer CloseLogFile(f)
 	defer dash.TestSetEnd()
 	if f != nil {
-		SetTorpedoFileOutput(tpLog, f)
+		SetTorpedoFileOutput(log, f)
 	}
 
 	dash.TestCaseBegin("System check", "validating system check and clean up", "", nil)

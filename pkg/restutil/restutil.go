@@ -3,7 +3,7 @@ package restutil
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/portworx/torpedo/pkg/log"
+	logInstance "github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
@@ -21,6 +21,8 @@ type Auth struct {
 const (
 	defaultRestTimeOut = 10 * time.Second
 )
+
+var log *logrus.Logger
 
 //Get rest get call
 func Get(url string, auth *Auth, headers map[string]string) ([]byte, int, error) {
@@ -70,17 +72,17 @@ func validateURL(url string) error {
 }
 
 func getResponse(httpMethod, url string, payload interface{}, auth *Auth, headers map[string]string) ([]byte, int, error) {
-	tpLog := log.GetLogInstance()
+	log = logInstance.GetLogInstance()
 	var err error
 	err = validateURL(url)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	tpLog.Tracef("%s: %s", httpMethod, url)
+	log.Tracef("%s: %s", httpMethod, url)
 	var req *http.Request
 	if payload != nil {
-		tpLog.Tracef("Payload: %s", payload)
+		log.Tracef("Payload: %s", payload)
 		var j []byte
 		j, err = json.Marshal(payload)
 
@@ -109,7 +111,7 @@ func getResponse(httpMethod, url string, payload interface{}, auth *Auth, header
 	if err != nil {
 		return nil, 0, err
 	}
-	tpLog.Tracef("Response Status Code: %d", resp.StatusCode)
+	log.Tracef("Response Status Code: %d", resp.StatusCode)
 
 	respBody, err := getBody(resp.Body)
 	if err != nil {
@@ -137,7 +139,7 @@ func setBasicAuthAndHeaders(req *http.Request, auth *Auth, headers map[string]st
 }
 
 func getBody(rBody io.ReadCloser) ([]byte, error) {
-	logrus.Debugf("Response: %v", rBody)
+	log.Debugf("Response: %v", rBody)
 	respBody, err := ioutil.ReadAll(rBody)
 	if err != nil {
 		return nil, err
