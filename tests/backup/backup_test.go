@@ -1957,8 +1957,7 @@ func validateBackupCluster() bool {
 	ns := backup.GetPxBackupNamespace()
 	pods, err := core.Instance().GetPods(ns, labelSelectors)
 	if err != nil {
-		logrus.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
-			err)
+		logrus.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n", err)
 		return false
 	}
 	for _, pod := range pods.Items {
