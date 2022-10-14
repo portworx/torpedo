@@ -195,8 +195,8 @@ var eventRing *ring.Ring
 //decommissionedNode for rejoin test
 var decommissionedNode = node.Node{}
 
-//node with auti pilot rule enabled
-var autLabelNode node.Node
+// node with autopilot rule enabled
+var autoPilotLabelNode node.Node
 
 // emailRecords stores events for rendering
 // email template
@@ -3776,17 +3776,13 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 		var poolToBeResized *opsapi.StoragePool
 		if len(poolsToBeResized) > 0 {
 			for _, pool := range poolsToBeResized {
-
 				if !isPoolRebalanceEnabled(pool.Uuid) {
 					poolToBeResized = pool
 				}
-
 			}
-
 			logrus.Infof("Pool to resize-disk [%v]", poolToBeResized)
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 2, true)
 		}
-
 	})
 
 	Step("validate all apps after pool resize using resize-disk operation", func() {
@@ -3795,7 +3791,6 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 		}
 	})
 	updateMetrics(*event)
-
 }
 
 // TriggerPoolAddDisk peforms add-disk on the storage pools for the given contexts
@@ -3883,13 +3878,10 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 				if !isPoolRebalanceEnabled(pool.Uuid) {
 					poolToBeResized = pool
 				}
-
 			}
-
 			logrus.Infof("Pool to resize-disk [%v]", poolToBeResized)
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 1, true)
 		}
-
 	})
 
 	Step("validate all apps after pool resize using add-disk operation", func() {
@@ -3897,8 +3889,8 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			ValidateContext(ctx)
 		}
 	})
-	updateMetrics(*event)
 
+	updateMetrics(*event)
 }
 
 func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
@@ -3918,14 +3910,14 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 	}()
 	poolLabel := map[string]string{"autopilot": "rebalance"}
 	apRule := aututils.PoolRuleRebalanceAbsolute(120, 70, false)
-	apRule.Spec.ActionsCoolDownPeriod = int64(3600)
+	apRule.Spec.ActionsCoolDownPeriod = int64(getReblanceCoolOffPeriod(AutopilotRebalance))
 	apRule.Spec.Selector = apapi.RuleObjectSelector{
 		LabelSelector: meta_v1.LabelSelector{
 			MatchLabels: poolLabel,
 		},
 	}
 
-	if autLabelNode.Name == "" {
+	if autoPilotLabelNode.Name == "" {
 
 		Step("Create autopilot rule", func() {
 			logrus.Infof("Creating autopilot rule ; %+v", apRule)
@@ -3938,13 +3930,13 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 					totalSize += p.StoragePool.Used
 				}
 				if totalSize > maxUsed {
-					autLabelNode = sNode
+					autoPilotLabelNode = sNode
 					maxUsed = totalSize
 				}
 			}
 
-			logrus.Infof("Adding label %s to the node %s", poolLabel, autLabelNode.Name)
-			err := AddLabelsOnNode(autLabelNode, poolLabel)
+			logrus.Infof("Adding label %s to the node %s", poolLabel, autoPilotLabelNode.Name)
+			err := AddLabelsOnNode(autoPilotLabelNode, poolLabel)
 			UpdateOutcome(event, err)
 			if err == nil {
 				_, err = Inst().S.CreateAutopilotRule(apRule)
@@ -3952,8 +3944,8 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 				//Removing the label if autopilot rule creation is failed
 				if err != nil {
 					for k := range poolLabel {
-						Inst().S.RemoveLabelOnNode(autLabelNode, k)
-						autLabelNode = node.Node{}
+						Inst().S.RemoveLabelOnNode(autoPilotLabelNode, k)
+						autoPilotLabelNode = node.Node{}
 					}
 				}
 			} else {
@@ -3988,8 +3980,8 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 		})
 
 		Step("validate Px on the rebalanced node", func() {
-			logrus.Infof("Validating PX on node : %s", autLabelNode.Name)
-			err := Inst().V.WaitDriverUpOnNode(autLabelNode, 1*time.Minute)
+			logrus.Infof("Validating PX on node : %s", autoPilotLabelNode.Name)
+			err := Inst().V.WaitDriverUpOnNode(autoPilotLabelNode, 1*time.Minute)
 			UpdateOutcome(event, err)
 
 			rebalanceJobs, err := Inst().V.GetRebalanceJobs()
@@ -4026,12 +4018,11 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 								logrus.Infof("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
 								jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
 								UpdateOutcome(event, err)
-								if err == nil {
-									previousDone = currentDone
-									currentDone, total = getReblanceWorkSummary(jobResponse)
-								} else {
+								if err != nil {
 									break
 								}
+								previousDone = currentDone
+								currentDone, total = getReblanceWorkSummary(jobResponse)
 							}
 
 							if previousDone == currentDone {
@@ -5572,14 +5563,46 @@ func updateMetrics(event EventRecord) {
 }
 
 func isPoolRebalanceEnabled(poolUUID string) bool {
-	if autLabelNode.Name != "" {
-		for _, pool := range autLabelNode.Pools {
+	if autoPilotLabelNode.Name != "" {
+		for _, pool := range autoPilotLabelNode.Pools {
 			if pool.Uuid == poolUUID {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func getReblanceCoolOffPeriod(triggerType string) int {
+	var timePeriodInSeconds int
+
+	t := ChaosMap[triggerType]
+
+	baseInterval := 3600
+
+	switch t {
+	case 1:
+		timePeriodInSeconds = baseInterval
+	case 2:
+		timePeriodInSeconds = 3 * baseInterval
+	case 3:
+		timePeriodInSeconds = 6 * baseInterval
+	case 4:
+		timePeriodInSeconds = 9 * baseInterval
+	case 5:
+		timePeriodInSeconds = 12 * baseInterval
+	case 6:
+		timePeriodInSeconds = 15 * baseInterval
+	case 7:
+		timePeriodInSeconds = 18 * baseInterval
+	case 8:
+		timePeriodInSeconds = 21 * baseInterval
+	case 9:
+		timePeriodInSeconds = 24 * baseInterval
+	case 10:
+		timePeriodInSeconds = 30 * baseInterval
+	}
+	return timePeriodInSeconds
 }
 
 var htmlTemplate = `<!DOCTYPE html>
