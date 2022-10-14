@@ -55,9 +55,14 @@ func runPxctlCommand(pxctlCmd string, n node.Node, cmdConnectionOpts *node.Conne
 
 func TelemetryEnabled(currNode node.Node) bool {
 	// This returns true if telemetry is enabled
-	out, err := runPxctlCommand("status -j | jq .telemetrystatus.connection_status.error_code", currNode, nil)
-	Expect(err).NotTo(HaveOccurred(), "Error getting telemetry status for %s", currNode.Name)
-	return strings.TrimSpace(out) == TelemetryEnabledStatus
+	output, err := runPxctlCommand("status | egrep ^Telemetry:", currNode, nil)
+	Expect(err).NotTo(HaveOccurred(), "Failed to get status for nodee %v", currNode.Name)
+	logrus.Infof("node %s: %s", currNode.Name, output)
+	status, err := regexp.MatchString(`Telemetry:.*Healthy`, output)
+	if err != nil {
+		return false
+	}
+	return status
 }
 
 func oneTimeInit() {
@@ -104,10 +109,7 @@ var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 
 		for _, currNode := range node.GetWorkerNodes() {
 			Step(fmt.Sprintf("run pxctl status to check telemetry status on node %v", currNode.Name), func() {
-				output, err := runPxctlCommand("status | egrep ^Telemetry:", currNode, nil)
-				Expect(err).NotTo(HaveOccurred(), "Failed to get status for nodee %v", currNode.Name)
-				logrus.Infof("node %s: %s", currNode.Name, output)
-				telemetryNodeStatus[currNode.Name], _ = regexp.MatchString(`Telemetry:.*Healthy`, output)
+				telemetryNodeStatus[currNode.Name] = TelemetryEnabled(currNode)
 			})
 		}
 		for nodeName, isHealthy := range telemetryNodeStatus {
@@ -271,6 +273,8 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 						return
 					}
 				})
+				// This sleep is required because the heap and stack logs might not have been written at same time.
+				time.Sleep(30* time.Second)
 				// Get the latest files in the directory.  The newly generated files will not equal the most recent. So you know they are new.
 				Step(fmt.Sprintf("Get the new profile diags on node %v", currNode.Name), func() {
 					if skipTest {
@@ -283,7 +287,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 							currNode, nil)
 						if err == nil {
 							if existingDiags != "" && existingDiags == newDiags {
-								logrus.Infof("No new profile diags found...")
+								logrus.Infof("No new profile diags found... current latest ones are %v", newDiags)
 								newDiags = ""
 							}
 							if len(newDiags) > 0 {
@@ -291,6 +295,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 								// Needs to contain both stack/heap
 								if strings.Contains(newDiags, ".heap") && strings.Contains(newDiags, ".stack") {
 									diagsFiles = strings.Split(newDiags, "\n")
+									logrus.Debugf("Files found %v", diagsFiles)
 									return true
 								}
 							}

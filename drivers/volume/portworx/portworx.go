@@ -3340,13 +3340,16 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		}
 
 		pxctlPath := d.getPxctlPath(n)
-		out, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status -j | jq .telemetrystatus.connection_status.error_code", pxctlPath), opts)
-
+		out, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("%s status | egrep ^Telemetry:", pxctlPath), opts)
 		if err != nil {
 			return fmt.Errorf("failed to get pxctl status. cause: %v", err)
 		}
+		telStatus, err := regexp.MatchString(`Telemetry:.*Healthy`, out)
+		if err != nil {
+			return fmt.Errorf("Error in checking telemetry status")
+		}
 		d.log.Debugf("Status returned by pxctl %s", out)
-		if strings.TrimSpace(out) == telemetryNotEnabled {
+		if !telStatus {
 			d.log.Debugf("Telemetry not enabled in PX Status on node %s. Skipping validation on s3", n.Name)
 			return nil
 		}
