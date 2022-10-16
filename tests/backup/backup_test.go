@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -28,40 +28,16 @@ import (
 )
 
 const (
-	clusterName            = "tp-cluster"
-	restoreNamePrefix      = "tp-restore"
-	configMapName          = "kubeconfigs"
-	defaultTimeout         = 5 * time.Minute
-	defaultRetryInterval   = 10 * time.Second
-	sourceClusterName      = "source-cluster"
-	destinationClusterName = "destination-cluster"
-	backupLocationName     = "tp-blocation"
-
-	storkDeploymentName      = "stork"
-	storkDeploymentNamespace = "kube-system"
-
-	appReadinessTimeout = 10 * time.Minute
-	enumerateBatchSize  = 100
+	enumerateBatchSize = 100
+	post_install_hook_pod = "pxcentral-post-install-hook"
+	quick_maintenance_pod = "quick-maintenance-repo"
+	full_maintenance_pod  = "full-maintenance-repo"
 )
 
 var (
 	orgID      string
 	bucketName string
 )
-
-var _ = BeforeSuite(func() {
-	logrus.Infof("Init instance")
-	InitInstance()
-})
-
-func TestBackup(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
-}
 
 func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	for _, bkpNamespace := range bkpNamespaces {
@@ -82,17 +58,17 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	DeleteBucket(provider, BucketName)
 }
 
-var _ = AfterSuite(func() {
-	//PerformSystemCheck()
-	//ValidateCleanup()
-	//	BackupCleanup()
+//This testcase verifies if the backup pods are in Ready state or not
+var _ = Describe("{BackupClusterVerification}", func() {
+	It("Backup Cluster Verification", func() {
+		Step("Check the status of pxcentral-post-install-hook pods", func() {
+			status := validateBackupCluster()
+			Expect(status).NotTo(Equal(false),
+				fmt.Sprintf("Backup pods are not in expected state"))
+		})
+		//Will add CRD verification here
+	})
 })
-
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
 
 // This test performs basic test of starting an application, backing it up and killing stork while
 // performing backup.
@@ -107,6 +83,10 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 	labelSelectores := make(map[string]string)
 	namespaceMapping = make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
 
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
@@ -303,6 +283,10 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 	namespaceMapping := make(map[string]string)
 	taskNamePrefix := "backup-multi-provider"
 	providerUID := make(map[string]string)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
 
 	It("has to connect and check the backup setup", func() {
 		providers := getProviders()
@@ -834,6 +818,10 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 	volumeParams := make(map[string]map[string]string)
 	bkpNamespaces := make([]string, 0)
 
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
+
 	It("has to complete backup and restore", func() {
 		// Set cluster context to cluster where torpedo is running
 		SetClusterContext("")
@@ -1009,6 +997,10 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 	bkpNamespaceErrors := make(map[string]error)
 	volumeParams := make(map[string]map[string]string)
 	restoreNamespaces := make([]string, 0)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
 
 	It("has to perform simultaneous backups and restores", func() {
 		//ctx, err := backup.GetPxCentralAdminCtx()
@@ -1235,6 +1227,11 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 	namespaceMapping = make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
 	namespaceContextMap := make(map[string][]*scheduler.Context)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
+
 	It("has to connect and check the backup setup", func() {
 		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -1474,6 +1471,11 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 	volumeParams := make(map[string]map[string]string)
 	namespaceContextMap := make(map[string][]*scheduler.Context)
 	combinedErrors := make([]string, 0)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
+
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
 			// Set cluster context to cluster where torpedo is running
@@ -1950,4 +1952,59 @@ func getBackupUID(orgID, backupName string) string {
 		fmt.Sprintf("Failed to get backup uid for org %s backup %s ctx: [%v]",
 			orgID, backupName, err))
 	return backupUID
+}
+
+func validateBackupCluster() bool {
+	flag := false
+	labelSelectors := map[string]string{"job-name": "pxcentral-post-install-hook"}
+	ns := backup.GetPxBackupNamespace()
+	pods, err := core.Instance().GetPods(ns, labelSelectors)
+	if err != nil {
+		logrus.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
+			err)
+		return false
+	}
+	for _, pod := range pods.Items {
+		logrus.Info("Checking if the pxcentral-post-install-hook pod is in Completed state or not")
+		bkp_pod, err := core.Instance().GetPodByName(pod.GetName(), ns)
+		if err != nil {
+			logrus.Errorf("An Error Occured while getting the pxcentral-post-install-hook pod details")
+			return false
+		}
+		container_list := bkp_pod.Status.ContainerStatuses
+		for i := 0; i < len(container_list); i++ {
+			status := container_list[i].State.Terminated.Reason
+			if status == "Completed" {
+				logrus.Info("pxcentral-post-install-hook pod is in completed state")
+				flag = true
+				break
+			}
+		}
+	}
+	if flag == false {
+		return false
+	}
+	bkp_pods, err := core.Instance().GetPods(ns, nil)
+	for _, pod := range bkp_pods.Items {
+		matched, _ := regexp.MatchString(post_install_hook_pod, pod.GetName())
+		if !matched {
+			equal, _ := regexp.MatchString(quick_maintenance_pod, pod.GetName())
+			equal1, _ := regexp.MatchString(full_maintenance_pod, pod.GetName())
+			if !(equal || equal1){
+				logrus.Info("Checking if all the containers are up or not")
+				res := core.Instance().IsPodRunning(pod)
+				if !res {
+					logrus.Errorf("All the containers are not Up")
+					return false
+				}
+				err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
+				logrus.Warnf(" ERR is %s", err)
+				if err != nil {
+					logrus.Errorf("An Error Occured while validating the pod %v", err)
+					return false
+				}
+			}
+		}
+	}
+	return true
 }

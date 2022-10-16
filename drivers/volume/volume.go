@@ -2,6 +2,7 @@ package volume
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -51,7 +52,7 @@ type Options struct {
 // of failure scenarious that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string, nodeDriver string, token string, storageProvisioner string, csiGenericConfigMap string) error
+	Init(sched string, nodeDriver string, token string, storageProvisioner string, csiGenericConfigMap string, logger *logrus.Logger) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -182,6 +183,9 @@ type Driver interface {
 
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
+
+	//IsPxInstalled checks for Px to be installed on a node
+	IsPxInstalled(n node.Node) (bool, error)
 
 	//GetPxVersionOnNode get PXVersion on the given node
 	GetPxVersionOnNode(n node.Node) (string, error)
@@ -329,6 +333,9 @@ type Driver interface {
 
 	//GetAutoFsTrimStatus get status of autofstrim
 	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
+
+	// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
+	GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error)
 
 	// GetPxctlCmdOutput returns the command output run on the given node and any error
 	GetPxctlCmdOutput(n node.Node, command string) (string, error)

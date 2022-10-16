@@ -7,7 +7,17 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/s3utils"
+	"net"
+
+	logInstance "github.com/portworx/torpedo/pkg/log"
+
+	"github.com/portworx/torpedo/pkg/aetosutil"
+
+	"io"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -19,12 +29,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/s3utils"
+
 	storageapi "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -44,6 +54,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
@@ -91,9 +102,12 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/aws"
 	// import azure driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/azure"
+
 	// import generic csi driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
-	"github.com/portworx/torpedo/pkg/log"
+
+	// import driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
 
 	context1 "context"
 
@@ -111,6 +125,7 @@ const (
 	defaultSpecsRoot                     = "/specs"
 	schedulerCliFlag                     = "scheduler"
 	nodeDriverCliFlag                    = "node-driver"
+	monitorDriverCliFlag                 = "monitor-driver"
 	storageDriverCliFlag                 = "storage-driver"
 	backupCliFlag                        = "backup-driver"
 	specDirCliFlag                       = "spec-dir"
@@ -167,6 +182,21 @@ const (
 	defaultClusterPairDir  = "cluster-pair"
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
+
+	torpedoJobNameFlag = "torpedo-job-name"
+	torpedoJobTypeFlag = "torpedo-job-type"
+)
+
+//Dashboard params
+const (
+	enableDashBoardFlag = "enable-dash"
+	userFlag            = "user"
+	testTypeFlag        = "test-type"
+	testDescriptionFlag = "test-desc"
+	testTagsFlag        = "test-tags"
+	testSetIDFlag       = "testset-id"
+	testBranchFlag      = "branch"
+	testProductFlag     = "product"
 )
 
 // Backup constants
@@ -186,8 +216,9 @@ const (
 	oneMegabytes                          = 1024 * 1024
 	defaultScheduler                      = "k8s"
 	defaultNodeDriver                     = "ssh"
+	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
-	defaultLogLocation                    = "/mnt/torpedo_support_dir"
+	defaultLogLocation                    = "/testresults/"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
 	defaultAppScaleFactor                 = 1
@@ -202,6 +233,8 @@ const (
 	defaultLicenseExpiryTimeoutHours      = 1 * time.Hour
 	defaultMeteringIntervalMins           = 10 * time.Minute
 	authTokenParam                        = "auth-token"
+	defaultTorpedoJob                     = "torpedo-job"
+	defaultTorpedoJobType                 = "functional"
 )
 
 const (
@@ -274,15 +307,22 @@ const (
 	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
 )
 
+var log *logrus.Logger
+
+//TpLogPath torpedo log path
+var tpLogPath string
+var tpLogFile *os.File
+var dash *aetosutil.Dashboard
+
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
 	var token string
 	if Inst().ConfigMap != "" {
-		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 		expect(err).NotTo(haveOccurred())
-		logrus.Infof("Token used for initializing: %s ", token)
+		log.Infof("Token used for initializing: %s ", token)
 	} else {
 		token = ""
 	}
@@ -291,6 +331,7 @@ func InitInstance() {
 		SpecDir:                          Inst().SpecDir,
 		VolDriverName:                    Inst().V.String(),
 		NodeDriverName:                   Inst().N.String(),
+		MonitorDriverName:                Inst().M.String(),
 		SecretConfigMapName:              Inst().ConfigMap,
 		CustomAppConfig:                  Inst().CustomAppConfig,
 		StorageProvisioner:               Inst().Provisioner,
@@ -301,45 +342,75 @@ func InitInstance() {
 		PureSANType:                      Inst().PureSANType,
 		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
+		Logger:                           Inst().Logger,
 	})
+	if err != nil {
+		log.Errorf("Error occured while Scheduler Driver Initialization, Err: %v", err)
+	}
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
+		Logger:  Inst().Logger,
 	})
+	if err != nil {
+		log.Errorf("Error occured while Node Driver Initialization, Err: %v", err)
+	}
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap, Inst().Logger)
+	if err != nil {
+		log.Errorf("Error occured while Volume Driver Initialization, Err: %v", err)
+	}
+	expect(err).NotTo(haveOccurred())
+
+	err = Inst().M.Init(Inst().JobName, Inst().JobType)
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
+		if err != nil {
+			log.Errorf("Error occured while Backup Driver Initialization, Err: %v", err)
+		}
 		expect(err).NotTo(haveOccurred())
 	}
 	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
 		err = testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
 		if err == nil {
 			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
-				processError(fmt.Errorf("not all details provided to update testrail"))
+				err = fmt.Errorf("not all details provided to update testrail")
+				log.Errorf("Err: %v", err)
+				expect(err).NotTo(haveOccurred())
 			}
 			testrailuttils.CreateMilestone()
 		}
 	} else {
-		logrus.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
+		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
 	}
 
 	if jiraUserName != "" && jiraToken != "" {
-		logrus.Info("Initializing JIRA connection")
+		log.Info("Initializing JIRA connection")
 		jirautils.Init(jiraUserName, jiraToken)
 
 	} else {
-		logrus.Debugf("Not all information to connect to JIRA is provided.")
+		log.Debugf("Not all information to connect to JIRA is provided.")
 	}
+
+	pxVersion, err := Inst().V.GetDriverVersion()
+	if err != nil {
+		log.Errorf(err.Error())
+		expect(err).NotTo(haveOccurred())
+	}
+	commitID := strings.Split(pxVersion, "-")[1]
+	t := Inst().Dash.TestSet
+	t.CommitID = commitID
+	t.Tags = append(t.Tags, pxVersion)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
 	Step("validate cleanup of resources used by the test suite", func() {
+		dash.Info("validate cleanup of resources used by the test suite")
 		t := func() (interface{}, bool, error) {
 			if err := Inst().V.ValidateVolumeCleanup(); err != nil {
 				return "", true, err
@@ -350,22 +421,22 @@ func ValidateCleanup() {
 
 		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
 		if err != nil {
-			logrus.Info("an error occurred, collecting bundle")
+			log.Info("an error occurred, collecting bundle")
 			CollectSupport()
 		}
-		expect(err).NotTo(haveOccurred())
+		dash.VerifyFatal(err, nil, "verify if an error occurred while validating clean up")
 	})
 }
 
 func processError(err error, errChan ...*chan error) {
 	// if errChan is provided then just push err to on channel
 	// Useful for frameworks like longevity that must continue
-	// execution and must not not fail immidiately
+	// execution and must not fail immediately
 	if len(errChan) > 0 {
-		logrus.Error(err)
+		log.Error(err)
 		updateChannel(err, errChan...)
 	} else {
-		expect(err).NotTo(haveOccurred())
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verify if error occured.Err: %v", err))
 	}
 }
 
@@ -625,7 +696,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			vols, err := Inst().S.GetVolumes(ctx)
 			if err != nil {
-				logrus.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
 			volScaleFactor := 1
@@ -635,7 +706,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				// GlobalScaleFactor is 1, high number of volumes in a single app instance
 				// may slow things down.
 				volScaleFactor = len(vols) / 10
-				logrus.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
+				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
 			}
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
@@ -898,6 +969,23 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			}
 			err = Inst().S.CSISnapshotTest(ctx, request)
 			processError(err, errChan...)
+			// the snap name shown in pxctl isn't the CSI snapshot name, it's original PV name + "-snap"
+			var volMap map[string]map[string]string
+			Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
+				volMap, err = Inst().S.GetVolumeParameters(ctx)
+				processError(err, errChan...)
+			})
+			for k, v := range volMap {
+				if v["pvc_name"] == vols[0].Name && v["pvc_namespace"] == vols[0].Namespace {
+					Step(fmt.Sprintf("get %s app's snapshot: %s then check that it appears in pxctl", ctx.App.Key, k), func() {
+						err = Inst().V.ValidateVolumeInPxctlList(fmt.Sprint(k, "-snap"))
+						expect(err).To(beNil(), "unexpected error validating snapshot appears in pxctl list")
+					})
+					break
+				}
+
+			}
+
 		}
 	})
 }
@@ -1112,7 +1200,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		// Tear down application
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
 			err = Inst().S.Destroy(ctx, opts)
-			expect(err).NotTo(haveOccurred())
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", ctx.App.Key, err))
 		})
 
 		if !ctx.SkipVolumeValidation {
@@ -1134,8 +1222,9 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 	var err error
 	var vols []*volume.Volume
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
+		log.Infof("destroy the %s app's volumes", ctx.App.Key)
 		vols, err = Inst().S.DeleteVolumes(ctx, options)
-		expect(err).NotTo(haveOccurred())
+		dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volumes, Err: %v", ctx.App.Key, err))
 	})
 	return vols
 }
@@ -1145,8 +1234,10 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 	for _, vol := range vols {
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
+			log.Infof("validate %s app's volume %s has been deleted in the volume driver",
+				appName, vol.Name)
 			err := Inst().V.ValidateDeleteVolume(vol)
-			expect(err).NotTo(haveOccurred(), "unexpected error validating app volumes deleted")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volume %s, Err: %v", appName, vol.Name, err))
 		})
 	}
 }
@@ -1179,10 +1270,10 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 		}
 		//if not hyper converged set up deploy apps only on storageless nodes
 		if !Inst().IsHyperConverged {
-			logrus.Infof("Scheduling apps only on storageless nodes")
+			log.Infof("Scheduling apps only on storageless nodes")
 			storagelessNodes := node.GetStorageLessNodes()
 			if len(storagelessNodes) == 0 {
-				logrus.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
+				log.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
 				Inst().IsHyperConverged = true
 			}
 			for _, storagelessNode := range storagelessNodes {
@@ -1203,11 +1294,14 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			}
 
 		} else {
-			logrus.Infof("Scheduling Apps with hyper-converged")
+			log.Infof("Scheduling Apps with hyper-converged")
 		}
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, options)
-		processError(err, errChan...)
+		// Need to check err != nil before calling processError
+		if err != nil {
+			processError(err, errChan...)
+		}
 		if len(contexts) == 0 {
 			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
 		}
@@ -1428,10 +1522,10 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
 				namespaceDescription, err := Inst().S.Describe(ctx)
 				if err != nil {
-					logrus.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
+					log.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
 				}
 				if err = ioutil.WriteFile(filename, []byte(namespaceDescription), 0755); err != nil {
-					logrus.Errorf("failed to save file %s. Cause: %v", filename, err)
+					log.Errorf("failed to save file %s. Cause: %v", filename, err)
 				}
 			}
 		})
@@ -1493,21 +1587,23 @@ func GetStorageNodes() ([]node.Node, error) {
 // CollectSupport creates a support bundle
 func CollectSupport() {
 	context("generating support bundle...", func() {
+		dash.Info("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
-				logrus.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
+				log.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
 				return
 			}
 		}
 		nodes := node.GetWorkerNodes()
-		expect(nodes).NotTo(beEmpty())
+		dash.VerifyFatal(len(nodes) > 0, true, "Verify Get Worker nodes")
 
 		for _, n := range nodes {
 			if !n.IsStorageDriverInstalled {
 				continue
 			}
 			Step(fmt.Sprintf("save all useful logs on node %s", n.SchedulerNodeName), func() {
+				log.Infof("save all useful logs on node %s", n.SchedulerNodeName)
 
 				// Moves this out to deal with diag testing.
 				r := &volume.DiagRequestConfig{
@@ -1553,7 +1649,7 @@ func runCmd(cmd string, n node.Node) error {
 		Sudo:            true,
 	})
 	if err != nil {
-		logrus.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
 	}
 
 	return err
@@ -1577,24 +1673,26 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
 	context("checking for core files...", func() {
+		log.Info("checking for core files...")
 		Step("verifying if core files are present on each node", func() {
+			dash.Info("verifying if core files are present on each node")
 			nodes := node.GetNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
 					continue
 				}
-				logrus.Infof("looking for core files on node %s", n.Name)
+				dash.Infof("looking for core files on node %s", n.Name)
 				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
-					logrus.Info("an error occurred, collecting bundle")
+					log.Info("an error occurred, collecting bundle")
 					CollectSupport()
 				}
-				expect(err).NotTo(haveOccurred())
-				expect(file).To(beEmpty())
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verify if an error occurred, Err: %v", err))
+				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
 			}
 		})
 	})
@@ -1766,10 +1864,10 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	logrus.Debugf("contexts: %v", contexts)
+	log.Debugf("contexts: %v", contexts)
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
-		logrus.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 		CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
@@ -1777,7 +1875,7 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	if len(ids) >= 1 {
 		driverVersion, err := Inst().V.GetDriverVersion()
 		if err != nil {
-			logrus.Errorf("Error in getting driver version")
+			log.Errorf("Error in getting driver version")
 		}
 		testrailObject := testrailuttils.Testrail{
 			Status:        testStatus,
@@ -2046,15 +2144,14 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 
 //UpgradePxStorageCluster perform storage cluster upgrade
 func UpgradePxStorageCluster() (bool, error) {
-
-	logrus.Info("Initiating operator based install upgrade")
+	dash.Info("Initiating operator based install upgrade")
 	operatorTag, err := getOperatorLatestVersion()
 
 	if err != nil {
 		return false, fmt.Errorf("error getting latest operator version. Cause: %v", err)
 	}
 	operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
-	logrus.Info(operatorImage)
+	dash.Infof("OCI-Monitor Image: %s", operatorImage)
 
 	err = Inst().V.UpdateStorageClusterImage(operatorImage)
 	if err != nil {
@@ -2068,7 +2165,7 @@ func UpgradePxStorageCluster() (bool, error) {
 		checkTag = true
 	}
 
-	logrus.Infof("Expected version %s", expectedVersion)
+	dash.Infof("Expected PX version %s", expectedVersion)
 
 	nodes := node.GetStorageDriverNodes()
 	nodesUpgradeMap := make(map[string]bool)
@@ -2098,10 +2195,10 @@ func UpgradePxStorageCluster() (bool, error) {
 					return false, fmt.Errorf("error getting PX version for node %s. Cause: %v", k, err)
 				}
 				pxVersion := fmt.Sprintf("%v", versionVal)
-				logrus.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
+				log.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
 
 				if (checkTag && pxVersion == expectedVersion) || strings.Contains(pxVersion, expectedVersion) {
-					logrus.Infof("Node %s successfully upgraded to version %s", k, pxVersion)
+					dash.Infof("Node %s successfully upgraded to version %s", k, pxVersion)
 					nodesUpgradeMap[k] = true
 				}
 			}
@@ -2114,7 +2211,7 @@ func UpgradePxStorageCluster() (bool, error) {
 			isUpgradeDone = isNodeUpgraded
 			break
 		}
-		logrus.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
+		log.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
 		time.Sleep(2 * time.Minute)
 		waitCount--
 	}
@@ -3540,10 +3637,12 @@ type Torpedo struct {
 	S                                   scheduler.Driver
 	V                                   volume.Driver
 	N                                   node.Driver
+	M                                   monitor.Driver
 	SpecDir                             string
 	AppList                             []string
 	LogLoc                              string
 	LogLevel                            string
+	Logger                              *logrus.Logger
 	GlobalScaleFactor                   int
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
@@ -3573,15 +3672,19 @@ type Torpedo struct {
 	CsiGenericDriverConfigMap           string
 	HelmValuesConfigMap                 string
 	IsHyperConverged                    bool
+	Dash                                *aetosutil.Dashboard
+	JobName                             string
+	JobType                             string
 }
 
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
+	var monitorDriver monitor.Driver
 	var backupDriver backup.Driver
 	var appScaleFactor int
 	var volUpgradeEndpointURL string
@@ -3597,6 +3700,7 @@ func ParseFlags() {
 	var bundleLocation string
 	var customConfigPath string
 	var hyperConverged bool
+	var enableDash bool
 
 	// TODO: We rely on the customAppConfig map to be passed into k8s.go and stored there.
 	// We modify this map from the tests and expect that the next RescanSpecs will pick up the new custom configs.
@@ -3613,10 +3717,18 @@ func ParseFlags() {
 	var schedUpgradeHops string
 	var autopilotUpgradeImage string
 	var csiGenericDriverConfigMapName string
+	//dashboard fields
+	var user, testBranch, testProduct, testType, testDescription, testTags string
+	var testsetID int
+	var torpedoJobName string
+	var torpedoJobType string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
+	flag.StringVar(&m, monitorDriverCliFlag, defaultMonitorDriver, "Name of the prometheus driver to use")
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
+	flag.StringVar(&torpedoJobName, torpedoJobNameFlag, defaultTorpedoJob, "Name of the torpedo job")
+	flag.StringVar(&torpedoJobType, torpedoJobTypeFlag, defaultTorpedoJobType, "Type of torpedo job")
 	flag.StringVar(&backupDriverName, backupCliFlag, "", "Name of the backup driver to use")
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
@@ -3661,46 +3773,100 @@ func ParseFlags() {
 	flag.StringVar(&jiraToken, jiraTokenFlag, "", "API token for accessing the JIRA")
 	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
 	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
+	flag.BoolVar(&enableDash, enableDashBoardFlag, true, "To enable/disable aetos dashboard reporting")
+	flag.StringVar(&user, userFlag, "no-user", "user name running the tests")
+	flag.StringVar(&testDescription, testDescriptionFlag, "Running Torpedo test-suiter", "test suite description")
+	flag.StringVar(&testType, testTypeFlag, "system-test", "test types like system-test,functional,integration")
+	flag.StringVar(&testTags, testTagsFlag, "", "tags running the tests")
+	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
+	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
+	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
 	flag.Parse()
+
+	log = logInstance.GetLogInstance()
+	log.Out = io.MultiWriter(log.Out)
+	setLoglevel(log, logLevel)
+	tpLogPath = fmt.Sprintf("%s/%s", logLoc, "torpedo.log")
+	tpLogFile = CreateLogFile(tpLogPath)
+	if tpLogFile != nil {
+		SetTorpedoFileOutput(log, tpLogFile)
+	}
 
 	appList, err := splitCsv(appListCSV)
 	if err != nil {
-		logrus.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
+		log.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
 	}
 
 	sched.Init(time.Second)
 
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
-		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
+		log.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
 	} else if volumeDriver, err = volume.Get(v); err != nil {
-		logrus.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
+		log.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
 	} else if nodeDriver, err = node.Get(n); err != nil {
-		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
+		log.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
+	} else if monitorDriver, err = monitor.Get(m); err != nil {
+		log.Fatalf("Cannot find monitor driver for %v. Err: %v\n", m, err)
 	} else if err = os.MkdirAll(logLoc, os.ModeDir); err != nil {
-		logrus.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
+		log.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 	} else {
 		if _, err = os.Stat(customConfigPath); err == nil {
 			var data []byte
 
-			logrus.Infof("Using custom app config file %s", customConfigPath)
+			log.Infof("Using custom app config file %s", customConfigPath)
 			data, err = ioutil.ReadFile(customConfigPath)
 			if err != nil {
-				logrus.Fatalf("Cannot read file %s. Error: %v", customConfigPath, err)
+				log.Fatalf("Cannot read file %s. Error: %v", customConfigPath, err)
 			}
 			err = yaml.Unmarshal(data, &customAppConfig)
 			if err != nil {
-				logrus.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
+				log.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
 			}
-			logrus.Infof("Parsed custom app config file: %+v", customAppConfig)
+			log.Infof("Parsed custom app config file: %+v", customAppConfig)
 		}
-		logrus.Infof("Backup driver name %s", backupDriverName)
+		log.Infof("Backup driver name %s", backupDriverName)
 		if backupDriverName != "" {
 			if backupDriver, err = backup.Get(backupDriverName); err != nil {
-				logrus.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
+				log.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
 			} else {
-				logrus.Infof("Backup driver found %v", backupDriver)
+				log.Infof("Backup driver found %v", backupDriver)
 			}
 		}
+		dash = aetosutil.Get()
+		dash.Log = log
+		if enableDash && !isDashboardReachable() {
+			enableDash = false
+			log.Warn("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
+		}
+
+		dash.IsEnabled = enableDash
+		testSet := aetosutil.TestSet{
+			User:        user,
+			Product:     testProduct,
+			Description: testDescription,
+			Branch:      testBranch,
+			TestType:    testType,
+			Tags:        make([]string, 0),
+			Status:      aetosutil.NOTSTARTED,
+		}
+		if testTags != "" {
+			tags := strings.Split(testTags, ",")
+			testSet.Tags = append(testSet.Tags, tags...)
+		}
+
+		val, ok := os.LookupEnv("TESTSET-ID")
+		if ok {
+			testsetID, err = strconv.Atoi(val)
+			if err != nil {
+				log.Warnf("Failed to convert environment testset id  %v to int, err: %v", val, err)
+			}
+		}
+		if testsetID != 0 {
+			dash.TestSetID = testsetID
+			os.Setenv("TESTSET-ID", fmt.Sprint(testsetID))
+		}
+
+		dash.TestSet = &testSet
 
 		once.Do(func() {
 			instance = &Torpedo{
@@ -3708,9 +3874,11 @@ func ParseFlags() {
 				S:                                   schedulerDriver,
 				V:                                   volumeDriver,
 				N:                                   nodeDriver,
+				M:                                   monitorDriver,
 				SpecDir:                             specDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
+				Logger:                              log,
 				GlobalScaleFactor:                   appScaleFactor,
 				MinRunTimeMins:                      minRunTimeMins,
 				ChaosLevel:                          chaosLevel,
@@ -3739,16 +3907,94 @@ func ParseFlags() {
 				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,
 				MeteringIntervalMins:                meteringIntervalMins,
 				IsHyperConverged:                    hyperConverged,
+				Dash:                                dash,
+				JobName:                             torpedoJobName,
+				JobType:                             torpedoJobType,
 			}
 		})
 	}
+	printFlags()
+}
 
-	// Set log level
-	logLvl, err := logrus.ParseLevel(instance.LogLevel)
-	if err != nil {
-		logrus.Fatalf("Failed to set log level due to Err: %v", err)
+func printFlags() {
+
+	log.Info("********Torpedo Command********")
+	log.Info(strings.Join(os.Args, " "))
+	log.Info("******************************")
+
+	log.Info("*********Parsed Args**********")
+	flag.VisitAll(func(f *flag.Flag) {
+		log.Infof("   %s: %s", f.Name, f.Value)
+	})
+	log.Info("******************************")
+}
+
+func isDashboardReachable() bool {
+	timeout := 5 * time.Second
+	dashURLSplice := strings.Split(aetosutil.DashBoardBaseURL, "/")
+	_, err := net.DialTimeout("tcp", fmt.Sprintf("%s:80", dashURLSplice[2]), timeout)
+	if err == nil {
+		return true
 	}
-	logrus.SetLevel(logLvl)
+	log.Warn(err.Error())
+	return false
+}
+
+func setLoglevel(tpLog *logrus.Logger, logLevel string) {
+	switch logLevel {
+	case "debug":
+		tpLog.Level = logrus.DebugLevel
+	case "info":
+		tpLog.Level = logrus.InfoLevel
+	case "error":
+		tpLog.Level = logrus.ErrorLevel
+	case "warn":
+		tpLog.Level = logrus.WarnLevel
+	case "trace":
+		tpLog.Level = logrus.TraceLevel
+	default:
+		tpLog.Level = logrus.DebugLevel
+
+	}
+}
+
+//SetTorpedoFileOutput adds output destination for logging
+func SetTorpedoFileOutput(tpLog *logrus.Logger, f *os.File) {
+	tpLog.Out = io.MultiWriter(tpLog.Out, f)
+	tpLog.Infof("Log Dir: %s", f.Name())
+}
+
+//CreateLogFile creates file and return the file object
+func CreateLogFile(filename string) *os.File {
+	var filePath string
+	if strings.Contains(filename, "/") {
+		filePath = filename
+	} else {
+		filePath = fmt.Sprintf("%s/%s", Inst().LogLoc, filename)
+	}
+
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Println("Failed to create logfile torpedo.log")
+		fmt.Println("Error: ", err)
+	}
+	return f
+
+}
+
+//CloseLogFile ends testcase file object
+func CloseLogFile(f *os.File) {
+	if f != nil {
+		f.Close()
+		//Below steps are performed to remove current file from log output
+		tpLogFile.Close()
+		tpFile, err := os.OpenFile(tpLogPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Failed to create logfile torpedo.log")
+			fmt.Println("Error: ", err)
+		}
+		log.Out = io.MultiWriter(os.Stdout, tpFile)
+	}
 
 }
 
@@ -3778,7 +4024,7 @@ func mapToVolumeOptions(options map[string]bool) *scheduler.VolumeOptions {
 
 func init() {
 	logrus.SetLevel(logrus.InfoLevel)
-	logrus.StandardLogger().Hooks.Add(log.NewHook())
+	logrus.StandardLogger().Hooks.Add(logInstance.NewHook())
 	logrus.SetOutput(os.Stdout)
 }
 
@@ -3960,7 +4206,7 @@ func IsCloudDriveInitialised(n node.Node) (bool, error) {
 	})
 
 	if err != nil && strings.Contains(err.Error(), "Cloud Drive is not initialized") {
-		logrus.Warnf("cd list error : %v", err)
+		log.Warnf("cd list error : %v", err)
 		return false, nil
 	}
 	if err == nil {
