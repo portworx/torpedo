@@ -29,6 +29,7 @@ func (o *oracle) String() string {
 	return DriverName
 }
 
+// Init initializes the node driver for oracle under the given scheduler
 func (o *oracle) Init(nodeOpts node.InitOptions) error {
 	instanceID := os.Getenv("INSTANCE_ID")
 	if instanceID == "" {
@@ -51,6 +52,7 @@ func (o *oracle) Init(nodeOpts node.InitOptions) error {
 	return nil
 }
 
+// SetASGClusterSize sets node count per zone
 func (o *oracle) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
 	err := o.ops.SetInstanceGroupSize(o.instanceGroupName, perZoneCount, timeout)
 	if err != nil {
@@ -61,6 +63,7 @@ func (o *oracle) SetASGClusterSize(perZoneCount int64, timeout time.Duration) er
 	return nil
 }
 
+// GetASGClusterSize gets node count for cluster
 func (o *oracle) GetASGClusterSize() (int64, error) {
 	size, err := o.ops.GetInstanceGroupSize(o.instanceGroupName)
 	if err != nil {
@@ -70,6 +73,7 @@ func (o *oracle) GetASGClusterSize() (int64, error) {
 	return size, nil
 }
 
+// GetZones returns list of zones in which cluster is running
 func (o *oracle) GetZones() ([]string, error) {
 	asgInfo, err := o.ops.InspectInstanceGroupForInstance(o.instanceID)
 	if err != nil {
@@ -79,6 +83,7 @@ func (o *oracle) GetZones() ([]string, error) {
 	return asgInfo.Zones, nil
 }
 
+// SetClusterVersion sets desired version for cluster and its node pools
 func (o *oracle) SetClusterVersion(version string, timeout time.Duration) error {
 	logrus.Info("[Torpedo] Setting cluster version to :", version)
 	err := o.ops.SetClusterVersion(version, timeout)
@@ -93,8 +98,18 @@ func (o *oracle) SetClusterVersion(version string, timeout time.Duration) error 
 		logrus.Errorf("failed to set version for instance group %s. Error: %v", o.instanceGroupName, err)
 		return err
 	}
-	logrus.Info("[Torpedo] Node group version set successfully.")
+	logrus.Info("[Torpedo] Node group version set successfully for group ", o.instanceGroupName)
 
+	return nil
+}
+
+// DeleteNode deletes the given node
+func (o *oracle) DeleteNode(node node.Node, timeout time.Duration) error {
+	logrus.Info("[Torpedo] Deleting node with ID :", node.Id)
+	err := o.ops.DeleteInstance(node.Id, "", timeout)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
