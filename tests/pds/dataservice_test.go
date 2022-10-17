@@ -215,6 +215,17 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 			})
 		})
 
+		defer func() {
+			Step("Delete created deployments")
+			for _, dep := range deployments {
+				for index := range dep {
+					resp, err := pdslib.DeleteDeployment(dep[index].GetId())
+					Expect(err).NotTo(HaveOccurred())
+					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				}
+			}
+		}()
+
 		Step("Running Workloads before scaling up of dataservices ", func() {
 			for ds, deployment := range deployments {
 				for index := range deployment {
@@ -241,6 +252,17 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				}
 			}
 		})
+
+		defer func() {
+			Step("Delete the worload generating deployments", func() {
+				if DataService == "Cassandra" || DataService == "PostgreSQL" {
+					err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+				} else {
+					err = pdslib.DeleteK8sPods(pod.Name, namespace)
+				}
+				Expect(err).NotTo(HaveOccurred())
+			})
+		}()
 
 		Step("Scaling up the dataservice replicas", func() {
 			for ds, deployment := range deployments {
@@ -280,27 +302,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				}
 			}
 		})
-
-		defer func() {
-			Step("Delete the worload generating deployments", func() {
-				if DataService == "Cassandra" || DataService == "PostgreSQL" {
-					err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-				} else {
-					err = pdslib.DeleteK8sPods(pod.Name, namespace)
-				}
-				Expect(err).NotTo(HaveOccurred())
-			})
-			Step("Delete created deployments")
-			for _, dep := range deployments {
-				for index := range dep {
-					resp, err := pdslib.DeleteDeployment(dep[index].GetId())
-					Expect(err).NotTo(HaveOccurred())
-					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-				}
-			}
-		}()
 	})
-
 })
 
 var _ = Describe("{UpgradeDataServiceVersion}", func() {

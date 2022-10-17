@@ -346,8 +346,9 @@ func CheckNamespace(namespace string) (bool, error) {
 	ns, err = k8sCore.GetNamespace(namespace)
 	isavailable = false
 	if err != nil {
-		logrus.Warnf("Namespace not found %v", err)
+		logrus.Warn(err)
 		if strings.Contains(err.Error(), "not found") {
+
 			nsName := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   namespace,
@@ -754,7 +755,8 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 				{
 					Name:    "rmqperf",
 					Image:   rmqStressImage,
-					Command: []string{command},
+					Command: []string{"/bin/bash", "-c"},
+					Args:    []string{command},
 					Env:     make([]corev1.EnvVar, 3),
 				},
 			},
@@ -835,7 +837,8 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 
 	case rabbitmq:
 		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
-		command := "while true; do java -jar perf-test.jar com.rabbitmq.perf.PerfTest --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 30; done"
+		command := "while true; do java -jar perf-test.jar --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 100 --variable-rate 100:30 --producers 10 --consumers 50; done"
+		dnsEndpoint = strings.TrimSuffix(dnsEndpoint, ".portworx.pds-dns.io")
 		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env, command)
 		if err != nil {
 			logrus.Errorf("An Error Occured while creating rabbitmq workload %v", err)
