@@ -247,7 +247,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 				// Get the most recent profile diags for comparison
 				Step(fmt.Sprintf("Check latest profile diags on node %v", currNode.Name), func() {
 					logrus.Infof(" Getting latest profile  diags on %v", currNode.Name)
-					existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s-*.{stack,heap}.gz | head -n 2", currNode.Name),
+					existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"),
 						currNode, nil)
 					if err == nil {
 						logrus.Infof("Found latest profiles diags on node %s:\n%s ", currNode.Name, existingDiags)
@@ -283,7 +283,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 					}
 					logrus.Infof("Getting latest profile diags on %66v", currNode.Name)
 					Eventually(func() bool {
-						newDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s-*.{stack,heap}.gz | head -n 2", currNode.Name),
+						newDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"),
 							currNode, nil)
 						if err == nil {
 							if existingDiags != "" && existingDiags == newDiags {

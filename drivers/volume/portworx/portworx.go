@@ -3230,12 +3230,12 @@ func (d *portworx) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
 		if time.Since(start) >= timeToTryPreviousFolder {
 			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, true)
 			if err != nil {
-				return err
+				return fmt.Errorf("Error in getting g3 objects %v", err)
 			}
 		} else {
 			objects, err = s3utils.GetS3Objects(clusterUUID, n.Name, false)
 			if err != nil {
-				return err
+				return fmt.Errorf("Error in getting g3 objects %v", err)
 			}
 		}
 		for _, obj := range objects {
