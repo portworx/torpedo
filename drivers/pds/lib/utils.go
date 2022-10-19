@@ -497,6 +497,75 @@ func DeleteK8sDeployments(deployment string, namespace string) error {
 	return err
 }
 
+func GetPodsFromK8sStatefulSet(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {
+	var ss *v1.StatefulSet
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+		if err != nil {
+			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("An Error Occured while getting statefulsets %v", err)
+		return nil, err
+	}
+	pods, err := k8sApps.GetStatefulSetPods(ss)
+	if err != nil {
+		logrus.Errorf("An error occured while getting the pods belonging to this statefulset %v", err)
+		return nil, err
+	}
+	return pods, nil
+}
+
+func GetNodeObjectUsingPodNameK8s(nodeName string) (*corev1.Node, error) {
+	nodeObject, err := k8sCore.GetNodeByName(nodeName)
+	if err != nil {
+		logrus.Errorf("Could not get the node object for node %v because %v", nodeName, err)
+		return nil, err
+	}
+	return nodeObject, nil
+}
+
+func CordonK8sNode(node *corev1.Node) error {
+	err := k8sCore.CordonNode(node.Name, timeOut, maxtimeInterval)
+	return err
+}
+
+func DrainPxPodsOnK8sNode(node *corev1.Node, namespace string) error {
+	labelSelector := map[string]string{"name": "portworx"}
+	pods, err := k8sCore.GetPodsByNodeAndLabels(node.Name, namespace, labelSelector)
+	if err != nil {
+		logrus.Errorf("Could not fetch pods running on the given node %v", err)
+		return err
+	}
+	logrus.Infof("List of portworx pods to be drained %v from node %v", pods.Items, node.Name)
+	err = k8sCore.DrainPodsFromNode(node.Name, pods.Items, timeOut, maxtimeInterval)
+	if err != nil {
+		logrus.Errorf("Could not drain the node %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func LabelK8sNode(node *corev1.Node, label string) error {
+	keyval := strings.Split(label, "=")
+	err := k8sCore.AddLabelOnNode(node.Name, keyval[0], keyval[1])
+	return err
+}
+
+func RemoveLabelFromK8sNode(node *corev1.Node, label string) error {
+	err := k8sCore.RemoveLabelOnNode(node.Name, label)
+	return err
+}
+
+func UnCordonK8sNode(node *corev1.Node) error {
+	err := k8sCore.UnCordonNode(node.Name, timeOut, maxtimeInterval)
+	return err
+}
+
 // DeleteDeployment deletes the given deployment
 func DeleteDeployment(deploymentID string) (*state.Response, error) {
 	resp, err := components.DataServiceDeployment.DeleteDeployment(deploymentID)
@@ -716,7 +785,8 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 				{
 					Name:    "rmqperf",
 					Image:   rmqStressImage,
-					Command: []string{command},
+					Command: []string{"/bin/bash", "-c"},
+					Args:    []string{command},
 					Env:     make([]corev1.EnvVar, 3),
 				},
 			},
@@ -779,7 +849,8 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 
 	case rabbitmq:
 		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
-		command := "while true; do java -jar perf-test.jar com.rabbitmq.perf.PerfTest --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 30; done"
+		command := "while true; do java -jar perf-test.jar --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 100 --variable-rate 100:30 --producers 10 --consumers 50; done"
+		dnsEndpoint = strings.TrimSuffix(dnsEndpoint, ".portworx.pds-dns.io")
 		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env, command)
 		if err != nil {
 			logrus.Errorf("An Error Occured while creating rabbitmq workload %v", err)
