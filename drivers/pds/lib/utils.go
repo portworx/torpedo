@@ -23,6 +23,29 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+type JsonPara struct {
+	Parameter *ParaType
+}
+
+type ParaType struct {
+	DataServiceToTest        []DataServiceToTestType
+	UpdateDataServiceVersion []UpdateDataServiceVersionType
+}
+
+type DataServiceToTestType struct {
+	Name          string
+	Version       string
+	Image         string
+	Replicas      int
+	ScaleReplicas int
+}
+
+type UpdateDataServiceVersionType struct {
+	Name       string
+	OldVersion string
+	OldImage   string
+}
+
 // ResourceSettingTemplate struct used to store template values
 type ResourceSettingTemplate struct {
 	Resources struct {
@@ -243,6 +266,42 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName, AccountName s
 		}
 	}
 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
+}
+
+// ReadParams reads the params from given or default json
+func ReadParams(filename string) {
+	jsonPara := JsonPara{
+		Parameter: &ParaType{
+			DataServiceToTest: []DataServiceToTestType{
+				{
+					Name:          "Cassandra",
+					Version:       "3.0.5",
+					Image:         "029172b",
+					Replicas:      1,
+					ScaleReplicas: 3,
+				},
+				{
+					Name:          "PostgreSQL",
+					Version:       "14.5",
+					Image:         "d69b376",
+					Replicas:      1,
+					ScaleReplicas: 3,
+				},
+			},
+			UpdateDataServiceVersion: []UpdateDataServiceVersionType{
+				{
+					Name:       "PostgreSQL",
+					OldVersion: "14.4",
+					OldImage:   "b64d741",
+				},
+			},
+		},
+	}
+	if filename == "" {
+		logrus.Println("Parameter json file is not used, use initial parameters value.")
+		parameter := jsonPara.Parameter
+		logrus.Infof("Default DataService Name  %v", parameter.DataServiceToTest[0].Name)
+	}
 }
 
 // GetClusterID retruns the cluster id for given targetClusterName

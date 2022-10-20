@@ -2,7 +2,6 @@ package tests
 
 import (
 	"net/http"
-	"os"
 	"strconv"
 	"testing"
 
@@ -133,6 +132,17 @@ var _ = BeforeSuite(func() {
 		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(namespaceID).NotTo(BeEmpty())
+	})
+})
+
+var _ = Describe("{DeployUsinJsonPrams}", func() {
+	JustBeforeEach(func() {
+		Step("Get the params", func() {
+			pdslib.ReadParams("")
+		})
+	})
+	It("Read Params", func() {
+		logrus.Infof("Test Reading Default Params")
 	})
 })
 
@@ -668,8 +678,8 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
+// func TestMain(m *testing.M) {
+// 	// call flag.Parse() here if TestMain uses flags
+// 	ParseFlags()
+// 	os.Exit(m.Run())
+// }
