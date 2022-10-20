@@ -497,75 +497,6 @@ func DeleteK8sDeployments(deployment string, namespace string) error {
 	return err
 }
 
-func GetPodsFromK8sStatefulSet(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {
-	var ss *v1.StatefulSet
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
-		if err != nil {
-			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		logrus.Errorf("An Error Occured while getting statefulsets %v", err)
-		return nil, err
-	}
-	pods, err := k8sApps.GetStatefulSetPods(ss)
-	if err != nil {
-		logrus.Errorf("An error occured while getting the pods belonging to this statefulset %v", err)
-		return nil, err
-	}
-	return pods, nil
-}
-
-func GetNodeObjectUsingPodNameK8s(nodeName string) (*corev1.Node, error) {
-	nodeObject, err := k8sCore.GetNodeByName(nodeName)
-	if err != nil {
-		logrus.Errorf("Could not get the node object for node %v because %v", nodeName, err)
-		return nil, err
-	}
-	return nodeObject, nil
-}
-
-func CordonK8sNode(node *corev1.Node) error {
-	err := k8sCore.CordonNode(node.Name, timeOut, maxtimeInterval)
-	return err
-}
-
-func DrainPxPodsOnK8sNode(node *corev1.Node, namespace string) error {
-	labelSelector := map[string]string{"name": "portworx"}
-	pods, err := k8sCore.GetPodsByNodeAndLabels(node.Name, namespace, labelSelector)
-	if err != nil {
-		logrus.Errorf("Could not fetch pods running on the given node %v", err)
-		return err
-	}
-	logrus.Infof("List of portworx pods to be drained %v from node %v", pods.Items, node.Name)
-	err = k8sCore.DrainPodsFromNode(node.Name, pods.Items, timeOut, maxtimeInterval)
-	if err != nil {
-		logrus.Errorf("Could not drain the node %v", err)
-		return err
-	}
-
-	return nil
-}
-
-func LabelK8sNode(node *corev1.Node, label string) error {
-	keyval := strings.Split(label, "=")
-	err := k8sCore.AddLabelOnNode(node.Name, keyval[0], keyval[1])
-	return err
-}
-
-func RemoveLabelFromK8sNode(node *corev1.Node, label string) error {
-	err := k8sCore.RemoveLabelOnNode(node.Name, label)
-	return err
-}
-
-func UnCordonK8sNode(node *corev1.Node) error {
-	err := k8sCore.UnCordonNode(node.Name, timeOut, maxtimeInterval)
-	return err
-}
-
 // DeleteDeployment deletes the given deployment
 func DeleteDeployment(deploymentID string) (*state.Response, error) {
 	resp, err := components.DataServiceDeployment.DeleteDeployment(deploymentID)
@@ -1085,4 +1016,148 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 
 	return resourceTemp, storageOp, config, nil
 
+}
+
+func GetPodsFromK8sStatefulSet(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {
+	var ss *v1.StatefulSet
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+		if err != nil {
+			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("An Error Occured while getting statefulsets %v", err)
+		return nil, err
+	}
+	pods, err := k8sApps.GetStatefulSetPods(ss)
+	if err != nil {
+		logrus.Errorf("An error occured while getting the pods belonging to this statefulset %v", err)
+		return nil, err
+	}
+	return pods, nil
+}
+
+func GetNodeObjectUsingPodNameK8s(nodeName string) (*corev1.Node, error) {
+	nodeObject, err := k8sCore.GetNodeByName(nodeName)
+	if err != nil {
+		logrus.Errorf("Could not get the node object for node %v because %v", nodeName, err)
+		return nil, err
+	}
+	return nodeObject, nil
+}
+
+func CordonK8sNode(node *corev1.Node) error {
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		err = k8sCore.CordonNode(node.Name, timeOut, maxtimeInterval)
+		if err != nil {
+			logrus.Errorf("Failed cordon node %v due to %v", node.Name, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
+}
+
+func DrainPxPodOnK8sNode(node *corev1.Node, namespace string) error {
+	labelSelector := map[string]string{"name": "portworx"}
+	pod, err := k8sCore.GetPodsByNodeAndLabels(node.Name, namespace, labelSelector)
+	if err != nil {
+		logrus.Errorf("Could not fetch pods running on the given node %v", err)
+		return err
+	}
+	logrus.Infof("Portworx pod to be drained %v from node %v", pod.Items[0].Name, node.Name)
+	err = k8sCore.DrainPodsFromNode(node.Name, pod.Items, timeOut, maxtimeInterval)
+	if err != nil {
+		logrus.Errorf("Could not drain the node %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func LabelK8sNode(node *corev1.Node, label string) error {
+	keyval := strings.Split(label, "=")
+	err := k8sCore.AddLabelOnNode(node.Name, keyval[0], keyval[1])
+	return err
+}
+
+func RemoveLabelFromK8sNode(node *corev1.Node, label string) error {
+	err := k8sCore.RemoveLabelOnNode(node.Name, label)
+	return err
+}
+
+func UnCordonK8sNode(node *corev1.Node) error {
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		err = k8sCore.UnCordonNode(node.Name, timeOut, maxtimeInterval)
+		if err != nil {
+			logrus.Errorf("Failed uncordon node %v due to %v", node.Name, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
+}
+
+func SearchLogLinesFromPxPodOnNode(nodeName string, namespace string, searchPattern string) (bool, error) {
+	labelSelector := map[string]string{"name": "portworx"}
+	var pods *corev1.PodList
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		pods, err = k8sCore.GetPodsByNodeAndLabels(nodeName, namespace, labelSelector)
+		if err != nil {
+			logrus.Errorf("Failed to get pods from node %v due to %v", nodeName, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("Could not fetch pods running on the given node %v", err)
+		return false, err
+	}
+	pxPodName := pods.Items[0].Name
+	logrus.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
+	var log string
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		tailLines := int64(500)
+		log, err = k8sCore.GetPodLog(pxPodName, namespace, &corev1.PodLogOptions{Container: "portworx", Follow: false, TailLines: &tailLines})
+		// logrus.Infof("Pod logs: %v, all logs: %v", log, logs)
+		if err != nil {
+			logrus.Errorf("Failed to get logs from pod %v due to %v", pxPodName, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("Error: Failed to get pod logs %v because %v", pxPodName, err)
+		return false, nil
+	}
+
+	if strings.Contains(log, searchPattern) {
+		logrus.Infof("MATCHED!! line with pattern %v", searchPattern)
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func VerifyPxPodOnNode(nodeName string, namespace string) (bool, error) {
+	labelSelector := map[string]string{"name": "portworx"}
+	var pods *corev1.PodList
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		pods, err = k8sCore.GetPodsByNodeAndLabels(nodeName, namespace, labelSelector)
+		if err != nil {
+			logrus.Errorf("Failed to get pods from node %v due to %v", nodeName, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("Could not fetch pods running on the given node %v", err)
+		return false, err
+	}
+	pxPodName := pods.Items[0].Name
+	logrus.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
+	return true, nil
 }

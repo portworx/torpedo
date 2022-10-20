@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -736,6 +735,17 @@ var _ = Describe("{DeployDSCrashPortworxOnNodes}", func() {
 				}
 			})
 
+			defer func() {
+				Step("Delete created PDS deployment")
+				for _, dep := range deployments {
+					for index := range dep {
+						resp, err := pdslib.DeleteDeployment(dep[index].GetId())
+						Expect(err).NotTo(HaveOccurred())
+						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					}
+				}
+			}()
+
 			/*
 			   Deploy a data service
 
@@ -743,7 +753,7 @@ var _ = Describe("{DeployDSCrashPortworxOnNodes}", func() {
 
 			   For each pds pod in podList, do kubectl get pod $pod -o json | jq -r '.spec.nodeName ' and get the node that the pv for the pod resides on. (nodeList)
 
-			   For each node in the nodeList, kubectl cordon node, label the node to stop the px service.
+			   For each node in the nodeList, label the node to stop the px service.
 
 			   Verify: Validate that the pds deployment goes down, and ensure that it comes back up after a while when the attached volumes have been moved to different nodes where the px service is still active.
 
@@ -762,8 +772,6 @@ var _ = Describe("{DeployDSCrashPortworxOnNodes}", func() {
 					}
 				}
 
-				logrus.Infof("List of pods: %v", deploymentPods)
-
 			})
 
 			var nodeList []*corev1.Node
@@ -779,22 +787,21 @@ var _ = Describe("{DeployDSCrashPortworxOnNodes}", func() {
 			Step("For each node in the nodelist, cordon the node, stop px service on it", func() {
 
 				for _, node := range nodeList {
-					err := pdslib.CordonK8sNode(node)
-					Expect(err).NotTo(HaveOccurred())
-				}
-
-				logrus.Info("Finished cordoning the nodes...")
-
-				for _, node := range nodeList {
 					label := "px/service=stop"
 					err := pdslib.LabelK8sNode(node, label)
 					Expect(err).NotTo(HaveOccurred())
 				}
 
-				logrus.Info("Finished labeling the nodes, waiting for 5 min...")
+				logrus.Info("Finished labeling the nodes...")
 
 				// Read log lines of the px pod on the node to see if service has shutdown
-				time.Sleep(5 * time.Minute)
+				for _, node := range nodeList {
+					searchPattern := "INFO stopped: pxdaemon (exit status 0)"
+					rc, err := pdslib.SearchLogLinesFromPxPodOnNode(node.Name, "kube-system", searchPattern)
+					Expect(rc).To(BeTrue())
+					Expect(err).NotTo(HaveOccurred())
+				}
+
 			})
 
 			Step("Validate that the deployment is healthy", func() {
@@ -816,33 +823,29 @@ var _ = Describe("{DeployDSCrashPortworxOnNodes}", func() {
 				logrus.Info("Finished removing labels from the nodes...")
 
 				for _, node := range nodeList {
+					err := pdslib.DrainPxPodOnK8sNode(node, "kube-system")
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				logrus.Info("Finished draining px pods from the nodes...")
+
+				for _, node := range nodeList {
 					err := pdslib.UnCordonK8sNode(node)
 					Expect(err).NotTo(HaveOccurred())
 				}
 
-				logrus.Info("Finished uncordoning the nodes...")
+				logrus.Infof("Finished uncordoning the node...")
 
+				logrus.Info("Verify that the px pod has started on node...")
+				// Read log lines of the px pod on the node to see if the service is running
 				for _, node := range nodeList {
-					err := pdslib.DrainPxPodsOnK8sNode(node, "kube-system")
+					rc, err := pdslib.VerifyPxPodOnNode(node.Name, "kube-system")
+					Expect(rc).To(BeTrue())
 					Expect(err).NotTo(HaveOccurred())
 				}
 
-				logrus.Info("Finished draining the nodes, waiting for 5 min for service to converge...")
-				// Read log lines of the px pod on the node to see if the service is running
-				time.Sleep(5 * time.Minute)
-
 			})
 
-			defer func() {
-				Step("Delete created PDS deployment")
-				for _, dep := range deployments {
-					for index := range dep {
-						resp, err := pdslib.DeleteDeployment(dep[index].GetId())
-						Expect(err).NotTo(HaveOccurred())
-						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-					}
-				}
-			}()
 		})
 	})
 
