@@ -736,7 +736,7 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				}
 			})
 
-			Step("Running Workloads before scaling up of dataservices ", func() {
+			Step("Running Workloads on dataservices ", func() {
 				for ds, deployment := range deployments {
 					for index := range deployment {
 						if ds == postgresql {
@@ -763,6 +763,26 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				}
 			})
 
+			defer func() {
+				Step("Delete the worload generating deployments", func() {
+					if DataService == "Cassandra" || DataService == "PostgreSQL" {
+						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+					} else {
+						err = pdslib.DeleteK8sPods(pod.Name, namespace)
+					}
+					Expect(err).NotTo(HaveOccurred())
+
+				})
+				Step("Delete created PDS deployment")
+				for _, dep := range deployments {
+					for index := range dep {
+						resp, err := pdslib.DeleteDeployment(dep[index].GetId())
+						Expect(err).NotTo(HaveOccurred())
+						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					}
+				}
+			}()
+
 			/*
 				Deploy a dataservice
 
@@ -788,8 +808,6 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 						Expect(deploymentPods).NotTo(BeEmpty())
 					}
 				}
-
-				logrus.Infof("List of pods: %v", deploymentPods)
 
 			})
 
@@ -821,7 +839,13 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				logrus.Info("Finished labeling the nodes, waiting for 5 min...")
 
 				// Read log lines of the px pod on the node to see if service has shutdown
-				time.Sleep(5 * time.Minute)
+				for _, node := range nodeList {
+					searchPattern := "INFO stopped: pxdaemon (exit status 0)"
+					rc, err := pdslib.SearchLogLinesFromPxPodOnNode(node.Name, "kube-system", searchPattern)
+					Expect(rc).To(BeTrue())
+					Expect(err).NotTo(HaveOccurred())
+				}
+
 			})
 
 			Step("Validate that the deployment is healthy", func() {
@@ -848,37 +872,23 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				}
 
 				logrus.Info("Finished uncordoning the nodes...")
+				time.Sleep(2 * time.Minute)
 
 				for _, node := range nodeList {
-					err := pdslib.DrainPxPodsOnK8sNode(node, "kube-system")
+					err := pdslib.DrainPxPodOnK8sNode(node, "kube-system")
 					Expect(err).NotTo(HaveOccurred())
 				}
 
-				logrus.Info("Finished draining the nodes, waiting for 5 min for service to converge...")
+				logrus.Info("Finished draining the nodes, verify that the px pod has started on node...")
 				// Read log lines of the px pod on the node to see if the service is running
-				time.Sleep(5 * time.Minute)
+				for _, node := range nodeList {
+
+					rc, err := pdslib.VerifyPxPodOnNode(node.Name, "kube-system")
+					Expect(rc).To(BeTrue())
+					Expect(err).NotTo(HaveOccurred())
+				}
 
 			})
-
-			defer func() {
-				Step("Delete the worload generating deployments", func() {
-					if DataService == "Cassandra" || DataService == "PostgreSQL" {
-						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-					} else {
-						err = pdslib.DeleteK8sPods(pod.Name, namespace)
-					}
-					Expect(err).NotTo(HaveOccurred())
-
-				})
-				Step("Delete created PDS deployment")
-				for _, dep := range deployments {
-					for index := range dep {
-						resp, err := pdslib.DeleteDeployment(dep[index].GetId())
-						Expect(err).NotTo(HaveOccurred())
-						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-					}
-				}
-			}()
 		})
 	})
 

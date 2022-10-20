@@ -1048,19 +1048,26 @@ func GetNodeObjectUsingPodNameK8s(nodeName string) (*corev1.Node, error) {
 }
 
 func CordonK8sNode(node *corev1.Node) error {
-	err := k8sCore.CordonNode(node.Name, timeOut, maxtimeInterval)
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		err = k8sCore.CordonNode(node.Name, timeOut, maxtimeInterval)
+		if err != nil {
+			logrus.Errorf("Failed cordon node %v due to %v", node.Name, err)
+			return false, nil
+		}
+		return true, nil
+	})
 	return err
 }
 
-func DrainPxPodsOnK8sNode(node *corev1.Node, namespace string) error {
+func DrainPxPodOnK8sNode(node *corev1.Node, namespace string) error {
 	labelSelector := map[string]string{"name": "portworx"}
-	pods, err := k8sCore.GetPodsByNodeAndLabels(node.Name, namespace, labelSelector)
+	pod, err := k8sCore.GetPodsByNodeAndLabels(node.Name, namespace, labelSelector)
 	if err != nil {
 		logrus.Errorf("Could not fetch pods running on the given node %v", err)
 		return err
 	}
-	logrus.Infof("List of portworx pods to be drained %v from node %v", pods.Items, node.Name)
-	err = k8sCore.DrainPodsFromNode(node.Name, pods.Items, timeOut, maxtimeInterval)
+	logrus.Infof("Portworx pod to be drained %v from node %v", pod.Items[0].Name, node.Name)
+	err = k8sCore.DrainPodsFromNode(node.Name, pod.Items, timeOut, maxtimeInterval)
 	if err != nil {
 		logrus.Errorf("Could not drain the node %v", err)
 		return err
@@ -1081,6 +1088,79 @@ func RemoveLabelFromK8sNode(node *corev1.Node, label string) error {
 }
 
 func UnCordonK8sNode(node *corev1.Node) error {
-	err := k8sCore.UnCordonNode(node.Name, timeOut, maxtimeInterval)
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		err = k8sCore.UnCordonNode(node.Name, timeOut, maxtimeInterval)
+		if err != nil {
+			logrus.Errorf("Failed uncordon node %v due to %v", node.Name, err)
+			return false, nil
+		}
+		return true, nil
+	})
 	return err
+}
+
+func SearchLogLinesFromPxPodOnNode(nodeName string, namespace string, searchPattern string) (bool, error) {
+	labelSelector := map[string]string{"name": "portworx"}
+	var pods *corev1.PodList
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		pods, err = k8sCore.GetPodsByNodeAndLabels(nodeName, namespace, labelSelector)
+		if err != nil {
+			logrus.Errorf("Failed to get pods from node %v due to %v", nodeName, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("Could not fetch pods running on the given node %v", err)
+		return false, err
+	}
+	pxPodName := pods.Items[0].Name
+	logrus.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
+	var logs []string
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		tailLines := int64(500)
+		log, err := k8sCore.GetPodLog(pxPodName, namespace, &corev1.PodLogOptions{Container: "portworx", Follow: false, TailLines: &tailLines})
+		// logrus.Infof("Pod logs: %v, all logs: %v", log, logs)
+		logs = append(logs, log)
+		if err != nil {
+			logrus.Errorf("Failed to get logs from pod %v due to %v", pxPodName, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("Error: Failed to get pod logs %v because %v", pxPodName, err)
+		return false, nil
+	}
+
+	// logrus.Infof("All logs: %v", logs)
+
+	for _, line := range logs {
+		// logrus.Infof("Comparing line %v with pattern %v", line, searchPattern)
+		if strings.Contains(line, searchPattern) {
+			logrus.Infof("MATCHED!! line %v with pattern %v", line, searchPattern)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func VerifyPxPodOnNode(nodeName string, namespace string) (bool, error) {
+	labelSelector := map[string]string{"name": "portworx"}
+	var pods *corev1.PodList
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		pods, err = k8sCore.GetPodsByNodeAndLabels(nodeName, namespace, labelSelector)
+		if err != nil {
+			logrus.Errorf("Failed to get pods from node %v due to %v", nodeName, err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("Could not fetch pods running on the given node %v", err)
+		return false, err
+	}
+	pxPodName := pods.Items[0].Name
+	logrus.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
+	return true, nil
 }
