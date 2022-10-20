@@ -1398,12 +1398,11 @@ func SearchLogLinesFromPxPodOnNode(nodeName string, namespace string, searchPatt
 	}
 	pxPodName := pods.Items[0].Name
 	logrus.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
-	var logs []string
+	var log string
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		tailLines := int64(500)
-		log, err := k8sCore.GetPodLog(pxPodName, namespace, &corev1.PodLogOptions{Container: "portworx", Follow: false, TailLines: &tailLines})
+		log, err = k8sCore.GetPodLog(pxPodName, namespace, &corev1.PodLogOptions{Container: "portworx", Follow: false, TailLines: &tailLines})
 		// logrus.Infof("Pod logs: %v, all logs: %v", log, logs)
-		logs = append(logs, log)
 		if err != nil {
 			logrus.Errorf("Failed to get logs from pod %v due to %v", pxPodName, err)
 			return false, nil
@@ -1415,15 +1414,11 @@ func SearchLogLinesFromPxPodOnNode(nodeName string, namespace string, searchPatt
 		return false, nil
 	}
 
-	// logrus.Infof("All logs: %v", logs)
-
-	for _, line := range logs {
-		// logrus.Infof("Comparing line %v with pattern %v", line, searchPattern)
-		if strings.Contains(line, searchPattern) {
-			logrus.Infof("MATCHED!! line %v with pattern %v", line, searchPattern)
-			return true, nil
-		}
+	if strings.Contains(log, searchPattern) {
+		logrus.Infof("MATCHED!! line with pattern %v", searchPattern)
+		return true, nil
 	}
+
 	return false, nil
 }
 

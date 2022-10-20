@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -708,19 +707,12 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 			Step("For each node in the nodelist, cordon the node, stop px service on it", func() {
 
 				for _, node := range nodeList {
-					err := pdslib.CordonK8sNode(node)
-					Expect(err).NotTo(HaveOccurred())
-				}
-
-				logrus.Info("Finished cordoning the nodes...")
-
-				for _, node := range nodeList {
 					label := "px/service=stop"
 					err := pdslib.LabelK8sNode(node, label)
 					Expect(err).NotTo(HaveOccurred())
 				}
 
-				logrus.Info("Finished labeling the nodes, waiting for 5 min...")
+				logrus.Info("Finished labeling the nodes...")
 
 				// Read log lines of the px pod on the node to see if service has shutdown
 				for _, node := range nodeList {
@@ -751,14 +743,6 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				logrus.Info("Finished removing labels from the nodes...")
 
 				for _, node := range nodeList {
-					err := pdslib.UnCordonK8sNode(node)
-					Expect(err).NotTo(HaveOccurred())
-				}
-
-				logrus.Info("Finished uncordoning the nodes...")
-				time.Sleep(2 * time.Minute)
-
-				for _, node := range nodeList {
 					err := pdslib.DrainPxPodOnK8sNode(node, "kube-system")
 					Expect(err).NotTo(HaveOccurred())
 				}
@@ -766,7 +750,6 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				logrus.Info("Finished draining the nodes, verify that the px pod has started on node...")
 				// Read log lines of the px pod on the node to see if the service is running
 				for _, node := range nodeList {
-
 					rc, err := pdslib.VerifyPxPodOnNode(node.Name, "kube-system")
 					Expect(rc).To(BeTrue())
 					Expect(err).NotTo(HaveOccurred())
