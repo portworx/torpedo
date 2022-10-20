@@ -820,7 +820,7 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				}
 			})
 
-			Step("For each node in the nodelist, cordon the node, stop px service on it", func() {
+			Step("For each node in the nodelist, stop px service on it", func() {
 
 				for _, node := range nodeList {
 					label := "px/service=stop"
