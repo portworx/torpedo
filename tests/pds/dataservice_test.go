@@ -863,7 +863,16 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 					Expect(err).NotTo(HaveOccurred())
 				}
 
-				logrus.Info("Finished draining the nodes, verify that the px pod has started on node...")
+				logrus.Info("Finished draining px pods from the nodes...")
+
+				for _, node := range nodeList {
+					err := pdslib.UnCordonK8sNode(node)
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				logrus.Infof("Finished uncordoning the node...")
+
+				logrus.Info("Verify that the px pod has started on node...")
 				// Read log lines of the px pod on the node to see if the service is running
 				for _, node := range nodeList {
 					rc, err := pdslib.VerifyPxPodOnNode(node.Name, "kube-system")
