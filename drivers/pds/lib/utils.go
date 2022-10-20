@@ -485,24 +485,6 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment) error {
 	return err
 }
 
-// ValidateDataServiceDeploymentNegative checks if deployment is not present
-func ValidateDataServiceDeploymentNegative(deployment *pds.ModelsDeployment, namespace string) error {
-	var ss *v1.StatefulSet
-	err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
-		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
-		if err != nil {
-			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
-			return false, nil
-		}
-		return true, nil
-	})
-	if err == nil {
-		logrus.Errorf("Validate DS Deployment negative failed, the StatefulSet still exists %v", ss)
-		return nil
-	}
-	return err
-}
-
 //DeleteK8sPods deletes the pods in given namespace
 func DeleteK8sPods(pod string, namespace string) error {
 	err := k8sCore.DeletePod(pod, namespace, true)
@@ -523,16 +505,6 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 		return nil, err
 	}
 	return resp, nil
-}
-
-// DeleteK8sNamespace deletes the specified namespace
-func DeleteK8sNamespace(namespace string) error {
-	err := k8sCore.DeleteNamespace(namespace)
-	if err != nil {
-		logrus.Errorf("Could not delete the specified namespace %v because %v", namespace, err)
-		return err
-	}
-	return nil
 }
 
 //GetDeploymentConnectionInfo returns the dns endpoint
@@ -1042,4 +1014,32 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 
 	return resourceTemp, storageOp, config, nil
 
+}
+
+// DeleteK8sNamespace deletes the specified namespace
+func DeleteK8sNamespace(namespace string) error {
+	err := k8sCore.DeleteNamespace(namespace)
+	if err != nil {
+		logrus.Errorf("Could not delete the specified namespace %v because %v", namespace, err)
+		return err
+	}
+	return nil
+}
+
+// ValidateDataServiceDeploymentNegative checks if deployment is not present
+func ValidateDataServiceDeploymentNegative(deployment *pds.ModelsDeployment, namespace string) error {
+	var ss *v1.StatefulSet
+	err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+		if err != nil {
+			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err == nil {
+		logrus.Errorf("Validate DS Deployment negative failed, the StatefulSet still exists %v", ss)
+		return nil
+	}
+	return err
 }
