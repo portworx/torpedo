@@ -107,10 +107,6 @@ const (
 	PureBlock = "pure_block"
 	// PortworxStrict provisioner for using same provisioner as provided in the spec
 	PortworxStrict = "strict"
-	// PXDaemonSet DaemonSet Name
-	PXDaemonSet = "portworx"
-	// PXNamespace default namespace
-	PXNamespace = "kube-system"
 	// CsiProvisioner is csi provisioner
 	CsiProvisioner = "pxd.portworx.com"
 )
@@ -131,8 +127,8 @@ const (
 	SnapshotReadyTimeout             = 5 * time.Minute
 	numOfRestoredPVCForCloneManyTest = 500
 
-	autopilotServiceName          = "autopilot"
 	autopilotDefaultNamespace     = "kube-system"
+	portworxServiceName           = "portworx-service"
 	resizeSupportedAnnotationKey  = "torpedo.io/resize-supported"
 	autopilotEnabledAnnotationKey = "torpedo.io/autopilot-enabled"
 	pvcLabelsAnnotationKey        = "torpedo.io/pvclabels-enabled"
@@ -4987,7 +4983,7 @@ func (k *K8s) GetAutopilotNamespace() (string, error) {
 		return "", err
 	}
 	for _, svc := range allServices.Items {
-		if svc.Name == autopilotServiceName {
+		if svc.Name == portworxServiceName {
 			return svc.Namespace, nil
 		}
 	}
