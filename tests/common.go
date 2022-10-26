@@ -8,7 +8,7 @@ import (
 	"flag"
 	"fmt"
 	logInstance "github.com/portworx/torpedo/pkg/log"
-	"net"
+	"net/http"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 
@@ -3965,14 +3965,19 @@ func printFlags() {
 
 func isDashboardReachable() bool {
 	timeout := 5 * time.Second
-	dashURLSlice := strings.Split(aetosutil.DashBoardBaseURL, "/")
-	dashURL := fmt.Sprintf("%s:80", dashURLSlice[2])
-	log.Infof("Dialing %s", dashURL)
-	_, err := net.DialTimeout("tcp", dashURL, timeout)
-	if err == nil {
+	client := http.Client{
+		Timeout: timeout,
+	}
+
+	response, err := client.Get(aetosutil.DashBoardBaseURL)
+
+	if err != nil {
+		log.Warn(err.Error())
+		return false
+	}
+	if response.StatusCode == 200 {
 		return true
 	}
-	log.Warn(err.Error())
 	return false
 }
 

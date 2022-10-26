@@ -112,7 +112,7 @@ var _ = Describe("{Longevity}", func() {
 	})
 
 	It("has to schedule app and introduce test triggers", func() {
-		dash.Info("has to schedule app and introduce test triggers")
+		dash.Info("schedule apps and start test triggers")
 		watchLog := fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
 			configMapNS, testTriggersConfigMap)
 
@@ -204,9 +204,9 @@ func testTrigger(wg *sync.WaitGroup,
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 			// If trigger is not disabled and its right time to trigger,
 
-			dash.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+			log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
 			triggerLoc.Lock()
-			dash.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+			log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
 			/* PTX-2667: check no other disruptive trigger is happening at same time
 			if isDisruptiveTrigger(triggerType) {
 			   // At a give point in time, only single disruptive trigger is allowed to run.
@@ -222,11 +222,11 @@ func testTrigger(wg *sync.WaitGroup,
 			}*/
 
 			triggerFunc(contexts, triggerEventsChan)
-			dash.Infof("Trigger Function completed for [%s]\n", triggerType)
+			log.Infof("Trigger Function completed for [%s]\n", triggerType)
 
 			//if isDisruptiveTrigger(triggerType) {
 			triggerLoc.Unlock()
-			dash.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+			log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
 			//}
 
 			lastInvocationTime = time.Now().Local()
