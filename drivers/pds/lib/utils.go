@@ -1313,3 +1313,283 @@ func ValidateAllDataServiceVolumes(deployment *pds.ModelsDeployment, dataService
 	return resourceTemp, storageOp, config, nil
 
 }
+
+func CreateK8sPDSNamespace(nname string) (*corev1.Namespace, error) {
+	ns, err := k8sCore.CreateNamespace(&corev1.Namespace{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Namespace",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   nname,
+			Labels: map[string]string{"pds.portworx.com/available": "true"},
+		},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("could not create ns %v", nname)
+	}
+
+	return ns, nil
+
+}
+
+func DeleteK8sPDSNamespace(nname string) error {
+	err := k8sCore.DeleteNamespace(nname)
+	return err
+}
+
+// ValidateDataServiceVolumes validates the volumes
+func ValidateDataServiceVolumesNamespace(deployment *pds.ModelsDeployment, dataService string, dataServiceDefaultResourceTemplateIDMap map[string]string, storageTemplateID string, namespace string) (ResourceSettingTemplate, StorageOptions, StorageClassConfig, error) {
+	var config StorageClassConfig
+	var resourceTemp ResourceSettingTemplate
+	var storageOp StorageOptions
+	logrus.Infof("Searching in namespace %v", namespace)
+	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+	if err != nil {
+		logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+	}
+	err = k8sApps.ValidatePVCsForStatefulSet(ss, timeOut, timeInterval)
+	if err != nil {
+		logrus.Errorf("An error occured while validating pvcs of statefulsets %v ", err)
+	}
+	pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+	if err != nil {
+		logrus.Warnf("An Error Occured while getting pvcs of statefulsets %v", err)
+	}
+
+	for _, pvc := range pvcList.Items {
+		sc, err := k8sCore.GetStorageClassForPVC(&pvc)
+		if err != nil {
+			logrus.Errorf("Error Occured while getting storage class for pvc %v", err)
+		}
+		scAnnotation := sc.Annotations
+		for k, v := range scAnnotation {
+			if k == "kubectl.kubernetes.io/last-applied-configuration" {
+				logrus.Infof("Storage Options Values %v", v)
+				data := []byte(v)
+				err := json.Unmarshal(data, &config)
+				if err != nil {
+					logrus.Errorf("Error Occured while getting volume params %v", err)
+				}
+			}
+		}
+	}
+
+	rt, err := components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateIDMap[dataService])
+	if err != nil {
+		logrus.Errorf("Error Occured while getting resource setting template %v", err)
+	}
+	resourceTemp.Resources.Requests.CPU = *rt.CpuRequest
+	resourceTemp.Resources.Requests.Memory = *rt.MemoryRequest
+	resourceTemp.Resources.Requests.Storage = *rt.StorageRequest
+	resourceTemp.Resources.Limits.CPU = *rt.CpuLimit
+	resourceTemp.Resources.Limits.Memory = *rt.MemoryLimit
+
+	st, err := components.StorageSettingsTemplate.GetTemplate(storageTemplateID)
+	if err != nil {
+		logrus.Errorf("Error Occured while getting storage template %v", err)
+		return resourceTemp, storageOp, config, err
+	}
+	storageOp.Filesystem = st.GetFs()
+	storageOp.Replicas = st.GetRepl()
+	storageOp.VolumeGroup = st.GetFg()
+
+	return resourceTemp, storageOp, config, nil
+
+}
+
+// ValidateDataServiceDeployment checks if deployment is healthy and running
+func ValidateDataServiceDeploymentNamespace(deployment *pds.ModelsDeployment, namespace string) error {
+	var ss *v1.StatefulSet
+
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+		if err != nil {
+			logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		logrus.Errorf("An Error Occured while getting statefulsets %v", err)
+		return err
+	}
+	//validate the statefulset deployed in the namespace
+	err = k8sApps.ValidateStatefulSet(ss, defaultRetryInterval)
+	if err != nil {
+		logrus.Errorf("An Error Occured while validating statefulsets %v", err)
+		return err
+	}
+
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
+		logrus.Infof("Health status -  %v", status.GetHealth())
+		if err != nil {
+			logrus.Errorf("Error occured while getting deployment status %v", err)
+			return false, nil
+		}
+		if res.StatusCode != state.StatusOK {
+			logrus.Errorf("Error when calling `ApiDeploymentsIdCredentialsGet``: %v\n", err)
+			logrus.Errorf("Full HTTP response: %v\n", res)
+			return false, err
+		}
+		if status.GetHealth() != "Healthy" {
+			return false, nil
+		}
+		logrus.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+		return true, nil
+
+	})
+	return err
+}
+
+// GetAllVersionsImages returns all the versions and Images of dataservice
+func GetAllVersionsImagesNamespace(dataServiceID string) (map[string][]string, map[string][]string, error) {
+	var versions []pds.ModelsVersion
+	var images []pds.ModelsImage
+	var dataServiceIDImagesMap map[string][]string = make(map[string][]string, 0)
+	var dataServiceVersionBuildMap map[string][]string = make(map[string][]string, 0)
+
+	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i := 0; i < len(versions); i++ {
+		if *versions[i].Enabled {
+			images, _ = components.Image.ListImages(versions[i].GetId())
+			for j := 0; j < len(images); j++ {
+				dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
+				dataServiceVersionBuildMap[versions[i].GetName()] = append(dataServiceVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
+			}
+		}
+	}
+
+	for key := range dataServiceVersionBuildMap {
+		logrus.Infof("Version - %v,Build - %v", key, dataServiceVersionBuildMap[key])
+	}
+	for key := range dataServiceIDImagesMap {
+		logrus.Infof("DS Verion id - %v,DS Image id - %v", key, dataServiceIDImagesMap[key])
+	}
+	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
+}
+
+// GetVersionsImage returns the required Image of dataservice version
+func GetVersionsImageNamespace(dsVersion string, dsBuild string, dataServiceID string, getAllImages bool) (map[string][]string, map[string][]string, error) {
+	var versions []pds.ModelsVersion
+	var images []pds.ModelsImage
+	var dataServiceIDImagesMap map[string][]string = make(map[string][]string, 0)
+	var dataServiceVersionBuildMap map[string][]string = make(map[string][]string, 0)
+
+	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	isVersionAvailable = false
+	isBuildAvailable = false
+	for i := 0; i < len(versions); i++ {
+		if (*versions[i].Enabled) && (*versions[i].Name == dsVersion) {
+			images, _ = components.Image.ListImages(versions[i].GetId())
+			for j := 0; j < len(images); j++ {
+				if !getAllImages && *images[j].Build == dsBuild {
+					dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
+					dataServiceVersionBuildMap[versions[i].GetName()] = append(dataServiceVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
+					isBuildAvailable = true
+					break //remove this break to deploy all images for selected version
+				} else if getAllImages {
+					dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
+					dataServiceVersionBuildMap[versions[i].GetName()] = append(dataServiceVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
+					isBuildAvailable = true
+				}
+			}
+			isVersionAvailable = true
+			break
+		}
+	}
+	if !(isVersionAvailable && isBuildAvailable) {
+		logrus.Errorf("Version/Build passed is not available")
+	}
+
+	for key := range dataServiceVersionBuildMap {
+		logrus.Infof("Version - %v,Build - %v", key, dataServiceVersionBuildMap[key])
+	}
+
+	for key := range dataServiceIDImagesMap {
+		logrus.Infof("DS Verion id - %v, DS Image id - %v", key, dataServiceIDImagesMap[key])
+	}
+	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
+}
+
+// DeployDataServices deploys all dataservices, versions and images that are supported
+func DeployDataServicesNamespace(supportedDataServicesMap map[string]string, projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID string,
+	dataServiceNameDefaultAppConfigMap map[string]string, replicas int32, serviceType string, dataServiceDefaultResourceTemplateIDMap map[string]string,
+	storageTemplateID string, deployAllVersions, getAllImages bool, dsVersion, dsBuild string, namespace string) (map[string][]*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+
+	currentReplicas = replicas
+	var dataServiceImageMap map[string][]string = make(map[string][]string, 0)
+	var deploymentsMap map[string][]*pds.ModelsDeployment = make(map[string][]*pds.ModelsDeployment, 0)
+
+	for ds, id := range supportedDataServicesMap {
+		logrus.Infof("dataService: %v ", ds)
+		logrus.Infof(`Request params:
+				projectID- %v deploymentTargetID - %v,
+				dnsZone - %v,deploymentName - %v,namespaceID - %v
+				App config ID - %v,
+				num pods- %v, service-type - %v
+				Resource template id - %v, storageTemplateID - %v`,
+			projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceNameDefaultAppConfigMap[ds],
+			replicas, serviceType, dataServiceDefaultResourceTemplateIDMap[ds], storageTemplateID)
+
+		if ds == zookeeper && replicas != 3 {
+			logrus.Warnf("Zookeeper replicas cannot be %v, it should be 3", replicas)
+			currentReplicas = 3
+		}
+		if ds == redis {
+			logrus.Infof("Replicas passed %v", replicas)
+			logrus.Warnf("Redis deployment replicas should be any one of the following values 1, 6, 8 and 10")
+		}
+
+		if !deployAllVersions {
+			logrus.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
+			_, dataServiceImageMap, err = GetVersionsImageNamespace(dsVersion, dsBuild, id, getAllImages)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+		} else {
+			_, dataServiceImageMap, err = GetAllVersionsImagesNamespace(id)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+		}
+
+		for version := range dataServiceImageMap {
+			for index := range dataServiceImageMap[version] {
+				imageID := dataServiceImageMap[version][index]
+				logrus.Infof("VersionID %v ImageID %v", version, imageID)
+				components = pdsapi.NewComponents(apiClient)
+				deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
+					deploymentTargetID,
+					dnsZone,
+					deploymentName,
+					namespaceID,
+					dataServiceNameDefaultAppConfigMap[ds],
+					imageID,
+					currentReplicas,
+					serviceType,
+					dataServiceDefaultResourceTemplateIDMap[ds],
+					storageTemplateID)
+
+				if err != nil {
+					logrus.Warnf("An Error Occured while creating deployment %v", err)
+					return nil, nil, nil, err
+				}
+				err = ValidateDataServiceDeploymentNamespace(deployment, namespace)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				deploymentsMap[ds] = append(deploymentsMap[ds], deployment)
+			}
+		}
+	}
+	return deploymentsMap, dataServiceImageMap, dataServiceVersionBuildMap, nil
+}
