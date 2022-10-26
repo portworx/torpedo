@@ -668,13 +668,10 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func DeployInANamespaceAndVerify(nname string, namespaceID string, cleanup []*pds.ModelsDeployment) {
+func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 
+	var cleanup []string
 	var deployments map[string][]*pds.ModelsDeployment = make(map[string][]*pds.ModelsDeployment, 0)
-
-	logrus.Infof("DataService NameID Map: %v", dataServiceNameIDMap)
-	logrus.Infof("DataService appconfig Map: %v", dataServiceNameDefaultAppConfigMap)
-	logrus.Infof("DataService default resource template: %v", dataServiceDefaultResourceTemplateIDMap)
 
 	deployments, _, _, err := pdslib.DeployDataServicesNamespace(dataServiceNameIDMap, projectID,
 		deploymentTargetID,
@@ -720,12 +717,14 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string, cleanup []*pd
 				Expect(storageOp.Replicas).Should(Equal(int32(repl)))
 				Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
 				Expect(config.Spec.Nodes).Should(Equal(replicas))
-
-				cleanup = append(cleanup, deploy[index])
+				cleanup = append(cleanup, deploy[index].GetId())
 			}
+
 		}
 
 	})
+
+	return cleanup
 }
 
 var _ = Describe("MultipleNamespacesDeploy", func() {
@@ -761,20 +760,12 @@ var _ = Describe("MultipleNamespacesDeploy", func() {
 			Expect(err).NotTo(HaveOccurred())
 			namespaces = append(namespaces, ns)
 		}
-		defer func() {
-			for _, namespace := range namespaces {
-				logrus.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
-				err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
-				Expect(err).NotTo(HaveOccurred())
-			}
-		}()
 
 		logrus.Info("Waiting for created namespaces to be available in PDS")
 		time.Sleep(10 * time.Second)
 
-		var cleanup []*pds.ModelsDeployment
 		Step("Deploy All Supported Data Services", func() {
-
+			var cleanupall []string
 			for _, namespace := range namespaces {
 
 				logrus.Infof("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
@@ -782,15 +773,27 @@ var _ = Describe("MultipleNamespacesDeploy", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newNamespaceID).NotTo(BeEmpty())
 
-				DeployInANamespaceAndVerify(namespace.Name, newNamespaceID, cleanup)
+				deps := DeployInANamespaceAndVerify(namespace.Name, newNamespaceID)
+				cleanupall = append(cleanupall, deps...)
 
 			}
+
+			logrus.Infof("List of created deployments: %v ", cleanupall)
+
+			defer func() {
+				Step("Delete created deployments")
+				for _, dep := range cleanupall {
+					_, err := pdslib.DeleteDeployment(dep)
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}()
 
 		})
 
 		defer func() {
-			for _, dep := range cleanup {
-				_, err := pdslib.DeleteDeployment(dep.GetId())
+			for _, namespace := range namespaces {
+				logrus.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
+				err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		}()
