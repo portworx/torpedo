@@ -2,7 +2,6 @@ package tests
 
 import (
 	"net/http"
-	"os"
 	"strconv"
 	"testing"
 
@@ -668,8 +667,103 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
+var _ = Describe("{ResizeDataServicePVC}", func() {
+	JustBeforeEach(func() {
+		if !DeployAllDataService {
+			supportedDataServices = append(supportedDataServices, pdslib.GetAndExpectStringEnvVar(envDataService))
+			for _, ds := range supportedDataServices {
+				logrus.Infof("supported dataservices %v", ds)
+			}
+			Step("Get the resource and app config template for supported dataservice", func() {
+				dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap, err = pdslib.GetResourceTemplate(tenantID, supportedDataServices)
+				Expect(err).NotTo(HaveOccurred())
+
+				dataServiceNameDefaultAppConfigMap, err = pdslib.GetAppConfTemplate(tenantID, dataServiceNameIDMap)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
+			})
+		}
+	})
+
+	It("deploy Dataservices", func() {
+		logrus.Info("Create dataservices without backup.")
+		Step("Deploy Data Services", func() {
+			deployments, _, _, err := pdslib.DeployDataServices(dataServiceNameIDMap, projectID,
+				deploymentTargetID,
+				dnsZone,
+				deploymentName,
+				namespaceID,
+				dataServiceNameDefaultAppConfigMap,
+				replicas,
+				serviceType,
+				dataServiceDefaultResourceTemplateIDMap,
+				storageTemplateID,
+				DeployAllVersions,
+				DeployAllImages,
+				dsVersion,
+				dsBuild,
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deployments).NotTo(BeEmpty())
+			defer func() {
+				Step("Delete created deployments")
+				for _, dep := range deployments {
+					for index := range dep {
+						resp, err := pdslib.DeleteDeployment(dep[index].GetId())
+						Expect(err).NotTo(HaveOccurred())
+						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					}
+				}
+			}()
+
+			namespace := pdslib.GetAndExpectStringEnvVar("NAMESPACE")
+			Step("Resize PVC transparently from K8s", func() {
+				for ds, dep := range deployments {
+					for index := range dep {
+						pvcList, err1 := pdslib.GetAllPVCsForStatefulSet(dep[index], ds, namespace)
+						Expect(err1).NotTo(HaveOccurred())
+						err2 := pdslib.ResizePVCsForStatefulSet(dep[index], pvcList, namespace, 100)
+						Expect(err2).NotTo(HaveOccurred())
+					}
+				}
+			})
+
+			Step("Validate Storage Configurations", func() {
+				for ds, deployment := range deployments {
+					for index := range deployment {
+						logrus.Infof("data service deployed %v ", ds)
+						resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
+						Expect(err).NotTo(HaveOccurred())
+						logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+						logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+						logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+						logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+						logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+						logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
+						logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+
+						Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+						Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+						Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+						Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+						Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+						repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+						Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+						Expect(config.Spec.Nodes).Should(Equal(replicas))
+
+					}
+				}
+			})
+
+		})
+	})
+
+})
+
+// func TestMain(m *testing.M) {
+// 	// call flag.Parse() here if TestMain uses flags
+// 	ParseFlags()
+// 	os.Exit(m.Run())
+// }

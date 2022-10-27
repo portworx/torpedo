@@ -19,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -1014,4 +1015,75 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 
 	return resourceTemp, storageOp, config, nil
 
+}
+
+func GetAllPVCsForStatefulSet(deployment *pds.ModelsDeployment, dataservice string, namespace string) (*corev1.PersistentVolumeClaimList, error) {
+	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), GetAndExpectStringEnvVar("NAMESPACE"))
+	if err != nil {
+		logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+		return nil, err
+	}
+	err = k8sApps.ValidatePVCsForStatefulSet(ss, timeOut, timeInterval)
+	if err != nil {
+		logrus.Errorf("An error occured while validating pvcs of statefulsets %v ", err)
+		return nil, err
+	}
+	pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+	if err != nil {
+		logrus.Warnf("An Error Occured while getting pvcs of statefulsets %v", err)
+		return nil, err
+	}
+	return pvcList, nil
+}
+
+func ResizePVCsForStatefulSet(deployment *pds.ModelsDeployment, pvclist *corev1.PersistentVolumeClaimList, namespace string, newSize int64) error {
+	for _, pvc := range pvclist.Items {
+		newPvc := &corev1.PersistentVolumeClaim{
+			TypeMeta:   pvc.TypeMeta,
+			ObjectMeta: *pvc.ObjectMeta.DeepCopy(),
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      pvc.Spec.DeepCopy().AccessModes,
+				StorageClassName: pvc.Spec.DeepCopy().StorageClassName,
+				VolumeName:       pvc.Spec.DeepCopy().VolumeName,
+				VolumeMode:       pvc.Spec.DeepCopy().VolumeMode,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						"storage": *resource.NewQuantity(newSize, "G"),
+					},
+				},
+			},
+			Status: *pvc.Status.DeepCopy(),
+		}
+
+		err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+			err := k8sCore.DeletePersistentVolumeClaim(pvc.Name, namespace)
+			if err != nil {
+				logrus.Warnf("The PVC %v was not deleted yet, trying again...", pvc.Name)
+				return false, err
+			}
+			return true, nil
+		})
+
+		if err != nil {
+			logrus.Errorf("Failed to delete pvc %v because %v", pvc.Name, err)
+			return err
+		}
+
+		err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+			_, err := k8sCore.CreatePersistentVolumeClaim(newPvc)
+			if err != nil {
+				logrus.Warnf("The PVC %v was not created yet, trying again...", newPvc.Name)
+				return false, err
+			}
+			return true, nil
+		})
+
+		if err != nil {
+			logrus.Errorf("Failed to create new pvc %v because %v", newPvc.Name, err)
+			return err
+		}
+
+	}
+
+	return nil
 }
