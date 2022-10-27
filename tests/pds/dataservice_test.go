@@ -2,6 +2,7 @@ package tests
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 	"testing"
 
@@ -782,20 +783,6 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				}
 			}()
 
-			/*
-				Deploy a dataservice
-
-				Start a workload on the deployed dataservice.
-
-				For each pod of the dataservice, run kubectl get $pod -o wide, and get the node where the pds pod’s pv is located. (nodeList)
-
-				For each node in nodeList, label the node px/service=stop and then label it with px/service=start
-
-				Verify: The PDS service is down for sometime, but comes up eventually and is healthy.
-
-				Cleanup: Delete the dataservice
-
-			*/
 			namespace := pdslib.GetAndExpectStringEnvVar(envNamespace)
 
 			var deploymentPods []corev1.Pod
@@ -886,8 +873,8 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 
 })
 
-// func TestMain(m *testing.M) {
-// 	// call flag.Parse() here if TestMain uses flags
-// 	ParseFlags()
-// 	os.Exit(m.Run())
-// }
+func TestMain(m *testing.M) {
+	// call flag.Parse() here if TestMain uses flags
+	ParseFlags()
+	os.Exit(m.Run())
+}
