@@ -104,6 +104,7 @@ var _ = BeforeSuite(func() {
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(ControlPlaneURL, ClusterType, TargetClusterName, AccountName)
 		Expect(err).NotTo(HaveOccurred())
+		logrus.Infof("Get tenant ID: %v", tenantID)
 
 		DataService = pdslib.GetAndExpectStringEnvVar(envDataService)
 		Expect(DataService).NotTo(BeEmpty(), "ENV "+envDataService+" is not set")
@@ -722,7 +723,7 @@ var _ = Describe("{ResizeDataServicePVC}", func() {
 					for index := range dep {
 						pvcList, err1 := pdslib.GetAllPVCsForStatefulSet(dep[index], ds, namespace)
 						Expect(err1).NotTo(HaveOccurred())
-						err2 := pdslib.ResizePVCsForStatefulSet(dep[index], pvcList, namespace, 100)
+						err2 := pdslib.ResizePVCsForStatefulSet(dep[index], pvcList, namespace, "200G")
 						Expect(err2).NotTo(HaveOccurred())
 					}
 				}
@@ -744,6 +745,8 @@ var _ = Describe("{ResizeDataServicePVC}", func() {
 
 						Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
 						Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+						// TODO: This still shows 100G as the value for storage requests, even after the UI reflects available
+						// storage as 200G. There needs to be a way to query the UI for current available storage metrics and validate it.
 						Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
 						Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
 						Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))

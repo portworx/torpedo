@@ -1018,7 +1018,7 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 }
 
 func GetAllPVCsForStatefulSet(deployment *pds.ModelsDeployment, dataservice string, namespace string) (*corev1.PersistentVolumeClaimList, error) {
-	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), GetAndExpectStringEnvVar("NAMESPACE"))
+	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
 	if err != nil {
 		logrus.Warnf("An Error Occured while getting statefulsets %v", err)
 		return nil, err
@@ -1036,52 +1036,56 @@ func GetAllPVCsForStatefulSet(deployment *pds.ModelsDeployment, dataservice stri
 	return pvcList, nil
 }
 
-func ResizePVCsForStatefulSet(deployment *pds.ModelsDeployment, pvclist *corev1.PersistentVolumeClaimList, namespace string, newSize int64) error {
+func ResizePVCsForStatefulSet(deployment *pds.ModelsDeployment, pvclist *corev1.PersistentVolumeClaimList, namespace string, newSize string) error {
 	for _, pvc := range pvclist.Items {
+
+		pvc.Labels["createdby"] = "torpedo"
+
 		newPvc := &corev1.PersistentVolumeClaim{
-			TypeMeta:   pvc.TypeMeta,
-			ObjectMeta: *pvc.ObjectMeta.DeepCopy(),
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: pvc.APIVersion,
+				Kind:       pvc.Kind,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        pvc.Name,
+				Namespace:   pvc.Namespace,
+				Labels:      pvc.Labels,
+				Annotations: pvc.Annotations,
+				ClusterName: pvc.ClusterName,
+			},
 			Spec: corev1.PersistentVolumeClaimSpec{
-				AccessModes:      pvc.Spec.DeepCopy().AccessModes,
-				StorageClassName: pvc.Spec.DeepCopy().StorageClassName,
-				VolumeName:       pvc.Spec.DeepCopy().VolumeName,
-				VolumeMode:       pvc.Spec.DeepCopy().VolumeMode,
+				AccessModes:      pvc.Spec.AccessModes,
+				StorageClassName: pvc.Spec.StorageClassName,
+				VolumeName:       pvc.Spec.VolumeName,
+				VolumeMode:       pvc.Spec.VolumeMode,
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
-						"storage": *resource.NewQuantity(newSize, "G"),
+						"storage": resource.MustParse(newSize),
 					},
 				},
 			},
-			Status: *pvc.Status.DeepCopy(),
 		}
 
+		logrus.Infof("Spec for the pvc update: %v", newPvc)
+
 		err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-			err := k8sCore.DeletePersistentVolumeClaim(pvc.Name, namespace)
+			updated, err := k8sCore.UpdatePersistentVolumeClaim(newPvc)
 			if err != nil {
-				logrus.Warnf("The PVC %v was not deleted yet, trying again...", pvc.Name)
-				return false, err
+				logrus.Infof("Error while trying to update pvc %v", err)
+				logrus.Warnf("The PVC %v was not updated yet, trying again...", pvc.Name)
+				return false, nil
 			}
+			logrus.Infof("The updated PVC is %v", updated.String())
 			return true, nil
 		})
 
 		if err != nil {
-			logrus.Errorf("Failed to delete pvc %v because %v", pvc.Name, err)
+			logrus.Errorf("Failed to update pvc %v because %v", pvc.Name, err)
 			return err
 		}
 
-		err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-			_, err := k8sCore.CreatePersistentVolumeClaim(newPvc)
-			if err != nil {
-				logrus.Warnf("The PVC %v was not created yet, trying again...", newPvc.Name)
-				return false, err
-			}
-			return true, nil
-		})
-
-		if err != nil {
-			logrus.Errorf("Failed to create new pvc %v because %v", newPvc.Name, err)
-			return err
-		}
+		// It takes time for the update to reflect on the PDS UI
+		time.Sleep(1 * time.Minute)
 
 	}
 
