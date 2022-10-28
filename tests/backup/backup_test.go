@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -52,11 +53,11 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 }
 
 //This testcase verifies if the backup pods are in Ready state or not
+//Also verifies if backup CRDs are registered or not
 var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
 		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil)
-
 	})
 	It("Backup Cluster Verification", func() {
 		Step("Check the status of backup pods", func() {
@@ -64,7 +65,15 @@ var _ = Describe("{BackupClusterVerification}", func() {
 			status := ValidateBackupCluster()
 			dash.VerifyFatal(status, true, "Validating backup pod")
 		})
-		//Will add CRD verification here
+		Step("Check the CRDS for backup", func() {
+			dash.Info("Check the CRDS for backup")
+			for _, crd := range backup_crd_list {
+				err := apiextensions.Instance().ValidateCRD(crd, time.Duration(5)*time.Minute, time.Duration(1)*time.Minute)
+				if err != nil {
+					dash.VerifyFatal(err, nil, "Verifying backup CRDS")
+				}
+			}
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()

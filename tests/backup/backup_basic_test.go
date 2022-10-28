@@ -44,6 +44,7 @@ var (
 		"cassandra": {"pre_action_list": "nodetool flush -- keyspace1;", "post_action_list": "nodetool verify -- keyspace1;", "background": "false", "run_in_single_pod": "false"},
 		"postgres":  {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U '$POSTGRES_USER' -c 'CHECKPOINT';", "background": "false", "run_in_single_pod": "false"},
 	}
+	backup_crd_list = []string{"backuplocations.stork.libopenstorage.org", "applicationbackups.stork.libopenstorage.org", "applicationbackupschedules.stork.libopenstorage.org"}
 )
 
 func TestBasic(t *testing.T) {
