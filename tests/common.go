@@ -253,6 +253,8 @@ const (
 	pxctlCDListCmd = "pxctl cd list"
 )
 
+var pxRuntimeOpts string
+
 const (
 	post_install_hook_pod = "pxcentral-post-install-hook"
 	quick_maintenance_pod = "quick-maintenance-repo"
@@ -1785,7 +1787,10 @@ func PerformSystemCheck() {
 					log.Info("an error occurred, collecting bundle")
 					CollectSupport()
 				}
-				dash.VerifySafely(err, nil, fmt.Sprintf("Verify if an error occurred, Err: %v", err))
+				if err != nil {
+					dash.VerifySafely(err, nil, fmt.Sprintf("Error occurred while checking for core on node %s, Err: %v", n.Name, err))
+				}
+
 				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
 			}
 		})
@@ -3916,6 +3921,7 @@ func ParseFlags() {
 	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
+	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "run time options for cluster update")
 	flag.Parse()
 
 	log = logInstance.GetLogInstance()
@@ -4709,6 +4715,31 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		return false
 	}
 	return true
+}
+
+func updatePxRuntimeOpts() error {
+	if pxRuntimeOpts != "" {
+		dash.Infof("Setting run time options: %s", pxRuntimeOpts)
+		optionsMap := make(map[string]string)
+		runtimeOpts, err := splitCsv(pxRuntimeOpts)
+		if err != nil {
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Error parsing run time options, err : %v", err))
+		}
+
+		for _, opt := range runtimeOpts {
+			if !strings.Contains(opt, "=") {
+				dash.VerifyFatal(false, true, fmt.Sprintf("Given run time option is not in expected format key=val, Actual : %v", opt))
+			}
+			optArr := strings.Split(opt, "=")
+			optionsMap[optArr[0]] = optArr[1]
+		}
+		currNode := node.GetWorkerNodes()[0]
+		err = Inst().V.SetClusterRunTimeOpts(currNode, optionsMap)
+		return err
+	} else {
+		log.Info("No run time options provided to update")
+	}
+	return nil
 }
 
 //StartTorpedoTest starts the logging for torpedo test
