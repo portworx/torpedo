@@ -220,7 +220,7 @@ const (
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
-	defaultLogLocation                    = "/testresults/"
+	defaultLogLocation                    = "/Users/marunachalam/Desktop"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
 	defaultAppScaleFactor                 = 1
@@ -3643,7 +3643,7 @@ type Torpedo struct {
 	M                                   monitor.Driver
 	SpecDir                             string
 	AppList                             []string
-	PDSParams                           []byte
+	PDSParams                           string
 	LogLoc                              string
 	LogLevel                            string
 	Logger                              *logrus.Logger
@@ -3684,7 +3684,7 @@ type Torpedo struct {
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, pdsParam, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -3727,7 +3727,7 @@ func ParseFlags() {
 	var torpedoJobName string
 	var torpedoJobType string
 
-	flag.String(pdsParamCliFlag, "", "PDS Test Params")
+	flag.StringVar(&pdsParam, pdsParamCliFlag, "", "PDS Test Params")
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&m, monitorDriverCliFlag, defaultMonitorDriver, "Name of the prometheus driver to use")
@@ -3802,10 +3802,10 @@ func ParseFlags() {
 		log.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
 	}
 
-	pdsparameters, err := ioutil.ReadFile(pdsParamCliFlag)
-	if err != nil {
-		log.Fatalf("File error: %v\n", err)
-	}
+	// pdsparameters, err := ioutil.ReadFile(pdsParam)
+	// if err != nil {
+	// 	log.Fatalf("File error: %v\n", err)
+	// }
 
 	sched.Init(time.Second)
 
@@ -3896,7 +3896,7 @@ func ParseFlags() {
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
-				PDSParams:                           pdsparameters,
+				PDSParams:                           pdsParam,
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
@@ -3979,7 +3979,7 @@ func SetTorpedoFileOutput(tpLog *logrus.Logger, f *os.File) {
 func CreateLogFile(filename string) *os.File {
 	var filePath string
 	if strings.Contains(filename, "/") {
-		filePath = filename
+		filePath = "/Users/marunachalam/Desktop/torpedo.log"
 	} else {
 		filePath = fmt.Sprintf("%s/%s", Inst().LogLoc, filename)
 	}
