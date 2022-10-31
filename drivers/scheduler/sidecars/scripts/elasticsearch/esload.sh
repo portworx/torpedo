@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -x
+
 pid=0
+
 esload() {
 	while true; do
-		python elasticsearch_readupdate.py "$@"
+		python elasticsearch-stress-test.py "$@"
 		sleep 5
 	done
 }
@@ -30,3 +32,4 @@ while true
 do
 	tail -f /dev/null & wait "${!}"
 done
+

@@ -18,14 +18,20 @@ spec:
       containers:
       - name: es-load-readupdate
         image: docker.pwx.dev.purestorage.com/portworx/elasticsearch_read_update
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         env:
         - name: POD_NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        readinessProbe:
+          exec:
+            command:
+            - /bin/bash
+            - -c
+            - curl GET "http://esnode-1.elasticsearch-api.$POD_NAMESPACE.svc.cluster.local:9200/_cluster/health?wait_for_status=yellow&timeout=50s" | egrep yellow\|green
         command:
           - /bin/bash
           - -c
-          - "./esreadupdate.sh --es_address esnode-0.elasticsearch-api.$POD_NAMESPACE.svc.cluster.local:9200"
+          - "./esreadupdate.sh --es_address esnode-1.elasticsearch-api.$POD_NAMESPACE.svc.cluster.local:9200"
       restartPolicy: Always

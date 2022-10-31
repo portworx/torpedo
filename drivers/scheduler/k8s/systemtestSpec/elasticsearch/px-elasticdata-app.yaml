@@ -37,8 +37,8 @@ data:
     discovery.zen.minimum_master_nodes: 1
     xpack.security.enabled: false
     xpack.monitoring.enabled: false
-    indices.memory.index_buffer_size: 30%
-  ES_JAVA_OPTS: -Xms8196m -Xmx8196m
+    indices.memory.index_buffer_size: 20%
+  ES_JAVA_OPTS: -Xms2048m -Xmx2048m
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -57,6 +57,16 @@ spec:
       labels:
         app: es-cluster
     spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: "app"
+                  operator: In
+                  values:
+                  - es-cluster
+            topologyKey: "kubernetes.io/hostname"
       schedulerName: stork
       securityContext:
         fsGroup: 1000
@@ -71,10 +81,11 @@ spec:
       - name: elasticsearch
         resources:
           requests:
-            memory: 8Gi
+            memory: 4Gi
             cpu: "1"
           limits:
-            cpu: "2"
+            memory: 4Gi
+            cpu: "4"
         securityContext:
           privileged: true
           runAsUser: 1000
@@ -142,8 +153,8 @@ spec:
     spec:
       containers:
       - name: es-load
-        image: portworx/torpedo-esload:1.1
-        imagePullPolicy: IfNotPresent
+        image: docker.pwx.dev.purestorage.com/portworx/elasticsearch_read_update
+        imagePullPolicy: Always
         env:
         - name: POD_NAMESPACE
           valueFrom:
@@ -152,6 +163,6 @@ spec:
         command:
           - /bin/bash
           - -c
-          - "./esload.sh --es_address esnode-0.elasticsearch-api.$POD_NAMESPACE.svc.cluster.local:9200 --indices 10 --documents 750 --seconds 172800 --not-green --clients 3 --max-fields-per-document 200 --no-cleanup"
+          - "./esload.sh --es_address esnode-0.elasticsearch-api.$POD_NAMESPACE.svc.cluster.local:9200 --indices 5 --documents 1000 --seconds 272800 --not-green --clients 3 --max-fields-per-document 200 --no-cleanup --bulk-size 500"
       restartPolicy: Always
 

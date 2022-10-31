@@ -21,8 +21,13 @@ spec:
       containers:
         - name: es-exporter
           image: quay.io/prometheuscommunity/elasticsearch-exporter:latest
+          env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace 
           args:
-            - '--es.uri=http://esnode-0.elasticsearch-api.elasticsearch.svc.cluster.local:9200'
+            - '--es.uri=http://esnode-0.elasticsearch-api.es-for-test4.svc.cluster.local:9200'
             - --es.all
             - --es.indices
           ports:
