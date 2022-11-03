@@ -332,7 +332,6 @@ func ReadParams(filename string) (*Parameter, error) {
 	}
 
 	logrus.Infof("Reading params from %v ", filename)
-	time.Sleep(100000 * time.Minute)
 	file, err := ioutil.ReadFile(filename)
 	if err != nil {
 

@@ -1,27 +1,9 @@
 {
   "DataServiceToTest": [
     {
-      "Name": "RabbitMQ",
-      "Version": "3.10.9",
-      "Image": "716b7b8",
-      "Replicas": 1,
-      "ScaleReplicas": 6,
-      "OldVersion": "3.10.7",
-      "OldImage": "862425e"
-    },
-    {
-      "Name": "MySQL",
-      "Version": "8.0.30",
-      "Image": "a7bc638",
-      "Replicas": 2,
-      "ScaleReplicas": 6,
-      "OldVersion": "8.0.30",
-      "OldImage": "a7bc638"
-    },
-    {
       "Name": "PostgreSQL",
       "Version": "14.5",
-      "Image": "d69b376",
+      "Image": "25852e0",
       "Replicas": 3,
       "ScaleReplicas": 6,
       "OldVersion": "14.4",
