@@ -3192,7 +3192,7 @@ func GetSourceClusterConfigPath() (string, error) {
 		return "", fmt.Errorf(`Failed to get source config path.
 				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
-	logrus.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
+	log.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]), nil
 }
 
@@ -3208,7 +3208,7 @@ func GetDestinationClusterConfigPath() (string, error) {
 		return "", fmt.Errorf(`Failed to get source config path.
 				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
-	logrus.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
+	log.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
 }
 
