@@ -4678,7 +4678,6 @@ func ValidateBackupClusterCRD() {
 		dash.VerifyFatal(err, nil, "Verfiying setting dest config path")
 	}
 	for _, crd := range backup_cluster_crd_list {
-		fmt.Println(" \n\n dest crd is ", crd)
 		err := bkpapiExt.ValidateCRD(crd, time.Duration(1)*time.Minute, time.Duration(1)*time.Minute)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup CRD on backup cluster: %s", crd))
 	}
