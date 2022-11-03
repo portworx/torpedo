@@ -524,8 +524,8 @@ func GetnameSpaceID(namespace string, deploymentTargetID string) (string, error)
 	return namespaceID, nil
 }
 
-// NewGetVersionsImage returns the required Image of dataservice version
-func NewGetVersionsImage(dsVersion string, dsBuild string, dataServiceID string, getAllImages bool) (string, string, map[string][]string, error) {
+// GetVersionsImage returns the required Image of dataservice version
+func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (string, string, map[string][]string, error) {
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
 
@@ -539,7 +539,7 @@ func NewGetVersionsImage(dsVersion string, dsBuild string, dataServiceID string,
 		if (*versions[i].Enabled) && (*versions[i].Name == dsVersion) {
 			images, _ = components.Image.ListImages(versions[i].GetId())
 			for j := 0; j < len(images); j++ {
-				if !getAllImages && *images[j].Build == dsBuild {
+				if *images[j].Build == dsBuild {
 					versionID = versions[i].GetId()
 					imageID = images[j].GetId()
 					dataServiceVersionBuildMap[versions[i].GetName()] = append(dataServiceVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
@@ -555,50 +555,6 @@ func NewGetVersionsImage(dsVersion string, dsBuild string, dataServiceID string,
 		logrus.Errorf("Version/Build passed is not available")
 	}
 	return versionID, imageID, dataServiceVersionBuildMap, nil
-}
-
-// GetVersionsImage returns the required Image of dataservice version
-func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string, getAllImages bool) (map[string][]string, map[string][]string, error) {
-	var versions []pds.ModelsVersion
-	var images []pds.ModelsImage
-
-	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
-	if err != nil {
-		return nil, nil, err
-	}
-	isVersionAvailable = false
-	isBuildAvailable = false
-	for i := 0; i < len(versions); i++ {
-		if (*versions[i].Enabled) && (*versions[i].Name == dsVersion) {
-			images, _ = components.Image.ListImages(versions[i].GetId())
-			for j := 0; j < len(images); j++ {
-				if !getAllImages && *images[j].Build == dsBuild {
-					dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
-					dataServiceVersionBuildMap[versions[i].GetName()] = append(dataServiceVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
-					isBuildAvailable = true
-					break //remove this break to deploy all images for selected version
-				} else if getAllImages {
-					dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
-					dataServiceVersionBuildMap[versions[i].GetName()] = append(dataServiceVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
-					isBuildAvailable = true
-				}
-			}
-			isVersionAvailable = true
-			break
-		}
-	}
-	if !(isVersionAvailable && isBuildAvailable) {
-		logrus.Errorf("Version/Build passed is not available")
-	}
-
-	for key := range dataServiceVersionBuildMap {
-		logrus.Infof("Version - %v,Build - %v", key, dataServiceVersionBuildMap[key])
-	}
-
-	for key := range dataServiceIDImagesMap {
-		logrus.Infof("DS Verion id - %v, DS Image id - %v", key, dataServiceIDImagesMap[key])
-	}
-	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
 }
 
 // GetAllVersionsImages returns all the versions and Images of dataservice
@@ -1012,9 +968,9 @@ func GetDataServiceID(ds string) string {
 }
 
 // DeployDataServices deploys all dataservices, versions and images that are supported
-func DeployDataServices(ds string, projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID string,
-	dataServiceDefaultAppConfigID string, replicas int32, serviceType string, dataServiceDefaultResourceTemplateID string,
-	storageTemplateID string, deployAllVersions, getAllImages bool, dsVersion, dsBuild, namespace string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceDefaultAppConfigID string,
+	replicas int32, serviceType, dataServiceDefaultResourceTemplateID, storageTemplateID, dsVersion,
+	dsBuild, namespace string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 
 	currentReplicas = replicas
 
@@ -1052,12 +1008,10 @@ func DeployDataServices(ds string, projectID, deploymentTargetID, dnsZone, deplo
 		delete(dataServiceVersionBuildMap, version)
 	}
 
-	if !deployAllVersions {
-		logrus.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
-		versionID, imageID, dataServiceVersionBuildMap, err = NewGetVersionsImage(dsVersion, dsBuild, id, getAllImages)
-		if err != nil {
-			return nil, nil, nil, err
-		}
+	logrus.Infof("Getting versionID  for Data service version %s and buildID for %s ", dsVersion, dsBuild)
+	versionID, imageID, dataServiceVersionBuildMap, err = GetVersionsImage(dsVersion, dsBuild, id)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	logrus.Infof("VersionID %v ImageID %v", versionID, imageID)
