@@ -4,6 +4,14 @@ if [ -n "${VERBOSE}" ]; then
     VERBOSE="--v"
 fi
 
+if [ -z "${ENABLE_DASH}" ]; then
+    ENABLE_DASH=true
+fi
+
+if [ -z "${TESTSET_ID}" ]; then
+    TESTSET_ID="0"
+fi
+
 if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
@@ -31,6 +39,7 @@ fi
 if [ -z "${CHAOS_LEVEL}" ]; then
     CHAOS_LEVEL="5"
 fi
+
 if [ -z "${MIN_RUN_TIME}" ]; then
     MIN_RUN_TIME="0"
 fi
@@ -91,6 +100,10 @@ fi
 
 if [ -z "${PROVISIONER}" ]; then
     PROVISIONER="portworx"
+fi
+
+if [ -z "${IS_HYPER_CONVERGED}" ]; then
+    IS_HYPER_CONVERGED=true
 fi
 
 CONFIGMAP=""
@@ -163,6 +176,14 @@ if [ -z "$AWS_REGION" ]; then
     echo "Using default AWS_REGION of ${AWS_REGION}"
 fi
 
+if [ -z "$TORPEDO_JOB_TYPE"]; then
+    TORPEDO_JOB_TYPE="functional"
+fi
+
+if [ -z "$TORPEDO_JOB_NAME"]; then
+    TORPEDO_JOB_NAME="torpedo-daily-job"
+fi
+
 for i in $@
 do
 case $i in
@@ -174,32 +195,13 @@ case $i in
 esac
 done
 
-if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
-    TEST_SUITE='
-            "bin/asg.test",
-            "bin/autopilot.test",
-            "bin/basic.test",
-            "bin/backup.test",
-            "bin/reboot.test",
-            "bin/upgrade.test",
-            "bin/drive_failure.test",
-            "bin/volume_ops.test",
-            "bin/sched.test",
-            "bin/scheduler_upgrade.test",
-            "bin/node_decommission.test",
-            "bin/license.test",
-            "bin/upgrade_cluster.test",
-            "bin/sharedv4.test",
-            "bin/telemetry.test",
-            "bin/upgrade_cluster.test",
-            "bin/pxcentral.test",
-            "bin/storage_pool.test",
-            "bin/openshift.test",
-'
-else
-  TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
+echo "checking if we need to override test suite: ${TEST_SUITE}"
+
+if [[ "$TEST_SUITE" != *"pds.test"* ]]; then
+    TEST_SUITE='"bin/basic.test"'
 fi
-echo "Using list of test suite(s): ${TEST_SUITE}"
+
+echo "Using test suite: ${TEST_SUITE}"
 
 if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
     AUTOPILOT_UPGRADE_VERSION=""
@@ -365,6 +367,8 @@ spec:
   - key: node-role.kubernetes.io/controlplane
     operator: Equal
     value: "true"
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
   - key: node-role.kubernetes.io/etcd
     operator: Equal
     value: "true"
@@ -409,7 +413,7 @@ spec:
             "$VERBOSE",
             "$FOCUS_ARG",
             "$SKIP_ARG",
-            $TEST_SUITE
+            $TEST_SUITE,
             "--",
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
@@ -419,6 +423,7 @@ spec:
             "--log-level", "$LOGLEVEL",
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
+            "--hyper-converged=$IS_HYPER_CONVERGED",
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
             "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
             "--chaos-level", "$CHAOS_LEVEL",
@@ -451,6 +456,16 @@ spec:
             "--jira-username=$JIRA_USERNAME",
             "--jira-token=$JIRA_TOKEN",
             "--jira-account-id=$JIRA_ACCOUNT_ID",
+            "--user=$USER",
+            "--enable-dash=$ENABLE_DASH",
+            "--test-desc=$TEST_DESCRIPTION",
+            "--test-type=$TEST_TYPE",
+            "--test-tags=$TEST_TAGS",
+            "--testset-id=$TESTSET_ID",
+            "--branch=$BRANCH",
+            "--product=$PRODUCT",
+            "--torpedo-job-name=$TORPEDO_JOB_NAME",
+            "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "$APP_DESTROY_TIMEOUT_ARG",
     ]
     tty: true
@@ -494,6 +509,10 @@ spec:
       value: "${CLUSTER_CONFIGS}"
     - name: S3_ENDPOINT
       value: "${S3_ENDPOINT}"
+    - name: S3_AWS_ACCESS_KEY_ID
+      value: "${S3_AWS_ACCESS_KEY_ID}"
+    - name: S3_AWS_SECRET_ACCESS_KEY
+      value: "${S3_AWS_SECRET_ACCESS_KEY}"
     - name: S3_REGION
       value: "${S3_REGION}"
     - name: S3_DISABLE_SSL
@@ -518,6 +537,41 @@ spec:
       value: "${VSPHERE_HOST_IP}"
     - name: IBMCLOUD_API_KEY
       value: "${IBMCLOUD_API_KEY}"
+    - name: CONTROL_PLANE_URL
+      value: "${CONTROL_PLANE_URL}"
+    - name: DS_VERSION
+      value: "${DS_VERSION}"
+    - name: DS_BUILD
+      value: "${DS_BUILD}"
+    - name: NAMESPACE
+      value: "${NAMESPACE}"
+    - name: NO_OF_NODES
+      value: "${NO_OF_NODES}"
+    - name: DATA_SERVICE
+      value: "${DATA_SERVICE}"
+    - name: DEPLOY_ALL_VERSIONS
+      value: "${DEPLOY_ALL_VERSIONS}"
+    - name: DEPLOY_ALL_IMAGES
+      value: "${DEPLOY_ALL_IMAGES}"
+    - name: DEPLOY_ALL_DATASERVICE
+      value: "${DEPLOY_ALL_DATASERVICE}"
+    - name: PDS_USERNAME
+      value: "${PDS_USERNAME}"
+    - name: PDS_PASSWORD
+      value: "${PDS_PASSWORD}"
+    - name: PDS_CLIENT_SECRET
+      value: "${PDS_CLIENT_SECRET}"
+    - name: PDS_CLIENT_ID
+      value: "${PDS_CLIENT_ID}"
+    - name: PDS_ISSUER_URL
+      value: "${PDS_ISSUER_URL}"
+    - name: CLUSTER_TYPE
+      value: "${CLUSTER_TYPE}"
+    - name: TARGET_KUBECONFIG
+      value: "${TARGET_KUBECONFIG}"
+    - name: TARGET_CLUSTER_NAME
+      value: "${TARGET_CLUSTER_NAME}"
+    
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

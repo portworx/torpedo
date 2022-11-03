@@ -3,16 +3,8 @@ package tests
 import (
 	"context"
 	"fmt"
-	"os"
-	"path"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -21,47 +13,24 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+
+	"os"
+	"path"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	. "github.com/portworx/torpedo/tests"
+
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	clusterName            = "tp-cluster"
-	restoreNamePrefix      = "tp-restore"
-	configMapName          = "kubeconfigs"
-	defaultTimeout         = 5 * time.Minute
-	defaultRetryInterval   = 10 * time.Second
-	sourceClusterName      = "source-cluster"
-	destinationClusterName = "destination-cluster"
-	backupLocationName     = "tp-blocation"
-
-	storkDeploymentName      = "stork"
-	storkDeploymentNamespace = "kube-system"
-
-	appReadinessTimeout = 10 * time.Minute
-	enumerateBatchSize  = 100
-)
-
 var (
-	orgID      string
 	bucketName string
 )
-
-var _ = BeforeSuite(func() {
-	logrus.Infof("Init instance")
-	InitInstance()
-})
-
-func TestBackup(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
-}
 
 func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	for _, bkpNamespace := range bkpNamespaces {
@@ -82,17 +51,109 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	DeleteBucket(provider, BucketName)
 }
 
-var _ = AfterSuite(func() {
-	//PerformSystemCheck()
-	//ValidateCleanup()
-	//	BackupCleanup()
+//This testcase verifies if the backup pods are in Ready state or not
+var _ = Describe("{BackupClusterVerification}", func() {
+	JustBeforeEach(func() {
+		log.Infof("No pre-setup required for this testcase")
+		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil)
+
+	})
+	It("Backup Cluster Verification", func() {
+		Step("Check the status of backup pods", func() {
+			dash.Info("Check the status of backup pods")
+			status := ValidateBackupCluster()
+			dash.VerifyFatal(status, true, "Validating backup pod")
+		})
+		//Will add CRD verification here
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.Infof("No cleanup required for this testcase")
+	})
 })
 
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
+//This testcase verifies basic backup rule,backup location, cloud setting
+var _ = Describe("{BasicBackupCreateWithRules}", func() {
+	var (
+		ps       = make(map[string]map[string]string)
+		app_list = Inst().AppList
+	)
+	var contexts []*scheduler.Context
+	var CloudCredUID_list []string
+	var appContexts []*scheduler.Context
+
+	providers := getProviders()
+	JustBeforeEach(func() {
+		StartTorpedoTest("Backup: BasicBackupCreateWithRules", "Creating backup with Rules", nil)
+		dash.Infof("Verifying if the pre/post rules for the required apps are present in the list or not ")
+		for i := 0; i < len(app_list); i++ {
+			if Contains(post_rule_app, app_list[i]) {
+				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
+				}
+			}
+			if Contains(pre_rule_app, app_list[i]) {
+				if _, ok := app_parameters[app_list[i]]["pre_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
+				}
+			}
+		}
+		dash.Info("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+		}
+	})
+	It("Basic Backup Creation", func() {
+		Step("Validate applications and get their labels", func() {
+			ValidateApplications(contexts)
+			log.Infof("Create list of pod selector for the apps deployed")
+			for _, ctx := range appContexts {
+				for _, specObj := range ctx.App.SpecList {
+					if obj, ok := specObj.(*appsapi.Deployment); ok {
+						if Contains(app_list, obj.Name) {
+							ps[obj.Name] = obj.Spec.Template.Labels
+						}
+					} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+						if Contains(app_list, obj.Name) {
+							ps[obj.Name] = obj.Spec.Template.Labels
+						}
+					}
+				}
+			}
+		})
+		Step("Creating rules for backup", func() {
+			dash.Info("Creating pre rule for deployed apps")
+			pre_rule_status := CreateRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
+			dash.VerifyFatal(pre_rule_status, true, "Verifying pre rule for backup")
+			dash.Info("Creating post rule for deployed apps")
+			post_rule_status := CreateRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
+			dash.VerifyFatal(post_rule_status, true, "Verifying Post rule for backup")
+		})
+		Step("Creating bucket,backup location and cloud setting", func() {
+			dash.Info("Creating bucket,backup location and cloud setting")
+			for _, provider := range providers {
+				bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
+				CredName := fmt.Sprintf("%s-%s", "cred1", provider)
+				backup_location_name := fmt.Sprintf("%s-%s", "location1", provider)
+				CloudCredUID = uuid.New()
+				CloudCredUID_list = append(CloudCredUID_list, CloudCredUID)
+				BackupLocationUID = uuid.New()
+				CreateBucket(provider, bucketName)
+				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
+				time.Sleep(time.Minute * 1)
+				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		teardown_status := TeardownForTestcase(contexts, providers, CloudCredUID_list)
+		dash.VerifyFatal(teardown_status, true, "Testcase teardown status")
+	})
+})
 
 // This test performs basic test of starting an application, backing it up and killing stork while
 // performing backup.
@@ -103,10 +164,13 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 		namespaceMapping map[string]string
 		taskNamePrefix   = "backupcreaterestore"
 	)
-
 	labelSelectores := make(map[string]string)
 	namespaceMapping = make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
 
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
@@ -303,6 +367,10 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 	namespaceMapping := make(map[string]string)
 	taskNamePrefix := "backup-multi-provider"
 	providerUID := make(map[string]string)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
 
 	It("has to connect and check the backup setup", func() {
 		providers := getProviders()
@@ -834,6 +902,10 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 	volumeParams := make(map[string]map[string]string)
 	bkpNamespaces := make([]string, 0)
 
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
+
 	It("has to complete backup and restore", func() {
 		// Set cluster context to cluster where torpedo is running
 		SetClusterContext("")
@@ -1009,6 +1081,10 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 	bkpNamespaceErrors := make(map[string]error)
 	volumeParams := make(map[string]map[string]string)
 	restoreNamespaces := make([]string, 0)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
 
 	It("has to perform simultaneous backups and restores", func() {
 		//ctx, err := backup.GetPxCentralAdminCtx()
@@ -1235,6 +1311,11 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 	namespaceMapping = make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
 	namespaceContextMap := make(map[string][]*scheduler.Context)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
+
 	It("has to connect and check the backup setup", func() {
 		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -1474,6 +1555,11 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 	volumeParams := make(map[string]map[string]string)
 	namespaceContextMap := make(map[string][]*scheduler.Context)
 	combinedErrors := make([]string, 0)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
+
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
 			// Set cluster context to cluster where torpedo is running

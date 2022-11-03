@@ -83,6 +83,14 @@ func (d *DefaultDriver) String() string {
 	return ""
 }
 
+func (d *DefaultDriver) GetVolumeDriverNamespace() (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetVolumeDriverNamespace()",
+	}
+
+}
+
 // Init initializes the volume driver under the given scheduler
 func (d *DefaultDriver) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	StorageProvisioner = DefaultStorageProvisioner
@@ -168,6 +176,14 @@ func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 		Operation: "GetStorageDevices()",
 	}
 
+}
+
+//IsPxInstalled checks for Px to be installed on a node
+func (d *DefaultDriver) IsPxInstalled(n node.Node) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "IsPxInstalled()",
+	}
 }
 
 // RecoverDriver will recover a volume driver from a failure/storage down state.
@@ -786,6 +802,14 @@ func (d *DefaultDriver) GetPxVersionOnNode(n node.Node) (string, error) {
 	}
 }
 
+// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
+func (d *DefaultDriver) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPxctlCmdOutputConnectionOpts()",
+	}
+}
+
 // GetPxctlCmdOutput returns the command output run on the given node and any error
 func (d *DefaultDriver) GetPxctlCmdOutput(n node.Node, command string) (string, error) {
 	return "", &errors.ErrNotSupported{
@@ -855,5 +879,21 @@ func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "AddBlockDrives()",
+	}
+}
+
+// GetRebalanceJobs returns the list of rebalance jobs
+func (d *DefaultDriver) GetRebalanceJobs() ([]*api.StorageRebalanceJob, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetRebalanceJobs()",
+	}
+}
+
+// GetRebalanceJobStatus returns the rebalance jobs response
+func (d *DefaultDriver) GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobStatusResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetRebalanceJobStatus()",
 	}
 }

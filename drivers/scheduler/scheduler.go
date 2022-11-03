@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -86,6 +87,8 @@ type InitOptions struct {
 	VolDriverName string
 	// NodeDriverName node driver name
 	NodeDriverName string
+	// MonitorDriverName monitor driver name
+	MonitorDriverName string
 	// ConfigMap  identifies what config map should be used to
 	SecretConfigMapName string
 	// HelmValuesConfigMapName custom values for helm charts
@@ -106,6 +109,9 @@ type InitOptions struct {
 	PureSANType string
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
+
+	//Logger log the output
+	Logger *logrus.Logger
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
