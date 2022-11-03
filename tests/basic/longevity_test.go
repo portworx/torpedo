@@ -10,12 +10,10 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	k8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -67,6 +65,8 @@ var _ = Describe("{Longevity}", func() {
 		VolumeResize:     TriggerVolumeResize,
 		//EmailReporter:        TriggerEmailReporter,
 		AppTaskDown:          TriggerAppTaskDown,
+		AppTasksDown:         TriggerAppTasksDown,
+		AddDrive:             TriggerAddDrive,
 		CoreChecker:          TriggerCoreChecker,
 		CloudSnapShot:        TriggerCloudSnapShot,
 		LocalSnapShot:        TriggerLocalSnapShot,
@@ -102,6 +102,8 @@ var _ = Describe("{Longevity}", func() {
 
 	BeforeEach(func() {
 		if !populateDone {
+			StartTorpedoTest("PX-Longevity", "Validate PX longevity workflow", nil)
+
 			populateIntervals()
 			populateDisruptiveTriggers()
 			populateDone = true
@@ -109,16 +111,26 @@ var _ = Describe("{Longevity}", func() {
 	})
 
 	It("has to schedule app and introduce test triggers", func() {
-		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
-			configMapNS, testTriggersConfigMap), func() {
+		dash.Info("schedule apps and start test triggers")
+		watchLog := fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
+			configMapNS, testTriggersConfigMap)
+
+		Step(watchLog, func() {
+			dash.Info(watchLog)
 			err := watchConfigMap()
-			Expect(err).NotTo(HaveOccurred())
+			if err != nil {
+				log.Error(err)
+			}
+			dash.VerifyFatal(err, nil, "Validate config map watch set")
 		})
 
 		if pureTopologyEnabled {
 			var err error
 			labels, err = SetTopologyLabelsOnNodes()
-			Expect(err).NotTo(HaveOccurred())
+			if err != nil {
+				log.Error(err)
+			}
+			dash.VerifyFatal(err, nil, "Validate set topology labels")
 			Inst().TopologyLabels = labels
 		}
 
@@ -129,24 +141,24 @@ var _ = Describe("{Longevity}", func() {
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
 			for triggerType, triggerFunc := range triggerFunctions {
-				logrus.Infof("Registering trigger: [%v]", triggerType)
+				dash.Infof("Registering trigger: [%v]", triggerType)
 				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
 				wg.Add(1)
 			}
 		})
-		logrus.Infof("Finished registering test triggers")
+		dash.Infof("Finished registering test triggers")
 		if Inst().MinRunTimeMins != 0 {
-			logrus.Infof("Longevity Tests  timeout set to %d  minutes", Inst().MinRunTimeMins)
+			dash.Infof("Longevity Tests  timeout set to %d  minutes", Inst().MinRunTimeMins)
 		}
 
 		Step("Register email trigger", func() {
 			for triggerType, triggerFunc := range emailTriggerFunction {
-				logrus.Infof("Registering email trigger: [%v]", triggerType)
+				dash.Infof("Registering email trigger: [%v]", triggerType)
 				go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
 				wg.Add(1)
 			}
 		})
-		logrus.Infof("Finished registering email trigger")
+		dash.Infof("Finished registering email trigger")
 
 		CollectEventRecords(&triggerEventsChan)
 		wg.Wait()
@@ -158,6 +170,7 @@ var _ = Describe("{Longevity}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
@@ -179,7 +192,7 @@ func testTrigger(wg *sync.WaitGroup,
 	for {
 		// if timeout is 0, run indefinitely
 		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-			logrus.Infof("Longevity Tests timed out with timeout %d  minutes", minRunTime)
+			dash.Infof("Longevity Tests timed out with timeout %d  minutes", minRunTime)
 			break
 		}
 
@@ -190,9 +203,9 @@ func testTrigger(wg *sync.WaitGroup,
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 			// If trigger is not disabled and its right time to trigger,
 
-			logrus.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+			log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
 			triggerLoc.Lock()
-			logrus.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+			log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
 			/* PTX-2667: check no other disruptive trigger is happening at same time
 			if isDisruptiveTrigger(triggerType) {
 			   // At a give point in time, only single disruptive trigger is allowed to run.
@@ -208,11 +221,11 @@ func testTrigger(wg *sync.WaitGroup,
 			}*/
 
 			triggerFunc(contexts, triggerEventsChan)
-			logrus.Infof("Trigger Function completed for [%s]\n", triggerType)
+			log.Infof("Trigger Function completed for [%s]\n", triggerType)
 
 			//if isDisruptiveTrigger(triggerType) {
 			triggerLoc.Unlock()
-			logrus.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+			log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
 			//}
 
 			lastInvocationTime = time.Now().Local()
@@ -248,15 +261,15 @@ func emailEventTrigger(wg *sync.WaitGroup,
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 			// If trigger is not disabled and its right time to trigger,
 
-			logrus.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+			dash.Infof("Waiting for lock for trigger [%s]\n", triggerType)
 			emailTriggerLock.Lock()
-			logrus.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+			dash.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
 
 			triggerFunc()
-			logrus.Infof("Trigger Function completed for [%s]\n", triggerType)
+			dash.Infof("Trigger Function completed for [%s]\n", triggerType)
 
 			emailTriggerLock.Unlock()
-			logrus.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+			dash.Infof("Successfully released lock for trigger [%s]\n", triggerType)
 
 			lastInvocationTime = time.Now().Local()
 
@@ -361,7 +374,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 func setEmailRecipients(configData *map[string]string) {
 	// Get email recipients from configMap
 	if emailRecipients, ok := (*configData)[EmailRecipientsConfigMapField]; !ok {
-		logrus.Warnf("No [%s] field found in [%s] config-map in [%s] namespace."+
+		log.Warnf("No [%s] field found in [%s] config-map in [%s] namespace."+
 			"Defaulting email recipients to [%s].\n",
 			EmailRecipientsConfigMapField, testTriggersConfigMap, configMapNS, DefaultEmailRecipient)
 		EmailRecipients = []string{DefaultEmailRecipient}
@@ -376,12 +389,12 @@ func setPureTopology(configData *map[string]string) {
 	// Set Pure Topology Enabled value from configMap
 	var err error
 	if pureTopology, ok := (*configData)[PureTopologyField]; !ok {
-		logrus.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.\n",
+		log.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.\n",
 			PureTopologyField, testTriggersConfigMap, configMapNS)
 	} else {
 		pureTopologyEnabled, err = strconv.ParseBool(pureTopology)
 		if err != nil {
-			logrus.Errorf("Failed to parse [%s] field in config-map in [%s] namespace.Error:[%v]\n",
+			log.Errorf("Failed to parse [%s] field in config-map in [%s] namespace.Error:[%v]\n",
 				PureTopologyField, configMapNS, err)
 		}
 		delete(*configData, PureTopologyField)
@@ -391,12 +404,12 @@ func setPureTopology(configData *map[string]string) {
 func setHyperConvergedType(configData *map[string]string) {
 	var err error
 	if hyperConvergedType, ok := (*configData)[HyperConvergedTypeField]; !ok {
-		logrus.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.\n",
+		log.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.\n",
 			HyperConvergedTypeField, testTriggersConfigMap, configMapNS)
 	} else {
 		hyperConvergedTypeEnabled, err = strconv.ParseBool(hyperConvergedType)
 		if err != nil {
-			logrus.Errorf("Failed to parse [%s] field in config-map in [%s] namespace.Error:[%v]\n",
+			log.Errorf("Failed to parse [%s] field in config-map in [%s] namespace.Error:[%v]\n",
 				HyperConvergedTypeField, configMapNS, err)
 		}
 		delete(*configData, HyperConvergedTypeField)
@@ -446,10 +459,14 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	topologyLabels := make([]map[string]string, 0)
 	nodeUpTimeout := 5 * time.Minute
 
-	logrus.Info("Add Topology Labels on node")
+	log.Info("Add Topology Labels on node")
 	var secret PureSecret
+	volumeDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get volume driver namespace. Error [%v]", err)
+	}
 	pureSecretString, err := Inst().S.GetSecretData(
-		schedops.PXNamespace, PureSecretName, PureSecretDataField,
+		volumeDriverNamespace, PureSecretName, PureSecretDataField,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read pure secret [%s]. Error [%v]",
@@ -480,10 +497,10 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 			}
 			switch key {
 			case k8s.TopologyZoneK8sNodeLabel:
-				logrus.Infof("Setting node: [%s] Topology Zone to: [%s]", n.Name, value)
+				dash.Infof("Setting node: [%s] Topology Zone to: [%s]", n.Name, value)
 				n.TopologyZone = value
 			case k8s.TopologyRegionK8sNodeLabel:
-				logrus.Infof("Setting node: [%s] Topology Region to: [%s]", n.Name, value)
+				dash.Infof("Setting node: [%s] Topology Region to: [%s]", n.Name, value)
 				n.TopologyRegion = value
 			}
 		}
@@ -493,12 +510,13 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 
 	// Bouncing Back the PX pods on all nodes to restart Csi Registrar Container
 	logrus.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
-	if err := deletePXPods(""); err != nil {
+
+	if err := deletePXPods(volumeDriverNamespace); err != nil {
 		return nil, fmt.Errorf("Failed to delete PX pods. Error:[%v]", err)
 	}
 
 	// Wait for PX pods to be up
-	logrus.Info("Waiting for Volume Driver to be up and running")
+	log.Info("Waiting for Volume Driver to be up and running")
 	for _, n := range node.GetWorkerNodes() {
 		if err := Inst().V.WaitForPxPodsToBeUp(n); err != nil {
 			return nil, fmt.Errorf("PX pod not coming up in a node [%s]. Error:[%v]", n.Name, err)
@@ -514,9 +532,6 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 // deletePXPods delete px pods
 func deletePXPods(nameSpace string) error {
 	pxLabel := make(map[string]string)
-	if nameSpace == "" {
-		nameSpace = k8s.PXNamespace
-	}
 	pxLabel["name"] = "portworx"
 	if err := core.Instance().DeletePodsByLabels(nameSpace, pxLabel, podDestroyTimeout); err != nil {
 		return err
@@ -1193,7 +1208,7 @@ func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 	chaosLevel, ok = ChaosMap[triggerType]
 	if !ok {
 		chaosLevel = Inst().ChaosLevel
-		logrus.Warnf("Chaos level for trigger [%s] not found in chaos map. Using global chaos level [%d]",
+		log.Warnf("Chaos level for trigger [%s] not found in chaos map. Using global chaos level [%d]",
 			triggerType, Inst().ChaosLevel)
 	}
 	if triggerInterval[triggerType][chaosLevel] != 0 {
