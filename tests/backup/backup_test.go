@@ -55,8 +55,8 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 //Also verifies if backup CRDs are registered or not
 var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
-		log.Infof("No pre-setup required for this testcase")
 		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil)
+		log.Infof("No pre-setup required for this testcase")
 	})
 	It("Backup Cluster Verification", func() {
 		Step("Check the status of backup pods", func() {
