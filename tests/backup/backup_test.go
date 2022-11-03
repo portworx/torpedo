@@ -88,7 +88,6 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: BasicBackupCreateWithRules", "Creating backup with Rules", nil)
 		dash.Infof("Verifying if the pre/post rules for the required apps are present in the list or not ")
-
 		for i := 0; i < len(app_list); i++ {
 			if Contains(post_rule_app, app_list[i]) {
 				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
