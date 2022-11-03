@@ -8,7 +8,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/sched-ops/k8s/apiextensions"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -67,12 +66,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 		})
 		Step("Check the CRDS for backup", func() {
 			dash.Info("Check the CRDS for backup")
-			for _, crd := range backup_crd_list {
-				err := apiextensions.Instance().ValidateCRD(crd, time.Duration(5)*time.Minute, time.Duration(1)*time.Minute)
-				if err != nil {
-					dash.VerifyFatal(err, nil, "Verifying backup CRDS")
-				}
-			}
+			ValidateBackupClusterCRD()
 		})
 	})
 	JustAfterEach(func() {
@@ -90,11 +84,11 @@ var _ = Describe("{BasicBackupCreateWithRules}", func() {
 	var contexts []*scheduler.Context
 	var CloudCredUID_list []string
 	var appContexts []*scheduler.Context
-
 	providers := getProviders()
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: BasicBackupCreateWithRules", "Creating backup with Rules", nil)
 		dash.Infof("Verifying if the pre/post rules for the required apps are present in the list or not ")
+
 		for i := 0; i < len(app_list); i++ {
 			if Contains(post_rule_app, app_list[i]) {
 				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {

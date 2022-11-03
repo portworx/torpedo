@@ -51,6 +51,7 @@ import (
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
@@ -271,6 +272,12 @@ var (
 		"cassandra": {"pre_action_list": "nodetool flush -- keyspace1;", "post_action_list": "nodetool verify -- keyspace1;", "background": "false", "run_in_single_pod": "false"},
 		"postgres":  {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U '$POSTGRES_USER' -c 'CHECKPOINT';", "background": "false", "run_in_single_pod": "false"},
 	}
+	backup_cluster_crd_list = []string{"backuplocations.stork.libopenstorage.org", "applicationbackups.stork.libopenstorage.org", "applicationbackupschedules.stork.libopenstorage.org",
+		"applicationrestores.stork.libopenstorage.org", "schedulepolicies.stork.libopenstorage.org", "rules.stork.libopenstorage.org",
+		"dataexports.kdmp.portworx.com", "hostendpoints.crd.projectcalico.org", "volumebackups.kdmp.portworx.com", "backuplocationmaintenances.kdmp.portworx.com", "volumebackupdeletes.kdmp.portworx.com"}
+	app_cluster_crd_list = []string{"backuplocations.stork.libopenstorage.org", "applicationbackups.stork.libopenstorage.org", "applicationbackupschedules.stork.libopenstorage.org",
+		"applicationrestores.stork.libopenstorage.org", "schedulepolicies.stork.libopenstorage.org", "rules.stork.libopenstorage.org",
+		"dataexports.kdmp.portworx.com", "hostendpoints.crd.projectcalico.org", "volumebackups.kdmp.portworx.com"}
 )
 
 var (
@@ -3185,7 +3192,6 @@ func GetSourceClusterConfigPath() (string, error) {
 		return "", fmt.Errorf(`Failed to get source config path.
 				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
-
 	logrus.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]), nil
 }
@@ -3202,7 +3208,6 @@ func GetDestinationClusterConfigPath() (string, error) {
 		return "", fmt.Errorf(`Failed to get source config path.
 				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
-
 	logrus.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
 }
@@ -4586,7 +4591,6 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		}
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 	}
-
 	dash.Info("Deleting backup rules created")
 	RuleEnumerateReq := &api.RuleEnumerateRequest{
 		OrgId: orgID,
@@ -4594,6 +4598,7 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 	ctx, err := backup.GetAdminCtxFromSecret()
 	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching px-central-admin ctx:"))
 	rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
+	dash.VerifyFatal(err, nil, "Fetching backup rule lists")
 	if create_post_rule == true {
 		for i := 0; i < len(rule_list.Rules); i++ {
 			if rule_list.Rules[i].Metadata.Name == "backup-post-rule" {
@@ -4626,8 +4631,8 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
 		DeleteBucket(provider, bucketName)
 		CredName := fmt.Sprintf("%s-%s", "cred1", provider)
-		DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
 		DeleteBackupLocation(backup_location_name, orgID)
+		DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
 	}
 	if flag == false {
 		return false
@@ -4647,4 +4652,34 @@ func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
 
+}
+
+func ValidateBackupClusterCRD() {
+	//set env variable KUBECONFIGS's first value to application cluster kubeconfig path
+	dash.Info("Check the CRDS for backup on application cluster")
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	dash.VerifyFatal(err, nil, "Getting config path for application cluster")
+	SetClusterContext(sourceClusterConfigPath)
+	apiExt, err := apiextensions.NewInstanceFromConfigFile(sourceClusterConfigPath)
+	if err != nil {
+		dash.VerifyFatal(err, nil, "Verify setting source config path")
+	}
+	for _, crd := range app_cluster_crd_list {
+		err := apiExt.ValidateCRD(crd, time.Duration(1)*time.Minute, time.Duration(1)*time.Minute)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup CRD on application cluster: %s", crd))
+	}
+	//set env variable KUBECONFIGS's comma seperated second value to backup cluster kubeconfig path
+	dash.Info("Check the CRDS for backup on backup cluster")
+	destClusterConfigPath, err := GetDestinationClusterConfigPath()
+	dash.VerifyFatal(err, nil, "Getting cluster config path for backup cluster")
+	SetClusterContext(destClusterConfigPath)
+	bkpapiExt, err := apiextensions.NewInstanceFromConfigFile(destClusterConfigPath)
+	if err != nil {
+		dash.VerifyFatal(err, nil, "Verfiying setting dest config path")
+	}
+	for _, crd := range backup_cluster_crd_list {
+		fmt.Println(" \n\n dest crd is ", crd)
+		err := bkpapiExt.ValidateCRD(crd, time.Duration(1)*time.Minute, time.Duration(1)*time.Minute)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup CRD on backup cluster: %s", crd))
+	}
 }
