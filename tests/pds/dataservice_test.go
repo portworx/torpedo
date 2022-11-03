@@ -244,16 +244,14 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					isDeploymentsDeleted = true
 				})
 
-				defer func() {
-					Step("Delete the worload generating deployments", func() {
-						if DataService == "Cassandra" || DataService == "PostgreSQL" {
-							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-						} else {
-							err = pdslib.DeleteK8sPods(pod.Name, namespace)
-						}
-						Expect(err).NotTo(HaveOccurred())
-					})
-				}()
+				Step("Delete the worload generating deployments", func() {
+					if ds.Name == "Cassandra" || ds.Name == "PostgreSQL" {
+						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+					} else {
+						err = pdslib.DeleteK8sPods(pod.Name, namespace)
+					}
+					Expect(err).NotTo(HaveOccurred())
+				})
 			}
 		})
 	})
@@ -391,7 +389,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 		defer func() {
 			Step("Delete the worload generating deployments", func() {
-				if DataService == "Cassandra" || DataService == "PostgreSQL" {
+				if dataservice == "Cassandra" || dataservice == "PostgreSQL" {
 					err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
 				} else {
 					err = pdslib.DeleteK8sPods(pod.Name, namespace)
