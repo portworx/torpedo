@@ -153,8 +153,7 @@ const (
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
 	pxNamespace                          = "kube-system"
-
-	pdsParamCliFlag = "pds-parameter-json"
+	pdsParamCliFlag                      = "pds-parameter-json"
 
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"
@@ -3802,11 +3801,6 @@ func ParseFlags() {
 		log.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
 	}
 
-	// pdsparameters, err := ioutil.ReadFile(pdsParam)
-	// if err != nil {
-	// 	log.Fatalf("File error: %v\n", err)
-	// }
-
 	sched.Init(time.Second)
 
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
@@ -3979,7 +3973,7 @@ func SetTorpedoFileOutput(tpLog *logrus.Logger, f *os.File) {
 func CreateLogFile(filename string) *os.File {
 	var filePath string
 	if strings.Contains(filename, "/") {
-		filePath = "/Users/marunachalam/Desktop/torpedo.log"
+		filePath = "filename"
 	} else {
 		filePath = fmt.Sprintf("%s/%s", Inst().LogLoc, filename)
 	}
