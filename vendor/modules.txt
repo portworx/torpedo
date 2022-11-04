@@ -478,7 +478,7 @@ github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/scheme
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/typed/autopilot/v1alpha1
-# github.com/libopenstorage/cloudops v0.0.0-20220909060939-0cbeca281dfd
+# github.com/libopenstorage/cloudops v0.0.0-20221104040503-78e71ce44fb7
 github.com/libopenstorage/cloudops
 github.com/libopenstorage/cloudops/azure
 github.com/libopenstorage/cloudops/backoff

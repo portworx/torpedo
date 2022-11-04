@@ -100,7 +100,7 @@ func (o *oracle) SetClusterVersion(version string, timeout time.Duration) error 
 
 // DeleteNode deletes the given node
 func (o *oracle) DeleteNode(node node.Node, timeout time.Duration) error {
-	logrus.Info("[Torpedo] Deleting node [%s]", node.Hostname)
+	logrus.Infof("[Torpedo] Deleting node [%s]", node.Hostname)
 	instanceDetails, err := o.ops.GetInstance(node.Hostname)
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func (o *oracle) DeleteNode(node node.Node, timeout time.Duration) error {
 
 	oracleInstance, ok := instanceDetails.(core.Instance)
 	if !ok {
-		fmt.Errorf("could not retrive oracle instance details for %s", node.Hostname)
+		return fmt.Errorf("could not retrive oracle instance details for %s", node.Hostname)
 	}
 	err = o.ops.DeleteInstance(*oracleInstance.Id, "", timeout)
 	if err != nil {

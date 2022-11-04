@@ -280,6 +280,26 @@ func (o *oracleOps) InspectInstance(instanceID string) (*cloudops.InstanceInfo, 
 	}, nil
 }
 
+func (o *oracleOps) GetInstance(displayName string) (interface{}, error) {
+	listInstanceReq := core.ListInstancesRequest{
+		DisplayName:   common.String(displayName),
+		CompartmentId: common.String(o.compartmentID),
+	}
+
+	listInstanceResp, err := o.compute.ListInstances(context.Background(), listInstanceReq)
+	if err != nil {
+		return nil, err
+	}
+	if len(listInstanceResp.Items) == 0 {
+		return nil, fmt.Errorf("no oracle instance found with display name: %s", displayName)
+	}
+	// Currently, torpedo uses this API to fetch details of the instance created 
+	// by OKE. OKE ensures that all the worker nodes created, have unique display
+	// names. In future, if we require to use this API to get details of vanilla
+	// compute instances, then we can modify below array indexing.
+	return listInstanceResp.Items[0], nil
+}
+
 func (o *oracleOps) InspectInstanceGroupForInstance(instanceID string) (*cloudops.InstanceGroupInfo, error) {
 	getNodePoolReq := containerengine.GetNodePoolRequest{
 		NodePoolId: &o.poolID,
@@ -331,12 +351,14 @@ func (o *oracleOps) DeviceMappings() (map[string]string, error) {
 		return m, err
 	}
 	for _, va := range volumeAttachmentResp.Items {
-		if va.GetDevice() != nil && va.GetVolumeId() != nil {
-			devicePath = *va.GetDevice()
-			volID = *va.GetVolumeId()
-		} else {
-			logrus.Warnf("Device path or volume id for [%+v] volume attachment not found", va)
-			continue
+		if va.GetLifecycleState() == core.VolumeAttachmentLifecycleStateAttached {
+			if va.GetDevice() != nil && va.GetVolumeId() != nil {
+				devicePath = *va.GetDevice()
+				volID = *va.GetVolumeId()
+			} else {
+				logrus.Warnf("Device path or volume id for [%+v] volume attachment not found", va)
+				continue
+			}
 		}
 		m[devicePath] = volID
 	}
@@ -354,16 +376,16 @@ func (o *oracleOps) DevicePath(volumeID string) (string, error) {
 		return "", err
 	}
 
-	if volumeAttachmentResp.Items == nil || len(volumeAttachmentResp.Items) == 0 {
+	if volumeAttachmentResp.Items == nil ||
+		len(volumeAttachmentResp.Items) == 0 ||
+		volumeAttachmentResp.Items[0].GetInstanceId() == nil ||
+		volumeAttachmentResp.Items[0].GetLifecycleState() == core.VolumeAttachmentLifecycleStateDetached ||
+		volumeAttachmentResp.Items[0].GetLifecycleState() == core.VolumeAttachmentLifecycleStateDetaching {
 		return "", cloudops.NewStorageError(cloudops.ErrVolDetached,
 			"Volume is detached", volumeID)
 	}
 
 	volumeAttachment := volumeAttachmentResp.Items[0]
-	if volumeAttachment.GetInstanceId() == nil {
-		return "", cloudops.NewStorageError(cloudops.ErrVolInval,
-			"Unable to determine volume instance attachment", "")
-	}
 
 	if o.instance != *volumeAttachment.GetInstanceId() {
 		return "", cloudops.NewStorageError(cloudops.ErrVolAttachedOnRemoteNode,
@@ -422,6 +444,10 @@ func (o *oracleOps) Create(template interface{}, labels map[string]string) (inte
 	}
 	createVolResp, err := o.storage.CreateVolume(context.Background(), createVolReq)
 	if err != nil {
+		if strings.Contains(err.Error(), "vpusPerGB is invalid") {
+			return nil, fmt.Errorf("VPUs must be an integer that is multiple of 10 " +
+				"Please refer to oracle cloud block volume documentation for valid values")
+		}
 		return nil, err
 	}
 
@@ -610,18 +636,22 @@ func (o *oracleOps) Attach(volumeID string, options map[string]string) (string, 
 			return "", err
 		}
 
+		var devicePath string
 		if attachVolResp.GetLifecycleState() != core.VolumeAttachmentLifecycleStateAttached {
-			err = o.waitVolumeAttachmentStatus(
+			devicePath, err = o.waitVolumeAttachmentStatus(
 				attachVolResp.GetId(),
 				core.VolumeAttachmentLifecycleStateAttached,
 			)
 			if err != nil {
-				return "", err
+				devicePath, err := o.DevicePath(volumeID)
+				if err != nil {
+					return "", err
+				}
+				o.volumeAttachmentMapping[volumeID] = attachVolResp.GetId()
+				return devicePath, err
 			}
-		}
-		devicePath, err := o.DevicePath(volumeID)
-		if err != nil {
-			logrus.Errorf("Error while getting device path. Error: %v", err)
+		} else {
+			devicePath = *attachVolResp.GetDevice()
 		}
 		o.volumeAttachmentMapping[volumeID] = attachVolResp.GetId()
 		return devicePath, err
@@ -629,7 +659,7 @@ func (o *oracleOps) Attach(volumeID string, options map[string]string) (string, 
 	return "", fmt.Errorf("failed to attach any of the free devices. Attempted: %v", devices)
 }
 
-func (o *oracleOps) waitVolumeAttachmentStatus(volumeAttachmentID *string, desiredStatus core.VolumeAttachmentLifecycleStateEnum) error {
+func (o *oracleOps) waitVolumeAttachmentStatus(volumeAttachmentID *string, desiredStatus core.VolumeAttachmentLifecycleStateEnum) (string, error) {
 	getVolAttachmentReq := core.GetVolumeAttachmentRequest{
 		VolumeAttachmentId: volumeAttachmentID,
 	}
@@ -639,14 +669,21 @@ func (o *oracleOps) waitVolumeAttachmentStatus(volumeAttachmentID *string, desir
 			return nil, true, err
 		}
 		if getVolAttachmentResp.GetLifecycleState() == desiredStatus {
-			return nil, false, nil
+			return getVolAttachmentResp.GetDevice(), false, nil
 		}
 
 		logrus.Debugf("volume [%s] is still in [%s] state", *getVolAttachmentResp.GetVolumeId(), getVolAttachmentResp.GetLifecycleState())
 		return nil, true, fmt.Errorf("volume [%s] is still in [%s] state", *getVolAttachmentResp.GetVolumeId(), getVolAttachmentResp.GetLifecycleState())
 	}
-	_, err := task.DoRetryWithTimeout(f, cloudops.ProviderOpsTimeout, cloudops.ProviderOpsRetryInterval)
-	return err
+	devicePathRaw, err := task.DoRetryWithTimeout(f, cloudops.ProviderOpsTimeout, cloudops.ProviderOpsRetryInterval)
+	if err != nil {
+		return "", err
+	}
+	devicePath, ok := devicePathRaw.(*string)
+	if !ok {
+		return "", fmt.Errorf("volume attachment [%s] attached successfully but could not get it's local device path", *volumeAttachmentID)
+	}
+	return *devicePath, err
 }
 
 // Detach volumeID.
@@ -690,7 +727,7 @@ func (o *oracleOps) detachInternal(volumeID, instanceID string) error {
 			volumeID, instanceID, detachVolResp, err)
 		return err
 	}
-	err = o.waitVolumeAttachmentStatus(
+	_, err = o.waitVolumeAttachmentStatus(
 		attachmentID,
 		core.VolumeAttachmentLifecycleStateDetached,
 	)
@@ -760,6 +797,10 @@ func (o *oracleOps) DeleteInstance(instanceID string, zone string, timeout time.
 		}
 	}
 
+	if nodePoolID == nil {
+		return fmt.Errorf("node pool containing instance [%s] not found", instanceID)
+	}
+
 	nodeDeleteReq := containerengine.DeleteNodeRequest{
 		NodePoolId:      nodePoolID,
 		NodeId:          &instanceID,
@@ -787,7 +828,6 @@ func nodePoolContainsNode(s []containerengine.Node, e string) bool {
 	}
 	return false
 }
-
 
 func (o *oracleOps) Expand(volumeID string, newSizeInGiB uint64) (uint64, error) {
 	logrus.Debug("Expand volume to size ", newSizeInGiB, " GiB")
@@ -932,4 +972,118 @@ func (o *oracleOps) scaleDownToZeroThenScaleUp(instanceGroupName, instanceGroupI
 	}
 
 	return updateResp, nil
+}
+
+// Enumerate volumes that match given filters. Organize them into
+// sets identified by setIdentifier.
+// labels can be nil, setIdentifier can be empty string.
+func (o *oracleOps) Enumerate(volumeIds []*string,
+	labels map[string]string,
+	setIdentifier string,
+) (map[string][]interface{}, error) {
+	sets := make(map[string][]interface{})
+	req := core.ListVolumesRequest{
+		CompartmentId: common.String(o.compartmentID),
+	}
+	resp, err := o.storage.ListVolumes(context.Background(), req)
+	if err != nil {
+		return nil, err
+	}
+	volIDsMap := map[string]string{}
+	for _, volIds := range volumeIds {
+		volIDsMap[*volIds] = *volIds
+	}
+	for _, vol := range resp.Items {
+		_, ok := volIDsMap[*vol.Id]
+		if !ok {
+			continue
+		}
+
+		if o.deleted(vol) {
+			continue
+		}
+		// TODO: [PWX-26616] Check if SDK itself returns list of volumes
+		// that have labels OR use volumeGroup for filtering
+		if labels != nil && !containsMap(vol.FreeformTags, labels) {
+			continue
+		}
+		if len(setIdentifier) == 0 {
+			cloudops.AddElementToMap(sets, vol, cloudops.SetIdentifierNone)
+		} else {
+			found := false
+			for tagKey, tagValue := range vol.FreeformTags {
+				if tagKey == setIdentifier {
+					cloudops.AddElementToMap(sets, vol, tagValue)
+					found = true
+					break
+				}
+			}
+			if !found {
+				cloudops.AddElementToMap(sets, vol, cloudops.SetIdentifierNone)
+			}
+		}
+	}
+	return sets, nil
+}
+
+func containsMap(mainMap map[string]string, subMap map[string]string) bool {
+	for k, v := range subMap {
+		value, ok := mainMap[k]
+		if !ok {
+			return false
+		}
+		if value != v {
+			return false
+		}
+	}
+	return true
+}
+
+func (o *oracleOps) deleted(v core.Volume) bool {
+	return v.LifecycleState == core.VolumeLifecycleStateTerminating ||
+		v.LifecycleState == core.VolumeLifecycleStateTerminated
+}
+
+// ApplyTags will overwrite the existing tags with newly provided tags
+func (o *oracleOps) ApplyTags(volumeID string, labels map[string]string) error {
+	req := core.UpdateVolumeRequest{
+		VolumeId: common.String(volumeID),
+		UpdateVolumeDetails: core.UpdateVolumeDetails{
+			FreeformTags: labels,
+		},
+	}
+	resp, err := o.storage.UpdateVolume(context.Background(), req)
+	if err != nil {
+		logrus.Errorf("failed to apply tag to %s. response: %v", volumeID, resp)
+	}
+	return err
+}
+
+// Tags will list the existing labels/tags on the given volume
+func (o *oracleOps) Tags(volumeID string) (map[string]string, error) {
+	vols, err := o.Inspect([]*string{&volumeID})
+	if err != nil {
+		return nil, err
+	}
+	if len(vols) != 1 {
+		return nil, fmt.Errorf("incorrect number of volumes [%v] got for volume id: %v",
+			len(vols), volumeID)
+	}
+	oracleVol, ok := vols[0].(*core.Volume)
+	if !ok {
+		return nil, fmt.Errorf("Invalid oracle volume")
+	}
+	return oracleVol.FreeformTags, nil
+}
+
+// RemoveTags removes labels/tags from the given volume
+func (o *oracleOps) RemoveTags(volumeID string, labels map[string]string) error {
+	currentTags, err := o.Tags(volumeID)
+	if err != nil {
+		return nil
+	}
+	for key := range labels {
+		delete(currentTags, key)
+	}
+	return o.ApplyTags(volumeID, currentTags)
 }

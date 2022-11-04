@@ -97,6 +97,8 @@ type Compute interface {
 	// InspectInstanceGroupForInstance inspects the instance group to which the
 	// cloud instance with given ID belongs
 	InspectInstanceGroupForInstance(instanceID string) (*InstanceGroupInfo, error)
+	// GetInstance returns cloud provider specific instance details
+	GetInstance(displayName string) (interface{}, error)
 	// SetInstanceGroupSize sets desired node count per availability zone
 	// for given instance group
 	SetInstanceGroupSize(instanceGroupID string,

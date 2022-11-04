@@ -65,7 +65,7 @@ build:
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
 
 	(mkdir -p tools && cd tools && GO111MODULE=on go get github.com/onsi/ginkgo/ginkgo@v1.16.5)
-	(mkdir -p tools && cd tools && GO111MODULE=off go get github.com/onsi/gomega)
+	(mkdir -p tools && cd tools && GO111MODULE=on go get github.com/onsi/gomega@v1.19.0)
 	ginkgo build -r $(GINKGO_BUILD_DIR)
 
 	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
