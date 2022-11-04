@@ -3297,16 +3297,16 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	}
 
 	if !diagOps.Validate {
-		d.log.Infof("Collecting diags on node %v. Will skip validation", hostname)
+		d.log.Infof("Collecting diags on node [%s]. Will skip validation", hostname)
 	}
 
 	if status == api.Status_STATUS_OFFLINE {
-		d.log.Debugf("Node %v is offline, collecting diags using pxctl", hostname)
+		d.log.Debugf("Node [%s] is offline, collecting diags using pxctl", hostname)
 
 		// Only way to collect diags when PX is offline is using pxctl
 		out, err := d.GetPxctlCmdOutputConnectionOpts(n, fmt.Sprintf("sv diags -a -f --output %s", config.OutputFile), opts, true)
 		if err != nil {
-			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", hostname, err, out)
+			return fmt.Errorf("failed to collect diags on node [%s], Err: %v %v", hostname, err, out)
 		}
 	} else {
 		diagsPort := 9014
@@ -3344,7 +3344,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 
 		resp := req.Do()
 		if resp.Error() != nil {
-			return fmt.Errorf("failed to collect diags on node %v, Err: %v", hostname, resp.Error())
+			return fmt.Errorf("failed to collect diags on node [%s], Err: %v", hostname, resp.Error())
 		}
 	}
 
@@ -3352,28 +3352,11 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		cmd := fmt.Sprintf("test -f %s", config.OutputFile)
 		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
 		if err != nil {
-			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", hostname, err, out)
+			return fmt.Errorf("failed to locate diags on node [%s], Err: %v %v", hostname, err, out)
 		}
-
-		out, err = d.GetPxctlCmdOutputConnectionOpts(n, "status | egrep ^Telemetry:", opts, true)
-		if err != nil {
-			return fmt.Errorf("failed to get pxctl status. cause: %v", err)
-		}
-		telStatus, err := regexp.MatchString(`Telemetry:.*Healthy`, out)
-		if err != nil {
-			return fmt.Errorf("Error in checking telemetry status")
-		}
-		d.log.Debugf("Status returned by pxctl %s", out)
-		if !telStatus {
-			d.log.Debugf("Telemetry not enabled in PX Status on node %s. Skipping validation on s3", n.Name)
-			return nil
-		}
-
-		d.log.Infof("**** DIAGS FILE EXIST: %s ****", config.OutputFile)
 		d.DiagsFile = config.OutputFile[strings.LastIndex(config.OutputFile, "/")+1:]
+		d.log.Debugf("Successfully validated diags were collected on node [%s]", hostname)
 	}
-
-	d.log.Debugf("Successfully collected diags on node %v", hostname)
 	return nil
 }
 
