@@ -1,7 +1,7 @@
 package oracle
 
 import (
-	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -9,6 +9,7 @@ import (
 
 	"github.com/libopenstorage/cloudops"
 	oracleOps "github.com/libopenstorage/cloudops/oracle"
+	"github.com/oracle/oci-go-sdk/v65/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/sirupsen/logrus"
 )
@@ -31,18 +32,12 @@ func (o *oracle) String() string {
 
 // Init initializes the node driver for oracle under the given scheduler
 func (o *oracle) Init(nodeOpts node.InitOptions) error {
-	instanceID := os.Getenv("INSTANCE_ID")
-	if instanceID == "" {
-		return errors.New("INSTANCE_ID not found")
+	instanceGroup := os.Getenv("INSTANCE_GROUP")
+	if len(instanceGroup) != 0 {
+		o.instanceGroupName = instanceGroup
+	} else {
+		o.instanceGroupName = "default"
 	}
-	o.instanceID = instanceID
-
-	instanceGroupName := os.Getenv("INSTANCE_GROUP_NAME")
-	if instanceGroupName == "" {
-		return errors.New("INSTANCE_GROUP_NAME not found")
-	}
-	o.instanceGroupName = instanceGroupName
-
 	ops, err := oracleOps.NewClient()
 	if err != nil {
 		return err
@@ -75,7 +70,7 @@ func (o *oracle) GetASGClusterSize() (int64, error) {
 
 // GetZones returns list of zones in which cluster is running
 func (o *oracle) GetZones() ([]string, error) {
-	asgInfo, err := o.ops.InspectInstanceGroupForInstance(o.instanceID)
+	asgInfo, err := o.ops.InspectInstanceGroupForInstance(o.ops.InstanceID())
 	if err != nil {
 		return []string{}, err
 	}
@@ -105,8 +100,17 @@ func (o *oracle) SetClusterVersion(version string, timeout time.Duration) error 
 
 // DeleteNode deletes the given node
 func (o *oracle) DeleteNode(node node.Node, timeout time.Duration) error {
-	logrus.Info("[Torpedo] Deleting node with ID :", node.Id)
-	err := o.ops.DeleteInstance(node.Id, "", timeout)
+	logrus.Info("[Torpedo] Deleting node [%s]", node.Hostname)
+	instanceDetails, err := o.ops.GetInstance(node.Hostname)
+	if err != nil {
+		return err
+	}
+
+	oracleInstance, ok := instanceDetails.(core.Instance)
+	if !ok {
+		fmt.Errorf("could not retrive oracle instance details for %s", node.Hostname)
+	}
+	err = o.ops.DeleteInstance(*oracleInstance.Id, "", timeout)
 	if err != nil {
 		return err
 	}
