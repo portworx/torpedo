@@ -154,7 +154,7 @@ const (
 	configMapName                        = "kubeconfigs"
 	pxNamespace                          = "kube-system"
 
-	pdsParamCliFlag = "pdsparameter"
+	pdsParamCliFlag = "pds-parameter-json"
 
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"
@@ -220,7 +220,7 @@ const (
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
-	defaultLogLocation                    = "/Users/marunachalam/Desktop"
+	defaultLogLocation                    = "/testresults/"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
 	defaultAppScaleFactor                 = 1
