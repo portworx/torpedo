@@ -3995,15 +3995,19 @@ func ParseFlags() {
 			Status:      aetosutil.NOTSTARTED,
 		}
 		if testTags != "" {
-			tags := strings.Split(testTags, ",")
-			for _, tag := range tags {
-				var key, value string
-				if !strings.Contains(tag, ":") {
-					logrus.Info("Invalid tag %s. Please provide tag in key:value format skipping provided tag", tag)
-				} else {
-					key = strings.SplitN(tag, ":", 2)[0]
-					value = strings.SplitN(tag, ":", 2)[1]
-					testSet.Tags[key] = value
+			tags, err := splitCsv(testTags)
+			if err != nil {
+				log.Fatalf("failed to parse tags: %v. err: %v", testTags, err)
+			} else {
+				for _, tag := range tags {
+					var key, value string
+					if !strings.Contains(tag, ":") {
+						log.Info("Invalid tag %s. Please provide tag in key:value format skipping provided tag", tag)
+					} else {
+						key = strings.SplitN(tag, ":", 2)[0]
+						value = strings.SplitN(tag, ":", 2)[1]
+						testSet.Tags[key] = value
+					}
 				}
 			}
 		}
