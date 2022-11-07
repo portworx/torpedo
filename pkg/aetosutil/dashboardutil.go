@@ -93,7 +93,7 @@ type TestCase struct {
 	HostOs      string            `json:"hostOs"`
 	Tags        map[string]string `json:"nTags"`
 	TestSetID   int               `json:"testSetID"`
-	TestRepoID  string            `json:"testRepoID"`
+	TestRailID  string            `json:"testRepoID"`
 	Duration    string            `json:"duration"`
 }
 
@@ -274,7 +274,7 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 }
 
 // TestCaseBegin start the test case and push data to dashboard DB
-func (d *Dashboard) TestCaseBegin(testName, description, testRepoID string, tags map[string]string) {
+func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags map[string]string) {
 
 	d.Log.Info("--------Test Start------")
 	d.Log.Infof("#Test: %s ", testName)
@@ -313,7 +313,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRepoID string, tags
 
 		testCase.TestSetID = d.TestSetID
 
-		testCase.TestRepoID = testRepoID
+		testCase.TestRailID = testRailID
 		if tags != nil {
 			testCase.Tags = tags
 		}

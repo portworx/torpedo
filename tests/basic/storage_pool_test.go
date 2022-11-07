@@ -106,7 +106,9 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 })
 
 var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
-	StartTorpedoTest("StoragePoolExpandDiskAdd", "Validate storage pool expansion expansion using add-disk option", nil)
+	JustBeforeEach(func() {
+		StartTorpedoTest("StoragePoolExpandDiskAdd", "Validate storage pool expansion expansion using add-disk option", nil, 0)
+	})
 	var contexts []*scheduler.Context
 
 	stepLog := "should get the existing pool and expand it by adding a disk"
@@ -191,7 +193,10 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 })
 
 var _ = Describe("{PoolResizeDiskReboot}", func() {
-	StartTorpedoTest("PoolResizeDiskReboot", "Initiate pool expansion using resize-disk and reboot node", nil)
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolResizeDiskReboot", "Initiate pool expansion using resize-disk and reboot node", nil, 0)
+	})
+
 	var contexts []*scheduler.Context
 
 	stepLog := "has to schedule apps, and expand it by resizing a disk"
@@ -284,7 +289,9 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 })
 
 var _ = Describe("{PoolAddDiskReboot}", func() {
-	StartTorpedoTest("PoolAddDiskReboot", "Initiate pool expansion using add-disk and reboot node", nil)
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolAddDiskReboot", "Initiate pool expansion using add-disk and reboot node", nil, 0)
+	})
 	var contexts []*scheduler.Context
 
 	stepLog := "should get the existing pool and expand it by adding a disk"
