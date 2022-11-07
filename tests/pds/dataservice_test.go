@@ -188,7 +188,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 				Step("Scaling up the dataservice replicas", func() {
 
-					updatedDeployment, err := pdslib.NewUpdateDataServices(deployment.GetId(),
+					updatedDeployment, err := pdslib.UpdateDataServices(deployment.GetId(),
 						dataServiceDefaultAppConfigID, deployment.GetImageId(),
 						int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
 

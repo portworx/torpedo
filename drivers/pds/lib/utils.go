@@ -1162,12 +1162,9 @@ func GetAllSupportedDataServices() map[string]string {
 	return dataServiceNameIDMap
 }
 
-// NewUpdateDataServices modifies the existing deployment
-func NewUpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
-	//for version := range dataServiceImageMap {
-	//for i := range dataServiceImageMap[version] {
-	//imageID := dataServiceImageMap[version][i]
-	//logrus.Infof("Version %v ImageID %v", version, imageID)
+// UpdateDataServices modifies the existing deployment
+func UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
+
 	logrus.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
 	deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
 	if err != nil {
@@ -1175,26 +1172,6 @@ func NewUpdateDataServices(deploymentID string, appConfigID string, imageID stri
 		return nil, err
 	}
 	ValidateDataServiceDeployment(deployment, namespace)
-	//}
-	//}
-	return deployment, nil
-}
-
-// UpdateDataServices modifies the existing deployment
-func UpdateDataServices(deploymentID string, appConfigID string, dataServiceImageMap map[string][]string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
-	for version := range dataServiceImageMap {
-		for i := range dataServiceImageMap[version] {
-			imageID := dataServiceImageMap[version][i]
-			logrus.Infof("Version %v ImageID %v", version, imageID)
-			logrus.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
-			deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
-			if err != nil {
-				logrus.Errorf("An Error Occured while updating deployment %v", err)
-				return nil, err
-			}
-			ValidateDataServiceDeployment(deployment, namespace)
-		}
-	}
 	return deployment, nil
 }
 
