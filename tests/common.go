@@ -444,7 +444,7 @@ func InitInstance() {
 	commitID := strings.Split(pxVersion, "-")[1]
 	t := Inst().Dash.TestSet
 	t.CommitID = commitID
-	t.Tags = append(t.Tags, pxVersion)
+	t.Tags["px-version"] = pxVersion
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -3991,12 +3991,21 @@ func ParseFlags() {
 			Description: testDescription,
 			Branch:      testBranch,
 			TestType:    testType,
-			Tags:        make([]string, 0),
+			Tags:        make(map[string]string),
 			Status:      aetosutil.NOTSTARTED,
 		}
 		if testTags != "" {
 			tags := strings.Split(testTags, ",")
-			testSet.Tags = append(testSet.Tags, tags...)
+			for _, tag := range tags {
+				var key, value string
+				if !strings.Contains(tag, ":") {
+					logrus.Info("Invalid tag %s. Please provide tag in key:value format skipping provided tag", tag)
+				} else {
+					key = strings.SplitN(tag, ":", 2)[0]
+					value = strings.SplitN(tag, ":", 2)[1]
+					testSet.Tags[key] = value
+				}
+			}
 		}
 
 		val, ok := os.LookupEnv("TESTSET-ID")
@@ -4745,7 +4754,7 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 }
 
 //StartTorpedoTest starts the logging for torpedo test
-func StartTorpedoTest(testName, testDescription string, tags []string) {
+func StartTorpedoTest(testName, testDescription string, tags map[string]string) {
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
 	SetTorpedoFileOutput(log, TestLogger)
 	dash.TestCaseBegin(testName, testDescription, "", tags)
