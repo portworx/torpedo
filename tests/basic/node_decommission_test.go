@@ -14,7 +14,7 @@ import (
 
 var _ = Describe("{DecommissionNode}", func() {
 	var contexts []*scheduler.Context
-	StartTorpedoTest("DecommissionNode", "Validate node decommission", nil)
+	StartTorpedoTest("DecommissionNode", "Validate node decommission", nil, 0)
 
 	testName := "decommissionnode"
 	stepLog := "has to decommission a node and check if node was decommissioned successfully"
