@@ -3921,7 +3921,7 @@ func ParseFlags() {
 	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
-	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "run time options for cluster update")
+	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.Parse()
 
 	log = logInstance.GetLogInstance()
@@ -4734,8 +4734,7 @@ func updatePxRuntimeOpts() error {
 			optionsMap[optArr[0]] = optArr[1]
 		}
 		currNode := node.GetWorkerNodes()[0]
-		err = Inst().V.SetClusterRunTimeOpts(currNode, optionsMap)
-		return err
+		return Inst().V.SetClusterRunTimeOpts(currNode, optionsMap)
 	} else {
 		log.Info("No run time options provided to update")
 	}

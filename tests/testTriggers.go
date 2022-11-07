@@ -472,8 +472,7 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
 	Step(fmt.Sprintf("Set throttle to re-sync"), func() {
-		err := updatePxRuntimeOpts()
-		UpdateOutcome(event, err)
+		UpdateOutcome(event, updatePxRuntimeOpts())
 	})
 
 	errorChan := make(chan error, errorChannelSize)
