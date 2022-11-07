@@ -89,6 +89,7 @@ var _ = Describe("{Longevity}", func() {
 		KVDBFailover:         TriggerKVDBFailover,
 		ValidateDeviceMapper: TriggerValidateDeviceMapperCleanup,
 		AsyncDR:              TriggerAsyncDR,
+		AsyncDRVolumeOnly:    TriggerAsyncDRVolumeOnly,
 		RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
 		HAIncreaseAndReboot:  TriggerHAIncreaseAndReboot,
 		AddDiskAndReboot:     TriggerPoolAddDiskAndReboot,
@@ -590,6 +591,7 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover] = make(map[int]time.Duration)
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRVolumeOnly] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AddDrive] = make(map[int]time.Duration)
 	triggerInterval[AddDiskAndReboot] = make(map[int]time.Duration)
@@ -716,17 +718,6 @@ func populateIntervals() {
 	triggerInterval[BackupRestartNode][6] = 5 * baseInterval
 	triggerInterval[BackupRestartNode][5] = 6 * baseInterval
 
-	triggerInterval[AppTasksDown][10] = 1 * baseInterval
-	triggerInterval[AppTasksDown][9] = 2 * baseInterval
-	triggerInterval[AppTasksDown][8] = 3 * baseInterval
-	triggerInterval[AppTasksDown][7] = 4 * baseInterval
-	triggerInterval[AppTasksDown][6] = 5 * baseInterval
-	triggerInterval[AppTasksDown][5] = 6 * baseInterval
-	triggerInterval[AppTasksDown][4] = 7 * baseInterval
-	triggerInterval[AppTasksDown][3] = 8 * baseInterval
-	triggerInterval[AppTasksDown][2] = 9 * baseInterval
-	triggerInterval[AppTasksDown][1] = 10 * baseInterval
-
 	triggerInterval[AsyncDR][10] = 1 * baseInterval
 	triggerInterval[AsyncDR][9] = 3 * baseInterval
 	triggerInterval[AsyncDR][8] = 6 * baseInterval
@@ -738,7 +729,29 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][2] = 24 * baseInterval
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
 
+	triggerInterval[AsyncDRVolumeOnly][10] = 1 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][9] = 3 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][8] = 6 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][7] = 9 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][6] = 12 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][5] = 15 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][4] = 18 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][3] = 21 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][2] = 24 * baseInterval
+	triggerInterval[AsyncDRVolumeOnly][1] = 27 * baseInterval
+
 	baseInterval = 60 * time.Minute
+
+	triggerInterval[AppTasksDown][10] = 1 * baseInterval
+	triggerInterval[AppTasksDown][9] = 2 * baseInterval
+	triggerInterval[AppTasksDown][8] = 3 * baseInterval
+	triggerInterval[AppTasksDown][7] = 4 * baseInterval
+	triggerInterval[AppTasksDown][6] = 5 * baseInterval
+	triggerInterval[AppTasksDown][5] = 6 * baseInterval
+	triggerInterval[AppTasksDown][4] = 7 * baseInterval
+	triggerInterval[AppTasksDown][3] = 8 * baseInterval
+	triggerInterval[AppTasksDown][2] = 9 * baseInterval
+	triggerInterval[AppTasksDown][1] = 10 * baseInterval
 
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 3 * baseInterval
@@ -1195,6 +1208,7 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
+	triggerInterval[AsyncDRVolumeOnly][0] = 0
 	triggerInterval[HAIncreaseAndReboot][0] = 0
 	triggerInterval[AddDrive][0] = 0
 	triggerInterval[AddDiskAndReboot][0] = 0

@@ -253,6 +253,8 @@ const (
 	pxctlCDListCmd = "pxctl cd list"
 )
 
+var pxRuntimeOpts string
+
 const (
 	post_install_hook_pod = "pxcentral-post-install-hook"
 	quick_maintenance_pod = "quick-maintenance-repo"
@@ -1799,7 +1801,10 @@ func PerformSystemCheck() {
 					log.Info("an error occurred, collecting bundle")
 					CollectSupport()
 				}
-				dash.VerifySafely(err, nil, fmt.Sprintf("Verify if an error occurred, Err: %v", err))
+				if err != nil {
+					dash.VerifySafely(err, nil, fmt.Sprintf("Error occurred while checking for core on node %s, Err: %v", n.Name, err))
+				}
+
 				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
 			}
 		})
@@ -3930,6 +3935,7 @@ func ParseFlags() {
 	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
+	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.Parse()
 
 	log = logInstance.GetLogInstance()
@@ -4759,6 +4765,109 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 	return true
 }
 
+//ValidatePoolRebalance checks rebalnce state of pools if running
+func ValidatePoolRebalance() error {
+	rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+
+	if err == nil {
+
+		for _, job := range rebalanceJobs {
+			jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
+
+			if err == nil {
+
+				previousDone := uint64(0)
+				jobState := jobResponse.GetJob().GetState()
+				if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
+					return fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
+					dash.Infof("Job %v is in paused/pending state", job.GetId())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_DONE {
+					dash.Infof("Job %v is in DONE state", job.GetId())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_RUNNING {
+					dash.Infof("Job %v is in Running state", job.GetId())
+
+					currentDone, total := getReblanceWorkSummary(jobResponse)
+					//checking for rebalance progress
+					for currentDone < total && previousDone < currentDone {
+						time.Sleep(2 * time.Minute)
+						dash.Infof("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
+						jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
+						if err != nil {
+							return err
+						}
+						previousDone = currentDone
+						currentDone, total = getReblanceWorkSummary(jobResponse)
+					}
+
+					if previousDone == currentDone {
+						return fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
+					}
+					if currentDone == total {
+						dash.Infof("Rebalance for job %v completed,", job.GetId())
+					}
+
+				}
+
+			}
+		}
+	}
+	return err
+}
+
+func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse) (uint64, uint64) {
+	status := jobResponse.GetJob().GetStatus()
+	if status != "" {
+		log.Infof(" Job Status: %s", status)
+	}
+
+	currentDone := uint64(0)
+	currentPending := uint64(0)
+	total := uint64(0)
+	rebalWorkSummary := jobResponse.GetSummary().GetWorkSummary()
+
+	for _, summary := range rebalWorkSummary {
+		currentDone += summary.GetDone()
+		currentPending += summary.GetPending()
+		log.Infof("WorkSummary --> Type: %v,Done : %v, Pending: %v", summary.GetType(), currentDone, currentPending)
+
+	}
+	total = currentDone + currentPending
+
+	return currentDone, total
+}
+
+func updatePxRuntimeOpts() error {
+	if pxRuntimeOpts != "" {
+		dash.Infof("Setting run time options: %s", pxRuntimeOpts)
+		optionsMap := make(map[string]string)
+		runtimeOpts, err := splitCsv(pxRuntimeOpts)
+		if err != nil {
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Error parsing run time options, err : %v", err))
+		}
+
+		for _, opt := range runtimeOpts {
+			if !strings.Contains(opt, "=") {
+				dash.VerifyFatal(false, true, fmt.Sprintf("Given run time option is not in expected format key=val, Actual : %v", opt))
+			}
+			optArr := strings.Split(opt, "=")
+			optionsMap[optArr[0]] = optArr[1]
+		}
+		currNode := node.GetWorkerNodes()[0]
+		return Inst().V.SetClusterRunTimeOpts(currNode, optionsMap)
+	} else {
+		log.Info("No run time options provided to update")
+	}
+	return nil
+
+}
+
 //StartTorpedoTest starts the logging for torpedo test
 func StartTorpedoTest(testName, testDescription string, tags map[string]string, testRepoID int) {
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
@@ -4770,7 +4879,6 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
-
 }
 
 func Backupschedulepolicy(name string, uid string, orgid string, schedule_policy_info *api.SchedulePolicyInfo) error {
