@@ -253,6 +253,8 @@ const (
 	pxctlCDListCmd = "pxctl cd list"
 )
 
+var pxRuntimeOpts string
+
 const (
 	post_install_hook_pod = "pxcentral-post-install-hook"
 	quick_maintenance_pod = "quick-maintenance-repo"
@@ -327,6 +329,18 @@ var (
 const (
 	rootLogDir   = "/root/logs"
 	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+)
+
+type Weekday string
+
+const (
+	Monday    Weekday = "Mon"
+	Tuesday           = "Tue"
+	Wednesday         = "Wed"
+	Thursday          = "Thu"
+	Friday            = "Fri"
+	Saturday          = "Sat"
+	Sunday            = "Sun"
 )
 
 var log *logrus.Logger
@@ -1785,7 +1799,10 @@ func PerformSystemCheck() {
 					log.Info("an error occurred, collecting bundle")
 					CollectSupport()
 				}
-				dash.VerifySafely(err, nil, fmt.Sprintf("Verify if an error occurred, Err: %v", err))
+				if err != nil {
+					dash.VerifySafely(err, nil, fmt.Sprintf("Error occurred while checking for core on node %s, Err: %v", n.Name, err))
+				}
+
 				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
 			}
 		})
@@ -3916,6 +3933,7 @@ func ParseFlags() {
 	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
+	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.Parse()
 
 	log = logInstance.GetLogInstance()
@@ -4649,7 +4667,7 @@ func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_
 	return true
 }
 
-func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string) bool {
+func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string, policy_list []string) bool {
 	var flag bool = true
 	dash.Info("Deleting the deployed apps after the testcase")
 	for i := 0; i < len(contexts); i++ {
@@ -4662,7 +4680,6 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		}
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 	}
-
 	dash.Info("Deleting backup rules created")
 	RuleEnumerateReq := &api.RuleEnumerateRequest{
 		OrgId: orgID,
@@ -4698,12 +4715,34 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 	}
 	dash.Info("Deleting bucket,backup location and cloud setting")
 	for i, provider := range providers {
-		backup_location_name := fmt.Sprintf("%s-%s", "location1", provider)
+		backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
 		bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
 		DeleteBucket(provider, bucketName)
-		CredName := fmt.Sprintf("%s-%s", "cred1", provider)
+		CredName := fmt.Sprintf("%s-%s", "cred", provider)
 		DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
 		DeleteBackupLocation(backup_location_name, orgID)
+	}
+	dash.Info("Deleting schedule policies")
+	sched_policy_map := make(map[string]string)
+	schedPolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
+		OrgId: orgID,
+	}
+	schedule_policy_list, err := Inst().Backup.EnumerateSchedulePolicy(ctx, schedPolicyEnumerateReq)
+	dash.VerifyFatal(err, nil, "Getting list of schedule policies")
+	for i := 0; i < len(schedule_policy_list.SchedulePolicies); i++ {
+		sched_policy_map[schedule_policy_list.SchedulePolicies[i].Metadata.Name] = schedule_policy_list.SchedulePolicies[i].Metadata.Uid
+	}
+	for i := 0; i < len(policy_list); i++ {
+		schedPolicydeleteReq := &api.SchedulePolicyDeleteRequest{
+			OrgId: orgID,
+			Name:  policy_list[i],
+			Uid:   sched_policy_map[policy_list[i]],
+		}
+		_, err := Inst().Backup.DeleteSchedulePolicy(ctx, schedPolicydeleteReq)
+		if err != nil {
+			flag = false
+		}
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verify deleting schedule policies %s, Err: %v", policy_list[i], err))
 	}
 	if flag == false {
 		return false
@@ -4766,6 +4805,7 @@ func ValidatePoolRebalance() error {
 	}
 	return err
 }
+
 func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse) (uint64, uint64) {
 	status := jobResponse.GetJob().GetStatus()
 	if status != "" {
@@ -4788,6 +4828,31 @@ func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse
 	return currentDone, total
 }
 
+func updatePxRuntimeOpts() error {
+	if pxRuntimeOpts != "" {
+		dash.Infof("Setting run time options: %s", pxRuntimeOpts)
+		optionsMap := make(map[string]string)
+		runtimeOpts, err := splitCsv(pxRuntimeOpts)
+		if err != nil {
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Error parsing run time options, err : %v", err))
+		}
+
+		for _, opt := range runtimeOpts {
+			if !strings.Contains(opt, "=") {
+				dash.VerifyFatal(false, true, fmt.Sprintf("Given run time option is not in expected format key=val, Actual : %v", opt))
+			}
+			optArr := strings.Split(opt, "=")
+			optionsMap[optArr[0]] = optArr[1]
+		}
+		currNode := node.GetWorkerNodes()[0]
+		return Inst().V.SetClusterRunTimeOpts(currNode, optionsMap)
+	} else {
+		log.Info("No run time options provided to update")
+	}
+	return nil
+
+}
+
 //StartTorpedoTest starts the logging for torpedo test
 func StartTorpedoTest(testName, testDescription string, tags []string) {
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
@@ -4799,4 +4864,78 @@ func StartTorpedoTest(testName, testDescription string, tags []string) {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+}
+
+func Backupschedulepolicy(name string, uid string, orgid string, schedule_policy_info *api.SchedulePolicyInfo) error {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			Uid:   uid,
+			OrgId: orgid,
+		},
+		SchedulePolicy: schedule_policy_info,
+	}
+	_, err = Inst().Backup.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		log.Infof(" \n\n eeror in schel policy is +%v", err)
+		return err
+	}
+	return nil
+}
+
+func CreateIntervalSchedulePolicy(retain int64, min int64, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Interval: &api.SchedulePolicyInfo_IntervalPolicy{
+			Retain:  retain,
+			Minutes: min,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateDailySchedulePolicy(retain int64, time string, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Daily: &api.SchedulePolicyInfo_DailyPolicy{
+			Retain: retain,
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateWeeklySchedulePolicy(retain int64, day Weekday, time string, incr_count uint64) *api.SchedulePolicyInfo {
+
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Weekly: &api.SchedulePolicyInfo_WeeklyPolicy{
+			Retain: retain,
+			Day:    string(day),
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateMonthlySchedulePolicy(retain int64, date int64, time string, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Monthly: &api.SchedulePolicyInfo_MonthlyPolicy{
+			Retain: retain,
+			Date:   date,
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
 }
