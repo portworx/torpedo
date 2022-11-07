@@ -2,8 +2,11 @@ package jirautils
 
 import (
 	"bytes"
+	"net/http"
+	"time"
 
 	jira "github.com/andygrunwald/go-jira"
+	logInstance "github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"github.com/trivago/tgo/tcontainer"
 )
@@ -11,6 +14,7 @@ import (
 var (
 	client                     *jira.Client
 	isJiraConnectionSuccessful bool
+	log                        *logrus.Logger
 
 	//AccountID for bug assignment
 	AccountID string
@@ -22,22 +26,31 @@ const (
 
 // Init function for the Jira
 func Init(username, token string) {
-	httpClient := jira.BasicAuthTransport{
+	jiraAuth := jira.BasicAuthTransport{
 		Username: username,
 		Password: token,
 	}
 	var err error
-
-	client, err = jira.NewClient(httpClient.Client(), jiraURL)
-	if err != nil {
+	timeout := 15 * time.Second
+	httpClient := http.Client{
+		Timeout: timeout,
+	}
+	response, err := httpClient.Get(jiraURL)
+	if err == nil {
+		isJiraConnectionSuccessful = true
+	}
+	if response != nil && response.StatusCode != 200 {
+		log.Warnf("Response code : %d", response.StatusCode)
 		isJiraConnectionSuccessful = false
-		logrus.Errorf("Jira connection not successful, Cause: %v", err)
-
-	} else {
-		logrus.Info("Jira connection is successful")
 	}
 
-	isJiraConnectionSuccessful = true
+	if isJiraConnectionSuccessful {
+		client, err = jira.NewClient(jiraAuth.Client(), jiraURL)
+	} else {
+		log.Errorf("Jira connection not successful, Cause: %v", err)
+	}
+
+	log.Info("Jira connection is successful")
 
 }
 
@@ -46,12 +59,10 @@ func CreateIssue(issueDesription, issueSummary string) (string, error) {
 
 	issueKey := ""
 	var err error
-
-	if isJiraConnectionSuccessful {
-
+	if isJiraConnectionSuccessful && client != nil {
 		issueKey, err = createPTX(issueDesription, issueSummary)
 	} else {
-		logrus.Warn("Skipping issue creation as jira connection is not successful")
+		log.Warn("Skipping issue creation as jira connection is not successful")
 	}
 	return issueKey, err
 
@@ -60,12 +71,12 @@ func CreateIssue(issueDesription, issueSummary string) (string, error) {
 func getPTX(issueID string) {
 
 	issue, _, err := client.Issue.Get(issueID, nil)
-	logrus.Infof("Error: %v", err)
+	log.Infof("Error: %v", err)
 
-	logrus.Infof("%s: %+v\n", issue.Key, issue.Fields.Summary)
+	log.Infof("%s: %+v\n", issue.Key, issue.Fields.Summary)
 
-	logrus.Infof("%s: %s\n", issue.ID, issue.Fields.Summary)
-	logrus.Info(issue.Fields.FixVersions[0].Name)
+	log.Infof("%s: %s\n", issue.ID, issue.Fields.Summary)
+	log.Info(issue.Fields.FixVersions[0].Name)
 
 }
 
@@ -106,19 +117,19 @@ func createPTX(description, summary string) (string, error) {
 	}
 	issue, resp, err := client.Issue.Create(&i)
 
-	logrus.Infof("Resp: %v", resp.StatusCode)
+	log.Infof("Resp: %v", resp.StatusCode)
 	issueKey := ""
 	if resp.StatusCode == 201 {
-		logrus.Info("Successfully created new jira issue.")
-		logrus.Infof("Jira Issue: %+v\n", issue.Key)
+		log.Info("Successfully created new jira issue.")
+		log.Infof("Jira Issue: %+v\n", issue.Key)
 		issueKey = issue.Key
 
 	} else {
-		logrus.Infof("Error while creating jira issue: %v", err)
+		log.Infof("Error while creating jira issue: %v", err)
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(resp.Body)
 		newStr := buf.String()
-		logrus.Infof(newStr)
+		log.Infof(newStr)
 
 	}
 	return issueKey, err
@@ -131,13 +142,17 @@ func getProjects() {
 	projects := new([]jira.Project)
 	_, err := client.Do(req, projects)
 	if err != nil {
-		logrus.Info("Error while getting project")
-		logrus.Error(err)
+		log.Info("Error while getting project")
+		log.Error(err)
 		return
 	}
 
 	for _, project := range *projects {
 
-		logrus.Infof("%s: %s\n", project.Key, project.Name)
+		log.Infof("%s: %s\n", project.Key, project.Name)
 	}
+}
+
+func init() {
+	log = logInstance.GetLogInstance()
 }
