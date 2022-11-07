@@ -7,7 +7,18 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/s3utils"
+	"net/http"
+	"regexp"
+
+	logInstance "github.com/portworx/torpedo/pkg/log"
+
+	"github.com/portworx/torpedo/pkg/aetosutil"
+
+	"io"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -19,12 +30,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/s3utils"
+
 	storageapi "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -44,6 +55,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
@@ -93,13 +105,17 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/aws"
 	// import azure driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/azure"
+
 	// import generic csi driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
-	"github.com/portworx/torpedo/pkg/log"
+
+	// import driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
 
 	context1 "context"
 
 	"github.com/pborman/uuid"
+	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -113,6 +129,7 @@ const (
 	defaultSpecsRoot                     = "/specs"
 	schedulerCliFlag                     = "scheduler"
 	nodeDriverCliFlag                    = "node-driver"
+	monitorDriverCliFlag                 = "monitor-driver"
 	storageDriverCliFlag                 = "storage-driver"
 	backupCliFlag                        = "backup-driver"
 	specDirCliFlag                       = "spec-dir"
@@ -169,6 +186,21 @@ const (
 	defaultClusterPairDir  = "cluster-pair"
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
+
+	torpedoJobNameFlag = "torpedo-job-name"
+	torpedoJobTypeFlag = "torpedo-job-type"
+)
+
+//Dashboard params
+const (
+	enableDashBoardFlag = "enable-dash"
+	userFlag            = "user"
+	testTypeFlag        = "test-type"
+	testDescriptionFlag = "test-desc"
+	testTagsFlag        = "test-tags"
+	testSetIDFlag       = "testset-id"
+	testBranchFlag      = "branch"
+	testProductFlag     = "product"
 )
 
 // Backup constants
@@ -188,8 +220,9 @@ const (
 	oneMegabytes                          = 1024 * 1024
 	defaultScheduler                      = "k8s"
 	defaultNodeDriver                     = "ssh"
+	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
-	defaultLogLocation                    = "/mnt/torpedo_support_dir"
+	defaultLogLocation                    = "/testresults/"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
 	defaultAppScaleFactor                 = 1
@@ -204,6 +237,8 @@ const (
 	defaultLicenseExpiryTimeoutHours      = 1 * time.Hour
 	defaultMeteringIntervalMins           = 10 * time.Minute
 	authTokenParam                        = "auth-token"
+	defaultTorpedoJob                     = "torpedo-job"
+	defaultTorpedoJobType                 = "functional"
 )
 
 const (
@@ -218,6 +253,28 @@ const (
 
 const (
 	pxctlCDListCmd = "pxctl cd list"
+)
+
+var pxRuntimeOpts string
+
+const (
+	post_install_hook_pod = "pxcentral-post-install-hook"
+	quick_maintenance_pod = "quick-maintenance-repo"
+	full_maintenance_pod  = "full-maintenance-repo"
+	taskNamePrefix        = "backupcreaterestore"
+	orgID                 = "default"
+)
+
+var (
+	create_pre_rule  = false
+	create_post_rule = false
+	// User should keep updating the below 3 datas
+	pre_rule_app   = []string{"cassandra", "postgres"}
+	post_rule_app  = []string{"cassandra"}
+	app_parameters = map[string]map[string]string{
+		"cassandra": {"pre_action_list": "nodetool flush -- keyspace1;", "post_action_list": "nodetool verify -- keyspace1;", "background": "false", "run_in_single_pod": "false"},
+		"postgres":  {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U '$POSTGRES_USER' -c 'CHECKPOINT';", "background": "false", "run_in_single_pod": "false"},
+	}
 )
 
 var (
@@ -276,23 +333,40 @@ const (
 	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
 )
 
+type Weekday string
+
+const (
+	Monday    Weekday = "Mon"
+	Tuesday           = "Tue"
+	Wednesday         = "Wed"
+	Thursday          = "Thu"
+	Friday            = "Fri"
+	Saturday          = "Sat"
+	Sunday            = "Sun"
+)
+
+var log *logrus.Logger
+
+//TpLogPath torpedo log path
+var tpLogPath string
+var suiteLogger *lumberjack.Logger
+
+//TestLogger for logging test logs
+var TestLogger *lumberjack.Logger
+var dash *aetosutil.Dashboard
+var post_rule_uid string
+var pre_rule_uid string
+
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
 	var token string
-	if Inst().ConfigMap != "" {
-		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
-		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-		expect(err).NotTo(haveOccurred())
-		logrus.Infof("Token used for initializing: %s ", token)
-	} else {
-		token = ""
-	}
 
 	err = Inst().S.Init(scheduler.InitOptions{
 		SpecDir:                          Inst().SpecDir,
 		VolDriverName:                    Inst().V.String(),
 		NodeDriverName:                   Inst().N.String(),
+		MonitorDriverName:                Inst().M.String(),
 		SecretConfigMapName:              Inst().ConfigMap,
 		CustomAppConfig:                  Inst().CustomAppConfig,
 		StorageProvisioner:               Inst().Provisioner,
@@ -303,45 +377,84 @@ func InitInstance() {
 		PureSANType:                      Inst().PureSANType,
 		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
+		Logger:                           Inst().Logger,
 	})
+	if err != nil {
+		log.Errorf("Error occured while Scheduler Driver Initialization, Err: %v", err)
+	}
 	expect(err).NotTo(haveOccurred())
+
+	if Inst().ConfigMap != "" {
+		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+		expect(err).NotTo(haveOccurred())
+		log.Infof("Token used for initializing: %s ", token)
+	} else {
+		token = ""
+	}
 
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
+		Logger:  Inst().Logger,
 	})
+	if err != nil {
+		log.Errorf("Error occured while Node Driver Initialization, Err: %v", err)
+	}
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap, Inst().Logger)
+	if err != nil {
+		log.Errorf("Error occured while Volume Driver Initialization, Err: %v", err)
+	}
+	expect(err).NotTo(haveOccurred())
+
+	err = Inst().M.Init(Inst().JobName, Inst().JobType)
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
+		if err != nil {
+			log.Errorf("Error occured while Backup Driver Initialization, Err: %v", err)
+		}
 		expect(err).NotTo(haveOccurred())
 	}
 	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
 		err = testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
 		if err == nil {
 			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
-				processError(fmt.Errorf("not all details provided to update testrail"))
+				err = fmt.Errorf("not all details provided to update testrail")
+				log.Errorf("Err: %v", err)
+				expect(err).NotTo(haveOccurred())
 			}
 			testrailuttils.CreateMilestone()
 		}
 	} else {
-		logrus.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
+		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
 	}
 
 	if jiraUserName != "" && jiraToken != "" {
-		logrus.Info("Initializing JIRA connection")
+		log.Info("Initializing JIRA connection")
 		jirautils.Init(jiraUserName, jiraToken)
 
 	} else {
-		logrus.Debugf("Not all information to connect to JIRA is provided.")
+		log.Debugf("Not all information to connect to JIRA is provided.")
 	}
+
+	pxVersion, err := Inst().V.GetDriverVersion()
+	if err != nil {
+		log.Errorf(err.Error())
+		expect(err).NotTo(haveOccurred())
+	}
+	commitID := strings.Split(pxVersion, "-")[1]
+	t := Inst().Dash.TestSet
+	t.CommitID = commitID
+	t.Tags = append(t.Tags, pxVersion)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
 	Step("validate cleanup of resources used by the test suite", func() {
+		dash.Info("validate cleanup of resources used by the test suite")
 		t := func() (interface{}, bool, error) {
 			if err := Inst().V.ValidateVolumeCleanup(); err != nil {
 				return "", true, err
@@ -352,22 +465,22 @@ func ValidateCleanup() {
 
 		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
 		if err != nil {
-			logrus.Info("an error occurred, collecting bundle")
+			log.Info("an error occurred, collecting bundle")
 			CollectSupport()
 		}
-		expect(err).NotTo(haveOccurred())
+		dash.VerifyFatal(err, nil, "verify if an error occurred while validating clean up")
 	})
 }
 
 func processError(err error, errChan ...*chan error) {
 	// if errChan is provided then just push err to on channel
 	// Useful for frameworks like longevity that must continue
-	// execution and must not not fail immidiately
+	// execution and must not fail immediately
 	if len(errChan) > 0 {
-		logrus.Error(err)
+		log.Error(err)
 		updateChannel(err, errChan...)
 	} else {
-		expect(err).NotTo(haveOccurred())
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verify if error occured.Err: %v", err))
 	}
 }
 
@@ -386,6 +499,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	}()
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
+		dash.Info(fmt.Sprintf("Validating %s app", ctx.App.Key))
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
@@ -395,11 +509,15 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
+				dash.Info(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
 				ValidateVolumes(ctx, errChan...)
 			}
 		})
 
-		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
+		stepLog := fmt.Sprintf("wait for %s app to start running", ctx.App.Key)
+
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 			if err != nil {
 				processError(err, errChan...)
@@ -409,7 +527,9 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 		// Validating Topology Labels for apps if Topology is enabled
 		if len(Inst().TopologyLabels) > 0 {
-			Step(fmt.Sprintf("validate topology labels for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("validate topology labels for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				dash.Info(stepLog)
 				err := Inst().S.ValidateTopologyLabel(ctx)
 				if err != nil {
 					processError(err, errChan...)
@@ -417,11 +537,13 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 				}
 			})
 		}
+		stepLog = fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key)
 
-		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
+		Step(stepLog, func() {
 			if ctx.SkipVolumeValidation {
 				return
 			}
+			dash.Info(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
 
 			vols, err := Inst().S.GetVolumes(ctx)
 			// Fixing issue where it is priniting nil
@@ -430,7 +552,9 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 
 			for _, vol := range vols {
-				Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
+				stepLog = fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol)
+				Step(stepLog, func() {
+					log.Infof(stepLog)
 					err := Inst().V.ValidateVolumeSetup(vol)
 					if err != nil {
 						processError(err, errChan...)
@@ -627,7 +751,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			vols, err := Inst().S.GetVolumes(ctx)
 			if err != nil {
-				logrus.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
 			volScaleFactor := 1
@@ -637,7 +761,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				// GlobalScaleFactor is 1, high number of volumes in a single app instance
 				// may slow things down.
 				volScaleFactor = len(vols) / 10
-				logrus.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
+				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
 			}
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
@@ -1106,6 +1230,44 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 	}
 }
 
+func ValidateFastpathVolume(ctx *scheduler.Context, expectedStatus opsapi.FastpathStatus) error {
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return err
+	}
+	for _, vol := range appVolumes {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return err
+		}
+		if decommissionedNode.Name != "" && decommissionedNode.Id == appVol.FpConfig.Replicas[0].NodeUuid {
+			expectedStatus = opsapi.FastpathStatus_FASTPATH_INACTIVE
+
+		}
+
+		fpConfig := appVol.FpConfig
+		log.Infof("fpconfig: %+v", fpConfig)
+		if len(fpConfig.Replicas) > 1 {
+			expectedStatus = opsapi.FastpathStatus_FASTPATH_INACTIVE
+		}
+		if fpConfig.Status == expectedStatus {
+			log.Infof("Fastpath status is %v", fpConfig.Status)
+			if fpConfig.Status == opsapi.FastpathStatus_FASTPATH_ACTIVE {
+				if fpConfig.Dirty {
+					return fmt.Errorf("fastpath vol %s is dirty", vol.Name)
+				}
+				if !fpConfig.Promote {
+					return fmt.Errorf("fastpath vol %s is not promoted", vol.Name)
+				}
+			}
+		} else {
+			return fmt.Errorf("expected Fastpath Status: %v, Actual: %v", expectedStatus, fpConfig.Status)
+		}
+	}
+
+	return nil
+}
+
 // TearDownContext is the ginkgo spec for tearing down a scheduled context
 // In the tear down flow we first want to delete volumes, then applications and only then we want to delete StorageClasses
 // StorageClass has to be deleted last because it has information that is required for when deleting PVC, if StorageClass objects are deleted before
@@ -1129,9 +1291,11 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		vols := DeleteVolumes(ctx, options)
 
 		// Tear down application
-		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
+		stepLog := fmt.Sprintf("start destroying %s app", ctx.App.Key)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			err = Inst().S.Destroy(ctx, opts)
-			expect(err).NotTo(haveOccurred())
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", ctx.App.Key, err))
 		})
 
 		if !ctx.SkipVolumeValidation {
@@ -1153,8 +1317,9 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 	var err error
 	var vols []*volume.Volume
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
+		log.Infof("destroy the %s app's volumes", ctx.App.Key)
 		vols, err = Inst().S.DeleteVolumes(ctx, options)
-		expect(err).NotTo(haveOccurred())
+		dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volumes, Err: %v", ctx.App.Key, err))
 	})
 	return vols
 }
@@ -1164,8 +1329,10 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 	for _, vol := range vols {
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
+			dash.Infof("validate %s app's volume %s has been deleted in the volume driver",
+				appName, vol.Name)
 			err := Inst().V.ValidateDeleteVolume(vol)
-			expect(err).NotTo(haveOccurred(), "unexpected error validating app volumes deleted")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volume %s, Err: %v", appName, vol.Name, err))
 		})
 	}
 }
@@ -1198,10 +1365,10 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 		}
 		//if not hyper converged set up deploy apps only on storageless nodes
 		if !Inst().IsHyperConverged {
-			logrus.Infof("Scheduling apps only on storageless nodes")
+			log.Infof("Scheduling apps only on storageless nodes")
 			storagelessNodes := node.GetStorageLessNodes()
 			if len(storagelessNodes) == 0 {
-				logrus.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
+				log.Info("No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
 				Inst().IsHyperConverged = true
 			}
 			for _, storagelessNode := range storagelessNodes {
@@ -1222,11 +1389,14 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			}
 
 		} else {
-			logrus.Infof("Scheduling Apps with hyper-converged")
+			log.Infof("Scheduling Apps with hyper-converged")
 		}
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, options)
-		processError(err, errChan...)
+		// Need to check err != nil before calling processError
+		if err != nil {
+			processError(err, errChan...)
+		}
 		if len(contexts) == 0 {
 			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
 		}
@@ -1283,6 +1453,7 @@ func ValidateApplicationsPureSDK(contexts []*scheduler.Context) {
 // ValidateApplications validates applications
 func ValidateApplications(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
+		dash.Info("Validate applications")
 		for _, ctx := range contexts {
 			ValidateContext(ctx)
 		}
@@ -1297,14 +1468,18 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		}
 	}()
 	context(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
-		Step(fmt.Sprintf("start volume driver on nodes: %v", appNodes), func() {
+		stepLog := fmt.Sprintf("start volume driver on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.StartDriver(n)
 				processError(err, errChan...)
 			}
 		})
 
-		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
+		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -1323,12 +1498,16 @@ func StopVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		}
 	}()
 	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
-		Step(fmt.Sprintf("stop volume driver on nodes: %v", appNodes), func() {
+		stepLog := fmt.Sprintf("stop volume driver on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			err := Inst().V.StopDriver(appNodes, false, nil)
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
+		stepLog = fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverDownOnNode(n)
 				processError(err, errChan...)
@@ -1346,12 +1525,16 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 		}
 	}()
 	context(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
-		Step(fmt.Sprintf("crash volume driver on nodes: %v", appNodes), func() {
+		stepLog := fmt.Sprintf("crash volume driver on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			err := Inst().V.StopDriver(appNodes, true, nil)
 			processError(err, errChan...)
 		})
 
-		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
+		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -1364,12 +1547,14 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 // ValidateAndDestroy validates application and then destroys them
 func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	Step("validate apps", func() {
+		dash.Info("Validating apps")
 		for _, ctx := range contexts {
 			ValidateContext(ctx)
 		}
 	})
 
 	Step("destroy apps", func() {
+		dash.Info("Destroying apps")
 		for _, ctx := range contexts {
 			TearDownContext(ctx, opts)
 		}
@@ -1447,10 +1632,10 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
 				namespaceDescription, err := Inst().S.Describe(ctx)
 				if err != nil {
-					logrus.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
+					log.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
 				}
 				if err = ioutil.WriteFile(filename, []byte(namespaceDescription), 0755); err != nil {
-					logrus.Errorf("failed to save file %s. Cause: %v", filename, err)
+					log.Errorf("failed to save file %s. Cause: %v", filename, err)
 				}
 			}
 		})
@@ -1461,17 +1646,17 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 // using total cluster size `count` and max_storage_nodes_per_zone
 func ValidateClusterSize(count int64) {
 	zones, err := Inst().N.GetZones()
-	expect(err).NotTo(haveOccurred())
-	logrus.Debugf("ASG is running in [%+v] zones\n", zones)
+	dash.VerifyFatal(err, nil, "Verify Get zones")
+	dash.Infof("ASG is running in [%+v] zones\n", zones)
 	perZoneCount := count / int64(len(zones))
 
 	// Validate total node count
 	currentNodeCount, err := Inst().N.GetASGClusterSize()
-	expect(err).NotTo(haveOccurred())
-	expect(perZoneCount*int64(len(zones))).Should(equal(currentNodeCount),
-		"ASG cluster size is not as expected."+
-			" Current size is [%d]. Expected ASG size is [%d]",
-		currentNodeCount, perZoneCount*int64(len(zones)))
+	dash.VerifyFatal(err, nil, "Verify Get ASG Cluster Size")
+
+	dash.VerifyFatal(perZoneCount*int64(len(zones)), currentNodeCount, fmt.Sprintf("Verify if ASG cluster size is as expected."+
+		" Current size is [%d]. Expected ASG size is [%d]",
+		currentNodeCount, perZoneCount*int64(len(zones))))
 
 	// Validate storage node count
 	var expectedStorageNodesPerZone int
@@ -1481,14 +1666,14 @@ func ValidateClusterSize(count int64) {
 		expectedStorageNodesPerZone = int(perZoneCount)
 	}
 	storageNodes, err := GetStorageNodes()
+	dash.VerifyFatal(err, nil, "Verify Get storage nodes")
 
-	expect(err).NotTo(haveOccurred())
-	expect(len(storageNodes)).Should(equal(expectedStorageNodesPerZone*len(zones)),
-		"Current number of storeage nodes [%d] does not match expected number of storage nodes [%d]."+
+	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones),
+		fmt.Sprintf("Verify if c urrent number of storeage nodes [%d] match the expected number of storage nodes [%d]."+
 			"List of storage nodes:[%v]",
-		len(storageNodes), expectedStorageNodesPerZone*len(zones), storageNodes)
+			len(storageNodes), expectedStorageNodesPerZone*len(zones), storageNodes))
 
-	logrus.Infof("Validated successfully that [%d] storage nodes are present", len(storageNodes))
+	dash.Infof("Validated successfully that [%d] storage nodes are present", len(storageNodes))
 }
 
 //GetStorageNodes get storage nodes in the cluster
@@ -1512,21 +1697,23 @@ func GetStorageNodes() ([]node.Node, error) {
 // CollectSupport creates a support bundle
 func CollectSupport() {
 	context("generating support bundle...", func() {
+		dash.Info("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
-				logrus.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
+				log.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
 				return
 			}
 		}
 		nodes := node.GetWorkerNodes()
-		expect(nodes).NotTo(beEmpty())
+		dash.VerifyFatal(len(nodes) > 0, true, "Verify Get Worker nodes")
 
 		for _, n := range nodes {
 			if !n.IsStorageDriverInstalled {
 				continue
 			}
 			Step(fmt.Sprintf("save all useful logs on node %s", n.SchedulerNodeName), func() {
+				log.Infof("save all useful logs on node %s", n.SchedulerNodeName)
 
 				// Moves this out to deal with diag testing.
 				r := &volume.DiagRequestConfig{
@@ -1572,7 +1759,7 @@ func runCmd(cmd string, n node.Node) error {
 		Sudo:            true,
 	})
 	if err != nil {
-		logrus.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
 	}
 
 	return err
@@ -1596,24 +1783,29 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
 	context("checking for core files...", func() {
+		log.Info("checking for core files...")
 		Step("verifying if core files are present on each node", func() {
+			dash.Info("verifying if core files are present on each node")
 			nodes := node.GetNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
 					continue
 				}
-				logrus.Infof("looking for core files on node %s", n.Name)
+				dash.Infof("looking for core files on node %s", n.Name)
 				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
-					logrus.Info("an error occurred, collecting bundle")
+					log.Info("an error occurred, collecting bundle")
 					CollectSupport()
 				}
-				expect(err).NotTo(haveOccurred())
-				expect(file).To(beEmpty())
+				if err != nil {
+					dash.VerifySafely(err, nil, fmt.Sprintf("Error occurred while checking for core on node %s, Err: %v", n.Name, err))
+				}
+
+				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
 			}
 		})
 	})
@@ -1785,10 +1977,10 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	logrus.Debugf("contexts: %v", contexts)
+	log.Debugf("contexts: %v", contexts)
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
-		logrus.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 		CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
@@ -1796,7 +1988,7 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	if len(ids) >= 1 {
 		driverVersion, err := Inst().V.GetDriverVersion()
 		if err != nil {
-			logrus.Errorf("Error in getting driver version")
+			log.Errorf("Error in getting driver version")
 		}
 		testrailObject := testrailuttils.Testrail{
 			Status:        testStatus,
@@ -2065,15 +2257,14 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 
 //UpgradePxStorageCluster perform storage cluster upgrade
 func UpgradePxStorageCluster() (bool, error) {
-
-	logrus.Info("Initiating operator based install upgrade")
+	dash.Info("Initiating operator based install upgrade")
 	operatorTag, err := getOperatorLatestVersion()
 
 	if err != nil {
 		return false, fmt.Errorf("error getting latest operator version. Cause: %v", err)
 	}
 	operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
-	logrus.Info(operatorImage)
+	dash.Infof("OCI-Monitor Image: %s", operatorImage)
 
 	err = Inst().V.UpdateStorageClusterImage(operatorImage)
 	if err != nil {
@@ -2087,7 +2278,7 @@ func UpgradePxStorageCluster() (bool, error) {
 		checkTag = true
 	}
 
-	logrus.Infof("Expected version %s", expectedVersion)
+	dash.Infof("Expected PX version %s", expectedVersion)
 
 	nodes := node.GetStorageDriverNodes()
 	nodesUpgradeMap := make(map[string]bool)
@@ -2117,10 +2308,10 @@ func UpgradePxStorageCluster() (bool, error) {
 					return false, fmt.Errorf("error getting PX version for node %s. Cause: %v", k, err)
 				}
 				pxVersion := fmt.Sprintf("%v", versionVal)
-				logrus.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
+				log.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
 
 				if (checkTag && pxVersion == expectedVersion) || strings.Contains(pxVersion, expectedVersion) {
-					logrus.Infof("Node %s successfully upgraded to version %s", k, pxVersion)
+					dash.Infof("Node %s successfully upgraded to version %s", k, pxVersion)
 					nodesUpgradeMap[k] = true
 				}
 			}
@@ -2133,7 +2324,7 @@ func UpgradePxStorageCluster() (bool, error) {
 			isUpgradeDone = isNodeUpgraded
 			break
 		}
-		logrus.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
+		log.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
 		time.Sleep(2 * time.Minute)
 		waitCount--
 	}
@@ -3193,22 +3384,24 @@ func DeleteBucket(provider string, bucketName string) {
 //HaIncreaseRebootTargetNode repl increase and reboot target node
 func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
 
-	Step(
-		fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
-			Inst().V.String(), ctx.App.Key, v),
+	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
+		Inst().V.String(), ctx.App.Key, v)
+
+	Step(stepLog,
 		func() {
+			dash.Info(stepLog)
 			currRep, err := Inst().V.GetReplicationFactor(v)
 
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				logrus.Error(err)
+				log.Error(err)
 				UpdateOutcome(event, err)
 				return
 			}
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				logrus.Warn(err)
+				log.Warn(err)
 				UpdateOutcome(event, err)
 				return
 			}
@@ -3216,7 +3409,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 			replicaSets, err := Inst().V.GetReplicaSets(v)
 			if err == nil {
 				replicaNodes := replicaSets[0].Nodes
-				logrus.Infof("Current replica nodes of volume %v are %v", v.Name, replicaNodes)
+				dash.Infof("Current replica nodes of volume %v are %v", v.Name, replicaNodes)
 				var newReplID string
 				var newReplNode node.Node
 
@@ -3235,26 +3428,31 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 						break
 					}
 				}
-
-				Step(
-					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
-						Inst().V.String(), ctx.App.Key, v),
+				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+					Inst().V.String(), ctx.App.Key, v)
+				Step(stepLog,
 					func() {
-						logrus.Infof("Increasing repl with target node  [%v]", newReplID)
+						dash.Info(stepLog)
+						if strings.Contains(ctx.App.Key, fastpathAppName) {
+							defer Inst().S.RemoveLabelOnNode(newReplNode, k8s.NodeType)
+							Inst().S.AddLabelOnNode(newReplNode, k8s.NodeType, k8s.FastpathNodeType)
+
+						}
+						dash.Infof("Increasing repl with target node  [%v]", newReplID)
 						err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
 						if err != nil {
-							logrus.Errorf("There is an error increasing repl [%v]", err.Error())
+							log.Errorf("There is an error increasing repl [%v]", err.Error())
 							UpdateOutcome(event, err)
 						}
 					})
 
 				if err == nil {
-					Step(
-						fmt.Sprintf("reboot target node %s while repl increase is in-progres",
-							newReplNode.Hostname),
+					stepLog = fmt.Sprintf("reboot target node %s while repl increase is in-progres",
+						newReplNode.Hostname)
+					Step(stepLog,
 						func() {
-
-							logrus.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
+							dash.Info(stepLog)
+							log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 							time.Sleep(10 * time.Second)
 
 							err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
@@ -3265,22 +3463,27 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								},
 							})
 							if err != nil {
-								logrus.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+								log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
 								UpdateOutcome(event, err)
 							}
 
 							err = validateReplFactorUpdate(v, currRep+1)
 							if err != nil {
 								err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
-								logrus.Error(err)
+								log.Error(err)
 								UpdateOutcome(event, err)
 							} else {
-								logrus.Infof("repl successfully increased to %d", currRep+1)
+								dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+							}
+							if strings.Contains(ctx.App.Key, fastpathAppName) {
+								err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+								UpdateOutcome(event, err)
+								err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
 							}
 						})
 				}
 			} else {
-				logrus.Error(err)
+				log.Error(err)
 				UpdateOutcome(event, err)
 
 			}
@@ -3289,14 +3492,15 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 //HaIncreaseRebootSourceNode repl increase and reboot source node
 func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node) {
-	Step(
-		fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
-			Inst().V.String(), ctx.App.Key, v),
+	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
+		Inst().V.String(), ctx.App.Key, v)
+	Step(stepLog,
 		func() {
+			dash.Info(stepLog)
 			currRep, err := Inst().V.GetReplicationFactor(v)
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				logrus.Error(err)
+				log.Error(err)
 				UpdateOutcome(event, err)
 				return
 			}
@@ -3304,25 +3508,33 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
-				logrus.Warn(err)
+				log.Warn(err)
 				UpdateOutcome(event, err)
 				return
 			}
 
 			if err == nil {
-				Step(
-					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
-						Inst().V.String(), ctx.App.Key, v),
+				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+					Inst().V.String(), ctx.App.Key, v)
+				Step(stepLog,
 					func() {
+						dash.Info(stepLog)
 						replicaSets, err := Inst().V.GetReplicaSets(v)
 						if err == nil {
 							replicaNodes := replicaSets[0].Nodes
+							if strings.Contains(ctx.App.Key, fastpathAppName) {
+								newFastPathNode, err := AddFastPathLabel(ctx)
+								if err == nil {
+									defer Inst().S.RemoveLabelOnNode(*newFastPathNode, k8s.NodeType)
+								}
+								UpdateOutcome(event, err)
+							}
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, false)
 							if err != nil {
-								logrus.Errorf("There is an error increasing repl [%v]", err.Error())
+								log.Errorf("There is an error increasing repl [%v]", err.Error())
 								UpdateOutcome(event, err)
 							} else {
-								logrus.Info("Waiting for 10 seconds for re-sync to initialize before source nodes reboot")
+								log.Info("Waiting for 10 seconds for re-sync to initialize before source nodes reboot")
 								time.Sleep(10 * time.Second)
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
@@ -3335,33 +3547,53 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 										},
 									})
 									if err != nil {
-										logrus.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
+										log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
 										UpdateOutcome(event, err)
 									}
 								}
 								err = validateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
-									logrus.Error(err)
+									log.Error(err)
 									UpdateOutcome(event, err)
 								} else {
-									logrus.Infof("repl successfully increased to %d", currRep+1)
+									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+								}
+								if strings.Contains(ctx.App.Key, fastpathAppName) {
+									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+									UpdateOutcome(event, err)
+									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
 								}
 							}
 						} else {
 							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
-							logrus.Error(err)
+							log.Error(err)
 							UpdateOutcome(event, err)
 						}
 
 					})
 			} else {
 				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
-				logrus.Error(err)
+				log.Error(err)
 				UpdateOutcome(event, err)
 			}
 
 		})
+}
+
+func AddFastPathLabel(ctx *scheduler.Context) (*node.Node, error) {
+	sNodes := node.GetStorageDriverNodes()
+	appNodes, err := Inst().S.GetNodesForApp(ctx)
+	if err == nil {
+		appNode := appNodes[0]
+		for _, n := range sNodes {
+			if n.Name != appNode.Name {
+				Inst().S.AddLabelOnNode(n, k8s.NodeType, k8s.FastpathNodeType)
+				return &n, nil
+			}
+		}
+	}
+	return nil, err
 }
 
 func validateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error {
@@ -3559,10 +3791,12 @@ type Torpedo struct {
 	S                                   scheduler.Driver
 	V                                   volume.Driver
 	N                                   node.Driver
+	M                                   monitor.Driver
 	SpecDir                             string
 	AppList                             []string
 	LogLoc                              string
 	LogLevel                            string
+	Logger                              *logrus.Logger
 	GlobalScaleFactor                   int
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
@@ -3592,15 +3826,19 @@ type Torpedo struct {
 	CsiGenericDriverConfigMap           string
 	HelmValuesConfigMap                 string
 	IsHyperConverged                    bool
+	Dash                                *aetosutil.Dashboard
+	JobName                             string
+	JobType                             string
 }
 
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
+	var monitorDriver monitor.Driver
 	var backupDriver backup.Driver
 	var appScaleFactor int
 	var volUpgradeEndpointURL string
@@ -3616,6 +3854,7 @@ func ParseFlags() {
 	var bundleLocation string
 	var customConfigPath string
 	var hyperConverged bool
+	var enableDash bool
 
 	// TODO: We rely on the customAppConfig map to be passed into k8s.go and stored there.
 	// We modify this map from the tests and expect that the next RescanSpecs will pick up the new custom configs.
@@ -3632,10 +3871,18 @@ func ParseFlags() {
 	var schedUpgradeHops string
 	var autopilotUpgradeImage string
 	var csiGenericDriverConfigMapName string
+	//dashboard fields
+	var user, testBranch, testProduct, testType, testDescription, testTags string
+	var testsetID int
+	var torpedoJobName string
+	var torpedoJobType string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
+	flag.StringVar(&m, monitorDriverCliFlag, defaultMonitorDriver, "Name of the prometheus driver to use")
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
+	flag.StringVar(&torpedoJobName, torpedoJobNameFlag, defaultTorpedoJob, "Name of the torpedo job")
+	flag.StringVar(&torpedoJobType, torpedoJobTypeFlag, defaultTorpedoJobType, "Type of torpedo job")
 	flag.StringVar(&backupDriverName, backupCliFlag, "", "Name of the backup driver to use")
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
@@ -3680,46 +3927,99 @@ func ParseFlags() {
 	flag.StringVar(&jiraToken, jiraTokenFlag, "", "API token for accessing the JIRA")
 	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
 	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
+	flag.BoolVar(&enableDash, enableDashBoardFlag, true, "To enable/disable aetos dashboard reporting")
+	flag.StringVar(&user, userFlag, "nouser", "user name running the tests")
+	flag.StringVar(&testDescription, testDescriptionFlag, "Torpedo Workflows", "test suite description")
+	flag.StringVar(&testType, testTypeFlag, "system-test", "test types like system-test,functional,integration")
+	flag.StringVar(&testTags, testTagsFlag, "", "tags running the tests")
+	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
+	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
+	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
+	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.Parse()
+
+	log = logInstance.GetLogInstance()
+	log.Out = io.MultiWriter(log.Out)
+	setLoglevel(log, logLevel)
+	tpLogPath = fmt.Sprintf("%s/%s", logLoc, "torpedo.log")
+	suiteLogger = CreateLogger(tpLogPath)
+	SetTorpedoFileOutput(log, suiteLogger)
 
 	appList, err := splitCsv(appListCSV)
 	if err != nil {
-		logrus.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
+		log.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
 	}
 
 	sched.Init(time.Second)
 
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
-		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
+		log.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
 	} else if volumeDriver, err = volume.Get(v); err != nil {
-		logrus.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
+		log.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
 	} else if nodeDriver, err = node.Get(n); err != nil {
-		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
+		log.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
+	} else if monitorDriver, err = monitor.Get(m); err != nil {
+		log.Fatalf("Cannot find monitor driver for %v. Err: %v\n", m, err)
 	} else if err = os.MkdirAll(logLoc, os.ModeDir); err != nil {
-		logrus.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
+		log.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 	} else {
 		if _, err = os.Stat(customConfigPath); err == nil {
 			var data []byte
 
-			logrus.Infof("Using custom app config file %s", customConfigPath)
+			log.Infof("Using custom app config file %s", customConfigPath)
 			data, err = ioutil.ReadFile(customConfigPath)
 			if err != nil {
-				logrus.Fatalf("Cannot read file %s. Error: %v", customConfigPath, err)
+				log.Fatalf("Cannot read file %s. Error: %v", customConfigPath, err)
 			}
 			err = yaml.Unmarshal(data, &customAppConfig)
 			if err != nil {
-				logrus.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
+				log.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
 			}
-			logrus.Infof("Parsed custom app config file: %+v", customAppConfig)
+			log.Infof("Parsed custom app config file: %+v", customAppConfig)
 		}
-		logrus.Infof("Backup driver name %s", backupDriverName)
+		log.Infof("Backup driver name %s", backupDriverName)
 		if backupDriverName != "" {
 			if backupDriver, err = backup.Get(backupDriverName); err != nil {
-				logrus.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
+				log.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
 			} else {
-				logrus.Infof("Backup driver found %v", backupDriver)
+				log.Infof("Backup driver found %v", backupDriver)
 			}
 		}
+		dash = aetosutil.Get()
+		dash.Log = log
+		if enableDash && !isDashboardReachable() {
+			enableDash = false
+			log.Warn("Aetos Dashboard is not reachable. Disabling dashboard reporting.")
+		}
+
+		dash.IsEnabled = enableDash
+		testSet := aetosutil.TestSet{
+			User:        user,
+			Product:     testProduct,
+			Description: testDescription,
+			Branch:      testBranch,
+			TestType:    testType,
+			Tags:        make([]string, 0),
+			Status:      aetosutil.NOTSTARTED,
+		}
+		if testTags != "" {
+			tags := strings.Split(testTags, ",")
+			testSet.Tags = append(testSet.Tags, tags...)
+		}
+
+		val, ok := os.LookupEnv("TESTSET-ID")
+		if ok {
+			testsetID, err = strconv.Atoi(val)
+			if err != nil {
+				log.Warnf("Failed to convert environment testset id  %v to int, err: %v", val, err)
+			}
+		}
+		if testsetID != 0 {
+			dash.TestSetID = testsetID
+			os.Setenv("TESTSET-ID", fmt.Sprint(testsetID))
+		}
+
+		dash.TestSet = &testSet
 
 		once.Do(func() {
 			instance = &Torpedo{
@@ -3727,9 +4027,11 @@ func ParseFlags() {
 				S:                                   schedulerDriver,
 				V:                                   volumeDriver,
 				N:                                   nodeDriver,
+				M:                                   monitorDriver,
 				SpecDir:                             specDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
+				Logger:                              log,
 				GlobalScaleFactor:                   appScaleFactor,
 				MinRunTimeMins:                      minRunTimeMins,
 				ChaosLevel:                          chaosLevel,
@@ -3758,16 +4060,121 @@ func ParseFlags() {
 				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,
 				MeteringIntervalMins:                meteringIntervalMins,
 				IsHyperConverged:                    hyperConverged,
+				Dash:                                dash,
+				JobName:                             torpedoJobName,
+				JobType:                             torpedoJobType,
 			}
 		})
 	}
+	printFlags()
+}
 
-	// Set log level
-	logLvl, err := logrus.ParseLevel(instance.LogLevel)
-	if err != nil {
-		logrus.Fatalf("Failed to set log level due to Err: %v", err)
+func printFlags() {
+
+	log.Info("********Torpedo Command********")
+	log.Info(strings.Join(os.Args, " "))
+	log.Info("******************************")
+
+	log.Info("*********Parsed Args**********")
+	flag.VisitAll(func(f *flag.Flag) {
+		log.Infof("   %s: %s", f.Name, f.Value)
+	})
+	log.Info("******************************")
+}
+
+func isDashboardReachable() bool {
+	timeout := 15 * time.Second
+	client := http.Client{
+		Timeout: timeout,
 	}
-	logrus.SetLevel(logLvl)
+	aboutURL := strings.Replace(aetosutil.DashBoardBaseURL, "dashboard", "datamodel/about", -1)
+	log.Infof("Checking URL: %s", aboutURL)
+	response, err := client.Get(aboutURL)
+
+	if err != nil {
+		log.Warn(err.Error())
+		return false
+	}
+	if response.StatusCode == 200 {
+		return true
+	}
+	return false
+}
+
+func setLoglevel(tpLog *logrus.Logger, logLevel string) {
+	switch logLevel {
+	case "debug":
+		tpLog.Level = logrus.DebugLevel
+	case "info":
+		tpLog.Level = logrus.InfoLevel
+	case "error":
+		tpLog.Level = logrus.ErrorLevel
+	case "warn":
+		tpLog.Level = logrus.WarnLevel
+	case "trace":
+		tpLog.Level = logrus.TraceLevel
+	default:
+		tpLog.Level = logrus.DebugLevel
+
+	}
+}
+
+//SetTorpedoFileOutput adds output destination for logging
+func SetTorpedoFileOutput(tpLog *logrus.Logger, logger *lumberjack.Logger) {
+
+	//tpLog.Out = io.MultiWriter(tpLog.Out, f)
+	tpLog.Out = io.MultiWriter(tpLog.Out, logger)
+	tpLog.Infof("Log Dir: %s", logger.Filename)
+	//tpLog.Infof("Log Dir: %s", f.Name())
+}
+
+//CreateLogFile creates file and return the file object
+func CreateLogFile(filename string) *os.File {
+	var filePath string
+	if strings.Contains(filename, "/") {
+		filePath = filename
+	} else {
+		filePath = fmt.Sprintf("%s/%s", Inst().LogLoc, filename)
+	}
+
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Println("Failed to create logfile torpedo.log")
+		fmt.Println("Error: ", err)
+	}
+	return f
+
+}
+
+//CreateLogger creates file and return the file object
+func CreateLogger(filename string) *lumberjack.Logger {
+	var filePath string
+	if strings.Contains(filename, "/") {
+		filePath = filename
+	} else {
+		filePath = fmt.Sprintf("%s/%s", Inst().LogLoc, filename)
+	}
+
+	logger := &lumberjack.Logger{
+		Filename:   filePath,
+		MaxSize:    10, // megabytes
+		MaxBackups: 10,
+		MaxAge:     30,   //days
+		Compress:   true, // disabled by default
+		LocalTime:  true,
+	}
+
+	return logger
+
+}
+
+//CloseLogFile ends testcase file object
+func CloseLogger(testLogger *lumberjack.Logger) {
+	if testLogger != nil {
+		testLogger.Close()
+		//Below steps are performed to remove current file from log output
+		log.Out = io.MultiWriter(os.Stdout, suiteLogger)
+	}
 
 }
 
@@ -3797,7 +4204,7 @@ func mapToVolumeOptions(options map[string]bool) *scheduler.VolumeOptions {
 
 func init() {
 	logrus.SetLevel(logrus.InfoLevel)
-	logrus.StandardLogger().Hooks.Add(log.NewHook())
+	logrus.StandardLogger().Hooks.Add(logInstance.NewHook())
 	logrus.SetOutput(os.Stdout)
 }
 
@@ -3819,9 +4226,9 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 	for _, currNode := range node.GetWorkerNodes() {
 		err := runCmd("pwd", currNode)
 		if err == nil {
-			logrus.Infof("Creating directors logs in the node %v", currNode.Name)
+			log.Infof("Creating directors logs in the node %v", currNode.Name)
 			runCmd(fmt.Sprintf("mkdir -p %v", rootLogDir), currNode)
-			logrus.Info("Mounting nfs diags directory")
+			log.Info("Mounting nfs diags directory")
 			runCmd(fmt.Sprintf("mount -t nfs %v %v", diagsDirPath, rootLogDir), currNode)
 			if !isIssueDirCreated {
 				logrus.Infof("Creating PTX %v directory in the node %v", issueKey, currNode.Name)
@@ -3829,7 +4236,7 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 				isIssueDirCreated = true
 			}
 
-			logrus.Infof("collect diags on node: %s", currNode.Name)
+			log.Infof("collect diags on node: %s", currNode.Name)
 
 			filePath := fmt.Sprintf("/var/cores/%s-diags-*.tar.gz", currNode.Name)
 
@@ -3848,10 +4255,10 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 			err = Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false, Async: true})
 
 			if err == nil {
-				logrus.Infof("copying logs %v  on node: %s", filePath, currNode.Name)
+				log.Infof("copying logs %v  on node: %s", filePath, currNode.Name)
 				runCmd(fmt.Sprintf("cp %v %v/%v/", filePath, rootLogDir, issueKey), currNode)
 			} else {
-				logrus.Warnf("Error collecting diags on node: %v, Error: %v", currNode.Name, err)
+				log.Warnf("Error collecting diags on node: %v, Error: %v", currNode.Name, err)
 			}
 
 		}
@@ -3870,7 +4277,7 @@ func collectAndCopyStorkLogs(issueKey string) {
 				// Getting 250 lines from the pod logs to get the io_bytes
 				TailLines: getInt64Address(250),
 			}
-			logrus.Info("Collecting stork logs")
+			log.Info("Collecting stork logs")
 			output, err := core.Instance().GetPodLog(p.Name, p.Namespace, &logOptions)
 			if err != nil {
 				logrus.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
@@ -3880,9 +4287,9 @@ func collectAndCopyStorkLogs(issueKey string) {
 		masterNode := node.GetMasterNodes()[0]
 		err = runCmd("pwd", masterNode)
 		if err == nil {
-			logrus.Infof("Creating directors logs in the node %v", masterNode.Name)
+			log.Infof("Creating directors logs in the node %v", masterNode.Name)
 			runCmd(fmt.Sprintf("mkdir -p %v", rootLogDir), masterNode)
-			logrus.Info("Mounting nfs diags directory")
+			log.Info("Mounting nfs diags directory")
 			runCmd(fmt.Sprintf("mount -t nfs %v %v", diagsDirPath, rootLogDir), masterNode)
 
 			for k, v := range logsByPodName {
@@ -3893,7 +4300,7 @@ func collectAndCopyStorkLogs(issueKey string) {
 		}
 
 	} else {
-		logrus.Errorf("Error in getting stork pods, Err: %v", err.Error())
+		log.Errorf("Error in getting stork pods, Err: %v", err.Error())
 	}
 
 }
@@ -3909,10 +4316,10 @@ func collectAndCopyOperatorLogs(issueKey string) {
 				// Getting 250 lines from the pod logs to get the io_bytes
 				TailLines: getInt64Address(250),
 			}
-			logrus.Info("Collecting portworx operator logs")
+			log.Info("Collecting portworx operator logs")
 			output, err := core.Instance().GetPodLog(p.Name, p.Namespace, &logOptions)
 			if err != nil {
-				logrus.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
+				log.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
 			}
 			logsByPodName[p.Name] = output
 		}
@@ -3927,7 +4334,7 @@ func collectAndCopyOperatorLogs(issueKey string) {
 		}
 
 	} else {
-		logrus.Errorf("Error in getting portworx-operator pods, Err: %v", err.Error())
+		log.Errorf("Error in getting portworx-operator pods, Err: %v", err.Error())
 	}
 
 }
@@ -3943,10 +4350,10 @@ func collectAndCopyAutopilotLogs(issueKey string) {
 				// Getting 250 lines from the pod logs to get the io_bytes
 				TailLines: getInt64Address(250),
 			}
-			logrus.Info("Collecting autopilot logs")
+			log.Info("Collecting autopilot logs")
 			output, err := core.Instance().GetPodLog(p.Name, p.Namespace, &logOptions)
 			if err != nil {
-				logrus.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
+				log.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
 			}
 			logsByPodName[p.Name] = output
 		}
@@ -3961,7 +4368,7 @@ func collectAndCopyAutopilotLogs(issueKey string) {
 			}
 		}
 	} else {
-		logrus.Errorf("Error in getting autopilot pods, Err: %v", err.Error())
+		log.Errorf("Error in getting autopilot pods, Err: %v", err.Error())
 	}
 
 }
@@ -3979,7 +4386,7 @@ func IsCloudDriveInitialised(n node.Node) (bool, error) {
 	})
 
 	if err != nil && strings.Contains(err.Error(), "Cloud Drive is not initialized") {
-		logrus.Warnf("cd list error : %v", err)
+		log.Warnf("cd list error : %v", err)
 		return false, nil
 	}
 	if err == nil {
@@ -4003,7 +4410,7 @@ func WaitForExpansionToStart(poolID string) error {
 
 			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
 				// storage pool resize has been triggered
-				logrus.Infof("Pool %s expansion started", poolID)
+				dash.Infof("Pool %s expansion started", poolID)
 				return nil, true, nil
 			}
 		}
@@ -4093,4 +4500,366 @@ func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 	}
 
 	return pool, nil
+}
+
+func ValidateBackupCluster() bool {
+	flag := false
+	labelSelectors := map[string]string{"job-name": post_install_hook_pod}
+	ns := backup.GetPxBackupNamespace()
+	pods, err := core.Instance().GetPods(ns, labelSelectors)
+	if err != nil {
+		log.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
+			err)
+		return false
+	}
+	for _, pod := range pods.Items {
+		log.Infof("Checking if the pxcentral-post-install-hook pod is in Completed state or not")
+		bkp_pod, err := core.Instance().GetPodByName(pod.GetName(), ns)
+		if err != nil {
+			log.Errorf("Error: %v Occured while getting the pxcentral-post-install-hook pod details", err)
+			return false
+		}
+		container_list := bkp_pod.Status.ContainerStatuses
+		for i := 0; i < len(container_list); i++ {
+			status := container_list[i].State.Terminated.Reason
+			if status == "Completed" {
+				log.Infof("pxcentral-post-install-hook pod is in completed state")
+				flag = true
+				break
+			}
+		}
+	}
+	if flag == false {
+		return false
+	}
+	bkp_pods, err := core.Instance().GetPods(ns, nil)
+	for _, pod := range bkp_pods.Items {
+		matched, _ := regexp.MatchString(post_install_hook_pod, pod.GetName())
+		if !matched {
+			equal, _ := regexp.MatchString(quick_maintenance_pod, pod.GetName())
+			equal1, _ := regexp.MatchString(full_maintenance_pod, pod.GetName())
+			if !(equal || equal1) {
+				log.Infof("Checking if all the containers are up or not")
+				res := core.Instance().IsPodRunning(pod)
+				if !res {
+					log.Errorf("All the containers of pod %sare not Up", pod)
+					return false
+				}
+				err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
+				if err != nil {
+					log.Errorf("An Error: %v  Occured while validating the pod %s", err, pod)
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func DeleteRuleForBackup(orgID string, name string, uid string) bool {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching px-central-admin ctx:"))
+	RuleDeleteReq := &api.RuleDeleteRequest{
+		Name:  name,
+		OrgId: orgID,
+		Uid:   uid,
+	}
+	_, err = Inst().Backup.DeleteRule(ctx, RuleDeleteReq)
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup Rule"))
+	return true
+}
+
+func Contains(app_list []string, app string) bool {
+	for _, v := range app_list {
+		if v == app {
+			return true
+		}
+	}
+	return false
+}
+
+func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_post_flag string, ps map[string]map[string]string) bool {
+	pod_selector := []map[string]string{}
+	action_value := []string{}
+	container := []string{}
+	background := []bool{}
+	run_in_single_pod := []bool{}
+	var rulesinfo api.RulesInfo
+	var uid string
+	for i := 0; i < len(app_list); i++ {
+		if pre_post_flag == "pre" {
+			create_pre_rule = true
+			if _, ok := app_parameters[app_list[i]]["pre_action_list"]; ok {
+				pod_selector = append(pod_selector, ps[app_list[i]])
+				action_value = append(action_value, app_parameters[app_list[i]]["pre_action_list"])
+				background_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["background"])
+				background = append(background, background_val)
+				pod_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["run_in_single_pod"])
+				run_in_single_pod = append(run_in_single_pod, pod_val)
+				// Here user has to set env for each app container if required in the format container<app name> eg: containersql
+				container_name := fmt.Sprintf("%s-%s", "container", app_list[i])
+				container = append(container, os.Getenv(container_name))
+			} else {
+				log.Infof("Pre rule not required for this application")
+			}
+		} else {
+			create_post_rule = true
+			if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
+				pod_selector = append(pod_selector, ps[app_list[i]])
+				action_value = append(action_value, app_parameters[app_list[i]]["post_action_list"])
+				background_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["background"])
+				background = append(background, background_val)
+				pod_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["run_in_single_pod"])
+				run_in_single_pod = append(run_in_single_pod, pod_val)
+				// Here user has to set env for each app container if required in the format container<app name> eg: containersql
+				container_name := fmt.Sprintf("%s-%s", "container", app_list[i])
+				container = append(container, os.Getenv(container_name))
+			} else {
+				log.Infof("Post rule not required for this application")
+			}
+		}
+
+	}
+	total_rules := len(action_value)
+	if total_rules == 0 {
+		log.Info("Rules not required for the apps")
+		return true
+	}
+	rulesinfo_ruleitem := make([]api.RulesInfo_RuleItem, total_rules)
+	for i := 0; i < total_rules; i++ {
+		rule_action := api.RulesInfo_Action{Background: background[i], RunInSinglePod: run_in_single_pod[i], Value: action_value[i]}
+		var actions []*api.RulesInfo_Action = []*api.RulesInfo_Action{&rule_action}
+		rulesinfo_ruleitem[i].PodSelector = pod_selector[i]
+		rulesinfo_ruleitem[i].Actions = actions
+		rulesinfo_ruleitem[i].Container = container[i]
+		rulesinfo.Rules = append(rulesinfo.Rules, &rulesinfo_ruleitem[i])
+	}
+	RuleCreateReq := &api.RuleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  rule_name,
+			OrgId: orgID,
+		},
+		RulesInfo: &rulesinfo,
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching px-central-admin ctx:"))
+	_, err = Inst().Backup.CreateRule(ctx, RuleCreateReq)
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup Rules"))
+	log.Infof("Validate rules for backup")
+	RuleEnumerateReq := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
+	for i := 0; i < len(rule_list.Rules); i++ {
+		if rule_list.Rules[i].Metadata.Name == rule_name {
+			uid = rule_list.Rules[i].Metadata.Uid
+			break
+		}
+	}
+	RuleInspectReq := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  rule_name,
+		Uid:   uid,
+	}
+	_, err1 := Inst().Backup.InspectRule(ctx, RuleInspectReq)
+	if err1 != nil {
+		log.Errorf("Failed to validate the created rule with Error: [%v]", err)
+		return false
+	}
+	return true
+}
+
+func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string, policy_list []string) bool {
+	var flag bool = true
+	dash.Info("Deleting the deployed apps after the testcase")
+	for i := 0; i < len(contexts); i++ {
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+		err := Inst().S.Destroy(contexts[i], opts)
+		if err != nil {
+			flag = false
+		}
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+	}
+	dash.Info("Deleting backup rules created")
+	RuleEnumerateReq := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching px-central-admin ctx:"))
+	rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
+	if create_post_rule == true {
+		for i := 0; i < len(rule_list.Rules); i++ {
+			if rule_list.Rules[i].Metadata.Name == "backup-post-rule" {
+				post_rule_uid = rule_list.Rules[i].Metadata.Uid
+				break
+			}
+		}
+		post_rule_delete_status := DeleteRuleForBackup(orgID, "backup-post-rule", post_rule_uid)
+		if post_rule_delete_status != true {
+			flag = false
+		}
+		dash.VerifySafely(post_rule_delete_status, true, fmt.Sprintf("Verifying Post rule deletion for backup"))
+	}
+	if create_pre_rule == true {
+		for i := 0; i < len(rule_list.Rules); i++ {
+			if rule_list.Rules[i].Metadata.Name == "backup-pre-rule" {
+				pre_rule_uid = rule_list.Rules[i].Metadata.Uid
+				break
+			}
+		}
+		pre_rule_delete_status := DeleteRuleForBackup(orgID, "backup-pre-rule", pre_rule_uid)
+		if pre_rule_delete_status != true {
+			flag = false
+		}
+		dash.VerifySafely(pre_rule_delete_status, true, fmt.Sprintf("Verifying Pre rule deletion for backup"))
+	}
+	dash.Info("Deleting bucket,backup location and cloud setting")
+	for i, provider := range providers {
+		backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
+		bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
+		DeleteBucket(provider, bucketName)
+		CredName := fmt.Sprintf("%s-%s", "cred", provider)
+		DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
+		DeleteBackupLocation(backup_location_name, orgID)
+	}
+	dash.Info("Deleting schedule policies")
+	sched_policy_map := make(map[string]string)
+	schedPolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
+		OrgId: orgID,
+	}
+	schedule_policy_list, err := Inst().Backup.EnumerateSchedulePolicy(ctx, schedPolicyEnumerateReq)
+	dash.VerifyFatal(err, nil, "Getting list of schedule policies")
+	for i := 0; i < len(schedule_policy_list.SchedulePolicies); i++ {
+		sched_policy_map[schedule_policy_list.SchedulePolicies[i].Metadata.Name] = schedule_policy_list.SchedulePolicies[i].Metadata.Uid
+	}
+	for i := 0; i < len(policy_list); i++ {
+		schedPolicydeleteReq := &api.SchedulePolicyDeleteRequest{
+			OrgId: orgID,
+			Name:  policy_list[i],
+			Uid:   sched_policy_map[policy_list[i]],
+		}
+		_, err := Inst().Backup.DeleteSchedulePolicy(ctx, schedPolicydeleteReq)
+		if err != nil {
+			flag = false
+		}
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verify deleting schedule policies %s, Err: %v", policy_list[i], err))
+	}
+	if flag == false {
+		return false
+	}
+	return true
+}
+
+func updatePxRuntimeOpts() error {
+	if pxRuntimeOpts != "" {
+		dash.Infof("Setting run time options: %s", pxRuntimeOpts)
+		optionsMap := make(map[string]string)
+		runtimeOpts, err := splitCsv(pxRuntimeOpts)
+		if err != nil {
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Error parsing run time options, err : %v", err))
+		}
+
+		for _, opt := range runtimeOpts {
+			if !strings.Contains(opt, "=") {
+				dash.VerifyFatal(false, true, fmt.Sprintf("Given run time option is not in expected format key=val, Actual : %v", opt))
+			}
+			optArr := strings.Split(opt, "=")
+			optionsMap[optArr[0]] = optArr[1]
+		}
+		currNode := node.GetWorkerNodes()[0]
+		return Inst().V.SetClusterRunTimeOpts(currNode, optionsMap)
+	} else {
+		log.Info("No run time options provided to update")
+	}
+	return nil
+}
+
+//StartTorpedoTest starts the logging for torpedo test
+func StartTorpedoTest(testName, testDescription string, tags []string) {
+	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
+	SetTorpedoFileOutput(log, TestLogger)
+	dash.TestCaseBegin(testName, testDescription, "", tags)
+}
+
+//EndTorpedoTest ends the logging for torpedo test
+func EndTorpedoTest() {
+	CloseLogger(TestLogger)
+	dash.TestCaseEnd()
+
+}
+
+func Backupschedulepolicy(name string, uid string, orgid string, schedule_policy_info *api.SchedulePolicyInfo) error {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			Uid:   uid,
+			OrgId: orgid,
+		},
+		SchedulePolicy: schedule_policy_info,
+	}
+	_, err = Inst().Backup.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		log.Infof(" \n\n eeror in schel policy is +%v", err)
+		return err
+	}
+	return nil
+}
+
+func CreateIntervalSchedulePolicy(retain int64, min int64, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Interval: &api.SchedulePolicyInfo_IntervalPolicy{
+			Retain:  retain,
+			Minutes: min,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateDailySchedulePolicy(retain int64, time string, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Daily: &api.SchedulePolicyInfo_DailyPolicy{
+			Retain: retain,
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateWeeklySchedulePolicy(retain int64, day Weekday, time string, incr_count uint64) *api.SchedulePolicyInfo {
+
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Weekly: &api.SchedulePolicyInfo_WeeklyPolicy{
+			Retain: retain,
+			Day:    string(day),
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
+}
+
+func CreateMonthlySchedulePolicy(retain int64, date int64, time string, incr_count uint64) *api.SchedulePolicyInfo {
+	SchedulePolicy := &api.SchedulePolicyInfo{
+		Monthly: &api.SchedulePolicyInfo_MonthlyPolicy{
+			Retain: retain,
+			Date:   date,
+			Time:   time,
+			IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{
+				Count: incr_count,
+			},
+		},
+	}
+	return SchedulePolicy
 }

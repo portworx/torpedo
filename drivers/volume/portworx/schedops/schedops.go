@@ -2,6 +2,7 @@ package schedops
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
@@ -13,6 +14,8 @@ import (
 
 // Driver is the interface for portworx operations under various schedulers
 type Driver interface {
+	// Init initializes the sched-ops
+	Init(logger *logrus.Logger)
 	//GetKubernetesVersion returns kubernetes version
 	GetKubernetesVersion() (*version.Info, error)
 	// StartPxOnNode enables portworx service on given node
@@ -35,6 +38,8 @@ type Driver interface {
 	ValidateSnapshot(volumeParams map[string]string, parent *api.Volume) error
 	// GetVolumeName returns the volume name based on the volume object received
 	GetVolumeName(v *volume.Volume) string
+	// GetPortworxNamespace returns the Portworx namespace
+	GetPortworxNamespace() (string, error)
 	// GetServiceEndpoint returns the hostname of portworx service if it is present
 	GetServiceEndpoint() (string, error)
 	// UpgradePortworx upgrades portworx to the given docker image and tag

@@ -2,6 +2,7 @@ package volume
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -48,13 +49,16 @@ type Options struct {
 // Driver defines an external volume driver interface that must be implemented
 // by any external storage provider that wants to qualify their product with
 // Torpedo.  The functions defined here are meant to be destructive and illustrative
-// of failure scenarious that can happen with an external storage provider.
+// of failure scenarios that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string, nodeDriver string, token string, storageProvisioner string, csiGenericConfigMap string) error
+	Init(sched string, nodeDriver string, token string, storageProvisioner string, csiGenericConfigMap string, logger *logrus.Logger) error
 
 	// String returns the string name of this driver.
 	String() string
+
+	// GetVolumeDriverNamespace returns the namespace of this driver.
+	GetVolumeDriverNamespace() (string, error)
 
 	// CreateVolume creates a volume with the default setting
 	// returns volume_id of the new volume
@@ -68,10 +72,10 @@ type Driver interface {
 	// returns the device path
 	AttachVolume(volumeID string) (string, error)
 
-	// DetachVolume detaches the volume given the volumeID
+	// DetachVolume detaches the volume for given volumeID
 	DetachVolume(volumeID string) error
 
-	// Delete the volume of the Volume ID provided
+	// DeleteVolume deletes the volume for given volumeID
 	DeleteVolume(volumeID string) error
 
 	// InspectVolume inspects the volume with the given name
@@ -182,6 +186,9 @@ type Driver interface {
 
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
+
+	//IsPxInstalled checks for Px to be installed on a node
+	IsPxInstalled(n node.Node) (bool, error)
 
 	//GetPxVersionOnNode get PXVersion on the given node
 	GetPxVersionOnNode(n node.Node) (string, error)
@@ -330,6 +337,9 @@ type Driver interface {
 	//GetAutoFsTrimStatus get status of autofstrim
 	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
 
+	// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
+	GetPxctlCmdOutputConnectionOpts(n node.Node, command string, opts node.ConnectionOpts, retry bool) (string, error)
+
 	// GetPxctlCmdOutput returns the command output run on the given node and any error
 	GetPxctlCmdOutput(n node.Node, command string) (string, error)
 
@@ -347,6 +357,12 @@ type Driver interface {
 
 	// AddBlockDrives add drives to the node using PXCTL
 	AddBlockDrives(n *node.Node, drivePath []string) error
+
+	// GetRebalanceJobs returns the list of rebalance jobs
+	GetRebalanceJobs() ([]*api.StorageRebalanceJob, error)
+
+	// GetRebalanceJobStatus returns the rebalance jobs response
+	GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobStatusResponse, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
