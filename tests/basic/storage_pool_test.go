@@ -394,7 +394,7 @@ func roundUpValue(toRound uint64) uint64 {
 
 func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 	poolSizeHasBeenChanged := false
-	waitCount := 20
+	waitCount := 5
 	if poolToBeResized.LastOperation != nil {
 		for {
 			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})

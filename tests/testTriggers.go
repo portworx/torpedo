@@ -3731,7 +3731,7 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 	if poolToBeResized != nil && poolToBeResized.LastOperation != nil {
 
 		dash.Infof("Validating pool :%v to expand", poolToBeResized.Uuid)
-		waitCount := 20
+		waitCount := 5
 
 		for {
 			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
@@ -3758,7 +3758,6 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 
 				dash.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
 				if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "Will not proceed with pool expansion") {
-
 					break
 				}
 				time.Sleep(time.Second * 60)
