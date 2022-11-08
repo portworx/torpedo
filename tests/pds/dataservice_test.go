@@ -41,7 +41,6 @@ var (
 	dataServiceDefaultResourceTemplateIDMap map[string]string
 	dataServiceNameIDMap                    map[string]string
 	supportedDataServicesNameIDMap          map[string]string
-	DeployAllDataService                    bool
 	DeployAllVersions                       bool
 	DataService                             string
 	DeployAllImages                         bool
@@ -66,8 +65,6 @@ func TestDataService(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
-		DeployAllDataService, err = pdslib.GetAndExpectBoolEnvVar(envDeployAllDataService)
-		Expect(err).NotTo(HaveOccurred())
 
 		pdsparams := Inst().PDSParams
 		params, err = pdslib.ReadParams(pdsparams)
@@ -337,11 +334,6 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 var _ = Describe("{DeployAllDataServices}", func() {
 
 	JustBeforeEach(func() {
-		Step("Check the required env param is available to run this test", func() {
-			if !DeployAllDataService {
-				logrus.Fatal("Env Var are not set as expected")
-			}
-		})
 		Step("Get All Supported Dataservices and Versions", func() {
 			supportedDataServicesNameIDMap = pdslib.GetAllSupportedDataServices()
 			for dsName := range supportedDataServicesNameIDMap {
