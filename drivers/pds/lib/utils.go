@@ -19,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -1014,4 +1015,79 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 
 	return resourceTemp, storageOp, config, nil
 
+}
+
+func GetAllPVCsForStatefulSet(deployment *pds.ModelsDeployment, dataservice string, namespace string) (*corev1.PersistentVolumeClaimList, error) {
+	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+	if err != nil {
+		logrus.Warnf("An Error Occured while getting statefulsets %v", err)
+		return nil, err
+	}
+	err = k8sApps.ValidatePVCsForStatefulSet(ss, timeOut, timeInterval)
+	if err != nil {
+		logrus.Errorf("An error occured while validating pvcs of statefulsets %v ", err)
+		return nil, err
+	}
+	pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+	if err != nil {
+		logrus.Warnf("An Error Occured while getting pvcs of statefulsets %v", err)
+		return nil, err
+	}
+	return pvcList, nil
+}
+
+func ResizePVCsForStatefulSet(deployment *pds.ModelsDeployment, pvclist *corev1.PersistentVolumeClaimList, namespace string, newSize string) error {
+	for _, pvc := range pvclist.Items {
+
+		pvc.Labels["createdby"] = "torpedo"
+
+		newPvc := &corev1.PersistentVolumeClaim{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: pvc.APIVersion,
+				Kind:       pvc.Kind,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        pvc.Name,
+				Namespace:   pvc.Namespace,
+				Labels:      pvc.Labels,
+				Annotations: pvc.Annotations,
+				ClusterName: pvc.ClusterName,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      pvc.Spec.AccessModes,
+				StorageClassName: pvc.Spec.StorageClassName,
+				VolumeName:       pvc.Spec.VolumeName,
+				VolumeMode:       pvc.Spec.VolumeMode,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						"storage": resource.MustParse(newSize),
+					},
+				},
+			},
+		}
+
+		logrus.Infof("Spec for the pvc update: %v", newPvc)
+
+		err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+			updated, err := k8sCore.UpdatePersistentVolumeClaim(newPvc)
+			if err != nil {
+				logrus.Infof("Error while trying to update pvc %v", err)
+				logrus.Warnf("The PVC %v was not updated yet, trying again...", pvc.Name)
+				return false, nil
+			}
+			logrus.Infof("The updated PVC is %v", updated.String())
+			return true, nil
+		})
+
+		if err != nil {
+			logrus.Errorf("Failed to update pvc %v because %v", pvc.Name, err)
+			return err
+		}
+
+		// It takes time for the update to reflect on the PDS UI
+		time.Sleep(1 * time.Minute)
+
+	}
+
+	return nil
 }
