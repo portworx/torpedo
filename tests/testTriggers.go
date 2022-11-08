@@ -387,6 +387,8 @@ const (
 	ResizeDiskAndReboot = "resizeDiskAndReboot"
 	// AutopilotRebalance performs  pool rebalance
 	AutopilotRebalance = "autopilotRebalance"
+	// VolumeCreatePxRestart performs  volume create and px restart parallel
+	VolumeCreatePxRestart = "volumeCreatePxRestart"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -504,6 +506,112 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 				logrus.Infof("Error: %v", err)
 				UpdateOutcome(event, err)
 			}
+		}
+	})
+}
+
+//TriggerVolumeCreatePXRestart create volume , attach , detach and reboot nodes parallely
+func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(VolumeCreatePxRestart)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: VolumeCreatePxRestart,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := "Create multiple volumes , attached and restart PX"
+	var createdVolIDs map[string]string
+	var err error
+	volCreateCount := 10
+	Step(stepLog, func() {
+		dash.Infof(stepLog)
+
+		stNodes := node.GetStorageNodes()
+		index := randIntn(1, len(stNodes))[0]
+
+		selectedNode := stNodes[index]
+
+		dash.Infof("Creating and attaching %d volumes on node %s", volCreateCount, selectedNode.Name)
+
+		wg := new(sync.WaitGroup)
+		wg.Add(1)
+		go func(appNode node.Node) {
+			createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
+			if err != nil {
+				UpdateOutcome(event, err)
+			}
+		}(selectedNode)
+		time.Sleep(2 * time.Second)
+		wg.Add(1)
+		go func(appNode node.Node) {
+			defer wg.Done()
+			stepLog = fmt.Sprintf("restart volume driver %s on node: %s", Inst().V.String(), appNode.Name)
+			Step(stepLog, func() {
+				dash.Info(stepLog)
+				err = Inst().V.RestartDriver(appNode, nil)
+				UpdateOutcome(event, err)
+
+			})
+		}(selectedNode)
+		wg.Wait()
+
+	})
+
+	stepLog = "Validate the created volumes"
+	Step(stepLog, func() {
+		dash.Info(stepLog)
+
+		for vol, volPath := range createdVolIDs {
+			t := func() (interface{}, bool, error) {
+				out, err := Inst().V.InspectVolume(vol)
+				p := fmt.Sprintf("%s", out.DevicePath)
+				fmt.Printf("Checking vol : %s\n", vol)
+				fmt.Printf("Got path : %s\n", p)
+				if !strings.Contains(p, "pxd/") {
+					return out, true, fmt.Errorf("Path %s is not correct", p)
+				}
+				return out, true, err
+			}
+
+			_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			if err != nil {
+				fmt.Printf("Got error in getting device path: %v\n", err)
+			}
+			cVol, err := Inst().V.InspectVolume(vol)
+			if err == nil {
+				dash.VerifySafely(cVol.State, opsapi.VolumeState_VOLUME_STATE_ATTACHED, fmt.Sprintf("Verify vol %s is attached", cVol.Id))
+				dash.VerifySafely(cVol.DevicePath, volPath, fmt.Sprintf("Verify vol %s is has device path", cVol.Id))
+				log.Infof("Volume spec: %+v", cVol)
+			} else {
+				UpdateOutcome(event, err)
+			}
+		}
+	})
+
+	stepLog = "Deleting the created volumes"
+	Step(stepLog, func() {
+		dash.Info(stepLog)
+
+		for vol, _ := range createdVolIDs {
+			log.Infof("Detaching and deleting volume: %s", vol)
+			err := Inst().V.DetachVolume(vol)
+			if err == nil {
+				err = Inst().V.DeleteVolume(vol)
+			}
+			UpdateOutcome(event, err)
+
 		}
 	})
 }
