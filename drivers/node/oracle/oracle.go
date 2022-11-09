@@ -24,6 +24,7 @@ type oracle struct {
 	ops               cloudops.Ops
 	instanceID        string
 	instanceGroupName string
+	log *logrus.Logger
 }
 
 func (o *oracle) String() string {
@@ -32,6 +33,8 @@ func (o *oracle) String() string {
 
 // Init initializes the node driver for oracle under the given scheduler
 func (o *oracle) Init(nodeOpts node.InitOptions) error {
+	o.SSH.Init(nodeOpts)
+	o.log = nodeOpts.Logger
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {
 		o.instanceGroupName = instanceGroup
@@ -51,7 +54,7 @@ func (o *oracle) Init(nodeOpts node.InitOptions) error {
 func (o *oracle) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
 	err := o.ops.SetInstanceGroupSize(o.instanceGroupName, perZoneCount, timeout)
 	if err != nil {
-		logrus.Errorf("failed to set size of node pool %s. Error: %v", o.instanceGroupName, err)
+		o.log.Errorf("failed to set size of node pool %s. Error: %v", o.instanceGroupName, err)
 		return err
 	}
 
@@ -62,7 +65,7 @@ func (o *oracle) SetASGClusterSize(perZoneCount int64, timeout time.Duration) er
 func (o *oracle) GetASGClusterSize() (int64, error) {
 	size, err := o.ops.GetInstanceGroupSize(o.instanceGroupName)
 	if err != nil {
-		logrus.Errorf("failed to get size of node pool %s. Error: %v", o.instanceGroupName, err)
+		o.log.Errorf("failed to get size of node pool %s. Error: %v", o.instanceGroupName, err)
 		return 0, err
 	}
 	return size, nil
@@ -80,27 +83,27 @@ func (o *oracle) GetZones() ([]string, error) {
 
 // SetClusterVersion sets desired version for cluster and its node pools
 func (o *oracle) SetClusterVersion(version string, timeout time.Duration) error {
-	logrus.Info("[Torpedo] Setting cluster version to :", version)
+	o.log.Info("[Torpedo] Setting cluster version to :", version)
 	err := o.ops.SetClusterVersion(version, timeout)
 	if err != nil {
-		logrus.Errorf("failed to set version for cluster. Error: %v", err)
+		o.log.Errorf("failed to set version for cluster. Error: %v", err)
 		return err
 	}
-	logrus.Info("[Torpedo] Cluster version set successfully. Setting up node group version now ...")
+	o.log.Info("[Torpedo] Cluster version set successfully. Setting up node group version now ...")
 
 	err = o.ops.SetInstanceGroupVersion(o.instanceGroupName, version, timeout)
 	if err != nil {
-		logrus.Errorf("failed to set version for instance group %s. Error: %v", o.instanceGroupName, err)
+		o.log.Errorf("failed to set version for instance group %s. Error: %v", o.instanceGroupName, err)
 		return err
 	}
-	logrus.Info("[Torpedo] Node group version set successfully for group ", o.instanceGroupName)
+	o.log.Info("[Torpedo] Node group version set successfully for group ", o.instanceGroupName)
 
 	return nil
 }
 
 // DeleteNode deletes the given node
 func (o *oracle) DeleteNode(node node.Node, timeout time.Duration) error {
-	logrus.Infof("[Torpedo] Deleting node [%s]", node.Hostname)
+	o.log.Infof("[Torpedo] Deleting node [%s]", node.Hostname)
 	instanceDetails, err := o.ops.GetInstance(node.Hostname)
 	if err != nil {
 		return err

@@ -243,7 +243,6 @@ fi
 
 ORACLE_API_KEY_VOLUME=""
 if [ -n "${ORACLE_API_KEY}" ]; then
-    kubectl create secret generic key4oracle --from-file=${ORACLE_API_KEY}
     ORACLE_API_KEY_VOLUME="{ \"name\": \"oracle-api-key-volume\", \"secret\": { \"secretName\": \"key4oracle\", \"defaultMode\": 256 }}"
     ORACLE_API_KEY_MOUNT="{ \"name\": \"oracle-api-key-volume\", \"mountPath\": \"/home/oci/\" }"
 fi
