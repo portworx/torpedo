@@ -20,7 +20,7 @@ const retryTimeout = time.Minute
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("StoragePoolExpandDiskResize", "Validate storage pool expansion expansion using resize-disk option", nil)
+		StartTorpedoTest("StoragePoolExpandDiskResize", "Validate storage pool expansion expansion using resize-disk option", nil, 0)
 	})
 
 	var contexts []*scheduler.Context
@@ -107,7 +107,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 
 var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("StoragePoolExpandDiskAdd", "Validate storage pool expansion expansion using add-disk option", nil)
+		StartTorpedoTest("StoragePoolExpandDiskAdd", "Validate storage pool expansion expansion using add-disk option", nil, 0)
 	})
 	var contexts []*scheduler.Context
 
@@ -194,7 +194,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 
 var _ = Describe("{PoolResizeDiskReboot}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolResizeDiskReboot", "Initiate pool expansion using resize-disk and reboot node", nil)
+		StartTorpedoTest("PoolResizeDiskReboot", "Initiate pool expansion using resize-disk and reboot node", nil, 0)
 	})
 
 	var contexts []*scheduler.Context
@@ -290,7 +290,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 
 var _ = Describe("{PoolAddDiskReboot}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolAddDiskReboot", "Initiate pool expansion using add-disk and reboot node", nil)
+		StartTorpedoTest("PoolAddDiskReboot", "Initiate pool expansion using add-disk and reboot node", nil, 0)
 	})
 	var contexts []*scheduler.Context
 
@@ -394,6 +394,7 @@ func roundUpValue(toRound uint64) uint64 {
 
 func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 	poolSizeHasBeenChanged := false
+	waitCount := 5
 	if poolToBeResized.LastOperation != nil {
 		for {
 			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
@@ -402,11 +403,18 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 			dash.VerifyFatal(len(pools) > 0, true, "Validate storage pools exist")
 
 			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
+
 			dash.VerifyFatal(updatedPoolToBeResized != nil, true, "Validate pool to be resized exist")
+			dash.VerifyFatal(waitCount, 0, "timed out waiting for pool resize to finish")
 			if updatedPoolToBeResized.LastOperation.Status != api.SdkStoragePool_OPERATION_SUCCESSFUL {
 				dash.VerifyFatal(updatedPoolToBeResized.LastOperation.Status != api.SdkStoragePool_OPERATION_FAILED, true, fmt.Sprintf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation))
+				err = ValidatePoolRebalance()
+				if err != nil {
+					dash.VerifyFatal(err, nil, "Error while pool rebalance")
+				}
 				log.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
-				time.Sleep(time.Second * 90)
+				time.Sleep(time.Second * 60)
+				waitCount--
 				continue
 			}
 			poolSizeHasBeenChanged = true
@@ -426,6 +434,7 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 			return nil, false, fmt.Errorf("expanded pool value is nil")
 		}
 		if expandedPool.LastOperation != nil {
+			logrus.Infof("Pool Resize Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
 			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED {
 				return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
 			}

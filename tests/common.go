@@ -448,7 +448,9 @@ func InitInstance() {
 	commitID := strings.Split(pxVersion, "-")[1]
 	t := Inst().Dash.TestSet
 	t.CommitID = commitID
-	t.Tags = append(t.Tags, pxVersion)
+	if pxVersion != "" {
+		t.Tags["px-version"] = pxVersion
+	}
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -2754,7 +2756,7 @@ func SetupBackup(testName string) {
 	CreateOrganization(OrgID)
 	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
 	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID)
-	CreateSourceAndDestClusters(CredName, OrgID)
+	CreateSourceAndDestClusters(OrgID, "", "")
 }
 
 // DeleteBackup deletes backup
@@ -2826,7 +2828,7 @@ func DeleteBackupLocation(name string, orgID string) {
 // CreateSourceAndDestClusters creates source and destination cluster
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
-func CreateSourceAndDestClusters(cloudCred, orgID string) {
+func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
@@ -2847,8 +2849,8 @@ func CreateSourceAndDestClusters(cloudCred, orgID string) {
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
 
-		logrus.Debugf("Save cluster %s kubeconfig to %s", sourceClusterName, srcClusterConfigPath)
-		CreateCluster(sourceClusterName, cloudCred, srcClusterConfigPath, orgID)
+		log.Infof("Save cluster %s kubeconfig to %s", sourceClusterName, srcClusterConfigPath)
+		CreateCluster(sourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid)
 	})
 
 	// Register destination cluster with backup driver
@@ -2856,8 +2858,8 @@ func CreateSourceAndDestClusters(cloudCred, orgID string) {
 		dstClusterConfigPath, err := GetDestinationClusterConfigPath()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
-		logrus.Debugf("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
-		CreateCluster(destinationClusterName, cloudCred, dstClusterConfigPath, orgID)
+		log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
+		CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid)
 	})
 }
 
@@ -2872,7 +2874,8 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 }
 
 // CreateCluster creates/registers cluster with px-backup
-func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID string) {
+func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string) {
+	var clusterCreateReq *api.ClusterCreateRequest
 
 	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
@@ -2880,14 +2883,26 @@ func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID s
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to read kubeconfig file from location [%s]. Error:[%v]",
 				kubeconfigPath, err))
-
-		clusterCreateReq := &api.ClusterCreateRequest{
-			CreateMetadata: &api.CreateMetadata{
-				Name:  name,
-				OrgId: orgID,
-			},
-			Kubeconfig:      base64.StdEncoding.EncodeToString(kubeconfigRaw),
-			CloudCredential: cloudCred,
+		if cloud_name != "" {
+			clusterCreateReq = &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					OrgId: orgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+				CloudCredentialRef: &api.ObjectRef{
+					Name: cloud_name,
+					Uid:  uid,
+				},
+			}
+		} else {
+			clusterCreateReq = &api.ClusterCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					OrgId: orgID,
+				},
+				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+			}
 		}
 		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -3931,7 +3946,7 @@ func ParseFlags() {
 	flag.StringVar(&user, userFlag, "nouser", "user name running the tests")
 	flag.StringVar(&testDescription, testDescriptionFlag, "Torpedo Workflows", "test suite description")
 	flag.StringVar(&testType, testTypeFlag, "system-test", "test types like system-test,functional,integration")
-	flag.StringVar(&testTags, testTagsFlag, "", "tags running the tests")
+	flag.StringVar(&testTags, testTagsFlag, "", "tags running the tests. Eg: key1:val1,key2:val2")
 	flag.IntVar(&testsetID, testSetIDFlag, 0, "testset id to post the results")
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
@@ -3999,12 +4014,25 @@ func ParseFlags() {
 			Description: testDescription,
 			Branch:      testBranch,
 			TestType:    testType,
-			Tags:        make([]string, 0),
+			Tags:        make(map[string]string),
 			Status:      aetosutil.NOTSTARTED,
 		}
 		if testTags != "" {
-			tags := strings.Split(testTags, ",")
-			testSet.Tags = append(testSet.Tags, tags...)
+			tags, err := splitCsv(testTags)
+			if err != nil {
+				log.Fatalf("failed to parse tags: %v. err: %v", testTags, err)
+			} else {
+				for _, tag := range tags {
+					var key, value string
+					if !strings.Contains(tag, ":") {
+						log.Info("Invalid tag %s. Please provide tag in key:value format skipping provided tag", tag)
+					} else {
+						key = strings.SplitN(tag, ":", 2)[0]
+						value = strings.SplitN(tag, ":", 2)[1]
+						testSet.Tags[key] = value
+					}
+				}
+			}
 		}
 
 		val, ok := os.LookupEnv("TESTSET-ID")
@@ -4746,10 +4774,90 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		}
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify deleting schedule policies %s, Err: %v", policy_list[i], err))
 	}
+	DeleteCluster(destinationClusterName, OrgID)
+	DeleteCluster(sourceClusterName, OrgID)
 	if flag == false {
 		return false
 	}
 	return true
+}
+
+//ValidatePoolRebalance checks rebalnce state of pools if running
+func ValidatePoolRebalance() error {
+	rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+
+	if err == nil {
+
+		for _, job := range rebalanceJobs {
+			jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
+
+			if err == nil {
+
+				previousDone := uint64(0)
+				jobState := jobResponse.GetJob().GetState()
+				if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
+					return fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
+					dash.Infof("Job %v is in paused/pending state", job.GetId())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_DONE {
+					dash.Infof("Job %v is in DONE state", job.GetId())
+				}
+
+				if jobState == opsapi.StorageRebalanceJobState_RUNNING {
+					dash.Infof("Job %v is in Running state", job.GetId())
+
+					currentDone, total := getReblanceWorkSummary(jobResponse)
+					//checking for rebalance progress
+					for currentDone < total && previousDone < currentDone {
+						time.Sleep(2 * time.Minute)
+						dash.Infof("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
+						jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
+						if err != nil {
+							return err
+						}
+						previousDone = currentDone
+						currentDone, total = getReblanceWorkSummary(jobResponse)
+					}
+
+					if previousDone == currentDone {
+						return fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
+					}
+					if currentDone == total {
+						dash.Infof("Rebalance for job %v completed,", job.GetId())
+					}
+
+				}
+
+			}
+		}
+	}
+	return err
+}
+
+func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse) (uint64, uint64) {
+	status := jobResponse.GetJob().GetStatus()
+	if status != "" {
+		log.Infof(" Job Status: %s", status)
+	}
+
+	currentDone := uint64(0)
+	currentPending := uint64(0)
+	total := uint64(0)
+	rebalWorkSummary := jobResponse.GetSummary().GetWorkSummary()
+
+	for _, summary := range rebalWorkSummary {
+		currentDone += summary.GetDone()
+		currentPending += summary.GetPending()
+		log.Infof("WorkSummary --> Type: %v,Done : %v, Pending: %v", summary.GetType(), currentDone, currentPending)
+
+	}
+	total = currentDone + currentPending
+
+	return currentDone, total
 }
 
 func updatePxRuntimeOpts() error {
@@ -4774,20 +4882,20 @@ func updatePxRuntimeOpts() error {
 		log.Info("No run time options provided to update")
 	}
 	return nil
+
 }
 
 //StartTorpedoTest starts the logging for torpedo test
-func StartTorpedoTest(testName, testDescription string, tags []string) {
+func StartTorpedoTest(testName, testDescription string, tags map[string]string, testRepoID int) {
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
 	SetTorpedoFileOutput(log, TestLogger)
-	dash.TestCaseBegin(testName, testDescription, "", tags)
+	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
 }
 
 //EndTorpedoTest ends the logging for torpedo test
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
-
 }
 
 func Backupschedulepolicy(name string, uid string, orgid string, schedule_policy_info *api.SchedulePolicyInfo) error {
@@ -4862,4 +4970,15 @@ func CreateMonthlySchedulePolicy(retain int64, date int64, time string, incr_cou
 		},
 	}
 	return SchedulePolicy
+}
+
+func RegisterBackupCluster(orgID string, cloud_name string, uid string) {
+	CreateSourceAndDestClusters(orgID, cloud_name, uid)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: sourceClusterName, IncludeSecrets: true}
+	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
+	dash.VerifyFatal(err, nil, "Inspecting cluster object")
+	clusterObj := clusterResp.GetCluster()
+	dash.VerifyFatal(clusterObj.Status.Status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 }
