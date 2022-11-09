@@ -4035,7 +4035,7 @@ func ParseFlags() {
 			}
 		}
 
-		val, ok := os.LookupEnv("TESTSET-ID")
+		val, ok := os.LookupEnv("TESTSET_ID")
 		if ok {
 			testsetID, err = strconv.Atoi(val)
 			if err != nil {
@@ -4044,7 +4044,7 @@ func ParseFlags() {
 		}
 		if testsetID != 0 {
 			dash.TestSetID = testsetID
-			os.Setenv("TESTSET-ID", fmt.Sprint(testsetID))
+			os.Setenv("TESTSET_ID", fmt.Sprint(testsetID))
 		}
 
 		dash.TestSet = &testSet
