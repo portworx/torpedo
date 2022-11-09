@@ -45,6 +45,8 @@ def main():
                 results = result['hits']['hits']
                 print("Scroll id "+old_scroll_id)
                 print("Lenght of hits " +str(len(results)))
+                print("Wait for 10 seconds")
+                time.sleep(10)
         except Exception as ex:
             print("Exception thrown while querying %s : %s",es_index, ex)
         print("Picking next indes after 1 minute")
