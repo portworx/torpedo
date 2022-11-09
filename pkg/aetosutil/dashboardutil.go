@@ -154,7 +154,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 				d.Log.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
 			d.Log.Infof("Dashboard URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
-			os.Setenv("TESTSET_ID", fmt.Sprint(d.TestSetID))
+			os.Setenv("DASH_UID", fmt.Sprint(d.TestSetID))
 
 		}
 	}
