@@ -553,7 +553,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 				UpdateOutcome(event, err)
 			}
 		}(selectedNode)
-		time.Sleep(2 * time.Second)
+		time.Sleep(3 * time.Second)
 		wg.Add(1)
 		go func(appNode node.Node) {
 			defer wg.Done()
@@ -572,31 +572,34 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 	stepLog = "Validate the created volumes"
 	Step(stepLog, func() {
 		dash.Info(stepLog)
+		var cVol *opsapi.Volume
+		var err error
 
 		for vol, volPath := range createdVolIDs {
+			//TODO: remove this retry once PWX-27773 is fixed
 			t := func() (interface{}, bool, error) {
-				out, err := Inst().V.InspectVolume(vol)
-				p := fmt.Sprintf("%s", out.DevicePath)
-				fmt.Printf("Checking vol : %s\n", vol)
-				fmt.Printf("Got path : %s\n", p)
-				if !strings.Contains(p, "pxd/") {
-					return out, true, fmt.Errorf("Path %s is not correct", p)
+				cVol, err = Inst().V.InspectVolume(vol)
+				if err != nil {
+					return cVol, true, fmt.Errorf("error inspecting volume %s, err : %v", vol, err)
 				}
-				return out, true, err
+
+				if !strings.Contains(cVol.DevicePath, "pxd/") {
+					return cVol, true, fmt.Errorf("path %s is not correct", cVol.DevicePath)
+				}
+				if cVol.DevicePath == "" {
+					return cVol, false, fmt.Errorf("device path is not present for volume: %s", vol)
+				}
+				return cVol, true, err
 			}
 
-			_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 			if err != nil {
-				fmt.Printf("Got error in getting device path: %v\n", err)
-			}
-			cVol, err := Inst().V.InspectVolume(vol)
-			if err == nil {
+				UpdateOutcome(event, err)
+			} else {
 				dash.VerifySafely(cVol.State, opsapi.VolumeState_VOLUME_STATE_ATTACHED, fmt.Sprintf("Verify vol %s is attached", cVol.Id))
 				dash.VerifySafely(cVol.DevicePath, volPath, fmt.Sprintf("Verify vol %s is has device path", cVol.Id))
-				log.Infof("Volume spec: %+v", cVol)
-			} else {
-				UpdateOutcome(event, err)
 			}
+
 		}
 	})
 
@@ -3844,6 +3847,9 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 		waitCount := 5
 
 		for {
+			if waitCount == 0 {
+				break
+			}
 			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
 
 			if err != nil {
@@ -3856,7 +3862,6 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 
 			if updatedPoolToBeResized.LastOperation.Status != opsapi.SdkStoragePool_OPERATION_SUCCESSFUL {
 				if updatedPoolToBeResized.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
-
 					err = fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
 					return poolResizePossible, err
 
@@ -3900,16 +3905,22 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 				return nil, false, fmt.Errorf("PoolResize for %s has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
 			}
 		}
+
 		newPoolSize := expandedPool.TotalSize / units.GiB
+		err = ValidatePoolRebalance()
+		if err != nil {
+			return nil, true, fmt.Errorf("pool %s not been resized .Current size is %d,Error while pool rebalance: %v", poolIDToResize, newPoolSize, err)
+		}
 
 		if newPoolSize > initialSize {
 			// storage pool resize has been completed
 			return nil, true, nil
 		}
+
 		return nil, true, fmt.Errorf("pool %s not been resized .Current size is %d", poolIDToResize, newPoolSize)
 	}
 
-	_, err := task.DoRetryWithTimeout(f, 90*time.Minute, 1*time.Minute)
+	_, err := task.DoRetryWithTimeout(f, 10*time.Minute, 1*time.Minute)
 	return err
 }
 

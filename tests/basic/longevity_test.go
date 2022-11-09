@@ -138,7 +138,7 @@ var _ = Describe("{Longevity}", func() {
 
 		Inst().IsHyperConverged = hyperConvergedTypeEnabled
 
-		//TriggerDeployNewApps(&contexts, &triggerEventsChan)
+		TriggerDeployNewApps(&contexts, &triggerEventsChan)
 
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
@@ -743,7 +743,7 @@ func populateIntervals() {
 	triggerInterval[AsyncDRVolumeOnly][2] = 24 * baseInterval
 	triggerInterval[AsyncDRVolumeOnly][1] = 27 * baseInterval
 
-	baseInterval = 1 * time.Minute
+	baseInterval = 60 * time.Minute
 
 	triggerInterval[AppTasksDown][10] = 1 * baseInterval
 	triggerInterval[AppTasksDown][9] = 2 * baseInterval

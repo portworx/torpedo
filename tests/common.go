@@ -4996,7 +4996,7 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		volCreateRequest := &opsapi.SdkVolumeCreateRequest{
 			Name: volName,
 			Spec: &opsapi.VolumeSpec{
-				Size:    100,
+				Size:    1000,
 				HaLevel: 1,
 				Format:  opsapi.FSType_FS_TYPE_EXT4,
 				ReplicaSet: &opsapi.ReplicaSet{
