@@ -532,45 +532,50 @@ func roundUpValue(toRound uint64) uint64 {
 }
 
 func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
-	poolSizeHasBeenChanged := false
-	waitCount := 5
 	if poolToBeResized.LastOperation != nil {
-		for {
+		f := func() (interface{}, bool, error) {
 			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-			dash.VerifyFatal(err, nil, "Validate get storage pools list")
-			dash.VerifyFatal(len(pools) > 0, true, "Validate storage pools exist")
+			if err != nil || len(pools) == 0 {
+				return nil, true, fmt.Errorf("error getting pools list, err %v", err)
+			}
 
 			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
-			dash.VerifyFatal(updatedPoolToBeResized != nil, true, "Validate pool to be resized exist")
-			if waitCount == 0 {
-				dash.VerifyFatal(waitCount > 0, true, "timed out waiting for pool resize to finish")
+			if updatedPoolToBeResized == nil {
+				return nil, false, fmt.Errorf("error getting pool with given pool id %s", poolToBeResized.Uuid)
 			}
+
 			if updatedPoolToBeResized.LastOperation.Status != api.SdkStoragePool_OPERATION_SUCCESSFUL {
 				log.Infof("Current pool status : %v", updatedPoolToBeResized.LastOperation)
 				if updatedPoolToBeResized.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED {
 					dash.VerifyFatal(updatedPoolToBeResized.LastOperation.Status, api.SdkStoragePool_OPERATION_SUCCESSFUL, fmt.Sprintf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation))
+					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
 				}
 				err = ValidatePoolRebalance()
 				if err != nil {
-					dash.VerifyFatal(err, nil, "Error while pool rebalance")
+					return nil, true, fmt.Errorf("errorvalidatng  err %v", err)
 				}
 				log.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
-				time.Sleep(time.Second * 60)
-				waitCount--
-				continue
+				return nil, true, nil
 			}
-			poolSizeHasBeenChanged = true
-			break
+			return nil, false, nil
 		}
+
+		_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, retryTimeout)
+		if err != nil {
+			dash.VerifyFatal(err, nil, "Verify pool status before expansion")
+		}
+		return true
 	}
-	return poolSizeHasBeenChanged
+	return true
 }
 
 func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJournalEnabled bool) error {
 
 	f := func() (interface{}, bool, error) {
 		expandedPool, err := GetStoragePoolByUUID(poolIDToResize)
-		dash.VerifyFatal(err, nil, "Validate get pool using UUID ")
+		if err != nil {
+			return nil, true, fmt.Errorf("error getting pool by using id %s", poolIDToResize)
+		}
 
 		if expandedPool == nil {
 			return nil, false, fmt.Errorf("expanded pool value is nil")

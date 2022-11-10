@@ -3840,54 +3840,47 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 }
 
 func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
-	poolResizePossible := false
+	if poolToBeResized == nil {
+		return false, fmt.Errorf("pool provided is nil")
+	}
+
 	if poolToBeResized != nil && poolToBeResized.LastOperation != nil {
-
 		dash.Infof("Validating pool :%v to expand", poolToBeResized.Uuid)
-		waitCount := 5
 
-		for {
-			if waitCount == 0 {
-				break
-			}
+		f := func() (interface{}, bool, error) {
+
 			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
-
 			if err != nil {
 				err = fmt.Errorf("error getting storage pools list. Err: %v", err)
-				dash.Error(err.Error())
-				return poolResizePossible, err
+				return nil, true, fmt.Errorf("error getting pools list, Error :%v", err)
 			}
 
 			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
-
 			if updatedPoolToBeResized.LastOperation.Status != opsapi.SdkStoragePool_OPERATION_SUCCESSFUL {
 				if updatedPoolToBeResized.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
-					err = fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
-					return poolResizePossible, err
+					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
 
 				}
 				err = ValidatePoolRebalance()
 				if err != nil {
-					return poolResizePossible, err
+					return nil, true, err
 				}
 
 				dash.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
 				if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "Will not proceed with pool expansion") {
-					break
+					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation.Msg)
 				}
-				time.Sleep(time.Second * 60)
-				waitCount--
-				continue
+				return nil, true, nil
 			}
-			poolResizePossible = true
-			break
+			return nil, false, nil
 		}
-	}
+		_, err := task.DoRetryWithTimeout(f, 10*time.Minute, 1*time.Minute)
+		if err != nil {
+			return false, err
+		}
 
-	if poolToBeResized != nil && poolToBeResized.LastOperation == nil {
-		poolResizePossible = true
 	}
-	return poolResizePossible, nil
+	return true, nil
 }
 
 func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
@@ -3900,7 +3893,7 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 
 		expandedPool := pools[poolIDToResize]
 		if expandedPool.LastOperation != nil {
-			dash.Infof("Current pool %s last opration status : %v", poolIDToResize, expandedPool.LastOperation.Status)
+			dash.Infof("Current pool %s last operation status : %v", poolIDToResize, expandedPool.LastOperation.Status)
 			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
 				return nil, false, fmt.Errorf("PoolResize for %s has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
 			}
