@@ -459,13 +459,10 @@ func GetAppConfTemplate(tenantID string, supportedDataService string) (string, e
 	for i := 0; i < len(appConfigs); i++ {
 		if appConfigs[i].GetName() == appConfigTemplateName {
 			isTemplateavailable = true
-			//for key := range dataServiceNameIDMap {
 			if dataServiceId == appConfigs[i].GetDataServiceId() {
-				//dataServiceNameDefaultAppConfigMap[key] = appConfigs[i].GetId()
 				appConfigTemplateID = appConfigs[i].GetId()
 				isavailable = true
 			}
-			//}
 		}
 	}
 	if !(isavailable && isTemplateavailable) {
@@ -1142,7 +1139,11 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 		logrus.Errorf("An Error Occured while updating the deployment %v", err)
 		return nil, err
 	}
-	ValidateDataServiceDeployment(deployment, namespace)
+
+	err = ValidateDataServiceDeployment(deployment, namespace)
+	if err != nil {
+		return nil, err
+	}
 
 	return deployment, nil
 
@@ -1171,7 +1172,12 @@ func UpdateDataServices(deploymentID string, appConfigID string, imageID string,
 		logrus.Errorf("An Error Occured while updating deployment %v", err)
 		return nil, err
 	}
-	ValidateDataServiceDeployment(deployment, namespace)
+
+	err = ValidateDataServiceDeployment(deployment, namespace)
+	if err != nil {
+		return nil, err
+	}
+
 	return deployment, nil
 }
 
