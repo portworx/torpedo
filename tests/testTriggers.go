@@ -375,6 +375,8 @@ const (
 	ValidateDeviceMapper = "validateDeviceMapper"
 	// AsyncDR runs Async DR between two clusters
 	AsyncDR = "asyncdr"
+	// AsyncDR Volume Only runs Async DR volume only migration between two clusters
+	AsyncDRVolumeOnly = "asyncdrvolumeonly"
 	// HAIncreaseAndReboot performs repl-add
 	HAIncreaseAndReboot = "haIncreaseAndReboot"
 	// AddDrive performs drive add for on-prem cluster
@@ -3729,7 +3731,10 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 	poolResizePossible := false
 	if poolToBeResized != nil && poolToBeResized.LastOperation != nil {
+
 		dash.Infof("Validating pool :%v to expand", poolToBeResized.Uuid)
+		waitCount := 5
+
 		for {
 			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
 
@@ -3748,12 +3753,17 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 					return poolResizePossible, err
 
 				}
+				err = ValidatePoolRebalance()
+				if err != nil {
+					return poolResizePossible, err
+				}
 
 				dash.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
 				if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "Will not proceed with pool expansion") {
 					break
 				}
-				time.Sleep(time.Second * 90)
+				time.Sleep(time.Second * 60)
+				waitCount--
 				continue
 			}
 			poolResizePossible = true
@@ -4203,83 +4213,12 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 			err := Inst().V.WaitDriverUpOnNode(autoPilotLabelNode, 1*time.Minute)
 			UpdateOutcome(event, err)
 
-			rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+			err = ValidatePoolRebalance()
+
 			UpdateOutcome(event, err)
-			if err == nil {
 
-				for _, job := range rebalanceJobs {
-					jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
-					UpdateOutcome(event, err)
-					if err == nil {
-
-						previousDone := uint64(0)
-						jobState := jobResponse.GetJob().GetState()
-						if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
-							UpdateOutcome(event, fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary()))
-
-						}
-
-						if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
-							dash.Infof("Job %v is in paused/pending state", job.GetId())
-						}
-
-						if jobState == opsapi.StorageRebalanceJobState_DONE {
-							dash.Infof("Job %v is in DONE state", job.GetId())
-						}
-
-						if jobState == opsapi.StorageRebalanceJobState_RUNNING {
-							dash.Infof("Job %v is in Running state", job.GetId())
-
-							currentDone, total := getReblanceWorkSummary(jobResponse)
-							//checking for rebalance progress
-							for currentDone < total && previousDone < currentDone {
-								time.Sleep(2 * time.Minute)
-								dash.Infof("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
-								jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
-								UpdateOutcome(event, err)
-								if err != nil {
-									break
-								}
-								previousDone = currentDone
-								currentDone, total = getReblanceWorkSummary(jobResponse)
-							}
-
-							if previousDone == currentDone {
-								UpdateOutcome(event, fmt.Errorf("job %v is in running state but not progressing further", job.GetId()))
-							}
-							if currentDone == total {
-								dash.Infof("Rebalance for job %v completed,", job.GetId())
-							}
-
-						}
-
-					}
-				}
-			}
 		})
 	}
-}
-
-func getReblanceWorkSummary(jobResponse *opsapi.SdkGetRebalanceJobStatusResponse) (uint64, uint64) {
-	status := jobResponse.GetJob().GetStatus()
-	if status != "" {
-		log.Infof(" Job Status: %s", status)
-	}
-
-	currentDone := uint64(0)
-	currentPending := uint64(0)
-	total := uint64(0)
-	rebalWorkSummary := jobResponse.GetSummary().GetWorkSummary()
-
-	for _, summary := range rebalWorkSummary {
-		currentDone += summary.GetDone()
-		currentPending += summary.GetPending()
-		log.Infof("WorkSummary --> Type: %v,Done : %v, Pending: %v", summary.GetType(), currentDone, currentPending)
-
-	}
-	total = currentDone + currentPending
-
-	return currentDone, total
 }
 
 // TriggerUpgradeVolumeDriver upgrades volume driver version to the latest build
@@ -5741,6 +5680,105 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 		} else {
 			UpdateOutcome(event, err)
+		}
+	}
+	updateMetrics(*event)
+}
+
+// TriggerAsyncDRVolumeOnly triggers Async DR
+func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRVolumeOnly)
+	defer ginkgo.GinkgoRecover()
+	dash.Infof("Volume Only Async DR triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppTasksDown,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[AsyncDRVolumeOnly]
+	var (
+		migrationNamespaces   []string
+		taskNamePrefix        = "async-dr-vol-only-mig"
+		allMigrations         []*storkapi.Migration
+		includeResourcesFlag  = false
+		startApplicationsFlag = false
+	)
+
+	Step(fmt.Sprintf("Deploy applications for volume-only migration, with frequency: %v", chaosLevel), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			dash.Errorf("Failed to write kubeconfig: %v", err)
+		}
+
+		err = SetSourceKubeConfig()
+		if err != nil {
+			dash.Errorf("Failed to Set source kubeconfig: %v", err)
+		}
+		UpdateOutcome(event, err)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			dash.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
+			}
+			Step("Create cluster pair between source and destination clusters", func() {
+				// Set cluster context to cluster where torpedo is running
+				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+			})
+		}
+
+		dash.Infof("Volume-only Migration Namespaces: %v", migrationNamespaces)
+
+	})
+
+	time.Sleep(5 * time.Minute)
+	dash.Info("Start volume only migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := migrationKey + fmt.Sprintf("%d", i)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+		} else {
+			allMigrations = append(allMigrations, currMig)
+		}
+	}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+		}
+		resp, get_mig_err := storkops.Instance().GetMigration(mig.Name, mig.Namespace)
+		if get_mig_err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to get migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, get_mig_err))
+		}
+		resourcesMigrated := resp.Status.Summary.NumberOfMigratedResources
+		if resourcesMigrated != 0 {
+			UpdateOutcome(event, fmt.Errorf("resources should not migrate in volumeonlymigration case, numberOfmigratedresources should %d, getting %d",
+				0, resourcesMigrated))
+		} else {
+			dash.Infof("Number of resources migrated in Volume Only migration should be 0, Resources migrated: %d", resourcesMigrated)
 		}
 	}
 	updateMetrics(*event)

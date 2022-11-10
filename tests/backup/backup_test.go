@@ -55,7 +55,7 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
-		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil)
+		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil, 0)
 	})
 	It("Backup Cluster Verification", func() {
 		Step("Check the status of backup pods", func() {
@@ -83,7 +83,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 	providers := getProviders()
 	JustBeforeEach(func() {
-		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil)
+		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
 		dash.Infof("Verifying if the pre/post rules for the required apps are present in the list or not ")
 		for i := 0; i < len(app_list); i++ {
 			if Contains(post_rule_app, app_list[i]) {
@@ -167,6 +167,14 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			monthly_schedule_policy_info := CreateMonthlySchedulePolicy(1, 29, "9:20AM", 2)
 			monthly_policy_status := Backupschedulepolicy("monthly", uuid.New(), orgID, monthly_schedule_policy_info)
 			dash.VerifyFatal(monthly_policy_status, nil, "Creating monthly schedule policy")
+		})
+		Step("Register cluster for backup", func() {
+			CloudCredUID = uuid.New()
+			CreateCloudCredential("azure", "azureaccount", CloudCredUID, orgID)
+			// To create cloud clustre
+			RegisterBackupCluster(orgID, "azure", CloudCredUID)
+			//To create on prem cluster
+			RegisterBackupCluster(orgID, "", "")
 		})
 	})
 	JustAfterEach(func() {
@@ -1852,10 +1860,9 @@ func CreateProviderClusterObject(provider string, kubeconfigList []string, cloud
 	Step(fmt.Sprintf("Create cluster [%s-%s] in org [%s]",
 		clusterName, provider, orgID), func() {
 		kubeconfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
-		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider), cloudCred,
-			kubeconfigPath, orgID)
+		dash.VerifyFatal(err, nil, "Fetching kubeconfig path for source cluster")
+		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider),
+			kubeconfigPath, orgID, "", "")
 	})
 }
 
