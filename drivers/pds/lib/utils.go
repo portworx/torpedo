@@ -141,7 +141,7 @@ const (
 	pxLabel               = "pds.portworx.com/available"
 	defaultParams         = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap    = "pds-params"
-	systemNamespace       = "kube-system"
+	configmapNamespace    = "default"
 )
 
 // PDS vars
@@ -344,7 +344,7 @@ func ReadParams(filename string) (*Parameter, error) {
 			return nil, err
 		}
 	} else {
-		cm, err := core.Instance().GetConfigMap(pdsParamsConfigmap, systemNamespace)
+		cm, err := core.Instance().GetConfigMap(pdsParamsConfigmap, configmapNamespace)
 		if err != nil {
 			logrus.Errorf("Error reading config map: %v", err)
 		}
