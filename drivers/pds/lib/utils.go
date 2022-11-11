@@ -40,6 +40,7 @@ type Parameter struct {
 		AccountName     string `json:"AccountName"`
 		ClusterType     string `json:"ClusterType"`
 		Namespace       string `json:"Namespace"`
+		PxNamespace     string `json:"PxNamespace"`
 	} `json:"InfraToTest"`
 }
 
@@ -1379,47 +1380,6 @@ func UnCordonK8sNode(node *corev1.Node) error {
 		return true, nil
 	})
 	return err
-}
-
-func SearchLogLinesFromPxPodOnNode(nodeName string, namespace string, searchPattern string) (bool, error) {
-	labelSelector := map[string]string{"name": "portworx"}
-	var pods *corev1.PodList
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-		pods, err = k8sCore.GetPodsByNodeAndLabels(nodeName, namespace, labelSelector)
-		if err != nil {
-			logrus.Errorf("Failed to get pods from node %v due to %v", nodeName, err)
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		logrus.Errorf("Could not fetch pods running on the given node %v", err)
-		return false, err
-	}
-	pxPodName := pods.Items[0].Name
-	logrus.Infof("The portworx pod %v from node %v", pxPodName, nodeName)
-	var log string
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-		tailLines := int64(500)
-		log, err = k8sCore.GetPodLog(pxPodName, namespace, &corev1.PodLogOptions{Container: "portworx", Follow: false, TailLines: &tailLines})
-		// logrus.Infof("Pod logs: %v, all logs: %v", log, logs)
-		if err != nil {
-			logrus.Errorf("Failed to get logs from pod %v due to %v", pxPodName, err)
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		logrus.Errorf("Error: Failed to get pod logs %v because %v", pxPodName, err)
-		return false, nil
-	}
-
-	if strings.Contains(log, searchPattern) {
-		logrus.Infof("MATCHED!! line with pattern %v", searchPattern)
-		return true, nil
-	}
-
-	return false, nil
 }
 
 func VerifyPxPodOnNode(nodeName string, namespace string) (bool, error) {
