@@ -41,9 +41,7 @@
       "Version": "7.0.4",
       "Image": "212733c",
       "Replicas": 6,
-      "ScaleReplicas": 8,
-      "OldVersion": "7.0.4",
-      "OldImage": "212733c"
+      "ScaleReplicas": 8
     },
     {
       "Name": "Cassandra",
