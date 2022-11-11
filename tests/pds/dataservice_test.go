@@ -584,7 +584,6 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 					namespace,
 				)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(deployment).NotTo(BeEmpty())
 
 				defer func() {
 					if !isDeploymentsDeleted {
