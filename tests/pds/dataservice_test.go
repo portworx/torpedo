@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -27,6 +28,7 @@ const (
 
 var (
 	namespace                               string
+	pxnamespace                             string
 	tenantID                                string
 	dnsZone                                 string
 	projectID                               string
@@ -57,7 +59,7 @@ func TestDataService(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
+	junitReporter := reporters.NewJUnitReporter("/tmp/testresults/junit_basic.xml")
 	specReporters = append(specReporters, junitReporter)
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : pds", specReporters)
 
@@ -90,6 +92,7 @@ var _ = BeforeSuite(func() {
 		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(namespaceID).NotTo(BeEmpty())
+		pxnamespace = params.InfraToTest.PxNamespace
 	})
 })
 
@@ -225,7 +228,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					isDeploymentsDeleted = true
 				})
 
-				Step("Delete the worload generating deployments", func() {
+				Step("Delete the workload generating deployments", func() {
 					if ds.Name == "Cassandra" || ds.Name == "PostgreSQL" {
 						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
 					} else {
@@ -642,19 +645,14 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				})
 
 				defer func() {
-					Step("Delete the worload generating deployments", func() {
-						if DataService == "Cassandra" || DataService == "PostgreSQL" {
+					Step("Delete the workload generating deployments", func() {
+						if ds.Name == "Cassandra" || ds.Name == "PostgreSQL" {
 							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
 						} else {
 							err = pdslib.DeleteK8sPods(pod.Name, namespace)
 						}
 						Expect(err).NotTo(HaveOccurred())
-
 					})
-					Step("Delete created PDS deployment")
-					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					Expect(err).NotTo(HaveOccurred())
-					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
 				}()
 
 				var deploymentPods []corev1.Pod
@@ -685,12 +683,13 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 					logrus.Info("Finished labeling the nodes...")
 
 					// Read log lines of the px pod on the node to see if service has shutdown
-					for _, node := range nodeList {
-						searchPattern := "INFO stopped: pxdaemon (exit status 0)"
-						rc, err := pdslib.SearchLogLinesFromPxPodOnNode(node.Name, "kube-system", searchPattern)
-						Expect(rc).To(BeTrue())
-						Expect(err).NotTo(HaveOccurred())
-					}
+					// for _, node := range nodeList {
+					// 	searchPattern := "INFO stopped: pxdaemon (exit status 0)"
+					// 	rc, err := pdslib.SearchLogLinesFromPxPodOnNode(node.Name, pxnamespace, searchPattern)
+					// 	Expect(rc).To(BeTrue())
+					// 	Expect(err).NotTo(HaveOccurred())
+					// }
+					time.Sleep(30 * time.Second)
 
 				})
 
@@ -709,7 +708,7 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 					logrus.Info("Finished removing labels from the nodes...")
 
 					for _, node := range nodeList {
-						err := pdslib.DrainPxPodOnK8sNode(node, "kube-system")
+						err := pdslib.DrainPxPodOnK8sNode(node, pxnamespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
 
@@ -725,7 +724,7 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 					logrus.Info("Verify that the px pod has started on node...")
 					// Read log lines of the px pod on the node to see if the service is running
 					for _, node := range nodeList {
-						rc, err := pdslib.VerifyPxPodOnNode(node.Name, "kube-system")
+						rc, err := pdslib.VerifyPxPodOnNode(node.Name, pxnamespace)
 						Expect(rc).To(BeTrue())
 						Expect(err).NotTo(HaveOccurred())
 					}
