@@ -73,7 +73,6 @@ var _ = BeforeSuite(func() {
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
 		Expect(err).NotTo(HaveOccurred())
-
 	})
 
 	Step("Get StorageTemplateID and Replicas", func() {
