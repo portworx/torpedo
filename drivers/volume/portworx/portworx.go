@@ -27,7 +27,6 @@ import (
 	"github.com/libopenstorage/openstorage/api/client"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	"github.com/libopenstorage/openstorage/api/spec"
-	api "github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
 	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
