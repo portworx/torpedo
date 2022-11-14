@@ -27,6 +27,7 @@ import (
 	"github.com/libopenstorage/openstorage/api/client"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	"github.com/libopenstorage/openstorage/api/spec"
+	api "github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
 	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
@@ -1227,7 +1228,9 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecIoProfile:
-			if requestedSpec.IoProfile != vol.Spec.IoProfile {
+			if requestedSpec.IoProfile != vol.Spec.IoProfile &&
+				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_SEQUENTIAL &&
+				requestedSpec.IoProfile != api.IoProfile_IO_PROFILE_DB {
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
 			}
 		case api.SpecSize:
