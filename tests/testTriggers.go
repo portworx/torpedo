@@ -3851,7 +3851,6 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 
 			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
 			if err != nil {
-				err = fmt.Errorf("error getting storage pools list. Err: %v", err)
 				return nil, true, fmt.Errorf("error getting pools list, Error :%v", err)
 			}
 

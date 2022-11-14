@@ -722,11 +722,10 @@ func (d *portworx) CreateVolumeUsingRequest(request *api.SdkVolumeCreateRequest)
 	volDriver := d.getVolDriver()
 	resp, err := volDriver.Create(d.getContext(), request)
 	if err != nil {
-		err = fmt.Errorf("error while creating volume because of: %v", err)
-		return "", err
+		return "", fmt.Errorf("error while creating volume because of: %v", err)
 	}
 
-	d.log.Infof("successfully created Portworx volume %v ", resp.VolumeId)
+	d.log.Infof("Successfully created Portworx volume %v ", resp.VolumeId)
 
 	return resp.VolumeId, nil
 }
