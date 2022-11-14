@@ -47,7 +47,7 @@ spec:
             - name: mysql-persistent-storage
               mountPath: /var/lib/mysql
         - name: sysbench
-          image: docker.pwx.dev.purestorage.com/portworx/sysbench_test:latest
+          image: portworx/sysbench_test:latest
           imagePullPolicy: Always
           env:
             - name: MYSQL_HOST
