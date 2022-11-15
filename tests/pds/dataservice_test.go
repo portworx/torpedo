@@ -24,6 +24,9 @@ const (
 	cassandra               = "Cassandra"
 	redis                   = "Redis"
 	rabbitmq                = "RabbitMQ"
+	mysql                   = "MySQL"
+	kafka                   = "Kafka"
+	zookeeper               = "ZooKeeper"
 )
 
 var (
@@ -106,7 +109,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 		logrus.Info("Create dataservices without backup.")
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name == "MySQL" {
+				if ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper {
 					continue
 				}
 				isDeploymentsDeleted = false
