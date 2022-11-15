@@ -3,39 +3,32 @@ package tests
 import (
 	"context"
 	"fmt"
-	"os"
-	"path"
-	"regexp"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/sched-ops/k8s/core"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+
+	"os"
+	"path"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	. "github.com/portworx/torpedo/tests"
+
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	enumerateBatchSize = 100
-	post_install_hook_pod = "pxcentral-post-install-hook"
-	quick_maintenance_pod = "quick-maintenance-repo"
-	full_maintenance_pod  = "full-maintenance-repo"
-)
-
 var (
-	orgID      string
 	bucketName string
 )
 
@@ -60,13 +53,135 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 
 //This testcase verifies if the backup pods are in Ready state or not
 var _ = Describe("{BackupClusterVerification}", func() {
+	JustBeforeEach(func() {
+		log.Infof("No pre-setup required for this testcase")
+		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil, 0)
+	})
 	It("Backup Cluster Verification", func() {
-		Step("Check the status of pxcentral-post-install-hook pods", func() {
-			status := validateBackupCluster()
-			Expect(status).NotTo(Equal(false),
-				fmt.Sprintf("Backup pods are not in expected state"))
+		Step("Check the status of backup pods", func() {
+			dash.Info("Check the status of backup pods")
+			status := ValidateBackupCluster()
+			dash.VerifyFatal(status, true, "Validating backup pod")
 		})
 		//Will add CRD verification here
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.Infof("No cleanup required for this testcase")
+	})
+})
+
+//This testcase verifies basic backup rule,backup location, cloud setting
+var _ = Describe("{BasicBackupCreation}", func() {
+	var (
+		ps       = make(map[string]map[string]string)
+		app_list = Inst().AppList
+	)
+	var contexts []*scheduler.Context
+	var CloudCredUID_list []string
+	var appContexts []*scheduler.Context
+
+	providers := getProviders()
+	JustBeforeEach(func() {
+		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
+		dash.Infof("Verifying if the pre/post rules for the required apps are present in the list or not ")
+		for i := 0; i < len(app_list); i++ {
+			if Contains(post_rule_app, app_list[i]) {
+				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
+				}
+			}
+			if Contains(pre_rule_app, app_list[i]) {
+				if _, ok := app_parameters[app_list[i]]["pre_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
+				}
+			}
+		}
+		dash.Info("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+		}
+	})
+	It("Basic Backup Creation", func() {
+		Step("Validate applications and get their labels", func() {
+			ValidateApplications(contexts)
+			log.Infof("Create list of pod selector for the apps deployed")
+			for _, ctx := range appContexts {
+				for _, specObj := range ctx.App.SpecList {
+					if obj, ok := specObj.(*appsapi.Deployment); ok {
+						if Contains(app_list, obj.Name) {
+							ps[obj.Name] = obj.Spec.Template.Labels
+						}
+					} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+						if Contains(app_list, obj.Name) {
+							ps[obj.Name] = obj.Spec.Template.Labels
+						}
+					}
+				}
+			}
+		})
+
+		Step("Creating rules for backup", func() {
+			dash.Info("Creating pre rule for deployed apps")
+			pre_rule_status := CreateRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
+			dash.VerifyFatal(pre_rule_status, true, "Verifying pre rule for backup")
+			dash.Info("Creating post rule for deployed apps")
+			post_rule_status := CreateRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
+			dash.VerifyFatal(post_rule_status, true, "Verifying Post rule for backup")
+		})
+		Step("Creating bucket,backup location and cloud setting", func() {
+			dash.Info("Creating bucket,backup location and cloud setting")
+			for _, provider := range providers {
+				bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
+				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
+				CloudCredUID = uuid.New()
+				CloudCredUID_list = append(CloudCredUID_list, CloudCredUID)
+				BackupLocationUID = uuid.New()
+				CreateBucket(provider, bucketName)
+				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
+				time.Sleep(time.Minute * 1)
+				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
+			}
+		})
+		Step("Creating backup schedule policies", func() {
+			dash.Info("Creating backup interval schedule policy")
+			interval_schedule_policy_info := CreateIntervalSchedulePolicy(5, 15, 2)
+			interval_policy_status := Backupschedulepolicy("interval", uuid.New(), orgID, interval_schedule_policy_info)
+			dash.VerifyFatal(interval_policy_status, nil, "Creating interval schedule policy")
+
+			dash.Info("Creating backup daily schedule policy")
+			daily_schedule_policy_info := CreateDailySchedulePolicy(1, "9:00AM", 2)
+			daily_policy_status := Backupschedulepolicy("daily", uuid.New(), orgID, daily_schedule_policy_info)
+			dash.VerifyFatal(daily_policy_status, nil, "Creating daily schedule policy")
+
+			dash.Info("Creating backup weekly schedule policy")
+			weekly_schedule_policy_info := CreateWeeklySchedulePolicy(1, Friday, "9:10AM", 2)
+			weekly_policy_status := Backupschedulepolicy("weekly", uuid.New(), orgID, weekly_schedule_policy_info)
+			dash.VerifyFatal(weekly_policy_status, nil, "Creating weekly schedule policy")
+
+			dash.Info("Creating backup monthly schedule policy")
+			monthly_schedule_policy_info := CreateMonthlySchedulePolicy(1, 29, "9:20AM", 2)
+			monthly_policy_status := Backupschedulepolicy("monthly", uuid.New(), orgID, monthly_schedule_policy_info)
+			dash.VerifyFatal(monthly_policy_status, nil, "Creating monthly schedule policy")
+		})
+		Step("Register cluster for backup", func() {
+			CloudCredUID = uuid.New()
+			CreateCloudCredential("azure", "azureaccount", CloudCredUID, orgID)
+			// To create cloud clustre
+			RegisterBackupCluster(orgID, "azure", CloudCredUID)
+			//To create on prem cluster
+			RegisterBackupCluster(orgID, "", "")
+		})
+	})
+	JustAfterEach(func() {
+		policy_list := []string{"interval", "daily", "weekly", "monthly"}
+		defer EndTorpedoTest()
+		teardown_status := TeardownForTestcase(contexts, providers, CloudCredUID_list, policy_list)
+		dash.VerifyFatal(teardown_status, true, "Testcase teardown status")
 	})
 })
 
@@ -79,7 +194,6 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 		namespaceMapping map[string]string
 		taskNamePrefix   = "backupcreaterestore"
 	)
-
 	labelSelectores := make(map[string]string)
 	namespaceMapping = make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
@@ -1746,10 +1860,9 @@ func CreateProviderClusterObject(provider string, kubeconfigList []string, cloud
 	Step(fmt.Sprintf("Create cluster [%s-%s] in org [%s]",
 		clusterName, provider, orgID), func() {
 		kubeconfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
-		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider), cloudCred,
-			kubeconfigPath, orgID)
+		dash.VerifyFatal(err, nil, "Fetching kubeconfig path for source cluster")
+		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider),
+			kubeconfigPath, orgID, "", "")
 	})
 }
 
@@ -1952,59 +2065,4 @@ func getBackupUID(orgID, backupName string) string {
 		fmt.Sprintf("Failed to get backup uid for org %s backup %s ctx: [%v]",
 			orgID, backupName, err))
 	return backupUID
-}
-
-func validateBackupCluster() bool {
-	flag := false
-	labelSelectors := map[string]string{"job-name": "pxcentral-post-install-hook"}
-	ns := backup.GetPxBackupNamespace()
-	pods, err := core.Instance().GetPods(ns, labelSelectors)
-	if err != nil {
-		logrus.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
-			err)
-		return false
-	}
-	for _, pod := range pods.Items {
-		logrus.Info("Checking if the pxcentral-post-install-hook pod is in Completed state or not")
-		bkp_pod, err := core.Instance().GetPodByName(pod.GetName(), ns)
-		if err != nil {
-			logrus.Errorf("An Error Occured while getting the pxcentral-post-install-hook pod details")
-			return false
-		}
-		container_list := bkp_pod.Status.ContainerStatuses
-		for i := 0; i < len(container_list); i++ {
-			status := container_list[i].State.Terminated.Reason
-			if status == "Completed" {
-				logrus.Info("pxcentral-post-install-hook pod is in completed state")
-				flag = true
-				break
-			}
-		}
-	}
-	if flag == false {
-		return false
-	}
-	bkp_pods, err := core.Instance().GetPods(ns, nil)
-	for _, pod := range bkp_pods.Items {
-		matched, _ := regexp.MatchString(post_install_hook_pod, pod.GetName())
-		if !matched {
-			equal, _ := regexp.MatchString(quick_maintenance_pod, pod.GetName())
-			equal1, _ := regexp.MatchString(full_maintenance_pod, pod.GetName())
-			if !(equal || equal1){
-				logrus.Info("Checking if all the containers are up or not")
-				res := core.Instance().IsPodRunning(pod)
-				if !res {
-					logrus.Errorf("All the containers are not Up")
-					return false
-				}
-				err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
-				logrus.Warnf(" ERR is %s", err)
-				if err != nil {
-					logrus.Errorf("An Error Occured while validating the pod %v", err)
-					return false
-				}
-			}
-		}
-	}
-	return true
 }
