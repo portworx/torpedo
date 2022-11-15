@@ -659,7 +659,6 @@ var _ = Describe("{MultipleNamespacesDeploy}", func() {
 
 		Step("Deploy All Supported Data Services", func() {
 			for _, namespace := range namespaces {
-
 				logrus.Infof("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
 				newNamespaceID, err := pdslib.GetnameSpaceID(namespace.Name, deploymentTargetID)
 				Expect(err).NotTo(HaveOccurred())
