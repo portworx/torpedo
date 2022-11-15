@@ -646,6 +646,14 @@ var _ = Describe("{MultipleNamespacesDeploy}", func() {
 			namespaces = append(namespaces, ns)
 		}
 
+		defer func() {
+			for _, namespace := range namespaces {
+				logrus.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
+				err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		}()
+
 		logrus.Info("Waiting for created namespaces to be available in PDS")
 		time.Sleep(10 * time.Second)
 
@@ -659,14 +667,6 @@ var _ = Describe("{MultipleNamespacesDeploy}", func() {
 				DeployInANamespaceAndVerify(namespace.Name, newNamespaceID)
 			}
 		})
-
-		defer func() {
-			for _, namespace := range namespaces {
-				logrus.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
-				err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
-				Expect(err).NotTo(HaveOccurred())
-			}
-		}()
 
 	})
 
