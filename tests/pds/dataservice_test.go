@@ -5,10 +5,12 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/torpedo/drivers/node"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/portworx/torpedo/tests"
@@ -101,6 +103,96 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
 	defer dash.TestCaseEnd()
+})
+
+var _ = Describe("{RestartPortworxService}", func() {
+
+	It("restart portworx and validate dataservice", func() {
+		Step("deploy dataservices and restart portworx on worker nodes", func() {
+			for _, ds := range params.DataServiceToTest {
+				dash.Infof("Deploying DataService %v ", ds.Name)
+				isDeploymentsDeleted = false
+				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				logrus.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+
+				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+
+				logrus.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+
+				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
+					deploymentTargetID,
+					dnsZone,
+					deploymentName,
+					namespaceID,
+					dataServiceDefaultAppConfigID,
+					int32(ds.Replicas),
+					serviceType,
+					dataServiceDefaultResourceTemplateID,
+					storageTemplateID,
+					ds.Version,
+					ds.Image,
+					namespace,
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				defer func() {
+					if !isDeploymentsDeleted {
+						Step("Delete created deployments")
+						resp, err := pdslib.DeleteDeployment(deployment.GetId())
+						Expect(err).NotTo(HaveOccurred())
+						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					}
+				}()
+
+				Step("Validate Storage Configurations", func() {
+					logrus.Infof("data service deployed %v ", ds.Name)
+					dash.Infof("Validating DataService %v ", ds.Name)
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					Expect(err).NotTo(HaveOccurred())
+					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+					logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+					logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+					logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+					logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+					logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
+					logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+
+					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+				})
+
+				Step("restart portworx on worker nodes", func() {
+					nodesToRestartPortworx := node.GetWorkerNodes()
+					Expect(nodesToRestartPortworx).NotTo(BeEmpty())
+					for _, workerNodes := range nodesToRestartPortworx {
+						logrus.Infof("worker nodes %v", workerNodes.Name)
+						err := Inst().N.Systemctl(workerNodes, "portworx.service", node.SystemctlOpts{
+							Action: "restart",
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         5 * time.Minute,
+								TimeBeforeRetry: 10 * time.Second,
+							}})
+						Expect(err).NotTo(HaveOccurred())
+					}
+				})
+				Step("Validate Deployments after restarting portworx")
+				pdslib.ValidateDataServiceDeployment(deployment, namespace)
+			}
+		})
+	})
+
 })
 
 var _ = Describe("{DeletePDSPods}", func() {
