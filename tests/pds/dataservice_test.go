@@ -626,7 +626,7 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(storageOp.Replicas).Should(Equal(int32(repl)))
 			Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-			Expect(config.Spec.Nodes).Should(Equal(replicas))
+			Expect(config.Spec.Nodes).Should(Equal(ds.Replicas))
 			cleanup = append(cleanup, deployment.GetId())
 
 		})
