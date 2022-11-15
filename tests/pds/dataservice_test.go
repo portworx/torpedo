@@ -563,7 +563,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 	})
 }
 
-var _ = Describe("{DeployDSDeleteNamespace", func() {
+var _ = Describe("{DeployDSDeleteNamespace}", func() {
 
 	It("Deploy Dataservices and delete namespace", func() {
 
