@@ -1321,25 +1321,13 @@ func GetPodsFromK8sStatefulSet(deployment *pds.ModelsDeployment, namespace strin
 	return pods, nil
 }
 
-func GetNodeObjectUsingPodNameK8s(nodeName string) (*corev1.Node, error) {
+func GetK8sNodeObjectUsingPodName(nodeName string) (*corev1.Node, error) {
 	nodeObject, err := k8sCore.GetNodeByName(nodeName)
 	if err != nil {
 		logrus.Errorf("Could not get the node object for node %v because %v", nodeName, err)
 		return nil, err
 	}
 	return nodeObject, nil
-}
-
-func CordonK8sNode(node *corev1.Node) error {
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-		err = k8sCore.CordonNode(node.Name, timeOut, maxtimeInterval)
-		if err != nil {
-			logrus.Errorf("Failed cordon node %v due to %v", node.Name, err)
-			return false, nil
-		}
-		return true, nil
-	})
-	return err
 }
 
 func DrainPxPodOnK8sNode(node *corev1.Node, namespace string) error {

@@ -666,7 +666,7 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				Step("Get the node that the PV of the pod resides on", func() {
 					for _, pod := range deploymentPods {
 						logrus.Infof("The pod spec node name: %v", pod.Spec.NodeName)
-						nodeObject, err := pdslib.GetNodeObjectUsingPodNameK8s(pod.Spec.NodeName)
+						nodeObject, err := pdslib.GetK8sNodeObjectUsingPodName(pod.Spec.NodeName)
 						Expect(err).NotTo(HaveOccurred())
 						nodeList = append(nodeList, nodeObject)
 					}
@@ -681,14 +681,6 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 					}
 
 					logrus.Info("Finished labeling the nodes...")
-
-					// Read log lines of the px pod on the node to see if service has shutdown
-					// for _, node := range nodeList {
-					// 	searchPattern := "INFO stopped: pxdaemon (exit status 0)"
-					// 	rc, err := pdslib.SearchLogLinesFromPxPodOnNode(node.Name, pxnamespace, searchPattern)
-					// 	Expect(rc).To(BeTrue())
-					// 	Expect(err).NotTo(HaveOccurred())
-					// }
 					time.Sleep(30 * time.Second)
 
 				})
