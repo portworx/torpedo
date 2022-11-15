@@ -996,6 +996,7 @@ var _ = Describe("{DeployDSDeleteNamespace}", func() {
 					_, err := pdslib.DeleteDeployment(dep)
 					Expect(err).NotTo(HaveOccurred())
 				}
+				isDeploymentsDeleted = true
 			})
 
 		})
@@ -1003,7 +1004,7 @@ var _ = Describe("{DeployDSDeleteNamespace}", func() {
 	})
 })
 
-var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
+var _ = Describe("{RestartPXPodsOnNodes}", func() {
 	It("Deploy Dataservices", func() {
 		logrus.Info("Create dataservices without backup.")
 		Step("Deploy PDS Data Service", func() {
