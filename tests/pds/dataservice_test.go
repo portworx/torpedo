@@ -676,14 +676,13 @@ var _ = Describe("{MultipleNamespacesDeploy}", func() {
 			}
 
 			logrus.Infof("List of created deployments: %v ", cleanupall)
-
-			defer func() {
-				Step("Delete created deployments")
+			Step("Delete created deployments", func() {
 				for _, dep := range cleanupall {
 					_, err := pdslib.DeleteDeployment(dep)
 					Expect(err).NotTo(HaveOccurred())
 				}
-			}()
+				isDeploymentsDeleted = true
+			})
 
 		})
 	})
