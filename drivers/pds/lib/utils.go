@@ -364,6 +364,47 @@ func ReadParams(filename string) (*Parameter, error) {
 	return &jsonPara, nil
 }
 
+// GetPods returns the list of pods in namespace
+func GetPods(namespace string) (*corev1.PodList, error) {
+	k8sOps := k8sCore
+	podList, err := k8sOps.GetPods(namespace, nil)
+	if err != nil {
+		return nil, err
+	}
+	return podList, err
+}
+
+// DeleteDeploymentPods deletes the given pods
+func DeleteDeploymentPods(podList *corev1.PodList) error {
+	var pods, newPods []corev1.Pod
+	k8sOps := k8sCore
+
+	pods = append(pods, podList.Items...)
+	err := k8sOps.DeletePods(pods, true)
+	if err != nil {
+		return err
+	}
+
+	//get the newly created pods
+	time.Sleep(10 * time.Second)
+	newPodList, err := GetPods("pds-system")
+	if err != nil {
+		return err
+	}
+	//reinitializing the pods
+	newPods = append(newPods, newPodList.Items...)
+
+	//validate deployment pods are up and running after deletion
+	for _, pod := range newPods {
+		logrus.Infof("pds system pod name %v", pod.Name)
+		err = k8sOps.ValidatePod(&pod, timeOut, timeInterval)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetStorageTemplate return the storage template id
 func GetStorageTemplate(tenantID string) (string, error) {
 	logrus.Infof("Get the storage template")
