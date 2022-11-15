@@ -446,8 +446,7 @@ func nodePoolsExpansion(testName string) {
 		dash.VerifyFatal(poolsToBeResized != nil, true, "Validate pools to be resized exist")
 
 		// px will put a new request in a queue, but in this case we can't calculate the expected size,
-		// so need to wain until the ongoing operation is completed
-		time.Sleep(time.Second * 60)
+		// so need to wait until the ongoing operation is completed
 		stepLog = "Verify that pool resize is none in progress"
 		Step(stepLog, func() {
 			dash.Info(stepLog)
