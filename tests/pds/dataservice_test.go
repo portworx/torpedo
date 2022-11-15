@@ -108,6 +108,9 @@ var _ = AfterSuite(func() {
 })
 
 var _ = Describe("{RestartPortworxService}", func() {
+	JustBeforeEach(func() {
+		InitInstance()
+	})
 
 	It("restart portworx and validate dataservice", func() {
 		Step("deploy dataservices and restart portworx on worker nodes", func() {
