@@ -2,6 +2,7 @@ package tests
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -565,83 +566,77 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 
 	var cleanup []string
-	var deployments map[string][]*pds.ModelsDeployment = make(map[string][]*pds.ModelsDeployment, 0)
+	for _, ds := range params.DataServiceToTest {
+		isDeploymentsDeleted = false
+		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+		Expect(err).NotTo(HaveOccurred())
 
-	deployments, _, _, err := pdslib.DeployDataServicesNamespace(dataServiceNameIDMap, projectID,
-		deploymentTargetID,
-		dnsZone,
-		deploymentName,
-		namespaceID,
-		dataServiceNameDefaultAppConfigMap,
-		replicas,
-		serviceType,
-		dataServiceDefaultResourceTemplateIDMap,
-		storageTemplateID,
-		DeployAllVersions,
-		DeployAllImages,
-		dsVersion,
-		dsBuild,
-		nname,
-	)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(deployments).NotTo(BeEmpty())
+		logrus.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
-	Step("Validate Storage Configurations", func() {
+		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
-		for ds, deploy := range deployments {
-			for index := range deploy {
-				logrus.Infof("data service deployed %v ", ds)
-				resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumesNamespace(deploy[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID, nname)
+		logrus.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+
+		deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
+			deploymentTargetID,
+			dnsZone,
+			deploymentName,
+			namespaceID,
+			dataServiceDefaultAppConfigID,
+			int32(ds.Replicas),
+			serviceType,
+			dataServiceDefaultResourceTemplateID,
+			storageTemplateID,
+			ds.Version,
+			ds.Image,
+			nname,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-				logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-				logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-				logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-				logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-				logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
-				logrus.Infof("volume group %v ", storageOp.VolumeGroup)
-
-				Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-				Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-				Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-				Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-				Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-				repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-				Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-				Expect(config.Spec.Nodes).Should(Equal(replicas))
-				cleanup = append(cleanup, deploy[index].GetId())
+				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
 			}
+		}()
 
-		}
+		Step("Validate Storage Configurations", func() {
 
-	})
+			logrus.Infof("data service deployed %v ", ds)
+			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumesNamespace(deployment, ds.Name, dataServiceDefaultResourceTemplateIDMap, storageTemplateID, nname)
+			Expect(err).NotTo(HaveOccurred())
+			logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+			logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+			logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+			logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+			logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+			logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
+			logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+
+			Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+			Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+			Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+			Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+			Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+			repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+			Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+			Expect(config.Spec.Nodes).Should(Equal(replicas))
+			cleanup = append(cleanup, deployment.GetId())
+
+		})
+
+	}
 
 	return cleanup
 }
 
 var _ = Describe("MultipleNamespacesDeploy", func() {
-
-	JustBeforeEach(func() {
-		if !DeployAllDataService {
-			supportedDataServices = append(supportedDataServices, DataService)
-			for _, ds := range supportedDataServices {
-				logrus.Infof("supported dataservices %v", ds)
-			}
-
-			Step("Get the resource and app config template for supported dataservice", func() {
-				dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap, err = pdslib.GetResourceTemplate(tenantID, supportedDataServices)
-				Expect(err).NotTo(HaveOccurred())
-
-				dataServiceNameDefaultAppConfigMap, err = pdslib.GetAppConfTemplate(tenantID, dataServiceNameIDMap)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
-			})
-
-		}
-
-	})
 
 	It("creates multiple namespaces, deploys in each namespace", func() {
 
@@ -696,8 +691,8 @@ var _ = Describe("MultipleNamespacesDeploy", func() {
 
 })
 
-// func TestMain(m *testing.M) {
-// 	// call flag.Parse() here if TestMain uses flags
-// 	ParseFlags()
-// 	os.Exit(m.Run())
-// }
+func TestMain(m *testing.M) {
+	// call flag.Parse() here if TestMain uses flags
+	ParseFlags()
+	os.Exit(m.Run())
+}
