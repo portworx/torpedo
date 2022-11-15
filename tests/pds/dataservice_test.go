@@ -831,7 +831,7 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 	return cleanup
 }
 
-var _ = Describe("{MultipleNamespacesDeploy}", func() {
+var _ = Describe("{DeployMultipleNamespaces}", func() {
 
 	It("creates multiple namespaces, deploys in each namespace", func() {
 
@@ -886,7 +886,7 @@ var _ = Describe("{MultipleNamespacesDeploy}", func() {
 
 })
 
-var _ = Describe("{DeployDSDeleteNamespace}", func() {
+var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 
 	It("Deploy Dataservices and delete namespace", func() {
 
@@ -1004,7 +1004,7 @@ var _ = Describe("{DeployDSDeleteNamespace}", func() {
 	})
 })
 
-var _ = Describe("{RestartPXPodsOnNodes}", func() {
+var _ = Describe("{RestartPXPods}", func() {
 	It("Deploy Dataservices", func() {
 		logrus.Info("Create dataservices without backup.")
 		Step("Deploy PDS Data Service", func() {
