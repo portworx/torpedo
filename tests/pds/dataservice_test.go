@@ -2,7 +2,6 @@ package tests
 
 import (
 	"net/http"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -691,8 +690,142 @@ var _ = Describe("MultipleNamespacesDeploy", func() {
 
 })
 
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
+func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
+
+	var cleanup []string
+	var deployments map[string][]*pds.ModelsDeployment = make(map[string][]*pds.ModelsDeployment, 0)
+
+	deployments, _, _, err := pdslib.DeployDataServicesNamespace(dataServiceNameIDMap, projectID,
+		deploymentTargetID,
+		dnsZone,
+		deploymentName,
+		namespaceID,
+		dataServiceNameDefaultAppConfigMap,
+		replicas,
+		serviceType,
+		dataServiceDefaultResourceTemplateIDMap,
+		storageTemplateID,
+		DeployAllVersions,
+		DeployAllImages,
+		dsVersion,
+		dsBuild,
+		nname,
+	)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(deployments).NotTo(BeEmpty())
+
+	Step("Validate Storage Configurations", func() {
+
+		for ds, deploy := range deployments {
+			for index := range deploy {
+				logrus.Infof("data service deployed %v ", ds)
+				resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumesNamespace(deploy[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID, nname)
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+				logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+				logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+				logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+				logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+				logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
+				logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+
+				Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+				Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+				Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+				Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+				Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+				repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+				Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+				Expect(config.Spec.Nodes).Should(Equal(replicas))
+				cleanup = append(cleanup, deploy[index].GetId())
+			}
+
+		}
+
+	})
+
+	return cleanup
 }
+
+var _ = Describe("MultipleNamespacesDeploy", func() {
+
+	JustBeforeEach(func() {
+		if !DeployAllDataService {
+			supportedDataServices = append(supportedDataServices, DataService)
+			for _, ds := range supportedDataServices {
+				logrus.Infof("supported dataservices %v", ds)
+			}
+
+			Step("Get the resource and app config template for supported dataservice", func() {
+				dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap, err = pdslib.GetResourceTemplate(tenantID, supportedDataServices)
+				Expect(err).NotTo(HaveOccurred())
+
+				dataServiceNameDefaultAppConfigMap, err = pdslib.GetAppConfTemplate(tenantID, dataServiceNameIDMap)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
+			})
+
+		}
+
+	})
+
+	It("creates multiple namespaces, deploys in each namespace", func() {
+
+		var namespaces []*corev1.Namespace
+		// create k8s namespaces
+		for i := 0; i < 2; i++ {
+			nname := "namespace-" + strconv.Itoa(i)
+			ns, err := pdslib.CreateK8sPDSNamespace(nname)
+			logrus.Infof("Created namespace: %v", nname)
+			Expect(err).NotTo(HaveOccurred())
+			namespaces = append(namespaces, ns)
+		}
+
+		logrus.Info("Waiting for created namespaces to be available in PDS")
+		time.Sleep(10 * time.Second)
+
+		Step("Deploy All Supported Data Services", func() {
+			var cleanupall []string
+			for _, namespace := range namespaces {
+
+				logrus.Infof("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
+				newNamespaceID, err := pdslib.GetnameSpaceID(namespace.Name, deploymentTargetID)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(newNamespaceID).NotTo(BeEmpty())
+
+				deps := DeployInANamespaceAndVerify(namespace.Name, newNamespaceID)
+				cleanupall = append(cleanupall, deps...)
+
+			}
+
+			logrus.Infof("List of created deployments: %v ", cleanupall)
+
+			defer func() {
+				Step("Delete created deployments")
+				for _, dep := range cleanupall {
+					_, err := pdslib.DeleteDeployment(dep)
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}()
+
+		})
+
+		defer func() {
+			for _, namespace := range namespaces {
+				logrus.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
+				err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		}()
+
+	})
+
+})
+
+// func TestMain(m *testing.M) {
+// 	// call flag.Parse() here if TestMain uses flags
+// 	ParseFlags()
+// 	os.Exit(m.Run())
+// }
