@@ -608,7 +608,7 @@ var _ = Describe("{DeployDSDeleteNamespace}", func() {
 					deploymentTargetID,
 					dnsZone,
 					deploymentName,
-					namespaceID,
+					newNamespaceID,
 					dataServiceDefaultAppConfigID,
 					int32(ds.Replicas),
 					serviceType,
