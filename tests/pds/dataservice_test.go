@@ -676,6 +676,7 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 				Step("Get the node that the PV of the pod resides on", func() {
 					for _, pod := range deploymentPods {
 						logrus.Infof("The pod spec node name: %v", pod.Spec.NodeName)
+						dash.Infof("The pod spec node name: %v", pod.Spec.NodeName)
 						nodeObject, err := pdslib.GetK8sNodeObjectUsingPodName(pod.Spec.NodeName)
 						Expect(err).NotTo(HaveOccurred())
 						nodeList = append(nodeList, nodeObject)
@@ -691,6 +692,7 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 					}
 
 					logrus.Info("Finished labeling the nodes...")
+					dash.Info("Finished labeling the nodes...")
 					time.Sleep(30 * time.Second)
 
 				})
@@ -708,6 +710,7 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 					}
 
 					logrus.Info("Finished removing labels from the nodes...")
+					dash.Info("Finished removing labels from the nodes...")
 
 					for _, node := range nodeList {
 						err := pdslib.DrainPxPodOnK8sNode(node, pxnamespace)
@@ -715,6 +718,7 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 					}
 
 					logrus.Info("Finished draining px pods from the nodes...")
+					dash.Info("Finished draining px pods from the nodes...")
 
 					for _, node := range nodeList {
 						err := pdslib.UnCordonK8sNode(node)
@@ -722,8 +726,10 @@ var _ = Describe("{DeployDSRunWorkloadRestartPXOnNodes}", func() {
 					}
 
 					logrus.Infof("Finished uncordoning the node...")
+					dash.Infof("Finished uncordoning the node...")
 
 					logrus.Info("Verify that the px pod has started on node...")
+					dash.Info("Verify that the px pod has started on node...")
 					// Read log lines of the px pod on the node to see if the service is running
 					for _, node := range nodeList {
 						rc, err := pdslib.VerifyPxPodOnNode(node.Name, pxnamespace)
