@@ -1313,3 +1313,28 @@ func ValidateAllDataServiceVolumes(deployment *pds.ModelsDeployment, dataService
 	return resourceTemp, storageOp, config, nil
 
 }
+
+func CreateK8sPDSNamespace(nname string) (*corev1.Namespace, error) {
+	ns, err := k8sCore.CreateNamespace(&corev1.Namespace{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Namespace",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   nname,
+			Labels: map[string]string{"pds.portworx.com/available": "true"},
+		},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("could not create ns %v", nname)
+	}
+
+	return ns, nil
+
+}
+
+func DeleteK8sPDSNamespace(nname string) error {
+	err := k8sCore.DeleteNamespace(nname)
+	return err
+}
