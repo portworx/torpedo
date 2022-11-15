@@ -563,9 +563,8 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 	})
 }
 
-func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
+func DeployInANamespaceAndVerify(nname string, namespaceID string) {
 
-	var cleanup []string
 	for _, ds := range params.DataServiceToTest {
 		isDeploymentsDeleted = false
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
@@ -596,12 +595,11 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
+			Step("Delete created deployments", func() {
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-			}
+			})
 		}()
 
 		Step("Validate Storage Configurations", func() {
@@ -627,13 +625,11 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 			Expect(storageOp.Replicas).Should(Equal(int32(repl)))
 			Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
 			Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
-			cleanup = append(cleanup, deployment.GetId())
 
 		})
 
 	}
 
-	return cleanup
 }
 
 var _ = Describe("{MultipleNamespacesDeploy}", func() {
@@ -650,6 +646,20 @@ var _ = Describe("{MultipleNamespacesDeploy}", func() {
 			namespaces = append(namespaces, ns)
 		}
 
+		logrus.Info("Waiting for created namespaces to be available in PDS")
+		time.Sleep(10 * time.Second)
+
+		Step("Deploy All Supported Data Services", func() {
+			for _, namespace := range namespaces {
+
+				logrus.Infof("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
+				newNamespaceID, err := pdslib.GetnameSpaceID(namespace.Name, deploymentTargetID)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(newNamespaceID).NotTo(BeEmpty())
+				DeployInANamespaceAndVerify(namespace.Name, newNamespaceID)
+			}
+		})
+
 		defer func() {
 			for _, namespace := range namespaces {
 				logrus.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
@@ -658,33 +668,6 @@ var _ = Describe("{MultipleNamespacesDeploy}", func() {
 			}
 		}()
 
-		logrus.Info("Waiting for created namespaces to be available in PDS")
-		time.Sleep(10 * time.Second)
-
-		Step("Deploy All Supported Data Services", func() {
-			var cleanupall []string
-			for _, namespace := range namespaces {
-
-				logrus.Infof("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
-				newNamespaceID, err := pdslib.GetnameSpaceID(namespace.Name, deploymentTargetID)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(newNamespaceID).NotTo(BeEmpty())
-
-				deps := DeployInANamespaceAndVerify(namespace.Name, newNamespaceID)
-				cleanupall = append(cleanupall, deps...)
-
-			}
-
-			logrus.Infof("List of created deployments: %v ", cleanupall)
-			Step("Delete created deployments", func() {
-				for _, dep := range cleanupall {
-					_, err := pdslib.DeleteDeployment(dep)
-					Expect(err).NotTo(HaveOccurred())
-				}
-				isDeploymentsDeleted = true
-			})
-
-		})
 	})
 
 })
