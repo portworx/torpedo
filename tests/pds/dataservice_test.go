@@ -636,7 +636,7 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 	return cleanup
 }
 
-var _ = Describe("MultipleNamespacesDeploy", func() {
+var _ = Describe("{MultipleNamespacesDeploy}", func() {
 
 	It("creates multiple namespaces, deploys in each namespace", func() {
 
