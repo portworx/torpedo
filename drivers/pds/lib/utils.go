@@ -271,7 +271,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 		logrus.Errorf("Error while listing deployments %v", err)
 		return "", "", "", "", "", err
 	}
-	if len(targetClusters) == 0 {
+	if targetClusters == nil {
 		logrus.Fatalf("Target cluster passed is not available to the account/tenant %v", err)
 	}
 	for i := 0; i < len(targetClusters); i++ {
