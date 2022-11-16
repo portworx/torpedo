@@ -2,111 +2,20 @@ package tests
 
 import (
 	"net/http"
-	"os"
 	"strconv"
-	"testing"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
-	v1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 )
-
-const (
-	deploymentName          = "qa"
-	envDeployAllDataService = "DEPLOY_ALL_DATASERVICE"
-	postgresql              = "PostgreSQL"
-	cassandra               = "Cassandra"
-	redis                   = "Redis"
-	rabbitmq                = "RabbitMQ"
-	mysql                   = "MySQL"
-	kafka                   = "Kafka"
-	zookeeper               = "ZooKeeper"
-)
-
-var (
-	namespace                               string
-	tenantID                                string
-	dnsZone                                 string
-	projectID                               string
-	serviceType                             string
-	deploymentTargetID                      string
-	replicas                                int32
-	err                                     error
-	supportedDataServices                   []string
-	dataServiceNameDefaultAppConfigMap      map[string]string
-	namespaceID                             string
-	storageTemplateID                       string
-	dataServiceDefaultResourceTemplateIDMap map[string]string
-	dataServiceNameIDMap                    map[string]string
-	supportedDataServicesNameIDMap          map[string]string
-	DeployAllVersions                       bool
-	DataService                             string
-	DeployAllImages                         bool
-	dataServiceDefaultResourceTemplateID    string
-	dataServiceDefaultAppConfigID           string
-	dataServiceVersionBuildMap              map[string][]string
-	dep                                     *v1.Deployment
-	pod                                     *corev1.Pod
-	params                                  *pdslib.Parameter
-	isDeploymentsDeleted                    bool
-	dash                                    *aetosutil.Dashboard
-)
-
-func TestDataService(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : pds", specReporters)
-
-}
-
-var _ = BeforeSuite(func() {
-	Step("get prerequisite params to run the pds tests", func() {
-		dash = Inst().Dash
-		dash.TestSetBegin(dash.TestSet)
-		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
-		params, err = pdslib.ReadParams(pdsparams)
-		Expect(err).NotTo(HaveOccurred())
-		infraParams := params.InfraToTest
-
-		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	Step("Get StorageTemplateID and Replicas", func() {
-		storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
-		Expect(err).NotTo(HaveOccurred())
-		logrus.Infof("storageTemplateID %v", storageTemplateID)
-	})
-
-	Step("Create/Get Namespace and NamespaceID", func() {
-		namespace = params.InfraToTest.Namespace
-		isavailabbe, err := pdslib.CheckNamespace(namespace)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(isavailabbe).To(BeTrue())
-		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(namespaceID).NotTo(BeEmpty())
-	})
-})
-
-var _ = AfterSuite(func() {
-	defer dash.TestSetEnd()
-	defer dash.TestCaseEnd()
-})
 
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", nil, 0)
 	})
+
 	It("delete pds pods and validate if its coming back online and dataserices are not affected", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
@@ -183,11 +92,16 @@ var _ = Describe("{DeletePDSPods}", func() {
 				}
 
 				Step("delete pods from pds-system namespace")
+				dash.Info("Deleting PDS System Pods")
 				err = pdslib.DeleteDeploymentPods(podList)
 				Expect(err).NotTo(HaveOccurred())
 
-				Step("Validate Deployments after pods are up")
-				pdslib.ValidateDataServiceDeployment(deployment, namespace)
+				Step("Validate Deployments after pods are up", func() {
+					dash.Info("Validate Deployments after pds pods are up")
+					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					Expect(err).NotTo(HaveOccurred())
+					dash.Info("Deployments pods are up and healthy")
+				})
 			}
 		})
 	})
@@ -197,6 +111,9 @@ var _ = Describe("{DeletePDSPods}", func() {
 })
 
 var _ = Describe("{ScaleUPDataServices}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
+	})
 
 	It("deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
@@ -350,27 +267,49 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
 })
 
 var _ = Describe("{UpgradeDataServiceVersion}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeDataServiceVersion", "Upgrades the dataservice version", nil, 0)
+	})
+
 	It("runs the dataservice version upgrade test", func() {
 		for _, ds := range params.DataServiceToTest {
 			dash.Infof("Running UpgradeDataServiceVersion test for DataService %v ", ds.Name)
 			UpgradeDataService(ds.Name, ds.OldVersion, ds.OldImage, ds.Version, ds.Image, int32(ds.Replicas))
 		}
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
 })
 
 var _ = Describe("{UpgradeDataServiceImage}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeDataServiceImage", "Upgrades the dataservice image", nil, 0)
+	})
+
 	It("runs the dataservice build image upgrade test", func() {
 		for _, ds := range params.DataServiceToTest {
 			dash.Infof("Running UpgradeDataServiceImage test for DataService %v ", ds.Name)
 			UpgradeDataService(ds.Name, ds.Version, ds.OldImage, ds.Version, ds.Image, int32(ds.Replicas))
 		}
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
 })
 
 var _ = Describe("{DeployDataServicesOnDemand}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployDataServicesOnDemand", "Deploys DataServices", nil, 0)
+	})
+
 	It("Deploy DataservicesOnDemand", func() {
 		logrus.Info("Create dataservices without backup.")
 		Step("Deploy, Validate and Delete Data Services", func() {
@@ -447,6 +386,9 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				})
 			}
 		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
 
@@ -671,10 +613,4 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			})
 		}()
 	})
-}
-
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
 }
