@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	opsapi "github.com/libopenstorage/openstorage/api"
 	"math/rand"
 	"sync"
 	"time"
+
+	opsapi "github.com/libopenstorage/openstorage/api"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -741,7 +742,7 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 			wg := new(sync.WaitGroup)
 			wg.Add(1)
 			go func(appNode node.Node) {
-				createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
+				// createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
 				if err != nil {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Error while creating volumes. Err: %v", err))
 				}
