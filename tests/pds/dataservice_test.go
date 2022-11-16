@@ -109,6 +109,7 @@ var _ = AfterSuite(func() {
 
 var _ = Describe("{RestartPortworxService}", func() {
 	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPortworxService", "Restart Portworx service and validate the deployments", nil, 0)
 		InitInstance()
 	})
 
@@ -201,13 +202,13 @@ var _ = Describe("{RestartPortworxService}", func() {
 })
 
 var _ = Describe("{DeletePDSPods}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", nil, 0)
+	})
 	It("delete pds pods and validate if its coming back online and dataserices are not affected", func() {
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper {
-					continue
-				}
 				dash.Infof("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
