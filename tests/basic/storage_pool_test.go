@@ -561,42 +561,67 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 		stNodes := node.GetStorageNodes()
 		var poolToBeResized *api.StoragePool
 		var currentTotalPoolSize uint64
-		var currentUsedPoolSize uint64
 		var err error
 		var nodeSelected node.Node
 		var pools map[string]*api.StoragePool
-		//waiting till one of the pool has enough IO and selecting pool and node to run the test
+		//waiting till one of the volume has enough IO and selecting pool and node  using the volume to run the test
+		var volSelected *api.Volume
 		f := func() (interface{}, bool, error) {
-			pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
-			if err != nil {
-				return nil, true, fmt.Errorf("error getting storage pools")
-			}
-			for _, pool := range pools {
-				currentUsedPoolSize = pool.Used / units.GiB
-				if currentUsedPoolSize >= 10 {
-					currentTotalPoolSize = pool.TotalSize / units.GiB
-					poolIDToResize = pool.Uuid
-					return nil, false, nil
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return nil, true, err
+				}
+				for _, vol := range vols {
+					appVol, err := Inst().V.InspectVolume(vol.ID)
+					if err != nil {
+						return nil, true, err
+					}
+					usedBytes := appVol.GetUsage()
+					usedGiB := usedBytes / units.GiB
+					if usedGiB > 10 {
+						volSelected = appVol
+						return nil, false, nil
+					}
 				}
 			}
-			return nil, true, fmt.Errorf("error getting storage pool with size atleast 10 GiB used")
+			return nil, true, fmt.Errorf("error getting volume with size atleast 10 GiB used")
 		}
 		_, err = task.DoRetryWithTimeout(f, 15*time.Minute, retryTimeout)
 		if err != nil {
-			dash.VerifyFatal(err, nil, "Verify getting pool to expand")
+			dash.VerifyFatal(err, nil, "error identifying volume")
 		}
-		existingPoolsCount := len(pools)
 
-	outer:
+		log.Infof("%+v", volSelected)
+		attachedNodeID := volSelected.ReplicaSets[0].Nodes[0]
+		volumePools := volSelected.ReplicaSets[0].PoolUuids
 		for _, stNode := range stNodes {
-			nodePools := stNode.Pools
-			for _, nodePool := range nodePools {
-				if nodePool.Uuid == poolIDToResize {
-					nodeSelected = stNode
-					break outer
+			if stNode.Id == attachedNodeID {
+				nodeSelected = stNode
+			}
+		}
+
+		if &nodeSelected == nil {
+			dash.VerifyFatal(false, true, "unable to identify the node for add new pool")
+		}
+	poolloop:
+		for _, volPool := range volumePools {
+			for _, nodePool := range nodeSelected.Pools {
+				if nodePool.Uuid == volPool {
+					poolIDToResize = nodePool.Uuid
+					break poolloop
 				}
 			}
 		}
+		dash.Infof("selected node %s, pool %s", nodeSelected.Name, poolIDToResize)
+		poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
+		dash.VerifyFatal(err, nil, "Validate get pool using UUID ")
+		currentTotalPoolSize = poolToBeResized.TotalSize / units.GiB
+		pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
+		if err != nil {
+			dash.VerifyFatal(err, nil, "error getting storage pools")
+		}
+		existingPoolsCount := len(pools)
 		///creating a spec to perform add  drive
 		driveSpecs, err := GetCloudDriveDeviceSpecs()
 		if err != nil {
@@ -622,16 +647,14 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 		newSpec := strings.Join(paramsArr, ",")
 		expandedExpectedPoolSize := currentTotalPoolSize * 2
 
-		stepLog = "Verify that pool can be expanded"
+		stepLog = fmt.Sprintf("Verify that pool %s can be expanded", poolIDToResize)
 		Step(stepLog, func() {
 			dash.Info(stepLog)
-			poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-			dash.VerifyFatal(err, nil, "Validate get pool using UUID ")
 			isPoolHealthy := poolResizeIsInProgress(poolToBeResized)
 			dash.VerifyFatal(isPoolHealthy, true, "Verfiy pool before expansion")
 		})
 
-		stepLog = "Trigger pool resize by add-disk"
+		stepLog = fmt.Sprintf("Trigger pool %s resize by add-disk", poolIDToResize)
 		Step(stepLog, func() {
 			dash.Info(stepLog)
 			dash.VerifyFatal(err, nil, "Validate is journal enabled check")
@@ -639,7 +662,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			dash.VerifyFatal(err, nil, "Validate pool expansion init")
 		})
 
-		stepLog = "Ensure that pool rebalance started and add new pool to the node"
+		stepLog = fmt.Sprintf("Ensure that pool %s rebalance started and add new pool to the node %s", poolIDToResize, nodeSelected.Name)
 		Step(stepLog, func() {
 			dash.Info(stepLog)
 			var rebalanceJobs []*api.StorageRebalanceJob
@@ -665,11 +688,11 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				dash.Info("Validate pool rebalance after drive add")
 				err = ValidatePoolRebalance()
 				if err != nil {
-					dash.VerifySafely(err, nil, "Validate pool rebalance")
+					dash.VerifySafely(err, nil, fmt.Sprintf("Validate pool %s rebalance", poolIDToResize))
 				}
 			}
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			dash.VerifyFatal(err, nil, "Validate get pool using UUID ")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			expectedSizeWithJournal := expandedExpectedPoolSize
