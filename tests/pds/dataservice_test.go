@@ -893,7 +893,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 
 	It("Deploy Dataservices and delete namespace", func() {
 
-		nname := "namespace-0"
+		nname := "test-namespace-0"
 		_, err := pdslib.CreateK8sPDSNamespace(nname)
 		logrus.Infof("Created namespace: %v", nname)
 		dash.Infof("Created namespace: %v", nname)
