@@ -3,6 +3,8 @@ module github.com/portworx/torpedo
 go 1.12
 
 require (
+	cloud.google.com/go/storage v1.10.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.5.1
 	github.com/Azure/azure-storage-blob-go v0.9.0
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/andygrunwald/go-jira v1.15.0
@@ -12,13 +14,11 @@ require (
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/educlos/testrail v0.0.0-20210915115134-adb5e6f62a6d
 	github.com/fatih/color v1.13.0
-	github.com/frankban/quicktest v1.14.2 // indirect
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-version v1.2.1
 	github.com/hashicorp/vault/api v1.0.5-0.20200902155336-f9d5ce5a171a
-	github.com/heptio/velero v0.0.0-00010101000000-000000000000 // indirect
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
@@ -26,6 +26,7 @@ require (
 	github.com/libopenstorage/openstorage v9.4.20+incompatible
 	github.com/libopenstorage/operator v0.0.0-20221017204507-4328e80ff06f
 	github.com/libopenstorage/stork v1.4.1-0.20220414104250-3c18fd21ed95
+	github.com/minio/minio-go/v7 v7.0.43
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
@@ -54,6 +55,11 @@ require (
 	k8s.io/apiextensions-apiserver v0.21.4
 	k8s.io/apimachinery v0.24.3
 	k8s.io/client-go v12.0.0+incompatible
+)
+
+require (
+	github.com/frankban/quicktest v1.14.2 // indirect
+	github.com/heptio/velero v0.0.0-00010101000000-000000000000 // indirect
 )
 
 replace (
