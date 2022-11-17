@@ -3,9 +3,6 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
-	"github.com/portworx/torpedo/pkg/aututils"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -18,6 +15,10 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	"github.com/portworx/torpedo/pkg/aututils"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"container/ring"
 
@@ -548,7 +549,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 		wg := new(sync.WaitGroup)
 		wg.Add(1)
 		go func(appNode node.Node) {
-			createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
+			//createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
 			if err != nil {
 				UpdateOutcome(event, err)
 			}
