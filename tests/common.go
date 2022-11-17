@@ -4910,7 +4910,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	TestLogger = CreateLogger(fmt.Sprintf("%s.log", testName))
 	SetTorpedoFileOutput(log, TestLogger)
 	tags["apps"] = strings.Join(Inst().AppList, ",")
-	tags["provisioner"] = Inst().Provisioner
+	tags["storageProvisioner"] = Inst().Provisioner
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)

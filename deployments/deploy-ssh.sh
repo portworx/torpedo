@@ -10,7 +10,7 @@ fi
 
 if [ -z "${DASH_UID}" ]; then
     if [ -e /build.properties ]; then
-      DASH_UID=`cat /build.properties | grep -oE '[0-9]+'`
+      DASH_UID=`cat /build.properties | grep -i "DASH_UID=" | grep -Eo '[0-9]+'`
     else
       DASH_UID="0"
     fi
