@@ -47,8 +47,8 @@ spec:
             - name: mysql-persistent-storage
               mountPath: /var/lib/mysql
         - name: sysbench
-          image: portworx/sysbench_test:latest
-          imagePullPolicy: Always
+          image: portworx/torpedo-sysbench:latest
+          imagePullPolicy: IfNotPresent
           env:
             - name: MYSQL_HOST
               value: 127.0.0.1
