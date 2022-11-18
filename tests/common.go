@@ -224,7 +224,7 @@ const (
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
-	defaultLogLocation                    = "/testresults/"
+	defaultLogLocation                    = "/root/testresults"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
 	defaultAppScaleFactor                 = 1
@@ -3949,7 +3949,7 @@ func ParseFlags() {
 	flag.StringVar(&backupDriverName, backupCliFlag, "", "Name of the backup driver to use")
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
-		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
+		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo")
 	flag.StringVar(&logLevel, logLevelCliFlag, defaultLogLevel, "Log level")
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
 	flag.IntVar(&minRunTimeMins, minRunTimeMinsFlag, defaultMinRunTimeMins, "Minimum Run Time in minutes for appliation deletion tests")
@@ -4006,8 +4006,13 @@ func ParseFlags() {
 	log.Out = io.MultiWriter(log.Out)
 	setLoglevel(log, logLevel)
 	tpLogPath = fmt.Sprintf("%s/%s", logLoc, "torpedo.log")
-	suiteLogger = CreateLogger(tpLogPath)
-	SetTorpedoFileOutput(log, suiteLogger)
+	err = os.MkdirAll(logLoc, os.ModeDir)
+	if err != nil{
+		log.Warnf("Error in creating folder for log location")
+	}else{
+		suiteLogger = CreateLogger(tpLogPath)
+		SetTorpedoFileOutput(log, suiteLogger)
+	}
 
 	appList, err := splitCsv(appListCSV)
 	if err != nil {
