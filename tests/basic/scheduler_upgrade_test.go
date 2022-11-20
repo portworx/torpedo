@@ -46,7 +46,7 @@ var _ = Describe("{UpgradeScheduler}", func() {
 		ValidateApplications(contexts)
 
 		upgradeHops := strings.Split(Inst().SchedUpgradeHops, ",")
-		dash.VerifyFatal(len(upgradeHops) > 0, true, "Validate upgrade hops are provided")
+		dash.VerifyFatal(len(upgradeHops) > 0, true, "upgrade hops are provided?")
 
 		for _, schedVersion := range upgradeHops {
 			schedVersion = strings.TrimSpace(schedVersion)
@@ -54,7 +54,7 @@ var _ = Describe("{UpgradeScheduler}", func() {
 			Step(stepLog, func() {
 				dash.Info(stepLog)
 				err := Inst().N.SetClusterVersion(schedVersion, upgradeTimeoutMins)
-				dash.VerifyFatal(err, nil, "Validate set cluster version")
+				dash.FailOnError(err, "Failed to set cluster version")
 			})
 
 			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
@@ -66,10 +66,10 @@ var _ = Describe("{UpgradeScheduler}", func() {
 			})
 
 			err = Inst().S.RefreshNodeRegistry()
-			dash.VerifyFatal(err, nil, "Validate node registry refresh")
+			dash.FailOnError(err, "Node registry refresh failed")
 
 			err = Inst().V.RefreshDriverEndpoints()
-			dash.VerifyFatal(err, nil, "Validate driver end points refresh")
+			dash.FailOnError(err, "Refersh Driver end points failed")
 			stepLog = fmt.Sprintf("validate number of storage nodes after scheduler upgrade to [%s]",
 				schedVersion)
 			Step(stepLog, func() {

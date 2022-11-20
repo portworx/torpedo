@@ -57,7 +57,7 @@ func performHaIncreaseRebootTest(testName string) {
 			dash.Info(stepLog)
 			storageNodeMap := make(map[string]node.Node)
 			storageNodes, err := GetStorageNodes()
-			dash.VerifyFatal(err, nil, "Verify Get storage nodes")
+			dash.FailOnError(err, "Failed to get storage nodes")
 
 			for _, n := range storageNodes {
 				storageNodeMap[n.Id] = n
@@ -70,21 +70,21 @@ func performHaIncreaseRebootTest(testName string) {
 				Step(stepLog, func() {
 					dash.Info(stepLog)
 					appVolumes, err = Inst().S.GetVolumes(ctx)
-					dash.VerifyFatal(err, nil, "Verify Get volumes")
-					dash.VerifyFatal(len(appVolumes) > 0, true, fmt.Sprintf("Verify length of app volmues %d", len(appVolumes)))
+					dash.FailOnError(err, "Failed to get volumes")
+					dash.VerifyFatal(len(appVolumes) > 0, true, fmt.Sprintf("Found %d app volmues", len(appVolumes)))
 				})
 
 				for _, v := range appVolumes {
 					// Check if volumes are Pure FA/FB DA volumes
 					isPureVol, err := Inst().V.IsPureVolume(v)
-					dash.VerifyFatal(err, nil, "Validate PURE volume check")
+					dash.FailOnError(err, "Failed to check is PURE volume")
 					if isPureVol {
 						dash.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
 						continue
 					}
 
 					currRep, err := Inst().V.GetReplicationFactor(v)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verify Get Repl factor for vil %s", v.Name))
+					dash.FailOnError(err, "Failed to get Repl factor for vil %s", v.Name)
 
 					if currRep != 0 {
 						//Reduce replication factor

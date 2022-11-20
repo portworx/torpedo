@@ -416,7 +416,7 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		Step("verifying if core files are present on each node", func() {
 			dash.Infof("verifying if core files are present on each node")
 			nodes := node.GetWorkerNodes()
-			dash.VerifyFatal(len(nodes) > 0, true, "Verify nodes are registered")
+			dash.VerifyFatal(len(nodes) > 0, true, "Nodes registered?")
 			log.Infof("len nodes: %v", len(nodes))
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {

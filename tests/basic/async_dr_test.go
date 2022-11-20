@@ -113,11 +113,11 @@ var _ = Describe("{MigrateDeployment}", func() {
 			migrationName := migrationKey + "volumeonly-" + fmt.Sprintf("%d", i)
 			currMig, create_mig_err := CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
 			allMigrations = append(allMigrations, currMig)
-			dash.VerifyFatal(create_mig_err, nil, fmt.Sprintf("Validate %s migration is triggered in %s namespace", migrationName, currMigNamespace))
+			dash.FailOnError(create_mig_err, "Failed to create %s migration in %s namespace", migrationName, currMigNamespace)
 			err := storkops.Instance().ValidateMigration(currMig.Name, currMig.Namespace, migrationRetryTimeout, migrationRetryInterval)
-			dash.VerifyFatal(err, nil, "Validate migration should be successful")
+			dash.VerifyFatal(err, nil, "Migration successful?")
 			resp, get_mig_err := storkops.Instance().GetMigration(currMig.Name, currMig.Namespace)
-			dash.VerifyFatal(get_mig_err, nil, "Validate get migration response")
+			dash.VerifyFatal(get_mig_err, nil, "Received migration response?")
 			dash.VerifyFatal(resp.Status.Summary.NumberOfMigratedResources == 0, true, "Validate no resources migrated")
 		}
 

@@ -3,7 +3,7 @@ package restutil
 import (
 	"bytes"
 	"encoding/json"
-	logInstance "github.com/portworx/torpedo/pkg/log"
+	logInstance "github.com/portworx/torpedo/log"
 	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"

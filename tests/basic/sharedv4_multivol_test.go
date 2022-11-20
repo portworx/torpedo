@@ -58,8 +58,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 
 		Inst().CustomAppConfig[appName] = customAppConfig
 		err := Inst().S.RescanSpecs(Inst().SpecDir, provider)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to rescan specs from %s for storage provider %s. Error: [%v]",
-			Inst().SpecDir, provider, err))
+		dash.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
 
 		stepLog = "schedule application with multiple sharedv4 volumes attached"
 
@@ -90,7 +89,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 				Expect(err).NotTo(HaveOccurred())
 				for _, appVolume := range appVolumes {
 					attachedNode, err := Inst().V.GetNodeForVolume(appVolume, defaultCommandTimeout, defaultCommandRetry)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get node the volume %s", appVolume.Name))
+					dash.FailOnError(err, "Failed to get volume %s from node", appVolume.Name)
 					stepLog = fmt.Sprintf("stop volume driver %s on app %s's node: %s",
 						Inst().V.String(), ctx.App.Key, attachedNode.Name)
 					Step(stepLog,
@@ -150,8 +149,8 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 			Step(stepLog, func() {
 				dash.Info(stepLog)
 				appVolumes, err = Inst().S.GetVolumes(ctx)
-				dash.VerifyFatal(err, nil, "Validate get volumes")
-				dash.VerifyFatal(len(appVolumes) > 0, 0, "Validate app volumes are not empty")
+				dash.FailOnError(err, "Failed to get volumes")
+				dash.VerifyFatal(len(appVolumes) > 0, 0, " App volumes are empty?")
 			})
 			for _, v := range appVolumes {
 				stepLog = "get attached node and stop the instance"
@@ -173,7 +172,7 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 							currNodes = node.GetStorageDriverNodes()
 							for _, currNode := range currNodes {
 								if currNode.Name == attachedNode.Name {
-									dash.VerifyFatal(currNode.Name, attachedNode.Name, fmt.Sprintf("Node: %v still exists",
+									dash.VerifyFatal(currNode.Name, attachedNode.Name, fmt.Sprintf("Node: %v still exists?",
 										attachedNode.Name))
 									break
 								}
@@ -193,15 +192,16 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 							dash.Info(stepLog)
 							time.Sleep(2 * time.Minute)
 							currNodes = node.GetStorageDriverNodes()
-							dash.VerifyFatal(countOfCurrNodes, len(currNodes), "Verify new instance is created")
+							dash.VerifyFatal(countOfCurrNodes, len(currNodes), "Create new instance successful?")
 							Expect(countOfCurrNodes).To(Equal(len(currNodes)))
+							dash.Info("Validating Node and Volume driver for all nodes")
 							for _, n := range currNodes {
 
 								err = Inst().S.IsNodeReady(n)
-								dash.VerifyFatal(err, nil, fmt.Sprintf("Validate node %s is ready", n.Name))
+								dash.FailOnError(err, "Node %s not ready", n.Name)
 
 								err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-								dash.VerifyFatal(err, nil, fmt.Sprintf("Validate volume driver is up in node %s", n.Name))
+								dash.FailOnError(err, "Failed to wait for volume driver %s to be up", n.Name)
 							}
 						})
 

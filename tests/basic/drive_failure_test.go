@@ -57,8 +57,8 @@ var _ = Describe("{DriveFailure}", func() {
 				Step(stepLog, func() {
 					dash.Infof(stepLog)
 					appNodes, err = Inst().S.GetNodesForApp(ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verify Get nodes for the app %s", ctx.App.Key))
-					dash.VerifyFatal(len(appNodes) > 0, true, fmt.Sprintf("Verify apps length %d", len(appNodes)))
+					dash.FailOnError(err, "Failed to get nodes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appNodes) > 0, true, fmt.Sprintf("Found %d apps", len(appNodes)))
 
 					nodeWithDrive = appNodes[0]
 				})
@@ -67,8 +67,8 @@ var _ = Describe("{DriveFailure}", func() {
 				Step(stepLog, func() {
 					dash.Infof(stepLog)
 					drives, err = Inst().V.GetStorageDevices(nodeWithDrive)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verify Get storage devices for the node %s", nodeWithDrive.Name))
-					dash.VerifyFatal(len(drives) > 0, true, fmt.Sprintf("Verify drives length %d", len(appNodes)))
+					dash.FailOnError(err, fmt.Sprintf("Failed to get storage devices for the node %s", nodeWithDrive.Name))
+					dash.VerifyFatal(len(drives) > 0, true, fmt.Sprintf("Found drives length %d", len(appNodes)))
 				})
 
 				busInfoMap := make(map[string]string)
@@ -81,7 +81,7 @@ var _ = Describe("{DriveFailure}", func() {
 							TimeBeforeRetry: dfDefaultRetryInterval,
 						})
 						busInfoMap[driveToFail] = busID
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verify yank drive %s", driveToFail))
+						dash.FailOnError(err, "Failed to yank drive %s", driveToFail)
 
 					}
 					stepLog = "wait for the drives to fail"

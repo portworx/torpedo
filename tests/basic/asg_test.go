@@ -43,7 +43,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		ValidateApplications(contexts)
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
-		dash.VerifyFatal(err, nil, "Verify Get ASG cluster size")
+		dash.FailOnError(err, "Failed to Get ASG cluster size")
 
 		scaleupCount := intitialNodeCount + intitialNodeCount/2
 		stepLog := fmt.Sprintf("scale up cluster from %d to %d nodes and validate",
@@ -56,7 +56,6 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 			dash.VerifyFatal(err, nil, "Verify node registry refresh")
 
 			err = Inst().V.RefreshDriverEndpoints()
-			Expect(err).NotTo(HaveOccurred())
 			dash.VerifyFatal(err, nil, "Verify driver end points refresh")
 
 			Scale(scaleupCount)

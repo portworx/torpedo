@@ -374,16 +374,15 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 	res.Description = description
 	res.TestCaseID = d.testcaseID
 
-	d.Log.Infof("Verifying : Description : %s", description)
-
+	d.Log.Infof("VerfySafely: Desc: %s", description)
 	if actualVal == expectedVal {
 		res.ResultType = "info"
 		res.ResultStatus = true
-		d.Log.Infof("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
+		d.Log.Infof("Actual:%v, Expected: %v", actual, expected)
 	} else {
 		res.ResultType = "error"
 		res.ResultStatus = false
-		d.Log.Errorf("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
+		d.Log.Errorf("Actual:%v, Expected: %v", actual, expected)
 	}
 	verifications = append(verifications, res)
 
@@ -393,14 +392,53 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 
 }
 
-//VerifyFatal verify test and abort operation upon failure
-func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string) {
+func (d *Dashboard) Fatal(description string, args ...interface{}) {
+	res := result{}
+	res.Actual = "false"
+	res.Expected = "true"
+	res.Description = description
+	res.TestCaseID = d.testcaseID
+	res.ResultStatus = false
+	res.ResultType = "error"
+	verifications = append(verifications, res)
+	d.Errorf(description, args)
+	err := fmt.Sprintf(description, args...)
+	expect(err).NotTo(haveOccurred())
+}
 
-	d.VerifySafely(actual, expected, description)
-	var err error
-	if actual != expected {
-		err = fmt.Errorf("Actual:%v, Expected: %v, Description: %v", actual, expected, description)
+func (d *Dashboard) FailOnError(err error, description string, args ...interface{}) {
+	if err != nil {
+		d.Fatal("%v. Err: %v", fmt.Sprintf(description, args), err)
 	}
+}
+
+//VerifyFatal verify test and abort operation upon failure
+func (d *Dashboard) VerifyFatal(actual interface{}, expected interface{}, description string) {
+	actualVal := fmt.Sprintf("%v", actual)
+	expectedVal := fmt.Sprintf("%v", expected)
+	res := result{}
+
+	res.Actual = actualVal
+	res.Expected = expectedVal
+	res.Description = description
+	res.TestCaseID = d.testcaseID
+
+	d.Log.Infof("VerifyFatal: Desc: %s", description)
+	if actualVal == expectedVal {
+		res.ResultType = "info"
+		res.ResultStatus = true
+		d.Log.Infof("Actual:%v, Expected: %v", actual, expected)
+	} else {
+		res.ResultType = "error"
+		res.ResultStatus = false
+		d.Log.Errorf("Actual:%v, Expected: %v", actual, expected)
+	}
+	verifications = append(verifications, res)
+
+	if d.IsEnabled {
+		d.verify(res)
+	}
+	err := fmt.Sprintf(description)
 	expect(err).NotTo(haveOccurred())
 }
 

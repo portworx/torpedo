@@ -7,10 +7,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	log "github.com/portworx/torpedo/log"
 	"net/http"
 	"regexp"
-
-	logInstance "github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 
@@ -348,8 +347,6 @@ const (
 	Sunday            = "Sun"
 )
 
-var log *logrus.Logger
-
 // TpLogPath torpedo log path
 var tpLogPath string
 var suiteLogger *lumberjack.Logger
@@ -436,7 +433,7 @@ func InitInstance() {
 	}
 
 	if jiraUserName != "" && jiraToken != "" {
-		log.Info("Initializing JIRA connection")
+		log.Infof("Initializing JIRA connection")
 		jirautils.Init(jiraUserName, jiraToken)
 
 	} else {
@@ -470,10 +467,10 @@ func ValidateCleanup() {
 
 		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
 		if err != nil {
-			log.Info("an error occurred, collecting bundle")
+			log.Infof("an error occurred, collecting bundle")
 			CollectSupport()
 		}
-		dash.VerifyFatal(err, nil, "verify if an error occurred while validating clean up")
+		dash.VerifyFatal(err, nil, "Validate cleanup operation successful ?")
 	})
 }
 
@@ -482,10 +479,10 @@ func processError(err error, errChan ...*chan error) {
 	// Useful for frameworks like longevity that must continue
 	// execution and must not fail immediately
 	if len(errChan) > 0 {
-		log.Error(err)
+		log.Errorf(fmt.Sprintf("%v", err))
 		updateChannel(err, errChan...)
 	} else {
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Verify if error occured.Err: %v", err))
+		dash.FailOnError(err, "Verify if error occurred")
 	}
 }
 
@@ -1304,7 +1301,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		Step(stepLog, func() {
 			dash.Info(stepLog)
 			err = Inst().S.Destroy(ctx, opts)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", ctx.App.Key, err))
+			dash.FailOnError(err, "Failed to destroy app %s", ctx.App.Key)
 		})
 
 		if !ctx.SkipVolumeValidation {
@@ -1328,7 +1325,7 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
 		log.Infof("destroy the %s app's volumes", ctx.App.Key)
 		vols, err = Inst().S.DeleteVolumes(ctx, options)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volumes, Err: %v", ctx.App.Key, err))
+		dash.FailOnError(err, "Failed to delete app %s's volumes", ctx.App.Key)
 	})
 	return vols
 }
@@ -1640,16 +1637,16 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			pxLabel := make(map[string]string)
 			pxLabel[labelNameKey] = defaultStorageProvisioner
 			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			dash.VerifyFatal(err, nil, "Getting portworx pod restart count")
+			dash.FailOnError(err, "Failed to get portworx pod restart count")
 
 			// Validate portworx pod restart count after test
 			for pod, value := range pxPodRestartCountMap {
 				n, err := node.GetNodeByIP(pod.Status.HostIP)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get node object using IP: %s", pod.Status.HostIP))
+				dash.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
 				if n.PxPodRestartCount != value {
 					log.Errorf("Portworx pods restart many times in a node: [%s]", n.Name)
 					if Inst().PortworxPodRestartCheck {
-						dash.VerifyFatal(fmt.Errorf("portworx pods restart [%d] times", value), nil, "Validate portworx restart count")
+						dash.Fatal("portworx pods restart [%d] times", value)
 					}
 				}
 				log.Infof("Portworx pods restart count: [%d] matching with expected count: [%d]", value, n.PxPodRestartCount)
@@ -1658,12 +1655,12 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			// Validate portworx operator pod check
 			pxLabel[labelNameKey] = portworxOperatorName
 			pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			dash.VerifyFatal(err, nil, "Getting portworx operator pod restart count")
+			dash.FailOnError(err, "Failed to get portworx operator pod restart count")
 			for _, v := range pxPodRestartCountMap {
 				if v > 0 {
 					log.Errorf("Portworx operator pods restarted many times: [%d]", v)
 					if Inst().PortworxPodRestartCheck {
-						dash.VerifyFatal(fmt.Errorf("portworx operator pods restart [%d] times", v), nil, "Checking portworx pod restart count")
+						dash.Fatal("portworx operator pods restart [%d] times", v)
 					}
 				}
 			}
@@ -1694,13 +1691,13 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 // using total cluster size `count` and max_storage_nodes_per_zone
 func ValidateClusterSize(count int64) {
 	zones, err := Inst().N.GetZones()
-	dash.VerifyFatal(err, nil, "Verify Get zones")
+	dash.FailOnError(err, "Zones empty")
 	dash.Infof("ASG is running in [%+v] zones\n", zones)
 	perZoneCount := count / int64(len(zones))
 
 	// Validate total node count
 	currentNodeCount, err := Inst().N.GetASGClusterSize()
-	dash.VerifyFatal(err, nil, "Verify Get ASG Cluster Size")
+	dash.FailOnError(err, "Failed to Get ASG Cluster Size")
 
 	dash.VerifyFatal(perZoneCount*int64(len(zones)), currentNodeCount, fmt.Sprintf("Verify if ASG cluster size is as expected."+
 		" Current size is [%d]. Expected ASG size is [%d]",
@@ -1714,7 +1711,7 @@ func ValidateClusterSize(count int64) {
 		expectedStorageNodesPerZone = int(perZoneCount)
 	}
 	storageNodes, err := GetStorageNodes()
-	dash.VerifyFatal(err, nil, "Verify Get storage nodes")
+	dash.FailOnError(err, "Storage nodes are empty")
 
 	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones),
 		fmt.Sprintf("Verify if c urrent number of storeage nodes [%d] match the expected number of storage nodes [%d]."+
@@ -1754,7 +1751,7 @@ func CollectSupport() {
 			}
 		}
 		nodes := node.GetWorkerNodes()
-		dash.VerifyFatal(len(nodes) > 0, true, "Verify Get Worker nodes")
+		dash.VerifyFatal(len(nodes) > 0, true, "Worker nodes not found")
 
 		for _, n := range nodes {
 			if !n.IsStorageDriverInstalled {
@@ -1846,14 +1843,11 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
-					log.Info("an error occurred, collecting bundle")
+					log.Errorf("an error occurred, collecting bundle")
 					CollectSupport()
+					dash.VerifySafely(file == "", true, fmt.Sprintf("Core generated on node %s, Core Path: %s", n.Name, file))
 				}
-				if err != nil {
-					dash.VerifySafely(err, nil, fmt.Sprintf("Error occurred while checking for core on node %s, Err: %v", n.Name, err))
-				}
-
-				dash.VerifyFatal(file, "", fmt.Sprintf("Core should not be generated on node %s, Core Path if generated: %s", n.Name, file))
+				dash.FailOnError(err, "Error occurred while checking for core on node %s", n.Name)
 			}
 		})
 	})
@@ -3857,7 +3851,7 @@ type Torpedo struct {
 	AppList                             []string
 	LogLoc                              string
 	LogLevel                            string
-	Logger                              *logrus.Logger
+	Logger                              *log.Logger
 	GlobalScaleFactor                   int
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
@@ -4002,12 +3996,13 @@ func ParseFlags() {
 	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
 	flag.Parse()
 
-	log = logInstance.GetLogInstance()
-	log.Out = io.MultiWriter(log.Out)
-	setLoglevel(log, logLevel)
-	tpLogPath = fmt.Sprintf("%s/%s", logLoc, "torpedo.log")
-	suiteLogger = CreateLogger(tpLogPath)
-	SetTorpedoFileOutput(log, suiteLogger)
+	// TODO: Need to fix this
+	//log = logInstance.GetLogInstance()
+	//log.Out = io.MultiWriter(log.Out)
+	//setLoglevel(log, logLevel)
+	//tpLogPath = fmt.Sprintf("%s/%s", logLoc, "torpedo.log")
+	//suiteLogger = CreateLogger(tpLogPath)
+	//SetTorpedoFileOutput(log, suiteLogger)
 
 	appList, err := splitCsv(appListCSV)
 	if err != nil {
@@ -4108,7 +4103,7 @@ func ParseFlags() {
 				SpecDir:                             specDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
-				Logger:                              log,
+				Logger:                              log.GetLogInstance(),
 				GlobalScaleFactor:                   appScaleFactor,
 				MinRunTimeMins:                      minRunTimeMins,
 				ChaosLevel:                          chaosLevel,
@@ -4635,15 +4630,16 @@ func ValidateBackupCluster() bool {
 }
 
 func DeleteRuleForBackup(orgID string, name string, uid string) bool {
+	dash.Info("Delete rule for backup")
 	ctx, err := backup.GetAdminCtxFromSecret()
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching px-central-admin ctx:"))
+	dash.FailOnError(err, "Failed to fetch px-central-admin ctx")
 	RuleDeleteReq := &api.RuleDeleteRequest{
 		Name:  name,
 		OrgId: orgID,
 		Uid:   uid,
 	}
 	_, err = Inst().Backup.DeleteRule(ctx, RuleDeleteReq)
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup Rule"))
+	dash.FailOnError(err, "Failed to delete backup Rule")
 	return true
 }
 
@@ -4657,6 +4653,7 @@ func Contains(app_list []string, app string) bool {
 }
 
 func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_post_flag string, ps map[string]map[string]string) bool {
+	dash.Info("Create Rule for backup")
 	pod_selector := []map[string]string{}
 	action_value := []string{}
 	container := []string{}
@@ -4720,10 +4717,10 @@ func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_
 		RulesInfo: &rulesinfo,
 	}
 	ctx, err := backup.GetAdminCtxFromSecret()
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching px-central-admin ctx:"))
+	dash.FailOnError(err, "Failed to fetch px-central-admin ctx")
 	_, err = Inst().Backup.CreateRule(ctx, RuleCreateReq)
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup Rules"))
-	log.Infof("Validate rules for backup")
+	dash.FailOnError(err, "Failed to create backup rules")
+	dash.Infof("Validate rules for backup")
 	RuleEnumerateReq := &api.RuleEnumerateRequest{
 		OrgId: orgID,
 	}
@@ -4765,7 +4762,7 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		OrgId: orgID,
 	}
 	ctx, err := backup.GetAdminCtxFromSecret()
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching px-central-admin ctx:"))
+	dash.FailOnError(err, "Failed to fetch px-central-admin ctx")
 	rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
 	if create_post_rule == true {
 		for i := 0; i < len(rule_list.Rules); i++ {
@@ -4808,7 +4805,7 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		OrgId: orgID,
 	}
 	schedule_policy_list, err := Inst().Backup.EnumerateSchedulePolicy(ctx, schedPolicyEnumerateReq)
-	dash.VerifyFatal(err, nil, "Getting list of schedule policies")
+	dash.FailOnError(err, "Failed to get list of schedule policies")
 	for i := 0; i < len(schedule_policy_list.SchedulePolicies); i++ {
 		sched_policy_map[schedule_policy_list.SchedulePolicies[i].Metadata.Name] = schedule_policy_list.SchedulePolicies[i].Metadata.Uid
 	}
@@ -4915,13 +4912,11 @@ func updatePxRuntimeOpts() error {
 		dash.Infof("Setting run time options: %s", pxRuntimeOpts)
 		optionsMap := make(map[string]string)
 		runtimeOpts, err := splitCsv(pxRuntimeOpts)
-		if err != nil {
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Error parsing run time options, err : %v", err))
-		}
+		dash.FailOnError(err, "Error parsing run time options")
 
 		for _, opt := range runtimeOpts {
 			if !strings.Contains(opt, "=") {
-				dash.VerifyFatal(false, true, fmt.Sprintf("Given run time option is not in expected format key=val, Actual : %v", opt))
+				dash.Fatal("Given run time option is not in expected format key=val, Actual : %v", opt)
 			}
 			optArr := strings.Split(opt, "=")
 			optionsMap[optArr[0]] = optArr[1]
@@ -4976,8 +4971,9 @@ func EndTorpedoTest() {
 }
 
 func Backupschedulepolicy(name string, uid string, orgid string, schedule_policy_info *api.SchedulePolicyInfo) error {
+	dash.Info("Create Backup Schedule Policy")
 	ctx, err := backup.GetAdminCtxFromSecret()
-	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	dash.FailOnError(err, "Failed to fetch px-central-admin ctx")
 	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4988,7 +4984,7 @@ func Backupschedulepolicy(name string, uid string, orgid string, schedule_policy
 	}
 	_, err = Inst().Backup.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
 	if err != nil {
-		log.Infof(" \n\n eeror in schel policy is +%v", err)
+		log.Errorf(" \n\n eeror in schel policy is +%v", err)
 		return err
 	}
 	return nil
@@ -5052,12 +5048,12 @@ func CreateMonthlySchedulePolicy(retain int64, date int64, time string, incr_cou
 func RegisterBackupCluster(orgID string, cloud_name string, uid string) {
 	CreateSourceAndDestClusters(orgID, cloud_name, uid)
 	ctx, err := backup.GetAdminCtxFromSecret()
-	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+	dash.FailOnError(err, "Failed to fetch px-central-admin ctx")
 	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: sourceClusterName, IncludeSecrets: true}
 	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-	dash.VerifyFatal(err, nil, "Inspecting cluster object")
+	dash.FailOnError(err, "Cluster Object nil")
 	clusterObj := clusterResp.GetCluster()
-	dash.VerifyFatal(clusterObj.Status.Status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+	dash.VerifyFatal(clusterObj.Status.Status, api.ClusterInfo_StatusInfo_Online, "Backup Cluster Registered ?")
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {

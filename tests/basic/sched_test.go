@@ -40,7 +40,7 @@ var _ = Describe("{StopScheduler}", func() {
 				Step(stepLog, func() {
 					dash.Infof(stepLog)
 					err := Inst().S.StopSchedOnNode(storageNode)
-					dash.VerifyFatal(err, nil, "validate scheduler is stopped")
+					dash.VerifyFatal(err == nil, true, "Is scheduler stopped ?")
 				})
 
 				stepLog = "wait for the service to stop and reschedule apps"
@@ -59,7 +59,7 @@ var _ = Describe("{StopScheduler}", func() {
 				Step(stepLog, func() {
 					dash.Info(stepLog)
 					err := Inst().S.StartSchedOnNode(storageNode)
-					dash.VerifyFatal(err, nil, "Validate start scheduler on the node")
+					dash.VerifyFatal(err == nil, true, "Scheduler started on Node ?")
 				})
 
 				Step("validate apps", func() {

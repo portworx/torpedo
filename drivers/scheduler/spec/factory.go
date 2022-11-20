@@ -2,7 +2,7 @@ package spec
 
 import (
 	"fmt"
-	logInstance "github.com/portworx/torpedo/pkg/log"
+	logInstance "github.com/portworx/torpedo/log"
 	"io/ioutil"
 	"path"
 

@@ -61,7 +61,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 		Step("Check the status of backup pods", func() {
 			dash.Info("Check the status of backup pods")
 			status := ValidateBackupCluster()
-			dash.VerifyFatal(status, true, "Validating backup pod")
+			dash.VerifyFatal(status, true, "Backup Cluster Verification successful?")
 		})
 		//Will add CRD verification here
 	})

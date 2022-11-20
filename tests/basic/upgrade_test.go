@@ -43,7 +43,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		storageNodes := node.GetStorageNodes()
 
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
-		dash.VerifyFatal(err, nil, "Validate cloud drive installation")
+		dash.FailOnError(err, "Cloud drive installation failed")
 
 		if !isCloudDrive {
 			for _, storageNode := range storageNodes {
@@ -51,7 +51,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
 					continue
 				}
-				dash.VerifyFatal(err, nil, "Verify adding block drive(s)")
+				dash.Fatal("Adding block drive(s) failed. ERR: %v", err)
 			}
 		}
 		dash.Info("Scheduling applications and validating")
@@ -71,12 +71,10 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				timeBeforeUpgrade = time.Now()
 				status, err := UpgradePxStorageCluster()
 				timeAfterUpgrade = time.Now()
-				if status {
-					dash.Info("Volume Driver upgrade is successful")
-				} else {
-					dash.Error("Volume Driver upgrade failed")
+				if err != nil {
+					dash.Fatal("Failed to Upgrade Px Storage Cluster. ERR: %v", err)
 				}
-				dash.VerifyFatal(err, nil, "Verify volume drive upgrade for operator based set up")
+				dash.VerifyFatal(status, true, "Volume driver upgrade successful?")
 
 			} else {
 				timeBeforeUpgrade = time.Now()
@@ -84,7 +82,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 					Inst().StorageDriverUpgradeEndpointVersion,
 					false)
 				timeAfterUpgrade = time.Now()
-				dash.VerifyFatal(err, nil, "Verify volume drive upgrade for daemon set based set up")
+				dash.VerifyFatal(err, nil, "Volume drive upgrade for daemon set based set up successful?")
 			}
 
 			durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
@@ -146,7 +144,7 @@ var _ = Describe("{UpgradeStork}", func() {
 				dash.Info("start the upgrade of stork deployment")
 				err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
 					Inst().StorageDriverUpgradeEndpointVersion)
-				dash.VerifyFatal(err, nil, "Verify stork upgrade")
+				dash.VerifyFatal(err, nil, "Stork upgrade successful?")
 			})
 
 			Step("validate all apps after upgrade", func() {
@@ -173,7 +171,7 @@ var _ = Describe("{UpgradeStork}", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				err = k8sApps.ValidateDeployment(storkDeploy, k8s.DefaultTimeout, k8s.DefaultRetryInterval)
-				dash.VerifyFatal(err, nil, "Verify stork deployment")
+				dash.VerifyFatal(err, nil, "Stork deployment successful?")
 			})
 
 		})

@@ -2,8 +2,7 @@ package monitor
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-
+	"github.com/portworx/torpedo/log"
 	"github.com/portworx/torpedo/pkg/errors"
 	prometheus "github.com/prometheus/client_golang/prometheus"
 )

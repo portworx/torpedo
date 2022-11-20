@@ -57,8 +57,8 @@ var _ = Describe("{VolumeUpdate}", func() {
 				Step(stepLog, func() {
 					dash.Info(stepLog)
 					appVolumes, err = Inst().S.GetVolumes(ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get volumes for app %s", ctx.App.Key))
-					dash.VerifyFatal(len(appVolumes) > 0, true, "Validate app volumes exist")
+					dash.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
 				})
 				for _, v := range appVolumes {
 					MaxRF := Inst().V.GetMaxReplicationFactor()
@@ -68,20 +68,12 @@ var _ = Describe("{VolumeUpdate}", func() {
 					Step(stepLog,
 						func() {
 							dash.Info(stepLog)
-							errExpected := false
 							currRep, err := Inst().V.GetReplicationFactor(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get volume  %s repl factor", v.Name))
-							if currRep == MinRF {
-								errExpected = true
-							}
+							dash.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
 							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
-							if !errExpected {
-								dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set volume  %s repl factor", v.Name))
-							} else {
-								dash.VerifyFatal(err != nil, true, fmt.Sprintf("Validate error occured whiel setting volume  %s repl factor, Err: %v", v.Name, err))
-							}
-
+							dash.FailOnError(err, "Failed to set volume  %s repl factor", v.Name)
+							dash.VerifyFatal(currRep, MinRF, fmt.Sprintf("Set volume  %s repl factor successful ?", v.Name))
 						})
 					stepLog = fmt.Sprintf("validate successful repl decrease on app %s's volume: %v",
 						ctx.App.Key, v)
@@ -89,43 +81,36 @@ var _ = Describe("{VolumeUpdate}", func() {
 						func() {
 							dash.Info(stepLog)
 							newRepl, err := Inst().V.GetReplicationFactor(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get volume  %s repl factor", v.Name))
-							dash.VerifyFatal(newRepl, expReplMap[v], "Validate repl factor is as expected")
+							dash.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
+							dash.VerifyFatal(newRepl, expReplMap[v], "Repl factor is as expected ?")
 						})
 					stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
 						Inst().V.String(), ctx.App.Key, v)
 					Step(stepLog,
 						func() {
-							errExpected := false
 							currRep, err := Inst().V.GetReplicationFactor(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get volume  %s repl factor", v.Name))
+							dash.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
 							// GetMaxReplicationFactory is hardcoded to 3
 							// if it increases repl 3 to an aggregated 2 volume, it will fail
 							// because it would require 6 worker nodes, since
 							// number of nodes required = aggregation level * replication factor
 							currAggr, err := Inst().V.GetAggregationLevel(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get volume  %s aggregate level", v.Name))
+							dash.FailOnError(err, "Failed to get volume  %s aggregate level", v.Name)
 							if currAggr > 1 {
 								MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
 							}
-							if currRep == MaxRF {
-								errExpected = true
-							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, true)
-							if !errExpected {
-								dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set volume  %s repl factor", v.Name))
-							} else {
-								dash.VerifyFatal(err != nil, true, fmt.Sprintf("Validate error occured whiel setting volume  %s repl factor, Err: %v", v.Name, err))
-							}
+							dash.FailOnError(err, "Failed to set volume  %s repl factor", v.Name)
+							dash.VerifyFatal(currRep, MaxRF, fmt.Sprintf("Repl factor set succesfully on volume  %s repl", v.Name))
 						})
 					stepLog = fmt.Sprintf("validate successful repl increase on app %s's volume: %v",
 						ctx.App.Key, v)
 					Step(stepLog,
 						func() {
 							newRepl, err := Inst().V.GetReplicationFactor(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get volume  %s repl factor", v.Name))
-							dash.VerifyFatal(newRepl, expReplMap[v], "Validate repl factor is as expected")
+							dash.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
+							dash.VerifyFatal(newRepl, expReplMap[v], "Repl factor is as expected?")
 						})
 				}
 				var requestedVols []*volume.Volume
@@ -135,7 +120,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 					func() {
 						dash.Info(stepLog)
 						requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Validate volume resize"))
+						dash.FailOnError(err, "Volume resize successful ?")
 					})
 				stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
 					ctx.App.Key, appVolumes)
@@ -147,10 +132,10 @@ var _ = Describe("{VolumeUpdate}", func() {
 							params := make(map[string]string)
 							if Inst().ConfigMap != "" {
 								params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-								dash.VerifyFatal(err, nil, "Validate get token from config map")
+								dash.FailOnError(err, "Failed to get token from configMap")
 							}
 							err := Inst().V.ValidateUpdateVolume(v, params)
-							dash.VerifyFatal(err, nil, "Validate volume update")
+							dash.VerifyFatal(err, nil, "Validate volume update successful?")
 						}
 					})
 
@@ -204,7 +189,7 @@ var _ = Describe("{VolumeIOThrottle}", func() {
 			log.Infof("waiting for 5 sec for the pod to stablize")
 			time.Sleep(5 * time.Second)
 			speedBeforeUpdate, err = Inst().S.GetIOBandwidth(fio, namespace)
-			dash.VerifyFatal(err, nil, "validate get IO bandwidth")
+			dash.FailOnError(err, "Failed to get IO Bandwidth")
 		})
 		dash.Infof("BW before update %d", speedBeforeUpdate)
 
@@ -215,13 +200,13 @@ var _ = Describe("{VolumeIOThrottle}", func() {
 				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
 				Step(stepLog, func() {
 					appVolumes, err = Inst().S.GetVolumes(ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get volumes for app %s", ctx.App.Key))
-					dash.VerifyFatal(len(appVolumes) > 0, true, "Validate app volumes exist")
+					dash.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
 				})
 				dash.Infof("Volumes to be updated %s", appVolumes)
 				for _, v := range appVolumes {
 					err := Inst().V.SetIoBandwidth(v, bandwidthMBps, bandwidthMBps)
-					dash.VerifyFatal(err, nil, "validate set IO bandwidth")
+					dash.FailOnError(err, "Failed to set IO bandwidth")
 				}
 			}
 		})
@@ -231,14 +216,14 @@ var _ = Describe("{VolumeIOThrottle}", func() {
 		Step(stepLog, func() {
 			dash.Info(stepLog)
 			speedAfterUpdate, err = Inst().S.GetIOBandwidth(fio, namespace)
-			dash.VerifyFatal(err, nil, "validate get IO bandwidth after update")
+			dash.FailOnError(err, "Failed to get IO bandwidth after update")
 		})
 		dash.Infof("BW after update %d", speedAfterUpdate)
 		stepLog = "Validate speed reduction"
 		Step(stepLog, func() {
 			// We are setting the BW to 1 MBps so expecting the returned value to be in 10% buffer
 			dash.Info(stepLog)
-			dash.VerifyFatal(speedAfterUpdate < bufferedBW, true, "Validate speed reduced below the buffer")
+			dash.VerifyFatal(speedAfterUpdate < bufferedBW, true, "Speed reduced below the buffer?")
 		})
 
 		Step("destroy apps", func() {
@@ -285,8 +270,8 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 				var appVolumes []*volume.Volume
 				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
 					appVolumes, err = Inst().S.GetVolumes(ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get volumes for app %s", ctx.App.Key))
-					dash.VerifyFatal(len(appVolumes) > 0, true, "Validate app volumes exist")
+					dash.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist ?")
 				})
 				for _, v := range appVolumes {
 					MaxRF := Inst().V.GetMaxReplicationFactor()
@@ -299,16 +284,12 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 					Step(stepLog,
 						func() {
 							dash.Info(stepLog)
-							errExpected := false
 							currRep, err := Inst().V.GetReplicationFactor(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get vol %s repl factor", v.Name))
-							if currRep == MinRF {
-								errExpected = true
-							}
+							dash.FailOnError(err, "Failed to get vol %s repl factor", v.Name)
 							attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
 
 							replicaSets, err := Inst().V.GetReplicaSets(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get vol %s replica sets", v.Name))
+							dash.FailOnError(err, "Failed to get vol %s replica sets", v.Name)
 							dash.VerifyFatal(len(replicaSets) > 0, true, fmt.Sprintf("Validate vol %s has replica sets", v.Name))
 
 							for _, nID := range replicaSets[0].Nodes {
@@ -334,12 +315,8 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 
 							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
 							err = Inst().V.SetReplicationFactor(v, currRep-1, updateReplicaSet, true)
-							if !errExpected {
-								dash.VerifyFatal(err, nil, "Validate set repl factor")
-							} else {
-								dash.VerifyFatal(err != nil, true, fmt.Sprintf("Validate err occured while setting repl factor,Err: %v ", err))
-							}
-
+							dash.FailOnError(err, "Failed to set repl factor")
+							dash.VerifyFatal(currRep, MinRF, "Repl factor set successfully?")
 						})
 					stepLog = fmt.Sprintf("validate successful repl decrease on app %s's volume: %v",
 						ctx.App.Key, v)
@@ -348,11 +325,11 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							dash.Info(stepLog)
 							newRepl, err := Inst().V.GetReplicationFactor(v)
 							dash.Infof("Got repl factor after update: %v", newRepl)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get vol %s repl factor", v.Name))
-							dash.VerifyFatal(newRepl, expReplMap[v], "validate new repl factor is as expected")
+							dash.FailOnError(err, "Failed to get vol %s repl factor", v.Name)
+							dash.VerifyFatal(newRepl, expReplMap[v], "New repl factor is as expected?")
 							currReplicaSets, err := Inst().V.GetReplicaSets(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get vol %s replica setss", v.Name))
-							dash.VerifyFatal(len(currReplicaSet) > 0, true, fmt.Sprintf("Validate vol %s repl sets exist", v.Name))
+							dash.FailOnError(err, "Failed to get vol %s replica sets", v.Name)
+							dash.VerifyFatal(len(currReplicaSet) > 0, true, fmt.Sprintf(" Vol %s repl sets exist?", v.Name))
 							reducedReplicaSet := []string{}
 							for _, nID := range currReplicaSets[0].Nodes {
 								reducedReplicaSet = append(reducedReplicaSet, nID)
@@ -361,7 +338,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							dash.Infof("ReplicaSet of volume %v is: %v", v.Name, reducedReplicaSet)
 							dash.Infof("Expected ReplicaSet of volume %v is: %v", v.Name, expectedReplicaSet)
 							res := reflect.DeepEqual(reducedReplicaSet, expectedReplicaSet)
-							dash.VerifyFatal(res, true, "Validate reduced replica set is as expected")
+							dash.VerifyFatal(res, true, "Reduced replica set is as expected?")
 						})
 					for _, ctx := range contexts {
 						ctx.SkipVolumeValidation = true
@@ -375,28 +352,21 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 					Step(stepLog,
 						func() {
 							dash.Info(stepLog)
-							errExpected := false
 							currRep, err := Inst().V.GetReplicationFactor(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get vol %s repl factor", v.Name))
+							dash.FailOnError(err, "Failed to get vol %s repl factor", v.Name)
 							// GetMaxReplicationFactory is hardcoded to 3
 							// if it increases repl 3 to an aggregated 2 volume, it will fail
 							// because it would require 6 worker nodes, since
 							// number of nodes required = aggregation level * replication factor
 							currAggr, err := Inst().V.GetAggregationLevel(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get vol %s aggregation level", v.Name))
+							dash.FailOnError(err, "Failed to get vol %s aggregation level", v.Name)
 							if currAggr > 1 {
 								MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
 							}
-							if currRep == MaxRF {
-								errExpected = true
-							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
 							err = Inst().V.SetReplicationFactor(v, currRep+1, updateReplicaSet, true)
-							if !errExpected {
-								dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set vol %s repl factor", v.Name))
-							} else {
-								dash.VerifyFatal(err != nil, true, fmt.Sprintf("Validate error occured while setting vol %s repl factor, Err: %v", v.Name, err))
-							}
+							dash.FailOnError(err, "Failed to set vol %s repl factor", v.Name)
+							dash.VerifyFatal(currRep, MaxRF, fmt.Sprintf("Vol %s repl factor set as expected?", v.Name))
 						})
 					stepLog = fmt.Sprintf("validate successful repl increase on app %s's volume: %v",
 						ctx.App.Key, v)
@@ -404,12 +374,12 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 						func() {
 							dash.Info(stepLog)
 							newRepl, err := Inst().V.GetReplicationFactor(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get vol %s repl factor", v.Name))
-							dash.VerifyFatal(newRepl, expReplMap[v], "Validate new repl factor is as expected")
+							dash.FailOnError(err, "Failed to get vol %s repl factor", v.Name)
+							dash.VerifyFatal(newRepl, expReplMap[v], "New repl factor is as expected?")
 							currReplicaSets, err := Inst().V.GetReplicaSets(v)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get vol %s replica sets", v.Name))
-							dash.VerifyFatal(len(currReplicaSets) > 0, true, "Validate new repl factor is as expected")
-							dash.VerifyFatal(len(currReplicaSet) > 0, true, fmt.Sprintf("Validate vol %s repl sets exist", v.Name))
+							dash.FailOnError(err, "Failed to get vol %s replica sets", v.Name)
+							dash.VerifyFatal(len(currReplicaSets) > 0, true, "New repl factor is as expected?")
+							dash.VerifyFatal(len(currReplicaSet) > 0, true, fmt.Sprintf("Vol %s repl sets exist?", v.Name))
 							increasedReplicaSet := []string{}
 							for _, nID := range currReplicaSets[0].Nodes {
 								increasedReplicaSet = append(increasedReplicaSet, nID)

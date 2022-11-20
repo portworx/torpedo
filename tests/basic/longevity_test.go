@@ -121,18 +121,16 @@ var _ = Describe("{Longevity}", func() {
 			dash.Info(watchLog)
 			err := watchConfigMap()
 			if err != nil {
-				log.Error(err)
+				dash.Fatal(fmt.Sprintf("%v", err))
 			}
-			dash.VerifyFatal(err, nil, "Validate config map watch set")
 		})
 
 		if pureTopologyEnabled {
 			var err error
 			labels, err = SetTopologyLabelsOnNodes()
 			if err != nil {
-				log.Error(err)
+				dash.Fatal(fmt.Sprintf("%v", err))
 			}
-			dash.VerifyFatal(err, nil, "Validate set topology labels")
 			Inst().TopologyLabels = labels
 		}
 

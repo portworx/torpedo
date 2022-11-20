@@ -8,7 +8,6 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -269,7 +268,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 			dash.Info(stepLog)
 			for _, ctx := range contexts {
 				appNodes, err := Inst().S.GetNodesForApp(ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verify get nodes for the app %s", ctx.App.Key))
+				dash.FailOnError(err, "Failed to get nodes for the app %s", ctx.App.Key)
 				appNode := appNodes[r.Intn(len(appNodes))]
 				stepLog = fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
 					Inst().V.String(), ctx.App.Key, appNode)
@@ -431,7 +430,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 				Step(stepLog, func() {
 					dash.Info(stepLog)
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-					dash.VerifyFatal(err, nil, "Validate get application scale up factor map ")
+					dash.FailOnError(err, "Failed to get application scale up factor map")
 					//Scaling up by number of storage-nodes
 					workerStorageNodes := int32(len(node.GetStorageNodes()))
 					for name, scale := range applicationScaleUpMap {
@@ -456,7 +455,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 				Step(stepLog, func() {
 					dash.Info(stepLog)
 					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
-					dash.VerifyFatal(err, nil, "Validate get application scale down factor map ")
+					dash.FailOnError(err, "Failed to get application scale down factor map")
 
 					for name, scale := range applicationScaleDownMap {
 						applicationScaleDownMap[name] = scale - 1
@@ -585,7 +584,6 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 			for _, n := range storageNodes {
 				err := Inst().S.DisableSchedulingOnNode(n)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate disable scheduling on node %s", n.Name))
-				Expect(err).NotTo(HaveOccurred())
 			}
 		})
 		stepLog = "Deploy applications"
@@ -609,7 +607,6 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 			for _, ctx := range contexts {
 				err := Inst().S.Destroy(ctx, opts)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate App %s detroy init", ctx.App.Key))
-
 			}
 		})
 		Step("Validate destroy", func() {
@@ -657,9 +654,9 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			daemonSets, err := k8sApps.ListDaemonSets("kube-system", metav1.ListOptions{
 				LabelSelector: "name=portworx",
 			})
-			dash.VerifyFatal(err, nil, "validate get daemon sets list")
-			dash.VerifyFatal(len(daemonSets) > 0, true, "validate daemon sets list")
-			dash.VerifyFatal(len(daemonSets[0].Spec.Template.Spec.Containers) > 0, true, "validate daemon set container is not empty")
+			dash.FailOnError(err, "Failed to get daemon sets list")
+			dash.VerifyFatal(len(daemonSets) > 0, true, "Daemon sets returned?")
+			dash.VerifyFatal(len(daemonSets[0].Spec.Template.Spec.Containers) > 0, true, "Daemon set container is not empty?")
 			usingVault := false
 			for _, container := range daemonSets[0].Spec.Template.Spec.Containers {
 				if container.Name == portworxContainerName {
@@ -678,8 +675,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			}
 		} else {
 			spec, err := Inst().V.GetStorageCluster()
-			dash.VerifyFatal(err, nil, "Validate Get storage cluster")
-			Expect(err).ToNot(HaveOccurred())
+			dash.FailOnError(err, "Failed to get storage cluster")
 			if *spec.Spec.SecretsProvider != vaultSecretProvider &&
 				*spec.Spec.SecretsProvider != vaultTransitSecretProvider {
 				Skip(fmt.Sprintf("Skip test for not using %s or %s ", vaultSecretProvider, vaultTransitSecretProvider))
@@ -743,7 +739,7 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 			go func(appNode node.Node) {
 				createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
 				if err != nil {
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Error while creating volumes. Err: %v", err))
+					dash.Fatal("Error while creating volumes. Err: %v", err)
 				}
 			}(selectedNode)
 			time.Sleep(2 * time.Second)
@@ -754,7 +750,7 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 				Step(stepLog, func() {
 					dash.Info(stepLog)
 					err = Inst().V.RestartDriver(appNode, nil)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Error while restarting volume driver. Err: %v", err))
+					dash.FailOnError(err, "Error while restarting volume driver")
 
 				})
 			}(selectedNode)
@@ -772,7 +768,7 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 					dash.VerifySafely(cVol.State, opsapi.VolumeState_VOLUME_STATE_ATTACHED, fmt.Sprintf("Verify vol %s is attached", cVol.Id))
 					dash.VerifySafely(cVol.DevicePath, volPath, fmt.Sprintf("Verify vol %s is has device path", cVol.Id))
 				} else {
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Error while inspecting volume %s. Err: %v", vol, err))
+					dash.Fatal("Error while inspecting volume %s. Err: %v", vol, err)
 				}
 			}
 		})
@@ -787,7 +783,7 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 				if err == nil {
 					err = Inst().V.DeleteVolume(vol)
 				}
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Error while deleting volume %s. Err: %v", vol, err))
+				dash.FailOnError(err, "Error while deleting volume %s", vol)
 
 			}
 		})

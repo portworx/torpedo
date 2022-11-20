@@ -77,7 +77,7 @@ var _ = Describe("{DecommissionNode}", func() {
 						return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
 					}
 					decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
-					dash.VerifyFatal(err, nil, "Validate get decommissioned node status")
+					dash.FailOnError(err, "Failed to get decommissioned node status")
 					dash.VerifyFatal(decommissioned.(bool), true, "Validate node is decommissioned")
 				})
 			})

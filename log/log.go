@@ -3,6 +3,7 @@ package log
 import (
 	"bytes"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"io"
 	"os"
 	"strings"
@@ -14,6 +15,10 @@ import (
 
 type colorizer func(...interface{}) string
 
+type Logger struct {
+	LogrusLogger *logrus.Logger
+}
+
 var (
 	green    colorizer
 	yellow   colorizer
@@ -24,8 +29,11 @@ var (
 	plain    colorizer
 )
 
-var log *logrus.Logger
-var lock = &sync.Mutex{}
+var (
+	Dash   = aetosutil.Get()
+	lock   = &sync.Mutex{}
+	logger = GetLogInstance()
+)
 
 // We are logging to file, strip colors to make the output more readable
 var txtFormatter = &logrus.TextFormatter{DisableColors: true}
@@ -128,19 +136,26 @@ func init() {
 	customFormatter.FullTimestamp = true
 }
 
+func New() *Logger {
+	logursLog := logrus.New()
+	logursLog.SetFormatter(&MyFormatter{})
+	logursLog.ReportCaller = true
+	logursLog.Out = io.MultiWriter(os.Stdout)
+	return &Logger{
+		LogrusLogger: logursLog,
+	}
+}
+
 //GetLogInstance returns the logrus instance
-func GetLogInstance() *logrus.Logger {
-	if log == nil {
+func GetLogInstance() *Logger {
+	if logger == nil {
 		lock.Lock()
 		defer lock.Unlock()
-		if log == nil {
-			log = logrus.New()
-			log.SetFormatter(&MyFormatter{})
-			log.ReportCaller = true
-			log.Out = io.MultiWriter(os.Stdout)
+		if logger == nil {
+			logger = New()
 		}
 	}
-	return log
+	return logger
 }
 
 type MyFormatter struct{}
@@ -162,8 +177,54 @@ func (mf *MyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		funcName = funcName[subIndex+1:]
 	}
 
-	b.WriteString(fmt.Sprintf("%s:[%s %s::%s:%d]  %s\n",
-		entry.Time.Format("2006-01-02 15:04:05 -0700"), level, fileName, funcName, entry.Caller.Line,
+	b.WriteString(fmt.Sprintf("%s:[%s %s:#%d]  %s\n",
+		entry.Time.Format("2006-01-02 15:04:05 -0700"), level, fileName, entry.Caller.Line,
 		entry.Message))
 	return b.Bytes(), nil
+}
+
+func Fatalf(format string, args ...interface{}) {
+	Dash.Fatal(format, args...)
+	logger.LogrusLogger.Fatalf(format, args...)
+}
+
+func Errorf(format string, args ...interface{}) {
+	Dash.Errorf(format, args...)
+	logger.LogrusLogger.Errorf(format, args...)
+}
+
+func Warnf(format string, args ...interface{}) {
+	Dash.Warnf(format, args...)
+	logger.LogrusLogger.Warningf(format, args...)
+}
+
+func Infof(format string, args ...interface{}) {
+	logger.LogrusLogger.Infof(format, args...)
+}
+
+func InfoD(format string, args ...interface{}) {
+	Dash.Infof(format, args...)
+	logger.LogrusLogger.Infof(format, args...)
+}
+
+func Debugf(format string, args ...interface{}) {
+	logger.LogrusLogger.Debugf(format, args...)
+}
+
+func Error(args ...interface{}) {
+	Dash.Error(fmt.Sprint(args...))
+	logger.LogrusLogger.Error(args...)
+}
+
+func Warn(args ...interface{}) {
+	Dash.Warn(fmt.Sprint(args...))
+	logger.LogrusLogger.Warn(args...)
+}
+
+func Info(args ...interface{}) {
+	logger.LogrusLogger.Info(args...)
+}
+
+func Debug(args ...interface{}) {
+	logger.LogrusLogger.Debug(args...)
 }

@@ -2,11 +2,11 @@ package jirautils
 
 import (
 	"bytes"
+	logInstance "github.com/portworx/torpedo/log"
 	"net/http"
 	"time"
 
 	jira "github.com/andygrunwald/go-jira"
-	logInstance "github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"github.com/trivago/tgo/tcontainer"
 )
