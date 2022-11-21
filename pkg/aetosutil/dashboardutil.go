@@ -167,6 +167,13 @@ func (d *Dashboard) TestSetEnd() {
 		if d.TestSetID == 0 {
 			return
 		}
+		if len(testCasesStack) > 0 {
+			for _, v := range testCasesStack {
+				d.testcaseID = v
+				d.TestCaseEnd()
+			}
+			testCasesStack = nil
+		}
 
 		updateTestSetURL := fmt.Sprintf("%s/testset/%d/end", DashBoardBaseURL, d.TestSetID)
 		resp, respStatusCode, err := rest.PUT(updateTestSetURL, nil, nil, nil)
@@ -176,15 +183,7 @@ func (d *Dashboard) TestSetEnd() {
 		} else if respStatusCode != http.StatusOK {
 			logrus.Errorf("Failed to end TestSet, Resp : %s", string(resp))
 		}
-
-		if len(testCasesStack) > 0 {
-			for _, v := range testCasesStack {
-				d.testcaseID = v
-				d.TestCaseEnd()
-			}
-			testCasesStack = nil
-
-		}
+		logrus.Infof("Dashboard URL : %s", fmt.Sprintf("http://aetos.pwx.purestorage.com/resultSet/testSetID/%d", d.TestSetID))
 	}
 }
 
@@ -376,7 +375,6 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 	} else {
 		res.ResultType = "error"
 		res.ResultStatus = false
-		logrus.Infof("DEBUGGING ERROR STRING: %s", reflect.TypeOf(actual).String())
 		if actual != nil && reflect.TypeOf(actual).String() == "*errors.errorString" {
 			d.Errorf(fmt.Sprintf("%v", actual))
 			logrus.Errorf(fmt.Sprintf("%v", actual))
