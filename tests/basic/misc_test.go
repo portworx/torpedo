@@ -38,9 +38,9 @@ var _ = Describe("{SetupTeardown}", func() {
 		dash.Warnf("This is Warning")
 		dash.Errorf("This is Errorf")
 		dash.Error("This is Error")
-		dash.VerifySafely(true, true, "This is VerifySafely pass")
-		dash.VerifyFatal(true, true, "This is VerifyFatal pass")
-		dash.VerifySafely(true, false, "This is VerifySafely fail")
+		dash.VerifySafely(fmt.Errorf("THIS IS AN ERROR"), true, "This is VerifySafely pass")
+		dash.VerifyFatal(fmt.Errorf("THIS IS AN ERROR"), fmt.Errorf("THIS IS AN ERROR"), "This is VerifyFatal pass")
+		dash.VerifySafely(fmt.Errorf("THIS IS AN ERROR"), fmt.Errorf("THIS IS AN ERROR"), "This is VerifySafely fail")
 		dash.Fatal("Raising ERROR, everything should stop here")
 		ValidateApplications(contexts)
 
