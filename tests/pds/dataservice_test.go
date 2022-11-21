@@ -22,7 +22,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 	It("delete pds pods and validate if its coming back online and dataserices are not affected", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				dash.Infof("Deploying DataService %v ", ds.Name)
+				log.InfoD("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
@@ -62,7 +62,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 				Step("Validate Storage Configurations", func() {
 					logrus.Infof("data service deployed %v ", ds.Name)
-					dash.Infof("Validating DataService %v ", ds.Name)
+					log.InfoD("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					Expect(err).NotTo(HaveOccurred())
 					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
@@ -95,15 +95,15 @@ var _ = Describe("{DeletePDSPods}", func() {
 				}
 
 				Step("delete pods from pds-system namespace")
-				dash.Info("Deleting PDS System Pods")
+				log.InfoD("Deleting PDS System Pods")
 				err = pdslib.DeleteDeploymentPods(podList)
 				Expect(err).NotTo(HaveOccurred())
 
 				Step("Validate Deployments after pods are up", func() {
-					dash.Info("Validate Deployments after pds pods are up")
+					log.InfoD("Validate Deployments after pds pods are up")
 					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
 					Expect(err).NotTo(HaveOccurred())
-					dash.Info("Deployments pods are up and healthy")
+					log.InfoD("Deployments pods are up and healthy")
 				})
 			}
 		})
@@ -124,7 +124,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				if ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper {
 					continue
 				}
-				dash.Infof("Deploying DataService %v ", ds.Name)
+				log.InfoD("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
@@ -164,7 +164,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 				Step("Validate Storage Configurations", func() {
 					logrus.Infof("data service deployed %v ", ds.Name)
-					dash.Infof("Validating DataService %v ", ds.Name)
+					log.InfoD("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					Expect(err).NotTo(HaveOccurred())
 					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
@@ -188,7 +188,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				})
 
 				Step("Running Workloads before scaling up of dataservices ", func() {
-					dash.Infof("Running Workloads on DataService %v ", ds.Name)
+					log.InfoD("Running Workloads on DataService %v ", ds.Name)
 					if ds.Name == postgresql {
 						deploymentName := "pgload"
 						logrus.Infof("Running Workloads on DataService %v ", ds.Name)
@@ -223,7 +223,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					logrus.Infof("Scaling up DataService %v ", ds.Name)
-					dash.Infof("Scaling up DataService %v ", ds.Name)
+					log.InfoD("Scaling up DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -251,7 +251,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					}
 				})
 				Step("Delete Deployments", func() {
-					dash.Infof("Deleting DataService %v ", ds.Name)
+					log.InfoD("Deleting DataService %v ", ds.Name)
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					Expect(err).NotTo(HaveOccurred())
 					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
@@ -259,7 +259,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				})
 
 				Step("Delete the worload generating deployments", func() {
-					dash.Infof("Deleting Workload Generating pods %v ", dep.Name)
+					log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
 					if ds.Name == "Cassandra" || ds.Name == "PostgreSQL" {
 						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
 					} else {
@@ -282,7 +282,7 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 
 	It("runs the dataservice version upgrade test", func() {
 		for _, ds := range params.DataServiceToTest {
-			dash.Infof("Running UpgradeDataServiceVersion test for DataService %v ", ds.Name)
+			log.InfoD("Running UpgradeDataServiceVersion test for DataService %v ", ds.Name)
 			UpgradeDataService(ds.Name, ds.OldVersion, ds.OldImage, ds.Version, ds.Image, int32(ds.Replicas))
 		}
 	})
@@ -298,7 +298,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 
 	It("runs the dataservice build image upgrade test", func() {
 		for _, ds := range params.DataServiceToTest {
-			dash.Infof("Running UpgradeDataServiceImage test for DataService %v ", ds.Name)
+			log.InfoD("Running UpgradeDataServiceImage test for DataService %v ", ds.Name)
 			UpgradeDataService(ds.Name, ds.Version, ds.OldImage, ds.Version, ds.Image, int32(ds.Replicas))
 		}
 	})
@@ -317,7 +317,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 		logrus.Info("Create dataservices without backup.")
 		Step("Deploy, Validate and Delete Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				dash.Infof("Deploying DataService %v ", ds.Name)
+				log.InfoD("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
@@ -357,7 +357,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 				Step("Validate Storage Configurations", func() {
 					logrus.Infof("data service deployed %v ", ds.Name)
-					dash.Infof("Validating DataService %v ", ds.Name)
+					log.InfoD("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					Expect(err).NotTo(HaveOccurred())
 					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
@@ -381,7 +381,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				})
 
 				Step("Delete Deployments", func() {
-					dash.Infof("Deleting DataService %v ", ds.Name)
+					log.InfoD("Deleting DataService %v ", ds.Name)
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					Expect(err).NotTo(HaveOccurred())
 					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
@@ -422,7 +422,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	It("Deploy All SupportedDataServices", func() {
 		Step("Deploy All Supported Data Services", func() {
 			replicas = 3
-			dash.Info("Deploying All Supported DataService")
+			log.InfoD("Deploying All Supported DataService")
 			deployments, _, _, err := pdslib.DeployAllDataServices(supportedDataServicesNameIDMap, projectID,
 				deploymentTargetID,
 				dnsZone,
@@ -489,7 +489,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
 		logrus.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-		dash.Infof("Deploying DataService %v ", dataservice)
+		log.InfoD("Deploying DataService %v ", dataservice)
 		deployment, _, dataServiceVersionBuildMap, err := pdslib.DeployDataServices(dataservice, projectID,
 			deploymentTargetID,
 			dnsZone,
@@ -509,7 +509,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		defer func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
-				dash.Infof("Deleting DataService %v ", dataservice)
+				log.InfoD("Deleting DataService %v ", dataservice)
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
@@ -631,7 +631,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 			nname := "namespace-" + strconv.Itoa(i)
 			ns, err := pdslib.CreateK8sPDSNamespace(nname)
 			logrus.Infof("Created namespace: %v", nname)
-			dash.Infof("Created namespace: %v", nname)
+			log.InfoD("Created namespace: %v", nname)
 			Expect(err).NotTo(HaveOccurred())
 			namespaces = append(namespaces, ns)
 		}
@@ -639,21 +639,21 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 		defer func() {
 			for _, namespace := range namespaces {
 				logrus.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
-				dash.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
+				log.InfoD("Cleanup: Deleting created namespace %v", namespace.Name)
 				err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		}()
 
 		logrus.Info("Waiting for created namespaces to be available in PDS")
-		dash.Info("Waiting for created namespaces to be available in PDS")
+		log.InfoD("Waiting for created namespaces to be available in PDS")
 		time.Sleep(10 * time.Second)
 
 		Step("Deploy All Supported Data Services", func() {
 			var cleanupall []string
 			for _, namespace := range namespaces {
 				logrus.Infof("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
-				dash.Infof("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
+				log.InfoD("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
 				newNamespaceID, err := pdslib.GetnameSpaceID(namespace.Name, deploymentTargetID)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newNamespaceID).NotTo(BeEmpty())
@@ -663,7 +663,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 			}
 
 			logrus.Infof("List of created deployments: %v ", cleanupall)
-			dash.Infof("List of created deployments: %v ", cleanupall)
+			log.InfoD("List of created deployments: %v ", cleanupall)
 			Step("Delete created deployments", func() {
 				for _, dep := range cleanupall {
 					_, err := pdslib.DeleteDeployment(dep)
@@ -690,14 +690,14 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 		_, err := pdslib.CreateK8sPDSNamespace(nname)
 		Expect(err).NotTo(HaveOccurred())
 		logrus.Infof("Created namespace: %v", nname)
-		dash.Infof("Created namespace: %v", nname)
+		log.InfoD("Created namespace: %v", nname)
 
 		logrus.Info("Waiting for created namespaces to be available in PDS")
-		dash.Info("Waiting for created namespaces to be available in PDS")
+		log.InfoD("Waiting for created namespaces to be available in PDS")
 		time.Sleep(10 * time.Second)
 
 		logrus.Info("Create dataservices")
-		dash.Info("Create dataservices")
+		log.InfoD("Create dataservices")
 
 		Step("Deploy All Supported Data Services in the namespace", func() {
 
@@ -713,14 +713,14 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				logrus.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
-				dash.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
 				logrus.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-				dash.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
@@ -750,7 +750,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 				Step("Validate Storage Configurations", func() {
 
 					logrus.Infof("data service deployed %v ", ds)
-					dash.Infof("data service deployed %v ", ds)
+					log.InfoD("data service deployed %v ", ds)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, nname)
 					Expect(err).NotTo(HaveOccurred())
 					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
@@ -778,11 +778,11 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			}
 
 			logrus.Infof("List of created deployments: %v ", cleanup)
-			dash.Infof("List of created deployments: %v ", cleanup)
+			log.InfoD("List of created deployments: %v ", cleanup)
 
 			Step("Delete created namespace", func() {
 				logrus.Infof("Cleanup: Deleting created namespace %v", nname)
-				dash.Infof("Cleanup: Deleting created namespace %v", nname)
+				log.InfoD("Cleanup: Deleting created namespace %v", nname)
 				err := pdslib.DeleteK8sPDSNamespace(nname)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -924,7 +924,7 @@ var _ = Describe("{RestartPXPods}", func() {
 				Step("Get the node that the PV of the pod resides on", func() {
 					for _, pod := range deploymentPods {
 						logrus.Infof("The pod spec node name: %v", pod.Spec.NodeName)
-						dash.Infof("The pod spec node name: %v", pod.Spec.NodeName)
+						log.InfoD("The pod spec node name: %v", pod.Spec.NodeName)
 						nodeObject, err := pdslib.GetK8sNodeObjectUsingPodName(pod.Spec.NodeName)
 						Expect(err).NotTo(HaveOccurred())
 						nodeList = append(nodeList, nodeObject)
@@ -939,7 +939,7 @@ var _ = Describe("{RestartPXPods}", func() {
 					}
 
 					logrus.Info("Finished labeling the nodes...")
-					dash.Info("Finished labeling the nodes...")
+					log.InfoD("Finished labeling the nodes...")
 					time.Sleep(30 * time.Second)
 
 				})
@@ -956,7 +956,7 @@ var _ = Describe("{RestartPXPods}", func() {
 					}
 
 					logrus.Info("Finished removing labels from the nodes...")
-					dash.Info("Finished removing labels from the nodes...")
+					log.InfoD("Finished removing labels from the nodes...")
 
 					for _, node := range nodeList {
 						err := pdslib.DrainPxPodOnK8sNode(node, pxnamespace)
@@ -964,7 +964,7 @@ var _ = Describe("{RestartPXPods}", func() {
 					}
 
 					logrus.Info("Finished draining px pods from the nodes...")
-					dash.Info("Finished draining px pods from the nodes...")
+					log.InfoD("Finished draining px pods from the nodes...")
 
 					for _, node := range nodeList {
 						err := pdslib.UnCordonK8sNode(node)
@@ -972,10 +972,10 @@ var _ = Describe("{RestartPXPods}", func() {
 					}
 
 					logrus.Infof("Finished uncordoning the node...")
-					dash.Infof("Finished uncordoning the node...")
+					log.InfoD("Finished uncordoning the node...")
 
 					logrus.Info("Verify that the px pod has started on node...")
-					dash.Info("Verify that the px pod has started on node...")
+					log.InfoD("Verify that the px pod has started on node...")
 					// Read log lines of the px pod on the node to see if the service is running
 					for _, node := range nodeList {
 						rc, err := pdslib.VerifyPxPodOnNode(node.Name, pxnamespace)
@@ -1009,14 +1009,14 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 		Expect(err).NotTo(HaveOccurred())
 
 		logrus.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
-		dash.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
 		logrus.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-		dash.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 		deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 			deploymentTargetID,
@@ -1037,7 +1037,7 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 		Step("Validate Storage Configurations", func() {
 
 			logrus.Infof("data service deployed %v ", ds)
-			dash.Infof("data service deployed %v ", ds)
+			log.InfoD("data service deployed %v ", ds)
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, nname)
 			Expect(err).NotTo(HaveOccurred())
 			logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)

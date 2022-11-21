@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"io"
 	"math"
 	"net"
@@ -3302,7 +3303,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 		hostname = n.Name
 		status = api.Status_STATUS_OFFLINE
 	}
-
+	log.InfoD("Collecting diags on node: %v", hostname)
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -3311,7 +3312,7 @@ func collectDiags(n node.Node, config *torpedovolume.DiagRequestConfig, diagOps 
 	}
 
 	if !diagOps.Validate {
-		d.log.Infof("Collecting diags on node %v. Will skip validation", hostname)
+		d.log.Infof("Skip validate on %v during diags collection", hostname)
 	}
 
 	if status == api.Status_STATUS_OFFLINE {
