@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -123,49 +122,7 @@ func (awsObj *awsStorageClient) deleteBucket(bucketName string) error {
 	return nil
 }
 
-// createBucket creates azure storage.
-func (azObj *azureStorageClient) createBucket(containerName string) error {
-	cred, err := azblob.NewSharedKeyCredential(azObj.accountName, azObj.accountKey)
-	if err != nil {
-		logrus.Error(err.Error())
-		return err
-	}
-	client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("https://%s.blob.core.windows.net/", azObj.accountName), cred, nil)
-	if err != nil {
-		logrus.Error(err.Error())
-		return err
-	}
-
-	_, err = client.CreateContainer(context.TODO(), containerName, nil)
-	if err != nil {
-		logrus.Infof("Container: %s, already exists.", containerName)
-	} else {
-		logrus.Infof("[Azure]Successfully created the container: %s", containerName)
-	}
-	return nil
-}
-
-// deleteBucket deletes azure storage.
-func (azObj *azureStorageClient) deleteBucket(containerName string) error {
-	cred, err := azblob.NewSharedKeyCredential(azObj.accountName, azObj.accountKey)
-	if err != nil {
-		logrus.Error(err.Error())
-		return err
-	}
-	client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("https://%s.blob.core.windows.net/", azObj.accountName), cred, nil)
-	if err != nil {
-		logrus.Error(err.Error())
-		return err
-	}
-
-	_, err = client.DeleteContainer(context.TODO(), containerName, nil)
-	if err != nil {
-		logrus.Infof("[Azure]Container: %s not found!!", containerName)
-	} else {
-		logrus.Infof("[Azure]Container: %s deleted successfully!!", containerName)
-	}
-	return nil
-}
+// Implement Azure storage creation/ delete with sdk having go support < 1.16
 
 // createBucket creates google storage.
 func (gcpObj *gcpStorageClient) createBucket(bucketName string) error {

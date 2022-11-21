@@ -99,6 +99,7 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 
 // CreateAzureBackupCredsAndTarget create backup creds,bucket and target.
 func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name string) (*pds.ModelsBackupTarget, error) {
+	// Pre-req: Azure bucket should be created by name pds-automation-1
 	log.Info("Add Azure backup creadentials")
 	accountKey := backupClient.azureStorageClient.accountKey
 	accountName := backupClient.azureStorageClient.accountName
@@ -109,12 +110,7 @@ func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name
 		log.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 		return nil, err
 	}
-	log.Info("Create azure storage.")
-	err = backupClient.azureStorageClient.createBucket(bucketName)
-	if err != nil {
-		log.Errorf("Failed while creating azure container, Err: %v ", err)
-		return nil, err
-	}
+
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, "", "azure")
 	if err != nil {
@@ -228,12 +224,6 @@ func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
 		log.Errorf("Failed to delete Azure backup credentials, Err: %v ", err)
-		return err
-	}
-	log.Info("Deleting container from Azure.")
-	err = backupClient.azureStorageClient.deleteBucket(bucketName)
-	if err != nil {
-		log.Errorf("Failed to delete Azure comtainer %s, Err: %v ", bucketName, err)
 		return err
 	}
 
