@@ -385,7 +385,7 @@ func (d *Dashboard) Fatal(description string, args ...interface{}) {
 	res := result{}
 	res.Actual = "false"
 	res.Expected = "true"
-	res.Description = fmt.Sprintf(description, args)
+	res.Description = fmt.Sprintf(description, args...)
 	res.TestCaseID = d.testcaseID
 	res.ResultStatus = false
 	res.ResultType = "error"
