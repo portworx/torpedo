@@ -38,8 +38,7 @@ var _ = Describe("{SetupTeardown}", func() {
 		log.Warnf("This is Warning")
 		log.Errorf("This is Errorf")
 		log.Error("This is Error")
-		dash.VerifySafely(fmt.Errorf("VerifySafely THIS IS AN ERROR"), true, "This is VerifySafely fail")
-		log.Fatalf("Raising ERROR, everything should stop here")
+		dash.VerifyFatal(fmt.Errorf("VerifyFatal THIS IS AN ERROR"), true, "This is VerifyFatal fail")
 		ValidateApplications(contexts)
 
 		opts := make(map[string]bool)
