@@ -31,7 +31,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 
 	stepLog := "has to create multiple sharedv4 volumes and mount to single pod"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		// set frequency mins depending on the chaos level
 		var frequency int
 		var timeout time.Duration
@@ -44,7 +44,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 			frequency = 10
 			timeout = 1 * time.Minute
 		}
-		dash.Infof("setting number of volumes=%v and app readiness timeout=%v for chaos level %v",
+		log.InfoD("setting number of volumes=%v and app readiness timeout=%v for chaos level %v",
 			frequency, timeout, chaosLevel)
 
 		customAppConfig := scheduler.AppConfig{
@@ -64,8 +64,8 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 		stepLog = "schedule application with multiple sharedv4 volumes attached"
 
 		Step(stepLog, func() {
-			dash.Info(stepLog)
-			dash.Infof("Number of Volumes to be mounted: %v", frequency)
+			log.InfoD(stepLog)
+			log.InfoD("Number of Volumes to be mounted: %v", frequency)
 
 			taskName := "sharedv4-multivol"
 
@@ -84,7 +84,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 		})
 		stepLog = "get nodes where volume is attached and restart volume driver"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				appVolumes, err := Inst().S.GetVolumes(ctx)
 				Expect(err).NotTo(HaveOccurred())
@@ -95,19 +95,19 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 						Inst().V.String(), ctx.App.Key, attachedNode.Name)
 					Step(stepLog,
 						func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							StopVolDriverAndWait([]node.Node{*attachedNode})
 						})
 					stepLog = fmt.Sprintf("starting volume %s driver on app %s's node %s",
 						Inst().V.String(), ctx.App.Key, attachedNode.Name)
 					Step(stepLog,
 						func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							StartVolDriverAndWait([]node.Node{*attachedNode})
 						})
 					stepLog = "Giving few seconds for volume driver to stabilize"
 					Step(stepLog, func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						time.Sleep(20 * time.Second)
 					})
 					stepLog = fmt.Sprintf("validate app %s", attachedNode.Name)
@@ -135,7 +135,7 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 	var contexts []*scheduler.Context
 	stepLog := "has to validate that the new pods started successfully after nfs server node is terminated"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		var err error
 
@@ -148,7 +148,7 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 			var appVolumes []*volume.Volume
 			stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
 			Step(stepLog, func() {
-				dash.Info(stepLog)
+				log.InfoD(stepLog)
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				log.FailOnError(err, "Failed to get volumes")
 				dash.VerifyFatal(len(appVolumes) > 0, 0, " App volumes are empty?")
@@ -156,7 +156,7 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 			for _, v := range appVolumes {
 				stepLog = "get attached node and stop the instance"
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					currNodes := node.GetStorageDriverNodes()
 					countOfCurrNodes := len(currNodes)
 
@@ -165,11 +165,11 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 					stepLog = fmt.Sprintf("delete node : %v having volume: %v attached", attachedNode.Name, v.Name)
 					// Delete node and check Apps status
 					Step(stepLog, func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						sv4KillANodeAndValidate(*attachedNode)
 						stepLog = fmt.Sprintf("validate node: %v is deleted", attachedNode.Name)
 						Step(stepLog, func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							currNodes = node.GetStorageDriverNodes()
 							for _, currNode := range currNodes {
 								if currNode.Name == attachedNode.Name {
@@ -182,7 +182,7 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 
 						stepLog = fmt.Sprintf("validate applications after node [%v] deletion", attachedNode.Name)
 						Step(stepLog, func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							for _, ctx := range contexts {
 								ValidateContext(ctx)
 							}
@@ -190,12 +190,12 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 						stepLog = fmt.Sprintf("wait to new instance to start scheduler: %s and volume driver: %s",
 							Inst().S.String(), Inst().V.String())
 						Step(stepLog, func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							time.Sleep(2 * time.Minute)
 							currNodes = node.GetStorageDriverNodes()
 							dash.VerifyFatal(countOfCurrNodes, len(currNodes), "Create new instance successful?")
 							Expect(countOfCurrNodes).To(Equal(len(currNodes)))
-							dash.Info("Validating Node and Volume driver for all nodes")
+							log.InfoD("Validating Node and Volume driver for all nodes")
 							for _, n := range currNodes {
 
 								err = Inst().S.IsNodeReady(n)
@@ -228,14 +228,14 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 func sv4KillANodeAndValidate(nodeToKill node.Node) {
 	steplog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
 	Step(steplog, func() {
-		dash.Info(steplog)
+		log.InfoD(steplog)
 		log.Infof("Instance is of %v ", Inst().N.String())
 		err := Inst().N.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
 		dash.VerifyFatal(err, nil, "Validate node delete init")
 	})
 	steplog = fmt.Sprintf("Wait for node: %v to be deleted", nodeToKill.Name)
 	Step(steplog, func() {
-		dash.Info(steplog)
+		log.InfoD(steplog)
 		maxWait := 10
 	OUTER:
 		for maxWait > 0 {

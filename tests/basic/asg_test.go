@@ -48,7 +48,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		stepLog := fmt.Sprintf("scale up cluster from %d to %d nodes and validate",
 			intitialNodeCount, (scaleupCount/3)*3)
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			// After scale up, get fresh list of nodes
 			// by re-initializing scheduler and volume driver
 			err = Inst().S.RefreshNodeRegistry()

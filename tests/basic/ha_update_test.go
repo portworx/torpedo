@@ -69,7 +69,7 @@ func performHaIncreaseRebootTest(testName string) {
 				var err error
 				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					appVolumes, err = Inst().S.GetVolumes(ctx)
 					log.FailOnError(err, "Failed to get volumes")
 					dash.VerifyFatal(len(appVolumes) > 0, true, fmt.Sprintf("Found %d app volmues", len(appVolumes)))
@@ -80,7 +80,7 @@ func performHaIncreaseRebootTest(testName string) {
 					isPureVol, err := Inst().V.IsPureVolume(v)
 					log.FailOnError(err, "Failed to check is PURE volume")
 					if isPureVol {
-						dash.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+						log.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
 						continue
 					}
 

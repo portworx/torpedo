@@ -108,7 +108,7 @@ var _ = Describe("{MigrateDeployment}", func() {
 					mig.Name, mig.Namespace, err))
 		}
 
-		dash.Info("Start volume only migration")
+		log.InfoD("Start volume only migration")
 		includeResourcesFlag = false
 		for i, currMigNamespace := range migrationNamespaces {
 			migrationName := migrationKey + "volumeonly-" + fmt.Sprintf("%d", i)

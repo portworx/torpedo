@@ -24,7 +24,7 @@ var _ = Describe("{StopScheduler}", func() {
 	testName := "stopscheduler"
 	stepLog := "has to stop scheduler service and check if applications are fine"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -34,18 +34,18 @@ var _ = Describe("{StopScheduler}", func() {
 		ValidateApplications(contexts)
 		stepLog = "get nodes and induce scheduler service to stop on the node"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, storageNode := range node.GetStorageDriverNodes() {
 				stepLog = fmt.Sprintf("stop scheduler service on node %s", storageNode.Name)
 				Step(stepLog, func() {
-					dash.Infof(stepLog)
+					log.InfoD(stepLog)
 					err := Inst().S.StopSchedOnNode(storageNode)
 					dash.VerifyFatal(err == nil, true, "Is scheduler stopped ?")
 				})
 
 				stepLog = "wait for the service to stop and reschedule apps"
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					time.Sleep(6 * time.Minute)
 				})
 
@@ -57,7 +57,7 @@ var _ = Describe("{StopScheduler}", func() {
 
 				stepLog = fmt.Sprintf("start scheduler service on node %s", storageNode.Name)
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					err := Inst().S.StartSchedOnNode(storageNode)
 					dash.VerifyFatal(err == nil, true, "Scheduler started on Node ?")
 				})

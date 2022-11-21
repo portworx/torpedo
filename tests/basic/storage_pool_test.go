@@ -30,7 +30,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	var contexts []*scheduler.Context
 	stepLog := "has to schedule apps, and expand it by resizing a disk"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -57,7 +57,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		time.Sleep(time.Second * 60)
 		stepLog = "Verify that pool resize is non in progress"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
@@ -89,7 +89,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 
 		stepLog = "Ensure that new pool has been expanded to the expected size"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
@@ -117,7 +117,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 
 	stepLog := "should get the existing pool and expand it by adding a disk"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -143,7 +143,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		// so need to wain until the ongoing operation is completed
 		stepLog = "Verify that pool resize is none in progress"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
@@ -156,7 +156,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 
 		stepLog = "Calculate expected pool size and trigger pool resize"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
 			expectedSize = roundUpValue(expectedSize)
 			isjournal, err := isJournalEnabled()
@@ -231,7 +231,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 		time.Sleep(time.Second * 60)
 		stepLog = "Verify that pool resize is none in progress"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
@@ -244,7 +244,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 
 		stepLog = "Calculate expected pool size and trigger pool resize"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
@@ -272,7 +272,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 
 		stepLog = "Ensure that new pool has been expanded to the expected size"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
@@ -301,7 +301,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 	stepLog := "should get the existing pool and expand it by adding a disk"
 
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -327,7 +327,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 		// so need to wain until the ongoing operation is completed
 		stepLog = "Verify that pool resize is non in progress"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
@@ -417,7 +417,7 @@ func nodePoolsExpansion(testName string) {
 	var contexts []*scheduler.Context
 	stepLog := fmt.Sprintf("has to schedule apps, and expand it by %s", option)
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -452,7 +452,7 @@ func nodePoolsExpansion(testName string) {
 		// so need to wait until the ongoing operation is completed
 		stepLog = "Verify that pool resize is none in progress"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, poolToBeResized := range poolsToBeResized {
 				poolIDToResize := poolToBeResized.Uuid
 				if poolResizeIsInProgress(poolToBeResized) {
@@ -498,7 +498,7 @@ func nodePoolsExpansion(testName string) {
 
 		stepLog = "Ensure that pools have been expanded to the expected size"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			ValidateApplications(contexts)
 			for poolUUID, expectedSize := range poolsExpectedSizeMap {
 				resizedPool, err := GetStoragePoolByUUID(poolUUID)
@@ -643,7 +643,7 @@ var _ = Describe("{PoolAddDrive}", func() {
 	stepLog := "should get the existing storage node and expand the pool by adding a drive"
 
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddrive-%d", i))...)
@@ -658,7 +658,7 @@ var _ = Describe("{PoolAddDrive}", func() {
 		driveSpecs, err := GetCloudDriveDeviceSpecs()
 
 		if err != nil {
-			dash.Fatal("Error getting cloud drive specs, ERR: %v", err)
+			log.Fatalf("Error getting cloud drive specs, ERR: %v", err)
 		}
 		stNode := stNodes[0]
 		nodePools := stNode.Pools
@@ -674,7 +674,7 @@ var _ = Describe("{PoolAddDrive}", func() {
 				val := strings.Split(param, "=")[1]
 				specSize, err = strconv.ParseUint(val, 10, 64)
 				if err != nil {
-					dash.Fatal("Error converting size to uint64, ERR: %v", err)
+					log.Fatalf("Error converting size to uint64, ERR: %v", err)
 				}
 			}
 		}
@@ -683,9 +683,9 @@ var _ = Describe("{PoolAddDrive}", func() {
 		Step(stepLog, func() {
 			err = Inst().V.AddCloudDrive(&stNode, deviceSpec)
 			if err != nil {
-				dash.Fatal("Add cloud drive failed on node %s. ERR: %v", stNode.Name, err)
+				log.Fatalf("Add cloud drive failed on node %s. ERR: %v", stNode.Name, err)
 			} else {
-				dash.Info("Validate pool rebalance after drive add")
+				log.InfoD("Validate pool rebalance after drive add")
 				err = ValidatePoolRebalance()
 				if err != nil {
 					dash.VerifySafely(err, nil, "Pool re-balance successful?")
@@ -696,7 +696,7 @@ var _ = Describe("{PoolAddDrive}", func() {
 			for _, nodePool := range nodePools {
 				pool, err := GetStoragePoolByUUID(nodePool.GetUuid())
 				if err != nil {
-					dash.Fatal("Error getting pool details of %s. ERR: %v", nodePool.GetUuid(), err)
+					log.Fatalf("Error getting pool details of %s. ERR: %v", nodePool.GetUuid(), err)
 				}
 				newTotalPoolSize += pool.GetTotalSize() / units.GiB
 			}

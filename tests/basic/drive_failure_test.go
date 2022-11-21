@@ -33,7 +33,7 @@ var _ = Describe("{DriveFailure}", func() {
 	testName := "drivefailure"
 	stepLog := "has to schedule apps and induce a drive failure on one of the nodes"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		var err error
 		contexts = make([]*scheduler.Context, 0)
 
@@ -46,7 +46,7 @@ var _ = Describe("{DriveFailure}", func() {
 		stepLog = "get nodes for all apps in test and induce drive failure on one of the nodes"
 
 		Step(stepLog, func() {
-			dash.Infof(stepLog)
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				var (
 					drives        []string
@@ -56,7 +56,7 @@ var _ = Describe("{DriveFailure}", func() {
 
 				stepLog = fmt.Sprintf("get nodes where %s app is running", ctx.App.Key)
 				Step(stepLog, func() {
-					dash.Infof(stepLog)
+					log.InfoD(stepLog)
 					appNodes, err = Inst().S.GetNodesForApp(ctx)
 					log.FailOnError(err, "Failed to get nodes for app %s", ctx.App.Key)
 					dash.VerifyFatal(len(appNodes) > 0, true, fmt.Sprintf("Found %d apps", len(appNodes)))
@@ -66,7 +66,7 @@ var _ = Describe("{DriveFailure}", func() {
 
 				stepLog = fmt.Sprintf("get drive from node %v", nodeWithDrive)
 				Step(stepLog, func() {
-					dash.Infof(stepLog)
+					log.InfoD(stepLog)
 					drives, err = Inst().V.GetStorageDevices(nodeWithDrive)
 					log.FailOnError(err, fmt.Sprintf("Failed to get storage devices for the node %s", nodeWithDrive.Name))
 					dash.VerifyFatal(len(drives) > 0, true, fmt.Sprintf("Found drives length %d", len(appNodes)))
@@ -75,7 +75,7 @@ var _ = Describe("{DriveFailure}", func() {
 				busInfoMap := make(map[string]string)
 				stepLog := fmt.Sprintf("induce a failure on all drives on the node %v", nodeWithDrive)
 				Step(stepLog, func() {
-					dash.Infof(stepLog)
+					log.InfoD(stepLog)
 					for _, driveToFail := range drives {
 						busID, err := Inst().N.YankDrive(nodeWithDrive, driveToFail, node.ConnectionOpts{
 							Timeout:         dfDefaultTimeout,
@@ -87,7 +87,7 @@ var _ = Describe("{DriveFailure}", func() {
 					}
 					stepLog = "wait for the drives to fail"
 					Step(stepLog, func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						time.Sleep(30 * time.Second)
 					})
 
@@ -99,7 +99,7 @@ var _ = Describe("{DriveFailure}", func() {
 
 				stepLog = "recover all drives and the storage driver"
 				Step(stepLog, func() {
-					dash.Infof(stepLog)
+					log.InfoD(stepLog)
 					for _, driveToFail := range drives {
 						err = Inst().N.RecoverDrive(nodeWithDrive, driveToFail, busInfoMap[driveToFail], node.ConnectionOpts{
 							Timeout:         driveFailTimeout,
@@ -110,7 +110,7 @@ var _ = Describe("{DriveFailure}", func() {
 					}
 					stepLog = "wait for the drives to recover"
 					Step(stepLog, func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						time.Sleep(30 * time.Second)
 					})
 

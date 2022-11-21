@@ -454,7 +454,7 @@ func InitInstance() {
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
 	Step("validate cleanup of resources used by the test suite", func() {
-		dash.Info("validate cleanup of resources used by the test suite")
+		log.InfoD("validate cleanup of resources used by the test suite")
 		t := func() (interface{}, bool, error) {
 			if err := Inst().V.ValidateVolumeCleanup(); err != nil {
 				return "", true, err
@@ -517,7 +517,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 		stepLog := fmt.Sprintf("wait for %s app to start running", ctx.App.Key)
 
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 			if err != nil {
 				processError(err, errChan...)
@@ -529,7 +529,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 		if len(Inst().TopologyLabels) > 0 {
 			stepLog = fmt.Sprintf("validate topology labels for %s app", ctx.App.Key)
 			Step(stepLog, func() {
-				dash.Info(stepLog)
+				log.InfoD(stepLog)
 				err := Inst().S.ValidateTopologyLabel(ctx)
 				if err != nil {
 					processError(err, errChan...)
@@ -543,7 +543,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			if ctx.SkipVolumeValidation {
 				return
 			}
-			dash.Info(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
+			log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
 
 			vols, err := Inst().S.GetVolumes(ctx)
 			// Fixing issue where it is priniting nil
@@ -1297,7 +1297,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		// Tear down application
 		stepLog := fmt.Sprintf("start destroying %s app", ctx.App.Key)
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			err = Inst().S.Destroy(ctx, opts)
 			log.FailOnError(err, "Failed to destroy app %s", ctx.App.Key)
 		})
@@ -1333,7 +1333,7 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 	for _, vol := range vols {
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
-			dash.Infof("validate %s app's volume %s has been deleted in the volume driver",
+			log.InfoD("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
 			err := Inst().V.ValidateDeleteVolume(vol)
 			log.FailOnError(err, fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
@@ -1475,7 +1475,7 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	context(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("start volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.StartDriver(n)
 				processError(err, errChan...)
@@ -1484,7 +1484,7 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -1505,14 +1505,14 @@ func StopVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("stop volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			err := Inst().V.StopDriver(appNodes, false, nil)
 			processError(err, errChan...)
 		})
 
 		stepLog = fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverDownOnNode(n)
 				processError(err, errChan...)
@@ -1532,14 +1532,14 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	context(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("crash volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			err := Inst().V.StopDriver(appNodes, true, nil)
 			processError(err, errChan...)
 		})
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -1552,14 +1552,14 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 // ValidateAndDestroy validates application and then destroys them
 func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	Step("validate apps", func() {
-		dash.Info("Validating apps")
+		log.InfoD("Validating apps")
 		for _, ctx := range contexts {
 			ValidateContext(ctx)
 		}
 	})
 
 	Step("destroy apps", func() {
-		dash.Info("Destroying apps")
+		log.InfoD("Destroying apps")
 		for _, ctx := range contexts {
 			TearDownContext(ctx, opts)
 		}
@@ -1735,7 +1735,7 @@ func GetStorageNodes() ([]node.Node, error) {
 // CollectSupport creates a support bundle
 func CollectSupport() {
 	context("generating support bundle...", func() {
-		dash.Info("generating support bundle...")
+		log.InfoD("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
@@ -1823,14 +1823,14 @@ func PerformSystemCheck() {
 	context("checking for core files...", func() {
 		log.Info("checking for core files...")
 		Step("verifying if core files are present on each node", func() {
-			dash.Info("verifying if core files are present on each node")
+			log.InfoD("verifying if core files are present on each node")
 			nodes := node.GetNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
 					continue
 				}
-				dash.Infof("looking for core files on node %s", n.Name)
+				log.InfoD("looking for core files on node %s", n.Name)
 				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
 					TimeBeforeRetry: 10 * time.Second,
@@ -2292,14 +2292,14 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 
 // UpgradePxStorageCluster perform storage cluster upgrade
 func UpgradePxStorageCluster() (bool, error) {
-	dash.Info("Initiating operator based install upgrade")
+	log.InfoD("Initiating operator based install upgrade")
 	operatorTag, err := getOperatorLatestVersion()
 
 	if err != nil {
 		return false, fmt.Errorf("error getting latest operator version. Cause: %v", err)
 	}
 	operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
-	dash.Infof("OCI-Monitor Image: %s", operatorImage)
+	log.InfoD("OCI-Monitor Image: %s", operatorImage)
 
 	err = Inst().V.UpdateStorageClusterImage(operatorImage)
 	if err != nil {
@@ -2313,7 +2313,7 @@ func UpgradePxStorageCluster() (bool, error) {
 		checkTag = true
 	}
 
-	dash.Infof("Expected PX version %s", expectedVersion)
+	log.InfoD("Expected PX version %s", expectedVersion)
 
 	nodes := node.GetStorageDriverNodes()
 	nodesUpgradeMap := make(map[string]bool)
@@ -2346,7 +2346,7 @@ func UpgradePxStorageCluster() (bool, error) {
 				log.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
 
 				if (checkTag && pxVersion == expectedVersion) || strings.Contains(pxVersion, expectedVersion) {
-					dash.Infof("Node %s successfully upgraded to version %s", k, pxVersion)
+					log.InfoD("Node %s successfully upgraded to version %s", k, pxVersion)
 					nodesUpgradeMap[k] = true
 				}
 			}
@@ -3437,7 +3437,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 	Step(stepLog,
 		func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			currRep, err := Inst().V.GetReplicationFactor(v)
 
 			if err != nil {
@@ -3457,7 +3457,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 			replicaSets, err := Inst().V.GetReplicaSets(v)
 			if err == nil {
 				replicaNodes := replicaSets[0].Nodes
-				dash.Infof("Current replica nodes of volume %v are %v", v.Name, replicaNodes)
+				log.InfoD("Current replica nodes of volume %v are %v", v.Name, replicaNodes)
 				var newReplID string
 				var newReplNode node.Node
 
@@ -3480,13 +3480,13 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					Inst().V.String(), ctx.App.Key, v)
 				Step(stepLog,
 					func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						if strings.Contains(ctx.App.Key, fastpathAppName) {
 							defer Inst().S.RemoveLabelOnNode(newReplNode, k8s.NodeType)
 							Inst().S.AddLabelOnNode(newReplNode, k8s.NodeType, k8s.FastpathNodeType)
 
 						}
-						dash.Infof("Increasing repl with target node  [%v]", newReplID)
+						log.InfoD("Increasing repl with target node  [%v]", newReplID)
 						err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
 						if err != nil {
 							log.Errorf("There is an error increasing repl [%v]", err.Error())
@@ -3499,7 +3499,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 						newReplNode.Hostname)
 					Step(stepLog,
 						func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 							time.Sleep(10 * time.Second)
 
@@ -3544,7 +3544,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 		Inst().V.String(), ctx.App.Key, v)
 	Step(stepLog,
 		func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			currRep, err := Inst().V.GetReplicationFactor(v)
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
@@ -3566,7 +3566,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 					Inst().V.String(), ctx.App.Key, v)
 				Step(stepLog,
 					func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						replicaSets, err := Inst().V.GetReplicaSets(v)
 						if err == nil {
 							replicaNodes := replicaSets[0].Nodes
@@ -4450,7 +4450,7 @@ func WaitForExpansionToStart(poolID string) error {
 
 			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
 				// storage pool resize has been triggered
-				dash.Infof("Pool %s expansion started", poolID)
+				log.InfoD("Pool %s expansion started", poolID)
 				return nil, true, nil
 			}
 		}
@@ -4620,7 +4620,7 @@ func Contains(app_list []string, app string) bool {
 }
 
 func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_post_flag string, ps map[string]map[string]string) bool {
-	dash.Info("Create Rule for backup")
+	log.InfoD("Create Rule for backup")
 	pod_selector := []map[string]string{}
 	action_value := []string{}
 	container := []string{}
@@ -4713,7 +4713,7 @@ func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_
 
 func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string, policy_list []string) bool {
 	var flag bool = true
-	dash.Info("Deleting the deployed apps after the testcase")
+	log.InfoD("Deleting the deployed apps after the testcase")
 	for i := 0; i < len(contexts); i++ {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
@@ -4724,7 +4724,7 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		}
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 	}
-	dash.Info("Deleting backup rules created")
+	log.InfoD("Deleting backup rules created")
 	RuleEnumerateReq := &api.RuleEnumerateRequest{
 		OrgId: orgID,
 	}
@@ -4757,7 +4757,7 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		}
 		dash.VerifySafely(pre_rule_delete_status, true, fmt.Sprintf("Verifying Pre rule deletion for backup"))
 	}
-	dash.Info("Deleting bucket,backup location and cloud setting")
+	log.InfoD("Deleting bucket,backup location and cloud setting")
 	for i, provider := range providers {
 		backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
 		bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
@@ -4766,7 +4766,7 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 		DeleteCloudCredential(CredName, orgID, CloudCredUID_list[i])
 		DeleteBackupLocation(backup_location_name, orgID)
 	}
-	dash.Info("Deleting schedule policies")
+	log.InfoD("Deleting schedule policies")
 	sched_policy_map := make(map[string]string)
 	schedPolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
 		OrgId: orgID,
@@ -4814,21 +4814,21 @@ func ValidatePoolRebalance() error {
 				}
 
 				if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
-					dash.Infof("Job %v is in paused/pending state", job.GetId())
+					log.InfoD("Job %v is in paused/pending state", job.GetId())
 				}
 
 				if jobState == opsapi.StorageRebalanceJobState_DONE {
-					dash.Infof("Job %v is in DONE state", job.GetId())
+					log.InfoD("Job %v is in DONE state", job.GetId())
 				}
 
 				if jobState == opsapi.StorageRebalanceJobState_RUNNING {
-					dash.Infof("Job %v is in Running state", job.GetId())
+					log.InfoD("Job %v is in Running state", job.GetId())
 
 					currentDone, total := getReblanceWorkSummary(jobResponse)
 					//checking for rebalance progress
 					for currentDone < total && previousDone < currentDone {
 						time.Sleep(2 * time.Minute)
-						dash.Infof("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
+						log.InfoD("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
 						jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
 						if err != nil {
 							return err
@@ -4841,7 +4841,7 @@ func ValidatePoolRebalance() error {
 						return fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
 					}
 					if currentDone == total {
-						dash.Infof("Rebalance for job %v completed,", job.GetId())
+						log.InfoD("Rebalance for job %v completed,", job.GetId())
 					}
 
 				}
@@ -4883,7 +4883,7 @@ func updatePxRuntimeOpts() error {
 
 		for _, opt := range runtimeOpts {
 			if !strings.Contains(opt, "=") {
-				dash.Fatal("Given run time option is not in expected format key=val, Actual : %v", opt)
+				log.Fatalf("Given run time option is not in expected format key=val, Actual : %v", opt)
 			}
 			optArr := strings.Split(opt, "=")
 			optionsMap[optArr[0]] = optArr[1]
@@ -4899,7 +4899,7 @@ func updatePxRuntimeOpts() error {
 
 //GetCloudDriveDeviceSpecs returns Cloud drive specs on the storage cluster
 func GetCloudDriveDeviceSpecs() ([]string, error) {
-	dash.Info("Getting cloud drive specs")
+	log.InfoD("Getting cloud drive specs")
 	deviceSpecs := make([]string, 0)
 	IsOperatorBasedInstall, err := Inst().V.IsOperatorBasedInstall()
 	if err != nil {

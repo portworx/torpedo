@@ -6,6 +6,7 @@ import (
 	rest "github.com/portworx/torpedo/pkg/restutil"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -365,7 +366,14 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 	} else {
 		res.ResultType = "error"
 		res.ResultStatus = false
-		logrus.Errorf("Actual:%v, Expected: %v", actual, expected)
+		if actual != nil && reflect.TypeOf(actual).String() == "*errors.errorString" {
+			d.Errorf(fmt.Sprintf("%v", actual))
+			logrus.Errorf(fmt.Sprintf("%v", actual))
+			res.Actual = "Error"
+			res.Expected = "nil"
+		} else {
+			logrus.Errorf("Actual:%v, Expected: %v", actual, expected)
+		}
 	}
 	verifications = append(verifications, res)
 
@@ -379,49 +387,13 @@ func (d *Dashboard) Fatal(description string, args ...interface{}) {
 	res := result{}
 	res.Actual = "false"
 	res.Expected = "true"
-	res.Description = description
+	res.Description = fmt.Sprintf(description, args)
 	res.TestCaseID = d.testcaseID
 	res.ResultStatus = false
 	res.ResultType = "error"
 	verifications = append(verifications, res)
 	d.TestSetEnd()
 }
-
-////VerifyFatal verify test and abort operation upon failure
-//func (d *Dashboard) VerifyFatal(actual interface{}, expected interface{}, description string) {
-//
-//	actualVal := fmt.Sprintf("%v", actual)
-//	expectedVal := fmt.Sprintf("%v", expected)
-//	res := result{}
-//	res.Actual = actualVal
-//	res.Expected = expectedVal
-//	res.Description = description
-//	res.TestCaseID = d.testcaseID
-//
-//	d.Log.Infof("VerifyFatal: Desc: %s", description)
-//	if actualVal == expectedVal {
-//		res.ResultType = "info"
-//		res.ResultStatus = true
-//		d.Log.Infof("Actual:%v, Expected: %v", actual, expected)
-//	} else {
-//		res.ResultType = "error"
-//		res.ResultStatus = false
-//		if actual != nil && reflect.TypeOf(actual).String() == "*errors.errorString" {
-//			d.Errorf(fmt.Sprintf("%v", actual))
-//			res.Actual = "Error"
-//			res.Expected = "nil"
-//		} else {
-//			d.Log.Errorf("Actual:%v, Expected: %v", actual, expected)
-//		}
-//	}
-//	verifications = append(verifications, res)
-//
-//	if d.IsEnabled {
-//		d.verify(res)
-//	}
-//	err := fmt.Sprintf(description)
-//	expect(err).NotTo(haveOccurred())
-//}
 
 //VerifyFatal verify test and abort operation upon failure
 func (d *Dashboard) VerifyFatal(actual, expected interface{}, description string) {

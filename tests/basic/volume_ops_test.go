@@ -38,7 +38,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 
 	stepLog := "has to schedule apps and update replication factor and size on all volumes of the apps"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		var err error
 		contexts = make([]*scheduler.Context, 0)
 		expReplMap := make(map[*volume.Volume]int64)
@@ -51,12 +51,12 @@ var _ = Describe("{VolumeUpdate}", func() {
 
 		stepLog = "get volumes for all apps in test and update replication factor and size"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, ctx := range contexts {
 				var appVolumes []*volume.Volume
 				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
 				Step(stepLog, func() {
-					dash.Info(stepLog)
+					log.InfoD(stepLog)
 					appVolumes, err = Inst().S.GetVolumes(ctx)
 					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
 					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
@@ -68,7 +68,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 						Inst().V.String(), ctx.App.Key, v)
 					Step(stepLog,
 						func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							currRep, err := Inst().V.GetReplicationFactor(v)
 							log.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
 							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
@@ -80,7 +80,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 						ctx.App.Key, v)
 					Step(stepLog,
 						func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							newRepl, err := Inst().V.GetReplicationFactor(v)
 							log.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
 							dash.VerifyFatal(newRepl, expReplMap[v], "Repl factor is as expected ?")
@@ -119,7 +119,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 					Inst().V.String(), ctx.App.Key, appVolumes)
 				Step(stepLog,
 					func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
 						log.FailOnError(err, "Volume resize successful ?")
 					})
@@ -127,7 +127,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 					ctx.App.Key, appVolumes)
 				Step(stepLog,
 					func() {
-						dash.Info(stepLog)
+						log.InfoD(stepLog)
 						for _, v := range requestedVols {
 							// Need to pass token before validating volume
 							params := make(map[string]string)
@@ -172,7 +172,7 @@ var _ = Describe("{VolumeIOThrottle}", func() {
 	})
 	stepLog := "has to schedule IOPs and limit them to a max bandwidth"
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		var err error
 		taskNamePrefix := "io-throttle"
@@ -186,13 +186,13 @@ var _ = Describe("{VolumeIOThrottle}", func() {
 		ValidateApplications(contexts)
 		stepLog = "get the BW for volume without limiting bandwidth"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			log.Infof("waiting for 5 sec for the pod to stablize")
 			time.Sleep(5 * time.Second)
 			speedBeforeUpdate, err = Inst().S.GetIOBandwidth(fio, namespace)
 			log.FailOnError(err, "Failed to get IO Bandwidth")
 		})
-		dash.Infof("BW before update %d", speedBeforeUpdate)
+		log.InfoD("BW before update %d", speedBeforeUpdate)
 
 		stepLog = "updating the BW"
 		Step(stepLog, func() {
@@ -204,26 +204,26 @@ var _ = Describe("{VolumeIOThrottle}", func() {
 					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
 					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
 				})
-				dash.Infof("Volumes to be updated %s", appVolumes)
+				log.InfoD("Volumes to be updated %s", appVolumes)
 				for _, v := range appVolumes {
 					err := Inst().V.SetIoBandwidth(v, bandwidthMBps, bandwidthMBps)
 					log.FailOnError(err, "Failed to set IO bandwidth")
 				}
 			}
 		})
-		dash.Infof("waiting for the FIO to reduce the speed to take into account the IO Throttle")
+		log.InfoD("waiting for the FIO to reduce the speed to take into account the IO Throttle")
 		time.Sleep(60 * time.Second)
 		stepLog = "get the BW for volume after limiting bandwidth"
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			speedAfterUpdate, err = Inst().S.GetIOBandwidth(fio, namespace)
 			log.FailOnError(err, "Failed to get IO bandwidth after update")
 		})
-		dash.Infof("BW after update %d", speedAfterUpdate)
+		log.InfoD("BW after update %d", speedAfterUpdate)
 		stepLog = "Validate speed reduction"
 		Step(stepLog, func() {
 			// We are setting the BW to 1 MBps so expecting the returned value to be in 10% buffer
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			dash.VerifyFatal(speedAfterUpdate < bufferedBW, true, "Speed reduced below the buffer?")
 		})
 
@@ -255,7 +255,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 	stepLog := "has to schedule apps and update replication factor for attached node"
 
 	It(stepLog, func() {
-		dash.Info(stepLog)
+		log.InfoD(stepLog)
 		var err error
 		contexts = make([]*scheduler.Context, 0)
 		expReplMap := make(map[*volume.Volume]int64)
@@ -284,7 +284,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 						Inst().V.String(), ctx.App.Key, v)
 					Step(stepLog,
 						func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							currRep, err := Inst().V.GetReplicationFactor(v)
 							log.FailOnError(err, "Failed to get vol %s repl factor", v.Name)
 							attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
@@ -297,8 +297,8 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 								currReplicaSet = append(currReplicaSet, nID)
 							}
 
-							dash.Infof("ReplicaSet of volume %v is: %v", v.Name, currReplicaSet)
-							dash.Infof("Volume %v is attached to : %v", v.Name, attachedNode.Id)
+							log.InfoD("ReplicaSet of volume %v is: %v", v.Name, currReplicaSet)
+							log.InfoD("Volume %v is attached to : %v", v.Name, attachedNode.Id)
 
 							for _, n := range currReplicaSet {
 								if n == attachedNode.Id {
@@ -309,7 +309,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							}
 
 							if len(updateReplicaSet) == 0 {
-								dash.Info("Attached node in not part of ReplicatSet, choosing a random node part of set for setting replication factor")
+								log.InfoD("Attached node in not part of ReplicatSet, choosing a random node part of set for setting replication factor")
 								updateReplicaSet = append(updateReplicaSet, expectedReplicaSet[0])
 								expectedReplicaSet = expectedReplicaSet[1:]
 							}
@@ -323,9 +323,9 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 						ctx.App.Key, v)
 					Step(stepLog,
 						func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							newRepl, err := Inst().V.GetReplicationFactor(v)
-							dash.Infof("Got repl factor after update: %v", newRepl)
+							log.InfoD("Got repl factor after update: %v", newRepl)
 							log.FailOnError(err, "Failed to get vol %s repl factor", v.Name)
 							dash.VerifyFatal(newRepl, expReplMap[v], "New repl factor is as expected?")
 							currReplicaSets, err := Inst().V.GetReplicaSets(v)
@@ -336,8 +336,8 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 								reducedReplicaSet = append(reducedReplicaSet, nID)
 							}
 
-							dash.Infof("ReplicaSet of volume %v is: %v", v.Name, reducedReplicaSet)
-							dash.Infof("Expected ReplicaSet of volume %v is: %v", v.Name, expectedReplicaSet)
+							log.InfoD("ReplicaSet of volume %v is: %v", v.Name, reducedReplicaSet)
+							log.InfoD("Expected ReplicaSet of volume %v is: %v", v.Name, expectedReplicaSet)
 							res := reflect.DeepEqual(reducedReplicaSet, expectedReplicaSet)
 							dash.VerifyFatal(res, true, "Reduced replica set is as expected?")
 						})
@@ -352,7 +352,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 						Inst().V.String(), ctx.App.Key, v)
 					Step(stepLog,
 						func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							currRep, err := Inst().V.GetReplicationFactor(v)
 							log.FailOnError(err, "Failed to get vol %s repl factor", v.Name)
 							// GetMaxReplicationFactory is hardcoded to 3
@@ -373,7 +373,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 						ctx.App.Key, v)
 					Step(stepLog,
 						func() {
-							dash.Info(stepLog)
+							log.InfoD(stepLog)
 							newRepl, err := Inst().V.GetReplicationFactor(v)
 							log.FailOnError(err, "Failed to get vol %s repl factor", v.Name)
 							dash.VerifyFatal(newRepl, expReplMap[v], "New repl factor is as expected?")
@@ -386,7 +386,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 								increasedReplicaSet = append(increasedReplicaSet, nID)
 							}
 
-							dash.Infof("ReplicaSet of volume %v is: %v", v.Name, increasedReplicaSet)
+							log.InfoD("ReplicaSet of volume %v is: %v", v.Name, increasedReplicaSet)
 							res := reflect.DeepEqual(increasedReplicaSet, currReplicaSet)
 							dash.VerifyFatal(res, true, "Validate increased replica set is as expected")
 						})
