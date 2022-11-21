@@ -271,6 +271,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 		}
 
 		testCase = TestCase{}
+		testCase.Tags = make(map[string]string)
 		testCase.Name = testName
 
 		_, file, _, ok := runtime.Caller(1)
