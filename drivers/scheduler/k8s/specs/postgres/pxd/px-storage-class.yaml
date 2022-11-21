@@ -7,4 +7,5 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
   priority_io: "high"
+  nodiscard: "true"
 allowVolumeExpansion: true

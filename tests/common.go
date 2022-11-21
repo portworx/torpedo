@@ -4967,6 +4967,29 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
+	EnableFeatures()
+
+}
+
+// EnableFeatures to enable px features
+func EnableFeatures(errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	ginkgo.Describe(fmt.Sprintf("Enable features on PX cluster"), func() {
+		nodes := node.GetWorkerNodes()
+		Step(fmt.Sprintf("Enable Auto FSTrim"), func() {
+			err := Inst().V.SetClusterOpts(nodes[0], map[string]string{
+				"--auto-fstrim": "on",
+			})
+			if err != nil {
+				err = fmt.Errorf("Error while enabling auto fstrim, Error:%v", err)
+				processError(err, errChan...)
+			}
+		})
+	})
 }
 
 // EndTorpedoTest ends the logging for torpedo test
