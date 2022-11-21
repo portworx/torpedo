@@ -384,7 +384,7 @@ func (d *Dashboard) Fatal(description string, args ...interface{}) {
 	res.ResultStatus = false
 	res.ResultType = "error"
 	verifications = append(verifications, res)
-	d.Errorf(description, args)
+	d.Errorf(description, args...)
 	err := fmt.Sprintf(description, args...)
 	expect(err).NotTo(haveOccurred())
 }

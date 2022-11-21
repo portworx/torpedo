@@ -31,15 +31,15 @@ var (
 )
 
 var (
-	dash *aetosutil.Dashboard
-	lock = &sync.Mutex{}
-	log  *logrus.Logger
+	dash  *aetosutil.Dashboard
+	lock  = &sync.Mutex{}
+	tpLog *logrus.Logger
 )
 
 // We are logging to file, strip colors to make the output more readable
 var txtFormatter = &logrus.TextFormatter{DisableColors: true}
 
-// Hook to handle writing to local log files.
+// Hook to handle writing to local tpLog files.
 type Hook struct {
 	formatter logrus.Formatter
 }
@@ -52,7 +52,7 @@ func NewHook() *Hook {
 	return hook
 }
 
-// SetFormatter sets the log formatter.
+// SetFormatter sets the tpLog formatter.
 func (hook *Hook) SetFormatter(formatter logrus.Formatter) {
 	hook.formatter = formatter
 
@@ -147,30 +147,30 @@ func New() *logrus.Logger {
 
 //GetLogInstance returns the logrus instance
 func GetLogInstance() *logrus.Logger {
-	if log == nil {
+	if tpLog == nil {
 		lock.Lock()
 		defer lock.Unlock()
-		if log == nil {
-			log = New()
+		if tpLog == nil {
+			tpLog = New()
 		}
 	}
-	return log
+	return tpLog
 }
 
 func SetLoglevel(logLevel string) {
 	switch logLevel {
 	case "debug":
-		log.Level = logrus.DebugLevel
+		tpLog.Level = logrus.DebugLevel
 	case "info":
-		log.Level = logrus.InfoLevel
+		tpLog.Level = logrus.InfoLevel
 	case "error":
-		log.Level = logrus.ErrorLevel
+		tpLog.Level = logrus.ErrorLevel
 	case "warn":
-		log.Level = logrus.WarnLevel
+		tpLog.Level = logrus.WarnLevel
 	case "trace":
-		log.Level = logrus.TraceLevel
+		tpLog.Level = logrus.TraceLevel
 	default:
-		log.Level = logrus.DebugLevel
+		tpLog.Level = logrus.DebugLevel
 
 	}
 }
@@ -178,15 +178,15 @@ func SetLoglevel(logLevel string) {
 // SetTorpedoFileOutput adds output destination for logging
 func SetTorpedoFileOutput(logger *lumberjack.Logger) {
 	if logger != nil {
-		log.Out = io.MultiWriter(log.Out, logger)
-		log.Infof("Log Dir: %s", logger.Filename)
+		tpLog.Out = io.MultiWriter(tpLog.Out, logger)
+		tpLog.Infof("Log Dir: %s", logger.Filename)
 	}
 }
 
 // SetDefaultOutput  sets default output
 func SetDefaultOutput(logger *lumberjack.Logger) {
 	if logger != nil {
-		log.Out = io.MultiWriter(os.Stdout, logger)
+		tpLog.Out = io.MultiWriter(os.Stdout, logger)
 	}
 
 }
@@ -218,57 +218,57 @@ func (mf *MyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 func Fatalf(format string, args ...interface{}) {
 	dash.Fatal(format, args...)
-	log.Fatalf(format, args...)
+	tpLog.Fatalf(format, args...)
 }
 
 func Errorf(format string, args ...interface{}) {
 	dash.Errorf(format, args...)
-	log.Errorf(format, args...)
+	tpLog.Errorf(format, args...)
 }
 
 func Warnf(format string, args ...interface{}) {
 	dash.Warnf(format, args...)
-	log.Warningf(format, args...)
+	tpLog.Warningf(format, args...)
 }
 
 func Infof(format string, args ...interface{}) {
-	log.Infof(format, args...)
+	tpLog.Infof(format, args...)
 }
 
 func InfoD(format string, args ...interface{}) {
 	dash.Infof(format, args...)
-	log.Infof(format, args...)
+	tpLog.Infof(format, args...)
 }
 
 func Debugf(format string, args ...interface{}) {
-	log.Debugf(format, args...)
+	tpLog.Debugf(format, args...)
 }
 
 func Error(args ...interface{}) {
 	dash.Error(fmt.Sprint(args...))
-	log.Error(args...)
+	tpLog.Error(args...)
 }
 
 func Warn(args ...interface{}) {
 	dash.Warn(fmt.Sprint(args...))
-	log.Warn(args...)
+	tpLog.Warn(args...)
 }
 
 func Info(args ...interface{}) {
-	log.Info(args...)
+	tpLog.Info(args...)
 }
 
 func Debug(args ...interface{}) {
-	log.Debug(args...)
+	tpLog.Debug(args...)
 }
 
 func FailOnError(err error, description string, args ...interface{}) {
 	if err != nil {
-		log.Fatal("%v. Err: %v", fmt.Sprintf(description, args), err)
+		tpLog.Fatalf("%v. Err: %v", fmt.Sprintf(description, args...), err)
 	}
 }
 
 func init() {
-	log = GetLogInstance()
+	tpLog = GetLogInstance()
 	dash = aetosutil.Get()
 }

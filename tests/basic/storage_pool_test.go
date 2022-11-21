@@ -491,7 +491,7 @@ func nodePoolsExpansion(testName string) {
 				if isjournal {
 					expectedSizeWithJournal = expectedSizeWithJournal - 3
 				}
-				log.FailOnError(resizeErr, "Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal, resizeErr)
+				log.FailOnError(resizeErr, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
 			}
 
 		})

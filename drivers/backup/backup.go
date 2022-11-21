@@ -3,11 +3,10 @@ package backup
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/log"
-	"time"
-
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/torpedo/log"
 	"github.com/portworx/torpedo/pkg/errors"
+	"time"
 )
 
 // Image Generic struct
