@@ -2,7 +2,7 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/log"
+	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 
 	"github.com/libopenstorage/openstorage/api"

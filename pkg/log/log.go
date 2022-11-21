@@ -264,7 +264,7 @@ func Debug(args ...interface{}) {
 
 func FailOnError(err error, description string, args ...interface{}) {
 	if err != nil {
-		tpLog.Fatalf("%v. Err: %v", fmt.Sprintf(description, args...), err)
+		Fatalf("%v. Err: %v", fmt.Sprintf(description, args...), err)
 	}
 }
 
