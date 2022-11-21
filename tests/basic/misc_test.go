@@ -34,7 +34,14 @@ var _ = Describe("{SetupTeardown}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-%d", i))...)
 		}
-
+		dash.Warnf("This is Warningf")
+		dash.Warnf("This is Warning")
+		dash.Errorf("This is Errorf")
+		dash.Error("This is Error")
+		dash.VerifySafely(true, true, "This is VerifySafely pass")
+		dash.VerifyFatal(true, true, "This is VerifyFatal pass")
+		dash.VerifySafely(true, false, "This is VerifySafely fail")
+		dash.VerifyFatal(true, true, "This is VerifyFatal fail")
 		ValidateApplications(contexts)
 
 		opts := make(map[string]bool)

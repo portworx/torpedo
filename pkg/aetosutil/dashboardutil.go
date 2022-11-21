@@ -1,6 +1,7 @@
 package aetosutil
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/onsi/gomega"
 	rest "github.com/portworx/torpedo/pkg/restutil"
@@ -49,6 +50,11 @@ const (
 	// INPROGRESS  status for testset/testcase
 	INPROGRESS = "IN_PROGRESS"
 )
+
+type testCaseUpdateResponse struct {
+	Status         string `json:"status"`
+	TestCaseStatus string `json:"testCaseStatus"`
+}
 
 var workflowStatuses = []string{PASS, FAIL, ABORT, ERROR, TIMEOUT, NOTSTARTED, INPROGRESS}
 
@@ -185,15 +191,6 @@ func (d *Dashboard) TestSetEnd() {
 
 // TestCaseEnd update testcase  to dashboard DB
 func (d *Dashboard) TestCaseEnd() {
-	result := "PASS"
-
-	for _, v := range verifications {
-
-		if !v.ResultStatus {
-			result = "FAIL"
-			break
-		}
-	}
 	if d.IsEnabled {
 
 		if d.testcaseID == 0 {
@@ -212,12 +209,18 @@ func (d *Dashboard) TestCaseEnd() {
 		verifications = nil
 		removeTestCaseFromStack(d.testcaseID)
 
+		var updateResponse testCaseUpdateResponse
+		err = json.Unmarshal(resp, &updateResponse)
+		if err != nil {
+			logrus.Errorf("Error parsing update test output, %v", err)
+		}
+		result := updateResponse.TestCaseStatus
+		d.VerifySafely(result, "PASS", "Test completed successfully ?")
 	}
 
 	logrus.Info("--------Test End------")
 	logrus.Infof("#Test: %s ", testCase.ShortName)
 	logrus.Infof("#Description: %s ", testCase.Description)
-	logrus.Infof("#Result: %s ", result)
 	logrus.Info("------------------------")
 }
 
