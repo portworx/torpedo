@@ -39,7 +39,6 @@ var _ = Describe("{SetupTeardown}", func() {
 		log.Errorf("This is Errorf")
 		log.Error("This is Error")
 		dash.VerifySafely(fmt.Errorf("VerifySafely THIS IS AN ERROR"), true, "This is VerifySafely fail")
-		dash.VerifyFatal(fmt.Errorf("VerifyFatal THIS IS AN ERROR"), nil, "This is VerifyFatal fail")
 		log.Fatalf("Raising ERROR, everything should stop here")
 		ValidateApplications(contexts)
 
