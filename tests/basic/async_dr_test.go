@@ -3,6 +3,7 @@ package tests
 import (
 	//"context"
 	"fmt"
+	"github.com/portworx/torpedo/log"
 	"os"
 	"strings"
 	"time"
@@ -113,7 +114,7 @@ var _ = Describe("{MigrateDeployment}", func() {
 			migrationName := migrationKey + "volumeonly-" + fmt.Sprintf("%d", i)
 			currMig, create_mig_err := CreateMigration(migrationName, currMigNamespace, defaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
 			allMigrations = append(allMigrations, currMig)
-			dash.FailOnError(create_mig_err, "Failed to create %s migration in %s namespace", migrationName, currMigNamespace)
+			log.FailOnError(create_mig_err, "Failed to create %s migration in %s namespace", migrationName, currMigNamespace)
 			err := storkops.Instance().ValidateMigration(currMig.Name, currMig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 			dash.VerifyFatal(err, nil, "Migration successful?")
 			resp, get_mig_err := storkops.Instance().GetMigration(currMig.Name, currMig.Namespace)

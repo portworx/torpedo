@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	opsapi "github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/log"
 	"math/rand"
 	"sync"
 	"time"
@@ -268,7 +269,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 			dash.Info(stepLog)
 			for _, ctx := range contexts {
 				appNodes, err := Inst().S.GetNodesForApp(ctx)
-				dash.FailOnError(err, "Failed to get nodes for the app %s", ctx.App.Key)
+				log.FailOnError(err, "Failed to get nodes for the app %s", ctx.App.Key)
 				appNode := appNodes[r.Intn(len(appNodes))]
 				stepLog = fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
 					Inst().V.String(), ctx.App.Key, appNode)
@@ -430,7 +431,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 				Step(stepLog, func() {
 					dash.Info(stepLog)
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
-					dash.FailOnError(err, "Failed to get application scale up factor map")
+					log.FailOnError(err, "Failed to get application scale up factor map")
 					//Scaling up by number of storage-nodes
 					workerStorageNodes := int32(len(node.GetStorageNodes()))
 					for name, scale := range applicationScaleUpMap {
@@ -455,7 +456,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 				Step(stepLog, func() {
 					dash.Info(stepLog)
 					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
-					dash.FailOnError(err, "Failed to get application scale down factor map")
+					log.FailOnError(err, "Failed to get application scale down factor map")
 
 					for name, scale := range applicationScaleDownMap {
 						applicationScaleDownMap[name] = scale - 1
@@ -654,7 +655,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			daemonSets, err := k8sApps.ListDaemonSets("kube-system", metav1.ListOptions{
 				LabelSelector: "name=portworx",
 			})
-			dash.FailOnError(err, "Failed to get daemon sets list")
+			log.FailOnError(err, "Failed to get daemon sets list")
 			dash.VerifyFatal(len(daemonSets) > 0, true, "Daemon sets returned?")
 			dash.VerifyFatal(len(daemonSets[0].Spec.Template.Spec.Containers) > 0, true, "Daemon set container is not empty?")
 			usingVault := false
@@ -675,7 +676,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 			}
 		} else {
 			spec, err := Inst().V.GetStorageCluster()
-			dash.FailOnError(err, "Failed to get storage cluster")
+			log.FailOnError(err, "Failed to get storage cluster")
 			if *spec.Spec.SecretsProvider != vaultSecretProvider &&
 				*spec.Spec.SecretsProvider != vaultTransitSecretProvider {
 				Skip(fmt.Sprintf("Skip test for not using %s or %s ", vaultSecretProvider, vaultTransitSecretProvider))
@@ -750,7 +751,7 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 				Step(stepLog, func() {
 					dash.Info(stepLog)
 					err = Inst().V.RestartDriver(appNode, nil)
-					dash.FailOnError(err, "Error while restarting volume driver")
+					log.FailOnError(err, "Error while restarting volume driver")
 
 				})
 			}(selectedNode)
@@ -783,7 +784,7 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 				if err == nil {
 					err = Inst().V.DeleteVolume(vol)
 				}
-				dash.FailOnError(err, "Error while deleting volume %s", vol)
+				log.FailOnError(err, "Error while deleting volume %s", vol)
 
 			}
 		})

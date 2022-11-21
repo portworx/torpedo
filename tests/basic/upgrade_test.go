@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/log"
 	"strings"
 	"time"
 
@@ -43,7 +44,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		storageNodes := node.GetStorageNodes()
 
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
-		dash.FailOnError(err, "Cloud drive installation failed")
+		log.FailOnError(err, "Cloud drive installation failed")
 
 		if !isCloudDrive {
 			for _, storageNode := range storageNodes {

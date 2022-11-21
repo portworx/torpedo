@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/log"
 	"time"
 
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -57,7 +58,7 @@ var _ = Describe("{DriveFailure}", func() {
 				Step(stepLog, func() {
 					dash.Infof(stepLog)
 					appNodes, err = Inst().S.GetNodesForApp(ctx)
-					dash.FailOnError(err, "Failed to get nodes for app %s", ctx.App.Key)
+					log.FailOnError(err, "Failed to get nodes for app %s", ctx.App.Key)
 					dash.VerifyFatal(len(appNodes) > 0, true, fmt.Sprintf("Found %d apps", len(appNodes)))
 
 					nodeWithDrive = appNodes[0]
@@ -67,7 +68,7 @@ var _ = Describe("{DriveFailure}", func() {
 				Step(stepLog, func() {
 					dash.Infof(stepLog)
 					drives, err = Inst().V.GetStorageDevices(nodeWithDrive)
-					dash.FailOnError(err, fmt.Sprintf("Failed to get storage devices for the node %s", nodeWithDrive.Name))
+					log.FailOnError(err, fmt.Sprintf("Failed to get storage devices for the node %s", nodeWithDrive.Name))
 					dash.VerifyFatal(len(drives) > 0, true, fmt.Sprintf("Found drives length %d", len(appNodes)))
 				})
 
@@ -81,7 +82,7 @@ var _ = Describe("{DriveFailure}", func() {
 							TimeBeforeRetry: dfDefaultRetryInterval,
 						})
 						busInfoMap[driveToFail] = busID
-						dash.FailOnError(err, "Failed to yank drive %s", driveToFail)
+						log.FailOnError(err, "Failed to yank drive %s", driveToFail)
 
 					}
 					stepLog = "wait for the drives to fail"

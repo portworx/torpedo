@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/log"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -77,7 +78,7 @@ var _ = Describe("{RebootOneNode}", func() {
 						Step(fmt.Sprintf("Check if node: %s rebooted in last 3 minutes", n.Name), func() {
 							dash.Infof("Check if node: %s rebooted in last 3 minutes", n.Name)
 							isNodeRebootedAndUp, err := Inst().N.IsNodeRebootedInGivenTimeRange(n, defaultRebootTimeRange)
-							dash.FailOnError(err, "Check for node: %s rebooted in last 3 minutes", n.Name)
+							log.FailOnError(err, "Check for node: %s rebooted in last 3 minutes", n.Name)
 							if !isNodeRebootedAndUp {
 								Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
 									dash.Infof("wait for volume driver to stop on node: %v", n.Name)
@@ -160,7 +161,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 					if vol.Shared {
 
 						n, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-						dash.FailOnError(err, "Failed to get node for volume: %s", vol.ID)
+						log.FailOnError(err, "Failed to get node for volume: %s", vol.ID)
 
 						dash.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
 
@@ -202,7 +203,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 								TimeBeforeRetry: defaultCommandRetry,
 							},
 						})
-						dash.FailOnError(err, "Failed Rebooting node : %s", n.Name)
+						log.FailOnError(err, "Failed Rebooting node : %s", n.Name)
 
 						// as we keep the storage driver down on node until we check if the volume, we wait a minute for
 						// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
@@ -216,21 +217,21 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 								Timeout:         5 * time.Minute,
 								TimeBeforeRetry: 10 * time.Second,
 							}})
-						dash.FailOnError(err, "Failed starting nfs service on node : %s", n.Name)
+						log.FailOnError(err, "Failed starting nfs service on node : %s", n.Name)
 
 						ctx.RefreshStorageEndpoint = true
 						ValidateContext(ctx)
 						n2, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-						dash.FailOnError(err, "Failed to get node for volume : %s", vol.ID)
+						log.FailOnError(err, "Failed to get node for volume : %s", vol.ID)
 
 						// the mount should move to another node otherwise fail
 						dash.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
 						dash.VerifyFatal(n.SchedulerNodeName != n2.SchedulerNodeName, true, "Volume is scheduled on different nodes?")
 
 						StartVolDriverAndWait([]node.Node{*n})
-						dash.FailOnError(err, "Failed to Start volume driver on node: %s success ?", n.Name)
+						log.FailOnError(err, "Failed to Start volume driver on node: %s success ?", n.Name)
 						err = Inst().S.EnableSchedulingOnNode(*n)
-						dash.FailOnError(err, "Failed to Enable scheduling on node: %s", n.Name)
+						log.FailOnError(err, "Failed to Enable scheduling on node: %s", n.Name)
 
 						dash.Info("validating applications")
 						ValidateApplications(contexts)

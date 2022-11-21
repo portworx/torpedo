@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/log"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -58,7 +59,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 
 		Inst().CustomAppConfig[appName] = customAppConfig
 		err := Inst().S.RescanSpecs(Inst().SpecDir, provider)
-		dash.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
 
 		stepLog = "schedule application with multiple sharedv4 volumes attached"
 
@@ -89,7 +90,7 @@ var _ = Describe("{MultiVolumeMountsForSharedV4}", func() {
 				Expect(err).NotTo(HaveOccurred())
 				for _, appVolume := range appVolumes {
 					attachedNode, err := Inst().V.GetNodeForVolume(appVolume, defaultCommandTimeout, defaultCommandRetry)
-					dash.FailOnError(err, "Failed to get volume %s from node", appVolume.Name)
+					log.FailOnError(err, "Failed to get volume %s from node", appVolume.Name)
 					stepLog = fmt.Sprintf("stop volume driver %s on app %s's node: %s",
 						Inst().V.String(), ctx.App.Key, attachedNode.Name)
 					Step(stepLog,
@@ -149,7 +150,7 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 			Step(stepLog, func() {
 				dash.Info(stepLog)
 				appVolumes, err = Inst().S.GetVolumes(ctx)
-				dash.FailOnError(err, "Failed to get volumes")
+				log.FailOnError(err, "Failed to get volumes")
 				dash.VerifyFatal(len(appVolumes) > 0, 0, " App volumes are empty?")
 			})
 			for _, v := range appVolumes {
@@ -198,10 +199,10 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 							for _, n := range currNodes {
 
 								err = Inst().S.IsNodeReady(n)
-								dash.FailOnError(err, "Node %s not ready", n.Name)
+								log.FailOnError(err, "Node %s not ready", n.Name)
 
 								err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-								dash.FailOnError(err, "Failed to wait for volume driver %s to be up", n.Name)
+								log.FailOnError(err, "Failed to wait for volume driver %s to be up", n.Name)
 							}
 						})
 

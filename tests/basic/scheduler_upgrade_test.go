@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/log"
 	"strings"
 	"time"
 
@@ -54,7 +55,7 @@ var _ = Describe("{UpgradeScheduler}", func() {
 			Step(stepLog, func() {
 				dash.Info(stepLog)
 				err := Inst().N.SetClusterVersion(schedVersion, upgradeTimeoutMins)
-				dash.FailOnError(err, "Failed to set cluster version")
+				log.FailOnError(err, "Failed to set cluster version")
 			})
 
 			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
@@ -66,10 +67,10 @@ var _ = Describe("{UpgradeScheduler}", func() {
 			})
 
 			err = Inst().S.RefreshNodeRegistry()
-			dash.FailOnError(err, "Node registry refresh failed")
+			log.FailOnError(err, "Node registry refresh failed")
 
 			err = Inst().V.RefreshDriverEndpoints()
-			dash.FailOnError(err, "Refersh Driver end points failed")
+			log.FailOnError(err, "Refersh Driver end points failed")
 			stepLog = fmt.Sprintf("validate number of storage nodes after scheduler upgrade to [%s]",
 				schedVersion)
 			Step(stepLog, func() {

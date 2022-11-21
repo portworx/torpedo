@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/log"
 	"math/rand"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
-
 	// https://github.com/kubernetes/client-go/issues/242
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
@@ -33,7 +33,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to validate that storage nodes are not lost during asg scaledown", func() {
-		dash.Infof("Has to validate that storage nodes are not lost during asg scaledown")
+		log.InfoD("Has to validate that storage nodes are not lost during asg scaledown")
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -43,7 +43,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		ValidateApplications(contexts)
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
-		dash.FailOnError(err, "Failed to Get ASG cluster size")
+		log.FailOnError(err, "Failed to Get ASG cluster size")
 
 		scaleupCount := intitialNodeCount + intitialNodeCount/2
 		stepLog := fmt.Sprintf("scale up cluster from %d to %d nodes and validate",
@@ -70,28 +70,28 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		stepLog = fmt.Sprintf("scale down cluster back to original size of %d nodes",
 			intitialNodeCount)
 		Step(stepLog, func() {
-			dash.Info(stepLog)
+			log.InfoD(stepLog)
 			Scale(intitialNodeCount)
 
 			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
 				Inst().AutoStorageNodeRecoveryTimeout.String())
 
 			Step(stepLog, func() {
-				dash.Info(stepLog)
+				log.InfoD(stepLog)
 				time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
 			})
 
 			// After scale down, get fresh list of nodes
 			// by re-initializing scheduler and volume driver
 			err = Inst().S.RefreshNodeRegistry()
-			dash.VerifyFatal(err, nil, "verify refresh node registry")
+			log.FailOnError(err, "verify refresh node registry")
 
 			err = Inst().V.RefreshDriverEndpoints()
-			dash.VerifyFatal(err, nil, "verify refresh driver end points")
+			log.FailOnError(err, "verify refresh driver end points")
 
 			stepLog = fmt.Sprintf("validate number of storage nodes after scale down")
 			Step(stepLog, func() {
-				dash.Info(stepLog)
+				log.InfoD(stepLog)
 				ValidateClusterSize(intitialNodeCount)
 			})
 		})

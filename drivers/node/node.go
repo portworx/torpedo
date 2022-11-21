@@ -2,7 +2,7 @@ package node
 
 import (
 	"fmt"
-	logInstance "github.com/portworx/torpedo/log"
+	"github.com/sirupsen/logrus"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
@@ -125,7 +125,7 @@ type InitOptions struct {
 	// SpecDir app spec directory
 	SpecDir string
 	//Logger log the output
-	Logger *logInstance.Logger
+	Logger *logrus.Logger
 }
 
 // Driver provides the node driver interface

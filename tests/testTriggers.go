@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	"github.com/portworx/torpedo/log"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io/ioutil"
@@ -445,7 +446,7 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 
 func startLongevityTest(testName string) {
 	longevityLogger = CreateLogger(fmt.Sprintf("%s-%s.log", testName, time.Now().Format(time.RFC3339)))
-	SetTorpedoFileOutput(log, longevityLogger)
+	log.SetTorpedoFileOutput(longevityLogger)
 	dash.TestCaseBegin(testName, fmt.Sprintf("validating %s in longevity cluster", testName), "", nil)
 }
 func endLongevityTest() {
@@ -673,7 +674,7 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 						UpdateOutcome(event, err)
 					}
 					if isPureVol {
-						log.Warningf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+						log.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
 						continue
 					}
 

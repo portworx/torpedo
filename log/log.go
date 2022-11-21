@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"strings"
@@ -15,9 +16,9 @@ import (
 
 type colorizer func(...interface{}) string
 
-type Logger struct {
-	LogrusLogger *logrus.Logger
-}
+//type Logger struct {
+//	LogrusLogger *logrus.Logger
+//}
 
 var (
 	green    colorizer
@@ -30,9 +31,9 @@ var (
 )
 
 var (
-	Dash   = aetosutil.Get()
-	lock   = &sync.Mutex{}
-	logger = GetLogInstance()
+	dash *aetosutil.Dashboard
+	lock = &sync.Mutex{}
+	log  *logrus.Logger
 )
 
 // We are logging to file, strip colors to make the output more readable
@@ -136,26 +137,58 @@ func init() {
 	customFormatter.FullTimestamp = true
 }
 
-func New() *Logger {
+func New() *logrus.Logger {
 	logursLog := logrus.New()
 	logursLog.SetFormatter(&MyFormatter{})
 	logursLog.ReportCaller = true
 	logursLog.Out = io.MultiWriter(os.Stdout)
-	return &Logger{
-		LogrusLogger: logursLog,
-	}
+	return logursLog
 }
 
 //GetLogInstance returns the logrus instance
-func GetLogInstance() *Logger {
-	if logger == nil {
+func GetLogInstance() *logrus.Logger {
+	if log == nil {
 		lock.Lock()
 		defer lock.Unlock()
-		if logger == nil {
-			logger = New()
+		if log == nil {
+			log = New()
 		}
 	}
-	return logger
+	return log
+}
+
+func SetLoglevel(logLevel string) {
+	switch logLevel {
+	case "debug":
+		log.Level = logrus.DebugLevel
+	case "info":
+		log.Level = logrus.InfoLevel
+	case "error":
+		log.Level = logrus.ErrorLevel
+	case "warn":
+		log.Level = logrus.WarnLevel
+	case "trace":
+		log.Level = logrus.TraceLevel
+	default:
+		log.Level = logrus.DebugLevel
+
+	}
+}
+
+// SetTorpedoFileOutput adds output destination for logging
+func SetTorpedoFileOutput(logger *lumberjack.Logger) {
+	if logger != nil {
+		log.Out = io.MultiWriter(log.Out, logger)
+		log.Infof("Log Dir: %s", logger.Filename)
+	}
+}
+
+// SetDefaultOutput  sets default output
+func SetDefaultOutput(logger *lumberjack.Logger) {
+	if logger != nil {
+		log.Out = io.MultiWriter(os.Stdout, logger)
+	}
+
 }
 
 type MyFormatter struct{}
@@ -184,47 +217,58 @@ func (mf *MyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 }
 
 func Fatalf(format string, args ...interface{}) {
-	Dash.Fatal(format, args...)
-	logger.LogrusLogger.Fatalf(format, args...)
+	dash.Fatal(format, args...)
+	log.Fatalf(format, args...)
 }
 
 func Errorf(format string, args ...interface{}) {
-	Dash.Errorf(format, args...)
-	logger.LogrusLogger.Errorf(format, args...)
+	dash.Errorf(format, args...)
+	log.Errorf(format, args...)
 }
 
 func Warnf(format string, args ...interface{}) {
-	Dash.Warnf(format, args...)
-	logger.LogrusLogger.Warningf(format, args...)
+	dash.Warnf(format, args...)
+	log.Warningf(format, args...)
 }
 
 func Infof(format string, args ...interface{}) {
-	logger.LogrusLogger.Infof(format, args...)
+	log.Infof(format, args...)
 }
 
 func InfoD(format string, args ...interface{}) {
-	Dash.Infof(format, args...)
-	logger.LogrusLogger.Infof(format, args...)
+	dash.Infof(format, args...)
+	log.Infof(format, args...)
 }
 
 func Debugf(format string, args ...interface{}) {
-	logger.LogrusLogger.Debugf(format, args...)
+	log.Debugf(format, args...)
 }
 
 func Error(args ...interface{}) {
-	Dash.Error(fmt.Sprint(args...))
-	logger.LogrusLogger.Error(args...)
+	dash.Error(fmt.Sprint(args...))
+	log.Error(args...)
 }
 
 func Warn(args ...interface{}) {
-	Dash.Warn(fmt.Sprint(args...))
-	logger.LogrusLogger.Warn(args...)
+	dash.Warn(fmt.Sprint(args...))
+	log.Warn(args...)
 }
 
 func Info(args ...interface{}) {
-	logger.LogrusLogger.Info(args...)
+	log.Info(args...)
 }
 
 func Debug(args ...interface{}) {
-	logger.LogrusLogger.Debug(args...)
+	log.Debug(args...)
+}
+
+func FailOnError(err error, description string, args ...interface{}) {
+	if err != nil {
+		log.Fatal("%v. Err: %v", fmt.Sprintf(description, args), err)
+	}
+}
+
+func init() {
+	log = GetLogInstance()
+	dash = aetosutil.Get()
 }

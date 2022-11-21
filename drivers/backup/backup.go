@@ -317,7 +317,7 @@ func Get(name string) (Driver, error) {
 func init() {
 	str, err := GetPxCentralAdminPwd()
 	if err != nil {
-		log.GetLogInstance().Errorf("Error fetching password from secret: %v", err)
+		log.Errorf("Error fetching password from secret: %v", err)
 	}
 	PxCentralAdminPwd = str
 }

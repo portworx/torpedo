@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/log"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -41,7 +42,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		var poolIDToResize string
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		dash.FailOnError(err, "Failed to list storage pools")
+		log.FailOnError(err, "Failed to list storage pools")
 		dash.VerifyFatal(len(pools) > 0, true, " Storage pools exist?")
 
 		// pick a random pool from a pools list and resize it
@@ -60,7 +61,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				dash.FailOnError(err, "Failed to get pool using UUID ")
+				log.FailOnError(err, "Failed to get pool using UUID ")
 			}
 		})
 
@@ -71,7 +72,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
-			dash.FailOnError(err, "Failed to check if Journal enabled")
+			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			//To-Do Need to handle the case for multiple pools
 			expectedSizeWithJournal = expectedSize
@@ -92,7 +93,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			dash.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, "Failed to get pool using UUID ")
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
@@ -128,7 +129,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		var poolIDToResize string
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		dash.FailOnError(err, "Failed to list storage pools")
+		log.FailOnError(err, "Failed to list storage pools")
 		dash.VerifyFatal(len(pools) > 0, true, "Storage pools exist ?")
 
 		// pick a random pool from a pools list and resize it
@@ -146,7 +147,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				dash.FailOnError(err, "Failed to get pool using UUID ")
+				log.FailOnError(err, "Failed to get pool using UUID ")
 			}
 		})
 
@@ -159,7 +160,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
 			expectedSize = roundUpValue(expectedSize)
 			isjournal, err := isJournalEnabled()
-			dash.FailOnError(err, "Failed to check is Journal enabled")
+			log.FailOnError(err, "Failed to check is Journal enabled")
 
 			//To-Do Need to handle the case for multiple pools
 			expectedSizeWithJournal = expectedSize
@@ -178,7 +179,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			dash.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, "Failed to get pool using UUID ")
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
@@ -234,7 +235,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				dash.FailOnError(err, "Failed to get pool using UUID ")
+				log.FailOnError(err, "Failed to get pool using UUID ")
 			}
 		})
 
@@ -247,7 +248,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
-			dash.FailOnError(err, "Failed to check is journal enabled")
+			log.FailOnError(err, "Failed to check is journal enabled")
 
 			//To-Do Need to handle the case for multiple pools
 			expectedSizeWithJournal = expectedSize
@@ -259,12 +260,12 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful ?")
 
 			err = WaitForExpansionToStart(poolIDToResize)
-			dash.FailOnError(err, "Expansion is not started")
+			log.FailOnError(err, "Expansion is not started")
 
 			storageNode, err := GetNodeWithGivenPoolID(poolIDToResize)
-			dash.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, "Failed to get pool using UUID ")
 			err = RebootNodeAndWait(*storageNode)
-			dash.FailOnError(err, "Failed to reboot node and wait till it is up")
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
 		})
@@ -275,7 +276,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			dash.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, "Failed to get pool using UUID ")
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
@@ -312,7 +313,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 		var poolIDToResize string
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		dash.FailOnError(err, "Failed to list storage pools")
+		log.FailOnError(err, "Failed to list storage pools")
 		dash.VerifyFatal(len(pools) > 0, true, "Storage pools exist?")
 
 		// pick a random pool from a pools list and resize it
@@ -330,7 +331,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				dash.FailOnError(err, "Failed to get pool using UUID")
+				log.FailOnError(err, "Failed to get pool using UUID")
 			}
 		})
 
@@ -342,7 +343,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
 			expectedSize = roundUpValue(expectedSize)
 			isjournal, err := isJournalEnabled()
-			dash.FailOnError(err, "Failed to check is journal enabled")
+			log.FailOnError(err, "Failed to check is journal enabled")
 
 			//To-Do Need to handle the case for multiple pools
 			expectedSizeWithJournal = expectedSize
@@ -354,12 +355,12 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			err = WaitForExpansionToStart(poolIDToResize)
-			dash.FailOnError(err, "Failed while waiting for expansion to start")
+			log.FailOnError(err, "Failed while waiting for expansion to start")
 
 			storageNode, err := GetNodeWithGivenPoolID(poolIDToResize)
-			dash.FailOnError(err, " Failed to get pool using UUID")
+			log.FailOnError(err, " Failed to get pool using UUID")
 			err = RebootNodeAndWait(*storageNode)
-			dash.FailOnError(err, "Failed to reboot node and wait till it is up")
+			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 		})
@@ -369,7 +370,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			dash.FailOnError(err, " Failed to get pool using UUID")
+			log.FailOnError(err, " Failed to get pool using UUID")
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
@@ -438,7 +439,7 @@ func nodePoolsExpansion(testName string) {
 			}
 		}
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		dash.FailOnError(err, "Failed to list storage pools")
+		log.FailOnError(err, "Failed to list storage pools")
 		dash.VerifyFatal(len(nodePools) > 1, true, "Node has multiple storage pools?")
 
 		for _, p := range nodePools {
@@ -457,7 +458,7 @@ func nodePoolsExpansion(testName string) {
 				if poolResizeIsInProgress(poolToBeResized) {
 					// wait until resize is completed and get the updated pool again
 					poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-					dash.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID  %s", poolIDToResize))
+					log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID  %s", poolIDToResize))
 				}
 			}
 
@@ -467,7 +468,7 @@ func nodePoolsExpansion(testName string) {
 		var expectedSizeWithJournal uint64
 		poolsExpectedSizeMap := make(map[string]uint64)
 		isjournal, err := isJournalEnabled()
-		dash.FailOnError(err, "Failed to check is Journal Enabled")
+		log.FailOnError(err, "Failed to check is Journal Enabled")
 		stepLog = fmt.Sprintf("Calculate expected pool size and trigger pool resize for %s", nodePoolToExpanded.Name)
 		Step(stepLog, func() {
 
@@ -490,7 +491,7 @@ func nodePoolsExpansion(testName string) {
 				if isjournal {
 					expectedSizeWithJournal = expectedSizeWithJournal - 3
 				}
-				dash.FailOnError(resizeErr, "Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal, resizeErr)
+				log.FailOnError(resizeErr, "Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal, resizeErr)
 			}
 
 		})
@@ -501,7 +502,7 @@ func nodePoolsExpansion(testName string) {
 			ValidateApplications(contexts)
 			for poolUUID, expectedSize := range poolsExpectedSizeMap {
 				resizedPool, err := GetStoragePoolByUUID(poolUUID)
-				dash.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID  %s", poolUUID))
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID  %s", poolUUID))
 				newPoolSize := resizedPool.TotalSize / units.GiB
 				isExpansionSuccess := false
 				expectedSizeWithJournal = expectedSize
