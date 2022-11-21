@@ -3,11 +3,11 @@ package tests
 import (
 	"fmt"
 
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
 )
 
