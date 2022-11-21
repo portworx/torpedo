@@ -2,7 +2,7 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/log"
+	"github.com/portworx/torpedo/pkg/log"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -220,7 +220,6 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 						log.FailOnError(err, "Failed starting nfs service on node : %s", n.Name)
 
 						ctx.RefreshStorageEndpoint = true
-						ValidateContext(ctx)
 						n2, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
 						log.FailOnError(err, "Failed to get node for volume : %s", vol.ID)
 

@@ -341,11 +341,12 @@ func (d *Dashboard) verify(r result) {
 
 //VerifySafely verify test without aborting the execution
 func (d *Dashboard) VerifySafely(actual, expected interface{}, description string) {
-	if actual == nil {
-		actual = "nil"
+	if actual == nil && expected == nil {
+		actual = true
+		expected = true
 	}
-	if expected == nil {
-		expected = "nil"
+	if actual != nil && expected == nil {
+		expected = "no error"
 	}
 
 	actualVal := fmt.Sprintf("%v", actual)
@@ -384,9 +385,7 @@ func (d *Dashboard) Fatal(description string, args ...interface{}) {
 	res.ResultStatus = false
 	res.ResultType = "error"
 	verifications = append(verifications, res)
-	d.Errorf(description, args...)
-	err := fmt.Sprintf(description, args...)
-	expect(err).NotTo(haveOccurred())
+	d.TestSetEnd()
 }
 
 ////VerifyFatal verify test and abort operation upon failure

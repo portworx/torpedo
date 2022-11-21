@@ -7,7 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/log"
+	"github.com/portworx/torpedo/pkg/log"
 	"net/http"
 	"regexp"
 

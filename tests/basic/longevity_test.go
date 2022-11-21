@@ -3,7 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/log"
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strconv"
 	"strings"

@@ -3,7 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/log"
+	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"strconv"
 	"strings"

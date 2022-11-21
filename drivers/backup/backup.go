@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/torpedo/log"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
 	"time"
 )
 
