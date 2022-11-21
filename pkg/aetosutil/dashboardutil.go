@@ -306,7 +306,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 		if os.Getenv("BUILD_URL") != "" {
 			testCase.Tags["BUILD_URL"] = os.Getenv("BUILD_URL")
 		}
-		
+
 		if tags != nil {
 			for key, val := range tags {
 				testCase.Tags[key] = val
@@ -375,6 +375,7 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 	} else {
 		res.ResultType = "error"
 		res.ResultStatus = false
+		logrus.Infof("DEBUGGING ERROR STRING: %s", reflect.TypeOf(actual).String())
 		if actual != nil && reflect.TypeOf(actual).String() == "*errors.errorString" {
 			d.Errorf(fmt.Sprintf("%v", actual))
 			logrus.Errorf(fmt.Sprintf("%v", actual))
