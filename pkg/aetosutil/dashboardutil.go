@@ -418,7 +418,6 @@ func (d *Dashboard) VerifyFatal(actual interface{}, expected interface{}, descri
 	actualVal := fmt.Sprintf("%v", actual)
 	expectedVal := fmt.Sprintf("%v", expected)
 	res := result{}
-
 	res.Actual = actualVal
 	res.Expected = expectedVal
 	res.Description = description
@@ -433,16 +432,12 @@ func (d *Dashboard) VerifyFatal(actual interface{}, expected interface{}, descri
 		res.ResultType = "error"
 		res.ResultStatus = false
 		if actual != nil && reflect.TypeOf(actual).String() == "*errors.errorString" {
-			if d.IsEnabled {
-				fmtMsg := fmt.Sprintf("%v", actual)
-				res := comment{}
-				res.TestCaseID = d.testcaseID
-				res.Description = fmtMsg
-				res.ResultType = "error"
-				d.addComment(res)
-			}
+			d.Errorf(fmt.Sprintf("%v", actual))
+			res.Actual = "Error"
+			res.Expected = "nil"
+		} else {
+			d.Log.Errorf("Actual:%v, Expected: %v", actual, expected)
 		}
-		d.Log.Errorf("Actual:%v, Expected: %v", actual, expected)
 	}
 	verifications = append(verifications, res)
 
