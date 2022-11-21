@@ -470,7 +470,7 @@ func ValidateCleanup() {
 			log.Infof("an error occurred, collecting bundle")
 			CollectSupport()
 		}
-		dash.VerifyFatal(err, nil, "Validate cleanup operation successful ?")
+		dash.VerifyFatal(err, nil, "Validate cleanup operation successful?")
 	})
 }
 
@@ -1338,7 +1338,8 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 			dash.Infof("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
 			err := Inst().V.ValidateDeleteVolume(vol)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("verify deleting app %s's volume %s, Err: %v", appName, vol.Name, err))
+			dash.FailOnError(err, fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("%s's volume %s deleted successfully?", appName, vol.Name))
 		})
 	}
 }
@@ -1699,9 +1700,7 @@ func ValidateClusterSize(count int64) {
 	currentNodeCount, err := Inst().N.GetASGClusterSize()
 	dash.FailOnError(err, "Failed to Get ASG Cluster Size")
 
-	dash.VerifyFatal(perZoneCount*int64(len(zones)), currentNodeCount, fmt.Sprintf("Verify if ASG cluster size is as expected."+
-		" Current size is [%d]. Expected ASG size is [%d]",
-		currentNodeCount, perZoneCount*int64(len(zones))))
+	dash.VerifyFatal(currentNodeCount, perZoneCount*int64(len(zones)), "ASG cluster size is as expected?")
 
 	// Validate storage node count
 	var expectedStorageNodesPerZone int
@@ -1713,12 +1712,8 @@ func ValidateClusterSize(count int64) {
 	storageNodes, err := GetStorageNodes()
 	dash.FailOnError(err, "Storage nodes are empty")
 
-	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones),
-		fmt.Sprintf("Verify if c urrent number of storeage nodes [%d] match the expected number of storage nodes [%d]."+
-			"List of storage nodes:[%v]",
-			len(storageNodes), expectedStorageNodesPerZone*len(zones), storageNodes))
-
-	dash.Infof("Validated successfully that [%d] storage nodes are present", len(storageNodes))
+	dash.Infof("List of storage nodes:[%v]", storageNodes)
+	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
 }
 
 // GetStorageNodes get storage nodes in the cluster
@@ -1751,7 +1746,7 @@ func CollectSupport() {
 			}
 		}
 		nodes := node.GetWorkerNodes()
-		dash.VerifyFatal(len(nodes) > 0, true, "Worker nodes not found")
+		dash.VerifyFatal(len(nodes) > 0, true, "Worker nodes found ?")
 
 		for _, n := range nodes {
 			if !n.IsStorageDriverInstalled {
@@ -5053,7 +5048,7 @@ func RegisterBackupCluster(orgID string, cloud_name string, uid string) {
 	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
 	dash.FailOnError(err, "Cluster Object nil")
 	clusterObj := clusterResp.GetCluster()
-	dash.VerifyFatal(clusterObj.Status.Status, api.ClusterInfo_StatusInfo_Online, "Backup Cluster Registered ?")
+	dash.VerifyFatal(clusterObj.Status.Status, api.ClusterInfo_StatusInfo_Online, "Backup Cluster Registered?")
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {

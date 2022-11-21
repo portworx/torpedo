@@ -225,7 +225,7 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 
 						// the mount should move to another node otherwise fail
 						dash.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
-						dash.VerifyFatal(n.SchedulerNodeName != n2.SchedulerNodeName, true, fmt.Sprintf("Verfiy volume is scheduled on differt nodes"))
+						dash.VerifyFatal(n.SchedulerNodeName != n2.SchedulerNodeName, true, "Volume is scheduled on different nodes?")
 
 						StartVolDriverAndWait([]node.Node{*n})
 						dash.FailOnError(err, "Failed to Start volume driver on node: %s success ?", n.Name)

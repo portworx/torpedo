@@ -83,7 +83,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("expected new size to be '%d' or '%d', and error %s not not have occured", expectedSize, expectedSizeWithJournal, resizeErr))
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
 		})
 
 		stepLog = "Ensure that new pool has been expanded to the expected size"
@@ -171,7 +171,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal, and error %s not not have occured", expectedSize, expectedSizeWithJournal, resizeErr))
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 		})
 
 		Step("Ensure that new pool has been expanded to the expected size", func() {
@@ -266,7 +266,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			err = RebootNodeAndWait(*storageNode)
 			dash.FailOnError(err, "Failed to reboot node and wait till it is up")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d', and error %s not not have occured", expectedSize, expectedSizeWithJournal, resizeErr))
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
 		})
 
 		stepLog = "Ensure that new pool has been expanded to the expected size"
@@ -361,7 +361,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 			err = RebootNodeAndWait(*storageNode)
 			dash.FailOnError(err, "Failed to reboot node and wait till it is up")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal, and error %s not not have occured", expectedSize, expectedSizeWithJournal, resizeErr))
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 		})
 
 		stepLog = "Ensure that new pool has been expanded to the expected size"

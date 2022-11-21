@@ -6,6 +6,7 @@ import (
 	rest "github.com/portworx/torpedo/pkg/restutil"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -431,6 +432,16 @@ func (d *Dashboard) VerifyFatal(actual interface{}, expected interface{}, descri
 	} else {
 		res.ResultType = "error"
 		res.ResultStatus = false
+		if actual != nil && reflect.TypeOf(actual).String() == "*errors.errorString" {
+			if d.IsEnabled {
+				fmtMsg := fmt.Sprintf("%v", actual)
+				res := comment{}
+				res.TestCaseID = d.testcaseID
+				res.Description = fmtMsg
+				res.ResultType = "error"
+				d.addComment(res)
+			}
+		}
 		d.Log.Errorf("Actual:%v, Expected: %v", actual, expected)
 	}
 	verifications = append(verifications, res)
