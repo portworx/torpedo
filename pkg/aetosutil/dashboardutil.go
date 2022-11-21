@@ -342,11 +342,9 @@ func (d *Dashboard) verify(r result) {
 
 //VerifySafely verify test without aborting the execution
 func (d *Dashboard) VerifySafely(actual, expected interface{}, description string) {
-	if actual == nil {
-		actual = "nil"
-	}
-	if expected == nil {
-		expected = "nil"
+	if actual == nil && expected == nil {
+		actual = true
+		expected = true
 	}
 
 	actualVal := fmt.Sprintf("%v", actual)
