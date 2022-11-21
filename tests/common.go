@@ -480,7 +480,7 @@ func processError(err error, errChan ...*chan error) {
 		log.Errorf(fmt.Sprintf("%v", err))
 		updateChannel(err, errChan...)
 	} else {
-		log.FailOnError(err, "Verify if error occurred")
+		log.FailOnError(err, "processError")
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	rest "github.com/portworx/torpedo/pkg/restutil"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"os"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -296,10 +297,20 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 		testCase.TestType = "TEST"
 
 		testCase.TestSetID = d.TestSetID
-
 		testCase.TestRailID = testRailID
+
+		// Check for common env variables and add as tags
+		if os.Getenv("JOB_NAME") != "" {
+			testCase.Tags["JOB_NAME"] = os.Getenv("JOB_NAME")
+		}
+		if os.Getenv("BUILD_URL") != "" {
+			testCase.Tags["BUILD_URL"] = os.Getenv("BUILD_URL")
+		}
+		
 		if tags != nil {
-			testCase.Tags = tags
+			for key, val := range tags {
+				testCase.Tags[key] = val
+			}
 		}
 		testCaseStartTime = time.Now()
 
@@ -316,7 +327,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 				logrus.Errorf("TestCase creation failed. Cause : %v", err)
 			}
 		}
-
+		d.Infof("Torpedo Command: %s", os.Args)
 		testCasesStack = append(testCasesStack, d.testcaseID)
 
 	}
