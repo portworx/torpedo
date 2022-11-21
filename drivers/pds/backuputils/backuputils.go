@@ -31,17 +31,17 @@ type BackupClient struct {
 func (backupClient *BackupClient) CreateAdhocBackup(deploymentID, backupTargetID string) (*pds.ModelsBackup, error) {
 	deployment, err := backupClient.components.DataServiceDeployment.GetDeployment(deploymentID)
 	if err != nil {
-		log.Error("Unable to fetch info about the deployment, Err: %v ", err)
+		log.Errorf("Unable to fetch info about the deployment, Err: %v ", err)
 		return nil, err
 	}
 	backupTarget, err := backupClient.components.BackupTarget.GetBackupTarget(backupTargetID)
 	if err != nil {
-		log.Error("Unable to fetch info about the backup target, Err: %v ", err)
+		log.Errorf("Unable to fetch info about the backup target, Err: %v ", err)
 		return nil, err
 	}
 	backup, err := backupClient.components.Backup.CreateBackup(deploymentID, backupTargetID, backupJobHistoryLimit, true)
 	if err != nil {
-		log.Error("Error while performing adhoc backup for the deployment: {%v}, backuptarget: {%v}, \n Err: %v ", deployment.GetName(), backupTarget.GetName(), err)
+		log.Errorf("Error while performing adhoc backup for the deployment: {%v}, backuptarget: {%v}, \n Err: %v ", deployment.GetName(), backupTarget.GetName(), err)
 		return nil, err
 	}
 	// Implement verification whether backup job is succededed.
@@ -52,17 +52,17 @@ func (backupClient *BackupClient) CreateAdhocBackup(deploymentID, backupTargetID
 func (backupClient *BackupClient) CreateScehduledBackup(deploymentID, backupTargetID string) (*pds.ModelsBackup, error) {
 	deployment, err := backupClient.components.DataServiceDeployment.GetDeployment(deploymentID)
 	if err != nil {
-		log.Error("Unable to fetch info about the deployment, Err: %v ", err)
+		log.Errorf("Unable to fetch info about the deployment, Err: %v ", err)
 		return nil, err
 	}
 	backupTarget, err := backupClient.components.BackupTarget.GetBackupTarget(backupTargetID)
 	if err != nil {
-		log.Error("Unable to fetch info about the backup target, Err: %v ", err)
+		log.Errorf("Unable to fetch info about the backup target, Err: %v ", err)
 		return nil, err
 	}
 	backup, err := backupClient.components.Backup.CreateBackup(deploymentID, backupTargetID, backupJobHistoryLimit, false)
 	if err != nil {
-		log.Error("Error while performing adhoc backup for the deployment: {%v}, backuptarget: {%v}, \n Err: %v ", deployment.GetName(), backupTarget.GetName(), err)
+		log.Errorf("Error while performing adhoc backup for the deployment: {%v}, backuptarget: {%v}, \n Err: %v ", deployment.GetName(), backupTarget.GetName(), err)
 		return nil, err
 	}
 	// Implement verification whether backup job is succededed.
@@ -78,19 +78,19 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	backupCred, err := backupClient.components.BackupCredential.CreateS3BackupCredential(tenantId, name, akid, awsS3endpoint, skid)
 
 	if err != nil {
-		log.Error("Error in adding the backup credentials to PDS , Err: %v ", err)
+		log.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 		return nil, err
 	}
 	log.Info("Create S3 bucket on AWS cloud.")
 	err = backupClient.awsStorageClient.createBucket(bucketName)
 	if err != nil {
-		log.Error("Failed while creating S3 bucket, Err: %v ", err)
+		log.Errorf("Failed while creating S3 bucket, Err: %v ", err)
 		return nil, err
 	}
-	log.Info("Adding backup target {Name: %v} to PDS.", name)
+	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, region, "s3")
 	if err != nil {
-		log.Error("Failed to create AWS S3 backup target, Err: %v ", err)
+		log.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
 		return nil, err
 	}
 	return backupTarget, nil
@@ -106,19 +106,19 @@ func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name
 	backupCred, err := backupClient.components.BackupCredential.CreateAzureBackupCredential(tenantId, name, accountKey, accountName)
 
 	if err != nil {
-		log.Error("Error in adding the backup credentials to PDS , Err: %v ", err)
+		log.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 		return nil, err
 	}
 	log.Info("Create azure storage.")
 	err = backupClient.azureStorageClient.createBucket(bucketName)
 	if err != nil {
-		log.Error("Failed while creating azure container, Err: %v ", err)
+		log.Errorf("Failed while creating azure container, Err: %v ", err)
 		return nil, err
 	}
-	log.Info("Adding backup target {Name: %v} to PDS.", name)
+	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, "", "azure")
 	if err != nil {
-		log.Error("Failed to create Azure backup target, Err: %v ", err)
+		log.Errorf("Failed to create Azure backup target, Err: %v ", err)
 		return nil, err
 	}
 	return backupTarget, nil
@@ -138,19 +138,19 @@ func (backupClient *BackupClient) CreateGcpBackupCredsAndTarget(tenantId, name s
 	backupCred, err := backupClient.components.BackupCredential.CreateGoogleCredential(tenantId, name, projectId, string(contents))
 
 	if err != nil {
-		log.Error("Error in adding the backup credentials to PDS , Err: %v ", err)
+		log.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 		return nil, err
 	}
 	log.Info("Create google storage.")
 	err = backupClient.gcpStorageClient.createBucket(bucketName)
 	if err != nil {
-		log.Error("Failed while creating bucket, Err: %v ", err)
+		log.Errorf("Failed while creating bucket, Err: %v ", err)
 		return nil, err
 	}
-	log.Info("Adding backup target {Name: %v} to PDS.", name)
+	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, "", "google")
 	if err != nil {
-		log.Error("Failed to create google backup target, Err: %v ", err)
+		log.Errorf("Failed to create google backup target, Err: %v ", err)
 		return nil, err
 	}
 	return backupTarget, nil
@@ -167,19 +167,19 @@ func (backupClient *BackupClient) CreateS3CompatibleBackupCredsAndTarget(tenantI
 	backupCred, err := backupClient.components.BackupCredential.CreateS3CompatibleBackupCredential(tenantId, name, akid, endpoint, skid)
 
 	if err != nil {
-		log.Error("Error in adding the backup credentials to PDS , Err: %v ", err)
+		log.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 		return nil, err
 	}
 	log.Info("Create S3 compatible bucket.")
 	err = backupClient.s3CompatibleStorageClient.createBucket(bucketName)
 	if err != nil {
-		log.Error("Failed while creating S3 bucket, Err: %v ", err)
+		log.Errorf("Failed while creating S3 bucket, Err: %v ", err)
 		return nil, err
 	}
-	log.Info("Adding backup target {Name: %v} to PDS.", name)
+	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, region, "s3-compatible")
 	if err != nil {
-		log.Error("Failed to create AWS S3 backup target, Err: %v ", err)
+		log.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
 		return nil, err
 	}
 	return backupTarget, nil
@@ -190,22 +190,22 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 	log.Info("Removing S3 backup creadentials and target from PDS.")
 	backupTarget, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
 	credId := backupTarget.GetBackupCredentialsId()
-	log.Info("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
+	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
 	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
 	backupTarget.GetBackupCredentialsId()
 	if err != nil {
-		log.Error("Failed to delete AWS S3 backup target, Err: %v ", err)
+		log.Errorf("Failed to delete AWS S3 backup target, Err: %v ", err)
 		return err
 	}
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
-		log.Error("Failed to delete AWS S3 backup credentials, Err: %v ", err)
+		log.Errorf("Failed to delete AWS S3 backup credentials, Err: %v ", err)
 		return err
 	}
 	log.Info("Delete S3 bucket from AWS cloud.")
 	err = backupClient.awsStorageClient.deleteBucket(bucketName)
 	if err != nil {
-		log.Error("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
+		log.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
 		return err
 	}
 
@@ -218,22 +218,22 @@ func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId
 	log.Info("Removing Azure backup creadentials and target from PDS.")
 	backupTarget, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
 	credId := backupTarget.GetBackupCredentialsId()
-	log.Info("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
+	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
 	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
 	backupTarget.GetBackupCredentialsId()
 	if err != nil {
-		log.Error("Failed to delete Azure backup target, Err: %v ", err)
+		log.Errorf("Failed to delete Azure backup target, Err: %v ", err)
 		return err
 	}
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
-		log.Error("Failed to delete Azure backup credentials, Err: %v ", err)
+		log.Errorf("Failed to delete Azure backup credentials, Err: %v ", err)
 		return err
 	}
 	log.Info("Deleting container from Azure.")
 	err = backupClient.azureStorageClient.deleteBucket(bucketName)
 	if err != nil {
-		log.Error("Failed to delete Azure comtainer %s, Err: %v ", bucketName, err)
+		log.Errorf("Failed to delete Azure comtainer %s, Err: %v ", bucketName, err)
 		return err
 	}
 
@@ -246,22 +246,22 @@ func (backupClient *BackupClient) DeleteGoogleBackupCredsAndTarget(backupTargetI
 	log.Info("Removing Google backup creadentials and target from PDS.")
 	backupTarget, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
 	credId := backupTarget.GetBackupCredentialsId()
-	log.Info("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
+	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
 	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
 	backupTarget.GetBackupCredentialsId()
 	if err != nil {
-		log.Error("Failed to delete Google backup target, Err: %v ", err)
+		log.Errorf("Failed to delete Google backup target, Err: %v ", err)
 		return err
 	}
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
-		log.Error("Failed to delete Google backup credentials, Err: %v ", err)
+		log.Errorf("Failed to delete Google backup credentials, Err: %v ", err)
 		return err
 	}
 	log.Info("Deleting google storage.")
 	err = backupClient.gcpStorageClient.deleteBucket(bucketName)
 	if err != nil {
-		log.Error("Failed to delete bucket %s, Err: %v ", bucketName, err)
+		log.Errorf("Failed to delete bucket %s, Err: %v ", bucketName, err)
 		return err
 	}
 	return nil
@@ -272,22 +272,22 @@ func (backupClient *BackupClient) DeleteS3CompatibleBackupCredsAndTarget(backupT
 	log.Info("Removing S3-Compatible backup creadentials and target from PDS.")
 	backupTarget, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
 	credId := backupTarget.GetBackupCredentialsId()
-	log.Info("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
+	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
 	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
 	backupTarget.GetBackupCredentialsId()
 	if err != nil {
-		log.Error("Failed to delete S3-Compatible backup target, Err: %v ", err)
+		log.Errorf("Failed to delete S3-Compatible backup target, Err: %v ", err)
 		return err
 	}
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
-		log.Error("Failed to delete S3-Compatible backup credentials, Err: %v ", err)
+		log.Errorf("Failed to delete S3-Compatible backup credentials, Err: %v ", err)
 		return err
 	}
 	log.Info("Deleting S3-Compatible storage.")
 	err = backupClient.s3CompatibleStorageClient.deleteBucket(bucketName)
 	if err != nil {
-		log.Error("Failed to delete bucket %s, Err: %v ", bucketName, err)
+		log.Errorf("Failed to delete bucket %s, Err: %v ", bucketName, err)
 		return err
 	}
 	return nil
