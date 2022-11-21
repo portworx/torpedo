@@ -41,7 +41,7 @@ var _ = Describe("{SetupTeardown}", func() {
 		dash.VerifySafely(true, true, "This is VerifySafely pass")
 		dash.VerifyFatal(true, true, "This is VerifyFatal pass")
 		dash.VerifySafely(true, false, "This is VerifySafely fail")
-		dash.VerifyFatal(true, true, "This is VerifyFatal fail")
+		dash.Fatal("Raising ERROR, everything should stop here")
 		ValidateApplications(contexts)
 
 		opts := make(map[string]bool)

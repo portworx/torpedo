@@ -18,7 +18,6 @@ import (
 
 var (
 	testCasesStack    = make([]int, 0)
-	verifications     = make([]result, 0)
 	testCaseStartTime time.Time
 	testCase          TestCase
 
@@ -67,7 +66,6 @@ type Dashboard struct {
 	//TestSet object created during initialization
 	TestSet           *TestSet
 	testcaseID        int
-	verifications     []result
 	testSetStartTime  time.Time
 	testCaseStartTime time.Time
 }
@@ -206,7 +204,6 @@ func (d *Dashboard) TestCaseEnd() {
 			logrus.Errorf("Failed to end TestCase, Resp : %s", string(resp))
 		}
 
-		verifications = nil
 		removeTestCaseFromStack(d.testcaseID)
 
 		var updateResponse testCaseUpdateResponse
@@ -376,12 +373,9 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 			logrus.Errorf("Actual:%v, Expected: %v", actual, expected)
 		}
 	}
-	verifications = append(verifications, res)
-
 	if d.IsEnabled {
 		d.verify(res)
 	}
-
 }
 
 func (d *Dashboard) Fatal(description string, args ...interface{}) {
@@ -392,7 +386,9 @@ func (d *Dashboard) Fatal(description string, args ...interface{}) {
 	res.TestCaseID = d.testcaseID
 	res.ResultStatus = false
 	res.ResultType = "error"
-	verifications = append(verifications, res)
+	if d.IsEnabled {
+		d.verify(res)
+	}
 	d.TestSetEnd()
 }
 
