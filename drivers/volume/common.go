@@ -21,7 +21,7 @@ import (
 // to PX for running diagnostics on a node. This object can also be passed over
 // the wire through an API server for remote diag requests.
 type DiagRequestConfig struct {
-	// OutputFile for the diags.tgz
+	// OutputFile for the diags.tar.gz
 	OutputFile string
 	// DockerHost config
 	DockerHost string

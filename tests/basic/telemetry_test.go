@@ -20,9 +20,11 @@ import (
 )
 
 const (
-	telemetryCmdRetry      = 5 * time.Second
-	telemetryCmdTimeout    = 15 * time.Second
-	TelemetryEnabledStatus = "100"
+	telemetryCmdRetry              = 5 * time.Second
+	telemetryCmdTimeout            = 15 * time.Second
+	defaultCheckDiagsRetryInterval = 15 * time.Second
+	defaultCheckDiagsTimeout       = 5 * time.Minute
+	TelemetryEnabledStatus         = "100"
 )
 
 var (
@@ -31,8 +33,8 @@ var (
 		TimeBeforeRetry: telemetryCmdRetry,
 		Sudo:            false,
 	}
-	isTelemetryOperatorEnabled = false
-	oneTimeInitDone            = false
+	isTelemetryEnabledInStorageCluster = false
+	oneTimeInitDone                    = false
 )
 
 // Taken from SharedV4 tests...
@@ -40,6 +42,7 @@ func telemetryRunCmd(cmd string, n node.Node, cmdConnectionOpts *node.Connection
 	if cmdConnectionOpts == nil {
 		cmdConnectionOpts = &telemetryCmdConnectionOpts
 	}
+	logrus.Debug("Executing command [cmd]")
 	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, *cmdConnectionOpts)
 	return output, err
 }
@@ -69,18 +72,18 @@ func oneTimeInit() {
 	if oneTimeInitDone {
 		return
 	}
-	logrus.Infof("Checking telemetry status...")
+	logrus.Infof("Checking if Telemetry is enabled in StorageCluster...")
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	if isOpBased {
 		spec, err := Inst().V.GetStorageCluster()
 		Expect(err).ToNot(HaveOccurred())
 		if spec.Spec.Monitoring != nil && spec.Spec.Monitoring.Telemetry != nil && spec.Spec.Monitoring.Telemetry.Enabled {
-			logrus.Infof("Telemetry is operator enabled.")
-			isTelemetryOperatorEnabled = true
+			logrus.Infof("Telemetry is enabled in StorageCluster.")
+			isTelemetryEnabledInStorageCluster = true
 		}
 	}
-	if !isTelemetryOperatorEnabled {
-		logrus.Infof("Telemetry is not enabled.")
+	if !isTelemetryEnabledInStorageCluster {
+		logrus.Infof("Telemetry is not enabled in StorageCluster.")
 	}
 	oneTimeInitDone = true
 }
@@ -98,7 +101,7 @@ var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		if !isTelemetryOperatorEnabled {
+		if !isTelemetryEnabledInStorageCluster {
 			Skip("Skip test because telemetry is not enabled...")
 		}
 	})
@@ -172,7 +175,7 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 		for _, testRailID := range testrailIDs {
 			runIDs = append(runIDs, testrailuttils.AddRunsToMilestone(testRailID))
 		}
-		if !isTelemetryOperatorEnabled {
+		if !isTelemetryEnabledInStorageCluster {
 			Skip("Skip test because telemetry is not enabled...")
 		}
 	})
@@ -233,94 +236,88 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 	var newDiags string
 	var err error
 	var pxInstalled bool
-	var skipTest = false
 
-	It("has to collect, validate profile diags on S3", func() {
+	It("has to collect, validate profile only diags on S3", func() {
 		contexts = make([]*scheduler.Context, 0)
+
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
 			pxInstalled, err = Inst().V.IsPxInstalled(currNode)
 			if err != nil {
-				logrus.Debugf("Could not get PX status on %s", currNode.Name)
+				logrus.Debugf("Could not get PX status on node [%s]", currNode.Name)
 			}
+
 			if pxInstalled {
-				// Get the most recent profile diags for comparison
-				Step(fmt.Sprintf("Check latest profile diags on node %v", currNode.Name), func() {
-					logrus.Infof(" Getting latest profile  diags on %v", currNode.Name)
-					existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"),
-						currNode, nil)
+				checkDiagsCmd := "ls -t /var/cores/*-*.{stack,heap} | head -n 2"
+				if isTelemetryEnabledInStorageCluster && TelemetryEnabled(currNode) {
+					checkDiagsCmd = "ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"
+				}
+				// Get the most recent profile only diags for comparison
+				Step(fmt.Sprintf("Check for existing profile only diags on node [%s]", currNode.Name), func() {
+					logrus.Infof("Checking if there are any already existing profile only diags on node [%s]", currNode.Name)
+					existingDiags, err = telemetryRunCmd(checkDiagsCmd, currNode, nil)
 					if err == nil {
-						logrus.Infof("Found latest profiles diags on node %s:\n%s ", currNode.Name, existingDiags)
+						logrus.Infof("Found already existing profiles only diags on node [%s]:\n%s", currNode.Name, existingDiags)
 					} else {
 						existingDiags = ""
 					}
 				})
-				// Issue a profile diags to generate new files.
-				Step(fmt.Sprintf("collect profile diags on node: %s | %s", currNode.Name, currNode.Type), func() {
+				// Issue a profile only diags to generate new files.
+				Step(fmt.Sprintf("Collect new profile only diags on node [%s]", currNode.Name), func() {
 					config := &torpedovolume.DiagRequestConfig{
 						DockerHost: "unix:///var/run/docker.sock",
 						Profile:    true,
 					}
-					if TelemetryEnabled(currNode) {
-						err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
-						if err != nil {
-							logrus.Errorf("Failed to collect diags on Node: %s Err: %v", currNode.Name, err)
-						}
-						Expect(err).NotTo(HaveOccurred(), "Profile only diags collected successfully")
-					} else {
-						logrus.Infof("Telemetry not enabled on the node %s", currNode.Name)
-						skipTest = true
-						return
+
+					// Validate is set to false, since profile only diags are not collecting diags-*.tar.gz
+					err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false})
+					if err != nil {
+						logrus.Errorf("Failed to collect profile only diags on node [%s], Err: %v", currNode.Name, err)
 					}
+					Expect(err).NotTo(HaveOccurred(), "Profile only diags were successfully collected on node [%s]", currNode.Name)
 				})
 				// This sleep is required because the heap and stack logs might not have been written at same time.
 				time.Sleep(10 * time.Second)
-				// Get the latest files in the directory.  The newly generated files will not equal the most recent. So you know they are new.
-				Step(fmt.Sprintf("Get the new profile diags on node %v", currNode.Name), func() {
-					if skipTest {
-						logrus.Infof("Skipping getting new filename for node %s", currNode.Name)
-						return
-					}
-					logrus.Infof("Getting latest profile diags on %66v", currNode.Name)
+				// Get the latest files in the directory. The newly generated files will not equal the most recent. So you know they are new.
+				Step(fmt.Sprintf("Get the new profile only diags on node [%s]", currNode.Name), func() {
+					logrus.Infof("Getting the latest generated profile only diags on node [%s]", currNode.Name)
 					Eventually(func() bool {
-						newDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"),
-							currNode, nil)
+						newDiags, err = telemetryRunCmd(checkDiagsCmd, currNode, nil)
 						if err == nil {
 							if existingDiags != "" && existingDiags == newDiags {
-								logrus.Infof("No new profile diags found... current latest ones are %v", newDiags)
+								logrus.Infof("No new profile only diags were found... current latest profile only diags are:\n%s", newDiags)
 								newDiags = ""
 							}
 							if len(newDiags) > 0 {
-								logrus.Infof("Found new profile diags:\n%s", newDiags)
 								// Needs to contain both stack/heap
 								if strings.Contains(newDiags, ".heap") && strings.Contains(newDiags, ".stack") {
+									logrus.Infof("Found new profile only diags:\n%s", newDiags)
 									diagsFiles = strings.Split(newDiags, "\n")
-									logrus.Debugf("Files found %v", diagsFiles)
 									return true
 								}
 							}
 						}
 						return false
-					}, 5*time.Minute, 15*time.Second).Should(BeTrue(), "failed to generate profile diags on node %s", currNode.Name)
+					}, defaultCheckDiagsRetryInterval, defaultCheckDiagsTimeout).Should(BeTrue(), "failed to find new profile only diags on node [%s]", currNode.Name)
 
 				})
-				Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
-					for _, file := range diagsFiles {
-						fileNameToCheck := path.Base(file)
-						logrus.Debugf("Validating file %s", fileNameToCheck)
-						if !skipTest { // This is done in case the system is run without telemetry.
+				Step(fmt.Sprintf("Validate profile only diags got uploaded on S3"), func() {
+					if isTelemetryEnabledInStorageCluster && TelemetryEnabled(currNode) {
+						for _, file := range diagsFiles {
+							fileNameToCheck := path.Base(file)
+							logrus.Debugf("Validating file: %s", fileNameToCheck)
 							err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
 							if err != nil {
-								logrus.Errorf("Failed to validate diags: %v", err)
+								logrus.Errorf("Failed to validate profile only diags, Err: %v", err)
 							}
-							Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
-						} else {
-							logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+							Expect(err).NotTo(HaveOccurred(), "Profile only diags files got validated on s3")
 						}
+					} else {
+						logrus.Debugf("Telemetry is not enabled on node [%s], skipping validating profile only diags on S3", currNode.Name)
 					}
 				})
 			} else {
-				logrus.Debugf("Px not enabled on node %s", currNode.Name)
+				logrus.Debugf("PX is not installed on node [%s], skipping collecting diags on this node", currNode.Name)
 			}
 		}
 		for _, ctx := range contexts {
@@ -344,7 +341,7 @@ var _ = Describe("{DiagsClusterWide}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		if !isTelemetryOperatorEnabled {
+		if !isTelemetryEnabledInStorageCluster {
 			Skip("Skip test because telemetry is not enabled...")
 		}
 	})
@@ -452,7 +449,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 		for _, testRailID := range testProcNmsTestRailIDs {
 			runIDs[testRailID] = testrailuttils.AddRunsToMilestone(testRailID)
 		}
-		if !isTelemetryOperatorEnabled {
+		if !isTelemetryEnabledInStorageCluster {
 			Skip("Skip test because telemetry is not enabled...")
 		}
 	})
@@ -562,7 +559,7 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		if !isTelemetryOperatorEnabled {
+		if !isTelemetryEnabledInStorageCluster {
 			Skip("Skip test because telemetry is not enabled...")
 		}
 	})
@@ -633,7 +630,7 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		if !isTelemetryOperatorEnabled {
+		if !isTelemetryEnabledInStorageCluster {
 			Skip("Skip test because telemetry is not enabled...")
 		}
 	})
