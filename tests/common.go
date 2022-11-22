@@ -376,15 +376,13 @@ func InitInstance() {
 		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
 	})
-	if err != nil {
-		log.Errorf("Error occured while Scheduler Driver Initialization, Err: %v", err)
-	}
-	expect(err).NotTo(haveOccurred())
+
+	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
 
 	if Inst().ConfigMap != "" {
 		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-		expect(err).NotTo(haveOccurred())
+		log.FailOnError(err, "Error occured while getting token from config map")
 		log.Infof("Token used for initializing: %s ", token)
 	} else {
 		token = ""
@@ -393,34 +391,24 @@ func InitInstance() {
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
 	})
-	if err != nil {
-		log.Errorf("Error occured while Node Driver Initialization, Err: %v", err)
-	}
-	expect(err).NotTo(haveOccurred())
+	log.FailOnError(err, "Error occured while Node Driver Initialization")
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
-	if err != nil {
-		log.Errorf("Error occured while Volume Driver Initialization, Err: %v", err)
-	}
-	expect(err).NotTo(haveOccurred())
+	log.FailOnError(err, "Error occured while Volume Driver Initialization")
 
 	err = Inst().M.Init(Inst().JobName, Inst().JobType)
-	expect(err).NotTo(haveOccurred())
+	log.FailOnError(err, "Error occured while monitor Initialization")
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
-		if err != nil {
-			log.Errorf("Error occured while Backup Driver Initialization, Err: %v", err)
-		}
-		expect(err).NotTo(haveOccurred())
+		log.FailOnError(err, "Error occured while Backup Driver Initialization")
 	}
 	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
 		err = testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
 		if err == nil {
 			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
 				err = fmt.Errorf("not all details provided to update testrail")
-				log.Errorf("Err: %v", err)
-				expect(err).NotTo(haveOccurred())
+				log.FailOnError(err, "Error occured while testrail initialization")
 			}
 			testrailuttils.CreateMilestone()
 		}
@@ -437,10 +425,7 @@ func InitInstance() {
 	}
 
 	pxVersion, err := Inst().V.GetDriverVersion()
-	if err != nil {
-		log.Errorf(err.Error())
-		expect(err).NotTo(haveOccurred())
-	}
+	log.FailOnError(err, "Error occured while getting PX version")
 	commitID := strings.Split(pxVersion, "-")[1]
 	t := Inst().Dash.TestSet
 	t.CommitID = commitID
