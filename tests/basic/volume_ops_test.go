@@ -317,7 +317,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
 							err = Inst().V.SetReplicationFactor(v, currRep-1, updateReplicaSet, true)
 							log.FailOnError(err, "Failed to set repl factor")
-							dash.VerifyFatal(currRep, MinRF, "Repl factor set successfully?")
+							dash.VerifyFatal(err == nil, true, "Repl factor set successfully?")
 						})
 					stepLog = fmt.Sprintf("validate successful repl decrease on app %s's volume: %v",
 						ctx.App.Key, v)
@@ -367,7 +367,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
 							err = Inst().V.SetReplicationFactor(v, currRep+1, updateReplicaSet, true)
 							log.FailOnError(err, "Failed to set vol %s repl factor", v.Name)
-							dash.VerifyFatal(currRep, MaxRF, fmt.Sprintf("Vol %s repl factor set as expected?", v.Name))
+							dash.VerifyFatal(err == nil, true, fmt.Sprintf("Vol %s repl factor set as expected?", v.Name))
 						})
 					stepLog = fmt.Sprintf("validate successful repl increase on app %s's volume: %v",
 						ctx.App.Key, v)
