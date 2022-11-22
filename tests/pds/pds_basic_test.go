@@ -69,6 +69,8 @@ func TestDataService(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
+		logrus.Infof("Initializing torpedo instance.")
+		InitInstance()
 		dash = Inst().Dash
 		dash.TestSetBegin(dash.TestSet)
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")

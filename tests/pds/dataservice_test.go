@@ -8,10 +8,20 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/torpedo/drivers/node"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+)
+
+const (
+	defaultWaitRebootTimeout     = 5 * time.Minute
+	defaultWaitRebootRetry       = 10 * time.Second
+	defaultCommandRetry          = 5 * time.Second
+	defaultCommandTimeout        = 1 * time.Minute
+	defaultTestConnectionTimeout = 15 * time.Minute
+	defaultRebootTimeRange       = 5 * time.Minute
 )
 
 var _ = Describe("{DeletePDSPods}", func() {
@@ -1066,3 +1076,122 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 
 	return cleanup
 }
+
+var _ = Describe("{RollingRebootNodes}", func() {
+	JustBeforeEach(func() {
+		dash.TestCaseBegin("RollingRebootNodes", "Reboot node(s) while the data services will be running", "", nil)
+	})
+
+	It("has to deploy data service and reboot node(s) while the data services will be running.", func() {
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				dash.Infof("Deploying DataService %v ", ds.Name)
+				isDeploymentsDeleted = false
+				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				logrus.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+
+				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+
+				logrus.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+
+				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
+					deploymentTargetID,
+					dnsZone,
+					deploymentName,
+					namespaceID,
+					dataServiceDefaultAppConfigID,
+					int32(ds.Replicas),
+					serviceType,
+					dataServiceDefaultResourceTemplateID,
+					storageTemplateID,
+					ds.Version,
+					ds.Image,
+					namespace,
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				Step("Validate Storage Configurations", func() {
+					logrus.Infof("data service deployed %v ", ds.Name)
+					dash.Infof("Validating DataService %v ", ds.Name)
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					Expect(err).NotTo(HaveOccurred())
+					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+					logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+					logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+					logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+					logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+					logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
+					logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+
+					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+				})
+
+				Step("Reboot nodes", func() {
+					dash.Info("Rebooting all the nodes in rolling fashion.")
+					nodesToReboot := node.GetWorkerNodes()
+					for _, n := range nodesToReboot {
+						dash.Infof("reboot node: %s", n.Name)
+						err = Inst().N.RebootNode(n, node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+						Expect(err).NotTo(HaveOccurred())
+
+						logrus.Infof("wait for node: %s to be back up", n.Name)
+						err = Inst().N.TestConnection(n, node.ConnectionOpts{
+							Timeout:         defaultTestConnectionTimeout,
+							TimeBeforeRetry: defaultWaitRebootRetry,
+						})
+						if err != nil {
+							dash.Errorf("Error while testing node status %v, err: %v", n.Name, err.Error())
+						}
+						Expect(err).NotTo(HaveOccurred())
+					}
+
+				})
+
+				Step("get pods from pds-system namespace", func() {
+					podList, err := pdslib.GetPods("pds-system")
+					Expect(err).NotTo(HaveOccurred())
+
+					logrus.Info("PDS System Pods")
+					for _, pod := range podList.Items {
+						logrus.Infof("%v", pod.Name)
+					}
+				})
+
+				Step("Validate Deployments after pods are up", func() {
+					dash.Info("Validate Deployments after pds pods are up")
+					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					Expect(err).NotTo(HaveOccurred())
+					dash.Info("Deployments pods are up and healthy")
+				})
+
+				Step("Delete the deployment", func() {
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					Expect(err).NotTo(HaveOccurred())
+					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
