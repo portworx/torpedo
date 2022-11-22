@@ -21,8 +21,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const poolResizeTimeout = time.Minute * 10
-const retryTimeout = time.Minute
+const poolResizeTimeout = time.Minute * 180
+const retryTimeout = time.Minute * 2
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	JustBeforeEach(func() {
@@ -676,7 +676,8 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				}
 				if expandedPool.LastOperation != nil {
 					log.Infof("Pool Resize Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
-					if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS && strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance is running") {
+					if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
+						(strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance is running") || strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress")) {
 						return nil, false, nil
 					}
 					if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED {
@@ -702,18 +703,19 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				}
 			}
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			expectedSizeWithJournal := expandedExpectedPoolSize
+
 			isjournal, err := isJournalEnabled()
 			dash.VerifyFatal(err, nil, "Validate is journal enabled check")
-			if isjournal {
-				expectedSizeWithJournal = expectedSizeWithJournal - 3
-			}
-			if newPoolSize >= expectedSizeWithJournal {
+			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
+			if err == nil {
 				isExpansionSuccess = true
 			}
+
 			dash.VerifyFatal(isExpansionSuccess, true, fmt.Sprintf("expected new pool size to be %v or %v, got %v", expandedExpectedPoolSize, expectedSizeWithJournal, newPoolSize))
 			pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
 			if err != nil {
@@ -787,6 +789,7 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 
 func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJournalEnabled bool) error {
 
+	currentLastMsg := ""
 	f := func() (interface{}, bool, error) {
 		expandedPool, err := GetStoragePoolByUUID(poolIDToResize)
 		if err != nil {
@@ -801,6 +804,16 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED {
 				return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
 			}
+			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS {
+				if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") {
+					if currentLastMsg == expandedPool.LastOperation.Msg {
+						return nil, false, fmt.Errorf("pool reblance is not progressing")
+					} else {
+						currentLastMsg = expandedPool.LastOperation.Msg
+						return nil, true, nil
+					}
+				}
+			}
 		}
 		newPoolSize := expandedPool.TotalSize / units.GiB
 		err = ValidatePoolRebalance()
@@ -813,7 +826,7 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 		}
 		if newPoolSize >= expectedSizeWithJournal {
 			// storage pool resize has been completed
-			return nil, true, nil
+			return nil, false, nil
 		}
 		return nil, true, fmt.Errorf("pool has not been resized to %d or %d yet. Waiting...Current size is %d", expectedSize, expectedSizeWithJournal, newPoolSize)
 	}
