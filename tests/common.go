@@ -375,7 +375,6 @@ func InitInstance() {
 		PureSANType:                      Inst().PureSANType,
 		RunCSISnapshotAndRestoreManyTest: Inst().RunCSISnapshotAndRestoreManyTest,
 		HelmValuesConfigMapName:          Inst().HelmValuesConfigMap,
-		Logger:                           Inst().Logger,
 	})
 	if err != nil {
 		log.Errorf("Error occured while Scheduler Driver Initialization, Err: %v", err)
