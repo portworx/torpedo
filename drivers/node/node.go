@@ -123,7 +123,6 @@ type InitOptions struct {
 
 	// SpecDir app spec directory
 	SpecDir string
-	//Logger log the output
 }
 
 // Driver provides the node driver interface
