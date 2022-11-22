@@ -45,7 +45,7 @@ func (d *linstor) String() string {
 
 func (d *linstor) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string, logger *logrus.Logger) error {
 	d.log = logger
-	d.log.Infof("Using the LINSTOR volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+	d.log.Info(fmt.Sprintf("Using the LINSTOR volume driver with provisioner %v under scheduler: %v", storageProvisioner, sched))
 
 	// Configuration of linstor client happens via environment variables:
 	// * LS_CONTROLLERS
