@@ -498,13 +498,13 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		}
 
 		for _, ctx := range *contexts {
-			logrus.Infof("Validating context: %v", ctx.App.Key)
+			log.Infof("Validating context: %v", ctx.App.Key)
 			ctx.SkipVolumeValidation = false
 			ValidateContext(ctx, &errorChan)
 			// BUG: Execution doesn't resume here after ValidateContext called
 			// Below code is never executed
 			for err := range errorChan {
-				logrus.Infof("Error: %v", err)
+				log.Infof("Error: %v", err)
 				UpdateOutcome(event, err)
 			}
 		}
@@ -608,7 +608,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 
-		for vol, _ := range createdVolIDs {
+		for vol := range createdVolIDs {
 			log.Infof("Detaching and deleting volume: %s", vol)
 			err := Inst().V.DetachVolume(vol)
 			if err == nil {
@@ -694,7 +694,6 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 								if err != nil {
 									log.Errorf("There is an error decreasing repl [%v]", err.Error())
 									UpdateOutcome(event, err)
-
 								}
 								rep--
 
@@ -808,8 +807,8 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 								UpdateOutcome(event, err)
 							}
 							replSets, err := Inst().V.GetReplicaSets(v)
-							if err != nil {
-								log.Infof("Replica Set before ha-increase : %+v", replSets[0].Nodes)
+							if err == nil {
+								log.InfoD("Replica Set before ha-increase : %+v", replSets[0].Nodes)
 							}
 							err = Inst().V.SetReplicationFactor(v, expRF, nil, true, opts)
 							if err != nil {
@@ -830,8 +829,8 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						dash.VerifySafely(newRepl, expReplMap[v], fmt.Sprintf("validat repl update for volume %s", v.Name))
 						log.InfoD("repl increase validation completed on app %s", v.Name)
 						replSets, err := Inst().V.GetReplicaSets(v)
-						if err != nil {
-							log.Infof("Replica Set after ha-increase : %+v", replSets[0].Nodes)
+						if err == nil {
+							log.InfoD("Replica Set after ha-increase : %+v", replSets[0].Nodes)
 						}
 					})
 			}

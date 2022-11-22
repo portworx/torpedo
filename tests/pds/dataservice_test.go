@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"github.com/portworx/torpedo/pkg/log"
 	"net/http"
 	"strconv"
 	"time"
@@ -27,13 +28,13 @@ var _ = Describe("{DeletePDSPods}", func() {
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
 
-				logrus.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
-				logrus.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
@@ -61,17 +62,17 @@ var _ = Describe("{DeletePDSPods}", func() {
 				}()
 
 				Step("Validate Storage Configurations", func() {
-					logrus.Infof("data service deployed %v ", ds.Name)
+					log.Infof("data service deployed %v ", ds.Name)
 					log.InfoD("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					Expect(err).NotTo(HaveOccurred())
-					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
+					log.Infof("volume group %v ", storageOp.VolumeGroup)
 
 					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
 					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
@@ -89,7 +90,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 				podList, err := pdslib.GetPods("pds-system")
 				Expect(err).NotTo(HaveOccurred())
 
-				logrus.Info("PDS System Pods")
+				log.Info("PDS System Pods")
 				for _, pod := range podList.Items {
 					logrus.Infof("%v", pod.Name)
 				}
@@ -129,13 +130,13 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
 
-				logrus.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
-				logrus.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
@@ -167,13 +168,13 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					log.InfoD("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					Expect(err).NotTo(HaveOccurred())
-					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
+					log.Infof("volume group %v ", storageOp.VolumeGroup)
 
 					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
 					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
@@ -191,25 +192,25 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					log.InfoD("Running Workloads on DataService %v ", ds.Name)
 					if ds.Name == postgresql {
 						deploymentName := "pgload"
-						logrus.Infof("Running Workloads on DataService %v ", ds.Name)
+						log.Infof("Running Workloads on DataService %v ", ds.Name)
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "100", "1", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
 					if ds.Name == rabbitmq {
 						deploymentName := "rmq"
-						logrus.Infof("Running Workloads on DataService %v ", ds.Name)
+						log.Infof("Running Workloads on DataService %v ", ds.Name)
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
 					if ds.Name == redis {
 						deploymentName := "redisbench"
-						logrus.Infof("Running Workloads on DataService %v ", ds.Name)
+						log.Infof("Running Workloads on DataService %v ", ds.Name)
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
 					if ds.Name == cassandra {
 						deploymentName := "cassandra-stress"
-						logrus.Infof("Running Workloads on DataService %v ", ds.Name)
+						log.Infof("Running Workloads on DataService %v ", ds.Name)
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
 						Expect(err).NotTo(HaveOccurred())
 					}
@@ -222,19 +223,18 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 					Expect(err).NotTo(HaveOccurred())
 
-					logrus.Infof("Scaling up DataService %v ", ds.Name)
 					log.InfoD("Scaling up DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					Expect(err).NotTo(HaveOccurred())
 
-					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					logrus.Infof("volume group %v ", storageOp.VolumeGroup)
-					logrus.Infof("version/images used %v ", config.Spec.Version)
+					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
+					log.Infof("volume group %v ", storageOp.VolumeGroup)
+					log.Infof("version/images used %v ", config.Spec.Version)
 
 					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
 					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
@@ -314,7 +314,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	})
 
 	It("Deploy DataservicesOnDemand", func() {
-		logrus.Info("Create dataservices without backup.")
+		log.InfoD("Create dataservices without backup.")
 		Step("Deploy, Validate and Delete Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				log.InfoD("Deploying DataService %v ", ds.Name)
@@ -322,13 +322,13 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
 
-				logrus.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
-				logrus.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
@@ -356,17 +356,17 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				}()
 
 				Step("Validate Storage Configurations", func() {
-					logrus.Infof("data service deployed %v ", ds.Name)
+					log.Infof("data service deployed %v ", ds.Name)
 					log.InfoD("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					Expect(err).NotTo(HaveOccurred())
-					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
+					log.Infof("volume group %v ", storageOp.VolumeGroup)
 
 					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
 					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
