@@ -862,60 +862,204 @@ var _ = Describe("{PoolAddDrive}", func() {
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
-
-		driveSpecs, err := GetCloudDriveDeviceSpecs()
-		log.FailOnError(err, "Error getting cloud drive specs")
-
-		stNode := stNodes[0]
-		deviceSpec := driveSpecs[0]
-		deviceSpecParams := strings.Split(deviceSpec, ",")
-		var specSize uint64
-		for _, param := range deviceSpecParams {
-			if strings.Contains(param, "size") {
-				val := strings.Split(param, "=")[1]
-				specSize, err = strconv.ParseUint(val, 10, 64)
-				log.FailOnError(err, "Error converting size to uint64")
-			}
-		}
-
-		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		log.FailOnError(err, "error getting pools list")
-		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
-
-		var currentTotalPoolSize uint64
-
-		for _, pool := range pools {
-			currentTotalPoolSize += pool.GetTotalSize() / units.GiB
-		}
-
-		expectedTotalPoolSize := currentTotalPoolSize + specSize
-
-		stepLog = "Initiate add cloud drive and validate"
-		Step(stepLog, func() {
-			err = Inst().V.AddCloudDrive(&stNode, deviceSpec)
-			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
-			log.InfoD("Validate pool rebalance after drive add")
-			err = ValidatePoolRebalance()
-			log.FailOnError(err, "Pool re-balance failed")
-			err = Inst().V.WaitDriverUpOnNode(stNode, 2*time.Minute)
-			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
-			dash.VerifyFatal(err == nil, true, "PX is up after add drive")
-
-			var newTotalPoolSize uint64
-
-			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-			log.FailOnError(err, "error getting pools list")
-			dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
-			for _, pool := range pools {
-				newTotalPoolSize += pool.GetTotalSize() / units.GiB
-			}
-			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
-
-		})
-
+		addCloudDrive(stNodes[0])
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{AddDriveAndRestart}", func() {
+	//1) Deploy px with cloud drive.
+	//2) Create a volume on that pool and write some data on the volume.
+	//3) Expand pool by adding cloud drives.
+	//4) Restart px service where the pool is present.
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDriveAndRestart", "Initiate pool expansion using add-drive and restart PX", nil, 0)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the existing storage node and expand the pool by adding a drive"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddrive-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		stNodes := node.GetStorageNodes()
+		if len(stNodes) == 0 {
+			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
+		}
+		stNode := stNodes[0]
+		addCloudDrive(stNode)
+		stepLog = fmt.Sprintf("Restart PX on node %s", stNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.RestartDriver(stNode, nil)
+			log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", stNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(stNode, 2*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after restarting on node %s", stNode.Name))
+
+		})
+		ValidateApplications(contexts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
+
+func addCloudDrive(stNode node.Node) {
+	driveSpecs, err := GetCloudDriveDeviceSpecs()
+	log.FailOnError(err, "Error getting cloud drive specs")
+
+	deviceSpec := driveSpecs[0]
+	deviceSpecParams := strings.Split(deviceSpec, ",")
+	var specSize uint64
+	for _, param := range deviceSpecParams {
+		if strings.Contains(param, "size") {
+			val := strings.Split(param, "=")[1]
+			specSize, err = strconv.ParseUint(val, 10, 64)
+			log.FailOnError(err, "Error converting size to uint64")
+		}
+	}
+
+	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	log.FailOnError(err, "error getting pools list")
+	dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+
+	var currentTotalPoolSize uint64
+
+	for _, pool := range pools {
+		currentTotalPoolSize += pool.GetTotalSize() / units.GiB
+	}
+
+	expectedTotalPoolSize := currentTotalPoolSize + specSize
+
+	stepLog := "Initiate add cloud drive and validate"
+	Step(stepLog, func() {
+		err = Inst().V.AddCloudDrive(&stNode, deviceSpec)
+		log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
+		log.InfoD("Validate pool rebalance after drive add")
+		err = ValidatePoolRebalance()
+		log.FailOnError(err, "Pool re-balance failed")
+		err = Inst().V.WaitDriverUpOnNode(stNode, 2*time.Minute)
+		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
+
+		dash.VerifyFatal(err == nil, true, "PX is up after add drive")
+
+		var newTotalPoolSize uint64
+
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "error getting pools list")
+		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+		for _, pool := range pools {
+			newTotalPoolSize += pool.GetTotalSize() / units.GiB
+		}
+		dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+	})
+}
+
+var _ = Describe("{ResizeDiskAndRestart}", func() {
+	expandAndRestartPX("ResizeDiskAndRestart")
+})
+
+func expandAndRestartPX(testName string) {
+	var operation api.SdkStoragePool_ResizeOperationType
+	var option string
+	if testName == "ResizePoolAndRestart" {
+		operation = api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK
+		option = "resize-disk"
+	} else {
+		operation = api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
+		option = "add-disk"
+	}
+
+	JustBeforeEach(func() {
+		StartTorpedoTest(testName, fmt.Sprintf("Validate storage pool expansion using %s option and PX restart", option), nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := fmt.Sprintf("has to schedule apps, and expand it by %s", option)
+	It(stepLog, func() {
+		dash.Info(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expandrestart-%s-%d", option, i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		stNodes := node.GetStorageNodes()
+		nodePoolToExpanded := stNodes[0]
+
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		dash.VerifyFatal(err, nil, "Validate list storage pools")
+		poolToBeResized := pools[nodePoolToExpanded.StoragePools[0].Uuid]
+
+		dash.VerifyFatal(poolToBeResized != nil, true, "Validate pools to be resized exist")
+
+		// px will put a new request in a queue, but in this case we can't calculate the expected size,
+		// so need to wait until the ongoing operation is completed
+		stepLog = "Verify that pool resize is none in progress"
+		Step(stepLog, func() {
+			dash.Info(stepLog)
+			poolIDToResize := poolToBeResized.Uuid
+			if poolResizeIsInProgress(poolToBeResized) {
+				// wait until resize is completed and get the updated pool again
+				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get pool using UUID  %s", poolIDToResize))
+			}
+
+		})
+
+		var expectedSize uint64
+		var expectedSizeWithJournal uint64
+
+		isjournal, err := isJournalEnabled()
+		dash.VerifyFatal(err, nil, "Validate is journal enabled check")
+		stepLog = fmt.Sprintf("Calculate expected pool size and trigger pool resize for %s", nodePoolToExpanded.Name)
+		Step(stepLog, func() {
+
+			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
+
+			//To-Do Need to handle the case for multiple pools
+			expectedSizeWithJournal = expectedSize
+			if isjournal {
+				expectedSizeWithJournal = expectedSizeWithJournal - 3
+			}
+			err = Inst().V.ExpandPool(poolToBeResized.Uuid, operation, expectedSize)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool %s expansion init", poolToBeResized.Uuid))
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
+			expectedSizeWithJournal = expectedSize
+			if isjournal {
+				expectedSizeWithJournal = expectedSizeWithJournal - 3
+			}
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("expected new size to be '%d' or '%d', and error %s not not have occured", expectedSize, expectedSizeWithJournal, resizeErr))
+		})
+
+		stepLog = fmt.Sprintf("Restart PX on node %s after pool %s expansion using %s", nodePoolToExpanded.Name, poolToBeResized.Uuid, option)
+		Step(stepLog, func() {
+			dash.Info(stepLog)
+			err = Inst().V.RestartDriver(nodePoolToExpanded, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate driver restart on node %s", nodePoolToExpanded.Name))
+			err = Inst().V.WaitDriverUpOnNode(nodePoolToExpanded, Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate driver is up on node %s", nodePoolToExpanded.Name))
+			ValidateApplications(contexts)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+}
