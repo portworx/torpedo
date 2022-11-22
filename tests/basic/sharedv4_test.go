@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"regexp"
 	"strings"
 	"time"
