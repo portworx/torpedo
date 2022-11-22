@@ -3,7 +3,7 @@ package restutil
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/portworx/torpedo/pkg/log"
+	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -77,10 +77,10 @@ func getResponse(httpMethod, url string, payload interface{}, auth *Auth, header
 		return nil, 0, err
 	}
 
-	log.Debugf("%s: %s", httpMethod, url)
+	logrus.Debugf("%s: %s", httpMethod, url)
 	var req *http.Request
 	if payload != nil {
-		log.Debugf("Payload: %s", payload)
+		logrus.Debugf("Payload: %s", payload)
 		var j []byte
 		j, err = json.Marshal(payload)
 
@@ -106,7 +106,7 @@ func getResponse(httpMethod, url string, payload interface{}, auth *Auth, header
 	if err != nil {
 		return nil, 0, err
 	}
-	log.Debugf("Response Status Code: %d", resp.StatusCode)
+	logrus.Debugf("Response Status Code: %d", resp.StatusCode)
 	respBody, err := getBody(resp.Body)
 	if err != nil {
 		return nil, 0, err
@@ -152,6 +152,6 @@ func getBody(rBody io.ReadCloser) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("Response: %s", string(respBody))
+	logrus.Debugf("Response: %s", string(respBody))
 	return respBody, nil
 }
