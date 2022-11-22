@@ -16,7 +16,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	k8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -218,7 +217,7 @@ func testTrigger(wg *sync.WaitGroup,
 				triggerLoc.Lock()
 				log.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
 				triggerLoc.Unlock()
-				logrus.Infof("===Releasing lock for non-disruptive event [%s]\n", triggerType)
+				log.Infof("===Releasing lock for non-disruptive event [%s]\n", triggerType)
 			}*/
 
 			triggerFunc(contexts, triggerEventsChan)
@@ -511,7 +510,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	}
 
 	// Bouncing Back the PX pods on all nodes to restart Csi Registrar Container
-	logrus.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
+	log.Info("Bouncing back the PX pods after setting the Topology Labels on Nodes")
 
 	if err := deletePXPods(volumeDriverNamespace); err != nil {
 		return nil, fmt.Errorf("Failed to delete PX pods. Error:[%v]", err)

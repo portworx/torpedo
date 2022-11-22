@@ -3,7 +3,7 @@ package restutil
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 	"io"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -21,8 +21,6 @@ type Auth struct {
 const (
 	defaultRestTimeOut = 10 * time.Second
 )
-
-var log *logrus.Logger
 
 //Get rest get call
 func Get(url string, auth *Auth, headers map[string]string) ([]byte, int, error) {
@@ -79,10 +77,10 @@ func getResponse(httpMethod, url string, payload interface{}, auth *Auth, header
 		return nil, 0, err
 	}
 
-	logrus.Tracef("%s: %s", httpMethod, url)
+	log.Debugf("%s: %s", httpMethod, url)
 	var req *http.Request
 	if payload != nil {
-		logrus.Tracef("Payload: %s", payload)
+		log.Debugf("Payload: %s", payload)
 		var j []byte
 		j, err = json.Marshal(payload)
 
@@ -108,7 +106,7 @@ func getResponse(httpMethod, url string, payload interface{}, auth *Auth, header
 	if err != nil {
 		return nil, 0, err
 	}
-	logrus.Tracef("Response Status Code: %d", resp.StatusCode)
+	log.Debugf("Response Status Code: %d", resp.StatusCode)
 	respBody, err := getBody(resp.Body)
 	if err != nil {
 		return nil, 0, err
@@ -154,6 +152,6 @@ func getBody(rBody io.ReadCloser) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	logrus.Debugf("Response: %s", string(respBody))
+	log.Debugf("Response: %s", string(respBody))
 	return respBody, nil
 }

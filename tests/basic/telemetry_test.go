@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"path"
 	"regexp"
 	"strings"
@@ -16,7 +17,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -307,20 +307,20 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 				Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
 					for _, file := range diagsFiles {
 						fileNameToCheck := path.Base(file)
-						logrus.Debugf("Validating file %s", fileNameToCheck)
+						log.Debugf("Validating file %s", fileNameToCheck)
 						if !skipTest { // This is done in case the system is run without telemetry.
 							err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
 							if err != nil {
-								logrus.Errorf("Failed to validate diags: %v", err)
+								log.Errorf("Failed to validate diags: %v", err)
 							}
 							Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
 						} else {
-							logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+							log.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
 						}
 					}
 				})
 			} else {
-				logrus.Debugf("Px not enabled on node %s", currNode.Name)
+				log.Debugf("Px not enabled on node %s", currNode.Name)
 			}
 		}
 		for _, ctx := range contexts {
@@ -360,20 +360,20 @@ var _ = Describe("{DiagsClusterWide}", func() {
 				Expect(err).NotTo(HaveOccurred(), "Error running diags on Node: %s", currNode.Name)
 			})
 			Step(fmt.Sprintf("Get the svc diags collected above %s", currNode.Name), func() {
-				logrus.Infof("Getting latest svc diags on %66v", currNode.Name)
+				log.Infof("Getting latest svc diags on %66v", currNode.Name)
 				diagFile, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s-*.tar.gz | head -n 1", currNode.Name), currNode, nil)
 				if err != nil {
-					logrus.Fatalf("Error in getting cluster wide diags files on: %s, err: %v", currNode.Name, err)
+					log.Fatalf("Error in getting cluster wide diags files on: %s, err: %v", currNode.Name, err)
 				}
 			})
 			Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
 				fileNameToCheck := path.Base(strings.TrimSuffix(diagFile, "\n"))
-				logrus.Debugf("Validating file %s", fileNameToCheck)
+				log.Debugf("Validating file %s", fileNameToCheck)
 				if TelemetryEnabled(currNode) {
 					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
 					Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
 				} else {
-					logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+					log.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
 				}
 			})
 			break
@@ -468,7 +468,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 					Expect(err).NotTo(HaveOccurred(), "'%s' reset: failed to stop node %v", pxProcessNm, currNode.Name)
 					err = Inst().V.StartDriver(currNode)
 					Expect(err).NotTo(HaveOccurred(), "'%s' reset: failed to stop node %v", pxProcessNm, currNode.Name)
-					logrus.Infof("Wait for driver to start on %v...", currNode.Name)
+					log.Infof("Wait for driver to start on %v...", currNode.Name)
 					err = Inst().V.WaitDriverUpOnNode(currNode, Inst().DriverStartTimeout)
 					Expect(err).NotTo(HaveOccurred())
 				}
@@ -478,10 +478,10 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 				Step(fmt.Sprintf("'%s': Check latest auto diags on node %v", pxProcessNm, currNode.Name), func() {
 					_, err = telemetryRunCmd("ls -d /var/cores/auto", currNode, nil)
 					if err == nil {
-						logrus.Infof("'%s': Getting latest auto  diags on %v", pxProcessNm, currNode.Name)
+						log.Infof("'%s': Getting latest auto  diags on %v", pxProcessNm, currNode.Name)
 						existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/auto/%s*.tar.gz | head -n 1", currNode.Name), currNode, nil)
 						if err == nil {
-							logrus.Infof("'%s': Found latest auto diags on node %s: %s ",
+							log.Infof("'%s': Found latest auto diags on node %s: %s ",
 								pxProcessNm, currNode.Name, path.Base(existingDiags))
 						} else {
 							existingDiags = ""
@@ -506,11 +506,11 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 						newDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/auto/%s*.tar.gz | head -n 1", currNode.Name), currNode, nil)
 						if err == nil {
 							if existingDiags != "" && existingDiags == newDiags {
-								logrus.Infof("'%s': No new auto diags found...", pxProcessNm)
+								log.Infof("'%s': No new auto diags found...", pxProcessNm)
 								newDiags = ""
 							}
 							if len(newDiags) > 0 {
-								logrus.Infof("'%s': Found new auto diags %s", pxProcessNm, newDiags)
+								log.Infof("'%s': Found new auto diags %s", pxProcessNm, newDiags)
 								return true
 							}
 						}
@@ -525,7 +525,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 			driverVersion, err := Inst().V.GetDriverVersion()
 			if err != nil {
 				driverVersion = "Error in getting driver version"
-				logrus.Errorf(driverVersion)
+				log.Errorf(driverVersion)
 			}
 			testRailID := testProcNmsTestRailIDs[pxProcessNm]
 			testrailObject := testrailuttils.Testrail{
@@ -609,7 +609,7 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 
 		Step(fmt.Sprintf("Check portworx restart on all the nodes..."), func() {
 			for _, currNode := range node.GetWorkerNodes() {
-				logrus.Infof("Wait for driver to start on %v...", currNode.Name)
+				log.Infof("Wait for driver to start on %v...", currNode.Name)
 				err := Inst().V.WaitDriverUpOnNode(currNode, Inst().DriverStartTimeout)
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -649,10 +649,10 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 		diagNode := nodes[1]
 
 		Step(fmt.Sprintf("Check latest diags on node %v", diagNode.Name), func() {
-			logrus.Infof("Getting latest diags on %v", diagNode.Name)
+			log.Infof("Getting latest diags on %v", diagNode.Name)
 			existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s*.tar.gz | head -n 1", diagNode.Name), diagNode, nil)
 			if err == nil {
-				logrus.Infof("Found latest auto diags on node %s: %s ", diagNode.Name, path.Base(existingDiags))
+				log.Infof("Found latest auto diags on node %s: %s ", diagNode.Name, path.Base(existingDiags))
 			} else {
 				existingDiags = ""
 			}
@@ -667,7 +667,7 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 			diagFile, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s-*.tar.gz | head -n 1", diagNode.Name), diagNode, nil)
 			Expect(err).NotTo(HaveOccurred(), "Error getting new diags on Node %s", diagNode.Name)
 			if existingDiags != diagFile {
-				logrus.Infof("Found new diags %s", diagFile)
+				log.Infof("Found new diags %s", diagFile)
 				/// Need to validate new diags
 				err = Inst().V.ValidateDiagsOnS3(diagNode, path.Base(strings.TrimSpace(diagFile)))
 				Expect(err).NotTo(HaveOccurred())

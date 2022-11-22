@@ -15,7 +15,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -583,7 +582,7 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 			return nil, false, fmt.Errorf("expanded pool value is nil")
 		}
 		if expandedPool.LastOperation != nil {
-			logrus.Infof("Pool Resize Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
+			log.Infof("Pool Resize Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
 			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED {
 				return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
 			}
@@ -615,7 +614,7 @@ func isJournalEnabled() (bool, error) {
 	}
 	jDev := storageSpec.GetJournalDev()
 	if jDev != "" {
-		logrus.Infof("JournalDev: %s", jDev)
+		log.Infof("JournalDev: %s", jDev)
 		return true, nil
 	}
 	return false, nil

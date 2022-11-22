@@ -6,6 +6,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io/ioutil"
 	"math"
@@ -50,7 +51,6 @@ import (
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -2245,14 +2245,14 @@ func getCreateCloudCredentialRequest(uid string) (*api.CloudCredentialCreateRequ
 	}
 
 	provider, ok := os.LookupEnv("OBJECT_STORE_PROVIDER")
-	logrus.Infof("Provider for credentail secret is %s", provider)
+	log.Infof("Provider for credentail secret is %s", provider)
 	if !ok {
 		return nil, &errors.ErrNotFound{
 			ID:   "OBJECT_STORE_PROVIDER",
 			Type: "Environment Variable",
 		}
 	}
-	logrus.Infof("Provider for credentail secret is %s", provider)
+	log.Infof("Provider for credentail secret is %s", provider)
 
 	switch provider {
 	case "aws":
@@ -2344,7 +2344,7 @@ func getCreateCloudCredentialRequest(uid string) (*api.CloudCredentialCreateRequ
 			},
 		}
 	default:
-		logrus.Errorf("provider needs to be either aws, azure or google")
+		log.Errorf("provider needs to be either aws, azure or google")
 	}
 	return req, nil
 }
@@ -2504,13 +2504,13 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 			err, ok := bkpNamespaceErrors[namespace]
 			if ok {
-				logrus.Warningf("Skipping waiting for backup %s because %s", backupName, err)
+				log.Warnf("Skipping waiting for backup %s because %s", backupName, err)
 				continue
 			}
 			Step(fmt.Sprintf("Wait for backup %s to complete", backupName), func() {
 				ctx, err := backup.GetPxCentralAdminCtx()
 				if err != nil {
-					logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+					log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 					bkpNamespaceErrors[namespace] = err
 					UpdateOutcome(event, err)
 				} else {
@@ -2520,9 +2520,9 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						BackupRestoreCompletionTimeoutMin*time.Minute,
 						RetrySeconds*time.Second)
 					if err == nil {
-						logrus.Infof("Backup [%s] completed successfully", backupName)
+						log.Infof("Backup [%s] completed successfully", backupName)
 					} else {
-						logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+						log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 							backupName, err)
 						bkpNamespaceErrors[namespace] = err
 						UpdateOutcome(event, err)
@@ -2580,7 +2580,7 @@ func TriggerScheduledBackupAll(contexts *[]*scheduler.Context, recordChan *chan 
 		backupScheduleNamePrefix+BackupScheduleAllName)
 	ProcessErrorWithMessage(event, err, errorMessage)
 
-	logrus.Infof("Verify namespaces")
+	log.Infof("Verify namespaces")
 	// Verify that all namespaces are present in latest backup
 	latestBkpNamespaces := latestBkp.GetNamespaces()
 	namespacesList, err := core.Instance().ListNamespaces(nil)
@@ -2681,7 +2681,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 			bkpNames = append(bkpNames, namespace)
-			logrus.Infof("Create backup full name %s:%s:%s", sourceClusterName, namespace, backupName)
+			log.Infof("Create backup full name %s:%s:%s", sourceClusterName, namespace, backupName)
 			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, BackupLocationUID,
 				[]string{namespace}, labelSelectors, OrgID)
 			backupCreateRequest.Name = backupName
@@ -2697,7 +2697,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 		backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 		err, ok := bkpNamespaceErrors[namespace]
 		if ok {
-			logrus.Warningf("Skipping waiting for backup [%s] because [%s]", backupName, err)
+			log.Warnf("Skipping waiting for backup [%s] because [%s]", backupName, err)
 			continue
 		}
 		Step(fmt.Sprintf("Wait for backup [%s] to complete", backupName), func() {
@@ -2712,7 +2712,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 					BackupRestoreCompletionTimeoutMin*time.Minute,
 					RetrySeconds*time.Second)
 				if err == nil {
-					logrus.Infof("Backup [%s] completed successfully", backupName)
+					log.Infof("Backup [%s] completed successfully", backupName)
 				} else {
 					bkpNamespaceErrors[namespace] = err
 					ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]", backupName, err))
@@ -2725,7 +2725,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 			backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 			err, ok := bkpNamespaceErrors[namespace]
 			if ok {
-				logrus.Warningf("Skipping inspecting backup [%s] because [%s]", backupName, err)
+				log.Warnf("Skipping inspecting backup [%s] because [%s]", backupName, err)
 				continue
 			}
 			bkpInspectResp, err := InspectBackup(backupName)
@@ -2769,7 +2769,7 @@ func TriggerInspectBackup(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 	setMetrics(*event)
 
-	logrus.Infof("Enumerating backups")
+	log.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
@@ -2814,7 +2814,7 @@ func TriggerInspectRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 
 	setMetrics(*event)
 
-	logrus.Infof("Enumerating restores")
+	log.Infof("Enumerating restores")
 	restoreEnumerateReq := &api.RestoreEnumerateRequest{
 		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
@@ -2868,7 +2868,7 @@ func TriggerRestoreNamespace(contexts *[]*scheduler.Context, recordChan *chan *E
 	ProcessErrorWithMessage(event, err, "Restore namespace failed: GetDestinationClusterConfigPath failed")
 	SetClusterContext(destClusterConfigPath)
 
-	logrus.Infof("Enumerating backups")
+	log.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
@@ -2965,7 +2965,7 @@ func TriggerDeleteBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 	setMetrics(*event)
 
-	logrus.Infof("Enumerating backups")
+	log.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
@@ -3050,7 +3050,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			if err == nil {
-				logrus.Infof("Backup [%s] completed successfully", backupName)
+				log.Infof("Backup [%s] completed successfully", backupName)
 			} else {
 				ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]", backupName, err))
 			}
@@ -3240,7 +3240,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			if err == nil {
-				logrus.Infof("Backup [%s] completed successfully", backupName)
+				log.Infof("Backup [%s] completed successfully", backupName)
 			} else {
 				ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]", backupName, err))
 				return
@@ -3334,7 +3334,7 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 		backupScheduleNamePrefix+backupScheduleScaleName)
 	ProcessErrorWithMessage(event, err, errorMessage)
 
-	logrus.Infof("Verify newest pods have been scaled in backup")
+	log.Infof("Verify newest pods have been scaled in backup")
 	for _, ns := range bkpNamespaces {
 		pods, err := core.Instance().GetPods(ns, labelSelectors)
 		UpdateOutcome(event, err)
@@ -3389,7 +3389,7 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 		backupScheduleNamePrefix+backupScheduleScaleName)
 	ProcessErrorWithMessage(event, err, errorMessage)
 
-	logrus.Infof("Verify pods have been scaled in backup")
+	log.Infof("Verify pods have been scaled in backup")
 	for _, ns := range bkpNamespaces {
 		pods, err := core.Instance().GetPods(ns, labelSelectors)
 		UpdateOutcome(event, err)
@@ -3474,21 +3474,21 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	Step("Restart Portworx", func() {
 		nodes := node.GetStorageDriverNodes()
 		nodeIndex := rand.Intn(len(nodes))
-		logrus.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+		log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[nodeIndex].Name)
 		StopVolDriverAndWait([]node.Node{nodes[nodeIndex]})
-		logrus.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+		log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[nodeIndex].Name)
 		StartVolDriverAndWait([]node.Node{nodes[nodeIndex]})
-		logrus.Infof("Giving a few seconds for volume driver to stabilize")
+		log.Infof("Giving a few seconds for volume driver to stabilize")
 		time.Sleep(20 * time.Second)
 	})
 
 	Step("Wait for backup to complete", func() {
 		if bkpError {
-			logrus.Warningf("Skipping waiting for backup [%s] due to error", backupName)
+			log.Warnf("Skipping waiting for backup [%s] due to error", backupName)
 		} else {
 			ctx, err := backup.GetPxCentralAdminCtx()
 			if err != nil {
-				logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+				log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 				UpdateOutcome(event, err)
 			} else {
 				err = Inst().Backup.WaitForBackupCompletion(
@@ -3497,9 +3497,9 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 					BackupRestoreCompletionTimeoutMin*time.Minute,
 					RetrySeconds*time.Second)
 				if err == nil {
-					logrus.Infof("Backup [%s] completed successfully", backupName)
+					log.Infof("Backup [%s] completed successfully", backupName)
 				} else {
-					logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+					log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 						backupName, err)
 					UpdateOutcome(event, err)
 				}
@@ -3608,7 +3608,7 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 			t := func() (interface{}, bool, error) {
 				pxbPods, err := core.Instance().GetPodsByNode(nodes[nodeIndex].Name, "px-backup")
 				if err != nil {
-					logrus.Errorf("Failed to get apps on node [%s]", nodes[nodeIndex].Name)
+					log.Errorf("Failed to get apps on node [%s]", nodes[nodeIndex].Name)
 					return "", true, err
 				}
 				for _, pod := range pxbPods.Items {
@@ -3626,11 +3626,11 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 
 	Step("Wait for backup to complete", func() {
 		if bkpError {
-			logrus.Warningf("Skipping waiting for backup [%s] due to error", backupName)
+			log.Warnf("Skipping waiting for backup [%s] due to error", backupName)
 		} else {
 			ctx, err := backup.GetPxCentralAdminCtx()
 			if err != nil {
-				logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+				log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 				UpdateOutcome(event, err)
 			} else {
 				err = Inst().Backup.WaitForBackupCompletion(
@@ -3639,9 +3639,9 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 					BackupRestoreCompletionTimeoutMin*time.Minute,
 					RetrySeconds*time.Second)
 				if err == nil {
-					logrus.Infof("Backup [%s] completed successfully", backupName)
+					log.Infof("Backup [%s] completed successfully", backupName)
 				} else {
-					logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+					log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 						backupName, err)
 					UpdateOutcome(event, err)
 				}
@@ -3714,7 +3714,7 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 	Step("Wait for backup to complete", func() {
 		ctx, err := backup.GetPxCentralAdminCtx()
 		if err != nil {
-			logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+			log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 			UpdateOutcome(event, err)
 		} else {
 			err = Inst().Backup.WaitForBackupCompletion(
@@ -3723,9 +3723,9 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			if err == nil {
-				logrus.Infof("Backup [%s] completed successfully", backupName)
+				log.Infof("Backup [%s] completed successfully", backupName)
 			} else {
-				logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+				log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 					backupName, err)
 				UpdateOutcome(event, err)
 			}
@@ -3819,7 +3819,7 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 	Step("Wait for backup to complete", func() {
 		ctx, err := backup.GetPxCentralAdminCtx()
 		if err != nil {
-			logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+			log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 			UpdateOutcome(event, err)
 		} else {
 			err = Inst().Backup.WaitForBackupCompletion(
@@ -3828,9 +3828,9 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			if err == nil {
-				logrus.Infof("Backup [%s] completed successfully", backupName)
+				log.Infof("Backup [%s] completed successfully", backupName)
 			} else {
-				logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+				log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 					backupName, err)
 				UpdateOutcome(event, err)
 			}
@@ -5710,7 +5710,7 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 
 // TriggerAsyncDR triggers Async DR
 func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	logrus.Infof("Async DR triggered at: %v", time.Now())
+	log.Infof("Async DR triggered at: %v", time.Now())
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -5741,17 +5741,17 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
 		err := asyncdr.WriteKubeconfigToFiles()
 		if err != nil {
-			logrus.Errorf("Failed to write kubeconfig: %v", err)
+			log.Errorf("Failed to write kubeconfig: %v", err)
 		}
 
 		err = SetSourceKubeConfig()
 		if err != nil {
-			logrus.Errorf("Failed to Set source kubeconfig: %v", err)
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
 		}
 		UpdateOutcome(event, err)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
-			logrus.Infof("Task name %s\n", taskName)
+			log.Infof("Task name %s\n", taskName)
 			appContexts := ScheduleApplications(taskName)
 			*contexts = append(*contexts, appContexts...)
 			ValidateApplications(*contexts)
@@ -5767,12 +5767,12 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			})
 		}
 
-		logrus.Infof("Migration Namespaces: %v", migrationNamespaces)
+		log.Infof("Migration Namespaces: %v", migrationNamespaces)
 
 	})
 
 	time.Sleep(5 * time.Minute)
-	logrus.Info("Start migration")
+	log.Info("Start migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i)
@@ -5900,14 +5900,14 @@ func prepareEmailBody(eventRecords emailData) (string, error) {
 	t := template.New("t").Funcs(templateFuncs)
 	t, err = t.Parse(htmlTemplate)
 	if err != nil {
-		logrus.Errorf("Cannot parse HTML template Err: %v", err)
+		log.Errorf("Cannot parse HTML template Err: %v", err)
 		return "", err
 	}
 	var buf []byte
 	buffer := bytes.NewBuffer(buf)
 	err = t.Execute(buffer, eventRecords)
 	if err != nil {
-		logrus.Errorf("Cannot generate body from values, Err: %v", err)
+		log.Errorf("Cannot generate body from values, Err: %v", err)
 		return "", err
 	}
 

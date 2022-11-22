@@ -8,6 +8,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
+	"github.com/sirupsen/logrus"
 	"net/http"
 	"regexp"
 
@@ -56,7 +58,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
-	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -392,14 +393,13 @@ func InitInstance() {
 
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
-		Logger:  Inst().Logger,
 	})
 	if err != nil {
 		log.Errorf("Error occured while Node Driver Initialization, Err: %v", err)
 	}
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap, Inst().Logger)
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
 	if err != nil {
 		log.Errorf("Error occured while Volume Driver Initialization, Err: %v", err)
 	}
@@ -1004,7 +1004,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "-" + timestamp
 		if _, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
-			logrus.Errorf("Create volume snapshot class failed with error: [%v]", err)
+			log.Errorf("Create volume snapshot class failed with error: [%v]", err)
 			expect(err).NotTo(haveOccurred(), "failed to create snapshot class")
 		}
 
@@ -1014,7 +1014,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			processError(err, errChan...)
 		})
 		if len(vols) == 0 {
-			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
+			log.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
 			request := scheduler.CSISnapshotRequest{
@@ -1058,7 +1058,7 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 			processError(err, errChan...)
 		})
 		if len(vols) == 0 {
-			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
+			log.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
 			timestamp := strconv.Itoa(int(time.Now().Unix()))
@@ -1082,7 +1082,7 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "." + timestamp
 		if _, err := Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
-			logrus.Errorf("Create volume snapshot class failed with error: [%v]", err)
+			log.Errorf("Create volume snapshot class failed with error: [%v]", err)
 			expect(err).NotTo(haveOccurred(), "failed to create snapshot class")
 		}
 
@@ -1092,7 +1092,7 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 			processError(err, errChan...)
 		})
 		if len(vols) == 0 {
-			logrus.Warnf("No FlashArray DirectAccess volumes, skipping")
+			log.Warnf("No FlashArray DirectAccess volumes, skipping")
 			processError(err, errChan...)
 		} else {
 			request := scheduler.CSISnapshotRequest{
@@ -1115,7 +1115,7 @@ func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		if err != nil {
 			err = fmt.Errorf("error getting storage pools list. Err: %v", err)
-			logrus.Error(err.Error())
+			log.Error(err.Error())
 			processError(err, errChan...)
 		}
 
@@ -1128,12 +1128,12 @@ func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 20)
 			if err != nil {
 				err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err.Error())
-				logrus.Error(err.Error())
+				log.Error(err.Error())
 			} else {
 				err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
 				if err != nil {
 					err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, err)
-					logrus.Error(err)
+					log.Error(err)
 				}
 			}
 		}
@@ -1214,12 +1214,12 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 			})
 
 			updatedVolumeParams = UpdateVolumeInVolumeParameters(volumeParameters)
-			logrus.Infof("Updated parameter list: [%+v]\n", updatedVolumeParams)
+			log.Infof("Updated parameter list: [%+v]\n", updatedVolumeParams)
 			ValidateVolumeParameters(updatedVolumeParams)
 
 			Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 				vols, err := Inst().S.GetVolumes(ctx)
-				logrus.Infof("List of volumes from scheduler driver :[%+v] \n for context : [%+v]\n", vols, ctx)
+				log.Infof("List of volumes from scheduler driver :[%+v] \n for context : [%+v]\n", vols, ctx)
 				expect(err).NotTo(haveOccurred())
 
 				for _, vol := range vols {
@@ -1584,7 +1584,7 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 	if strExpansionEnabled {
 		var wSize uint64
 		var workloadSizesByPool = make(map[string]uint64)
-		logrus.Debugf("storage expansion enabled on at least one storage pool")
+		log.Debugf("storage expansion enabled on at least one storage pool")
 		// for each replica set add the workloadSize of app workload to each storage pool where replica resides on
 		for _, ctx := range contexts {
 			Step(fmt.Sprintf("get replica sets for app: %s's volumes", ctx.App.Key), func() {
@@ -1600,7 +1600,7 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 							wSize, err = Inst().S.GetWorkloadSizeFromAppSpec(ctx)
 							expect(err).NotTo(haveOccurred())
 							workloadSizesByPool[poolUUID] += wSize
-							logrus.Debugf("pool: %s workloadSize increased by: %d total now: %d", poolUUID, wSize, workloadSizesByPool[poolUUID])
+							log.Debugf("pool: %s workloadSize increased by: %d total now: %d", poolUUID, wSize, workloadSizesByPool[poolUUID])
 						}
 					}
 				}
@@ -1616,7 +1616,7 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 					n.StoragePools[id].WorkloadSize = workloadSizeForPool
 				}
 
-				logrus.Debugf("pool: %s InitialSize: %d WorkloadSize: %d", sPool.Uuid, sPool.StoragePoolAtInit.TotalSize, n.StoragePools[id].WorkloadSize)
+				log.Debugf("pool: %s InitialSize: %d WorkloadSize: %d", sPool.Uuid, sPool.StoragePoolAtInit.TotalSize, n.StoragePools[id].WorkloadSize)
 			}
 			err = node.UpdateNode(n)
 			expect(err).NotTo(haveOccurred())
@@ -1810,7 +1810,7 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 		Sudo:            false,
 	})
 	if err != nil {
-		logrus.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
 	}
 
 	return err
@@ -2091,18 +2091,18 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 
 	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "")
 	if err != nil {
-		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
+		log.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
 	}
 
 	err = CreateClusterPairFile(pairInfo, skipStorage, resetConfig, clusterPairDir, kubeConfigPath)
 	if err != nil {
-		logrus.Errorf("Error creating cluster Spec: %v", err)
+		log.Errorf("Error creating cluster Spec: %v", err)
 		return err
 	}
 	err = Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 	if err != nil {
-		logrus.Errorf("Unable to parse spec dir: %v", err)
+		log.Errorf("Unable to parse spec dir: %v", err)
 		return err
 	}
 
@@ -2116,13 +2116,13 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 	err = Inst().S.AddTasks(ctx,
 		scheduler.ScheduleOptions{AppKeys: []string{clusterPairDir}})
 	if err != nil {
-		logrus.Errorf("Failed to schedule Cluster Pair Specs: %v", err)
+		log.Errorf("Failed to schedule Cluster Pair Specs: %v", err)
 		return err
 	}
 
 	err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
 	if err != nil {
-		logrus.Errorf("Error waiting to get cluster pair in ready state: %v", err)
+		log.Errorf("Error waiting to get cluster pair in ready state: %v", err)
 		return err
 	}
 
@@ -2131,22 +2131,22 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 
 // CreateClusterPairFile creates a cluster pair yaml file inside the stork test pod in path 'clusterPairDir'
 func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir string, kubeConfigPath string) error {
-	logrus.Infof("Entering cluster pair")
+	log.Infof("Entering cluster pair")
 	err := os.MkdirAll(path.Join(Inst().SpecDir, clusterPairDir), 0777)
 	if err != nil {
-		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", Inst().SpecDir+"/"+clusterPairDir, err)
+		log.Errorf("Unable to make directory (%v) for cluster pair spec: %v", Inst().SpecDir+"/"+clusterPairDir, err)
 		return err
 	}
 	clusterPairFileName := path.Join(Inst().SpecDir, clusterPairDir, pairFileName)
 	pairFile, err := os.Create(clusterPairFileName)
 	if err != nil {
-		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
+		log.Errorf("Unable to create clusterPair.yaml: %v", err)
 		return err
 	}
 	defer func() {
 		err := pairFile.Close()
 		if err != nil {
-			logrus.Errorf("Error closing pair file: %v", err)
+			log.Errorf("Error closing pair file: %v", err)
 		}
 	}()
 
@@ -2154,15 +2154,15 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 	cmd := storkctl.NewCommand(factory, os.Stdin, pairFile, os.Stderr)
 	cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", kubeConfigPath})
 	if err := cmd.Execute(); err != nil {
-		logrus.Errorf("Execute storkctl failed: %v", err)
+		log.Errorf("Execute storkctl failed: %v", err)
 		return err
 	}
 
 	truncCmd := `sed -i "$((` + "`wc -l " + clusterPairFileName + "|awk '{print $1}'`" + `-4)),$ d" ` + clusterPairFileName
-	logrus.Infof("trunc cmd: %v", truncCmd)
+	log.Infof("trunc cmd: %v", truncCmd)
 	err = exec.Command("sh", "-c", truncCmd).Run()
 	if err != nil {
-		logrus.Errorf("truncate failed %v", err)
+		log.Errorf("truncate failed %v", err)
 		return err
 	}
 
@@ -2175,7 +2175,7 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 	}
 
 	if skipStorage {
-		logrus.Info("cluster-pair.yml created")
+		log.Info("cluster-pair.yml created")
 		return nil
 	}
 
@@ -2185,13 +2185,13 @@ func CreateClusterPairFile(pairInfo map[string]string, skipStorage, resetConfig 
 func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) error {
 	file, err := os.OpenFile(clusterPairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
-		logrus.Errorf("Unable to open %v: %v", pairFileName, err)
+		log.Errorf("Unable to open %v: %v", pairFileName, err)
 		return err
 	}
 	defer func() {
 		err := file.Close()
 		if err != nil {
-			logrus.Errorf("Error closing pair file: %v", err)
+			log.Errorf("Error closing pair file: %v", err)
 		}
 	}()
 	w := bufio.NewWriter(file)
@@ -2202,7 +2202,7 @@ func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) e
 		}
 		_, err = fmt.Fprintf(w, "    %v: %v\n", k, v)
 		if err != nil {
-			logrus.Infof("error writing file %v", err)
+			log.Infof("error writing file %v", err)
 			return err
 		}
 	}
@@ -2211,7 +2211,7 @@ func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) e
 		return err
 	}
 
-	logrus.Infof("cluster-pair.yml created with storage options in %s", clusterPairFileName)
+	log.Infof("cluster-pair.yml created with storage options in %s", clusterPairFileName)
 	return nil
 
 }
@@ -2229,7 +2229,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 			defer wg.Done()
 			namespace := ctx.App.SpecList[0].(*v1.PersistentVolumeClaim).Namespace
 			if err, ok := bkpErrors[namespace]; ok {
-				logrus.Infof("Skipping validating namespace %s because %s", namespace, err)
+				log.Infof("Skipping validating namespace %s because %s", namespace, err)
 			} else {
 				ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
@@ -2240,7 +2240,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 					})
 					if err != nil {
 						bkpErrors[namespace] = err
-						logrus.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
+						log.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
 						return
 					}
 
@@ -2250,26 +2250,26 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 					})
 					if err != nil {
 						bkpErrors[namespace] = err
-						logrus.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
+						log.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
 						return
 					}
 
 					updatedVolumeParams = UpdateVolumeInVolumeParameters(volumeParameters)
-					logrus.Infof("Updated parameter list: [%+v]\n", updatedVolumeParams)
+					log.Infof("Updated parameter list: [%+v]\n", updatedVolumeParams)
 					err = ValidateVolumeParametersGetErr(updatedVolumeParams)
 					if err != nil {
 						bkpErrors[namespace] = err
-						logrus.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
+						log.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
 						return
 					}
 
 					Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 						var vols []*volume.Volume
 						vols, err = Inst().S.GetVolumes(ctx)
-						logrus.Infof("List of volumes from scheduler driver :[%+v] \n for context : [%+v]\n", vols, ctx)
+						log.Infof("List of volumes from scheduler driver :[%+v] \n for context : [%+v]\n", vols, ctx)
 						if err != nil {
 							bkpErrors[namespace] = err
-							logrus.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
+							log.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
 						}
 
 						for _, vol := range vols {
@@ -2277,7 +2277,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 								err = Inst().V.ValidateVolumeSetup(vol)
 								if err != nil {
 									bkpErrors[namespace] = err
-									logrus.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
+									log.Errorf("Failed to validate [%s] app. Error: [%v]", ctx.App.Key, err)
 								}
 							})
 						}
@@ -2393,7 +2393,7 @@ func CreateBackupGetErr(backupName string, clusterName string, bLocation string,
 				err))
 		_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 		if err != nil {
-			logrus.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]",
+			log.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]",
 				backupName, orgID, err)
 		}
 	})
@@ -2485,7 +2485,7 @@ func DeleteNamespace() error {
 	}
 	SetClusterContext(sourceClusterConfigPath)
 	if len(contextsCreated) == 0 {
-		logrus.Infof("No namespace to delete")
+		log.Infof("No namespace to delete")
 		return nil
 	}
 	TearDownContext(contextsCreated[0], map[string]bool{
@@ -2569,7 +2569,7 @@ func CreateBackupFromRequest(backupName string, orgID string, request *api.Backu
 	backupDriver := Inst().Backup
 	_, err = backupDriver.CreateBackup(ctx, request)
 	if err != nil {
-		logrus.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]",
+		log.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]",
 			backupName, orgID, err)
 	}
 	return err
@@ -2606,7 +2606,7 @@ func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Durati
 	beginTimeSec := beginTime.Unix()
 
 	t := func() (interface{}, bool, error) {
-		logrus.Infof("Enumerating backups")
+		log.Infof("Enumerating backups")
 		bkpEnumerateReq := &api.BackupEnumerateRequest{
 			OrgId: OrgID}
 		//ctx, err := backup.GetPxCentralAdminCtx()
@@ -2675,7 +2675,7 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 		if obj.Labels != nil {
 			_, ok := obj.Labels[key]
 			if ok {
-				logrus.Infof("Deleting label with key [%s] from PVC %s", key, obj.Name)
+				log.Infof("Deleting label with key [%s] from PVC %s", key, obj.Name)
 				delete(obj.Labels, key)
 				core.Instance().UpdatePersistentVolumeClaim(obj)
 			}
@@ -2684,7 +2684,7 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 		if obj.Labels != nil {
 			_, ok := obj.Labels[key]
 			if ok {
-				logrus.Infof("Deleting label with key [%s] from ConfigMap %s", key, obj.Name)
+				log.Infof("Deleting label with key [%s] from ConfigMap %s", key, obj.Name)
 				delete(obj.Labels, key)
 				core.Instance().UpdateConfigMap(obj)
 			}
@@ -2693,7 +2693,7 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 		if obj.Labels != nil {
 			_, ok := obj.Labels[key]
 			if ok {
-				logrus.Infof("Deleting label with key [%s] from Secret %s", key, obj.Name)
+				log.Infof("Deleting label with key [%s] from Secret %s", key, obj.Name)
 				delete(obj.Labels, key)
 				core.Instance().UpdateSecret(obj)
 			}
@@ -2774,9 +2774,9 @@ func DeleteRestore(restoreName string, orgID string) {
 
 // SetupBackup sets up backup location and source and destination clusters
 func SetupBackup(testName string) {
-	logrus.Infof("Backup driver: %v", Inst().Backup)
+	log.Infof("Backup driver: %v", Inst().Backup)
 	provider := GetProvider()
-	logrus.Infof("Run Setup backup with object store provider: %s", provider)
+	log.Infof("Run Setup backup with object store provider: %s", provider)
 	OrgID = "default"
 	BucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
 	CloudCredUID = uuid.New()
@@ -2958,11 +2958,11 @@ func createS3BackupLocation(name string, uid, cloudCred string, cloudCredUID, bu
 // CreateCloudCredential creates cloud credetials
 func CreateCloudCredential(provider, name string, uid, orgID string) {
 	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
-		logrus.Printf("Create credential name %s for org %s provider %s", name, orgID, provider)
+		log.Infof("Create credential name %s for org %s provider %s", name, orgID, provider)
 		backupDriver := Inst().Backup
 		switch provider {
 		case drivers.ProviderAws:
-			logrus.Infof("Create creds for aws")
+			log.Infof("Create creds for aws")
 			id := os.Getenv("AWS_ACCESS_KEY_ID")
 			expect(id).NotTo(equal(""),
 				"AWS_ACCESS_KEY_ID Environment variable should not be empty")
@@ -3000,7 +3000,7 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
 		// TODO: validate CreateCloudCredentialResponse also
 		case drivers.ProviderAzure:
-			logrus.Infof("Create creds for azure")
+			log.Infof("Create creds for azure")
 			tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
 			credCreateRequest := &api.CloudCredentialCreateRequest{
 				CreateMetadata: &api.CreateMetadata{
@@ -3253,7 +3253,7 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 		if obj.Labels == nil {
 			obj.Labels = make(map[string]string)
 		}
-		logrus.Infof("Adding label [%s=%s] to PVC %s", key, val, obj.Name)
+		log.Infof("Adding label [%s=%s] to PVC %s", key, val, obj.Name)
 		obj.Labels[key] = val
 		core.Instance().UpdatePersistentVolumeClaim(obj)
 		return nil
@@ -3261,7 +3261,7 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 		if obj.Labels == nil {
 			obj.Labels = make(map[string]string)
 		}
-		logrus.Infof("Adding label [%s=%s] to ConfigMap %s", key, val, obj.Name)
+		log.Infof("Adding label [%s=%s] to ConfigMap %s", key, val, obj.Name)
 		obj.Labels[key] = val
 		core.Instance().UpdateConfigMap(obj)
 		return nil
@@ -3269,7 +3269,7 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 		if obj.Labels == nil {
 			obj.Labels = make(map[string]string)
 		}
-		logrus.Infof("Adding label [%s=%s] to Secret %s", key, val, obj.Name)
+		log.Infof("Adding label [%s=%s] to Secret %s", key, val, obj.Name)
 		obj.Labels[key] = val
 		core.Instance().UpdateSecret(obj)
 		return nil
@@ -3290,7 +3290,7 @@ func GetSourceClusterConfigPath() (string, error) {
 				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
-	logrus.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
+	log.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]), nil
 }
 
@@ -3307,7 +3307,7 @@ func GetDestinationClusterConfigPath() (string, error) {
 				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
-	logrus.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
+	log.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
 }
 
@@ -3321,7 +3321,7 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 	expect(accountKey).NotTo(equal(""),
 		"AZURE_ACCOUNT_KEY Environment variable should not be empty")
 
-	logrus.Infof("Create creds for azure")
+	log.Infof("Create creds for azure")
 	tenantID = os.Getenv("AZURE_TENANT_ID")
 	expect(tenantID).NotTo(equal(""),
 		"AZURE_TENANT_ID Environment variable should not be empty")
@@ -3399,7 +3399,7 @@ func DeleteAzureBucket(bucketName string) {
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
 
 	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
-	logrus.Infof("Delete container url %s", urlStr)
+	log.Infof("Delete container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
 	u, _ := url.Parse(urlStr)
 	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
@@ -3663,7 +3663,7 @@ func validateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error
 
 // TearDownBackupRestoreAll enumerates backups and restores before deleting them
 func TearDownBackupRestoreAll() {
-	logrus.Infof("Enumerating scheduled backups")
+	log.Infof("Enumerating scheduled backups")
 	bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
 		OrgId:  OrgID,
 		Labels: make(map[string]string),
@@ -3681,7 +3681,7 @@ func TearDownBackupRestoreAll() {
 		DeleteScheduledBackup(bkpSched.GetName(), bkpSched.GetUid(), schedPol.GetName(), schedPol.GetUid())
 	}
 
-	logrus.Infof("Enumerating backups")
+	log.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID,
 	}
@@ -3693,7 +3693,7 @@ func TearDownBackupRestoreAll() {
 		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID)
 	}
 
-	logrus.Infof("Enumerating restores")
+	log.Infof("Enumerating restores")
 	restoreEnumerateReq := &api.RestoreEnumerateRequest{
 		OrgId: OrgID}
 	ctx, err = backup.GetPxCentralAdminCtx()
@@ -3769,7 +3769,7 @@ func CreateAzureBucket(bucketName string) {
 	_, _, _, _, accountName, accountKey := GetAzureCredsFromEnv()
 
 	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
-	logrus.Infof("Create container url %s", urlStr)
+	log.Infof("Create container url %s", urlStr)
 	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
 	u, _ := url.Parse(urlStr)
 	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
@@ -3793,13 +3793,13 @@ func createAzureBackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, o
 }
 
 func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
-	logrus.Infof("dump kubeconfigs to file system")
+	log.Infof("dump kubeconfigs to file system")
 	cm, err := core.Instance().GetConfigMap(configObject, "default")
 	if err != nil {
-		logrus.Errorf("Error reading config map: %v", err)
+		log.Errorf("Error reading config map: %v", err)
 		return err
 	}
-	logrus.Infof("Get over kubeconfig list %v", kubeconfigList)
+	log.Infof("Get over kubeconfig list %v", kubeconfigList)
 	for _, kubeconfig := range kubeconfigList {
 		config := cm.Data[kubeconfig]
 		if len(config) == 0 {
@@ -3808,7 +3808,7 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 			return fmt.Errorf(configErr)
 		}
 		filePath := fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfig)
-		logrus.Infof("Save kubeconfig to %s", filePath)
+		log.Infof("Save kubeconfig to %s", filePath)
 		err := ioutil.WriteFile(filePath, []byte(config), 0644)
 		if err != nil {
 			return err
@@ -4270,7 +4270,7 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 			log.Info("Mounting nfs diags directory")
 			runCmd(fmt.Sprintf("mount -t nfs %v %v", diagsDirPath, rootLogDir), currNode)
 			if !isIssueDirCreated {
-				logrus.Infof("Creating PTX %v directory in the node %v", issueKey, currNode.Name)
+				log.Infof("Creating PTX %v directory in the node %v", issueKey, currNode.Name)
 				runCmd(fmt.Sprintf("mkdir -p %v/%v", rootLogDir, issueKey), currNode)
 				isIssueDirCreated = true
 			}
@@ -4319,7 +4319,7 @@ func collectAndCopyStorkLogs(issueKey string) {
 			log.Info("Collecting stork logs")
 			output, err := core.Instance().GetPodLog(p.Name, p.Namespace, &logOptions)
 			if err != nil {
-				logrus.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
+				log.Error(fmt.Errorf("failed to get logs for the pod %s/%s: %w", p.Namespace, p.Name, err))
 			}
 			logsByPodName[p.Name] = output
 		}
