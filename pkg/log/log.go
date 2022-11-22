@@ -262,6 +262,10 @@ func Debug(args ...interface{}) {
 	tpLog.Debug(args...)
 }
 
+func Panicf(format string, args ...interface{}) {
+	tpLog.Panicf(format, args...)
+}
+
 func FailOnError(err error, description string, args ...interface{}) {
 	if err != nil {
 		Fatalf("%v. Err: %v", fmt.Sprintf(description, args...), err)
