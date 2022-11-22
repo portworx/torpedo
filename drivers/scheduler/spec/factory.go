@@ -7,7 +7,6 @@ import (
 	"path"
 
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // Factory is an application spec factory
@@ -21,9 +20,9 @@ var appSpecFactory = make(map[string]*AppSpec)
 // register registers a new spec with the factory
 func (f *Factory) register(id string, app *AppSpec) {
 	if _, ok := appSpecFactory[id]; !ok {
-		logrus.Tracef("Registering new app: %v", id)
+		log.Debugf("Registering new app: %v", id)
 	} else {
-		logrus.Tracef("Substitute with new app: %v", id)
+		log.Debugf("Substitute with new app: %v", id)
 	}
 	// NOTE: In case of spec rescan we need to substitute old app with another one
 	appSpecFactory[id] = app

@@ -11,8 +11,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
-	"github.com/sirupsen/logrus"
-
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

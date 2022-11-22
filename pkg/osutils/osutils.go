@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 // Wget runs wget command
@@ -31,12 +31,12 @@ func Wget(URL string, filename string, verifyFile bool) error {
 		if err != nil {
 			return err
 		}
-		logrus.Debugf("file %s exists", filename)
+		log.Debugf("file %s exists", filename)
 
 		if FileEmpty(file) {
 			return fmt.Errorf("file %s is empty", filename)
 		}
-		logrus.Debugf("file %s is not empty", filename)
+		log.Debugf("file %s is not empty", filename)
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"path"
 	"strconv"
@@ -15,8 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 
 	. "github.com/onsi/ginkgo"
@@ -74,7 +74,7 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 			aggrLevel, err := Inst().V.GetAggregationLevel(volume)
 			Expect(err).NotTo(HaveOccurred())
 			if aggrLevel > 1 {
-				logrus.Infof("skipping app %s because volume %s has aggr level %d", ctx.App.Key, volume.ID, aggrLevel)
+				log.Infof("skipping app %s because volume %s has aggr level %d", ctx.App.Key, volume.ID, aggrLevel)
 				continue
 			}
 
@@ -119,11 +119,11 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 			Step("fail over nfs server, and make sure the pod on server gets restarted", func() {
 				oldServer, err := Inst().V.GetNodeForVolume(volume, cmdTimeout, cmdRetry)
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("old nfs server %v [%v]", oldServer.SchedulerNodeName, oldServer.Addresses[0])
+				log.Infof("old nfs server %v [%v]", oldServer.SchedulerNodeName, oldServer.Addresses[0])
 				pods, err := core.Instance().GetPodsUsingPV(volume.ID)
 				Expect(err).NotTo(HaveOccurred())
 				for _, pod := range pods {
-					logrus.Infof("pod %s/%s in phase %v on node %v before the failover",
+					log.Infof("pod %s/%s in phase %v on node %v before the failover",
 						pod.Namespace, pod.Name, pod.Status.Phase, pod.Spec.NodeName)
 				}
 				var oldPodOnOldServer corev1.Pod
@@ -134,14 +134,14 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 				}
 				// make sure there is a pod running on the old nfs server
 				Expect(oldPodOnOldServer.Name).NotTo(Equal(""))
-				logrus.Infof("pod on old server %v, creation time %v", oldPodOnOldServer.Name, oldPodOnOldServer.CreationTimestamp)
+				log.Infof("pod on old server %v, creation time %v", oldPodOnOldServer.Name, oldPodOnOldServer.CreationTimestamp)
 
 				timestampBeforeFailOver := time.Now()
 				err = Inst().V.StopDriver([]node.Node{*oldServer}, false, nil)
 				Expect(err).NotTo(HaveOccurred())
 				err = Inst().V.WaitDriverDownOnNode(*oldServer)
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("stopped px on nfs server node %v [%v]", oldServer.SchedulerNodeName, oldServer.Addresses[0])
+				log.Infof("stopped px on nfs server node %v [%v]", oldServer.SchedulerNodeName, oldServer.Addresses[0])
 
 				var newServer *node.Node
 
@@ -151,10 +151,10 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 					server, err := Inst().V.GetNodeForVolume(volume, cmdTimeout, cmdRetry)
 					// there could be intermittent error here
 					if err != nil {
-						logrus.Infof("Failed to get node for volume. Error: %v", err)
+						log.Infof("Failed to get node for volume. Error: %v", err)
 					} else {
 						if server.Id != oldServer.Id {
-							logrus.Infof("nfs server failed over, new nfs server is %s [%s]", server.SchedulerNodeName, server.Addresses[0])
+							log.Infof("nfs server failed over, new nfs server is %s [%s]", server.SchedulerNodeName, server.Addresses[0])
 							newServer = server
 							break
 						}
@@ -163,13 +163,13 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 				}
 				// make sure nfs server failed over
 				Expect(newServer).NotTo(BeNil())
-				logrus.Infof("new nfs server is %v [%v]", newServer.SchedulerNodeName, newServer.Addresses[0])
+				log.Infof("new nfs server is %v [%v]", newServer.SchedulerNodeName, newServer.Addresses[0])
 
-				logrus.Infof("start px on old nfs server Id %v, Name %v", oldServer.Id, oldServer.Name)
+				log.Infof("start px on old nfs server Id %v, Name %v", oldServer.Id, oldServer.Name)
 				Inst().V.StartDriver(*oldServer)
 				err = Inst().V.WaitDriverUpOnNode(*oldServer, Inst().DriverStartTimeout)
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("px is up on old nfs server Id %v, Name %v", oldServer.Id, oldServer.Name)
+				log.Infof("px is up on old nfs server Id %v, Name %v", oldServer.Id, oldServer.Name)
 
 				ValidateApplications(contexts)
 
@@ -177,20 +177,20 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 				pods, err = core.Instance().GetPodsUsingPV(volume.ID)
 				Expect(err).NotTo(HaveOccurred())
 				for _, pod := range pods {
-					logrus.Infof("pod %s/%s in phase %v on node %v after the failover",
+					log.Infof("pod %s/%s in phase %v on node %v after the failover",
 						pod.Namespace, pod.Name, pod.Status.Phase, pod.Spec.NodeName)
 				}
 				podRestartedOnOldServer := false
 				podRestartedOnNewServer := false
 				for _, pod := range pods {
 					if pod.Spec.NodeName == oldServer.Name {
-						logrus.Infof("pod on old server %v, creation time %v", oldPodOnOldServer.Name, oldPodOnOldServer.CreationTimestamp)
-						logrus.Infof("After failover, pod on old server %v, creation time %v", pod.Name, pod.CreationTimestamp)
+						log.Infof("pod on old server %v, creation time %v", oldPodOnOldServer.Name, oldPodOnOldServer.CreationTimestamp)
+						log.Infof("After failover, pod on old server %v, creation time %v", pod.Name, pod.CreationTimestamp)
 						Expect(pod.CreationTimestamp.After(timestampBeforeFailOver)).To(BeTrue())
 						podRestartedOnOldServer = true
 					}
 					if pod.Spec.NodeName == newServer.Name {
-						logrus.Infof("After failover, pod on new server %v, creation time %v", pod.Name, pod.CreationTimestamp)
+						log.Infof("After failover, pod on new server %v, creation time %v", pod.Name, pod.CreationTimestamp)
 						Expect(pod.CreationTimestamp.After(timestampBeforeFailOver)).To(BeTrue())
 						podRestartedOnNewServer = true
 					}
@@ -249,7 +249,7 @@ var _ = Describe("{PVCAccessModeFunctional}", func() {
 		for appName, customAppConfig := range customAppConfigs {
 			Inst().CustomAppConfig[appName] = customAppConfig
 		}
-		logrus.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
+		log.Infof("JustBeforeEach using Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
 
 		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 		Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
@@ -267,7 +267,7 @@ var _ = Describe("{PVCAccessModeFunctional}", func() {
 				}
 			}
 			if !found {
-				logrus.Warnf("App %v not found in %d contexts, skipping test", appName, len(contexts))
+				log.Warnf("App %v not found in %d contexts, skipping test", appName, len(contexts))
 				Skip(fmt.Sprintf("app %v not found", appName))
 			}
 		}
@@ -328,7 +328,7 @@ var _ = Describe("{PVCAccessModeFunctional}", func() {
 				delete(Inst().CustomAppConfig, appName)
 			}
 		}
-		logrus.Infof("JustAfterEach restoring Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
+		log.Infof("JustAfterEach restoring Inst().CustomAppConfig = %v", Inst().CustomAppConfig)
 
 		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 		Expect(err).NotTo(HaveOccurred(), "Failed to rescan specs from %s", Inst().SpecDir)
@@ -339,7 +339,7 @@ var _ = Describe("{PVCAccessModeFunctional}", func() {
 	AfterEach(func() {
 		Step("destroy apps", func() {
 			if CurrentGinkgoTestDescription().Failed {
-				logrus.Info("not destroying apps because the test failed\n")
+				log.Info("not destroying apps because the test failed\n")
 				return
 			}
 			for _, ctx := range contexts {
@@ -462,7 +462,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 			if Inst().N.IsUsingSSH() {
 				for _, anode := range node.GetWorkerNodes() {
 					// TODO: support other OS'es
-					logrus.Infof("installing tcpdump on node %s", anode.Name)
+					log.Infof("installing tcpdump on node %s", anode.Name)
 					cmd := "yum install -y tcpdump"
 					_, err := Inst().N.RunCommandWithNoRetry(anode, cmd, node.ConnectionOpts{
 						Timeout:         cmdTimeout,
@@ -470,7 +470,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 						Sudo:            true,
 					})
 					if err != nil {
-						logrus.Warnf("failed to install tcpdump on node %s: %v", anode.Name, err)
+						log.Warnf("failed to install tcpdump on node %s: %v", anode.Name, err)
 						break
 					}
 				}
@@ -551,7 +551,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 								Step("sleep between the failovers",
 									func() {
 										dur := fm.sleepBetweenFailovers()
-										logrus.Infof("sleeping for %v between the failovers", dur)
+										log.Infof("sleeping for %v between the failovers", dur)
 										time.Sleep(dur)
 									})
 							}
@@ -560,7 +560,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 								func() {
 									attachedNodeBefore, err = Inst().V.GetNodeForVolume(vol, cmdTimeout, cmdRetry)
 									Expect(err).NotTo(HaveOccurred())
-									logrus.Infof("volume %v (%v) is attached to node %v before %s",
+									log.Infof("volume %v (%v) is attached to node %v before %s",
 										vol.ID, apiVol.Id, attachedNodeBefore.Name, failoverLog)
 								})
 

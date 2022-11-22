@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -111,7 +111,7 @@ type InitOptions struct {
 	RunCSISnapshotAndRestoreManyTest bool
 
 	//Logger log the output
-	Logger *logrus.Logger
+	Logger *log.Logger
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

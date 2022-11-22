@@ -50,8 +50,7 @@ import (
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -498,13 +497,13 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		}
 
 		for _, ctx := range *contexts {
-			logrus.Infof("Validating context: %v", ctx.App.Key)
+			log.Infof("Validating context: %v", ctx.App.Key)
 			ctx.SkipVolumeValidation = false
 			ValidateContext(ctx, &errorChan)
 			// BUG: Execution doesn't resume here after ValidateContext called
 			// Below code is never executed
 			for err := range errorChan {
-				logrus.Infof("Error: %v", err)
+				log.Infof("Error: %v", err)
 				UpdateOutcome(event, err)
 			}
 		}

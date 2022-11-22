@@ -57,7 +57,7 @@ func TelemetryEnabled(currNode node.Node) bool {
 	// This returns true if telemetry is enabled
 	output, err := runPxctlCommand("status | egrep ^Telemetry:", currNode, nil)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get status for node %v", currNode.Name)
-	logrus.Infof("node %s: %s", currNode.Name, output)
+	log.Infof("node %s: %s", currNode.Name, output)
 	status, err := regexp.MatchString(`Telemetry:.*Healthy`, output)
 	if err != nil {
 		return false
@@ -69,18 +69,18 @@ func oneTimeInit() {
 	if oneTimeInitDone {
 		return
 	}
-	logrus.Infof("Checking telemetry status...")
+	log.Infof("Checking telemetry status...")
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	if isOpBased {
 		spec, err := Inst().V.GetStorageCluster()
 		Expect(err).ToNot(HaveOccurred())
 		if spec.Spec.Monitoring != nil && spec.Spec.Monitoring.Telemetry != nil && spec.Spec.Monitoring.Telemetry.Enabled {
-			logrus.Infof("Telemetry is operator enabled.")
+			log.Infof("Telemetry is operator enabled.")
 			isTelemetryOperatorEnabled = true
 		}
 	}
 	if !isTelemetryOperatorEnabled {
-		logrus.Infof("Telemetry is not enabled.")
+		log.Infof("Telemetry is not enabled.")
 	}
 	oneTimeInitDone = true
 }
@@ -191,7 +191,7 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 					Live:          true,
 				}
 				if !TelemetryEnabled(currNode) {
-					logrus.Debugf("Telemetry not enabled, sleeping for 5 mins")
+					log.Debugf("Telemetry not enabled, sleeping for 5 mins")
 					time.Sleep(5 * time.Minute)
 				}
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false})
@@ -200,7 +200,7 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 					err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)))
 					Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
 				} else {
-					logrus.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+					log.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
 				}
 			})
 		}
@@ -241,16 +241,16 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 		for _, currNode := range node.GetWorkerNodes() {
 			pxInstalled, err = Inst().V.IsPxInstalled(currNode)
 			if err != nil {
-				logrus.Debugf("Could not get PX status on %s", currNode.Name)
+				log.Debugf("Could not get PX status on %s", currNode.Name)
 			}
 			if pxInstalled {
 				// Get the most recent profile diags for comparison
 				Step(fmt.Sprintf("Check latest profile diags on node %v", currNode.Name), func() {
-					logrus.Infof(" Getting latest profile  diags on %v", currNode.Name)
+					log.Infof(" Getting latest profile  diags on %v", currNode.Name)
 					existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"),
 						currNode, nil)
 					if err == nil {
-						logrus.Infof("Found latest profiles diags on node %s:\n%s ", currNode.Name, existingDiags)
+						log.Infof("Found latest profiles diags on node %s:\n%s ", currNode.Name, existingDiags)
 					} else {
 						existingDiags = ""
 					}
@@ -264,11 +264,11 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 					if TelemetryEnabled(currNode) {
 						err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: true})
 						if err != nil {
-							logrus.Errorf("Failed to collect diags on Node: %s Err: %v", currNode.Name, err)
+							log.Errorf("Failed to collect diags on Node: %s Err: %v", currNode.Name, err)
 						}
 						Expect(err).NotTo(HaveOccurred(), "Profile only diags collected successfully")
 					} else {
-						logrus.Infof("Telemetry not enabled on the node %s", currNode.Name)
+						log.Infof("Telemetry not enabled on the node %s", currNode.Name)
 						skipTest = true
 						return
 					}
@@ -278,24 +278,24 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 				// Get the latest files in the directory.  The newly generated files will not equal the most recent. So you know they are new.
 				Step(fmt.Sprintf("Get the new profile diags on node %v", currNode.Name), func() {
 					if skipTest {
-						logrus.Infof("Skipping getting new filename for node %s", currNode.Name)
+						log.Infof("Skipping getting new filename for node %s", currNode.Name)
 						return
 					}
-					logrus.Infof("Getting latest profile diags on %66v", currNode.Name)
+					log.Infof("Getting latest profile diags on %66v", currNode.Name)
 					Eventually(func() bool {
 						newDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"),
 							currNode, nil)
 						if err == nil {
 							if existingDiags != "" && existingDiags == newDiags {
-								logrus.Infof("No new profile diags found... current latest ones are %v", newDiags)
+								log.Infof("No new profile diags found... current latest ones are %v", newDiags)
 								newDiags = ""
 							}
 							if len(newDiags) > 0 {
-								logrus.Infof("Found new profile diags:\n%s", newDiags)
+								log.Infof("Found new profile diags:\n%s", newDiags)
 								// Needs to contain both stack/heap
 								if strings.Contains(newDiags, ".heap") && strings.Contains(newDiags, ".stack") {
 									diagsFiles = strings.Split(newDiags, "\n")
-									logrus.Debugf("Files found %v", diagsFiles)
+									log.Debugf("Files found %v", diagsFiles)
 									return true
 								}
 							}
