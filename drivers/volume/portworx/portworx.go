@@ -3794,7 +3794,6 @@ func (d *portworx) GetClusterOpts(n node.Node, options []string) (map[string]str
 	//Make sure required options are available
 	for _, option := range options {
 		if _, ok := options_map[option]; !ok {
-			d.log.Info("cluster option not found : %v", option)
 			return nil, fmt.Errorf("Failed to find option : %v", option)
 		}
 	}
