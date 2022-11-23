@@ -1146,7 +1146,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 					dash.Info("Rebooting all the nodes in rolling fashion.")
 					nodesToReboot := node.GetWorkerNodes()
 					for _, n := range nodesToReboot {
-						dash.Infof("reboot node: %s", n.Name)
+						log.InfoD("reboot node: %s", n.Name)
 						err = Inst().N.RebootNode(n, node.RebootNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
@@ -1162,7 +1162,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 							TimeBeforeRetry: defaultWaitRebootRetry,
 						})
 						if err != nil {
-							dash.Errorf("Error while testing node status %v, err: %v", n.Name, err.Error())
+							log.FailOnError(err, "Error while testing node status %v, err: %v", n.Name, err.Error())
 						}
 						Expect(err).NotTo(HaveOccurred())
 					}
