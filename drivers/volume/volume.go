@@ -2,8 +2,9 @@ package volume
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -272,6 +273,9 @@ type Driver interface {
 
 	//SetClusterOpts sets cluster options
 	SetClusterOpts(n node.Node, clusterOpts map[string]string) error
+
+	//GetClusterOpts gets cluster options
+	GetClusterOpts(n node.Node, options []string) (map[string]string, error)
 
 	//SetClusterOptsWithConfirmation sets cluster options and confirm it
 	SetClusterOptsWithConfirmation(n node.Node, clusterOpts map[string]string) error

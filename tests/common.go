@@ -4967,26 +4967,38 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
-	EnableFeatures()
+	SetClusterOptions()
 
 }
 
-// EnableFeatures to enable px features
-func EnableFeatures(errChan ...*chan error) {
+// SetClusterOptions to set px cluster options
+func SetClusterOptions(errChan ...*chan error) {
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("Enable features on PX cluster"), func() {
+	ginkgo.Describe(fmt.Sprintf("Enable cluster options on PX cluster"), func() {
 		nodes := node.GetWorkerNodes()
+		options, err := Inst().V.GetClusterOpts(nodes[0], []string{"AutoFstrim"})
 		Step(fmt.Sprintf("Enable Auto FSTrim"), func() {
-			err := Inst().V.SetClusterOpts(nodes[0], map[string]string{
-				"--auto-fstrim": "on",
-			})
 			if err != nil {
-				err = fmt.Errorf("Error while enabling auto fstrim, Error:%v", err)
+				err = fmt.Errorf("AutoFS trim option not available, Error:%v", err)
 				processError(err, errChan...)
+			} else {
+				if options["AutoFstrim"] == "true" {
+					log.Info("Autofstrim already enabled.")
+				} else {
+					err := Inst().V.SetClusterOpts(nodes[0], map[string]string{
+						"--auto-fstrim": "on",
+					})
+					if err != nil {
+						err = fmt.Errorf("Error while enabling auto fstrim, Error:%v", err)
+						processError(err, errChan...)
+					} else {
+						log.Info("Autofstrim is enabled on the cluster.")
+					}
+				}
 			}
 		})
 	})
