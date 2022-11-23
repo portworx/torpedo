@@ -3,16 +3,8 @@ package tests
 import (
 	"context"
 	"fmt"
-	"os"
-	"path"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -21,47 +13,24 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/pkg/log"
+
+	"os"
+	"path"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
+
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	clusterName            = "tp-cluster"
-	restoreNamePrefix      = "tp-restore"
-	configMapName          = "kubeconfigs"
-	defaultTimeout         = 5 * time.Minute
-	defaultRetryInterval   = 10 * time.Second
-	sourceClusterName      = "source-cluster"
-	destinationClusterName = "destination-cluster"
-	backupLocationName     = "tp-blocation"
-
-	storkDeploymentName      = "stork"
-	storkDeploymentNamespace = "kube-system"
-
-	appReadinessTimeout = 10 * time.Minute
-	enumerateBatchSize  = 100
-)
-
 var (
-	orgID      string
 	bucketName string
 )
-
-var _ = BeforeSuite(func() {
-	logrus.Infof("Init instance")
-	InitInstance()
-})
-
-func TestBackup(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
-}
 
 func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	for _, bkpNamespace := range bkpNamespaces {
@@ -82,17 +51,139 @@ func TearDownBackupRestore(bkpNamespaces []string, restoreNamespaces []string) {
 	DeleteBucket(provider, BucketName)
 }
 
-var _ = AfterSuite(func() {
-	//PerformSystemCheck()
-	//ValidateCleanup()
-	//	BackupCleanup()
+//This testcase verifies if the backup pods are in Ready state or not
+var _ = Describe("{BackupClusterVerification}", func() {
+	JustBeforeEach(func() {
+		log.Infof("No pre-setup required for this testcase")
+		StartTorpedoTest("Backup: BackupClusterVerification", "Validating backup cluster pods", nil, 0)
+	})
+	It("Backup Cluster Verification", func() {
+		Step("Check the status of backup pods", func() {
+			log.InfoD("Check the status of backup pods")
+			status := ValidateBackupCluster()
+			dash.VerifyFatal(status, true, "Backup Cluster Verification successful?")
+		})
+		//Will add CRD verification here
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.Infof("No cleanup required for this testcase")
+	})
 })
 
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
+//This testcase verifies basic backup rule,backup location, cloud setting
+var _ = Describe("{BasicBackupCreation}", func() {
+	var (
+		ps       = make(map[string]map[string]string)
+		app_list = Inst().AppList
+	)
+	var contexts []*scheduler.Context
+	var CloudCredUID_list []string
+	var appContexts []*scheduler.Context
+
+	providers := getProviders()
+	JustBeforeEach(func() {
+		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
+		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not ")
+		for i := 0; i < len(app_list); i++ {
+			if Contains(post_rule_app, app_list[i]) {
+				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
+				}
+			}
+			if Contains(pre_rule_app, app_list[i]) {
+				if _, ok := app_parameters[app_list[i]]["pre_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
+				}
+			}
+		}
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+		}
+	})
+	It("Basic Backup Creation", func() {
+		Step("Validate applications and get their labels", func() {
+			ValidateApplications(contexts)
+			log.Infof("Create list of pod selector for the apps deployed")
+			for _, ctx := range appContexts {
+				for _, specObj := range ctx.App.SpecList {
+					if obj, ok := specObj.(*appsapi.Deployment); ok {
+						if Contains(app_list, obj.Name) {
+							ps[obj.Name] = obj.Spec.Template.Labels
+						}
+					} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+						if Contains(app_list, obj.Name) {
+							ps[obj.Name] = obj.Spec.Template.Labels
+						}
+					}
+				}
+			}
+		})
+
+		Step("Creating rules for backup", func() {
+			log.InfoD("Creating pre rule for deployed apps")
+			pre_rule_status := CreateRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
+			dash.VerifyFatal(pre_rule_status, true, "Verifying pre rule for backup")
+			log.InfoD("Creating post rule for deployed apps")
+			post_rule_status := CreateRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
+			dash.VerifyFatal(post_rule_status, true, "Verifying Post rule for backup")
+		})
+		Step("Creating bucket,backup location and cloud setting", func() {
+			log.InfoD("Creating bucket,backup location and cloud setting")
+			for _, provider := range providers {
+				bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
+				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				backup_location_name := fmt.Sprintf("%s-%s", "location", provider)
+				CloudCredUID = uuid.New()
+				CloudCredUID_list = append(CloudCredUID_list, CloudCredUID)
+				BackupLocationUID = uuid.New()
+				CreateBucket(provider, bucketName)
+				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
+				time.Sleep(time.Minute * 1)
+				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
+			}
+		})
+		Step("Creating backup schedule policies", func() {
+			log.InfoD("Creating backup interval schedule policy")
+			interval_schedule_policy_info := CreateIntervalSchedulePolicy(5, 15, 2)
+			interval_policy_status := Backupschedulepolicy("interval", uuid.New(), orgID, interval_schedule_policy_info)
+			dash.VerifyFatal(interval_policy_status, nil, "Creating interval schedule policy")
+
+			log.InfoD("Creating backup daily schedule policy")
+			daily_schedule_policy_info := CreateDailySchedulePolicy(1, "9:00AM", 2)
+			daily_policy_status := Backupschedulepolicy("daily", uuid.New(), orgID, daily_schedule_policy_info)
+			dash.VerifyFatal(daily_policy_status, nil, "Creating daily schedule policy")
+
+			log.InfoD("Creating backup weekly schedule policy")
+			weekly_schedule_policy_info := CreateWeeklySchedulePolicy(1, Friday, "9:10AM", 2)
+			weekly_policy_status := Backupschedulepolicy("weekly", uuid.New(), orgID, weekly_schedule_policy_info)
+			dash.VerifyFatal(weekly_policy_status, nil, "Creating weekly schedule policy")
+
+			log.InfoD("Creating backup monthly schedule policy")
+			monthly_schedule_policy_info := CreateMonthlySchedulePolicy(1, 29, "9:20AM", 2)
+			monthly_policy_status := Backupschedulepolicy("monthly", uuid.New(), orgID, monthly_schedule_policy_info)
+			dash.VerifyFatal(monthly_policy_status, nil, "Creating monthly schedule policy")
+		})
+		Step("Register cluster for backup", func() {
+			CloudCredUID = uuid.New()
+			CreateCloudCredential("azure", "azureaccount", CloudCredUID, orgID)
+			// To create cloud clustre
+			RegisterBackupCluster(orgID, "azure", CloudCredUID)
+			//To create on prem cluster
+			RegisterBackupCluster(orgID, "", "")
+		})
+	})
+	JustAfterEach(func() {
+		policy_list := []string{"interval", "daily", "weekly", "monthly"}
+		defer EndTorpedoTest()
+		teardown_status := TeardownForTestcase(contexts, providers, CloudCredUID_list, policy_list)
+		dash.VerifyFatal(teardown_status, true, "Testcase teardown status")
+	})
+})
 
 // This test performs basic test of starting an application, backing it up and killing stork while
 // performing backup.
@@ -103,10 +194,13 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 		namespaceMapping map[string]string
 		taskNamePrefix   = "backupcreaterestore"
 	)
-
 	labelSelectores := make(map[string]string)
 	namespaceMapping = make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
 
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
@@ -126,7 +220,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 			bkpNamespaces = make([]string, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-				logrus.Infof("Task name %s\n", taskName)
+				log.Infof("Task name %s\n", taskName)
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
@@ -150,7 +244,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 			}
 		})
 
-		logrus.Info("Wait for IO to proceed\n")
+		log.Info("Wait for IO to proceed\n")
 		time.Sleep(time.Minute * 5)
 
 		// TODO(stgleb): Add multi-namespace backup when ready in px-backup
@@ -175,13 +269,13 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 					Uid:   backupUID,
 				}
 
-				logrus.Infof("backup %s wait for running", backupName)
+				log.Infof("backup %s wait for running", backupName)
 				err := Inst().Backup.WaitForBackupRunning(context.Background(),
 					req, BackupRestoreCompletionTimeoutMin*time.Minute,
 					RetrySeconds*time.Second)
 
 				if err != nil {
-					logrus.Warnf("backup %s wait for running err %v",
+					log.Warnf("backup %s wait for running err %v",
 						backupName, err)
 					continue
 				} else {
@@ -201,7 +295,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 					},
 				},
 			}
-			logrus.Infof("Execute task for killing stork")
+			log.Infof("Execute task for killing stork")
 			err := Inst().S.DeleteTasks(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -304,6 +398,10 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 	taskNamePrefix := "backup-multi-provider"
 	providerUID := make(map[string]string)
 
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
+
 	It("has to connect and check the backup setup", func() {
 		providers := getProviders()
 
@@ -327,7 +425,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 			DumpKubeconfigs(kubeconfigList)
 
 			for _, provider := range providers {
-				logrus.Infof("Run Setup backup with object store provider: %s", provider)
+				log.Infof("Run Setup backup with object store provider: %s", provider)
 				orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix),
 					provider, Inst().InstanceID)
 				bucketName = fmt.Sprintf("%s-%s-%s", BucketNamePrefix, provider, Inst().InstanceID)
@@ -353,23 +451,23 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
 					Expect(err).NotTo(HaveOccurred(),
 						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-					logrus.Infof("Set context to %s", providerClusterConfigPath)
+					log.Infof("Set context to %s", providerClusterConfigPath)
 					SetClusterContext(providerClusterConfigPath)
 
 					providerContexts := make([]*scheduler.Context, 0)
 					providerNamespaces := make([]string, 0)
 
 					// Rescan specs for each provider to reload provider specific specs
-					logrus.Infof("Rescan specs for provider %s", provider)
+					log.Infof("Rescan specs for provider %s", provider)
 					err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
 					Expect(err).NotTo(HaveOccurred(),
 						fmt.Sprintf("Failed to rescan specs from %s for storage provider %s. Error: [%v]",
 							Inst().SpecDir, provider, err))
 
-					logrus.Infof("Start deploy applications for provider %s", provider)
+					log.Infof("Start deploy applications for provider %s", provider)
 					for i := 0; i < Inst().GlobalScaleFactor; i++ {
 						taskName := fmt.Sprintf("%s-%s-%d", taskNamePrefix, provider, i)
-						logrus.Infof("Task name %s\n", taskName)
+						log.Infof("Task name %s\n", taskName)
 						appContexts := ScheduleApplications(taskName)
 						providerContexts = append(providerContexts, appContexts...)
 
@@ -398,12 +496,12 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 						ctx.ReadinessTimeout = BackupRestoreCompletionTimeoutMin * time.Minute
 					}
 
-					logrus.Infof("validate applications for provider %s", provider)
+					log.Infof("validate applications for provider %s", provider)
 					ValidateApplications(contexts[provider])
 				}
 			})
 
-			logrus.Info("Wait for IO to proceed\n")
+			log.Info("Wait for IO to proceed\n")
 			time.Sleep(time.Minute * 5)
 
 			// Perform all backup operations concurrently
@@ -470,7 +568,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
 					SetClusterContext(providerClusterConfigPath)
 
-					logrus.Infof("Kill stork during backup for provider %s", provider)
+					log.Infof("Kill stork during backup for provider %s", provider)
 					// setup task to delete stork pods as soon as it starts doing backup
 					for _, namespace := range providerNamespaces {
 						backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, provider, namespace)
@@ -485,7 +583,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 							Uid:   backupUID,
 						}
 
-						logrus.Infof("backup %s wait for running", backupName)
+						log.Infof("backup %s wait for running", backupName)
 						err := Inst().Backup.WaitForBackupRunning(context.Background(),
 							req, BackupRestoreCompletionTimeoutMin*time.Minute,
 							RetrySeconds*time.Second)
@@ -526,7 +624,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
 					Expect(err).NotTo(HaveOccurred(),
 						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
-					logrus.Infof("Set config to %s", providerClusterConfigPath)
+					log.Infof("Set config to %s", providerClusterConfigPath)
 					SetClusterContext(providerClusterConfigPath)
 
 					for _, ctx := range contexts[provider] {
@@ -600,7 +698,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
 					SetClusterContext(providerClusterConfigPath)
 
-					logrus.Infof("Kill stork during restore for provider %s", provider)
+					log.Infof("Kill stork during restore for provider %s", provider)
 					// setup task to delete stork pods as soon as it starts doing backup
 					for _, namespace := range providerNamespaces {
 						restoreName := fmt.Sprintf("%s-%s-%s", restoreNamePrefix, provider, namespace)
@@ -613,14 +711,14 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 							OrgId: orgID,
 						}
 
-						logrus.Infof("restore %s wait for running", restoreName)
+						log.Infof("restore %s wait for running", restoreName)
 						err := Inst().Backup.WaitForRestoreRunning(context.Background(),
 							req, BackupRestoreCompletionTimeoutMin*time.Minute,
 							RetrySeconds*time.Second)
 
 						Expect(err).NotTo(HaveOccurred())
 					}
-					logrus.Infof("Kill stork task")
+					log.Infof("Kill stork task")
 					killStork()
 				}
 			})
@@ -689,7 +787,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 
 			Step("teardown backup and restore objects", func() {
 				for provider, providerNamespaces := range bkpNamespaces {
-					logrus.Infof("teardown backup and restore objects for provider %s", provider)
+					log.Infof("teardown backup and restore objects for provider %s", provider)
 					providerClusterConfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
 					Expect(err).NotTo(HaveOccurred(),
 						fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
@@ -757,7 +855,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 								ctx, _ := context.WithTimeout(context.Background(),
 									BackupRestoreCompletionTimeoutMin*time.Minute)
 
-								logrus.Infof("Wait for restore %s is deleted", restoreName)
+								log.Infof("Wait for restore %s is deleted", restoreName)
 								if err = backupDriver.WaitForRestoreDeletion(ctx, restoreName, orgID,
 									BackupRestoreCompletionTimeoutMin*time.Minute,
 									RetrySeconds*time.Second); err != nil {
@@ -791,7 +889,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 					fmt.Sprintf("Failed to get kubeconfig path for provider %s cluster. Error: [%v]", provider, err))
 				SetClusterContext(providerClusterConfigPath)
 
-				logrus.Infof("Run Setup backup with object store provider: %s", provider)
+				log.Infof("Run Setup backup with object store provider: %s", provider)
 				orgID := fmt.Sprintf("%s-%s-%s", strings.ToLower(taskNamePrefix), provider, Inst().InstanceID)
 				bucketName := fmt.Sprintf("%s-%s-%s", BucketNamePrefix, provider, Inst().InstanceID)
 				CredName := fmt.Sprintf("%s-%s", CredName, provider)
@@ -820,7 +918,7 @@ func killStork() {
 			},
 		},
 	}
-	logrus.Infof("Execute task for killing stork")
+	log.Infof("Execute task for killing stork")
 	err := Inst().S.DeleteTasks(ctx, nil)
 	Expect(err).NotTo(HaveOccurred())
 }
@@ -833,6 +931,10 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 	labelSelectors := make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
 	bkpNamespaces := make([]string, 0)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
 
 	It("has to complete backup and restore", func() {
 		// Set cluster context to cluster where torpedo is running
@@ -893,11 +995,11 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 						err))
 				err = Inst().Backup.WaitForBackupRunning(ctx, backupInspectReq, defaultTimeout, defaultRetryInterval)
 				if err != nil {
-					logrus.Warnf("[TriggerCheck]: Got error while checking if backup [%s] has started.\n Error : [%v]\n",
+					log.Warnf("[TriggerCheck]: Got error while checking if backup [%s] has started.\n Error : [%v]\n",
 						BackupName, err)
 					return false, err
 				}
-				logrus.Infof("[TriggerCheck]: backup [%s] has started.\n",
+				log.Infof("[TriggerCheck]: backup [%s] has started.\n",
 					BackupName)
 				return true, nil
 			}
@@ -1010,6 +1112,10 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 	volumeParams := make(map[string]map[string]string)
 	restoreNamespaces := make([]string, 0)
 
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
+
 	It("has to perform simultaneous backups and restores", func() {
 		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -1034,7 +1140,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 			bkpNamespaces = make([]string, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-				logrus.Infof("Task name %s\n", taskName)
+				log.Infof("Task name %s\n", taskName)
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
@@ -1076,7 +1182,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 			error, ok := bkpNamespaceErrors[namespace]
 			if ok {
-				logrus.Warningf("Skipping waiting for backup %s because %s", backupName, error)
+				log.Warnf("Skipping waiting for backup %s because %s", backupName, error)
 			} else {
 				wg.Add(1)
 				go func(wg *sync.WaitGroup, namespace, backupName string) {
@@ -1089,7 +1195,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 							RetrySeconds*time.Second)
 						if err != nil {
 							bkpNamespaceErrors[namespace] = err
-							logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+							log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 								backupName, err)
 						}
 					})
@@ -1121,7 +1227,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 			restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, namespace)
 			error, ok := bkpNamespaceErrors[namespace]
 			if ok {
-				logrus.Infof("Skipping create restore %s because %s", restoreName, error)
+				log.Infof("Skipping create restore %s because %s", restoreName, error)
 			} else {
 				restoreNamespaces = append(restoreNamespaces, namespace)
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
@@ -1141,7 +1247,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 			restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, namespace)
 			error, ok := bkpNamespaceErrors[namespace]
 			if ok {
-				logrus.Infof("Skipping waiting for restore %s because %s", restoreName, error)
+				log.Infof("Skipping waiting for restore %s because %s", restoreName, error)
 			} else {
 				wg.Add(1)
 				go func(wg *sync.WaitGroup, namespace, restoreName string) {
@@ -1153,7 +1259,7 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 							RetrySeconds*time.Second)
 						if err != nil {
 							bkpNamespaceErrors[namespace] = err
-							logrus.Errorf("Failed to wait for restore [%s] to complete. Error: [%v]",
+							log.Errorf("Failed to wait for restore [%s] to complete. Error: [%v]",
 								restoreName, err)
 						}
 					})
@@ -1195,12 +1301,12 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 		}
 
 		Step("report statistics", func() {
-			logrus.Infof("%d/%d backups succeeded.", successfulBackups, len(bkpNamespaces))
-			logrus.Infof("%d/%d restores succeeded.", successfulRestores, successfulBackups)
+			log.Infof("%d/%d backups succeeded.", successfulBackups, len(bkpNamespaces))
+			log.Infof("%d/%d restores succeeded.", successfulRestores, successfulBackups)
 		})
 
 		Step("view errors", func() {
-			logrus.Infof("There were %d errors during this test", len(bkpNamespaceErrors))
+			log.Infof("There were %d errors during this test", len(bkpNamespaceErrors))
 
 			var combinedErrors []string
 			for namespace, err := range bkpNamespaceErrors {
@@ -1235,10 +1341,15 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 	namespaceMapping = make(map[string]string)
 	volumeParams := make(map[string]map[string]string)
 	namespaceContextMap := make(map[string][]*scheduler.Context)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
+
 	It("has to connect and check the backup setup", func() {
 		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
-		logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+		log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 
 		Step("Setup backup", func() {
 			// Set cluster context to cluster where torpedo is running
@@ -1257,7 +1368,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 			bkpNamespaces = make([]string, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-				logrus.Infof("Task name %s\n", taskName)
+				log.Infof("Task name %s\n", taskName)
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
@@ -1281,7 +1392,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				}
 			}
 		})
-		logrus.Info("Wait for IO to proceed\n")
+		log.Info("Wait for IO to proceed\n")
 		time.Sleep(time.Minute * 2)
 
 		// Moment in time when tests should finish
@@ -1293,7 +1404,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 			aliveRestore := make(map[string]bool)
 			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
 			if err != nil {
-				logrus.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
+				log.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
 				continue
 			}
 
@@ -1309,7 +1420,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 						[]string{namespace}, labelSelectores, OrgID)
 					if err != nil {
 						aliveBackup[namespace] = false
-						logrus.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]", backupName, OrgID, err)
+						log.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]", backupName, OrgID, err)
 					}
 				})
 			}
@@ -1325,10 +1436,10 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 						BackupRestoreCompletionTimeoutMin*time.Minute,
 						RetrySeconds*time.Second)
 					if err == nil {
-						logrus.Infof("Backup [%s] completed successfully", backupName)
+						log.Infof("Backup [%s] completed successfully", backupName)
 						successfulBackups++
 					} else {
-						logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+						log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 							backupName, err)
 						aliveBackup[namespace] = false
 					}
@@ -1354,7 +1465,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 					err = CreateRestoreGetErr(restoreName, backupName, namespaceMapping,
 						destinationClusterName, OrgID)
 					if err != nil {
-						logrus.Errorf("Failed to create restore [%s] in org [%s] on cluster [%s]. Error: [%v]",
+						log.Errorf("Failed to create restore [%s] in org [%s] on cluster [%s]. Error: [%v]",
 							restoreName, OrgID, clusterName, err)
 						aliveRestore[namespace] = false
 					}
@@ -1371,10 +1482,10 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 						BackupRestoreCompletionTimeoutMin*time.Minute,
 						RetrySeconds*time.Second)
 					if err == nil {
-						logrus.Infof("Restore [%s] completed successfully", restoreName)
+						log.Infof("Restore [%s] completed successfully", restoreName)
 						successfulRestores++
 					} else {
-						logrus.Errorf("Failed to wait for restore [%s] to complete. Error: [%v]",
+						log.Errorf("Failed to wait for restore [%s] to complete. Error: [%v]",
 							restoreName, err)
 						aliveRestore[namespace] = false
 					}
@@ -1431,7 +1542,7 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 			Step("teardown applications on source cluster", func() {
 				sourceClusterConfigPath, err := GetSourceClusterConfigPath()
 				if err != nil {
-					logrus.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
+					log.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
 				} else {
 					SetClusterContext(sourceClusterConfigPath)
 					for _, ctx := range contexts {
@@ -1448,8 +1559,8 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 			})
 		}
 		Step("report statistics", func() {
-			logrus.Infof("%d/%d backups succeeded.", successfulBackups, numBackups)
-			logrus.Infof("%d/%d restores succeeded.", successfulRestores, numRestores)
+			log.Infof("%d/%d backups succeeded.", successfulBackups, numBackups)
+			log.Infof("%d/%d restores succeeded.", successfulRestores, numRestores)
 		})
 	})
 })
@@ -1474,6 +1585,11 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 	volumeParams := make(map[string]map[string]string)
 	namespaceContextMap := make(map[string][]*scheduler.Context)
 	combinedErrors := make([]string, 0)
+
+	BeforeEach(func() {
+		wantAllAfterSuiteActions = false
+	})
+
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
 			// Set cluster context to cluster where torpedo is running
@@ -1492,7 +1608,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 			bkpNamespaces = make([]string, 0)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-				logrus.Infof("Task name %s\n", taskName)
+				log.Infof("Task name %s\n", taskName)
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
@@ -1516,7 +1632,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 				}
 			}
 		})
-		logrus.Info("Wait for IO to proceed\n")
+		log.Info("Wait for IO to proceed\n")
 		time.Sleep(time.Minute * 2)
 
 		// Moment in time when tests should finish
@@ -1527,7 +1643,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 			bkpNamespaceErrors := make(map[string]error)
 			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
 			if err != nil {
-				logrus.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
+				log.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
 				continue
 			}
 			/*Expect(err).NotTo(HaveOccurred(),
@@ -1545,7 +1661,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 						if err != nil {
 							//aliveBackup[namespace] = false
 							bkpNamespaceErrors[namespace] = err
-							logrus.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]", backupName, OrgID, err)
+							log.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]", backupName, OrgID, err)
 						}
 					})
 				}(namespace)
@@ -1555,7 +1671,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 				backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, counter)
 				error, ok := bkpNamespaceErrors[namespace]
 				if ok {
-					logrus.Warningf("Skipping waiting for backup %s because %s", backupName, error)
+					log.Warnf("Skipping waiting for backup %s because %s", backupName, error)
 					continue
 				}
 				wg.Add(1)
@@ -1565,7 +1681,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 						//ctx, err := backup.GetPxCentralAdminCtx()
 						ctx, err := backup.GetAdminCtxFromSecret()
 						if err != nil {
-							logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+							log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 							bkpNamespaceErrors[namespace] = err
 						} else {
 							err = Inst().Backup.WaitForBackupCompletion(
@@ -1574,10 +1690,10 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 								BackupRestoreCompletionTimeoutMin*time.Minute,
 								RetrySeconds*time.Second)
 							if err == nil {
-								logrus.Infof("Backup [%s] completed successfully", backupName)
+								log.Infof("Backup [%s] completed successfully", backupName)
 								atomic.AddInt32(&successfulBackups, 1)
 							} else {
-								logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+								log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 									backupName, err)
 								bkpNamespaceErrors[namespace] = err
 							}
@@ -1598,7 +1714,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 				restoreName := fmt.Sprintf("%s-%s-%d", restoreNamePrefix, namespace, counter)
 				error, ok := bkpNamespaceErrors[namespace]
 				if ok {
-					logrus.Infof("Skipping create restore %s because %s", restoreName, error)
+					log.Infof("Skipping create restore %s because %s", restoreName, error)
 					continue
 				}
 				go func(namespace string) {
@@ -1608,7 +1724,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 						err = CreateRestoreGetErr(restoreName, backupName, namespaceMapping,
 							destinationClusterName, OrgID)
 						if err != nil {
-							logrus.Errorf("Failed to create restore [%s] in org [%s] on cluster [%s]. Error: [%v]",
+							log.Errorf("Failed to create restore [%s] in org [%s] on cluster [%s]. Error: [%v]",
 								restoreName, OrgID, clusterName, err)
 							bkpNamespaceErrors[namespace] = err
 						}
@@ -1619,7 +1735,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 				restoreName := fmt.Sprintf("%s-%s-%d", restoreNamePrefix, namespace, counter)
 				error, ok := bkpNamespaceErrors[namespace]
 				if ok {
-					logrus.Infof("Skipping waiting for restore %s because %s", restoreName, error)
+					log.Infof("Skipping waiting for restore %s because %s", restoreName, error)
 					continue
 				}
 				wg.Add(1)
@@ -1630,17 +1746,17 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 						//ctx, err := backup.GetPxCentralAdminCtx()
 						ctx, err := backup.GetAdminCtxFromSecret()
 						if err != nil {
-							logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+							log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 							bkpNamespaceErrors[namespace] = err
 						} else {
 							err = Inst().Backup.WaitForRestoreCompletion(ctx, restoreName, OrgID,
 								BackupRestoreCompletionTimeoutMin*time.Minute,
 								RetrySeconds*time.Second)
 							if err == nil {
-								logrus.Infof("Restore [%s] completed successfully", restoreName)
+								log.Infof("Restore [%s] completed successfully", restoreName)
 								atomic.AddInt32(&successfulRestores, 1)
 							} else {
-								logrus.Errorf("Failed to wait for restore [%s] to complete. Error: [%v]",
+								log.Errorf("Failed to wait for restore [%s] to complete. Error: [%v]",
 									restoreName, err)
 								bkpNamespaceErrors[namespace] = err
 							}
@@ -1689,7 +1805,7 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 		Step("teardown applications on source cluster", func() {
 			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
 			if err != nil {
-				logrus.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
+				log.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
 			} else {
 				SetClusterContext(sourceClusterConfigPath)
 				for _, ctx := range contexts {
@@ -1705,11 +1821,11 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 			TearDownBackupRestoreSpecific(successfulBackupNames, successfulRestoreNames)
 		})
 		Step("report statistics", func() {
-			logrus.Infof("%d/%d backups succeeded.", successfulBackups, numBackups)
-			logrus.Infof("%d/%d restores succeeded.", successfulRestores, numRestores)
+			log.Infof("%d/%d backups succeeded.", successfulBackups, numBackups)
+			log.Infof("%d/%d restores succeeded.", successfulRestores, numRestores)
 		})
 		Step("view errors", func() {
-			logrus.Infof("There were %d errors during this test", len(combinedErrors))
+			log.Infof("There were %d errors during this test", len(combinedErrors))
 			if len(combinedErrors) > 0 {
 				err = fmt.Errorf(strings.Join(combinedErrors, "\n"))
 				Expect(err).NotTo(HaveOccurred())
@@ -1744,10 +1860,9 @@ func CreateProviderClusterObject(provider string, kubeconfigList []string, cloud
 	Step(fmt.Sprintf("Create cluster [%s-%s] in org [%s]",
 		clusterName, provider, orgID), func() {
 		kubeconfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
-		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider), cloudCred,
-			kubeconfigPath, orgID)
+		dash.VerifyFatal(err, nil, "Fetching kubeconfig path for source cluster")
+		CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider),
+			kubeconfigPath, orgID, "", "")
 	})
 }
 
@@ -1757,7 +1872,7 @@ func getProviders() []string {
 }
 
 func getProviderClusterConfigPath(provider string, kubeconfigs []string) (string, error) {
-	logrus.Infof("Get kubeconfigPath from list %v and provider %s",
+	log.Infof("Get kubeconfigPath from list %v and provider %s",
 		kubeconfigs, provider)
 	for _, kubeconfigPath := range kubeconfigs {
 		if strings.Contains(provider, kubeconfigPath) {
@@ -1852,7 +1967,7 @@ func GetNodesForBackup(backupName string, bkpNamespace string,
 			fmt.Sprintf("Failed to get node on which backup [%s] in running. Error: [%v]",
 				backupName, err))
 
-		logrus.Debugf("Volume backup [%s] is running on node [%s], node id: [%s]\n",
+		log.Debugf("Volume backup [%s] is running on node [%s], node id: [%s]\n",
 			backupID, n.GetHostname(), n.GetId())
 		nodes = append(nodes, n)
 	}
@@ -1930,7 +2045,7 @@ func CreateRestoreGetErr(restoreName string, backupName string,
 				err))
 		_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
 		if err != nil {
-			logrus.Errorf("Failed to create restore [%s] in org [%s] on cluster [%s]. Error: [%v]",
+			log.Errorf("Failed to create restore [%s] in org [%s] on cluster [%s]. Error: [%v]",
 				restoreName, orgID, clusterName, err)
 		}
 

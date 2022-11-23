@@ -86,6 +86,8 @@ type InitOptions struct {
 	VolDriverName string
 	// NodeDriverName node driver name
 	NodeDriverName string
+	// MonitorDriverName monitor driver name
+	MonitorDriverName string
 	// ConfigMap  identifies what config map should be used to
 	SecretConfigMapName string
 	// HelmValuesConfigMapName custom values for helm charts
@@ -380,6 +382,9 @@ type Driver interface {
 
 	// DeleteCsiSnapshot delete a snapshots from namespace
 	DeleteCsiSnapshot(ctx *Context, snapshotName string, snapshotNameSpace string) error
+
+	// GetPodsRestartCount gets restart count maps for pods in given namespace
+	GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error)
 }
 
 var (

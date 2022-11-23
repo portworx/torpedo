@@ -3,7 +3,7 @@ package pdsutils
 import (
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -34,15 +34,12 @@ type Environment struct {
 // MustHaveEnvVariables return emnvironment variables.
 func MustHaveEnvVariables() Environment {
 	return Environment{
-		PDSControlPlaneURL:   mustGetEnvVariable(envControlPlaneURL),
-		PDSTestAccountName:   mustGetEnvVariable(envPDSTestAccountName),
-		PDSTargetKUBECONFIG:  mustGetEnvVariable(envTargetKubeconfig),
-		PDSUsername:          mustGetEnvVariable(envUsername),
-		PDSPassword:          mustGetEnvVariable(envPassword),
-		PDSIssuerURL:         mustGetEnvVariable(envPDSISSUERURL),
-		PDSClientID:          mustGetEnvVariable(envPDSClientID),
-		PDSClientSecret:      mustGetEnvVariable(envPDSClientSecret),
-		PDSTargetClusterType: mustGetEnvVariable(envClusterType),
+		PDSControlPlaneURL: mustGetEnvVariable(envControlPlaneURL),
+		PDSUsername:        mustGetEnvVariable(envUsername),
+		PDSPassword:        mustGetEnvVariable(envPassword),
+		PDSIssuerURL:       mustGetEnvVariable(envPDSISSUERURL),
+		PDSClientID:        mustGetEnvVariable(envPDSClientID),
+		PDSClientSecret:    mustGetEnvVariable(envPDSClientSecret),
 	}
 }
 

@@ -3,6 +3,11 @@ package tests
 import (
 	"bytes"
 	"fmt"
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	"github.com/portworx/torpedo/pkg/aututils"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -32,6 +37,7 @@ import (
 	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor/prometheus"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -45,8 +51,6 @@ import (
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -81,6 +85,7 @@ const (
 	PureBackend = "backend"
 	// EssentialsFaFbSKU is license strings for FA/FB essential license
 	EssentialsFaFbSKU = "Portworx CSI for FA/FB"
+	fastpathAppName   = "fastpath"
 )
 
 const (
@@ -99,6 +104,8 @@ const (
 	pxStatusError  = "ERROR GETTING PX STATUS"
 	pxVersionError = "ERROR GETTING PX VERSION"
 )
+
+var longevityLogger *lumberjack.Logger
 
 // EmailRecipients list of email IDs to send email to
 var EmailRecipients []string
@@ -155,6 +162,21 @@ var pureStorageClassMap map[string]*storageapi.StorageClass
 // DefaultSnapshotRetainCount is default snapshot retain count
 var DefaultSnapshotRetainCount = 10
 
+// TotalTriggerCount is counter metric for test trigger
+var TotalTriggerCount = prometheus.TorpedoTestTotalTriggerCount
+
+// TestRunningState is gauage metric for test method running
+var TestRunningState = prometheus.TorpedoTestRunning
+
+// TestFailedCount is counter metric for test failed
+var TestFailedCount = prometheus.TorpedoTestFailCount
+
+// TestPassedCount is counter metric for test passed
+var TestPassedCount = prometheus.TorpedoTestPassCount
+
+//  FailedTestAlert is a flag to alert test failed
+var FailedTestAlert = prometheus.TorpedoAlertTestFailed
+
 // Event describes type of test trigger
 type Event struct {
 	ID   string
@@ -176,6 +198,9 @@ var eventRing *ring.Ring
 
 //decommissionedNode for rejoin test
 var decommissionedNode = node.Node{}
+
+// node with autopilot rule enabled
+var autoPilotLabelNode node.Node
 
 // emailRecords stores events for rendering
 // email template
@@ -235,8 +260,10 @@ func GenerateUUID() string {
 func UpdateOutcome(event *EventRecord, err error) {
 
 	if err != nil && event != nil {
-		logrus.Infof("updating event outcome for [%v]", event.Event.Type)
+		Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
+		dash.VerifySafely(err, nil, fmt.Sprintf("verify if error occured for event %s", event.Event.Type))
 		er := fmt.Errorf(err.Error() + "<br>")
+		Inst().M.IncrementGaugeMetricsUsingAdditionalLabel(FailedTestAlert, event.Event.Type, err.Error())
 		event.Outcome = append(event.Outcome, er)
 		createLongevityJiraIssue(event, er)
 	}
@@ -348,6 +375,8 @@ const (
 	ValidateDeviceMapper = "validateDeviceMapper"
 	// AsyncDR runs Async DR between two clusters
 	AsyncDR = "asyncdr"
+	// AsyncDR Volume Only runs Async DR volume only migration between two clusters
+	AsyncDRVolumeOnly = "asyncdrvolumeonly"
 	// HAIncreaseAndReboot performs repl-add
 	HAIncreaseAndReboot = "haIncreaseAndReboot"
 	// AddDrive performs drive add for on-prem cluster
@@ -356,11 +385,17 @@ const (
 	AddDiskAndReboot = "addDiskAndReboot"
 	// ResizeDiskAndReboot performs  resize-disk and reboots node
 	ResizeDiskAndReboot = "resizeDiskAndReboot"
+	// AutopilotRebalance performs  pool rebalance
+	AutopilotRebalance = "autopilotRebalance"
+	// VolumeCreatePxRestart performs  volume create and px restart parallel
+	VolumeCreatePxRestart = "volumeCreatePxRestart"
 )
 
 // TriggerCoreChecker checks if any cores got generated
 func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CoreChecker)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -375,18 +410,20 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	}()
 	coresMap = nil
 	coresMap = make(map[string]string)
+	setMetrics(*event)
 
 	context("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
+			log.InfoD("verifying if core files are present on each node")
 			nodes := node.GetWorkerNodes()
-			expect(nodes).NotTo(beEmpty())
-			logrus.Infof("len nodes: %v", len(nodes))
+			dash.VerifyFatal(len(nodes) > 0, true, "Nodes registered?")
+			log.Infof("len nodes: %v", len(nodes))
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
-					logrus.Infof("%v is not storage driver", n.Name)
+					log.Infof("%v is not storage driver", n.Name)
 					continue
 				}
-				logrus.Infof("looking for core files on node %s", n.Name)
+				log.Infof("looking for core files on node %s", n.Name)
 				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
 					TimeBeforeRetry: 10 * time.Second,
@@ -394,7 +431,7 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				UpdateOutcome(event, err)
 
 				if len(file) != 0 {
-					logrus.Warnf("[%s] found on node [%s]", file, n.Name)
+					log.Warnf("[%s] found on node [%s]", file, n.Name)
 					coresMap[n.Name] = "1"
 					createLongevityJiraIssue(event, fmt.Errorf("[%s] found on node [%s]", file, n.Name))
 				} else {
@@ -406,9 +443,21 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	})
 }
 
+func startLongevityTest(testName string) {
+	longevityLogger = CreateLogger(fmt.Sprintf("%s-%s.log", testName, time.Now().Format(time.RFC3339)))
+	log.SetTorpedoFileOutput(longevityLogger)
+	dash.TestCaseBegin(testName, fmt.Sprintf("validating %s in longevity cluster", testName), "", nil)
+}
+func endLongevityTest() {
+	dash.TestCaseEnd()
+	CloseLogger(longevityLogger)
+}
+
 // TriggerDeployNewApps deploys applications in separate namespaces
 func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DeployApps)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -422,6 +471,14 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+
+	Step(fmt.Sprintf("Set throttle to re-sync"), func() {
+		UpdateOutcome(event, updatePxRuntimeOpts())
+	})
+
 	errorChan := make(chan error, errorChannelSize)
 	labels := Inst().TopologyLabels
 	Step("Deploy applications", func() {
@@ -440,13 +497,124 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		}
 
 		for _, ctx := range *contexts {
-			logrus.Infof("Validating context: %v", ctx.App.Key)
+			log.Infof("Validating context: %v", ctx.App.Key)
 			ctx.SkipVolumeValidation = false
 			ValidateContext(ctx, &errorChan)
+			// BUG: Execution doesn't resume here after ValidateContext called
+			// Below code is never executed
 			for err := range errorChan {
-				logrus.Infof("Error: %v", err)
+				log.Infof("Error: %v", err)
 				UpdateOutcome(event, err)
 			}
+		}
+	})
+}
+
+//TriggerVolumeCreatePXRestart create volume , attach , detach and reboot nodes parallely
+func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(VolumeCreatePxRestart)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: VolumeCreatePxRestart,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := "Create multiple volumes , attached and restart PX"
+	var createdVolIDs map[string]string
+	var err error
+	volCreateCount := 10
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		stNodes := node.GetStorageNodes()
+		index := randIntn(1, len(stNodes))[0]
+
+		selectedNode := stNodes[index]
+
+		log.InfoD("Creating and attaching %d volumes on node %s", volCreateCount, selectedNode.Name)
+
+		wg := new(sync.WaitGroup)
+		wg.Add(1)
+		go func(appNode node.Node) {
+			createdVolIDs, err = CreateMultiVolumesAndAttach(wg, volCreateCount, selectedNode.Id)
+			if err != nil {
+				UpdateOutcome(event, err)
+			}
+		}(selectedNode)
+		time.Sleep(3 * time.Second)
+		wg.Add(1)
+		go func(appNode node.Node) {
+			defer wg.Done()
+			stepLog = fmt.Sprintf("restart volume driver %s on node: %s", Inst().V.String(), appNode.Name)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().V.RestartDriver(appNode, nil)
+				UpdateOutcome(event, err)
+
+			})
+		}(selectedNode)
+		wg.Wait()
+
+	})
+
+	stepLog = "Validate the created volumes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		var cVol *opsapi.Volume
+		var err error
+
+		for vol, volPath := range createdVolIDs {
+			//TODO: remove this retry once PWX-27773 is fixed
+			t := func() (interface{}, bool, error) {
+				cVol, err = Inst().V.InspectVolume(vol)
+				if err != nil {
+					return cVol, true, fmt.Errorf("error inspecting volume %s, err : %v", vol, err)
+				}
+
+				if !strings.Contains(cVol.DevicePath, "pxd/") {
+					return cVol, true, fmt.Errorf("path %s is not correct", cVol.DevicePath)
+				}
+				if cVol.DevicePath == "" {
+					return cVol, false, fmt.Errorf("device path is not present for volume: %s", vol)
+				}
+				return cVol, true, err
+			}
+
+			_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+			if err != nil {
+				UpdateOutcome(event, err)
+			} else {
+				dash.VerifySafely(cVol.State, opsapi.VolumeState_VOLUME_STATE_ATTACHED, fmt.Sprintf("Verify vol %s is attached", cVol.Id))
+				dash.VerifySafely(cVol.DevicePath, volPath, fmt.Sprintf("Verify vol %s is has device path", cVol.Id))
+			}
+
+		}
+	})
+
+	stepLog = "Deleting the created volumes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		for vol := range createdVolIDs {
+			log.Infof("Detaching and deleting volume: %s", vol)
+			err := Inst().V.DetachVolume(vol)
+			if err == nil {
+				err = Inst().V.DeleteVolume(vol)
+			}
+			UpdateOutcome(event, err)
+
 		}
 	})
 }
@@ -454,6 +622,8 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 // TriggerHAIncreaseAndReboot triggers repl increase and reboots target and source nodes
 func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(HAIncreaseAndReboot)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -468,8 +638,12 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
 	//Reboot target node and source node while repl increase is in progress
-	Step("get a volume to  increase replication factor and reboot source  and target node", func() {
+	stepLog := "get a volume to  increase replication factor and reboot source  and target node"
+	Step(stepLog, func() {
+		log.InfoD("get a volume to  increase replication factor and reboot source  and target node")
 		storageNodeMap := make(map[string]node.Node)
 		storageNodes, err := GetStorageNodes()
 		UpdateOutcome(event, err)
@@ -481,7 +655,9 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
-			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				UpdateOutcome(event, err)
 				if len(appVolumes) == 0 {
@@ -497,7 +673,7 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 						UpdateOutcome(event, err)
 					}
 					if isPureVol {
-						logrus.Warningf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+						log.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
 						continue
 					}
 
@@ -507,7 +683,7 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 					if currRep != 0 {
 						//Changing replication factor to 1
 						if currRep > 1 {
-							logrus.Infof("Current replication is > 1, setting it to 1 before proceeding")
+							log.Infof("Current replication is > 1, setting it to 1 before proceeding")
 							opts := volume.Options{
 								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 							}
@@ -515,7 +691,7 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 							for rep > 1 {
 								err = Inst().V.SetReplicationFactor(v, rep-1, nil, true, opts)
 								if err != nil {
-									logrus.Errorf("There is an error decreasing repl [%v]", err.Error())
+									log.Errorf("There is an error decreasing repl [%v]", err.Error())
 									UpdateOutcome(event, err)
 
 								}
@@ -533,12 +709,15 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 				}
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
 // TriggerHAIncrease performs repl-add on all volumes of given contexts
 func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(HAIncrease)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -552,14 +731,19 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	setMetrics(*event)
 
 	expReplMap := make(map[*volume.Volume]int64)
-	Step("get volumes for all apps in test and increase replication factor", func() {
+	stepLog := "get volumes for all apps in test and increase replication factor"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		time.Sleep(10 * time.Minute)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
-			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				UpdateOutcome(event, err)
 				if len(appVolumes) == 0 {
@@ -576,15 +760,15 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 				if isPureVol {
-					logrus.Warningf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+					log.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
 					continue
 				}
 				MaxRF := Inst().V.GetMaxReplicationFactor()
-
-				Step(
-					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
-						Inst().V.String(), ctx.App.Key, v),
+				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+					Inst().V.String(), ctx.App.Key, v)
+				Step(stepLog,
 					func() {
+						log.InfoD(stepLog)
 						errExpected := false
 						currRep, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
@@ -611,57 +795,76 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							errExpected = true
 							expRF = currRep
 						}
-						logrus.Infof("Expected Replication factor %v", expRF)
-						logrus.Infof("Max Replication factor %v", MaxRF)
+						log.InfoD("Expected Replication factor %v", expRF)
+						log.InfoD("Max Replication factor %v", MaxRF)
 						expReplMap[v] = expRF
 						if !errExpected {
+							if strings.Contains(ctx.App.Key, fastpathAppName) {
+								newFastPathNode, err := AddFastPathLabel(ctx)
+								if err == nil {
+									defer Inst().S.RemoveLabelOnNode(*newFastPathNode, k8s.NodeType)
+								}
+								UpdateOutcome(event, err)
+							}
+							replSets, err := Inst().V.GetReplicaSets(v)
+							if err != nil {
+								log.Infof("Replica Set before ha-increase : %+v", replSets[0].Nodes)
+							}
 							err = Inst().V.SetReplicationFactor(v, expRF, nil, true, opts)
 							if err != nil {
-								logrus.Errorf("There is a error setting repl [%v]", err.Error())
+								log.Errorf("There is a error setting repl [%v]", err.Error())
 							}
 							UpdateOutcome(event, err)
 						} else {
-							logrus.Infof("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF)
+							log.Warnf("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF)
 						}
 					})
-				Step(
-					fmt.Sprintf("validate successful repl increase on app %s's volume: %v",
-						ctx.App.Key, v),
+				stepLog = fmt.Sprintf("validate successful repl increase on app %s's volume: %v",
+					ctx.App.Key, v)
+				Step(stepLog,
 					func() {
 						newRepl, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
 
-						if newRepl != expReplMap[v] {
-							err = fmt.Errorf("volume [%s] has invalid repl value for volume. Expected:%d Actual:%d", v.Name, expReplMap[v], newRepl)
-							logrus.Infof("Error while matching repl [%v]", err.Error())
-						} else {
-							logrus.Infof("Successfully validated repl for volume %s", v.Name)
+						dash.VerifySafely(newRepl, expReplMap[v], fmt.Sprintf("validat repl update for volume %s", v.Name))
+						log.InfoD("repl increase validation completed on app %s", v.Name)
+						replSets, err := Inst().V.GetReplicaSets(v)
+						if err != nil {
+							log.Infof("Replica Set after ha-increase : %+v", replSets[0].Nodes)
 						}
-						logrus.Infof("repl increase validation completed on app %s", v.Name)
 					})
 			}
-			Step(fmt.Sprintf("validating context after increasing HA for app: %s",
-				ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("validating context after increasing HA for app: %s",
+				ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				errorChan := make(chan error, errorChannelSize)
 				ctx.SkipVolumeValidation = true
-				logrus.Infof("Context Validation after increasing HA started for  %s", ctx.App.Key)
+				log.InfoD("Context Validation after increasing HA started for  %s", ctx.App.Key)
 				ValidateContext(ctx, &errorChan)
-				logrus.Infof("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
+				log.InfoD("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
 				for err := range errorChan {
 					if err != nil {
-						logrus.Errorf("There is a error in context validation [%v]", err.Error())
+						log.Errorf("There is a error in context validation [%v]", err.Error())
 					}
 					UpdateOutcome(event, err)
-					logrus.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
+					log.Infof("Context outcome after increasing HA is updated for  %s", ctx.App.Key)
+				}
+				if strings.Contains(ctx.App.Key, fastpathAppName) {
+					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+					UpdateOutcome(event, err)
 				}
 			})
 		}
+		updateMetrics(*event)
 	})
 }
 
 // TriggerHADecrease performs repl-reduce on all volumes of given contexts
 func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(HADecrease)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -675,13 +878,18 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+	setMetrics(*event)
 
 	expReplMap := make(map[*volume.Volume]int64)
-	Step("get volumes for all apps in test and decrease replication factor", func() {
+	stepLog := "get volumes for all apps in test and decrease replication factor"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
-			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				UpdateOutcome(event, err)
 				if len(appVolumes) == 0 {
@@ -698,15 +906,15 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 				if isPureVol {
-					logrus.Warningf("Repl decrease on Pure DA volume:[%s] not supported.Skipping repl decrease operation in pure volume", v.Name)
+					log.Warnf("Repl decrease on Pure DA volume:[%s] not supported.Skipping repl decrease operation in pure volume", v.Name)
 					continue
 				}
 				MinRF := Inst().V.GetMinReplicationFactor()
-
-				Step(
-					fmt.Sprintf("repl decrease volume driver %s on app %s's volume: %v",
-						Inst().V.String(), ctx.App.Key, v),
+				stepLog = fmt.Sprintf("repl decrease volume driver %s on app %s's volume: %v",
+					Inst().V.String(), ctx.App.Key, v)
+				Step(stepLog,
 					func() {
+						log.InfoD(stepLog)
 						errExpected := false
 						currRep, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
@@ -717,52 +925,67 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							expRF = currRep
 						}
 						expReplMap[v] = expRF
-						logrus.Infof("Expected Replication factor %v", expRF)
-						logrus.Infof("Min Replication factor %v", MinRF)
+						log.InfoD("Expected Replication factor %v", expRF)
+						log.InfoD("Min Replication factor %v", MinRF)
 						if !errExpected {
+							replSets, err := Inst().V.GetReplicaSets(v)
+							if err != nil {
+								log.Infof("Replica Set before ha-decrease : %+v", replSets[0].Nodes)
+							}
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true, opts)
 							if err != nil {
-								logrus.Errorf("There is an error decreasing repl [%v]", err.Error())
+								log.Errorf("There is an error decreasing repl [%v]", err.Error())
 							}
 							UpdateOutcome(event, err)
 						} else {
-							logrus.Infof("cannot perfomr HA reduce as new repl factor is less than minimum value %v ", MinRF)
+							log.Warnf("cannot perfomr HA reduce as new repl factor is less than minimum value %v ", MinRF)
 						}
 
 					})
-				Step(
-					fmt.Sprintf("validate successful repl decrease on app %s's volume: %v",
-						ctx.App.Key, v),
+				stepLog = fmt.Sprintf("validate successful repl decrease on app %s's volume: %v",
+					ctx.App.Key, v)
+				Step(stepLog,
 					func() {
+						log.InfoD(stepLog)
 						newRepl, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
-
-						if newRepl != expReplMap[v] {
-							logrus.Infof(fmt.Errorf("volume [%s] has invalid repl value . Expected:%d Actual:%d", v.Name, expReplMap[v], newRepl).Error())
+						dash.VerifySafely(newRepl, expReplMap[v], "Validate reduced rep value for the volume")
+						log.InfoD("repl decrease validation completed on app %s", v.Name)
+						replSets, err := Inst().V.GetReplicaSets(v)
+						if err != nil {
+							log.Infof("Replica Set after ha-decrease : %+v", replSets[0].Nodes)
 						}
-						logrus.Infof("repl decrease validation completed on app %s", v.Name)
 
 					})
 			}
-			Step(fmt.Sprintf("validating context after reducing HA for app: %s",
-				ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("validating context after reducing HA for app: %s",
+				ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				errorChan := make(chan error, errorChannelSize)
 				ctx.SkipVolumeValidation = true
-				logrus.Infof("Context Validation after reducing HA started for  %s", ctx.App.Key)
+				log.InfoD("Context Validation after reducing HA started for  %s", ctx.App.Key)
 				ValidateContext(ctx, &errorChan)
-				logrus.Infof("Context Validation after reducing HA is completed for  %s", ctx.App.Key)
+				log.InfoD("Context Validation after reducing HA is completed for  %s", ctx.App.Key)
 				for err := range errorChan {
 					UpdateOutcome(event, err)
-					logrus.Infof("Context outcome after reducing HA is updated for  %s", ctx.App.Key)
+					log.Infof("Context outcome after reducing HA is updated for  %s", ctx.App.Key)
+				}
+				if strings.Contains(ctx.App.Key, fastpathAppName) {
+					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+					UpdateOutcome(event, err)
 				}
 			})
 		}
+		updateMetrics(*event)
 	})
 }
 
 // TriggerAppTaskDown deletes application task for all contexts
 func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AppTaskDown)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -776,15 +999,22 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-
+	setMetrics(*event)
+	stepLog := ""
 	for _, ctx := range *contexts {
-		Step(fmt.Sprintf("delete tasks for app: [%s]", ctx.App.Key), func() {
+		stepLog = fmt.Sprintf("delete tasks for app: [%s]", ctx.App.Key)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			err := Inst().S.DeleteTasks(ctx, nil)
+			if err != nil {
+				PrintDescribeContext(ctx)
+			}
 			UpdateOutcome(event, err)
 		})
-
-		Step(fmt.Sprintf("validating context after delete tasks for app: [%s]",
-			ctx.App.Key), func() {
+		stepLog = fmt.Sprintf("validating context after delete tasks for app: [%s]",
+			ctx.App.Key)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			errorChan := make(chan error, errorChannelSize)
 			ctx.SkipVolumeValidation = true
 			ValidateContext(ctx, &errorChan)
@@ -793,11 +1023,14 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			}
 		})
 	}
+	updateMetrics(*event)
 }
 
 // TriggerCrashVolDriver crashes vol driver
 func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CrashVolDriver)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -811,12 +1044,16 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("crash volume driver in all nodes", func() {
+	setMetrics(*event)
+	stepLog := "crash volume driver in all nodes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, appNode := range node.GetStorageDriverNodes() {
-			Step(
-				fmt.Sprintf("crash volume driver %s on node: %v",
-					Inst().V.String(), appNode.Name),
+			stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
+				Inst().V.String(), appNode.Name)
+			Step(stepLog,
 				func() {
+					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("crash volume driver on node: %s",
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
@@ -827,12 +1064,15 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 					}
 				})
 		}
+		updateMetrics(*event)
 	})
 }
 
 // TriggerRestartVolDriver restarts volume driver and validates app
 func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RestartVolDriver)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -846,12 +1086,16 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("get nodes bounce volume driver", func() {
+	setMetrics(*event)
+	stepLog := "get nodes bounce volume driver"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, appNode := range node.GetStorageDriverNodes() {
-			Step(
-				fmt.Sprintf("stop volume driver %s on node: %s",
-					Inst().V.String(), appNode.Name),
+			stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
+				Inst().V.String(), appNode.Name)
+			Step(stepLog,
 				func() {
+					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("stop volume driver on node: %s.",
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
@@ -861,11 +1105,11 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 						UpdateOutcome(event, err)
 					}
 				})
-
-			Step(
-				fmt.Sprintf("starting volume %s driver on node %s",
-					Inst().V.String(), appNode.Name),
+			stepLog = fmt.Sprintf("starting volume %s driver on node %s",
+				Inst().V.String(), appNode.Name)
+			Step(stepLog,
 				func() {
+					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("starting volume driver on node: %s.",
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
@@ -881,22 +1125,31 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 			})
 
 			for _, ctx := range *contexts {
-				Step(fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key), func() {
+				stepLog = fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					errorChan := make(chan error, errorChannelSize)
 					ctx.ReadinessTimeout = time.Minute * 10
 					ValidateContext(ctx, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
 					}
+					if strings.Contains(ctx.App.Key, fastpathAppName) {
+						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+						UpdateOutcome(event, err)
+					}
 				})
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
 // TriggerRestartManyVolDriver restarts one or more volume drivers and validates app
 func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RestartManyVolDriver)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -910,14 +1163,21 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	driverNodesToRestart := getNodesByChaosLevel(RestartManyVolDriver)
 	var wg sync.WaitGroup
-	Step("get nodes bounce volume driver", func() {
+	stepLog := "get nodes bounce volume driver"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, appNode := range driverNodesToRestart {
 			wg.Add(1)
 			go func(appNode node.Node) {
 				defer wg.Done()
-				Step(fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name), func() {
+				stepLog = fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("stop volume driver on node: %s.",
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
@@ -938,7 +1198,9 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			wg.Add(1)
 			go func(appNode node.Node) {
 				defer wg.Done()
-				Step(fmt.Sprintf("starting volume %s driver on node %s", Inst().V.String(), appNode.Name), func() {
+				stepLog = fmt.Sprintf("starting volume %s driver on node %s", Inst().V.String(), appNode.Name)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("starting volume driver on node: %s.",
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
@@ -954,19 +1216,27 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 				})
 			}(appNode)
 		}
-		Step("wait all the storage drivers to be up", func() {
+		stepLog = "wait all the storage drivers to be up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			wg.Wait()
 		})
 		for _, ctx := range *contexts {
-			Step(fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key)
+			Step(stepLog, func() {
 				errorChan := make(chan error, errorChannelSize)
 				ctx.ReadinessTimeout = time.Minute * 10
 				ValidateContext(ctx, &errorChan)
 				for err := range errorChan {
 					UpdateOutcome(event, err)
 				}
+				if strings.Contains(ctx.App.Key, fastpathAppName) {
+					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+					UpdateOutcome(event, err)
+				}
 			})
 		}
+		updateMetrics(*event)
 
 	})
 }
@@ -974,6 +1244,8 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 // TriggerRestartKvdbVolDriver restarts volume driver where kvdb resides and validates app
 func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RestartKvdbVolDriver)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -987,12 +1259,16 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("get kvdb nodes bounce volume driver", func() {
+
+	setMetrics(*event)
+	stepLog := "get kvdb nodes bounce volume driver"
+	Step(stepLog, func() {
 		for _, appNode := range node.GetMetadataNodes() {
-			Step(
-				fmt.Sprintf("stop volume driver %s on node: %s",
-					Inst().V.String(), appNode.Name),
+			stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
+				Inst().V.String(), appNode.Name)
+			Step(stepLog,
 				func() {
+					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("stop volume driver on node: %s.",
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
@@ -1002,11 +1278,11 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 						UpdateOutcome(event, err)
 					}
 				})
-
-			Step(
-				fmt.Sprintf("starting volume %s driver on node %s",
-					Inst().V.String(), appNode.Name),
+			stepLog = fmt.Sprintf("starting volume %s driver on node %s",
+				Inst().V.String(), appNode.Name)
+			Step(stepLog,
 				func() {
+					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("starting volume driver on node: %s.",
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
@@ -1022,22 +1298,31 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			})
 
 			for _, ctx := range *contexts {
-				Step(fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key), func() {
+				stepLog = fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					errorChan := make(chan error, errorChannelSize)
 					ctx.ReadinessTimeout = time.Minute * 10
 					ValidateContext(ctx, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
 					}
+					if strings.Contains(ctx.App.Key, fastpathAppName) {
+						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+						UpdateOutcome(event, err)
+					}
 				})
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
 // TriggerRebootNodes reboots node on which apps are running
 func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RebootNode)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -1052,15 +1337,21 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		*recordChan <- event
 	}()
 
-	Step("get all nodes and reboot one by one", func() {
+	setMetrics(*event)
+	stepLog := "get all nodes and reboot one by one"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		nodesToReboot := node.GetWorkerNodes()
 
 		// Reboot node and check driver status
-		Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
+		stepLog = fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot)
+		Step(stepLog, func() {
 			// TODO: Below is the same code from existing nodeReboot test
+			log.InfoD(stepLog)
 			for _, n := range nodesToReboot {
 				if n.IsStorageDriverInstalled {
-					Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
+					stepLog = fmt.Sprintf("reboot node: %s", n.Name)
+					Step(stepLog, func() {
 						taskStep := fmt.Sprintf("reboot node: %s.", n.MgmtIp)
 						event.Event.Type += "<br>" + taskStep
 						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
@@ -1071,30 +1362,31 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 							},
 						})
 						if err != nil {
-							logrus.Errorf("Error while rebooting node %v, err: %v", n.Name, err.Error())
+							log.Errorf("Error while rebooting node %v, err: %v", n.Name, err.Error())
 						}
 						UpdateOutcome(event, err)
 					})
-
-					Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
+					stepLog = fmt.Sprintf("wait for node: %s to be back up", n.Name)
+					Step(stepLog, func() {
 						err := Inst().N.TestConnection(n, node.ConnectionOpts{
 							Timeout:         15 * time.Minute,
 							TimeBeforeRetry: 10 * time.Second,
 						})
 						if err != nil {
-							logrus.Errorf("Error while testing node status %v, err: %v", n.Name, err.Error())
+							log.Errorf("Error while testing node status %v, err: %v", n.Name, err.Error())
 						}
 						UpdateOutcome(event, err)
 					})
+					stepLog = fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name)
 
-					Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
+					Step(stepLog, func() {
 						err := Inst().V.WaitDriverDownOnNode(n)
 						UpdateOutcome(event, err)
 					})
-
-					Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
-						Inst().S.String(), Inst().V.String()), func() {
-
+					stepLog = fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+						Inst().S.String(), Inst().V.String())
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
 						err := Inst().S.IsNodeReady(n)
 						UpdateOutcome(event, err)
 
@@ -1104,10 +1396,15 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 
 					Step("validate apps", func() {
 						for _, ctx := range *contexts {
-							Step(fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key), func() {
+							stepLog = fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key)
+							Step(stepLog, func() {
 								errorChan := make(chan error, errorChannelSize)
 								ValidateContext(ctx, &errorChan)
 								for err := range errorChan {
+									UpdateOutcome(event, err)
+								}
+								if strings.Contains(ctx.App.Key, fastpathAppName) {
+									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 									UpdateOutcome(event, err)
 								}
 							})
@@ -1115,6 +1412,7 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					})
 				}
 			}
+			updateMetrics(*event)
 		})
 	})
 }
@@ -1122,6 +1420,8 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 // TriggerRebootManyNodes reboots one or more nodes on which apps are running
 func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RebootManyNodes)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -1136,16 +1436,23 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		*recordChan <- event
 	}()
 
-	Step("get all nodes and reboot one by one", func() {
+	setMetrics(*event)
+	stepLog := "get all nodes and reboot one by one"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
 		// Reboot node and check driver status
-		Step(fmt.Sprintf("reboot the node(s): %v", nodesToReboot), func() {
+		stepLog = fmt.Sprintf("reboot the node(s): %v", nodesToReboot)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			var wg sync.WaitGroup
 			for _, n := range nodesToReboot {
 				wg.Add(1)
 				go func(n node.Node) {
 					defer wg.Done()
-					Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
+					stepLog = fmt.Sprintf("reboot node: %s", n.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
 						taskStep := fmt.Sprintf("reboot node: %s.", n.MgmtIp)
 						event.Event.Type += "<br>" + taskStep
 						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
@@ -1156,14 +1463,15 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 							},
 						})
 						if err != nil {
-							logrus.Errorf("Error while rebooting node %v, err: %v", n.Name, err.Error())
+							log.Errorf("Error while rebooting node %v, err: %v", n.Name, err.Error())
 						}
 						UpdateOutcome(event, err)
 					})
 				}(n)
 			}
-
-			Step("wait all the nodes to be rebooted", func() {
+			stepLog = "wait all the nodes to be rebooted"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				wg.Wait()
 			})
 
@@ -1171,25 +1479,29 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				wg.Add(1)
 				go func(n node.Node) {
 					defer wg.Done()
-					Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
+					stepLog = fmt.Sprintf("wait for node: %s to be back up", n.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
 						err := Inst().N.TestConnection(n, node.ConnectionOpts{
 							Timeout:         15 * time.Minute,
 							TimeBeforeRetry: 10 * time.Second,
 						})
 						if err != nil {
-							logrus.Errorf("Error while testing node status %v, err: %v", n.Name, err.Error())
+							log.Errorf("Error while testing node status %v, err: %v", n.Name, err.Error())
 						}
 						UpdateOutcome(event, err)
 					})
 
-					Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
+					stepLog = fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
 						err := Inst().V.WaitDriverDownOnNode(n)
 						UpdateOutcome(event, err)
 					})
-
-					Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
-						Inst().S.String(), Inst().V.String()), func() {
-
+					stepLog = fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+						Inst().S.String(), Inst().V.String())
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
 						err := Inst().S.IsNodeReady(n)
 						UpdateOutcome(event, err)
 
@@ -1198,23 +1510,31 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 					})
 				}(n)
 			}
-
-			Step("wait all the nodes to be up", func() {
+			stepLog = "wait all the nodes to be up"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				wg.Wait()
 			})
 
 			Step("validate apps", func() {
 				for _, ctx := range *contexts {
-					Step(fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key), func() {
+					stepLog = fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
 						errorChan := make(chan error, errorChannelSize)
 						ValidateContext(ctx, &errorChan)
 						for err := range errorChan {
+							UpdateOutcome(event, err)
+						}
+						if strings.Contains(ctx.App.Key, fastpathAppName) {
+							err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 							UpdateOutcome(event, err)
 						}
 					})
 				}
 			})
 		})
+		updateMetrics(*event)
 	})
 }
 
@@ -1276,6 +1596,8 @@ func getNodesByChaosLevel(triggerType string) []node.Node {
 // TriggerCrashNodes crashes Worker nodes
 func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CrashNode)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -1289,16 +1611,21 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-
-	Step("get all nodes and crash one by one", func() {
+	stepLog := "get all nodes and crash one by one"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		nodesToCrash := node.GetWorkerNodes()
 
 		// Crash node and check driver status
-		Step(fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash), func() {
+		stepLog = fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash)
+		Step(stepLog, func() {
 			// TODO: Below is the same code from existing nodeCrash test
+			log.InfoD(stepLog)
 			for _, n := range nodesToCrash {
 				if n.IsStorageDriverInstalled {
-					Step(fmt.Sprintf("crash node: %s", n.Name), func() {
+					stepLog = fmt.Sprintf("crash node: %s", n.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
 						taskStep := fmt.Sprintf("crash node: %s.", n.MgmtIp)
 						event.Event.Type += "<br>" + taskStep
 						err := Inst().N.CrashNode(n, node.CrashNodeOpts{
@@ -1310,18 +1637,19 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						})
 						UpdateOutcome(event, err)
 					})
-
-					Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
+					stepLog = fmt.Sprintf("wait for node: %s to be back up", n.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
 						err := Inst().N.TestConnection(n, node.ConnectionOpts{
 							Timeout:         15 * time.Minute,
 							TimeBeforeRetry: 10 * time.Second,
 						})
 						UpdateOutcome(event, err)
 					})
-
-					Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
-						Inst().S.String(), Inst().V.String()), func() {
-
+					stepLog = fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+						Inst().S.String(), Inst().V.String())
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
 						err := Inst().S.IsNodeReady(n)
 						UpdateOutcome(event, err)
 
@@ -1331,10 +1659,16 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 					Step("validate apps", func() {
 						for _, ctx := range *contexts {
-							Step(fmt.Sprintf("CrashNode: validating app [%s]", ctx.App.Key), func() {
+							stepLog = fmt.Sprintf("CrashNode: validating app [%s]", ctx.App.Key)
+							Step(stepLog, func() {
+								log.InfoD(stepLog)
 								errorChan := make(chan error, errorChannelSize)
 								ValidateContext(ctx, &errorChan)
 								for err := range errorChan {
+									UpdateOutcome(event, err)
+								}
+								if strings.Contains(ctx.App.Key, fastpathAppName) {
+									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 									UpdateOutcome(event, err)
 								}
 							})
@@ -1349,6 +1683,8 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 // TriggerVolumeClone clones all volumes, validates and destorys the clone
 func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(VolumeClone)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -1361,11 +1697,17 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("get volumes for all apps in test and clone them", func() {
+
+	setMetrics(*event)
+	stepLog := "get volumes for all apps in test and clone them"
+
+	Step(stepLog, func() {
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
-			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+			stepLog := fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				UpdateOutcome(event, err)
 				if len(appVolumes) == 0 {
@@ -1378,46 +1720,52 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				// Skip clone trigger for Pure FB volumes
 				isPureFileVol, err := Inst().V.IsPureFileVolume(vol)
 				if err != nil {
-					logrus.Errorf("Checking pure file volume is for a volume %s failing with error: %v", vol.Name, err)
+					log.Errorf("Checking pure file volume is for a volume %s failing with error: %v", vol.Name, err)
 					UpdateOutcome(event, err)
 				}
 
 				if isPureFileVol {
-					logrus.Warningf(
-						"Clone is not supported for FB volumes: [%s]",
-						"Skipping clone create for FB volume.", vol.Name,
+					log.Warnf(
+						"Clone is not supported for FB volumes: [%s]. "+
+							"Skipping clone create for FB volume.", vol.Name,
 					)
 					continue
 				}
-
-				Step(fmt.Sprintf("Clone Volume %s", vol.Name), func() {
-					logrus.Infof("Calling CloneVolume()...")
+				stepLog = fmt.Sprintf("Clone Volume %s", vol.Name)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					log.Infof("Calling CloneVolume()...")
 					clonedVolID, err = Inst().V.CloneVolume(vol.ID)
 					UpdateOutcome(event, err)
 				})
-				Step(
-					fmt.Sprintf("Validate successful clone %s", clonedVolID), func() {
-						params := make(map[string]string)
-						if Inst().ConfigMap != "" {
-							params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-							UpdateOutcome(event, err)
-						}
-						err = Inst().V.ValidateCreateVolume(clonedVolID, params)
+				stepLog = fmt.Sprintf("Validate successful clone %s", clonedVolID)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					params := make(map[string]string)
+					if Inst().ConfigMap != "" {
+						params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 						UpdateOutcome(event, err)
-					})
-				Step(
-					fmt.Sprintf("cleanup the cloned volume %s", clonedVolID), func() {
-						err = Inst().V.DeleteVolume(clonedVolID)
-						UpdateOutcome(event, err)
-					})
+					}
+					err = Inst().V.ValidateCreateVolume(clonedVolID, params)
+					UpdateOutcome(event, err)
+				})
+				stepLog = fmt.Sprintf("cleanup the cloned volume %s", clonedVolID)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err = Inst().V.DeleteVolume(clonedVolID)
+					UpdateOutcome(event, err)
+				})
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
 // TriggerVolumeResize increases all volumes size and validates app
 func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(VolumeResize)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -1431,33 +1779,42 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("get volumes for all apps in test and update size", func() {
+
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	stepLog := "get volumes for all apps in test and update size"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
-			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				appVolumes, err = Inst().S.GetVolumes(ctx)
-				logrus.Infof("len of app volumes is : %v", len(appVolumes))
+				log.Infof("len of app volumes is : %v", len(appVolumes))
 				UpdateOutcome(event, err)
 				if len(appVolumes) == 0 {
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
 			})
 			var requestedVols []*volume.Volume
-			Step(
-				fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
-					Inst().V.String(), ctx.App.Key, appVolumes),
+			stepLog = fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
+				Inst().V.String(), ctx.App.Key, appVolumes)
+			Step(stepLog,
 				func() {
-					logrus.Info("increasing volume size")
+					log.InfoD(stepLog)
+					log.InfoD("increasing volume size")
 					requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
 					if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
 						UpdateOutcome(event, err)
 					}
 				})
-			Step(
-				fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
-					ctx.App.Key, appVolumes),
+			stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+				ctx.App.Key, appVolumes)
+			Step(stepLog,
 				func() {
+					log.InfoD(stepLog)
 					for _, v := range requestedVols {
 						// Need to pass token before validating volume
 						params := make(map[string]string)
@@ -1470,13 +1827,15 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 					}
 				})
 		}
+		updateMetrics(*event)
 	})
 }
 
 // TriggerLocalSnapShot takes local snapshots of the volumes and validates snapshot
 func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(LocalSnapShot)
 	uuid := GenerateUUID()
 	event := &EventRecord{
 		Event: Event{
@@ -1492,25 +1851,26 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		*recordChan <- event
 	}()
 
-	Step("Create and Validate LocalSnapshots", func() {
-
+	setMetrics(*event)
+	stepLog := "Create and Validate LocalSnapshots"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
 			if strings.Contains(ctx.App.Key, "localsnap") {
 
 				appNamespace := ctx.App.Key + "-" + ctx.UID
-				logrus.Infof("Namespace : %v", appNamespace)
-
-				Step(fmt.Sprintf("create schedule policy for %s app", ctx.App.Key), func() {
-
+				log.Infof("Namespace : %v", appNamespace)
+				stepLog = fmt.Sprintf("create schedule policy for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					policyName := "localintervalpolicy"
-
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
 						retain := 2
 						interval := getCloudSnapInterval(LocalSnapShot)
-						logrus.Infof("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
 						schedPolicy = &storkv1.SchedulePolicy{
 							ObjectMeta: meta_v1.ObjectMeta{
 								Name: policyName,
@@ -1523,47 +1883,48 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 							}}
 
 						_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
-						logrus.Infof("Waiting for 10 mins for Snapshots to be completed")
+						log.Infof("Waiting for 10 mins for Snapshots to be completed")
 						time.Sleep(10 * time.Minute)
 					} else {
-						logrus.Infof("schedPolicy is %v already exists", schedPolicy.Name)
+						log.Infof("schedPolicy is %v already exists", schedPolicy.Name)
 					}
 
 					UpdateOutcome(event, err)
 				})
-				logrus.Infof("Waiting for 2 mins for Snapshots to be completed")
+				log.Infof("Waiting for 2 mins for Snapshots to be completed")
 				time.Sleep(2 * time.Minute)
-
-				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					appVolumes, err = Inst().S.GetVolumes(ctx)
 					UpdateOutcome(event, err)
 					if len(appVolumes) == 0 {
 						UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 					}
 				})
-				logrus.Infof("Got volume count : %v", len(appVolumes))
+				log.Infof("Got volume count : %v", len(appVolumes))
 
 				snapshotScheduleRetryInterval := 10 * time.Second
 				snapshotScheduleRetryTimeout := 3 * time.Minute
 
 				for _, v := range appVolumes {
 					snapshotScheduleName := v.Name + "-interval-schedule"
-					logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+					log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
 					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
 						appNamespace,
 						snapshotScheduleRetryTimeout,
 						snapshotScheduleRetryInterval)
 					if err == nil {
 						for k, v := range snapStatuses {
-							logrus.Infof("Policy Type: %v", k)
+							log.InfoD("Policy Type: %v", k)
 							for _, e := range v {
-								logrus.Infof("ScheduledVolumeSnapShot Name: %v", e.Name)
-								logrus.Infof("ScheduledVolumeSnapShot status: %v", e.Status)
+								log.InfoD("ScheduledVolumeSnapShot Name: %v", e.Name)
+								log.InfoD("ScheduledVolumeSnapShot status: %v", e.Status)
 								snapData, err := Inst().S.GetSnapShotData(ctx, e.Name, appNamespace)
 								UpdateOutcome(event, err)
 
 								snapType := snapData.Spec.PortworxSnapshot.SnapshotType
-								logrus.Infof("Snapshot Type: %v", snapType)
+								log.InfoD("Snapshot Type: %v", snapType)
 								if snapType != "local" {
 									err = &scheduler.ErrFailedToGetVolumeParameters{
 										App:   ctx.App,
@@ -1574,7 +1935,7 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 								}
 
 								snapID := snapData.Spec.PortworxSnapshot.SnapshotID
-								logrus.Infof("Snapshot ID: %v", snapID)
+								log.InfoD("Snapshot ID: %v", snapID)
 
 								if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
 									len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
@@ -1588,7 +1949,7 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 						}
 
 					} else {
-						logrus.Infof("Got error while getting volume snapshot status :%v", err.Error())
+						log.InfoD("Got error while getting volume snapshot status :%v", err.Error())
 					}
 					UpdateOutcome(event, err)
 				}
@@ -1596,7 +1957,7 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 			}
 
 		}
-
+		updateMetrics(*event)
 	})
 
 }
@@ -1604,6 +1965,8 @@ func TriggerLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 // TriggerDeleteLocalSnapShot deletes local snapshots and snapshot schedules
 func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DeleteLocalSnapShot)
 	uuid := GenerateUUID()
 	event := &EventRecord{
 		Event: Event{
@@ -1619,21 +1982,26 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 		*recordChan <- event
 	}()
 
-	Step("Delete Schedule Policy and LocalSnapshots and Validate", func() {
-
+	setMetrics(*event)
+	stepLog := "Delete Schedule Policy and LocalSnapshots and Validate"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 
 			if strings.Contains(ctx.App.Key, "localsnap") {
 
 				appNamespace := ctx.App.Key + "-" + ctx.UID
-				logrus.Infof("Namespace : %v", appNamespace)
-				Step(fmt.Sprintf("delete schedule policy for %s app", ctx.App.Key), func() {
-
+				log.Infof("Namespace : %v", appNamespace)
+				stepLog = fmt.Sprintf("delete schedule policy for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					policyName := "localintervalpolicy"
 					err := storkops.Instance().DeleteSchedulePolicy(policyName)
 					UpdateOutcome(event, err)
-					Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+					stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
 						appVolumes, err = Inst().S.GetVolumes(ctx)
 						UpdateOutcome(event, err)
 						if len(appVolumes) == 0 {
@@ -1644,7 +2012,7 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 					snapshotScheduleRetryTimeout := 3 * time.Minute
 					for _, v := range appVolumes {
 						snapshotScheduleName := v.Name + "-interval-schedule"
-						logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+						log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
 						snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
 							appNamespace,
 							snapshotScheduleRetryTimeout,
@@ -1653,7 +2021,7 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 						if err == nil {
 							for _, v := range snapStatuses {
 								for _, e := range v {
-									logrus.Infof("Deleting ScheduledVolumeSnapShot: %v", e.Name)
+									log.InfoD("Deleting ScheduledVolumeSnapShot: %v", e.Name)
 									err = Inst().S.DeleteSnapShot(ctx, e.Name, appNamespace)
 									UpdateOutcome(event, err)
 
@@ -1663,14 +2031,14 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 							UpdateOutcome(event, err)
 
 						} else {
-							logrus.Infof("Got error while getting volume snapshot status :%v", err.Error())
+							log.InfoD("Got error while getting volume snapshot status :%v", err.Error())
 						}
 					}
 
 					snapshotList, err := Inst().S.GetSnapshotsInNameSpace(ctx, appNamespace)
 					UpdateOutcome(event, err)
 					if len(snapshotList.Items) != 0 {
-						logrus.Infof("Failed to delete snapshots in namespace %v", appNamespace)
+						log.InfoD("Failed to delete snapshots in namespace %v", appNamespace)
 						err = &scheduler.ErrFailedToDeleteTasks{
 							App:   ctx.App,
 							Cause: fmt.Sprintf("Failed to delete snapshots in namespace %v", appNamespace),
@@ -1682,7 +2050,7 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 				})
 			}
 		}
-
+		updateMetrics(*event)
 	})
 
 }
@@ -1690,6 +2058,8 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 // TriggerCloudSnapShot deploy Interval Policy and validates snapshot
 func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CloudSnapShot)
 	uuid := GenerateUUID()
 	event := &EventRecord{
 		Event: Event{
@@ -1705,27 +2075,29 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
 	snapshotScheduleRetryInterval := 10 * time.Second
 	snapshotScheduleRetryTimeout := 3 * time.Minute
-
-	Step("Validate Cloud Snaps", func() {
-
+	stepLog := "Validate Cloud Snaps"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
 			var err error
 			if strings.Contains(ctx.App.Key, "cloudsnap") {
 
 				appNamespace := ctx.App.Key + "-" + ctx.UID
-				logrus.Infof("Namespace : %v", appNamespace)
-
-				Step(fmt.Sprintf("create schedule policy for %s app", ctx.App.Key), func() {
+				log.Infof("Namespace : %v", appNamespace)
+				stepLog = fmt.Sprintf("create schedule policy for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					policyName := "intervalpolicy"
-
 					schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err != nil {
 						retain := 2
 						interval := getCloudSnapInterval(CloudSnapShot)
-						logrus.Infof("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+						log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
 						schedPolicy = &storkv1.SchedulePolicy{
 							ObjectMeta: meta_v1.ObjectMeta{
 								Name: policyName,
@@ -1738,23 +2110,25 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 							}}
 
 						_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
-						logrus.Infof("Waiting for 10 mins for Snapshots to be completed")
+						log.Infof("Waiting for 10 mins for Snapshots to be completed")
 						time.Sleep(10 * time.Minute)
 					} else {
-						logrus.Infof("schedPolicy is %v already exists", schedPolicy.Name)
+						log.Infof("schedPolicy is %v already exists", schedPolicy.Name)
 					}
 
 					UpdateOutcome(event, err)
 				})
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
 
-				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					appVolumes, err = Inst().S.GetVolumes(ctx)
 					UpdateOutcome(event, err)
 					if len(appVolumes) == 0 {
 						UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 					}
 				})
-				logrus.Infof("Got volume count : %v", len(appVolumes))
+				log.Infof("Got volume count : %v", len(appVolumes))
 
 				for _, v := range appVolumes {
 					// Skip cloud snapshot trigger for Pure DA volumes
@@ -1763,27 +2137,27 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 						UpdateOutcome(event, err)
 					}
 					if isPureVol {
-						logrus.Warningf(
+						log.Warnf(
 							"Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name,
 						)
 						continue
 					}
 					snapshotScheduleName := v.Name + "-interval-schedule"
-					logrus.Infof("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+					log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
 					snapStatuses, err := storkops.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
 						appNamespace,
 						snapshotScheduleRetryTimeout,
 						snapshotScheduleRetryInterval)
 					if err == nil {
 						for k, v := range snapStatuses {
-							logrus.Infof("Policy Type: %v", k)
+							log.InfoD("Policy Type: %v", k)
 							for _, e := range v {
-								logrus.Infof("ScheduledVolumeSnapShot Name: %v", e.Name)
-								logrus.Infof("ScheduledVolumeSnapShot status: %v", e.Status)
+								log.InfoD("ScheduledVolumeSnapShot Name: %v", e.Name)
+								log.InfoD("ScheduledVolumeSnapShot status: %v", e.Status)
 							}
 						}
 					} else {
-						logrus.Infof("Got error while getting volume snapshot status :%v", err.Error())
+						log.InfoD("Got error while getting volume snapshot status :%v", err.Error())
 					}
 					UpdateOutcome(event, err)
 				}
@@ -1791,7 +2165,7 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 			}
 
 		}
-
+		updateMetrics(*event)
 	})
 
 }
@@ -1799,6 +2173,8 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 // TriggerVolumeDelete delete the volumes
 func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(VolumesDelete)
 	uuid := GenerateUUID()
 	event := &EventRecord{
 		Event: Event{
@@ -1814,7 +2190,10 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
-	Step("Validate Delete Volumes", func() {
+	setMetrics(*event)
+	stepLog := "Validate Delete Volumes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		opts := make(map[string]bool)
 
 		for _, ctx := range *contexts {
@@ -1826,7 +2205,9 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 			vols := DeleteVolumes(ctx, options)
 
 			// Tear down application
-			Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("start destroying %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				err := Inst().S.Destroy(ctx, opts)
 				UpdateOutcome(event, err)
 			})
@@ -1835,6 +2216,7 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 		}
 		*contexts = nil
 		TriggerDeployNewApps(contexts, recordChan)
+		updateMetrics(*event)
 	})
 }
 
@@ -1866,14 +2248,14 @@ func getCreateCloudCredentialRequest(uid string) (*api.CloudCredentialCreateRequ
 	}
 
 	provider, ok := os.LookupEnv("OBJECT_STORE_PROVIDER")
-	logrus.Infof("Provider for credentail secret is %s", provider)
+	log.Infof("Provider for credentail secret is %s", provider)
 	if !ok {
 		return nil, &errors.ErrNotFound{
 			ID:   "OBJECT_STORE_PROVIDER",
 			Type: "Environment Variable",
 		}
 	}
-	logrus.Infof("Provider for credentail secret is %s", provider)
+	log.Infof("Provider for credentail secret is %s", provider)
 
 	switch provider {
 	case "aws":
@@ -1965,7 +2347,7 @@ func getCreateCloudCredentialRequest(uid string) (*api.CloudCredentialCreateRequ
 			},
 		}
 	default:
-		logrus.Errorf("provider needs to be either aws, azure or google")
+		log.Errorf("provider needs to be either aws, azure or google")
 	}
 	return req, nil
 }
@@ -1985,7 +2367,7 @@ func TriggerEmailReporter() {
 	// emailRecords stores events to be notified
 
 	emailData := emailData{}
-	logrus.Infof("Generating email report: %s", time.Now().Format(time.RFC1123))
+	log.Infof("Generating email report: %s", time.Now().Format(time.RFC1123))
 
 	var masterNodeList []string
 	var pxStatus string
@@ -2000,15 +2382,15 @@ func TriggerEmailReporter() {
 		k8sNodeStatus := "False"
 
 		if err != nil {
-			logrus.Errorf("Unable to get K8s node , Err : %v", err)
+			log.Errorf("Unable to get K8s node , Err : %v", err)
 		} else {
 			for _, condition := range k8sNode.Status.Conditions {
 				if condition.Type == v1.NodeReady {
 					if condition.Status == v1.ConditionTrue && !k8sNode.Spec.Unschedulable {
 						k8sNodeStatus = "True"
-						logrus.Infof("Node %v has Node Status True", n.Name)
+						log.Infof("Node %v has Node Status True", n.Name)
 					} else {
-						logrus.Errorf("Node %v has Node Status False", n.Name)
+						log.Errorf("Node %v has Node Status False", n.Name)
 
 					}
 				}
@@ -2016,7 +2398,7 @@ func TriggerEmailReporter() {
 
 		}
 		if n.StorageNode != nil {
-			logrus.Infof("Getting node %s status", n.Name)
+			log.Infof("Getting node %s status", n.Name)
 			status, err := Inst().V.GetNodeStatus(n)
 			if err != nil {
 				pxStatus = pxStatusError
@@ -2032,7 +2414,7 @@ func TriggerEmailReporter() {
 			emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp, NodeName: n.Name,
 				PxVersion: pxVersion, Status: pxStatus, NodeStatus: k8sNodeStatus, Cores: coresMap[n.Name]})
 		} else {
-			logrus.Infof("node %s storage is nil, %+v", n.Name, n)
+			log.Infof("node %s storage is nil, %+v", n.Name, n)
 		}
 	}
 
@@ -2050,7 +2432,7 @@ func TriggerEmailReporter() {
 
 	content, err := prepareEmailBody(emailData)
 	if err != nil {
-		logrus.Errorf("Failed to prepare email body. Error: [%v]", err)
+		log.Errorf("Failed to prepare email body. Error: [%v]", err)
 	}
 
 	emailSub := subject
@@ -2069,7 +2451,7 @@ func TriggerEmailReporter() {
 
 	err = emailDetails.SendEmail()
 	if err != nil {
-		logrus.Errorf("Failed to send out email, because of Error: %q", err)
+		log.Errorf("Failed to send out email, because of Error: %q", err)
 	}
 }
 
@@ -2089,6 +2471,9 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -2122,13 +2507,13 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 			err, ok := bkpNamespaceErrors[namespace]
 			if ok {
-				logrus.Warningf("Skipping waiting for backup %s because %s", backupName, err)
+				log.Warnf("Skipping waiting for backup %s because %s", backupName, err)
 				continue
 			}
 			Step(fmt.Sprintf("Wait for backup %s to complete", backupName), func() {
 				ctx, err := backup.GetPxCentralAdminCtx()
 				if err != nil {
-					logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+					log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 					bkpNamespaceErrors[namespace] = err
 					UpdateOutcome(event, err)
 				} else {
@@ -2138,9 +2523,9 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						BackupRestoreCompletionTimeoutMin*time.Minute,
 						RetrySeconds*time.Second)
 					if err == nil {
-						logrus.Infof("Backup [%s] completed successfully", backupName)
+						log.Infof("Backup [%s] completed successfully", backupName)
 					} else {
-						logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+						log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 							backupName, err)
 						bkpNamespaceErrors[namespace] = err
 						UpdateOutcome(event, err)
@@ -2148,6 +2533,7 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 			})
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -2167,6 +2553,8 @@ func TriggerScheduledBackupAll(contexts *[]*scheduler.Context, recordChan *chan 
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -2195,7 +2583,7 @@ func TriggerScheduledBackupAll(contexts *[]*scheduler.Context, recordChan *chan 
 		backupScheduleNamePrefix+BackupScheduleAllName)
 	ProcessErrorWithMessage(event, err, errorMessage)
 
-	logrus.Infof("Verify namespaces")
+	log.Infof("Verify namespaces")
 	// Verify that all namespaces are present in latest backup
 	latestBkpNamespaces := latestBkp.GetNamespaces()
 	namespacesList, err := core.Instance().ListNamespaces(nil)
@@ -2222,6 +2610,7 @@ func TriggerScheduledBackupAll(contexts *[]*scheduler.Context, recordChan *chan 
 			ProcessErrorWithMessage(event, err, "Scheduled backup backed up wrong namespaces")
 		}
 	}
+	updateMetrics(*event)
 }
 
 // TriggerBackupSpecificResource backs up a specific resource in a namespace
@@ -2236,6 +2625,9 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
+
+	setMetrics(*event)
+
 	namespaceResourceMap := make(map[string][]string)
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -2292,7 +2684,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 			bkpNames = append(bkpNames, namespace)
-			logrus.Infof("Create backup full name %s:%s:%s", sourceClusterName, namespace, backupName)
+			log.Infof("Create backup full name %s:%s:%s", sourceClusterName, namespace, backupName)
 			backupCreateRequest := GetBackupCreateRequest(backupName, sourceClusterName, backupLocationName, BackupLocationUID,
 				[]string{namespace}, labelSelectors, OrgID)
 			backupCreateRequest.Name = backupName
@@ -2308,7 +2700,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 		backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 		err, ok := bkpNamespaceErrors[namespace]
 		if ok {
-			logrus.Warningf("Skipping waiting for backup [%s] because [%s]", backupName, err)
+			log.Warnf("Skipping waiting for backup [%s] because [%s]", backupName, err)
 			continue
 		}
 		Step(fmt.Sprintf("Wait for backup [%s] to complete", backupName), func() {
@@ -2323,7 +2715,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 					BackupRestoreCompletionTimeoutMin*time.Minute,
 					RetrySeconds*time.Second)
 				if err == nil {
-					logrus.Infof("Backup [%s] completed successfully", backupName)
+					log.Infof("Backup [%s] completed successfully", backupName)
 				} else {
 					bkpNamespaceErrors[namespace] = err
 					ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]", backupName, err))
@@ -2336,7 +2728,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 			backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 			err, ok := bkpNamespaceErrors[namespace]
 			if ok {
-				logrus.Warningf("Skipping inspecting backup [%s] because [%s]", backupName, err)
+				log.Warnf("Skipping inspecting backup [%s] because [%s]", backupName, err)
 				continue
 			}
 			bkpInspectResp, err := InspectBackup(backupName)
@@ -2357,6 +2749,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 				}
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -2377,7 +2770,9 @@ func TriggerInspectBackup(contexts *[]*scheduler.Context, recordChan *chan *Even
 		*recordChan <- event
 	}()
 
-	logrus.Infof("Enumerating backups")
+	setMetrics(*event)
+
+	log.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
@@ -2399,6 +2794,7 @@ func TriggerInspectBackup(contexts *[]*scheduler.Context, recordChan *chan *Even
 	_, err = Inst().Backup.InspectBackup(ctx, backupInspectRequest)
 	desc := fmt.Sprintf("InspectBackup failed: Inspect backup %s failed", backupToInspect.GetName())
 	ProcessErrorWithMessage(event, err, desc)
+	updateMetrics(*event)
 
 }
 
@@ -2419,7 +2815,9 @@ func TriggerInspectRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		*recordChan <- event
 	}()
 
-	logrus.Infof("Enumerating restores")
+	setMetrics(*event)
+
+	log.Infof("Enumerating restores")
 	restoreEnumerateReq := &api.RestoreEnumerateRequest{
 		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
@@ -2440,6 +2838,7 @@ func TriggerInspectRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	_, err = Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
 	desc := fmt.Sprintf("InspectRestore failed: Inspect restore %s failed", restoreToInspect.GetName())
 	ProcessErrorWithMessage(event, err, desc)
+	updateMetrics(*event)
 }
 
 // TriggerRestoreNamespace restores a namespace to a new namespace
@@ -2453,6 +2852,8 @@ func TriggerRestoreNamespace(contexts *[]*scheduler.Context, recordChan *chan *E
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
+
+	setMetrics(*event)
 
 	defer func() {
 		sourceClusterConfigPath, err := GetSourceClusterConfigPath()
@@ -2470,7 +2871,7 @@ func TriggerRestoreNamespace(contexts *[]*scheduler.Context, recordChan *chan *E
 	ProcessErrorWithMessage(event, err, "Restore namespace failed: GetDestinationClusterConfigPath failed")
 	SetClusterContext(destClusterConfigPath)
 
-	logrus.Infof("Enumerating backups")
+	log.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
@@ -2545,6 +2946,7 @@ func TriggerRestoreNamespace(contexts *[]*scheduler.Context, recordChan *chan *E
 		err = fmt.Errorf("namespace %s not found", restoredNs)
 		ProcessErrorWithMessage(event, err, "RestoreNamespace restored incorrect namespaces")
 	}
+	updateMetrics(*event)
 }
 
 // TriggerDeleteBackup deletes a backup
@@ -2564,7 +2966,9 @@ func TriggerDeleteBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
-	logrus.Infof("Enumerating backups")
+	setMetrics(*event)
+
+	log.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
 	ctx, err := backup.GetPxCentralAdminCtx()
@@ -2581,6 +2985,7 @@ func TriggerDeleteBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 	desc := fmt.Sprintf("DeleteBackup failed: Delete backup %s on cluster %s failed",
 		backupToDelete.GetName(), backupToDelete.GetCluster())
 	ProcessErrorWithMessage(event, err, desc)
+	updateMetrics(*event)
 
 }
 
@@ -2600,6 +3005,9 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	if err != nil {
@@ -2645,7 +3053,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			if err == nil {
-				logrus.Infof("Backup [%s] completed successfully", backupName)
+				log.Infof("Backup [%s] completed successfully", backupName)
 			} else {
 				ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]", backupName, err))
 			}
@@ -2679,6 +3087,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 				}
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -2732,6 +3141,9 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	if err != nil {
@@ -2831,7 +3243,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			if err == nil {
-				logrus.Infof("Backup [%s] completed successfully", backupName)
+				log.Infof("Backup [%s] completed successfully", backupName)
 			} else {
 				ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]", backupName, err))
 				return
@@ -2855,6 +3267,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 				UpdateOutcome(event, err)
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -2874,6 +3287,8 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	err := backup.UpdatePxBackupAdminSecret()
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -2922,7 +3337,7 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 		backupScheduleNamePrefix+backupScheduleScaleName)
 	ProcessErrorWithMessage(event, err, errorMessage)
 
-	logrus.Infof("Verify newest pods have been scaled in backup")
+	log.Infof("Verify newest pods have been scaled in backup")
 	for _, ns := range bkpNamespaces {
 		pods, err := core.Instance().GetPods(ns, labelSelectors)
 		UpdateOutcome(event, err)
@@ -2977,7 +3392,7 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 		backupScheduleNamePrefix+backupScheduleScaleName)
 	ProcessErrorWithMessage(event, err, errorMessage)
 
-	logrus.Infof("Verify pods have been scaled in backup")
+	log.Infof("Verify pods have been scaled in backup")
 	for _, ns := range bkpNamespaces {
 		pods, err := core.Instance().GetPods(ns, labelSelectors)
 		UpdateOutcome(event, err)
@@ -3007,6 +3422,7 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 			UpdateOutcome(event, err)
 		}
 	}
+	updateMetrics(*event)
 }
 
 //TriggerBackupRestartPX backs up an application and restarts Portworx during the backup
@@ -3025,6 +3441,8 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
@@ -3059,21 +3477,21 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	Step("Restart Portworx", func() {
 		nodes := node.GetStorageDriverNodes()
 		nodeIndex := rand.Intn(len(nodes))
-		logrus.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+		log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[nodeIndex].Name)
 		StopVolDriverAndWait([]node.Node{nodes[nodeIndex]})
-		logrus.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+		log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[nodeIndex].Name)
 		StartVolDriverAndWait([]node.Node{nodes[nodeIndex]})
-		logrus.Infof("Giving a few seconds for volume driver to stabilize")
+		log.Infof("Giving a few seconds for volume driver to stabilize")
 		time.Sleep(20 * time.Second)
 	})
 
 	Step("Wait for backup to complete", func() {
 		if bkpError {
-			logrus.Warningf("Skipping waiting for backup [%s] due to error", backupName)
+			log.Warnf("Skipping waiting for backup [%s] due to error", backupName)
 		} else {
 			ctx, err := backup.GetPxCentralAdminCtx()
 			if err != nil {
-				logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+				log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 				UpdateOutcome(event, err)
 			} else {
 				err = Inst().Backup.WaitForBackupCompletion(
@@ -3082,14 +3500,15 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 					BackupRestoreCompletionTimeoutMin*time.Minute,
 					RetrySeconds*time.Second)
 				if err == nil {
-					logrus.Infof("Backup [%s] completed successfully", backupName)
+					log.Infof("Backup [%s] completed successfully", backupName)
 				} else {
-					logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+					log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 						backupName, err)
 					UpdateOutcome(event, err)
 				}
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -3109,6 +3528,9 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
@@ -3189,7 +3611,7 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 			t := func() (interface{}, bool, error) {
 				pxbPods, err := core.Instance().GetPodsByNode(nodes[nodeIndex].Name, "px-backup")
 				if err != nil {
-					logrus.Errorf("Failed to get apps on node [%s]", nodes[nodeIndex].Name)
+					log.Errorf("Failed to get apps on node [%s]", nodes[nodeIndex].Name)
 					return "", true, err
 				}
 				for _, pod := range pxbPods.Items {
@@ -3207,11 +3629,11 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 
 	Step("Wait for backup to complete", func() {
 		if bkpError {
-			logrus.Warningf("Skipping waiting for backup [%s] due to error", backupName)
+			log.Warnf("Skipping waiting for backup [%s] due to error", backupName)
 		} else {
 			ctx, err := backup.GetPxCentralAdminCtx()
 			if err != nil {
-				logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+				log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 				UpdateOutcome(event, err)
 			} else {
 				err = Inst().Backup.WaitForBackupCompletion(
@@ -3220,14 +3642,15 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 					BackupRestoreCompletionTimeoutMin*time.Minute,
 					RetrySeconds*time.Second)
 				if err == nil {
-					logrus.Infof("Backup [%s] completed successfully", backupName)
+					log.Infof("Backup [%s] completed successfully", backupName)
 				} else {
-					logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+					log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 						backupName, err)
 					UpdateOutcome(event, err)
 				}
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -3247,6 +3670,8 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
@@ -3292,7 +3717,7 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 	Step("Wait for backup to complete", func() {
 		ctx, err := backup.GetPxCentralAdminCtx()
 		if err != nil {
-			logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+			log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 			UpdateOutcome(event, err)
 		} else {
 			err = Inst().Backup.WaitForBackupCompletion(
@@ -3301,13 +3726,14 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			if err == nil {
-				logrus.Infof("Backup [%s] completed successfully", backupName)
+				log.Infof("Backup [%s] completed successfully", backupName)
 			} else {
-				logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+				log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 					backupName, err)
 				UpdateOutcome(event, err)
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
@@ -3327,6 +3753,8 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
 
 	Step("Update admin secret", func() {
 		err := backup.UpdatePxBackupAdminSecret()
@@ -3394,7 +3822,7 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 	Step("Wait for backup to complete", func() {
 		ctx, err := backup.GetPxCentralAdminCtx()
 		if err != nil {
-			logrus.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+			log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 			UpdateOutcome(event, err)
 		} else {
 			err = Inst().Backup.WaitForBackupCompletion(
@@ -3403,55 +3831,58 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			if err == nil {
-				logrus.Infof("Backup [%s] completed successfully", backupName)
+				log.Infof("Backup [%s] completed successfully", backupName)
 			} else {
-				logrus.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
+				log.Errorf("Failed to wait for backup [%s] to complete. Error: [%v]",
 					backupName, err)
 				UpdateOutcome(event, err)
 			}
 		}
+		updateMetrics(*event)
 	})
 }
 
 func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
-	poolResizePossible := false
-	if poolToBeResized != nil && poolToBeResized.LastOperation != nil {
-		logrus.Infof("Validating pool :%v to expand", poolToBeResized.Uuid)
-		for {
-			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
+	if poolToBeResized == nil {
+		return false, fmt.Errorf("pool provided is nil")
+	}
 
+	if poolToBeResized != nil && poolToBeResized.LastOperation != nil {
+		log.InfoD("Validating pool :%v to expand", poolToBeResized.Uuid)
+
+		f := func() (interface{}, bool, error) {
+
+			pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
 			if err != nil {
-				err = fmt.Errorf("error getting storage pools list. Err: %v", err)
-				logrus.Error(err.Error())
-				return poolResizePossible, err
+				return nil, true, fmt.Errorf("error getting pools list, Error :%v", err)
 			}
 
 			updatedPoolToBeResized := pools[poolToBeResized.Uuid]
-
 			if updatedPoolToBeResized.LastOperation.Status != opsapi.SdkStoragePool_OPERATION_SUCCESSFUL {
 				if updatedPoolToBeResized.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
-
-					err = fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
-					return poolResizePossible, err
+					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
 
 				}
+				err = ValidatePoolRebalance()
+				if err != nil {
+					return nil, true, err
+				}
 
-				logrus.Infof("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
+				log.InfoD("Pool Resize is already in progress: %v", updatedPoolToBeResized.LastOperation)
 				if strings.Contains(updatedPoolToBeResized.LastOperation.Msg, "Will not proceed with pool expansion") {
-					break
+					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation.Msg)
 				}
-				time.Sleep(time.Second * 90)
-				continue
+				return nil, true, nil
 			}
-			poolResizePossible = true
-			break
+			return nil, false, nil
 		}
-	}
+		_, err := task.DoRetryWithTimeout(f, 10*time.Minute, 1*time.Minute)
+		if err != nil {
+			return false, err
+		}
 
-	if poolToBeResized != nil && poolToBeResized.LastOperation == nil {
-		poolResizePossible = true
 	}
-	return poolResizePossible, nil
+	return true, nil
 }
 
 func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
@@ -3464,21 +3895,27 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 
 		expandedPool := pools[poolIDToResize]
 		if expandedPool.LastOperation != nil {
-			logrus.Infof("Current pool %s last opration status : %v", poolIDToResize, expandedPool.LastOperation.Status)
+			log.InfoD("Current pool %s last operation status : %v", poolIDToResize, expandedPool.LastOperation.Status)
 			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
 				return nil, false, fmt.Errorf("PoolResize for %s has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
 			}
 		}
+
 		newPoolSize := expandedPool.TotalSize / units.GiB
+		err = ValidatePoolRebalance()
+		if err != nil {
+			return nil, true, fmt.Errorf("pool %s not been resized .Current size is %d,Error while pool rebalance: %v", poolIDToResize, newPoolSize, err)
+		}
 
 		if newPoolSize > initialSize {
 			// storage pool resize has been completed
 			return nil, true, nil
 		}
+
 		return nil, true, fmt.Errorf("pool %s not been resized .Current size is %d", poolIDToResize, newPoolSize)
 	}
 
-	_, err := task.DoRetryWithTimeout(f, 90*time.Minute, 1*time.Minute)
+	_, err := task.DoRetryWithTimeout(f, 10*time.Minute, 1*time.Minute)
 	return err
 }
 
@@ -3517,7 +3954,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 	}
 	poolValidity, err := isPoolResizePossible(pool)
 	if err != nil {
-		logrus.Error(err)
+		log.Error(err.Error())
 		UpdateOutcome(event, err)
 	}
 
@@ -3533,19 +3970,19 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, uint64(chaosLevel))
 		if err != nil {
 			err = fmt.Errorf("error initiating pool [%v ] %v: [%v]", pool.Uuid, expansionType, err.Error())
-			logrus.Error(err.Error())
+			log.Error(err.Error())
 			UpdateOutcome(event, err)
 		} else {
 			if doNodeReboot {
 				err = WaitForExpansionToStart(pool.Uuid)
-				logrus.Error(err.Error())
+				log.Error(err.Error())
 				UpdateOutcome(event, err)
 				if err == nil {
 					storageNode, err := GetNodeWithGivenPoolID(pool.Uuid)
-					logrus.Error(err.Error())
+					log.Error(err.Error())
 					UpdateOutcome(event, err)
 					err = RebootNodeAndWait(*storageNode)
-					logrus.Error(err.Error())
+					log.Error(err.Error())
 					UpdateOutcome(event, err)
 				}
 
@@ -3553,7 +3990,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 			err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
 			if err != nil {
 				err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, expansionType, err)
-				logrus.Error(err)
+				log.Error(err.Error())
 				UpdateOutcome(event, err)
 			}
 		}
@@ -3563,6 +4000,8 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 // TriggerPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
 func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PoolResizeDisk)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -3576,40 +4015,54 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 
-	Step(fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel), func() {
+	setMetrics(*event)
+
+	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
+	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
+	Step(stepLog, func() {
 
 		poolsToBeResized, err := getStoragePoolsToExpand()
 
 		if err != nil {
-			logrus.Error(err)
+			log.Error(err.Error())
 			UpdateOutcome(event, err)
 		}
-		logrus.Infof("Pools to resize-disk [%v]", poolsToBeResized)
+		log.InfoD("Pools to resize-disk [%v]", poolsToBeResized)
 		var wg sync.WaitGroup
 
 		for _, pool := range poolsToBeResized {
-			//Initiating multiple pool expansions by resize-disk
-			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
-			wg.Add(1)
+			//Skipping pool resize if pool rebalance is enabled for the pool
+			if !isPoolRebalanceEnabled(pool.Uuid) {
+				//Initiating multiple pool expansions by resize-disk
+				go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
+				wg.Add(1)
+			}
 
 		}
 		wg.Wait()
 
 	})
 
-	Step("validate all apps after pool resize using resize-disk operation", func() {
+	stepLog = "validate all apps after pool resize using resize-disk operation"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			ValidateContext(ctx)
+			if strings.Contains(ctx.App.Key, fastpathAppName) {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				UpdateOutcome(event, err)
+			}
 		}
+		updateMetrics(*event)
 	})
-
 }
 
 // TriggerPoolResizeDiskAndReboot performs resize-disk on a storage pool and reboots the node
 func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(ResizeDiskAndReboot)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -3623,35 +4076,51 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
 
-	Step(fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel), func() {
+	setMetrics(*event)
 
+	chaosLevel := getPoolExpandPercentage(ResizeDiskAndReboot)
+
+	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		poolsToBeResized, err := getStoragePoolsToExpand()
 
 		if err != nil {
-			logrus.Error(err)
+			log.Error(err.Error())
 			UpdateOutcome(event, err)
 		}
+		var poolToBeResized *opsapi.StoragePool
 		if len(poolsToBeResized) > 0 {
-			poolToBeResized := poolsToBeResized[0]
-			logrus.Infof("Pool to resize-disk [%v]", poolToBeResized)
+			for _, pool := range poolsToBeResized {
+				if !isPoolRebalanceEnabled(pool.Uuid) {
+					poolToBeResized = pool
+				}
+			}
+			log.InfoD("Pool to resize-disk [%v]", poolToBeResized)
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 2, true)
 		}
-
 	})
 
-	Step("validate all apps after pool resize using resize-disk operation", func() {
+	stepLog = "validate all apps after pool resize using resize-disk operation"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			ValidateContext(ctx)
+			if strings.Contains(ctx.App.Key, fastpathAppName) {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				UpdateOutcome(event, err)
+			}
 		}
 	})
-
+	updateMetrics(*event)
 }
 
 // TriggerPoolAddDisk peforms add-disk on the storage pools for the given contexts
 func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PoolAddDisk)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -3665,43 +4134,58 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
-	Step(fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel), func() {
+
+	setMetrics(*event)
+
+	chaosLevel := getPoolExpandPercentage(PoolAddDisk)
+	stepLog := fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		poolsToBeResized, err := getStoragePoolsToExpand()
 
 		if err != nil {
-			logrus.Error(err)
+			log.Error(err.Error())
 			UpdateOutcome(event, err)
 		}
-		logrus.Infof("Pools to add-disk [%v]", poolsToBeResized)
+		log.InfoD("Pools to add-disk [%v]", poolsToBeResized)
 
 		var wg sync.WaitGroup
 
 		for _, pool := range poolsToBeResized {
-			//Initiating multiple pool expansions by add-disk
-			go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1, false)
-			wg.Add(1)
+			//Skipping pool resize if pool rebalance is enabled for the pool
+			if !isPoolRebalanceEnabled(pool.Uuid) {
+				//Initiating multiple pool expansions by add-disk
+				go initiatePoolExpansion(event, &wg, pool, chaosLevel, 1, false)
+				wg.Add(1)
 
+			}
 		}
 		wg.Wait()
 
 	})
-
-	Step("validate all apps after pool resize using add-disk operation", func() {
+	stepLog = "validate all apps after pool resize using add-disk operation"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			ValidateContext(ctx)
+			if strings.Contains(ctx.App.Key, fastpathAppName) {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				UpdateOutcome(event, err)
+			}
 		}
 	})
-
+	updateMetrics(*event)
 }
 
 // TriggerPoolAddDiskAndReboot performs add-disk and reboots the node
 func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AddDiskAndReboot)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: PoolResizeDisk,
+			Type: AddDiskAndReboot,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -3711,33 +4195,151 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
-	Step(fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel), func() {
+
+	setMetrics(*event)
+
+	chaosLevel := getPoolExpandPercentage(AddDiskAndReboot)
+	stepLog := fmt.Sprintf("get storage pools and perform add-disk by %v percentage on it ", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		poolsToBeResized, err := getStoragePoolsToExpand()
 
 		if err != nil {
-			logrus.Error(err)
+			log.Error(err.Error())
 			UpdateOutcome(event, err)
 		}
+		var poolToBeResized *opsapi.StoragePool
 		if len(poolsToBeResized) > 0 {
-			poolToBeResized := poolsToBeResized[0]
-			logrus.Infof("Pool to resize-disk [%v]", poolToBeResized)
+			for _, pool := range poolsToBeResized {
+				if !isPoolRebalanceEnabled(pool.Uuid) {
+					poolToBeResized = pool
+				}
+			}
+			log.InfoD("Pool to resize-disk [%v]", poolToBeResized)
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 1, true)
 		}
-
 	})
-
-	Step("validate all apps after pool resize using add-disk operation", func() {
+	stepLog = "validate all apps after pool resize using add-disk operation"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			ValidateContext(ctx)
+			if strings.Contains(ctx.App.Key, fastpathAppName) {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				UpdateOutcome(event, err)
+			}
 		}
 	})
 
+	updateMetrics(*event)
+}
+
+func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AutopilotRebalance)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AutopilotRebalance,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	poolLabel := map[string]string{"autopilot": "rebalance"}
+	apRule := aututils.PoolRuleRebalanceAbsolute(120, 70, false)
+	apRule.Spec.ActionsCoolDownPeriod = int64(getReblanceCoolOffPeriod(AutopilotRebalance))
+	apRule.Spec.Selector = apapi.RuleObjectSelector{
+		LabelSelector: meta_v1.LabelSelector{
+			MatchLabels: poolLabel,
+		},
+	}
+
+	if autoPilotLabelNode.Name == "" {
+
+		Step("Create autopilot rule", func() {
+			log.InfoD("Creating autopilot rule ; %+v", apRule)
+
+			storageNodes := node.GetStorageDriverNodes()
+			maxUsed := uint64(0)
+			for _, sNode := range storageNodes {
+				totalSize := uint64(0)
+				for _, p := range sNode.StoragePools {
+					totalSize += p.StoragePool.Used
+				}
+				if totalSize > maxUsed {
+					autoPilotLabelNode = sNode
+					maxUsed = totalSize
+				}
+			}
+
+			log.InfoD("Adding label %s to the node %s", poolLabel, autoPilotLabelNode.Name)
+			err := AddLabelsOnNode(autoPilotLabelNode, poolLabel)
+			UpdateOutcome(event, err)
+			if err == nil {
+				_, err = Inst().S.CreateAutopilotRule(apRule)
+				UpdateOutcome(event, err)
+				//Removing the label if autopilot rule creation is failed
+				if err != nil {
+					for k := range poolLabel {
+						Inst().S.RemoveLabelOnNode(autoPilotLabelNode, k)
+						autoPilotLabelNode = node.Node{}
+					}
+				}
+			} else {
+				log.Warn("Skipping autopilot rule creation as node is not labelled")
+			}
+
+		})
+	} else {
+
+		Step("validate the  autopilot events", func() {
+			log.InfoD("validate the  autopilot events for %s", apRule.Name)
+			ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+				FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
+			})
+			UpdateOutcome(event, err)
+
+			if err == nil {
+				for _, ruleEvent := range ruleEvents.Items {
+					//checking the events triggered in last 60 mins
+					if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-3600 {
+						continue
+					}
+					log.InfoD("autopilot rule event reason : %s and message: %s ", ruleEvent.Reason, ruleEvent.Message)
+					if strings.Contains(ruleEvent.Reason, "FailedAction") || strings.Contains(ruleEvent.Reason, "RuleCheckFailed") {
+						UpdateOutcome(event, fmt.Errorf("autopilot rule %s failed, Reason: %s, Message; %s", apRule.Name, ruleEvent.Reason, ruleEvent.Message))
+					}
+
+				}
+
+			}
+
+		})
+
+		Step("validate Px on the rebalanced node", func() {
+			log.InfoD("Validating PX on node : %s", autoPilotLabelNode.Name)
+			err := Inst().V.WaitDriverUpOnNode(autoPilotLabelNode, 1*time.Minute)
+			UpdateOutcome(event, err)
+
+			err = ValidatePoolRebalance()
+
+			UpdateOutcome(event, err)
+
+		})
+	}
 }
 
 // TriggerUpgradeVolumeDriver upgrades volume driver version to the latest build
 func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpgradeVolumeDriver)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -3751,44 +4353,55 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 		*recordChan <- event
 	}()
 
-	context("upgrade volume driver to the latest version", func() {
-		Step("start the volume driver upgrade", func() {
+	setMetrics(*event)
+
+	stepLog := "upgrade volume driver to the latest version"
+	context(stepLog, func() {
+		stepLog = "start the volume driver upgrade"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 			if IsOperatorBasedInstall {
 				status, err := UpgradePxStorageCluster()
 				if status {
-					logrus.Info("Volume Driver upgrade is successful")
+					log.InfoD("Volume Driver upgrade is successful")
 				} else {
-					logrus.Error("Volume Driver upgrade failed")
+					log.Error("Volume Driver upgrade failed")
 					UpdateOutcome(event, err)
 				}
 
 			} else {
-				logrus.Info("Initiating Daemon set based install upgrade")
+				log.InfoD("Initiating Daemon set based install upgrade")
 				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
 					Inst().StorageDriverUpgradeEndpointVersion,
 					Inst().EnableStorkUpgrade)
 				if err != nil {
-					logrus.Infof("Error upgrading: %v", err.Error())
+					log.InfoD("Error upgrading: %v", err.Error())
 				}
 				UpdateOutcome(event, err)
 
 			}
 
 		})
-
-		Step("validate all apps after upgrade", func() {
+		stepLog = "validate all apps after upgrade"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			for _, ctx := range *contexts {
 				ctx.SkipVolumeValidation = true
 				ValidateContext(ctx)
+				if strings.Contains(ctx.App.Key, fastpathAppName) {
+					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+					UpdateOutcome(event, err)
+				}
 			}
 		})
 	})
+	updateMetrics(*event)
 }
 
 func getOperatorLatestVersion() (string, error) {
 	url := fmt.Sprintf("%s/%s/version", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-	logrus.Infof("URL is : %v", url)
+	log.Infof("URL is : %v", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to send GET request to %s, Err: %v", url, err)
@@ -3815,6 +4428,8 @@ func getOperatorLatestVersion() (string, error) {
 // TriggerUpgradeStork peforms upgrade of the stork
 func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpgradeStork)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -3828,18 +4443,25 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	Step("Upgrading stork to latest version based on the compatible PX and storage driver upgrade version ",
+
+	setMetrics(*event)
+	stepLog := "Upgrading stork to latest version based on the compatible PX and storage driver upgrade version "
+	Step(stepLog,
 		func() {
+			log.InfoD(stepLog)
 			err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
 				Inst().StorageDriverUpgradeEndpointVersion)
 			UpdateOutcome(event, err)
 
 		})
+	updateMetrics(*event)
 }
 
 // TriggerAutoFsTrim enables Auto Fstrim in the PX Cluster
 func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AutoFsTrim)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -3853,10 +4475,16 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	context("Validate AutoFsTrim of the volumes", func() {
 
-		Step("enable auto fstrim ",
+	setMetrics(*event)
+
+	stepLog := "Validate AutoFsTrim of the volumes"
+	context(stepLog, func() {
+		log.InfoD(stepLog)
+		stepLog = "enable auto fstrim "
+		Step(stepLog,
 			func() {
+				log.InfoD(stepLog)
 				if !isAutoFsTrimEnabled {
 					currNode := node.GetWorkerNodes()[0]
 					err := Inst().V.SetClusterOpts(currNode, map[string]string{
@@ -3864,27 +4492,28 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					})
 					if err != nil {
 						err = fmt.Errorf("error while enabling auto fstrim, Error:%v", err)
-						logrus.Error(err)
+						log.Error(err.Error())
 						UpdateOutcome(event, err)
 					} else {
-						logrus.Info("AutoFsTrim is successfully enabled")
+						log.InfoD("AutoFsTrim is successfully enabled")
 						isAutoFsTrimEnabled = true
 						time.Sleep(5 * time.Minute)
 					}
 				} else {
-					logrus.Info("AutoFsTrim is already enabled")
+					log.InfoD("AutoFsTrim is already enabled")
 				}
 
 			})
-		Step("Validate AutoFsTrim Status ",
+		stepLog = "Validate AutoFsTrim Status "
+		Step(stepLog,
 			func() {
+				log.InfoD(stepLog)
 				validateAutoFsTrim(contexts, event)
-
 			})
-
-		Step("Reboot attached node and validate AutoFsTrim Status ",
+		stepLog = "Reboot attached node and validate AutoFsTrim Status "
+		Step(stepLog,
 			func() {
-
+				log.InfoD(stepLog)
 				for _, ctx := range *contexts {
 					if strings.Contains(ctx.App.Key, "fstrim") {
 						vols, _ := Inst().S.GetVolumes(ctx)
@@ -3892,7 +4521,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 							n, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
 							UpdateOutcome(event, err)
-							logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+							log.InfoD("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
 							err = Inst().S.DisableSchedulingOnNode(*n)
 							UpdateOutcome(event, err)
 
@@ -3906,12 +4535,12 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 								},
 							})
 
-							logrus.Info("wait for a minute for node reboot")
+							log.InfoD("wait for a minute for node reboot")
 							time.Sleep(1 * time.Minute)
 							n2, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
 							if err != nil {
 
-								logrus.Infof("Got error while getting node for volume %v, wait for 2 minutes to retry. Error: %v", vol.ID, err)
+								log.InfoD("Got error while getting node for volume %v, wait for 2 minutes to retry. Error: %v", vol.ID, err)
 								n2, err = Inst().V.GetNodeForVolume(vol, 3*time.Minute, 10*time.Second)
 								if err != nil {
 									err = fmt.Errorf("error while getting node for volume %v, Error: %v", vol.ID, err)
@@ -3920,7 +4549,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 							}
 
-							logrus.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
+							log.InfoD("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
 							StartVolDriverAndWait([]node.Node{*n})
 							Inst().S.EnableSchedulingOnNode(*n)
 
@@ -3929,17 +4558,17 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					}
 
 				}
-
 				validateAutoFsTrim(contexts, event)
-
 			})
 	})
-
+	updateMetrics(*event)
 }
 
 // TriggerVolumeUpdate enables to test volume update
 func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpdateVolume)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -3952,14 +4581,20 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	context("Validate update of the volumes", func() {
 
-		Step("Update Io priority on volumes ",
+	setMetrics(*event)
+	stepLog := "Validate update of the volumes"
+	context(stepLog, func() {
+		log.InfoD(stepLog)
+		stepLog = "Update Io priority on volumes "
+		Step(stepLog,
 			func() {
+				log.InfoD(stepLog)
 				updateIOPriorityOnVolumes(contexts, event)
-				logrus.Info("Update IO priority call completed")
+				log.InfoD("Update IO priority call completed")
 			})
 	})
+	updateMetrics(*event)
 }
 
 // updateIOPriorityOnVolumes this method is responsible for updating IO priority on Volumes.
@@ -3973,21 +4608,10 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 			UpdateOutcome(event, fmt.Errorf("found no volumes for app "))
 		}
 		for _, v := range appVolumes {
-			isPureVol, err := Inst().V.IsPureVolume(v)
-			if err != nil {
-				UpdateOutcome(event, err)
-			}
-			if isPureVol {
-				logrus.Warningf(
-					"Autofs Trim is not supported for Pure DA volume: [%s]",
-					"Skipping autofs trim status on pure volumes", v.Name,
-				)
-				continue
-			}
-			logrus.Infof("Getting info from volume: %s", v.ID)
+			log.InfoD("Getting info from volume: %s", v.ID)
 			appVol, err := Inst().V.InspectVolume(v.ID)
 			if err != nil {
-				logrus.Errorf("Error inspecting volume: %v", err)
+				log.Errorf("Error inspecting volume: %v", err)
 			}
 			if requiredPriority, ok := appVol.Spec.VolumeLabels["priority_io"]; ok {
 				if !setIoPriority {
@@ -3997,8 +4621,8 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 						requiredPriority = "low"
 					}
 				}
-				logrus.Infof("Expected Priority %v", requiredPriority)
-				logrus.Infof("COS %v", appVol.Spec.GetCos().SimpleString())
+				log.InfoD("Expected Priority %v", requiredPriority)
+				log.InfoD("COS %v", appVol.Spec.GetCos().SimpleString())
 				if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
 					err = Inst().V.UpdateIOPriority(v.ID, requiredPriority)
 					if err != nil {
@@ -4006,14 +4630,14 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 					}
 					//Verify Volume set with required IOPriority.
 					appVol, err := Inst().V.InspectVolume(v.ID)
-					logrus.Infof("COS after update %v", appVol.Spec.GetCos().SimpleString())
+					log.InfoD("COS after update %v", appVol.Spec.GetCos().SimpleString())
 					if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
 						err = fmt.Errorf("Failed to update volume %v with expected priority %v ", v.ID, requiredPriority)
 						UpdateOutcome(event, err)
 					}
-					logrus.Infof("Update IO priority on [%v] : [%v]", v.ID, requiredPriority)
+					log.InfoD("Update IO priority on [%v] : [%v]", v.ID, requiredPriority)
 				}
-				logrus.Infof("Completed update on %v", v.ID)
+				log.InfoD("Completed update on %v", v.ID)
 			}
 		}
 		// setIoPriority if IO priority is set to High then next iteration will be run with low.
@@ -4043,16 +4667,16 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 					UpdateOutcome(event, err)
 				}
 				if isPureVol {
-					logrus.Warningf(
-						"Autofs Trim is not supported for Pure DA volume: [%s]",
-						"Skipping autofs trim status on pure volumes", v.Name,
+					log.Warnf(
+						"Autofs Trim is not supported for Pure DA volume: [%s]. "+
+							"Skipping autofs trim status on pure volumes", v.Name,
 					)
 					continue
 				}
-				logrus.Infof("Getting info : %s", v.ID)
+				log.Infof("Getting info : %s", v.ID)
 				appVol, err := Inst().V.InspectVolume(v.ID)
 				if err != nil {
-					logrus.Errorf("Error inspecting volume: %v", err)
+					log.Errorf("Error inspecting volume: %v", err)
 				}
 				attachedNode := appVol.AttachedOn
 
@@ -4078,12 +4702,12 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 						UpdateOutcome(event, err)
 
 					} else {
-						logrus.Infof("Autofstrim status for volume %v, status: %v", v.ID, val.String())
+						log.InfoD("Autofstrim status for volume %v, status: %v", v.ID, val.String())
 
 					}
 				} else {
 					err = fmt.Errorf("autofstrim for volume %v not started", v.ID)
-					logrus.Errorf("Error: %v", err)
+					log.Errorf("Error: %v", err)
 					UpdateOutcome(event, err)
 				}
 
@@ -4095,12 +4719,11 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 }
 
 func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) string {
-
 	doExit := false
 	exitCount := 50
 
 	for !doExit {
-		logrus.Infof("Autofstrim for volume %v not started, retrying after 2 mins", volumeID)
+		log.Infof("Autofstrim for volume %v not started, retrying after 2 mins", volumeID)
 		time.Sleep(2 * time.Minute)
 		fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
 		if err != nil {
@@ -4117,14 +4740,14 @@ func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) stri
 		}
 		exitCount--
 	}
-
 	return ""
-
 }
 
 // TriggerTrashcan enables trashcan feature in the PX Cluster and validates it
 func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(Trashcan)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -4138,22 +4761,29 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	context("Validate Trashcan feature of the volumes", func() {
-		if !isTrashcanEnabled {
 
-			Step("enable trashcan",
+	setMetrics(*event)
+
+	stepLog := "Validate Trashcan feature of the volumes"
+
+	context(stepLog, func() {
+		log.InfoD(stepLog)
+		if !isTrashcanEnabled {
+			stepLog = "enable trashcan"
+			Step(stepLog,
 				func() {
+					log.InfoD(stepLog)
 					currNode := node.GetWorkerNodes()[0]
 					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
 						"--volume-expiration-minutes": "600",
 					})
 					if err != nil {
 						err = fmt.Errorf("error while enabling trashcan, Error:%v", err)
-						logrus.Error(err)
+						log.Error(err.Error())
 						UpdateOutcome(event, err)
 
 					} else {
-						logrus.Info("Trashcan is successfully enabled")
+						log.InfoD("Trashcan is successfully enabled")
 						isTrashcanEnabled = true
 					}
 
@@ -4162,12 +4792,13 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 			var trashcanVols []string
 			var err error
 			node := node.GetWorkerNodes()[0]
-
-			Step("Validating trashcan",
+			stepLog = "Validating trashcan"
+			Step(stepLog,
 				func() {
+					log.InfoD(stepLog)
 					trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
 					if err != nil {
-						logrus.Infof("Error While getting trashcan volumes, Err %v", err)
+						log.InfoD("Error While getting trashcan volumes, Err %v", err)
 					}
 
 					if len(trashcanVols) == 0 {
@@ -4176,23 +4807,24 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 
 					}
 				})
-
-			Step("Validating trashcan restore",
+			stepLog = "Validating trashcan restore"
+			Step(stepLog,
 				func() {
+					log.InfoD(stepLog)
 					if len(trashcanVols) != 0 {
 						volToRestore := trashcanVols[len(trashcanVols)-1]
-						logrus.Infof("Restoring vol [%v] from trashcan", volToRestore)
+						log.InfoD("Restoring vol [%v] from trashcan", volToRestore)
 						volName := fmt.Sprintf("%s-res", volToRestore[len(volToRestore)-4:])
 						pxctlCmdFull := fmt.Sprintf("v r %s --trashcan %s", volName, volToRestore)
 						output, err := Inst().V.GetPxctlCmdOutput(node, pxctlCmdFull)
 						if err == nil {
-							logrus.Infof("output: %v", output)
+							log.InfoD("output: %v", output)
 							if !strings.Contains(output, fmt.Sprintf("Successfully restored: %s", volName)) {
 								err = fmt.Errorf("volume %v, restore from trashcan failed, Err: %v", volToRestore, output)
 								UpdateOutcome(event, err)
 							}
 						} else {
-							logrus.Infof("Error restoring: %v", err)
+							log.InfoD("Error restoring: %v", err)
 							UpdateOutcome(event, err)
 						}
 
@@ -4201,12 +4833,14 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 				})
 		}
 	})
-
+	updateMetrics(*event)
 }
 
 // TriggerRelaxedReclaim enables Relaxed Reclaim in the PX Cluster
 func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(RelaxedReclaim)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -4220,32 +4854,37 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	context("Validate Relaxed Reclaim of the volumes", func() {
+
+	setMetrics(*event)
+
+	stepLog := "Validate Relaxed Reclaim of the volumes"
+	context(stepLog, func() {
+		log.InfoD(stepLog)
 		if !isRelaxedReclaimEnabled {
-
-			Step("enable relaxed reclaim ",
+			stepLog = "enable relaxed reclaim "
+			Step(stepLog,
 				func() {
-
+					log.InfoD(stepLog)
 					currNode := node.GetWorkerNodes()[0]
 					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
 						"--relaxedreclaim-delete-seconds": "600",
 					})
 					if err != nil {
 						err = fmt.Errorf("error while enabling relaxed reclaim, Error:%v", err)
-						logrus.Error(err)
+						log.Error(err.Error())
 						UpdateOutcome(event, err)
 
 					} else {
-						logrus.Info("RelaxedReclaim is successfully enabled")
+						log.InfoD("RelaxedReclaim is successfully enabled")
 						isRelaxedReclaimEnabled = true
 					}
 
 				})
 		} else {
-
-			Step("Validating relaxed reclaim ",
+			stepLog = "Validating relaxed reclaim "
+			Step(stepLog,
 				func() {
-
+					log.InfoD(stepLog)
 					nodes := node.GetWorkerNodes()
 					totalDeleted := 0
 					totalPending := 0
@@ -4255,9 +4894,9 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 						nodeStatsMap, err := Inst().V.GetNodeStats(n)
 
 						if err != nil {
-							logrus.Errorf("error while getting node stats for node : %v, err: %v", n.Name, err)
+							log.Errorf("error while getting node stats for node : %v, err: %v", n.Name, err)
 						} else {
-							logrus.Infof("Node [%v] relaxed reclaim stats : %v", n.Name, nodeStatsMap[n.Name])
+							log.InfoD("Node [%v] relaxed reclaim stats : %v", n.Name, nodeStatsMap[n.Name])
 
 							totalDeleted += nodeStatsMap[n.Name]["deleted"]
 							totalPending += nodeStatsMap[n.Name]["pending"]
@@ -4275,12 +4914,14 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 				})
 		}
 	})
-
+	updateMetrics(*event)
 }
 
 // TriggerNodeDecommission decommission the node for the PX cluster
 func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(NodeDecommission)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -4295,22 +4936,26 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
 	var workerNodes []node.Node
 	var nodeToDecomm node.Node
-
-	Step("Decommission a random node", func() {
-
+	stepLog := "Decommission a random node"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		workerNodes = node.GetWorkerNodes()
 		index := rand.Intn(len(workerNodes))
 		nodeToDecomm = workerNodes[index]
-		Step(fmt.Sprintf("decommission node %s", nodeToDecomm.Name), func() {
+		stepLog = fmt.Sprintf("decommission node %s", nodeToDecomm.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			err := Inst().S.PrepareNodeToDecommission(nodeToDecomm, Inst().Provisioner)
 			if err != nil {
 				UpdateOutcome(event, err)
 			} else {
 				err = Inst().V.DecommissionNode(&nodeToDecomm)
 				if err != nil {
-					logrus.Infof("Error while decommissioning the node: %v, Error:%v", nodeToDecomm.Name, err)
+					log.InfoD("Error while decommissioning the node: %v, Error:%v", nodeToDecomm.Name, err)
 					UpdateOutcome(event, err)
 				}
 
@@ -4331,16 +4976,14 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			if err != nil {
 				UpdateOutcome(event, err)
 				err = Inst().V.RecoverNode(&nodeToDecomm)
-				logrus.Errorf("Error recovering node after failed decommission, Err: %v", err)
+				log.Errorf("Error recovering node after failed decommission, Err: %v", err)
 				UpdateOutcome(event, err)
 			} else {
-
 				decommissionedNode = nodeToDecomm
-
 			}
 
 		})
-
+		updateMetrics(*event)
 	})
 
 	for _, ctx := range *contexts {
@@ -4352,6 +4995,10 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
 				UpdateOutcome(event, err)
+				if strings.Contains(ctx.App.Key, fastpathAppName) {
+					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+					UpdateOutcome(event, err)
+				}
 			}
 		})
 	}
@@ -4360,6 +5007,8 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 // TriggerNodeRejoin rejoins the decommissioned node
 func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(NodeRejoin)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -4374,37 +5023,41 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
 	var decommissionedNodeName string
 
-	Step("Rejoin the node", func() {
-
+	stepLog := "Rejoin the node"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		if decommissionedNode.Name != "" {
 			decommissionedNodeName = decommissionedNode.Name
-
-			Step(fmt.Sprintf("Rejoin node %s", decommissionedNode.Name), func() {
+			stepLog = fmt.Sprintf("Rejoin node %s", decommissionedNode.Name)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				err := Inst().V.RejoinNode(&decommissionedNode)
 
 				if err != nil {
-					logrus.Infof("Error while rejoining the node. error: %v", err)
+					log.InfoD("Error while rejoining the node. error: %v", err)
 					UpdateOutcome(event, err)
 				} else {
 					isNodeExist := false
-					logrus.Info("Waiting for node to rejoin and refresh inventory")
+					log.InfoD("Waiting for node to rejoin and refresh inventory")
 					time.Sleep(90 * time.Second)
 					t := func() (interface{}, bool, error) {
 						err = Inst().S.RefreshNodeRegistry()
 						if err != nil {
-							logrus.Errorf("Error refreshing node registry, Error : %v", err)
+							log.Errorf("Error refreshing node registry, Error : %v", err)
 							return "", true, err
 						}
 						latestNodes, err := Inst().V.GetPxNodes()
 						if err != nil {
-							logrus.Errorf("Error getting px nodes, Error : %v", err)
+							log.Errorf("Error getting px nodes, Error : %v", err)
 							return "", true, err
 						}
 
 						for _, latestNode := range latestNodes {
-							logrus.Infof("Inspecting Node: %v", latestNode.Hostname)
+							log.InfoD("Inspecting Node: %v", latestNode.Hostname)
 							if latestNode.Hostname == decommissionedNode.Hostname {
 								isNodeExist = true
 								return "", false, nil
@@ -4416,20 +5069,15 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 
 					if !isNodeExist {
 						err = fmt.Errorf("node %v rejoin failed,Error: %v", decommissionedNode.Hostname, err)
-						logrus.Error(err)
+						log.Error(err.Error())
 						UpdateOutcome(event, err)
 					} else {
-						logrus.Infof("node %v rejoin is successful ", decommissionedNode.Hostname)
+						log.InfoD("node %v rejoin is successful ", decommissionedNode.Hostname)
 					}
-
 				}
-
 			})
-
 			decommissionedNode = node.Node{}
-
 		}
-
 	})
 
 	for _, ctx := range *contexts {
@@ -4444,14 +5092,15 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			}
 		})
 	}
-
+	updateMetrics(*event)
 }
 
 // TriggerCsiSnapShot takes csi snapshots of the volumes and validates snapshot
 func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	var err error
-
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CsiSnapShot)
 	uuid := GenerateUUID()
 	event := &EventRecord{
 		Event: Event{
@@ -4467,22 +5116,28 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
+	err = fmt.Errorf("Testing failure alerts")
+	UpdateOutcome(event, err)
 	// Keeping retainSnapCount
 	retainSnapCount := DefaultSnapshotRetainCount
-	Step("Create and Validate snapshots for FA DA volumes", func() {
+	stepLog := "Create and Validate snapshots for FA DA volumes"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		if !isCsiVolumeSnapshotClassExist {
-			logrus.Info("Creating csi volume snapshot class")
+			log.InfoD("Creating csi volume snapshot class")
 			snapShotClassName := PureSnapShotClass + time.Now().Format("01-02-15h04m05s")
 			if volSnapshotClass, err = Inst().S.CreateCsiSnapshotClass(snapShotClassName, "Delete"); err != nil {
-				logrus.Errorf("Create volume snapshot class failed with error: [%v]", err)
+				log.Errorf("Create volume snapshot class failed with error: [%v]", err)
 				UpdateOutcome(event, err)
 			}
-			logrus.Infof("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
+			log.InfoD("Successfully created volume snapshot class: %v", volSnapshotClass.Name)
 			isCsiVolumeSnapshotClassExist = true
 			summary, err := Inst().V.GetLicenseSummary()
 
 			if err != nil {
-				logrus.Errorf("Failed to get license summary.Error: %v", err)
+				log.Errorf("Failed to get license summary.Error: %v", err)
 				UpdateOutcome(event, err)
 			}
 
@@ -4491,42 +5146,46 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				retainSnapCount = 4
 
 			}
-			logrus.Infof("Cluster is having: [%v] license. Setting snap retain count to: [%v]", summary.SKU, retainSnapCount)
+			log.InfoD("Cluster is having: [%v] license. Setting snap retain count to: [%v]", summary.SKU, retainSnapCount)
 		}
 		for _, ctx := range *contexts {
 			var volumeSnapshotMap map[string]*v1beta1.VolumeSnapshot
 			var err error
-			Step(fmt.Sprintf("Deleting snapshots when retention count limit got exceeded for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("Deleting snapshots when retention count limit got exceeded for %s app", ctx.App.Key)
+			Step(stepLog, func() {
 				err = Inst().S.DeleteCsiSnapsForVolumes(ctx, retainSnapCount)
 				if err != nil {
-					logrus.Errorf("Snapshot delete is failing with error: [%v]", err)
+					log.Errorf("Snapshot delete is failing with error: [%v]", err)
 					UpdateOutcome(event, err)
 				}
 			})
-
-			Step(fmt.Sprintf("Creating snapshots for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("Creating snapshots for %s app", ctx.App.Key)
+			Step(stepLog, func() {
 				volumeSnapshotMap, err = Inst().S.CreateCsiSnapsForVolumes(ctx, volSnapshotClass.Name)
 				if err != nil {
-					logrus.Errorf("Creating volume snapshot failed with error: [%v]", err)
+					log.Errorf("Creating volume snapshot failed with error: [%v]", err)
 					UpdateOutcome(event, err)
 				}
 			})
-
-			Step(fmt.Sprintf("Validate snapshot for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("Validate snapshot for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				if err = Inst().S.ValidateCsiSnapshots(ctx, volumeSnapshotMap); err != nil {
-					logrus.Errorf("Validating volume snapshot failed with error: [%v]", err)
+					log.Errorf("Validating volume snapshot failed with error: [%v]", err)
 					UpdateOutcome(event, err)
 				}
-				logrus.Infof("Successfully validated the snapshot for %s app", ctx.App.Key)
+				log.InfoD("Successfully validated the snapshot for %s app", ctx.App.Key)
 			})
 		}
 	})
+	updateMetrics(*event)
 }
 
 // TriggerCsiSnapRestore create pvc from snapshot and validate the restored PVC
 func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CsiSnapRestore)
 	uuid := GenerateUUID()
 	event := &EventRecord{
 		Event: Event{
@@ -4542,19 +5201,22 @@ func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		*recordChan <- event
 	}()
 
-	var err error
+	setMetrics(*event)
 
-	Step("Restore the Snapshot and Validate the PVC", func() {
+	var err error
+	stepLog := "Restore the Snapshot and Validate the PVC"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		if !isCsiRestoreStorageClassExist {
 			var blockSc *storageapi.StorageClass
 			var param = make(map[string]string)
 			pureStorageClassMap = make(map[string]*storageapi.StorageClass)
-			logrus.Info("Creating csi volume snapshot class")
+			log.InfoD("Creating csi volume snapshot class")
 			blkScName := PureBlockStorageClass + time.Now().Format("01-02-15h04m05s")
 			// Adding a pure backend parameters
 			param[PureBackend] = k8s.PureBlock
 			if blockSc, err = createPureStorageClass(blkScName, param); err != nil {
-				logrus.Errorf("StorageClass creation failed for SC: %s", blkScName)
+				log.Errorf("StorageClass creation failed for SC: %s", blkScName)
 				UpdateOutcome(event, err)
 			}
 			pureStorageClassMap[k8s.PureBlock] = blockSc
@@ -4562,16 +5224,18 @@ func TriggerCsiSnapRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		}
 		for _, ctx := range *contexts {
 			//var volumePVCMap map[string]v1.PersistentVolumeClaim
-
-			Step(fmt.Sprintf("Restore and validate snapshot for %s app", ctx.App.Key), func() {
+			stepLog = fmt.Sprintf("Restore and validate snapshot for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				_, err = Inst().S.RestoreCsiSnapAndValidate(ctx, pureStorageClassMap)
 				if err != nil {
-					logrus.Errorf("Restoring snapshot failed with error: [%v]", err)
+					log.Errorf("Restoring snapshot failed with error: [%v]", err)
 					UpdateOutcome(event, err)
 				}
 			})
 		}
 	})
+	updateMetrics(*event)
 }
 
 func getPoolExpandPercentage(triggerType string) uint64 {
@@ -4637,34 +5301,28 @@ func getCloudSnapInterval(triggerType string) int {
 }
 
 func createLongevityJiraIssue(event *EventRecord, err error) {
-	logrus.Info("Creating Jira Issue")
 
 	actualEvent := strings.Split(event.Event.Type, "<br>")[0]
-
 	eventsGenerated, ok := jiraEvents[actualEvent]
 	issueExists := false
 	t := time.Now().Format(time.RFC1123)
 	if ok {
-		logrus.Infof("Event type [%v] exists", actualEvent)
+		log.Infof("Event type [%v] exists", actualEvent)
 
 		for _, e := range eventsGenerated {
 			iss := strings.Split(e, "->")[1]
 			if strings.Contains(iss, err.Error()) {
 				issueExists = true
 			}
-
 		}
-
 	} else {
-		logrus.Infof("Event type [%v] does not exists", actualEvent)
-
+		log.Infof("Event type [%v] does not exists", actualEvent)
 		errorsSlice := make([]string, 0)
-
 		jiraEvents[actualEvent] = errorsSlice
-
 	}
 
 	if !issueExists {
+		log.Info("Creating Jira Issue")
 
 		//adding issue to existing jiraEvents
 		issues := jiraEvents[actualEvent]
@@ -4701,6 +5359,8 @@ func createLongevityJiraIssue(event *EventRecord, err error) {
 // TriggerKVDBFailover performs kvdb failover in cyclic manner
 func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(KVDBFailover)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -4714,19 +5374,24 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
-	context("perform kvdb failover in a cyclic manner", func() {
-		Step("Get KVDB nodes and perform failover", func() {
+	setMetrics(*event)
+	stepLog := "perform kvdb failover in a cyclic manner"
+	context(stepLog, func() {
+		log.InfoD(stepLog)
+		stepLog = "Get KVDB nodes and perform failover"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			nodes := node.GetWorkerNodes()
 
 			kvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
 
 			if err != nil {
 				err = fmt.Errorf("error getting kvdb members using node %v. cause: %v", nodes[0].Name, err)
-				logrus.Info(err)
+				log.InfoD(err.Error())
 				UpdateOutcome(event, err)
 			}
 
-			logrus.Infof("Validating initial KVDB members")
+			log.InfoD("Validating initial KVDB members")
 
 			allhealthy := validateKVDBMembers(event, kvdbMembers, false)
 
@@ -4748,21 +5413,21 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 						newKvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
 						if err != nil {
 							err = fmt.Errorf("error getting kvdb members using node %v, cause: %v ", nodes[0].Name, err)
-							logrus.Error(err.Error())
+							log.Error(err.Error())
 
 						}
 						m, ok := newKvdbMembers[id]
 
 						if !ok && len(newKvdbMembers) > 0 {
-							logrus.Infof("node %v is no longer kvdb member", kvdbNode.Name)
+							log.InfoD("node %v is no longer kvdb member", kvdbNode.Name)
 							isKvdbStatusUpdated = true
 
 						}
 						if ok && !m.IsHealthy {
-							logrus.Infof("kvdb node %v isHealthy?: %v", id, m.IsHealthy)
+							log.InfoD("kvdb node %v isHealthy?: %v", id, m.IsHealthy)
 							isKvdbStatusUpdated = true
 						} else {
-							logrus.Infof("Waiting for kvdb node %v health status to update to false after PX is stopped", kvdbNode.Name)
+							log.InfoD("Waiting for kvdb node %v health status to update to false after PX is stopped", kvdbNode.Name)
 							time.Sleep(1 * time.Minute)
 						}
 
@@ -4770,7 +5435,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 					}
 					if err != nil {
-						logrus.Error(err)
+						log.Error(err.Error())
 						UpdateOutcome(event, err)
 
 					}
@@ -4782,15 +5447,15 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 						newKvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
 						if err != nil {
 							err = fmt.Errorf("error getting kvdb members using node %v, cause: %v ", nodes[0].Name, err)
-							logrus.Error(err.Error())
+							log.Error(err.Error())
 						}
 
 						_, ok := newKvdbMembers[id]
 						if ok {
-							logrus.Infof("Node %v still exist as a KVDB member. Waiting for failover to happen", kvdbNode.Name)
+							log.InfoD("Node %v still exist as a KVDB member. Waiting for failover to happen", kvdbNode.Name)
 							time.Sleep(2 * time.Minute)
 						} else {
-							logrus.Infof("node %v is no longer kvdb member", kvdbNode.Name)
+							log.InfoD("node %v is no longer kvdb member", kvdbNode.Name)
 							isKvdbMembersUpdated = true
 
 						}
@@ -4798,13 +5463,13 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 					}
 
 					if err != nil {
-						logrus.Error(err)
+						log.Error(err.Error())
 						UpdateOutcome(event, err)
 					}
 
 					newKvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
 					if err != nil {
-						logrus.Error(err)
+						log.Error(err.Error())
 						UpdateOutcome(event, err)
 					}
 					kvdbMemberStatus := validateKVDBMembers(event, newKvdbMembers, false)
@@ -4812,7 +5477,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 					errorChan = make(chan error, errorChannelSize)
 
 					if !kvdbMemberStatus {
-						logrus.Infof("Skipping remaining Kvdb node failovers as not all members are healthy")
+						log.InfoD("Skipping remaining Kvdb node failovers as not all members are healthy")
 						StartVolDriverAndWait([]node.Node{kvdbNode}, &errorChan)
 						for err = range errorChan {
 							UpdateOutcome(event, err)
@@ -4822,23 +5487,23 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 					StartVolDriverAndWait([]node.Node{kvdbNode}, &errorChan)
 					for err = range errorChan {
-						logrus.Infof("Error a")
 						UpdateOutcome(event, err)
 					}
 
 				}
 			} else {
 				err = fmt.Errorf("not all kvdb members are healthy")
-				logrus.Errorf(err.Error())
+				log.Errorf(err.Error())
 				UpdateOutcome(event, err)
 			}
 
 		})
 	})
+	updateMetrics(*event)
 }
 
 func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.MetadataNode, isDestuctive bool) bool {
-	logrus.Infof("Current KVDB members: %v", kvdbMembers)
+	log.InfoD("Current KVDB members: %v", kvdbMembers)
 
 	allHealthy := true
 
@@ -4853,12 +5518,12 @@ func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.Meta
 		if !m.IsHealthy {
 			err := fmt.Errorf("kvdb member node: %v is not healthy", id)
 			allHealthy = allHealthy && false
-			logrus.Warn(err.Error())
+			log.Warn(err.Error())
 			if isDestuctive {
 				UpdateOutcome(event, err)
 			}
 		} else {
-			logrus.Infof("KVDB member node %v is healthy", id)
+			log.InfoD("KVDB member node %v is healthy", id)
 		}
 	}
 
@@ -4869,6 +5534,8 @@ func validateKVDBMembers(event *EventRecord, kvdbMembers map[string]*volume.Meta
 // TriggerAppTasksDown performs app scale up and down according to chaos level
 func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AppTasksDown)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -4882,27 +5549,40 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 		*recordChan <- event
 	}()
 
+	setMetrics(*event)
+
 	chaosLevel := ChaosMap[AppTasksDown]
-	context("deletes all pods from a given app and validate if they recover", func() {
+	stepLog := "deletes all pods from a given app and validate if they recover"
+	context(stepLog, func() {
+		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			for i := 0; i < chaosLevel; i++ {
-				Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
+				stepLog = fmt.Sprintf("delete tasks for app: %s", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					err := Inst().S.DeleteTasks(ctx, nil)
+					if err != nil {
+						PrintDescribeContext(ctx)
+					}
 					UpdateOutcome(event, err)
 				})
-
-				Step("validate all apps after deletion", func() {
+				stepLog = "validate all apps after deletion"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					ctx.SkipVolumeValidation = true
 					ValidateContext(ctx)
 				})
 			}
 		}
 	})
+	updateMetrics(*event)
 }
 
 // TriggerValidateDeviceMapperCleanup validate device mapper device cleaned up for FA setup
 func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(ValidateDeviceMapper)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -4915,20 +5595,25 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	logrus.Infof("Validating the deviceMapper devices cleaned up or not")
-	Step("Match the devicemapper devices in each node if it matches the expected count or not ", func() {
+
+	setMetrics(*event)
+
+	log.InfoD("Validating the deviceMapper devices cleaned up or not")
+	stepLog := "Match the devicemapper devices in each node if it matches the expected count or not "
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		pureVolAttachedMap, err := Inst().V.GetNodePureVolumeAttachedCountMap()
 		if err != nil {
-			logrus.Error(err)
+			log.Error(err.Error())
 			UpdateOutcome(event, err)
 		}
 
 		for _, n := range node.GetWorkerNodes() {
-			logrus.Infof("Validating the node: %v", n.Name)
+			log.InfoD("Validating the node: %v", n.Name)
 			expectedDevMapperCount := 0
 			storageNode, err := Inst().V.GetPxNode(&n)
 			if err != nil {
-				logrus.Error(err)
+				log.Error(err.Error())
 				UpdateOutcome(event, err)
 			}
 
@@ -4937,24 +5622,27 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 				expectedDevMapperCount += pureVolAttachedMap[n.Name]
 				actualCount, err := Inst().N.GetDeviceMapperCount(n, defaultTimeout)
 				if err != nil {
-					logrus.Error(err)
+					log.Error(err.Error())
 					UpdateOutcome(event, err)
 				}
 				if int(math.Abs(float64(expectedDevMapperCount)-float64(actualCount))) > 1 || (expectedDevMapperCount == 0 && actualCount >= 1) || (actualCount == 0 && expectedDevMapperCount >= 1) {
 					err := fmt.Errorf("device count mismatch in node: %v. Expected device: %v, Found %v device",
 						n.Name, expectedDevMapperCount, actualCount)
-					logrus.Error(err)
+					log.Error(err)
 					UpdateOutcome(event, err)
 				}
-				logrus.Infof("Successfully validated the deviceMapper device cleaned up in a node: %v", n.Name)
+				log.InfoD("Successfully validated the deviceMapper device cleaned up in a node: %v", n.Name)
 			}
 		}
 	})
+	updateMetrics(*event)
 }
 
 // TriggerAddDrive performs add drive operation
 func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(AddDrive)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -4969,7 +5657,9 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		*recordChan <- event
 	}()
 
-	Step(fmt.Sprintf("Perform add drive on all the worker nodes"), func() {
+	setMetrics(*event)
+	stepLog := fmt.Sprintf("Perform add drive on all the worker nodes")
+	Step(stepLog, func() {
 
 		storageNodes := node.GetStorageNodes()
 
@@ -4984,6 +5674,7 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		}
 		if err == nil && !isCloudDrive {
 			for _, storageNode := range storageNodes {
+				log.InfoD("Get Block drives to add for node %s", storageNode.Name)
 				blockDrives, err := Inst().N.GetBlockDrives(storageNode, systemOpts)
 				UpdateOutcome(event, err)
 
@@ -4995,15 +5686,20 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 						break
 					}
 				}
+
 				err = Inst().V.AddBlockDrives(&storageNode, drvPaths)
 				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+					log.Warn(err.Error())
 					continue
 				}
+
 				UpdateOutcome(event, err)
 			}
 
 			for _, ctx := range *contexts {
-				Step(fmt.Sprintf("validating context after add drive on storage nodes"), func() {
+				stepLog = fmt.Sprintf("validating context after add drive on storage nodes")
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					errorChan := make(chan error, errorChannelSize)
 					ctx.SkipVolumeValidation = true
 					ValidateContext(ctx, &errorChan)
@@ -5015,12 +5711,12 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		}
 
 	})
-
+	updateMetrics(*event)
 }
 
 // TriggerAsyncDR triggers Async DR
 func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	logrus.Infof("Async DR triggered at: %v", time.Now())
+	log.Infof("Async DR triggered at: %v", time.Now())
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
@@ -5034,6 +5730,9 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
+
+	setMetrics(*event)
+
 	chaosLevel := ChaosMap[AsyncDR]
 	var (
 		migrationNamespaces   []string
@@ -5048,17 +5747,17 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
 		err := asyncdr.WriteKubeconfigToFiles()
 		if err != nil {
-			logrus.Errorf("Failed to write kubeconfig: %v", err)
+			log.Errorf("Failed to write kubeconfig: %v", err)
 		}
 
 		err = SetSourceKubeConfig()
 		if err != nil {
-			logrus.Errorf("Failed to Set source kubeconfig: %v", err)
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
 		}
 		UpdateOutcome(event, err)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
-			logrus.Infof("Task name %s\n", taskName)
+			log.Infof("Task name %s\n", taskName)
 			appContexts := ScheduleApplications(taskName)
 			*contexts = append(*contexts, appContexts...)
 			ValidateApplications(*contexts)
@@ -5074,12 +5773,12 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			})
 		}
 
-		logrus.Infof("Migration Namespaces: %v", migrationNamespaces)
+		log.Infof("Migration Namespaces: %v", migrationNamespaces)
 
 	})
 
 	time.Sleep(5 * time.Minute)
-	logrus.Info("Start migration")
+	log.Info("Start migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i)
@@ -5100,6 +5799,106 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			UpdateOutcome(event, err)
 		}
 	}
+	updateMetrics(*event)
+}
+
+// TriggerAsyncDRVolumeOnly triggers Async DR
+func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRVolumeOnly)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Volume Only Async DR triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppTasksDown,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[AsyncDRVolumeOnly]
+	var (
+		migrationNamespaces   []string
+		taskNamePrefix        = "async-dr-vol-only-mig"
+		allMigrations         []*storkapi.Migration
+		includeResourcesFlag  = false
+		startApplicationsFlag = false
+	)
+
+	Step(fmt.Sprintf("Deploy applications for volume-only migration, with frequency: %v", chaosLevel), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			log.Errorf("Failed to write kubeconfig: %v", err)
+		}
+
+		err = SetSourceKubeConfig()
+		if err != nil {
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
+		}
+		UpdateOutcome(event, err)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.InfoD("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
+			}
+			Step("Create cluster pair between source and destination clusters", func() {
+				// Set cluster context to cluster where torpedo is running
+				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+			})
+		}
+
+		log.InfoD("Volume-only Migration Namespaces: %v", migrationNamespaces)
+
+	})
+
+	time.Sleep(5 * time.Minute)
+	log.InfoD("Start volume only migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := migrationKey + fmt.Sprintf("%d", i)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+		} else {
+			allMigrations = append(allMigrations, currMig)
+		}
+	}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+		}
+		resp, get_mig_err := storkops.Instance().GetMigration(mig.Name, mig.Namespace)
+		if get_mig_err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to get migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, get_mig_err))
+		}
+		resourcesMigrated := resp.Status.Summary.NumberOfMigratedResources
+		if resourcesMigrated != 0 {
+			UpdateOutcome(event, fmt.Errorf("resources should not migrate in volumeonlymigration case, numberOfmigratedresources should %d, getting %d",
+				0, resourcesMigrated))
+		} else {
+			log.InfoD("Number of resources migrated in Volume Only migration should be 0, Resources migrated: %d", resourcesMigrated)
+		}
+	}
+	updateMetrics(*event)
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {
@@ -5107,14 +5906,14 @@ func prepareEmailBody(eventRecords emailData) (string, error) {
 	t := template.New("t").Funcs(templateFuncs)
 	t, err = t.Parse(htmlTemplate)
 	if err != nil {
-		logrus.Errorf("Cannot parse HTML template Err: %v", err)
+		log.Errorf("Cannot parse HTML template Err: %v", err)
 		return "", err
 	}
 	var buf []byte
 	buffer := bytes.NewBuffer(buf)
 	err = t.Execute(buffer, eventRecords)
 	if err != nil {
-		logrus.Errorf("Cannot generate body from values, Err: %v", err)
+		log.Errorf("Cannot generate body from values, Err: %v", err)
 		return "", err
 	}
 
@@ -5166,6 +5965,60 @@ func createPureStorageClass(name string, params map[string]string) (*storageapi.
 		return nil, fmt.Errorf("failed to create CsiSnapshot storage class: %s.Error: %v", name, err)
 	}
 	return sc, err
+}
+
+func setMetrics(event EventRecord) {
+	Inst().M.IncrementGaugeMetric(TestRunningState, event.Event.Type)
+	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
+	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
+}
+
+func updateMetrics(event EventRecord) {
+	Inst().M.IncrementCounterMetric(TestPassedCount, event.Event.Type)
+	Inst().M.DecrementGaugeMetric(TestRunningState, event.Event.Type)
+}
+
+func isPoolRebalanceEnabled(poolUUID string) bool {
+	if autoPilotLabelNode.Name != "" {
+		for _, pool := range autoPilotLabelNode.Pools {
+			if pool.Uuid == poolUUID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func getReblanceCoolOffPeriod(triggerType string) int {
+	var timePeriodInSeconds int
+
+	t := ChaosMap[triggerType]
+
+	baseInterval := 3600
+
+	switch t {
+	case 1:
+		timePeriodInSeconds = baseInterval
+	case 2:
+		timePeriodInSeconds = 3 * baseInterval
+	case 3:
+		timePeriodInSeconds = 6 * baseInterval
+	case 4:
+		timePeriodInSeconds = 9 * baseInterval
+	case 5:
+		timePeriodInSeconds = 12 * baseInterval
+	case 6:
+		timePeriodInSeconds = 15 * baseInterval
+	case 7:
+		timePeriodInSeconds = 18 * baseInterval
+	case 8:
+		timePeriodInSeconds = 21 * baseInterval
+	case 9:
+		timePeriodInSeconds = 24 * baseInterval
+	case 10:
+		timePeriodInSeconds = 30 * baseInterval
+	}
+	return timePeriodInSeconds
 }
 
 var htmlTemplate = `<!DOCTYPE html>
@@ -5272,7 +6125,7 @@ tbody tr:last-child {
 <script>
 $('#pxtable tr td').each(function(){
   var cellValue = $(this).html();
-  
+
     if (cellValue != "STATUS_OK") {
       $(this).css('background-color','red');
     }
