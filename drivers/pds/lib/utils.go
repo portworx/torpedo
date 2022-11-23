@@ -952,7 +952,7 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 	}
 
 	//TODO: Remove static sleep and verify the injected data
-	//time.Sleep(1 * time.Minute)
+	time.Sleep(1 * time.Minute)
 
 	return pod, nil
 }
