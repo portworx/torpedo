@@ -3,8 +3,6 @@ package log
 import (
 	"bytes"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"strings"
@@ -16,10 +14,6 @@ import (
 
 type colorizer func(...interface{}) string
 
-//type Logger struct {
-//	LogrusLogger *logrus.Logger
-//}
-
 var (
 	green    colorizer
 	yellow   colorizer
@@ -30,16 +24,13 @@ var (
 	plain    colorizer
 )
 
-var (
-	dash  *aetosutil.Dashboard
-	lock  = &sync.Mutex{}
-	tpLog *logrus.Logger
-)
+var log *logrus.Logger
+var lock = &sync.Mutex{}
 
 // We are logging to file, strip colors to make the output more readable
 var txtFormatter = &logrus.TextFormatter{DisableColors: true}
 
-// Hook to handle writing to local tpLog files.
+// Hook to handle writing to local log files.
 type Hook struct {
 	formatter logrus.Formatter
 }
@@ -52,7 +43,7 @@ func NewHook() *Hook {
 	return hook
 }
 
-// SetFormatter sets the tpLog formatter.
+// SetFormatter sets the log formatter.
 func (hook *Hook) SetFormatter(formatter logrus.Formatter) {
 	hook.formatter = formatter
 
@@ -137,63 +128,22 @@ func init() {
 	customFormatter.FullTimestamp = true
 }
 
-func New() *logrus.Logger {
-	logursLog := logrus.New()
-	logursLog.SetFormatter(&MyFormatter{})
-	logursLog.ReportCaller = true
-	logursLog.Out = io.MultiWriter(os.Stdout)
-	return logursLog
-}
-
 //GetLogInstance returns the logrus instance
 func GetLogInstance() *logrus.Logger {
-	if tpLog == nil {
+	if log == nil {
 		lock.Lock()
 		defer lock.Unlock()
-		if tpLog == nil {
-			tpLog = New()
+		if log == nil {
+			log = logrus.New()
+			log.SetFormatter(&MyFormatter{})
+			log.ReportCaller = true
+			log.Out = io.MultiWriter(os.Stdout)
 		}
 	}
-	return tpLog
-}
-
-func SetLoglevel(logLevel string) {
-	switch logLevel {
-	case "debug":
-		tpLog.Level = logrus.DebugLevel
-	case "info":
-		tpLog.Level = logrus.InfoLevel
-	case "error":
-		tpLog.Level = logrus.ErrorLevel
-	case "warn":
-		tpLog.Level = logrus.WarnLevel
-	case "trace":
-		tpLog.Level = logrus.TraceLevel
-	default:
-		tpLog.Level = logrus.DebugLevel
-
-	}
-}
-
-// SetTorpedoFileOutput adds output destination for logging
-func SetTorpedoFileOutput(logger *lumberjack.Logger) {
-	if logger != nil {
-		tpLog.Out = io.MultiWriter(tpLog.Out, logger)
-		tpLog.Infof("Log Dir: %s", logger.Filename)
-	}
-}
-
-// SetDefaultOutput  sets default output
-func SetDefaultOutput(logger *lumberjack.Logger) {
-	if logger != nil {
-		tpLog.Out = io.MultiWriter(os.Stdout, logger)
-	}
-
+	return log
 }
 
 type MyFormatter struct{}
-
-var Logger *logrus.Logger
 
 func (mf *MyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	var b *bytes.Buffer
@@ -212,90 +162,8 @@ func (mf *MyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		funcName = funcName[subIndex+1:]
 	}
 
-	b.WriteString(fmt.Sprintf("%s:[%s %s:#%d]  %s\n",
-		entry.Time.Format("2006-01-02 15:04:05 -0700"), level, fileName, entry.Caller.Line,
+	b.WriteString(fmt.Sprintf("%s:[%s %s::%s:%d]  %s\n",
+		entry.Time.Format("2006-01-02 15:04:05 -0700"), level, fileName, funcName, entry.Caller.Line,
 		entry.Message))
 	return b.Bytes(), nil
-}
-
-type AetosHook struct{}
-
-func NewAetosHook() *AetosHook {
-	return &AetosHook{}
-}
-
-func (l *AetosHook) Fire(entry *logrus.Entry) error {
-	if entry.Level == logrus.ErrorLevel {
-		dash.Errorf(entry.Message)
-	} else if entry.Level == logrus.WarnLevel {
-		dash.Warnf(entry.Message)
-	} else if entry.Level == logrus.FatalLevel {
-		dash.Fatal(entry.Message)
-	}
-	return nil
-}
-
-func (hook *AetosHook) Levels() []logrus.Level {
-	return []logrus.Level{logrus.WarnLevel, logrus.ErrorLevel, logrus.FatalLevel}
-}
-
-func Fatalf(format string, args ...interface{}) {
-	dash.Fatal(format, args...)
-	tpLog.Fatalf(format, args...)
-}
-
-func Errorf(format string, args ...interface{}) {
-	dash.Errorf(format, args...)
-	tpLog.Errorf(format, args...)
-}
-
-func Warnf(format string, args ...interface{}) {
-	dash.Warnf(format, args...)
-	tpLog.Warningf(format, args...)
-}
-
-func Infof(format string, args ...interface{}) {
-	tpLog.Infof(format, args...)
-}
-
-func InfoD(format string, args ...interface{}) {
-	dash.InfoD(format, args...)
-	tpLog.Infof(format, args...)
-}
-
-func Debugf(format string, args ...interface{}) {
-	tpLog.Debugf(format, args...)
-}
-
-func Error(args ...interface{}) {
-	dash.Error(fmt.Sprint(args...))
-	tpLog.Error(args...)
-}
-
-func Warn(args ...interface{}) {
-	dash.Warn(fmt.Sprint(args...))
-	tpLog.Warn(args...)
-}
-
-func Info(args ...interface{}) {
-	tpLog.Info(args...)
-}
-
-func Debug(args ...interface{}) {
-	tpLog.Debug(args...)
-}
-
-func Panicf(format string, args ...interface{}) {
-	tpLog.Panicf(format, args...)
-}
-
-func FailOnError(err error, description string, args ...interface{}) {
-	if err != nil {
-		Fatalf("%v. Err: %v", fmt.Sprintf(description, args...), err)
-	}
-}
-
-func init() {
-	tpLog = GetLogInstance()
-	dash = aetosutil.Get()
 }

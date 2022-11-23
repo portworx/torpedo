@@ -4280,12 +4280,34 @@ func mapToVolumeOptions(options map[string]bool) *scheduler.VolumeOptions {
 	}
 }
 
+type AetosHook struct{}
+
+func NewAetosHook() *AetosHook {
+	return &AetosHook{}
+}
+
+func (hook *AetosHook) Levels() []logrus.Level {
+	return []logrus.Level{logrus.InfoLevel, logrus.ErrorLevel, logrus.WarnLevel, logrus.FatalLevel}
+}
+
+func (l *AetosHook) Fire(entry *logrus.Entry) error {
+	if entry.Level == logrus.ErrorLevel {
+		dash.Errorf(entry.Message)
+	} else if entry.Level == logrus.WarnLevel {
+		dash.Warnf(entry.Message)
+	} else if entry.Level == logrus.FatalLevel {
+		dash.Fatal(entry.Message)
+	}
+	return nil
+}
+
 func init() {
+
 	logrus.SetLevel(logrus.InfoLevel)
 	logrus.StandardLogger().Hooks.Add(logInstance.NewHook())
 
 	// Add Aetos Hook
-	logrus.StandardLogger().Hooks.Add(logInstance.NewAetosHook())
+	logrus.StandardLogger().Hooks.Add(NewAetosHook())
 	logrus.SetOutput(os.Stdout)
 }
 
