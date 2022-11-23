@@ -1079,7 +1079,7 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 
 var _ = Describe("{RollingRebootNodes}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("RollingRebootNodes", "Reboot node(s) while the data services will be running", "", nil)
+		StartTorpedoTest("PDS: RollingRebootNodes", "Reboot node(s) while the data services will be running", nil, 0)
 	})
 
 	It("has to deploy data service and reboot node(s) while the data services will be running.", func() {
@@ -1088,15 +1088,15 @@ var _ = Describe("{RollingRebootNodes}", func() {
 				dash.Infof("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
+				dash.VerifyFatal(err, nil, "Verifying data service deployment.")
 
-				logrus.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
-				logrus.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
@@ -1115,17 +1115,17 @@ var _ = Describe("{RollingRebootNodes}", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Step("Validate Storage Configurations", func() {
-					logrus.Infof("data service deployed %v ", ds.Name)
+					log.Infof("data service deployed %v ", ds.Name)
 					dash.Infof("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					Expect(err).NotTo(HaveOccurred())
-					logrus.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					logrus.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					logrus.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					logrus.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					logrus.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					logrus.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					logrus.Infof("volume group %v ", storageOp.VolumeGroup)
+					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
+					log.Infof("volume group %v ", storageOp.VolumeGroup)
 
 					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
 					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
@@ -1153,7 +1153,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 						})
 						Expect(err).NotTo(HaveOccurred())
 
-						logrus.Infof("wait for node: %s to be back up", n.Name)
+						log.Infof("wait for node: %s to be back up", n.Name)
 						err = Inst().N.TestConnection(n, node.ConnectionOpts{
 							Timeout:         defaultTestConnectionTimeout,
 							TimeBeforeRetry: defaultWaitRebootRetry,
@@ -1164,16 +1164,6 @@ var _ = Describe("{RollingRebootNodes}", func() {
 						Expect(err).NotTo(HaveOccurred())
 					}
 
-				})
-
-				Step("get pods from pds-system namespace", func() {
-					podList, err := pdslib.GetPods("pds-system")
-					Expect(err).NotTo(HaveOccurred())
-
-					logrus.Info("PDS System Pods")
-					for _, pod := range podList.Items {
-						logrus.Infof("%v", pod.Name)
-					}
 				})
 
 				Step("Validate Deployments after pods are up", func() {

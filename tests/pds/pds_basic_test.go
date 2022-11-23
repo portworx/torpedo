@@ -55,6 +55,7 @@ var (
 	params                                  *pdslib.Parameter
 	isDeploymentsDeleted                    bool
 	dash                                    *aetosutil.Dashboard
+	log                                     *logrus.Logger
 )
 
 func TestDataService(t *testing.T) {
@@ -72,6 +73,7 @@ var _ = BeforeSuite(func() {
 		logrus.Infof("Initializing torpedo instance.")
 		InitInstance()
 		dash = Inst().Dash
+		log = Inst().Logger
 		dash.TestSetBegin(dash.TestSet)
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
 		params, err = pdslib.ReadParams(pdsparams)
