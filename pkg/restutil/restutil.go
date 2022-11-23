@@ -3,7 +3,6 @@ package restutil
 import (
 	"bytes"
 	"encoding/json"
-	logInstance "github.com/portworx/torpedo/pkg/log"
 	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
@@ -73,7 +72,6 @@ func validateURL(url string) error {
 }
 
 func getResponse(httpMethod, url string, payload interface{}, auth *Auth, headers map[string]string) ([]byte, int, error) {
-	log = logInstance.GetLogInstance()
 	var err error
 	err = validateURL(url)
 	if err != nil {
