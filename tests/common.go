@@ -4283,6 +4283,9 @@ func mapToVolumeOptions(options map[string]bool) *scheduler.VolumeOptions {
 func init() {
 	logrus.SetLevel(logrus.InfoLevel)
 	logrus.StandardLogger().Hooks.Add(logInstance.NewHook())
+
+	// Add Aetos Hook
+	logrus.StandardLogger().Hooks.Add(logInstance.NewAetosHook())
 	logrus.SetOutput(os.Stdout)
 }
 
