@@ -4302,7 +4302,6 @@ func (l *AetosHook) Fire(entry *logrus.Entry) error {
 }
 
 func init() {
-
 	logrus.SetLevel(logrus.InfoLevel)
 	logrus.StandardLogger().Hooks.Add(logInstance.NewHook())
 

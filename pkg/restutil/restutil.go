@@ -3,7 +3,7 @@ package restutil
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -21,8 +21,6 @@ type Auth struct {
 const (
 	defaultRestTimeOut = 10 * time.Second
 )
-
-var log *logrus.Logger
 
 //Get rest get call
 func Get(url string, auth *Auth, headers map[string]string) ([]byte, int, error) {
