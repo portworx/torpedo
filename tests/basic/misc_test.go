@@ -29,18 +29,18 @@ var _ = Describe("{SetupTeardown}", func() {
 	})
 	var contexts []*scheduler.Context
 
-	logrus.Info("This is info message")
-	logrus.Infof("This is info message")
-	logrus.Warning("This is warning message")
-	logrus.Warnf("This is Warnf message")
-	logrus.Warn("This is Warn message")
-	logrus.Errorf("This is Errorf message")
-	logrus.Error("This is Error message")
-	logrus.Errorln("this is Errorln message")
-	logrus.Fatalf("Fatal message")
-
 	It("has to setup, validate and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
+
+		logrus.Info("This is info message")
+		logrus.Infof("This is info message")
+		logrus.Warning("This is warning message")
+		logrus.Warnf("This is Warnf message")
+		logrus.Warn("This is Warn message")
+		logrus.Errorf("This is Errorf message")
+		logrus.Error("This is Error message")
+		logrus.Errorln("this is Errorln message")
+		logrus.Fatalf("Fatal message")
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-%d", i))...)
