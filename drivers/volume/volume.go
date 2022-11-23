@@ -2,6 +2,7 @@ package volume
 
 import (
 	"fmt"
+        "github.com/sirupsen/logrus"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -12,7 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
