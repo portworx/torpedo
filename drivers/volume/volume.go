@@ -2,7 +2,7 @@ package volume
 
 import (
 	"fmt"
-        "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
