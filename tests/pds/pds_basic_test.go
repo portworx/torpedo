@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/portworx/torpedo/pkg/log"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -79,6 +81,7 @@ var _ = BeforeSuite(func() {
 		infraParams := params.InfraToTest
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
+		log.Infof("DeploymentTargetID %v ", deploymentTargetID)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
