@@ -1,10 +1,11 @@
 package tests
 
 import (
-	"github.com/portworx/torpedo/pkg/aetosutil"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/aetosutil"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -53,6 +54,7 @@ var _ = BeforeSuite(func() {
 	dash = Inst().Dash
 	log.Infof("Init instance")
 	InitInstance()
+	SetClusterOptions()
 	dash.TestSetBegin(dash.TestSet)
 })
 

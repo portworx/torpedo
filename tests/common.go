@@ -4967,8 +4967,6 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
-	SetClusterOptions()
-
 }
 
 // SetClusterOptions to set px cluster options
