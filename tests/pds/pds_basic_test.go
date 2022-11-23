@@ -11,7 +11,6 @@ import (
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -71,7 +70,7 @@ func TestDataService(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
-		dash.Infof("Initializing torpedo instance.")
+		dash.Info("Initializing torpedo instance.")
 		InitInstance()
 		dash = Inst().Dash
 		dash.TestSetBegin(dash.TestSet)
