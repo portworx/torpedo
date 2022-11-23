@@ -69,7 +69,7 @@ func TestDataService(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
-		log.Infof("Initializing torpedo instance.")
+		dash.Infof("Initializing torpedo instance.")
 		InitInstance()
 		dash = Inst().Dash
 		dash.TestSetBegin(dash.TestSet)

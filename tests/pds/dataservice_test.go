@@ -1084,7 +1084,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 	It("has to deploy data service and reboot node(s) while the data services will be running.", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				dash.Infof("Deploying DataService %v ", ds.Name)
+				log.Infof("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				dash.VerifyFatal(err, nil, "Verifying data service deployment.")
@@ -1115,7 +1115,6 @@ var _ = Describe("{RollingRebootNodes}", func() {
 
 				Step("Validate Storage Configurations", func() {
 					log.Infof("data service deployed %v ", ds.Name)
-					dash.Infof("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					Expect(err).NotTo(HaveOccurred())
 					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
@@ -1165,11 +1164,11 @@ var _ = Describe("{RollingRebootNodes}", func() {
 
 				})
 
-				Step("Validate Deployments after pods are up", func() {
-					dash.Info("Validate Deployments after pds pods are up")
+				Step("Validate Deployments after nodes are up", func() {
+					log.Info("Validate Deployments after nodes are up")
 					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
 					Expect(err).NotTo(HaveOccurred())
-					dash.Info("Deployments pods are up and healthy")
+					log.Info("Deployments pods are up and healthy")
 				})
 
 				Step("Delete the deployment", func() {
