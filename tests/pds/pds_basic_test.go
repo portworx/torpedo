@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"testing"
 
@@ -10,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -55,7 +55,6 @@ var (
 	params                                  *pdslib.Parameter
 	isDeploymentsDeleted                    bool
 	dash                                    *aetosutil.Dashboard
-	log                                     *logrus.Logger
 )
 
 func TestDataService(t *testing.T) {
@@ -70,10 +69,9 @@ func TestDataService(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
-		logrus.Infof("Initializing torpedo instance.")
+		log.Infof("Initializing torpedo instance.")
 		InitInstance()
 		dash = Inst().Dash
-		log = Inst().Logger
 		dash.TestSetBegin(dash.TestSet)
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
 		params, err = pdslib.ReadParams(pdsparams)
