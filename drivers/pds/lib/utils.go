@@ -646,6 +646,8 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 }
 
 // ValidateDataServiceDeployment checks if deployment is healthy and running
+// TODO: Add explicit timeout param and update the relevant tests implementing ValidateDataServiceDeployment func.
+// JIRA: PA-401
 func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace string) error {
 	var ss *v1.StatefulSet
 

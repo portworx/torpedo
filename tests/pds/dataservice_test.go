@@ -1139,6 +1139,9 @@ var _ = Describe("{RollingRebootNodes}", func() {
 					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
 				})
 
+				// TODO: Running workload for all datasevices
+				// JIRA: PA-403
+
 				Step("Reboot nodes", func() {
 					dash.Info("Rebooting all the nodes in rolling fashion.")
 					nodesToReboot := node.GetWorkerNodes()
