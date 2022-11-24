@@ -26,7 +26,7 @@ const (
 
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", "", nil)
+		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", nil, 0)
 	})
 
 	It("delete pds pods and validate if its coming back online and dataserices are not affected", func() {
@@ -125,7 +125,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 var _ = Describe("{ScaleUPDataServices}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("ScaleUPDataServices", "Deploys and Scales Up the dataservices", "", nil)
+		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
 	})
 
 	It("deploy Dataservices", func() {
@@ -288,7 +288,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 var _ = Describe("{UpgradeDataServiceVersion}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("UpgradeDataServiceVersion", "Upgrades the dataservice version", "", nil)
+		StartTorpedoTest("UpgradeDataServiceVersion", "Upgrades the dataservice version", nil, 0)
 	})
 
 	It("runs the dataservice version upgrade test", func() {
@@ -304,7 +304,7 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 
 var _ = Describe("{UpgradeDataServiceImage}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("UpgradeDataServiceImage", "Upgrades the dataservice image", "", nil)
+		StartTorpedoTest("UpgradeDataServiceImage", "Upgrades the dataservice image", nil, 0)
 	})
 
 	It("runs the dataservice build image upgrade test", func() {
@@ -321,7 +321,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("DeployDataServicesOnDemand", "Deploys DataServices", "", nil)
+		StartTorpedoTest("DeployDataServicesOnDemand", "Deploys DataServices", nil, 0)
 	})
 
 	It("Deploy DataservicesOnDemand", func() {
@@ -631,7 +631,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 var _ = Describe("{DeployMultipleNamespaces}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("DeployMultipleNamespaces", "Create multiple namespaces and deploy all dataservices", "", nil)
+		StartTorpedoTest("DeployMultipleNamespaces", "Create multiple namespaces and deploy all dataservices", nil, 0)
 	})
 
 	It("creates multiple namespaces, deploys in each namespace", func() {
@@ -692,7 +692,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 
 var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("DeletePDSEnabledNamespace", "Create a namespace, deploy dataservices, delete the namespace and validate", "", nil)
+		StartTorpedoTest("DeletePDSEnabledNamespace", "Create a namespace, deploy dataservices, delete the namespace and validate", nil, 0)
 	})
 
 	It("Deploy Dataservices and delete namespace", func() {
@@ -822,7 +822,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 
 var _ = Describe("{RestartPXPods}", func() {
 	JustBeforeEach(func() {
-		dash.TestCaseBegin("RestartPXPods", "Deploy dataservice, stop px service on the nodes where the dataservice is deployed, validate", "", nil)
+		StartTorpedoTest("RestartPXPods", "Deploy dataservice, stop px service on the nodes where the dataservice is deployed, validate", nil, 0)
 	})
 
 	It("Deploy Dataservices", func() {
