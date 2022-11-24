@@ -1638,34 +1638,38 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			pxLabel := make(map[string]string)
 			pxLabel[labelNameKey] = defaultStorageProvisioner
 			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			log.FailOnError(err, "Failed to get portworx pod restart count")
+			//Using fatal verification will abort longevity runs
+			if err != nil {
+				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+			}
 
 			// Validate portworx pod restart count after test
 			for pod, value := range pxPodRestartCountMap {
 				n, err := node.GetNodeByIP(pod.Status.HostIP)
 				log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
 				if n.PxPodRestartCount != value {
-					log.Errorf("Portworx pods restart many times in a node: [%s]", n.Name)
+					dash.VerifySafely(value, n.PxPodRestartCount, fmt.Sprintf("Portworx pods restart many times in a node: [%s]", n.Name))
 					if Inst().PortworxPodRestartCheck {
 						log.Fatalf("portworx pods restart [%d] times", value)
 					}
 				}
-				log.Infof("Portworx pods restart count: [%d] matching with expected count: [%d]", value, n.PxPodRestartCount)
 			}
 
 			// Validate portworx operator pod check
 			pxLabel[labelNameKey] = portworxOperatorName
 			pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			log.FailOnError(err, "Failed to get portworx operator pod restart count")
+			//Using fatal verification will abort longevity runs
+			if err != nil {
+				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+			}
 			for _, v := range pxPodRestartCountMap {
 				if v > 0 {
-					log.Errorf("Portworx operator pods restarted many times: [%d]", v)
+					dash.VerifySafely(v, 0, fmt.Sprintf("Portworx operator pods restarted many times: [%d]", v))
 					if Inst().PortworxPodRestartCheck {
 						log.Fatalf("portworx operator pods restart [%d] times", v)
 					}
 				}
 			}
-			log.Info("Portworx operator pod not restarted during this test")
 		})
 	})
 }
