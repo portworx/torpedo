@@ -3,15 +3,19 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/sirupsen/logrus"
 
 	state "net/http"
 
@@ -144,6 +148,7 @@ const (
 	defaultParams         = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap    = "pds-params"
 	configmapNamespace    = "default"
+	pdsSystemNamespace    = "pds-system"
 )
 
 // PDS vars
@@ -169,6 +174,7 @@ var (
 	appConfigTemplateID                   string
 	versionID                             string
 	imageID                               string
+	serviceAccId                          string
 	serviceType                           = "LoadBalancer"
 
 	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
@@ -186,20 +192,6 @@ var (
 func GetAndExpectStringEnvVar(varName string) string {
 	varValue := os.Getenv(varName)
 	return varValue
-}
-
-// GetAndExpectIntEnvVar parses an int from env variable.
-func GetAndExpectIntEnvVar(varName string) (int, error) {
-	varValue := GetAndExpectStringEnvVar(varName)
-	varIntValue, err := strconv.Atoi(varValue)
-	return varIntValue, err
-}
-
-// GetAndExpectBoolEnvVar parses a boolean from env variable.
-func GetAndExpectBoolEnvVar(varName string) (bool, error) {
-	varValue := GetAndExpectStringEnvVar(varName)
-	varBoolValue, err := strconv.ParseBool(varValue)
-	return varBoolValue, err
 }
 
 // SetupPDSTest returns few params required to run the test
@@ -267,11 +259,15 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 		return "", "", "", "", "", err
 	}
 
+	return tenantID, dnsZone, projectID, serviceType, clusterID, err
+}
+
+func GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
 	log.Info("Get the Target cluster details")
 	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 	if err != nil {
 		log.Errorf("Error while listing deployments %v", err)
-		return "", "", "", "", "", err
+		return "", err
 	}
 	if targetClusters == nil {
 		log.Fatalf("Target cluster passed is not available to the account/tenant %v", err)
@@ -279,11 +275,11 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	for i := 0; i < len(targetClusters); i++ {
 		if targetClusters[i].GetClusterId() == clusterID {
 			deploymentTargetID = targetClusters[i].GetId()
-			log.Infof("Deployment Target ID %v", deploymentTargetID)
+			log.Infof("deploymentTargetID %v", deploymentTargetID)
 			log.Infof("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
 		}
 	}
-	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
+	return deploymentTargetID, nil
 }
 
 // CheckNamespace checks if the namespace is available in the cluster and pds is enabled on it
@@ -1013,6 +1009,178 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 
 	}
 	return pod, dep, nil
+}
+
+func isReachbale(url string) (bool, error) {
+	timeout := time.Duration(15 * time.Second)
+	client := http.Client{
+		Timeout: timeout,
+	}
+	_, err := client.Get(url)
+	if err != nil {
+		logrus.Error(err.Error())
+		return false, err
+	}
+	return true, nil
+}
+
+func copyAndCapture(w io.Writer, r io.Reader) ([]byte, error) {
+	var out []byte
+	buf := make([]byte, 1024)
+	for {
+		n, err := r.Read(buf[:])
+		if n > 0 {
+			d := buf[:n]
+			out = append(out, d...)
+			_, err := w.Write(d)
+			if err != nil {
+				return out, err
+			}
+		}
+		if err != nil {
+			// Read returns io.EOF at the end of file, which is not an error for us
+			if err == io.EOF {
+				err = nil
+			}
+			return out, err
+		}
+	}
+}
+
+func ExecShellWithEnv(command string, envVars ...string) (string, string, error) {
+	var stout, sterr []byte
+	cmd := exec.Command("bash", "-c", command)
+	logrus.Infof("Command %s ", command)
+	cmd.Env = append(cmd.Env, envVars...)
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+	if err := cmd.Start(); err != nil {
+		logrus.Infof("Command %s failed to start. Cause: %v", command, err)
+		return "", "", err
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		stout, _ = copyAndCapture(os.Stdout, stdout)
+		wg.Done()
+	}()
+
+	sterr, _ = copyAndCapture(os.Stderr, stderr)
+
+	wg.Wait()
+
+	err := cmd.Wait()
+	return string(stout), string(sterr), err
+}
+
+// Function to execute local command
+func ExecShell(command string) (string, string, error) {
+	return ExecShellWithEnv(command)
+}
+
+func isLatestHelm() bool {
+	cmd := "helm ls --all -n pds-system | tail -n+2 | awk '{print $8}' "
+	output, _, err := ExecShell(cmd)
+	if err != nil {
+		logrus.Panic(err)
+	}
+	logrus.Infof("Helm chart status - %v", output)
+	return !strings.EqualFold(output, "pending-upgrade")
+
+}
+
+func RegisterToControlPlane(controlPlaneUrl, tenantId, clusterType string) error {
+	log.Info("Test control plane url connectivity.")
+	_, err := isReachbale(controlPlaneUrl)
+	if err != nil {
+		return fmt.Errorf("unable to reach the control plane with following error - %v", err)
+	}
+
+	helmChartversion, err := components.APIVersion.GetHelmChartVersion()
+	if err != nil {
+		log.Errorf("Error while getting helm version %v", helmChartversion)
+		return err
+	}
+
+	log.Info("listing service account")
+	listServiceAccounts, err := components.ServiceAccount.ListServiceAccounts(tenantId)
+	if err != nil {
+		return err
+	}
+	for _, acc := range listServiceAccounts {
+		log.Infof(*acc.Name)
+		if *acc.Name == "Default-AgentWriter" {
+			serviceAccId = *acc.Id
+		}
+	}
+
+	log.Info("getting service account token")
+	serviceAccToken, err := components.ServiceAccount.GetServiceAccountToken(serviceAccId)
+	if err != nil {
+		return err
+	}
+	bearerToken := *serviceAccToken.Token
+
+	var cmd string
+	apiEndpoint := fmt.Sprintf(controlPlaneUrl + "api")
+	log.Infof("Verify if the namespace %s already exits.", pdsSystemNamespace)
+	isRegistered := false
+	ns, err = k8sCore.GetNamespace(pdsSystemNamespace)
+	if err != nil {
+		log.Infof("Namespace %v doesnt exist ", pdsSystemNamespace)
+	} else {
+		pods, err := GetPods(pdsSystemNamespace)
+		if err != nil {
+			return err
+		}
+		if len(pods.Items) > 0 {
+			log.Warnf("Target cluster is already registered to control plane.")
+			cmd = "helm list -A "
+			if !isLatestHelm() {
+				log.Infof("Upgrading PDS helm chart from to %v", helmChartversion)
+
+				cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
+					"--set bearerToken=%s --set apiEndpoint=%s", pdsSystemNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
+			}
+			isRegistered = true
+		}
+	}
+	if !isRegistered {
+		log.Infof("Installing PDS ( helm version -  %v)", helmChartversion)
+		if strings.EqualFold(clusterType, "ocp") {
+			cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set platform=ocp --set tenantId=%s "+
+				"--set bearerToken=%s --set apiEndpoint=%s", pdsSystemNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
+		} else {
+			cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
+				"--set bearerToken=%s --set apiEndpoint=%s", pdsSystemNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
+		}
+		log.Infof("helm command %v ", cmd)
+	}
+	output, _, err := ExecShell(cmd)
+	if err != nil {
+		log.Warn("Kindly remove the PDS chart properly and retry. CMD>> helm uninstall  pds --namespace pds-system --kubeconfig $KUBECONFIG")
+		log.Error(err)
+		return err
+	}
+	log.Infof("Terminal output -> %v", output)
+
+	log.Infof("Verify the health of all the pods in %s namespace", pdsSystemNamespace)
+	err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
+		pods, err := GetPods(pdsSystemNamespace)
+		if err != nil {
+			return false, nil
+		}
+		log.Infof("There are %d pods present in the namespace %s", len(pods.Items), pdsSystemNamespace)
+		for _, pod := range pods.Items {
+			err = k8sCore.ValidatePod(&pod, 10*time.Second, 5*time.Second)
+			if err != nil {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	return err
 }
 
 func GetDataServiceID(ds string) string {

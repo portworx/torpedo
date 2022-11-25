@@ -36,6 +36,7 @@ var (
 	projectID                               string
 	serviceType                             string
 	deploymentTargetID                      string
+	clusterID                               string
 	replicas                                int32
 	err                                     error
 	supportedDataServices                   []string
@@ -70,18 +71,31 @@ func TestDataService(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
+		dash = Inst().Dash
 		dash.Info("Initializing torpedo instance.")
 		InitInstance()
-		dash = Inst().Dash
 		dash.TestSetBegin(dash.TestSet)
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
 		params, err = pdslib.ReadParams(pdsparams)
 		Expect(err).NotTo(HaveOccurred())
 		infraParams := params.InfraToTest
 
-		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
-		log.Infof("DeploymentTargetID %v ", deploymentTargetID)
+		dash.Info("Getting prerequisite for pds test")
+		tenantID, dnsZone, projectID, serviceType, clusterID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
+		dash.Infof("tenantID %v, projectID %v, serviceType %v, clusterID %v ", tenantID, projectID, serviceType, clusterID)
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Step("Check Target Cluster is registered to control", func() {
+		infraParams := params.InfraToTest
+		err = pdslib.RegisterToControlPlane(infraParams.ControlPlaneURL, tenantID, infraParams.ClusterType)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Step("Get Deployment TargetID", func() {
+		deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
+		Expect(err).NotTo(HaveOccurred())
+		dash.Infof("DeploymentTargetID %v ", deploymentTargetID)
 	})
 
 	Step("Get StorageTemplateID and Replicas", func() {
