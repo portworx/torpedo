@@ -73,7 +73,7 @@ var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
 		dash = Inst().Dash
 		dash.Info("Initializing torpedo instance.")
-		InitInstance()
+		//InitInstance()
 		dash.TestSetBegin(dash.TestSet)
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
 		params, err = pdslib.ReadParams(pdsparams)
