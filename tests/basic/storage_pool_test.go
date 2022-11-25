@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume"
 
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -81,6 +82,8 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 			if isjournal {
 				expectedSizeWithJournal = expectedSizeWithJournal - 3
 			}
+
+			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
 
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
@@ -170,6 +173,8 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 				expectedSizeWithJournal = expectedSizeWithJournal - 3
 			}
 
+			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
+
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
@@ -184,11 +189,98 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			log.FailOnError(err, "Failed to get pool using UUID ")
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
-			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
+			if newPoolSize >= expectedSizeWithJournal {
 				isExpansionSuccess = true
 			}
 			dash.VerifyFatal(isExpansionSuccess, true,
 				fmt.Sprintf("expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{StoragePoolExpandDiskAuto}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("StoragePoolExpandDiskAuto", "Validate storage pool expansion using auto option", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "has to schedule apps, and expand it by resizing a disk"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpandauto-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		var poolIDToResize string
+
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "Failed to list storage pools")
+		dash.VerifyFatal(len(pools) > 0, true, " Storage pools exist?")
+
+		// pick a random pool from a pools list and resize it
+		poolIDToResize = getRandomPoolID(pools)
+		dash.VerifyFatal(len(poolIDToResize) > 0, true, fmt.Sprintf("Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize))
+
+		poolToBeResized := pools[poolIDToResize]
+		dash.VerifyFatal(poolToBeResized != nil, true, "Pool to be resized exist?")
+
+		// px will put a new request in a queue, but in this case we can't calculate the expected size,
+		// so need to wain until the ongoing operation is completed
+		time.Sleep(time.Second * 60)
+		stepLog = "Verify that pool resize is non in progress"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if poolResizeIsInProgress(poolToBeResized) {
+				// wait until resize is completed and get the updated pool again
+				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
+				log.FailOnError(err, "Failed to get pool using UUID ")
+			}
+		})
+
+		var expectedSize uint64
+		var expectedSizeWithJournal uint64
+		stepLog = "Calculate expected pool size and trigger pool resize"
+		Step(stepLog, func() {
+			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
+
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			//To-Do Need to handle the case for multiple pools
+			expectedSizeWithJournal = expectedSize
+			if isjournal {
+				expectedSizeWithJournal = expectedSizeWithJournal - 3
+			}
+			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
+		})
+
+		stepLog = "Ensure that new pool has been expanded to the expected size"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+
+			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
+			log.FailOnError(err, "Failed to get pool using UUID ")
+			newPoolSize := resizedPool.TotalSize / units.GiB
+			isExpansionSuccess := false
+			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
+				isExpansionSuccess = true
+			}
+			dash.VerifyFatal(isExpansionSuccess, true, fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 
 		})
 	})
@@ -257,7 +349,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			if isjournal {
 				expectedSizeWithJournal = expectedSizeWithJournal - 3
 			}
-
+			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful ?")
 
@@ -352,7 +444,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 			if isjournal {
 				expectedSizeWithJournal = expectedSizeWithJournal - 3
 			}
-
+			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
@@ -483,6 +575,7 @@ func nodePoolsExpansion(testName string) {
 				if isjournal {
 					expectedSizeWithJournal = expectedSizeWithJournal - 3
 				}
+				log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
 				err = Inst().V.ExpandPool(poolToBeResized.Uuid, operation, expectedSize)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Pool %s expansion init succesful?", poolToBeResized.Uuid))
 			}
@@ -564,35 +657,14 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 		var err error
 		var nodeSelected node.Node
 		var pools map[string]*api.StoragePool
-		//waiting till one of the volume has enough IO and selecting pool and node  using the volume to run the test
-		var volSelected *api.Volume
-		f := func() (interface{}, bool, error) {
-			for _, ctx := range contexts {
-				vols, err := Inst().S.GetVolumes(ctx)
-				if err != nil {
-					return nil, true, err
-				}
-				for _, vol := range vols {
-					appVol, err := Inst().V.InspectVolume(vol.ID)
-					if err != nil {
-						return nil, true, err
-					}
-					usedBytes := appVol.GetUsage()
-					usedGiB := usedBytes / units.GiB
-					if usedGiB > 10 {
-						volSelected = appVol
-						return nil, false, nil
-					}
-				}
-			}
-			return nil, true, fmt.Errorf("error getting volume with size atleast 10 GiB used")
-		}
-		_, err = task.DoRetryWithTimeout(f, 15*time.Minute, retryTimeout)
+		var volSelected *volume.Volume
+		volSelected, err = getVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
-
 		log.Infof("%+v", volSelected)
-		attachedNodeID := volSelected.ReplicaSets[0].Nodes[0]
-		volumePools := volSelected.ReplicaSets[0].PoolUuids
+		rs, err := Inst().V.GetReplicaSets(volSelected)
+		log.FailOnError(err, fmt.Sprintf("error getting replica sets for vol %s", volSelected.Name))
+		attachedNodeID := rs[0].Nodes[0]
+		volumePools := rs[0].PoolUuids
 		for _, stNode := range stNodes {
 			if stNode.Id == attachedNodeID {
 				nodeSelected = stNode
@@ -842,9 +914,26 @@ func getRandomPoolID(pools map[string]*api.StoragePool) string {
 	return ""
 }
 
+func getRandomStorageNode(stNodes []node.Node) node.Node {
+	// pick a random pool from a pools list and resize it
+	randomIndex := rand.Intn(len(stNodes))
+	for _, stNode := range stNodes {
+		if randomIndex == 0 {
+			return stNode
+
+		}
+		randomIndex--
+	}
+	return node.Node{}
+}
+
 var _ = Describe("{PoolAddDrive}", func() {
+	var testrailID = 2017
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2017
+	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolAddDrive", "Initiate pool expansion using add-drive", nil, 0)
+		StartTorpedoTest("PoolAddDrive", "Initiate pool expansion using add-drive", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
 
@@ -862,22 +951,27 @@ var _ = Describe("{PoolAddDrive}", func() {
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
-		addCloudDrive(stNodes[0])
+		stNode := getRandomStorageNode(stNodes)
+		addCloudDrive(stNode)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
-var _ = Describe("{AddDriveAndRestart}", func() {
+var _ = Describe("{AddDriveAndPXRestart}", func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) Expand pool by adding cloud drives.
 	//4) Restart px service where the pool is present.
+	var testrailID = 2014
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2014
+	var runID int
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("AddDriveAndRestart", "Initiate pool expansion using add-drive and restart PX", nil, 0)
+		StartTorpedoTest("AddDriveAndPXRestart", "Initiate pool expansion using add-drive and restart PX", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
 
@@ -887,7 +981,7 @@ var _ = Describe("{AddDriveAndRestart}", func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddrive-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvrestrt-%d", i))...)
 		}
 		ValidateApplications(contexts)
 
@@ -895,7 +989,7 @@ var _ = Describe("{AddDriveAndRestart}", func() {
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
-		stNode := stNodes[0]
+		stNode := getRandomStorageNode(stNodes)
 		addCloudDrive(stNode)
 		stepLog = fmt.Sprintf("Restart PX on node %s", stNode.Name)
 		Step(stepLog, func() {
@@ -905,15 +999,170 @@ var _ = Describe("{AddDriveAndRestart}", func() {
 			err = Inst().V.WaitDriverUpOnNode(stNode, 2*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after restarting on node %s", stNode.Name))
-
 		})
 		ValidateApplications(contexts)
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		AfterEachTest(contexts)
+		AfterEachTest(contexts, testrailID, runID)
 	})
 
+})
+
+var _ = Describe("{AddDriveWithPXRestart}", func() {
+	//1) Deploy px with cloud drive.
+	//2) Create a volume on that pool and write some data on the volume.
+	//3) Expand pool by adding cloud drives.
+	//4) Restart px service where the pool expansion is in-progress
+	var testrailID = 50632
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50632
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDriveWithPXRestart", "Initiate pool expansion using add-drive and restart PX while it is in progress", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the existing storage node and expand the pool by adding a drive"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrst-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		stNodes := node.GetStorageNodes()
+		if len(stNodes) == 0 {
+			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
+		}
+		stNode := getRandomStorageNode(stNodes)
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+
+		deviceSpec := driveSpecs[0]
+		deviceSpecParams := strings.Split(deviceSpec, ",")
+		var specSize uint64
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				val := strings.Split(param, "=")[1]
+				specSize, err = strconv.ParseUint(val, 10, 64)
+				log.FailOnError(err, "Error converting size to uint64")
+			}
+		}
+
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "error getting pools list")
+		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+
+		var currentTotalPoolSize uint64
+
+		for _, pool := range pools {
+			currentTotalPoolSize += pool.GetTotalSize() / units.GiB
+		}
+
+		expectedTotalPoolSize := currentTotalPoolSize + specSize
+
+		stepLog := "Initiate add cloud drive and restart PX"
+		Step(stepLog, func() {
+			err = Inst().V.AddCloudDrive(&stNode, deviceSpec)
+			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
+			time.Sleep(3 * time.Second)
+			Inst().V.RestartDriver(stNode, nil)
+			log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", stNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(stNode, 2*time.Minute)
+			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
+			log.InfoD("Validate pool rebalance after drive add")
+			err = ValidatePoolRebalance()
+			log.FailOnError(err, "Pool re-balance failed")
+			dash.VerifyFatal(err == nil, true, "PX is up after add drive")
+
+			var newTotalPoolSize uint64
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "error getting pools list")
+			dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+			for _, pool := range pools {
+				newTotalPoolSize += pool.GetTotalSize() / units.GiB
+			}
+			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+		})
+		ValidateApplications(contexts)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
+
+var _ = Describe("{PoolAddDriveVolResize}", func() {
+	var testrailID = 2018
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2018
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolAddDriveVolResize", "pool expansion using add-drive and expanf volume to the pool", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the existing storage node and expand the pool by adding a drive"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddrive-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		stNodes := node.GetStorageNodes()
+		if len(stNodes) == 0 {
+			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
+		}
+		volSelected, err := getVolumeWithMinimumSize(contexts, 10)
+		log.FailOnError(err, "error identifying volume")
+		appVol, err := Inst().V.InspectVolume(volSelected.ID)
+		log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", volSelected.ID))
+		volNodes := appVol.ReplicaSets[0].Nodes
+		var stNode node.Node
+		for _, n := range stNodes {
+			nodeExist := false
+			for _, vn := range volNodes {
+				if n.Id == vn {
+					nodeExist = true
+				}
+			}
+			if !nodeExist {
+				stNode = n
+				break
+			}
+		}
+		addCloudDrive(stNode)
+		stepLog = "Expand volume to the expanded pool"
+		Step(stepLog, func() {
+			currRep, err := Inst().V.GetReplicationFactor(volSelected)
+			log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
+			opts := volume.Options{
+				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+			}
+			newRep := currRep
+			if currRep == 3 {
+				newRep = currRep - 1
+				err = Inst().V.SetReplicationFactor(volSelected, newRep, nil, true, opts)
+				log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+			}
+			log.InfoD(fmt.Sprintf("setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+			err = Inst().V.SetReplicationFactor(volSelected, newRep+1, []string{stNode.Id}, true, opts)
+			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep+1, volSelected.Name))
+			dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expanded successfully on node %s", volSelected.Name, stNode.Name))
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
 })
 
 func addCloudDrive(stNode node.Node) {
@@ -950,7 +1199,7 @@ func addCloudDrive(stNode node.Node) {
 		log.InfoD("Validate pool rebalance after drive add")
 		err = ValidatePoolRebalance()
 		log.FailOnError(err, "Pool re-balance failed")
-		err = Inst().V.WaitDriverUpOnNode(stNode, 2*time.Minute)
+		err = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute)
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 
 		dash.VerifyFatal(err == nil, true, "PX is up after add drive")
@@ -966,100 +1215,30 @@ func addCloudDrive(stNode node.Node) {
 		dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
 	})
 }
-
-var _ = Describe("{ResizeDiskAndRestart}", func() {
-	expandAndRestartPX("ResizeDiskAndRestart")
-})
-
-func expandAndRestartPX(testName string) {
-	var operation api.SdkStoragePool_ResizeOperationType
-	var option string
-	if testName == "ResizePoolAndRestart" {
-		operation = api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK
-		option = "resize-disk"
-	} else {
-		operation = api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
-		option = "add-disk"
-	}
-
-	JustBeforeEach(func() {
-		StartTorpedoTest(testName, fmt.Sprintf("Validate storage pool expansion using %s option and PX restart", option), nil, 0)
-	})
-
-	var contexts []*scheduler.Context
-	stepLog := fmt.Sprintf("has to schedule apps, and expand it by %s", option)
-	It(stepLog, func() {
-		dash.Info(stepLog)
-		contexts = make([]*scheduler.Context, 0)
-
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expandrestart-%s-%d", option, i))...)
+func getVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volume.Volume, error) {
+	var volSelected *volume.Volume
+	//waiting till one of the volume has enough IO and selecting pool and node  using the volume to run the test
+	f := func() (interface{}, bool, error) {
+		for _, ctx := range contexts {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				return nil, true, err
+			}
+			for _, vol := range vols {
+				appVol, err := Inst().V.InspectVolume(vol.ID)
+				if err != nil {
+					return nil, true, err
+				}
+				usedBytes := appVol.GetUsage()
+				usedGiB := usedBytes / units.GiB
+				if usedGiB > size {
+					volSelected = vol
+					return nil, false, nil
+				}
+			}
 		}
-
-		ValidateApplications(contexts)
-
-		stNodes := node.GetStorageNodes()
-		nodePoolToExpanded := stNodes[0]
-
-		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		dash.VerifyFatal(err, nil, "Validate list storage pools")
-		poolToBeResized := pools[nodePoolToExpanded.StoragePools[0].Uuid]
-
-		dash.VerifyFatal(poolToBeResized != nil, true, "Validate pools to be resized exist")
-
-		// px will put a new request in a queue, but in this case we can't calculate the expected size,
-		// so need to wait until the ongoing operation is completed
-		stepLog = "Verify that pool resize is none in progress"
-		Step(stepLog, func() {
-			dash.Info(stepLog)
-			poolIDToResize := poolToBeResized.Uuid
-			if poolResizeIsInProgress(poolToBeResized) {
-				// wait until resize is completed and get the updated pool again
-				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate get pool using UUID  %s", poolIDToResize))
-			}
-
-		})
-
-		var expectedSize uint64
-		var expectedSizeWithJournal uint64
-
-		isjournal, err := isJournalEnabled()
-		dash.VerifyFatal(err, nil, "Validate is journal enabled check")
-		stepLog = fmt.Sprintf("Calculate expected pool size and trigger pool resize for %s", nodePoolToExpanded.Name)
-		Step(stepLog, func() {
-
-			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
-
-			//To-Do Need to handle the case for multiple pools
-			expectedSizeWithJournal = expectedSize
-			if isjournal {
-				expectedSizeWithJournal = expectedSizeWithJournal - 3
-			}
-			err = Inst().V.ExpandPool(poolToBeResized.Uuid, operation, expectedSize)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate pool %s expansion init", poolToBeResized.Uuid))
-
-			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
-			expectedSizeWithJournal = expectedSize
-			if isjournal {
-				expectedSizeWithJournal = expectedSizeWithJournal - 3
-			}
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("expected new size to be '%d' or '%d', and error %s not not have occured", expectedSize, expectedSizeWithJournal, resizeErr))
-		})
-
-		stepLog = fmt.Sprintf("Restart PX on node %s after pool %s expansion using %s", nodePoolToExpanded.Name, poolToBeResized.Uuid, option)
-		Step(stepLog, func() {
-			dash.Info(stepLog)
-			err = Inst().V.RestartDriver(nodePoolToExpanded, nil)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate driver restart on node %s", nodePoolToExpanded.Name))
-			err = Inst().V.WaitDriverUpOnNode(nodePoolToExpanded, Inst().DriverStartTimeout)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate driver is up on node %s", nodePoolToExpanded.Name))
-			ValidateApplications(contexts)
-		})
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts)
-	})
-
+		return nil, true, fmt.Errorf("error getting volume with size atleast 10 GiB used")
+	}
+	_, err := task.DoRetryWithTimeout(f, 15*time.Minute, retryTimeout)
+	return volSelected, err
 }

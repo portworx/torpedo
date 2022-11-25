@@ -4911,7 +4911,7 @@ func ValidatePoolRebalance() error {
 					return nil, false, fmt.Errorf("Pool is failed state. Error: %s", expandedPool.LastOperation)
 				}
 				if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
-					if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") {
+					if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") || strings.Contains(expandedPool.LastOperation.Msg, "rebalance is running") {
 						if currentLastMsg == expandedPool.LastOperation.Msg {
 							return nil, false, fmt.Errorf("pool reblance is not progressing")
 						} else {
