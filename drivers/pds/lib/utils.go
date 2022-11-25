@@ -1124,7 +1124,7 @@ func RegisterToControlPlane(controlPlaneUrl, tenantId, clusterType string) error
 	}
 	bearerToken := *serviceAccToken.Token
 
-	ctx := GetAndExpectStringEnvVar("KUBECONFIG")
+	ctx := GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
 	target := tc.NewTargetCluster(ctx)
 	err = target.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantID, clusterType)
 

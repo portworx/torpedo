@@ -87,11 +87,11 @@ var _ = BeforeSuite(func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Step("Check Target Cluster is registered to control", func() {
-		infraParams := params.InfraToTest
-		err = pdslib.RegisterToControlPlane(infraParams.ControlPlaneURL, tenantID, infraParams.ClusterType)
-		Expect(err).NotTo(HaveOccurred())
-	})
+	// Step("Check Target Cluster is registered to control", func() {
+	// 	infraParams := params.InfraToTest
+	// 	err = pdslib.RegisterToControlPlane(infraParams.ControlPlaneURL, tenantID, infraParams.ClusterType)
+	// 	Expect(err).NotTo(HaveOccurred())
+	// })
 
 	Step("Get Deployment TargetID", func() {
 		deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
