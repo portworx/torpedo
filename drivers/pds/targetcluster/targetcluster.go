@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -31,7 +32,8 @@ const (
 	DefaultTimeout = 10 * time.Minute
 
 	// PDSNamespace PDS
-	PDSNamespace = "pds-system"
+	PDSNamespace       = "pds-system"
+	pdsSystemNamespace = "pds-system"
 )
 
 var (
@@ -47,35 +49,117 @@ type TargetCluster struct {
 	kubeconfig string
 }
 
-// RegisterToControlPlane register the target cluster to control plane.
-func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL string, helmChartversion string, bearerToken string, tenantID string, clusterType string) error {
-	log.Info("Test control plane url connectivity.")
-	_, err := isReachbale(controlPlaneURL)
+// GetPods returns the list of pods in namespace
+func GetPods(namespace string) (*corev1.PodList, error) {
+	k8sOps := k8sCore
+	podList, err := k8sOps.GetPods(namespace, nil)
 	if err != nil {
-		return fmt.Errorf("unable to reach the control plane with following error - %v", err)
+		return nil, err
 	}
-	var cmd string
-	apiEndpoint := fmt.Sprintf(controlPlaneURL + "/api")
-	log.Infof("Installing PDS ( helm version -  %v)", helmChartversion)
-	if strings.EqualFold(clusterType, "ocp") {
-		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set platform=ocp --set tenantId=%s "+
-			"--set bearerToken=%s --set apiEndpoint=%s --kubeconfig %s", PDSNamespace, helmChartversion, tenantID, bearerToken, apiEndpoint, targetCluster.kubeconfig)
-	} else {
-		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
-			"--set bearerToken=%s --set apiEndpoint=%s --kubeconfig %s", PDSNamespace, helmChartversion, tenantID, bearerToken, apiEndpoint, targetCluster.kubeconfig)
-	}
-	log.Info(cmd)
+	return podList, err
+}
+
+func isLatestHelm() bool {
+	cmd := "helm ls --all -n pds-system | tail -n+2 | awk '{print $8}' "
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
-		log.Info("Kindly remove the PDS chart properly and retry if that helps. CMD>> helm uninstall  pds --namespace pds-system --kubeconfig $KUBECONFIG")
+		log.Infof("err occured")
+	}
+	log.Infof("Helm chart status - %v", output)
+	return !strings.EqualFold(output, "pending-upgrade")
+}
+
+// RegisterToControlPlane register the target cluster to control plane.
+func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL string, helmChartversion string, bearerToken string, tenantId string, clusterType string) error {
+	var cmd string
+	apiEndpoint := fmt.Sprintf(controlPlaneURL + "api")
+	log.Infof("Verify if the namespace %s already exits.", pdsSystemNamespace)
+	isRegistered := false
+	_, err := k8sCore.GetNamespace(pdsSystemNamespace)
+	if err != nil {
+		log.Infof("Namespace %v doesnt exist ", pdsSystemNamespace)
+	} else {
+		pods, err := GetPods(pdsSystemNamespace)
+		if err != nil {
+			return err
+		}
+		if len(pods.Items) > 0 {
+			log.Warnf("Target cluster is already registered to control plane.")
+			cmd = "helm list -A "
+			if !isLatestHelm() {
+				log.Infof("Upgrading PDS helm chart from to %v", helmChartversion)
+
+				cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
+					"--set bearerToken=%s --set apiEndpoint=%s", pdsSystemNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
+			}
+			isRegistered = true
+		}
+	}
+	if !isRegistered {
+		log.Infof("Installing PDS ( helm version -  %v)", helmChartversion)
+		if strings.EqualFold(clusterType, "ocp") {
+			cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set platform=ocp --set tenantId=%s "+
+				"--set bearerToken=%s --set apiEndpoint=%s", pdsSystemNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
+		} else {
+			cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
+				"--set bearerToken=%s --set apiEndpoint=%s", pdsSystemNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
+		}
+		log.Infof("helm command %v ", cmd)
+	}
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		log.Warn("Kindly remove the PDS chart properly and retry. CMD>> helm uninstall  pds --namespace pds-system --kubeconfig $KUBECONFIG")
+		log.Error(err)
 		return err
 	}
 	log.Infof("Terminal output -> %v", output)
 
-	log.Info("Sleep for two minute.")
-	time.Sleep(time.Minute * 2)
-	err = targetCluster.ValidatePDSComponents()
+	log.Infof("Verify the health of all the pods in %s namespace", pdsSystemNamespace)
+	err = wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+		pods, err := GetPods(pdsSystemNamespace)
+		if err != nil {
+			return false, nil
+		}
+		log.Infof("There are %d pods present in the namespace %s", len(pods.Items), pdsSystemNamespace)
+		for _, pod := range pods.Items {
+			err = k8sCore.ValidatePod(&pod, 10*time.Second, 5*time.Second)
+			if err != nil {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+
+	// log.Info("Test control plane url connectivity.")
+	// _, err := isReachbale(controlPlaneURL)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to reach the control plane with following error - %v", err)
+	// }
+	// var cmd string
+	// apiEndpoint := fmt.Sprintf(controlPlaneURL + "/api")
+	// log.Infof("Installing PDS ( helm version -  %v)", helmChartversion)
+	// if strings.EqualFold(clusterType, "ocp") {
+	// 	cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set platform=ocp --set tenantId=%s "+
+	// 		"--set bearerToken=%s --set apiEndpoint=%s --kubeconfig %s", PDSNamespace, helmChartversion, tenantID, bearerToken, apiEndpoint, targetCluster.kubeconfig)
+	// } else {
+	// 	cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
+	// 		"--set bearerToken=%s --set apiEndpoint=%s --kubeconfig %s", PDSNamespace, helmChartversion, tenantID, bearerToken, apiEndpoint, targetCluster.kubeconfig)
+	// }
+	// log.Info(cmd)
+	// output, _, err := osutils.ExecShell(cmd)
+	// if err != nil {
+	// 	log.Info("Kindly remove the PDS chart properly and retry if that helps. CMD>> helm uninstall  pds --namespace pds-system --kubeconfig $KUBECONFIG")
+	// 	return err
+	// }
+	// log.Infof("Terminal output -> %v", output)
+
+	// log.Info("Sleep for two minute.")
+	// time.Sleep(time.Minute * 2)
+	// err = targetCluster.ValidatePDSComponents()
+	// return err
+
 	return err
+
 }
 
 // isReachbale verify if the control plane is accessable.
