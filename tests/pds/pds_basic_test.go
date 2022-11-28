@@ -56,9 +56,19 @@ var (
 	dep                                     *v1.Deployment
 	pod                                     *corev1.Pod
 	params                                  *pdslib.Parameter
-	isDeploymentsDeleted                    bool
 	dash                                    *aetosutil.Dashboard
 )
+
+//var ds struct
+var ds struct {
+	Name          string "json:\"Name\""
+	Version       string "json:\"Version\""
+	Image         string "json:\"Image\""
+	Replicas      int    "json:\"Replicas\""
+	ScaleReplicas int    "json:\"ScaleReplicas\""
+	OldVersion    string "json:\"OldVersion\""
+	OldImage      string "json:\"OldImage\""
+}
 
 func TestDataService(t *testing.T) {
 	RegisterFailHandler(Fail)
