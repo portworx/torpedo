@@ -10,6 +10,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
@@ -36,6 +37,7 @@ var (
 	projectID                               string
 	serviceType                             string
 	deploymentTargetID                      string
+	clusterID                               string
 	replicas                                int32
 	err                                     error
 	supportedDataServices                   []string
@@ -54,9 +56,19 @@ var (
 	dep                                     *v1.Deployment
 	pod                                     *corev1.Pod
 	params                                  *pdslib.Parameter
-	isDeploymentsDeleted                    bool
 	dash                                    *aetosutil.Dashboard
 )
+
+//var ds struct
+var ds struct {
+	Name          string "json:\"Name\""
+	Version       string "json:\"Version\""
+	Image         string "json:\"Image\""
+	Replicas      int    "json:\"Replicas\""
+	ScaleReplicas int    "json:\"ScaleReplicas\""
+	OldVersion    string "json:\"OldVersion\""
+	OldImage      string "json:\"OldImage\""
+}
 
 func TestDataService(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -70,18 +82,31 @@ func TestDataService(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
-		dash.Info("Initializing torpedo instance.")
-		InitInstance()
 		dash = Inst().Dash
+		dash.Info("Initializing torpedo instance.")
+		//InitInstance()
 		dash.TestSetBegin(dash.TestSet)
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
 		params, err = pdslib.ReadParams(pdsparams)
 		Expect(err).NotTo(HaveOccurred())
 		infraParams := params.InfraToTest
 
-		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
-		log.Infof("DeploymentTargetID %v ", deploymentTargetID)
+		dash.Info("Getting prerequisite for pds test")
+		tenantID, dnsZone, projectID, serviceType, clusterID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
+		dash.Infof("tenantID %v, projectID %v, serviceType %v, clusterID %v ", tenantID, projectID, serviceType, clusterID)
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	// Step("Check Target Cluster is registered to control", func() {
+	// 	infraParams := params.InfraToTest
+	// 	err = pdslib.RegisterToControlPlane(infraParams.ControlPlaneURL, tenantID, infraParams.ClusterType)
+	// 	Expect(err).NotTo(HaveOccurred())
+	// })
+
+	Step("Get Deployment TargetID", func() {
+		deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
+		Expect(err).NotTo(HaveOccurred())
+		dash.Infof("DeploymentTargetID %v ", deploymentTargetID)
 	})
 
 	Step("Get StorageTemplateID and Replicas", func() {
