@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
@@ -56,6 +57,7 @@ var (
 	params                                  *pdslib.Parameter
 	isDeploymentsDeleted                    bool
 	dash                                    *aetosutil.Dashboard
+	deployment                              *pds.ModelsDeployment
 )
 
 func TestDataService(t *testing.T) {
