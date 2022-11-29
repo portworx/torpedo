@@ -126,7 +126,7 @@ const (
 	appConfigTemplateName = "QaDefault"
 	defaultRetryInterval  = 10 * time.Minute
 	duration              = 900
-	timeOut               = 15 * time.Minute
+	timeOut               = 20 * time.Minute
 	timeInterval          = 10 * time.Second
 	maxtimeInterval       = 30 * time.Second
 	envDsVersion          = "DS_VERSION"
@@ -1097,7 +1097,7 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 	}
 	err = ValidateDataServiceDeployment(deployment, namespace)
 	if err != nil {
-		return nil, nil, nil, err
+		return deployment, nil, nil, err
 	}
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, nil
 }
