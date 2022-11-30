@@ -6,7 +6,7 @@ metadata:
 provisioner: kubernetes.io/portworx-volume
 parameters:
   {{ if .Repl }}
-  repl: "2"
+  repl: "{{ .Repl }}"
   {{ else }}
   repl: "3"{{ end }}
   priority_io: "high"
@@ -15,5 +15,5 @@ parameters:
   {{ else }}
   fs: "ext4"{{ end }}
   {{ if .AggregationLevel }}
-  aggregation_level: "2"{{ end }}
+  aggregation_level: "{{ .AggregationLevel }}"{{ end }}
 allowVolumeExpansion: true
