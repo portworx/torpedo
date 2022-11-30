@@ -154,7 +154,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
-				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.Infof("dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
@@ -171,15 +171,6 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					namespace,
 				)
 				Expect(err).NotTo(HaveOccurred())
-
-				defer func() {
-					if !isDeploymentsDeleted {
-						Step("Delete created deployments")
-						resp, err := pdslib.DeleteDeployment(deployment.GetId())
-						Expect(err).NotTo(HaveOccurred())
-						Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-					}
-				}()
 
 				Step("Validate Storage Configurations", func() {
 					log.Infof("data service deployed %v ", ds.Name)
@@ -632,9 +623,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			Expect(storageOp.Replicas).Should(Equal(int32(repl)))
 			Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
 			Expect(config.Spec.Nodes).Should(Equal(replicas))
-			for version, build := range dataServiceVersionBuildMap {
-				Expect(config.Spec.Version).Should(Equal(version + "-" + build[0]))
-			}
+			Expect(config.Spec.Version).Should(Equal(dsVersion + "-" + dsBuild))
 		})
 
 		Step("Delete Deployments", func() {
