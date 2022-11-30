@@ -139,7 +139,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 	It("deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper {
+				if ds.Name == zookeeper {
+					log.Warnf("Scaling of nodes is not supported for %v dataservice ", ds.Name)
 					continue
 				}
 				log.InfoD("Deploying DataService %v ", ds.Name)
@@ -1029,6 +1030,7 @@ var _ = Describe("{RestartPXPods}", func() {
 	})
 
 	JustAfterEach(func() {
+		//TODO: Write a wrapper method for defer func
 		defer func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
