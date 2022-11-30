@@ -952,7 +952,8 @@ var _ = Describe("{PoolAddDrive}", func() {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
 		stNode := getRandomStorageNode(stNodes)
-		addCloudDrive(stNode)
+		err := addCloudDrive(stNode)
+		log.FailOnError(err, "error adding cloud drive")
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -990,7 +991,8 @@ var _ = Describe("{AddDriveAndPXRestart}", func() {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
 		stNode := getRandomStorageNode(stNodes)
-		addCloudDrive(stNode)
+		err := addCloudDrive(stNode)
+		log.FailOnError(err, "error adding cloud drive")
 		stepLog = fmt.Sprintf("Restart PX on node %s", stNode.Name)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1067,6 +1069,7 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 
 		stepLog := "Initiate add cloud drive and restart PX"
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			err = Inst().V.AddCloudDrive(&stNode, deviceSpec)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
 			time.Sleep(3 * time.Second)
@@ -1102,7 +1105,7 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2018
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolAddDriveVolResize", "pool expansion using add-drive and expanf volume to the pool", nil, testrailID)
+		StartTorpedoTest("PoolAddDriveVolResize", "pool expansion using add-drive and expand volume to the pool", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -1139,9 +1142,11 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 				break
 			}
 		}
-		addCloudDrive(stNode)
+		err = addCloudDrive(stNode)
+		log.FailOnError(err, "error adding cloud drive")
 		stepLog = "Expand volume to the expanded pool"
 		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			currRep, err := Inst().V.GetReplicationFactor(volSelected)
 			log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
 			opts := volume.Options{
@@ -1165,10 +1170,68 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 	})
 })
 
-func addCloudDrive(stNode node.Node) {
-	driveSpecs, err := GetCloudDriveDeviceSpecs()
-	log.FailOnError(err, "Error getting cloud drive specs")
+var _ = Describe("{AddDriveMaintenanceMode}", func() {
+	var testrailID = 2013
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2013
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDriveMaintenanceMode", "pool expansion using add-drive when node is in maintenance mode", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
 
+	stepLog := "should get the existing storage node and put it in maintenance mode"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrvmnt-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		stNodes := node.GetStorageNodes()
+		if len(stNodes) == 0 {
+			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
+		}
+		stNode := getRandomStorageNode(stNodes)
+		err := Inst().V.EnterMaintenance(stNode)
+		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", stNode.Name))
+		status, err := Inst().V.GetNodeStatus(stNode)
+		log.Infof(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
+		stepLog = fmt.Sprintf("add cloud drive to the node %s", stNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = addCloudDrive(stNode)
+			if strings.Contains(err.Error(), "command terminated with exit code 1") {
+				dash.VerifySafely(true, true, "Add drive failed when node is in maintenance mode")
+			} else {
+				log.FailOnError(err, "add drive operation failed")
+			}
+		})
+		t := func() (interface{}, bool, error) {
+			if err := Inst().V.ExitMaintenance(stNode); err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+
+		_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
+		log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode in node %s", stNode.Name))
+		status, err = Inst().V.GetNodeStatus(stNode)
+		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+func addCloudDrive(stNode node.Node) error {
+	driveSpecs, err := GetCloudDriveDeviceSpecs()
+	if err != nil {
+		return fmt.Errorf("error getting cloud drive specs, err: %v", err)
+	}
 	deviceSpec := driveSpecs[0]
 	deviceSpecParams := strings.Split(deviceSpec, ",")
 	var specSize uint64
@@ -1176,12 +1239,16 @@ func addCloudDrive(stNode node.Node) {
 		if strings.Contains(param, "size") {
 			val := strings.Split(param, "=")[1]
 			specSize, err = strconv.ParseUint(val, 10, 64)
-			log.FailOnError(err, "Error converting size to uint64")
+			if err != nil {
+				return fmt.Errorf("error converting size to uint64, err: %v", err)
+			}
 		}
 	}
 
 	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-	log.FailOnError(err, "error getting pools list")
+	if err != nil {
+		return fmt.Errorf("error getting pools list, err: %v", err)
+	}
 	dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
 
 	var currentTotalPoolSize uint64
@@ -1192,28 +1259,34 @@ func addCloudDrive(stNode node.Node) {
 
 	expectedTotalPoolSize := currentTotalPoolSize + specSize
 
-	stepLog := "Initiate add cloud drive and validate"
-	Step(stepLog, func() {
-		err = Inst().V.AddCloudDrive(&stNode, deviceSpec)
-		log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
-		log.InfoD("Validate pool rebalance after drive add")
-		err = ValidatePoolRebalance()
-		log.FailOnError(err, "Pool re-balance failed")
-		err = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute)
-		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
+	log.InfoD("Initiate add cloud drive and validate")
+	err = Inst().V.AddCloudDrive(&stNode, deviceSpec)
+	if err != nil {
+		return fmt.Errorf("add cloud drive failed on node %s, err: %v", stNode.Name, err)
+	}
+	log.InfoD("Validate pool rebalance after drive add")
+	err = ValidatePoolRebalance()
+	if err != nil {
+		return fmt.Errorf("pool re-balance failed, err: %v", err)
+	}
+	err = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute)
+	if err != nil {
+		return fmt.Errorf("volume driver is down on node %s, err: %v", stNode.Name, err)
+	}
+	dash.VerifyFatal(err == nil, true, "PX is up after add drive")
 
-		dash.VerifyFatal(err == nil, true, "PX is up after add drive")
+	var newTotalPoolSize uint64
 
-		var newTotalPoolSize uint64
-
-		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		log.FailOnError(err, "error getting pools list")
-		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
-		for _, pool := range pools {
-			newTotalPoolSize += pool.GetTotalSize() / units.GiB
-		}
-		dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
-	})
+	pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools list, err: %v", err)
+	}
+	dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+	for _, pool := range pools {
+		newTotalPoolSize += pool.GetTotalSize() / units.GiB
+	}
+	dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+	return nil
 }
 func getVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volume.Volume, error) {
 	var volSelected *volume.Volume
