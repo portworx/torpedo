@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
+	"math/rand"
 	"net/http"
 	"regexp"
 
@@ -5143,4 +5144,53 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		count--
 	}
 	return createdVolIDs, nil
+}
+
+//GetPoolIDWithIOs returns the pools with IOs happening
+func GetPoolIDWithIOs(pools map[string]*opsapi.StoragePool) (string, error) {
+	// pick a  pool doing some IOs from a pools list
+	for _, pool := range pools {
+		currentUsedSize := pool.Used
+		time.Sleep(3 * time.Second)
+		updatedPool, err := GetStoragePoolByUUID(pool.Uuid)
+		if err != nil {
+			return "", err
+		}
+		newUsedSize := updatedPool.Used
+		if currentUsedSize != newUsedSize {
+			return pool.Uuid, nil
+		}
+	}
+	return "", fmt.Errorf("no pools have IOs running")
+}
+
+//GetRandomNodeWithPoolIOs returns node with IOs running
+func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
+	// pick a storage node with pool having IOs
+	for _, stNode := range stNodes {
+		pools := stNode.Pools
+		for _, pool := range pools {
+			time.Sleep(3 * time.Second)
+			updatedPool, err := GetStoragePoolByUUID(pool.Uuid)
+			if err != nil {
+				return node.Node{}, err
+			}
+			if pool.Used != updatedPool.Used {
+				return stNode, nil
+			}
+		}
+	}
+	return node.Node{}, fmt.Errorf("no node with IOs running identified")
+}
+
+func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
+	// pick a random storageless node
+	randomIndex := rand.Intn(len(slNodes))
+	for _, slNode := range slNodes {
+		if randomIndex == 0 {
+			return slNode
+		}
+		randomIndex--
+	}
+	return node.Node{}
 }
