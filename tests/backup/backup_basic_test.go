@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"testing"
 	"time"
@@ -10,7 +11,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -42,7 +42,7 @@ var (
 	post_rule_app  = []string{"cassandra"}
 	app_parameters = map[string]map[string]string{
 		"cassandra": {"pre_action_list": "nodetool flush -- keyspace1;", "post_action_list": "nodetool verify -- keyspace1;", "background": "false", "run_in_single_pod": "false"},
-		"postgres":  {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U '$POSTGRES_USER' -c 'CHECKPOINT';", "background": "false", "run_in_single_pod": "false"},
+		"postgres":  {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";", "background": "false", "run_in_single_pod": "false"},
 	}
 )
 
@@ -55,11 +55,9 @@ func TestBasic(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
 }
 
-var log *logrus.Logger
 var dash *aetosutil.Dashboard
 var _ = BeforeSuite(func() {
 	dash = Inst().Dash
-	log = Inst().Logger
 	log.Infof("Init instance")
 	InitInstance()
 	dash.TestSetBegin(dash.TestSet)

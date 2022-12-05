@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/osutils"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -73,7 +73,7 @@ func installPxcentral(centralOptions, lsOptions, monitorOptions *scheduler.Sched
 		context.ReadinessTimeout = centralAppReadinessTimeout
 
 		ValidateContext(context)
-		logrus.Infof("Successfully validated specs for px-central")
+		log.Infof("Successfully validated specs for px-central")
 	})
 
 	if lsOptions != nil {
@@ -91,7 +91,7 @@ func installPxcentral(centralOptions, lsOptions, monitorOptions *scheduler.Sched
 			Expect(err).NotTo(HaveOccurred())
 
 			ValidateContext(context)
-			logrus.Infof("Successfully validated specs for px-license-server")
+			log.Infof("Successfully validated specs for px-license-server")
 		})
 	}
 
@@ -107,7 +107,7 @@ func installPxcentral(centralOptions, lsOptions, monitorOptions *scheduler.Sched
 				endpointPort := serviceObj.Spec.Ports[0].NodePort
 
 				endpoint = fmt.Sprintf("%s:%v", endpointIP, endpointPort)
-				logrus.Infof("Got px-backup-ui endpoint: %s", endpoint)
+				log.Infof("Got px-backup-ui endpoint: %s", endpoint)
 			})
 
 			Step("Getting OIDC client secret", func() {
@@ -117,7 +117,7 @@ func installPxcentral(centralOptions, lsOptions, monitorOptions *scheduler.Sched
 				secretData, exist := secretObj.Data["OIDC_CLIENT_SECRET"]
 				Expect(exist).To(Equal(true))
 				oidcSecret = base64.StdEncoding.EncodeToString(secretData)
-				logrus.Infof("Got OIDC client secret: %s", oidcSecret)
+				log.Infof("Got OIDC client secret: %s", oidcSecret)
 			})
 
 			Step("Adding extra values to helm ConfigMap", func() {
@@ -129,7 +129,7 @@ func installPxcentral(centralOptions, lsOptions, monitorOptions *scheduler.Sched
 					oidcSecret)
 				configMap, err = core.Instance().UpdateConfigMap(configMap)
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("Got extra helm values for px-monitor: %s", configMap.Data[k8s.HelmExtraValues])
+				log.Infof("Got extra helm values for px-monitor: %s", configMap.Data[k8s.HelmExtraValues])
 			})
 
 			Step("Install px-monitor", func() {
@@ -137,7 +137,7 @@ func installPxcentral(centralOptions, lsOptions, monitorOptions *scheduler.Sched
 				Expect(err).NotTo(HaveOccurred())
 
 				ValidateContext(context)
-				logrus.Infof("Successfully validated specs for px-monitor")
+				log.Infof("Successfully validated specs for px-monitor")
 
 				// remove extra values in config map
 				if !configMutable {
@@ -168,7 +168,7 @@ func deleteAndWait(resource interface{}) error {
 		_, err := task.DoRetryWithTimeout(t, centralDefaultTimeout, centralDefaultRetryInterval)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("not found"))
-		logrus.Infof("namespace %s deleted", obj.Name)
+		log.Infof("namespace %s deleted", obj.Name)
 	} else if obj, ok := resource.(*batchv1.Job); ok {
 		t := func() (interface{}, bool, error) {
 			err := batch.Instance().DeleteJob(obj.Name, obj.Namespace)
@@ -182,7 +182,7 @@ func deleteAndWait(resource interface{}) error {
 		_, err := task.DoRetryWithTimeout(t, centralDefaultTimeout, centralDefaultRetryInterval)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("not found"))
-		logrus.Infof("job %s deleted", obj.Name)
+		log.Infof("job %s deleted", obj.Name)
 	} else {
 		return errors.New("resource type not implemented")
 	}
@@ -203,7 +203,7 @@ func destroyPxcentral(context *scheduler.Context) {
 		Expect(err).NotTo(HaveOccurred())
 	}
 
-	logrus.Infof("Successfully destroyed px-central")
+	log.Infof("Successfully destroyed px-central")
 }
 
 // All specs got deleted that would be validated during upgrade from 1.2.3+ to 1.3.0+
@@ -341,6 +341,9 @@ func annotateMonitor(context *scheduler.Context, releaseName string) {
 // This test performs basic test of installing px-central with helm
 // px-license-server and px-minotor will be installed after px-central is validated
 var _ = Describe("{InstallCentral}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("InstallCentral", "InstallCentral Test", nil, 0)
+	})
 	It("has to setup, validate and teardown apps", func() {
 		//var context *scheduler.Context
 
@@ -377,18 +380,24 @@ var _ = Describe("{InstallCentral}", func() {
 		//	Expect(err).NotTo(HaveOccurred())
 
 		//	ValidateContext(context)
-		//	logrus.Infof("Successfully uninstalled px-license-server and px-monitor")
+		//	log.Infof("Successfully uninstalled px-license-server and px-monitor")
 		//})
 
 		//Step("destroy apps", func() {
 		//	destroyPxcentral(context)
 		//})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 // This test installs px-central from release repo then upgrade using staging repo
 // testing 1.2.3 -> 1.3.0 multi charts to single chart upgrade
 var _ = Describe("{UpgradeCentralSingle}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeCentralSingle", "UpgradeCentralSingle Test", nil, 0)
+	})
 	It("has to setup, upgrade, validate and teardown apps", func() {
 		var context *scheduler.Context
 
@@ -481,16 +490,22 @@ var _ = Describe("{UpgradeCentralSingle}", func() {
 			configMap, err = core.Instance().UpdateConfigMap(configMap)
 			Expect(err).NotTo(HaveOccurred())
 
-			logrus.Infof("Successfully upgraded px-central to staging version")
+			log.Infof("Successfully upgraded px-central to staging version")
 		})
 
 		Step("destroy apps", func() {
 			destroyPxcentral(context)
 		})
 	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+	})
 })
 
 var _ = Describe("{InstallCentralWithoutBackup}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("InstallCentralWithoutBackup", "InstallCentralWithoutBackup Test", nil, 0)
+	})
 	It("has to setup, validate and teardown apps", func() {
 		var context *scheduler.Context
 
@@ -507,5 +522,8 @@ var _ = Describe("{InstallCentralWithoutBackup}", func() {
 		Step("destroy apps", func() {
 			destroyPxcentral(context)
 		})
+	})
+	JustBeforeEach(func() {
+		EndTorpedoTest()
 	})
 })

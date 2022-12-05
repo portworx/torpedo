@@ -439,6 +439,7 @@ spec:
             "--",
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
+            "--secure-apps", "$SECURE_APP_LIST",
             "--scheduler", "$SCHEDULER",
             "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
             "--backup-driver", "$BACKUP_DRIVER",
@@ -590,8 +591,6 @@ spec:
       value: "${PDS_PARAM_CM}"
     - name: PDS_ISSUER_URL
       value: "${PDS_ISSUER_URL}"
-    - name: PDS_PARAM_CM
-      value: "${PDS_PARAM_CM}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG

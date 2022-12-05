@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -76,6 +75,9 @@ type AppConfig struct {
 	CustomArgs           []string `yaml:"custom_args"`
 	StorageClassSharedv4 string   `yaml:"storage_class_sharedv4"`
 	PVCAccessMode        string   `yaml:"pvc_access_mode"`
+	Repl                 string   `yaml:"repl"`
+	Fs                   string   `yaml:"fs"`
+	AggregationLevel     string   `yaml:"aggregation_level"`
 }
 
 // InitOptions initialization options
@@ -109,9 +111,8 @@ type InitOptions struct {
 	PureSANType string
 	// RunCSISnapshotAndRestoreManyTest identifies if Pure clone many test is enabled
 	RunCSISnapshotAndRestoreManyTest bool
-
-	//Logger log the output
-	Logger *logrus.Logger
+	//SecureApps identifies apps to be deployed with secure annotation in storage class
+	SecureApps []string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

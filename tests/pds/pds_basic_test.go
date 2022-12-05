@@ -4,13 +4,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/portworx/torpedo/pkg/log"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -69,6 +70,7 @@ func TestDataService(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
+		//InitInstance()
 		dash = Inst().Dash
 		dash.TestSetBegin(dash.TestSet)
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
@@ -77,13 +79,14 @@ var _ = BeforeSuite(func() {
 		infraParams := params.InfraToTest
 
 		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
+		log.Infof("DeploymentTargetID %v ", deploymentTargetID)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Step("Get StorageTemplateID and Replicas", func() {
 		storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
 		Expect(err).NotTo(HaveOccurred())
-		logrus.Infof("storageTemplateID %v", storageTemplateID)
+		log.Infof("storageTemplateID %v", storageTemplateID)
 	})
 
 	Step("Create/Get Namespace and NamespaceID", func() {
