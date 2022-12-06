@@ -56,6 +56,7 @@ var (
 	pod                                     *corev1.Pod
 	params                                  *pdslib.Parameter
 	isDeploymentsDeleted                    bool
+	isNamespacesDeleted                     bool
 	dash                                    *aetosutil.Dashboard
 	deployment                              *pds.ModelsDeployment
 )

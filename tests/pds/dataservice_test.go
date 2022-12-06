@@ -665,13 +665,18 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 			Expect(err).NotTo(HaveOccurred())
 			namespaces = append(namespaces, ns)
 		}
+		isNamespacesDeleted = false
 
 		defer func() {
-			for _, namespace := range namespaces {
-				log.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
-				log.InfoD("Cleanup: Deleting created namespace %v", namespace.Name)
-				err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
-				Expect(err).NotTo(HaveOccurred())
+			if !isNamespacesDeleted {
+				Step("Delete created namespaces", func() {
+					for _, namespace := range namespaces {
+						log.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
+						log.InfoD("Cleanup: Deleting created namespace %v", namespace.Name)
+						err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
+						Expect(err).NotTo(HaveOccurred())
+					}
+				})
 			}
 		}()
 
@@ -701,6 +706,16 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 				}
 			})
 
+			Step("Delete created namespaces", func() {
+				for _, namespace := range namespaces {
+					log.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
+					log.InfoD("Cleanup: Deleting created namespace %v", namespace.Name)
+					err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
+					Expect(err).NotTo(HaveOccurred())
+				}
+				isNamespacesDeleted = true
+			})
+
 		})
 	})
 
@@ -719,6 +734,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 		nname := "test-namespace-0"
 		_, err := pdslib.CreateK8sPDSNamespace(nname)
 		Expect(err).NotTo(HaveOccurred())
+		isNamespacesDeleted = false
 		log.Infof("Created namespace: %v", nname)
 		log.InfoD("Created namespace: %v", nname)
 
@@ -811,6 +827,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			Step("Verify that the namespace was deleted", func() {
 				err := pdslib.ValidateK8sNamespaceDeleted(nname)
 				Expect(err).NotTo(HaveOccurred())
+				isNamespacesDeleted = true
 			})
 
 			Step("Verify created deployments have been deleted", func() {
@@ -832,6 +849,13 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			}
+		}()
+
+		defer func() {
+			if !isNamespacesDeleted {
+				err := pdslib.DeleteK8sPDSNamespace("test-namespace-0")
+				Expect(err).NotTo(HaveOccurred())
 			}
 		}()
 
