@@ -1534,9 +1534,8 @@ var _ = Describe("{PoolResizeMul}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizemul-%d", i))...)
 		}
-		//ValidateApplications(contexts)
+		ValidateApplications(contexts)
 
-		time.Sleep(1 * time.Minute)
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")

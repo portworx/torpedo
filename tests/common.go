@@ -3480,62 +3480,93 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					if !nExist {
 						newReplID = nID
 						newReplNode = node
-						break
+						poolsUsedSize, err := Inst().V.GetPoolsUsedSize(&newReplNode)
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
+						pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+						if err != nil {
+							UpdateOutcome(event, err)
+							return
+						}
+						for p, u := range poolsUsedSize {
+							listPool := pools[p]
+							usedSize, err := strconv.ParseUint(u, 10, 64)
+							if err != nil {
+								UpdateOutcome(event, err)
+								return
+							}
+							freeSize := listPool.TotalSize - usedSize
+							vol, err := Inst().V.InspectVolume(v.ID)
+							if err != nil {
+								UpdateOutcome(event, err)
+								return
+							}
+							if freeSize >= vol.Usage {
+								break
+							}
+						}
 					}
 				}
-				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
-					Inst().V.String(), ctx.App.Key, v)
-				Step(stepLog,
-					func() {
-						log.InfoD(stepLog)
-						if strings.Contains(ctx.App.Key, fastpathAppName) {
-							defer Inst().S.RemoveLabelOnNode(newReplNode, k8s.NodeType)
-							Inst().S.AddLabelOnNode(newReplNode, k8s.NodeType, k8s.FastpathNodeType)
+				if newReplID != "" {
 
-						}
-						log.InfoD("Increasing repl with target node  [%v]", newReplID)
-						err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
-						if err != nil {
-							log.Errorf("There is an error increasing repl [%v]", err.Error())
-							UpdateOutcome(event, err)
-						}
-					})
-
-				if err == nil {
-					stepLog = fmt.Sprintf("reboot target node %s while repl increase is in-progres",
-						newReplNode.Hostname)
+					stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+						Inst().V.String(), ctx.App.Key, v)
 					Step(stepLog,
 						func() {
 							log.InfoD(stepLog)
-							log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
-							time.Sleep(10 * time.Second)
-
-							err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
-								Force: true,
-								ConnectionOpts: node.ConnectionOpts{
-									Timeout:         1 * time.Minute,
-									TimeBeforeRetry: 5 * time.Second,
-								},
-							})
-							if err != nil {
-								log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
-								UpdateOutcome(event, err)
-							}
-
-							err = validateReplFactorUpdate(v, currRep+1)
-							if err != nil {
-								err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
-								log.Error(err)
-								UpdateOutcome(event, err)
-							} else {
-								dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
-							}
 							if strings.Contains(ctx.App.Key, fastpathAppName) {
-								err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+								defer Inst().S.RemoveLabelOnNode(newReplNode, k8s.NodeType)
+								Inst().S.AddLabelOnNode(newReplNode, k8s.NodeType, k8s.FastpathNodeType)
+
+							}
+							log.InfoD("Increasing repl with target node  [%v]", newReplID)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
+							if err != nil {
+								log.Errorf("There is an error increasing repl [%v]", err.Error())
 								UpdateOutcome(event, err)
-								err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
 							}
 						})
+
+					if err == nil {
+						stepLog = fmt.Sprintf("reboot target node %s while repl increase is in-progres",
+							newReplNode.Hostname)
+						Step(stepLog,
+							func() {
+								log.InfoD(stepLog)
+								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
+								time.Sleep(10 * time.Second)
+
+								err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
+									Force: true,
+									ConnectionOpts: node.ConnectionOpts{
+										Timeout:         1 * time.Minute,
+										TimeBeforeRetry: 5 * time.Second,
+									},
+								})
+								if err != nil {
+									log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+									UpdateOutcome(event, err)
+								}
+
+								err = validateReplFactorUpdate(v, currRep+1)
+								if err != nil {
+									err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
+									log.Error(err)
+									UpdateOutcome(event, err)
+								} else {
+									dash.VerifySafely(true, true, fmt.Sprintf("repl successfully increased to %d", currRep+1))
+								}
+								if strings.Contains(ctx.App.Key, fastpathAppName) {
+									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
+									UpdateOutcome(event, err)
+									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
+								}
+							})
+					}
+				} else {
+					UpdateOutcome(event, fmt.Errorf("no node identified to repl increase for vol: %s", v.Name))
 				}
 			} else {
 				log.Error(err)
