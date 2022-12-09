@@ -7,11 +7,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
+	"regexp"
+
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"regexp"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 
@@ -4969,37 +4970,37 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 }
 
 // SetClusterOptions to set px cluster options
-func SetClusterOptions(errChan ...*chan error) {
-	defer func() {
-		if len(errChan) > 0 {
-			close(*errChan[0])
-		}
-	}()
-	ginkgo.Describe(fmt.Sprintf("Enable cluster options on PX cluster"), func() {
-		nodes := node.GetWorkerNodes()
-		options, err := Inst().V.GetClusterOpts(nodes[0], []string{"AutoFstrim"})
-		Step(fmt.Sprintf("Enable Auto FSTrim"), func() {
-			if err != nil {
-				err = fmt.Errorf("AutoFS trim option not available, Error:%v", err)
-				processError(err, errChan...)
-			} else {
-				if options["AutoFstrim"] == "true" {
-					log.Info("Autofstrim already enabled.")
-				} else {
-					err := Inst().V.SetClusterOpts(nodes[0], map[string]string{
-						"--auto-fstrim": "on",
-					})
-					if err != nil {
-						err = fmt.Errorf("Error while enabling auto fstrim, Error:%v", err)
-						processError(err, errChan...)
-					} else {
-						log.Info("Autofstrim is enabled on the cluster.")
-					}
-				}
-			}
-		})
-	})
-}
+// func SetClusterOptions(errChan ...*chan error) {
+// 	defer func() {
+// 		if len(errChan) > 0 {
+// 			close(*errChan[0])
+// 		}
+// 	}()
+// 	ginkgo.Describe(fmt.Sprintf("Enable cluster options on PX cluster"), func() {
+// 		nodes := node.GetWorkerNodes()
+// 		options, err := Inst().V.GetClusterOpts(nodes[0], []string{"AutoFstrim"})
+// 		Step(fmt.Sprintf("Enable Auto FSTrim"), func() {
+// 			if err != nil {
+// 				err = fmt.Errorf("AutoFS trim option not available, Error:%v", err)
+// 				processError(err, errChan...)
+// 			} else {
+// 				if options["AutoFstrim"] == "true" {
+// 					log.Info("Autofstrim already enabled.")
+// 				} else {
+// 					err := Inst().V.SetClusterOpts(nodes[0], map[string]string{
+// 						"--auto-fstrim": "on",
+// 					})
+// 					if err != nil {
+// 						err = fmt.Errorf("Error while enabling auto fstrim, Error:%v", err)
+// 						processError(err, errChan...)
+// 					} else {
+// 						log.Info("Autofstrim is enabled on the cluster.")
+// 					}
+// 				}
+// 			}
+// 		})
+// 	})
+// }
 
 // EndTorpedoTest ends the logging for torpedo test
 func EndTorpedoTest() {
@@ -5090,7 +5091,7 @@ func RegisterBackupCluster(orgID string, cloud_name string, uid string) (api.Clu
 	clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
 	log.FailOnError(err, "Cluster Object nil")
 	clusterObj := clusterResp.GetCluster()
-  return clusterObj.Status.Status, clusterObj.Uid
+	return clusterObj.Status.Status, clusterObj.Uid
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
