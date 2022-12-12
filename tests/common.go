@@ -4969,38 +4969,25 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
 }
 
-// SetClusterOptions to set px cluster options
-// func SetClusterOptions(errChan ...*chan error) {
-// 	defer func() {
-// 		if len(errChan) > 0 {
-// 			close(*errChan[0])
-// 		}
-// 	}()
-// 	ginkgo.Describe(fmt.Sprintf("Enable cluster options on PX cluster"), func() {
-// 		nodes := node.GetWorkerNodes()
-// 		options, err := Inst().V.GetClusterOpts(nodes[0], []string{"AutoFstrim"})
-// 		Step(fmt.Sprintf("Enable Auto FSTrim"), func() {
-// 			if err != nil {
-// 				err = fmt.Errorf("AutoFS trim option not available, Error:%v", err)
-// 				processError(err, errChan...)
-// 			} else {
-// 				if options["AutoFstrim"] == "true" {
-// 					log.Info("Autofstrim already enabled.")
-// 				} else {
-// 					err := Inst().V.SetClusterOpts(nodes[0], map[string]string{
-// 						"--auto-fstrim": "on",
-// 					})
-// 					if err != nil {
-// 						err = fmt.Errorf("Error while enabling auto fstrim, Error:%v", err)
-// 						processError(err, errChan...)
-// 					} else {
-// 						log.Info("Autofstrim is enabled on the cluster.")
-// 					}
-// 				}
-// 			}
-// 		})
-// 	})
-// }
+// enableAutoFSTrim on supported PX version.
+func EnableAutoFSTrim() {
+	nodes := node.GetWorkerNodes()
+	pxVersion, err := Inst().V.GetPxVersionOnNode(nodes[0])
+	log.FailOnError(err, "Is autofstrim supported on the cluster ?")
+	log.Infof("PX version %s", pxVersion)
+	pxVersionList := []string{}
+	pxVersionList = strings.Split(pxVersion, ".")
+	majorVer, err := strconv.Atoi(pxVersionList[0])
+	minorVer, err := strconv.Atoi(pxVersionList[1])
+	if majorVer < 2 || (majorVer == 2 && minorVer < 10) {
+		log.Warnf("Auto FSTrim cannot be enabled on PX version %s", pxVersion)
+	} else {
+		err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
+			"--auto-fstrim": "on"})
+		log.FailOnError(err, "Autofstrim is enabled on the cluster ?")
+		log.Warnf("Auto FSTrim enabled on the cluster")
+	}
+}
 
 // EndTorpedoTest ends the logging for torpedo test
 func EndTorpedoTest() {

@@ -14,4 +14,4 @@ parameters:
   fs: {{ .Fs }}{{ end }}
   {{ if .AggregationLevel }}
   aggregation_level: "{{ .AggregationLevel }}"{{ end }}
-  allowVolumeExpansion: true
+allowVolumeExpansion: true

@@ -8,7 +8,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -53,10 +52,7 @@ var _ = BeforeSuite(func() {
 	log.Infof("Init instance")
 	InitInstance()
 	dash.TestSetBegin(dash.TestSet)
-	nodes := node.GetWorkerNodes()
-	err := Inst().V.SetClusterOpts(nodes[0], map[string]string{
-		"--auto-fstrim": "on"})
-	log.FailOnError(err, "Autofstrim is enabled on the cluster ?")
+	EnableAutoFSTrim()
 })
 
 var _ = AfterSuite(func() {
