@@ -1,6 +1,8 @@
 package tests
 
 import (
+        "github.com/portworx/torpedo/pkg/aetosutil"
+        "github.com/portworx/torpedo/pkg/log"
 	"os"
 	"testing"
 	"time"
@@ -8,8 +10,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
 

@@ -7,13 +7,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/http"
-	"regexp"
 
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
-
+	"net/http"
+	"regexp"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 
 	"google.golang.org/grpc/codes"
@@ -4985,7 +4984,7 @@ func EnableAutoFSTrim() {
 		err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
 			"--auto-fstrim": "on"})
 		log.FailOnError(err, "Autofstrim is enabled on the cluster ?")
-		log.Warnf("Auto FSTrim enabled on the cluster")
+		log.Infof("Auto FSTrim enabled on the cluster")
 	}
 }
 
