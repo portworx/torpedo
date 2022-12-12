@@ -27,6 +27,7 @@ const (
 	mysql                   = "MySQL"
 	kafka                   = "Kafka"
 	zookeeper               = "ZooKeeper"
+	mongodb                 = "MongoDB"
 )
 
 var (
