@@ -32,9 +32,9 @@ const (
 	PxVolumeUsagePercentMetric = "100 * (px_volume_usage_bytes / px_volume_capacity_bytes)"
 	// PxVolumeTotalCapacityMetric is metric for total volume capacity
 	PxVolumeTotalCapacityMetric = "px_volume_capacity_bytes / 1000000000"
-	//PXPoolProvisionedSpaceMetric is metric for pool provisioned space
+	// PXPoolProvisionedSpaceMetric is metric for pool provisioned space
 	PXPoolProvisionedSpaceMetric = "100 * (px_pool_stats_provisioned_bytes/ on (pool) px_pool_stats_total_bytes)"
-	//PXPoolUsedSpaceMetric is metric for pool used space
+	// PXPoolUsedSpaceMetric is metric for pool used space
 	PXPoolUsedSpaceMetric = "100 * (px_pool_stats_used_bytes/ on (pool) px_pool_stats_total_bytes)"
 	// RuleActionsScalePercentage is name for scale percentage rule action
 	RuleActionsScalePercentage = "scalepercentage"
@@ -261,6 +261,43 @@ func PoolRuleRebalanceByUsageMean(values []string, approvalRequired bool) apapi.
 	}
 	if approvalRequired {
 		apRuleObject.Spec.Enforcement = apapi.ApprovalRequired
+	}
+	return apRuleObject
+}
+
+// PVCRuleByTotalSizeApprovalRequired resizes volume by its total size and approval is required
+func PVCRuleByTotalSizeApprovalRequired(capacity int, scalePercentage int, maxSize string) apapi.AutopilotRule {
+	apRuleObject := apapi.AutopilotRule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: fmt.Sprintf("pvc-total-%d-scale-%d", capacity, scalePercentage),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			Enforcement: "approvalRequired",
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						Key:      PxVolumeTotalCapacityMetric,
+						Operator: apapi.LabelSelectorOpLt,
+						Values:   []string{fmt.Sprintf("%d", capacity)},
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: VolumeSpecAction,
+					Params: map[string]string{
+						RuleActionsScalePercentage: fmt.Sprintf("%d", scalePercentage),
+						RuleMaxSize:                maxSize,
+					},
+				},
+			},
+		},
+	}
+	if maxSize != "" {
+		apRuleObject.Name = fmt.Sprintf("%s-maxsize-%s", apRuleObject.Name, strings.ToLower(maxSize))
+		for _, action := range apRuleObject.Spec.Actions {
+			action.Params[RuleMaxSize] = maxSize
+		}
 	}
 	return apRuleObject
 }

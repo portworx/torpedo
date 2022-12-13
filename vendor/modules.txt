@@ -616,7 +616,9 @@ github.com/libopenstorage/operator/pkg/mock
 github.com/libopenstorage/operator/pkg/util
 github.com/libopenstorage/operator/pkg/util/test
 # github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
+github.com/libopenstorage/secrets
 github.com/libopenstorage/secrets/aws/credentials
+github.com/libopenstorage/secrets/k8s
 # github.com/libopenstorage/stork v1.4.1-0.20220414104250-3c18fd21ed95 => github.com/libopenstorage/stork v1.4.1-0.20220826160831-d630f1478d0e
 github.com/libopenstorage/stork/drivers
 github.com/libopenstorage/stork/drivers/volume
