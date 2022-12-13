@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 find_files() {
       find . -not \( \
