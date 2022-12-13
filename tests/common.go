@@ -5199,35 +5199,43 @@ func GetPoolIDWithIOs() (string, error) {
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
 func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 
-	poolsDataBfr, err := Inst().V.GetPoolsUsedSize(&stNode)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Printf("Node: %s\n", stNode.Name)
-	fmt.Printf("Before: %v\n", poolsDataBfr)
+	var selectedPool *opsapi.StoragePool
 
-	time.Sleep(5 * time.Second)
+	t := func() (interface{}, bool, error) {
+		poolsDataBfr, err := Inst().V.GetPoolsUsedSize(&stNode)
+		if err != nil {
+			return nil, false, err
+		}
 
-	poolsDataAfr, err := Inst().V.GetPoolsUsedSize(&stNode)
-	if err != nil {
-		return nil, err
-	}
+		time.Sleep(5 * time.Second)
 
-	fmt.Printf("After: %v\n", poolsDataAfr)
+		poolsDataAfr, err := Inst().V.GetPoolsUsedSize(&stNode)
+		if err != nil {
+			return nil, false, err
+		}
 
-	for k, v := range poolsDataBfr {
-		if v2, ok := poolsDataAfr[k]; ok {
-			if v2 != v {
-				selectedPool, err := GetStoragePoolByUUID(k)
-				if err != nil {
-					return nil, err
+		for k, v := range poolsDataBfr {
+			if v2, ok := poolsDataAfr[k]; ok {
+				if v2 != v {
+					selectedPool, err = GetStoragePoolByUUID(k)
+					if err != nil {
+						return nil, false, err
+					}
 				}
-				return selectedPool, nil
 			}
 		}
+		if selectedPool == nil {
+			return nil, true, fmt.Errorf("no pools have IOs running")
+		}
+
+		return nil, false, nil
 	}
 
-	return nil, fmt.Errorf("no pools have IOs running")
+	_, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultCmdTimeout)
+	if err != nil {
+		return nil, err
+	}
+	return selectedPool, nil
 }
 
 //GetRandomNodeWithPoolIOs returns node with IOs running

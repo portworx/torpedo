@@ -1590,7 +1590,7 @@ var _ = Describe("{PoolResizeMul}", func() {
 })
 
 var _ = Describe("{MultiDriveResizeDisk}", func() {
-	//Have 100GB of data written on the pools before resize
+	//Select Pool with multiple drives
 	//While IO is going onto repl=3 vols on all the pools on that system, Add drive to the pool using ""pxctl sv pool expand-u <uuid> -s <size> -o resize-disk"
 	var testrailID = 51266
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51266
@@ -1616,10 +1616,19 @@ var _ = Describe("{MultiDriveResizeDisk}", func() {
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
+		nodesWithMultiDrives := make([]node.Node, 0)
+		for _, n := range stNodes {
+			pxNode, err := Inst().V.GetPxNode(&n)
+			log.FailOnError(err, "Error getting PX node")
+			if len(pxNode.Disks) > 1 {
+				nodesWithMultiDrives = append(nodesWithMultiDrives, n)
+			}
+		}
+		dash.VerifyFatal(len(nodesWithMultiDrives) > 0, true, "nodes with multiple disks exist?")
 		var selectedNode node.Node
 		var err error
 		var selectedPool *api.StoragePool
-		for _, stNode := range stNodes {
+		for _, stNode := range nodesWithMultiDrives {
 			selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
 			if selectedPool != nil {
 				selectedNode = stNode
@@ -1627,18 +1636,8 @@ var _ = Describe("{MultiDriveResizeDisk}", func() {
 			}
 		}
 		log.FailOnError(err, "error identifying node to run test")
-		stepLog = fmt.Sprintf("Adding drive to the node %s and pool UUID: %s, Id:%d", selectedNode.Name, selectedPool.Uuid, selectedPool.ID)
-		Step(stepLog, func() {
-			err = addCloudDrive(selectedNode, selectedPool.ID)
-			log.FailOnError(err, "error adding cloud drive")
-		})
-		stepLog = fmt.Sprintf("Adding drive again to the node %s and pool UUID: %s, Id:%d", selectedNode.Name, selectedPool.Uuid, selectedPool.ID)
-		Step(stepLog, func() {
-			err = addCloudDrive(selectedNode, selectedPool.ID)
-			log.FailOnError(err, "error adding cloud drive")
-		})
 
-		stepLog = fmt.Sprintf("Expanding pool  on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
+		stepLog = fmt.Sprintf("Expanding pool  on node %s and pool UUID: %s using resize-disk", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
 			log.FailOnError(err, "Failed to get pool using UUID ")
@@ -1648,7 +1647,7 @@ var _ = Describe("{MultiDriveResizeDisk}", func() {
 			log.FailOnError(err, "Failed to check if Journal enabled")
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
