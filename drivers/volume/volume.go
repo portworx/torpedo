@@ -190,10 +190,10 @@ type Driver interface {
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 
-	//IsPxInstalled checks for Px to be installed on a node
+	// IsPxInstalled checks for Px to be installed on a node
 	IsPxInstalled(n node.Node) (bool, error)
 
-	//GetPxVersionOnNode get PXVersion on the given node
+	// GetPxVersionOnNode get PXVersion on the given node
 	GetPxVersionOnNode(n node.Node) (string, error)
 
 	// GetReplicationFactor returns the current replication factor of the volume.
@@ -202,7 +202,7 @@ type Driver interface {
 	// SetReplicationFactor sets the volume's replication factor to the passed param rf and nodes.
 	SetReplicationFactor(vol *Volume, rf int64, nodesToBeUpdated []string, waitForUpdateToFinish bool, opts ...Options) error
 
-	//WaitForReplicationToComplete waits for replication factor change to complete
+	// WaitForReplicationToComplete waits for replication factor change to complete
 	WaitForReplicationToComplete(vol *Volume, replFactor int64, replicationUpdateTimeout time.Duration) error
 
 	// GetMaxReplicationFactor returns the max supported repl factor of a volume
@@ -269,24 +269,24 @@ type Driver interface {
 	// GetLicenseSummary returns the activated license SKU and Features
 	GetLicenseSummary() (LicenseSummary, error)
 
-	//SetClusterOpts sets cluster options
+	// SetClusterOpts sets cluster options
 	SetClusterOpts(n node.Node, clusterOpts map[string]string) error
 
-	//SetClusterOptsWithConfirmation sets cluster options and confirm it
+	// SetClusterOptsWithConfirmation sets cluster options and confirm it
 	SetClusterOptsWithConfirmation(n node.Node, clusterOpts map[string]string) error
 
-	//SetClusterRunTimeOpts sets cluster run time options
+	// SetClusterRunTimeOpts sets cluster run time options
 	SetClusterRunTimeOpts(n node.Node, rtOpts map[string]string) error
 
-	//ToggleCallHome toggles Call-home
+	// ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
 
-	//UpdateIOPriority IO priority using pxctl command
+	// UpdateIOPriority IO priority using pxctl command
 	UpdateIOPriority(volumeName string, priorityType string) error
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
 
-	//IsOperatorBasedInstall returns if px is operator based
+	// IsOperatorBasedInstall returns if px is operator based
 	IsOperatorBasedInstall() (bool, error)
 
 	// RunSecretsLogin runs secrets login using pxctl
@@ -295,10 +295,10 @@ type Driver interface {
 	// GetStorageCluster returns the storageCluster object
 	GetStorageCluster() (*v1.StorageCluster, error)
 
-	//UpdateStorageClusterImage update storage cluster image version
+	// UpdateStorageClusterImage update storage cluster image version
 	UpdateStorageClusterImage(string) error
 
-	//GetPXStorageCluster returns portworx storage cluster
+	// GetPXStorageCluster returns portworx storage cluster
 	GetPXStorageCluster() (*v1.StorageCluster, error)
 
 	// ValidateStorageCluster validates all the storage cluster components
@@ -310,7 +310,7 @@ type Driver interface {
 	// ListStoragePools lists all existing storage pools
 	ListStoragePools(labelSelector metav1.LabelSelector) (map[string]*api.StoragePool, error)
 
-	//GetStorageSpec get the storage spec used to deploy portworx
+	// GetStorageSpec get the storage spec used to deploy portworx
 	GetStorageSpec() (*pxapi.StorageSpec, error)
 
 	// GetPxNode return api.StorageNode
@@ -320,7 +320,7 @@ type Driver interface {
 	GetStoragelessNodes() ([]*api.StorageNode, error)
 
 	// RecyclePXHost Recycle a node and validate the storageless node picked all it drives
-	//RecyclePXHost(*node.Node) error
+	// RecyclePXHost(*node.Node) error
 
 	// Contains check if StorageNode list conatins a give node or not
 	Contains([]*api.StorageNode, *api.StorageNode) bool
@@ -337,7 +337,7 @@ type Driver interface {
 	// WaitForPxPodsToBeUp waits for px pod to be up in given node
 	WaitForPxPodsToBeUp(n node.Node) error
 
-	//GetAutoFsTrimStatus get status of autofstrim
+	// GetAutoFsTrimStatus get status of autofstrim
 	GetAutoFsTrimStatus(pxEndpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error)
 
 	// GetPxctlCmdOutputConnectionOpts returns the command output run on the given node with ConnectionOpts and any error
@@ -352,7 +352,7 @@ type Driver interface {
 	// GetTrashCanVolumeIds returns the node stats of the given node and an error if any
 	GetTrashCanVolumeIds(n node.Node) ([]string, error)
 
-	//GetKvdbMembers returns KVDB memebers of the PX cluster
+	// GetKvdbMembers returns KVDB memebers of the PX cluster
 	GetKvdbMembers(n node.Node) (map[string]*MetadataNode, error)
 
 	// GetNodePureVolumeAttachedCountMap returns map of node name and count of pure volume attached on that node

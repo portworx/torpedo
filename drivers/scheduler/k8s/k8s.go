@@ -112,9 +112,9 @@ const (
 	PortworxStrict = "strict"
 	// CsiProvisioner is csi provisioner
 	CsiProvisioner = "pxd.portworx.com"
-	//NodeType for enabling specific features
+	// NodeType for enabling specific features
 	NodeType = "node-type"
-	//FastpathNodeType fsatpath node type value
+	// FastpathNodeType fsatpath node type value
 	FastpathNodeType = "fastpath"
 	// PxLabelNameKey is key for map
 	PxLabelNameKey = "name"
@@ -1539,7 +1539,7 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 	}
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
-		//secure-apps list is provided for which volumes should be encrypted
+		// secure-apps list is provided for which volumes should be encrypted
 		if len(k.secureApps) > 0 {
 			if k.isSecureEnabled(app.Key, k.secureApps) {
 

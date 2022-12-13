@@ -789,6 +789,60 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
+// ValidateVolumes is the ginkgo spec for validating volumes of a context
+func ValidateActionApproval(ctx *scheduler.Context, errChan ...*chan error) {
+	context("For validation of an app's volumes", func() {
+		var err error
+		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+				processError(err, errChan...)
+			}
+			volScaleFactor := 1
+			if len(vols) > 10 {
+				// Take into account the number of volumes in the app. More volumes will
+				// take longer to format if the backend storage has limited bandwidth. Even if the
+				// GlobalScaleFactor is 1, high number of volumes in a single app instance
+				// may slow things down.
+				volScaleFactor = len(vols) / 10
+				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
+			}
+			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
+			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			if err != nil {
+				processError(err, errChan...)
+			}
+		})
+
+		var vols map[string]map[string]string
+		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
+			vols, err = Inst().S.GetVolumeParameters(ctx)
+			if err != nil {
+				processError(err, errChan...)
+			}
+		})
+
+		for vol, params := range vols {
+			if Inst().ConfigMap != "" {
+				params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+				if err != nil {
+					processError(err, errChan...)
+				}
+			}
+			if ctx.RefreshStorageEndpoint {
+				params["refresh-endpoint"] = "true"
+			}
+			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
+				err = Inst().V.ValidateCreateVolume(vol, params)
+				if err != nil {
+					processError(err, errChan...)
+				}
+			})
+		}
+	})
+}
+
 // ValidatePureSnapshotsSDK is the ginkgo spec for validating Pure direct access volume snapshots using API for a context
 func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
@@ -1371,7 +1425,7 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
 		}
-		//if not hyper converged set up deploy apps only on storageless nodes
+		// if not hyper converged set up deploy apps only on storageless nodes
 		if !Inst().IsHyperConverged {
 			log.Infof("Scheduling apps only on storageless nodes")
 			storagelessNodes := node.GetStorageLessNodes()
@@ -1639,7 +1693,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			pxLabel := make(map[string]string)
 			pxLabel[labelNameKey] = defaultStorageProvisioner
 			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			//Using fatal verification will abort longevity runs
+			// Using fatal verification will abort longevity runs
 			if err != nil {
 				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
 			}
@@ -1659,7 +1713,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			// Validate portworx operator pod check
 			pxLabel[labelNameKey] = portworxOperatorName
 			pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			//Using fatal verification will abort longevity runs
+			// Using fatal verification will abort longevity runs
 			if err != nil {
 				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
 			}
@@ -1985,7 +2039,7 @@ func DeleteCloudCredential(name string, orgID string, cloudCredUID string) {
 			OrgId: orgID,
 			Uid:   cloudCredUID,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
+		// ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -2394,7 +2448,7 @@ func CreateBackupGetErr(backupName string, clusterName string, bLocation string,
 			Namespaces:     namespaces,
 			LabelSelectors: labelSelectors,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
+		// ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -2437,7 +2491,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				},
 			},
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
+		// ctx, err = backup.GetPxCentralAdminCtx()
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return
@@ -2472,7 +2526,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				Uid:  BackupLocationUID,
 			},
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
+		// ctx, err = backup.GetPxCentralAdminCtx()
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return
@@ -2570,7 +2624,7 @@ func GetBackupCreateRequest(backupName string, clusterName string, bLocation str
 
 // CreateBackupFromRequest creates a backup using a provided request
 func CreateBackupFromRequest(backupName string, orgID string, request *api.BackupCreateRequest) (err error) {
-	//ctx, err := backup.GetPxCentralAdminCtx()
+	// ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
@@ -2595,7 +2649,7 @@ func InspectBackup(backupName string) (bkpInspectResponse *api.BackupInspectResp
 			OrgId: OrgID,
 			Name:  backupName,
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
+		// ctx, err = backup.GetPxCentralAdminCtx()
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return
@@ -2617,7 +2671,7 @@ func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Durati
 		log.Infof("Enumerating backups")
 		bkpEnumerateReq := &api.BackupEnumerateRequest{
 			OrgId: OrgID}
-		//ctx, err := backup.GetPxCentralAdminCtx()
+		// ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return nil, true, err
@@ -2664,7 +2718,7 @@ func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpSc
 			Name:  backupScheduleNamePrefix + backupScheduleName,
 			Uid:   backupScheduleUID,
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
+		// ctx, err = backup.GetPxCentralAdminCtx()
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return
@@ -2711,7 +2765,7 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 
 // DeleteBackupAndDependencies deletes backup and dependent backups
 func DeleteBackupAndDependencies(backupName string, backupUID string, orgID string, clusterName string) error {
-	//ctx, err := backup.GetPxCentralAdminCtx()
+	// ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 
 	backupDeleteRequest := &api.BackupDeleteRequest{
@@ -2767,7 +2821,7 @@ func DeleteRestore(restoreName string, orgID string) {
 			OrgId: orgID,
 			Name:  restoreName,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
+		// ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -2788,9 +2842,9 @@ func SetupBackup(testName string) {
 	OrgID = "default"
 	BucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
 	CloudCredUID = uuid.New()
-	//cloudCredUID = "5a48be84-4f63-40ae-b7f1-4e4039ab7477"
+	// cloudCredUID = "5a48be84-4f63-40ae-b7f1-4e4039ab7477"
 	BackupLocationUID = uuid.New()
-	//backupLocationUID = "64d908e7-40cf-4c9e-a5cf-672e955fd0ca"
+	// backupLocationUID = "64d908e7-40cf-4c9e-a5cf-672e955fd0ca"
 
 	CreateBucket(provider, BucketName)
 	CreateOrganization(OrgID)
@@ -2811,14 +2865,14 @@ func DeleteBackup(backupName string, backupUID string, orgID string) {
 			OrgId: orgID,
 			Uid:   backupUID,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
+		// ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 				err))
 		backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 		// Best effort cleanup, dont fail test, if deletion fails
-		//expect(err).NotTo(haveOccurred(),
+		// expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to delete backup [%s] in org [%s]", backupName, orgID))
 		// TODO: validate createClusterResponse also
 	})
@@ -2839,7 +2893,7 @@ func DeleteCluster(name string, orgID string) {
 				err))
 		backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 		// Best effort cleanup, dont fail test, if deletion fails
-		//expect(err).NotTo(haveOccurred(),
+		// expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to delete cluster [%s] in org [%s]", name, orgID))
 	})
 }
@@ -2852,14 +2906,14 @@ func DeleteBackupLocation(name string, orgID string) {
 			Name:  name,
 			OrgId: orgID,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
+		// ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 				err))
 		backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
 		// Best effort cleanup, dont fail test, if deletion fails
-		//expect(err).NotTo(haveOccurred(),
+		// expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to delete backup location [%s] in org [%s]", name, orgID))
 		// TODO: validate createBackupLocationResponse also
 	})
@@ -2944,7 +2998,7 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
 			}
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
+		// ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -2995,7 +3049,7 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 					},
 				},
 			}
-			//ctx, err := backup.GetPxCentralAdminCtx()
+			// ctx, err := backup.GetPxCentralAdminCtx()
 			ctx, err := backup.GetAdminCtxFromSecret()
 			expect(err).NotTo(haveOccurred(),
 				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -3030,7 +3084,7 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 					},
 				},
 			}
-			//ctx, err := backup.GetPxCentralAdminCtx()
+			// ctx, err := backup.GetPxCentralAdminCtx()
 			ctx, err := backup.GetAdminCtxFromSecret()
 			expect(err).NotTo(haveOccurred(),
 				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -3050,9 +3104,9 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string) {
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
-	//inspReq := &api.CloudCredentialInspectRequest{Name: cloudCred, Uid: cloudCredUID, OrgId: orgID, IncludeSecrets: true}
-	//credCtx, err := backup.GetAdminCtxFromSecret()
-	//obj, err := backupDriver.InspectCloudCredential(credCtx, inspReq)
+	// inspReq := &api.CloudCredentialInspectRequest{Name: cloudCred, Uid: cloudCredUID, OrgId: orgID, IncludeSecrets: true}
+	// credCtx, err := backup.GetAdminCtxFromSecret()
+	// obj, err := backupDriver.InspectCloudCredential(credCtx, inspReq)
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -3080,7 +3134,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			},
 		},
 	}
-	//ctx, err := backup.GetPxCentralAdminCtx()
+	// ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -3113,7 +3167,7 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 			Type: api.BackupLocationInfo_Azure,
 		},
 	}
-	//ctx, err := backup.GetPxCentralAdminCtx()
+	// ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -3149,13 +3203,13 @@ func CreateOrganization(orgID string) {
 				Name: orgID,
 			},
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
+		// ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 				err))
 		_, err = backupDriver.CreateOrganization(ctx, req)
-		//expect(err).NotTo(haveOccurred(),
+		// expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to create organization [%s]. Error: [%v]",
 		//		orgID, err))
 	})
@@ -3187,7 +3241,7 @@ func UpdateScheduledBackup(schedulePolicyName, schedulePolicyUID string, Schedul
 				},
 			},
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
+		// ctx, err = backup.GetPxCentralAdminCtx()
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return
@@ -3453,7 +3507,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 				UpdateOutcome(event, err)
 				return
 			}
-			//if repl is 3 cannot increase repl for the volume
+			// if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
 				log.Warn(err)
@@ -3468,7 +3522,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 				var newReplID string
 				var newReplNode node.Node
 
-				//selecting the target node for repl increase
+				// selecting the target node for repl increase
 				for nID, node := range storageNodeMap {
 					nExist := false
 					for _, id := range replicaNodes {
@@ -3591,7 +3645,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 				return
 			}
 
-			//if repl is 3 cannot increase repl for the volume
+			// if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
 				log.Warn(err)
@@ -3622,7 +3676,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 							} else {
 								log.Info("Waiting for 10 seconds for re-sync to initialize before source nodes reboot")
 								time.Sleep(10 * time.Second)
-								//rebooting source nodes one by one
+								// rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
 									err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
@@ -3961,7 +4015,7 @@ func ParseFlags() {
 	var schedUpgradeHops string
 	var autopilotUpgradeImage string
 	var csiGenericDriverConfigMapName string
-	//dashboard fields
+	// dashboard fields
 	var user, testBranch, testProduct, testType, testDescription, testTags string
 	var testsetID int
 	var torpedoJobName string
@@ -4254,7 +4308,7 @@ func CreateLogger(filename string) *lumberjack.Logger {
 		Filename:   filePath,
 		MaxSize:    10, // megabytes
 		MaxBackups: 10,
-		MaxAge:     30,   //days
+		MaxAge:     30,   // days
 		Compress:   true, // disabled by default
 		LocalTime:  true,
 	}
@@ -4267,7 +4321,7 @@ func CreateLogger(filename string) *lumberjack.Logger {
 func CloseLogger(testLogger *lumberjack.Logger) {
 	if testLogger != nil {
 		testLogger.Close()
-		//Below steps are performed to remove current file from log output
+		// Below steps are performed to remove current file from log output
 		log.SetDefaultOutput(suiteLogger)
 	}
 

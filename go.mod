@@ -14,6 +14,7 @@ require (
 	github.com/fatih/color v1.13.0
 	github.com/frankban/quicktest v1.14.2 // indirect
 	github.com/gambol99/go-marathon v0.7.1
+	github.com/go-git/go-git/v5 v5.4.2
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-version v1.2.1
@@ -26,6 +27,7 @@ require (
 	github.com/libopenstorage/cloudops v0.0.0-20221104040503-78e71ce44fb7
 	github.com/libopenstorage/openstorage v9.4.20+incompatible
 	github.com/libopenstorage/operator v0.0.0-20221017204507-4328e80ff06f
+	github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 	github.com/libopenstorage/stork v1.4.1-0.20220414104250-3c18fd21ed95
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
@@ -33,7 +35,6 @@ require (
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
-	github.com/go-git/go-git/v5 v5.4.2
 	github.com/portworx/pds-api-go-client v0.0.0-20220901142946-b6ecf97f5e71
 	github.com/portworx/px-backup-api v1.2.2-0.20220822053657-49308ab319f1
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20220725231657-5a6a43c6a5b3

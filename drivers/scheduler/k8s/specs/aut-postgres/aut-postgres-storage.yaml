@@ -8,7 +8,7 @@ parameters:
   {{ if .Replicas }}
   repl: "{{ .Replicas }}"
   {{ else }}
-  repl: "3"{{ end }}
+  repl: "1"{{ end }}
   priority_io: "high"
 allowVolumeExpansion: true
 ---
