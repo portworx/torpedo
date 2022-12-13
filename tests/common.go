@@ -3522,7 +3522,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 							}
 							log.InfoD("Increasing repl with target node  [%v]", newReplID)
-							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, false)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
 								UpdateOutcome(event, err)
@@ -3561,7 +3561,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
 									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
 									UpdateOutcome(event, err)
-									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
+									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 							})
 					}
@@ -3615,7 +3615,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								}
 								UpdateOutcome(event, err)
 							}
-							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, false)
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
 								UpdateOutcome(event, err)
@@ -3648,7 +3648,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
 									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
 									UpdateOutcome(event, err)
-									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, true)
+									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 							}
 						} else {
