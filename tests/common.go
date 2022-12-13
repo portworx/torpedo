@@ -5203,6 +5203,8 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("Node: %s\n", stNode.Name)
+	fmt.Printf("Before: %v\n", poolsDataBfr)
 
 	time.Sleep(5 * time.Second)
 
@@ -5210,6 +5212,8 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("After: %v\n", poolsDataAfr)
 
 	for k, v := range poolsDataBfr {
 		if v2, ok := poolsDataAfr[k]; ok {
