@@ -939,7 +939,7 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 		Expect(err).NotTo(HaveOccurred())
 
 		Step("Validate Storage Configurations", func() {
-			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, nname)
 			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 			ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 			cleanup = append(cleanup, deployment.GetId())
