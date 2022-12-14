@@ -5185,15 +5185,12 @@ func GetPoolIDWithIOs() (string, error) {
 	stNodes := node.GetStorageNodes()
 	for _, stNode := range stNodes {
 		selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
-		if err != nil && !strings.Contains(err.Error(), "no pools have IOs running") {
-			return "", err
-		}
 		if selectedPool != nil {
 			return selectedPool.Uuid, nil
 		}
 	}
 
-	return "", fmt.Errorf("no pools have IOs running")
+	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
 }
 
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
@@ -5207,7 +5204,7 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 			return nil, false, err
 		}
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(10 * time.Second)
 
 		poolsDataAfr, err := Inst().V.GetPoolsUsedSize(&stNode)
 		if err != nil {
@@ -5241,16 +5238,15 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 //GetRandomNodeWithPoolIOs returns node with IOs running
 func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
 	// pick a storage node with pool having IOs
+	var err error
+	var pool *opsapi.StoragePool
 	for _, stNode := range stNodes {
-		pool, err := GetPoolWithIOsInGivenNode(stNode)
-		if err != nil && !strings.Contains(err.Error(), "no pools have IOs running") {
-			return node.Node{}, err
-		}
+		pool, err = GetPoolWithIOsInGivenNode(stNode)
 		if pool != nil {
 			return stNode, nil
 		}
 	}
-	return node.Node{}, fmt.Errorf("no node with IOs running identified")
+	return node.Node{}, fmt.Errorf("no node with IOs running identified,err: %v", err)
 }
 
 func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
