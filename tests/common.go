@@ -3550,7 +3550,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 									UpdateOutcome(event, err)
 								}
 
-								err = validateReplFactorUpdate(v, currRep+1)
+								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
 									log.Error(err)
@@ -3637,7 +3637,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 										UpdateOutcome(event, err)
 									}
 								}
-								err = validateReplFactorUpdate(v, currRep+1)
+								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
 									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
 									log.Error(err)
@@ -3682,7 +3682,7 @@ func AddFastPathLabel(ctx *scheduler.Context) (*node.Node, error) {
 	return nil, err
 }
 
-func validateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error {
+func ValidateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error {
 	t := func() (interface{}, bool, error) {
 		err := Inst().V.WaitForReplicationToComplete(v, expaectedReplFactor, validateReplicationUpdateTimeout)
 		if err != nil {
