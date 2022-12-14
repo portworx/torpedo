@@ -200,8 +200,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
-					dash.VerifyFatal(config.Spec.Nodes, int32(ds.ScaleReplicas), "Validating node replicas after scaling up")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.ScaleReplicas, dataServiceVersionBuildMap)
 					for version, build := range dataServiceVersionBuildMap {
 						dash.VerifyFatal(config.Spec.Version, version+"-"+build[0], "validating ds build and version")
 					}
