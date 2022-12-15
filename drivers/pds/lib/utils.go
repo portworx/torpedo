@@ -126,7 +126,7 @@ const (
 	appConfigTemplateName = "QaDefault"
 	defaultRetryInterval  = 10 * time.Minute
 	duration              = 900
-	timeOut               = 50 * time.Minute
+	timeOut               = 30 * time.Minute
 	timeInterval          = 10 * time.Second
 	maxtimeInterval       = 30 * time.Second
 	envDsVersion          = "DS_VERSION"
@@ -680,7 +680,7 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 		return err
 	}
 	//validate the statefulset deployed in the namespace
-	err = k8sApps.ValidateStatefulSet(ss, defaultRetryInterval)
+	err = k8sApps.ValidateStatefulSet(ss, timeOut)
 	if err != nil {
 		log.Errorf("An Error Occured while validating statefulsets %v", err)
 		return err
