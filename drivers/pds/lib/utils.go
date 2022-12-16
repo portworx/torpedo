@@ -286,8 +286,59 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
 }
 
-// CheckNamespace checks if the namespace is available in the cluster and pds is enabled on it
-func CheckNamespace(namespace string) (bool, error) {
+//ValidateNamespaces validates the namespace is available for pds
+func ValidateNamespaces(deploymentTargetID string, ns string, status string) error {
+	isavailable = false
+	waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
+		pdsNamespaces, err := components.Namespace.ListNamespaces(deploymentTargetID)
+		if err != nil {
+			return false, err
+		}
+		for _, pdsNamespace := range pdsNamespaces {
+			log.Infof("namespace name %v and status %v", *pdsNamespace.Name, *pdsNamespace.Status)
+			if *pdsNamespace.Name == ns && *pdsNamespace.Status == status {
+				isavailable = true
+			}
+		}
+		if isavailable {
+			return true, nil
+		}
+
+		return false, nil
+	})
+	return waitErr
+}
+
+//DeletePDSNamespace deletes the given namespace
+func DeletePDSNamespace(namespace string) error {
+	k8sOps := k8sCore
+	err := k8sOps.DeleteNamespace(namespace)
+	return err
+}
+
+//UpdatePDSNamespce updates the namespace
+func UpdatePDSNamespce(name string, nsLables map[string]string) (*corev1.Namespace, error) {
+	k8sOps := k8sCore
+	nsSpec := &corev1.Namespace{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Namespace",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: nsLables,
+		},
+	}
+	ns, err := k8sOps.UpdateNamespace(nsSpec)
+	time.Sleep(10 * time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return ns, nil
+}
+
+// CreatePDSNamespace checks if the namespace is available in the cluster and pds is enabled on it
+func CreatePDSNamespace(namespace string) (*corev1.Namespace, bool, error) {
 	ns, err = k8sCore.GetNamespace(namespace)
 	isavailable = false
 	if err != nil {
@@ -303,12 +354,12 @@ func CheckNamespace(namespace string) (bool, error) {
 			ns, err = k8sCore.CreateNamespace(nsName)
 			if err != nil {
 				log.Errorf("Error while creating namespace %v", err)
-				return false, err
+				return nil, false, err
 			}
 			isavailable = true
 		}
 		if !isavailable {
-			return false, err
+			return nil, false, err
 		}
 	}
 	isavailable = false
@@ -320,9 +371,9 @@ func CheckNamespace(namespace string) (bool, error) {
 		}
 	}
 	if !isavailable {
-		return false, nil
+		return nil, false, nil
 	}
-	return true, nil
+	return ns, true, nil
 }
 
 // ReadParams reads the params from given or default json

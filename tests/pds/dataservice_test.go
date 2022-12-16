@@ -131,6 +131,54 @@ var _ = Describe("{DeletePDSPods}", func() {
 	})
 })
 
+var _ = Describe("{Enable/DisableNamespace}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
+	})
+
+	It("enable/disable namespace multiple times by giving labels to the namespace", func() {
+		Step("Enable/Disable PDS Namespace", func() {
+			pdsNamespace := "test-ns"
+			testns, _, err := pdslib.CreatePDSNamespace(pdsNamespace)
+			log.FailOnError(err, "Error while creating pds namespace")
+			log.InfoD("PDS Namespace created %v", testns)
+
+			// Modifies the namespace multiple times
+			for index := 0; index < 5; index++ {
+				nsLables := map[string]string{
+					"pds.portworx.com/available": "true",
+				}
+				testns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
+				log.FailOnError(err, "Error while updating pds namespace")
+				log.Infof("PDS Namespace Updated %v", testns)
+
+				//Validate Namespace is available for pds
+				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "available")
+				log.FailOnError(err, "Error while validating pds namespace")
+
+				nsLables = map[string]string{
+					"pds.portworx.com/available": "false",
+				}
+				testns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
+				log.FailOnError(err, "Error while updating pds namespace")
+				log.Infof("PDS Namespace Updated %v", testns)
+
+				//Validate Namespace is available for pds
+				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "unavailable")
+				log.FailOnError(err, "Error while validating pds namespace")
+
+			}
+
+			defer func() {
+				err := pdslib.DeletePDSNamespace(pdsNamespace)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+		})
+	})
+
+})
+
 var _ = Describe("{ScaleUPDataServices}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)

@@ -95,7 +95,7 @@ var _ = BeforeSuite(func() {
 
 	Step("Create/Get Namespace and NamespaceID", func() {
 		namespace = params.InfraToTest.Namespace
-		isavailabbe, err := pdslib.CheckNamespace(namespace)
+		_, isavailabbe, err := pdslib.CreatePDSNamespace(namespace)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isavailabbe).To(BeTrue())
 		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
