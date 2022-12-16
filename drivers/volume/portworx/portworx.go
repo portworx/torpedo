@@ -3751,18 +3751,10 @@ func (d *portworx) SetClusterOpts(n node.Node, clusterOpts map[string]string) er
 	for k, v := range clusterOpts {
 		clusteropts += k + "=" + v + " "
 	}
-
 	clusteropts = strings.TrimSuffix(clusteropts, " ")
-	//Create context with admin token if PX security is enabled.
-	if len(d.token) > 0 {
-		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", d.getPxctlPath(n), d.token), opts)
-		if err != nil {
-			return fmt.Errorf("failed to create pxctl context. cause: %v", err)
-		}
-	}
 	cmd := fmt.Sprintf("%s cluster options update %s", d.getPxctlPath(n), clusteropts)
-
-	out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+	//Create context with admin token if PX security is enabled, later delete the token
+	out, err := d.GetPxctlCmdOutputConnectionOpts(n, cmd, opts, false)
 	if err != nil {
 		return fmt.Errorf("failed to set cluster options, Err: %v %v", err, out)
 	}

@@ -5043,10 +5043,14 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 func EnableAutoFSTrim() {
 	nodes := node.GetWorkerNodes()
 	var isPXNodeAvailable bool
-	for _, n := range nodes {
-		if n.IsStorageDriverInstalled {
+	for _, pxNode := range nodes {
+		isPxInstalled, err := Inst().V.IsPxInstalled(pxNode)
+		if err != nil {
+			log.Debugf("Could not get PX status on %s", pxNode.Name)
+		}
+		if isPxInstalled {
 			isPXNodeAvailable = true
-			pxVersion, err := Inst().V.GetPxVersionOnNode(nodes[0])
+			pxVersion, err := Inst().V.GetPxVersionOnNode(pxNode)
 			log.FailOnError(err, "Is autofstrim supported on the cluster ?")
 			log.Infof("PX version %s", pxVersion)
 			pxVersionList := []string{}
@@ -5056,7 +5060,7 @@ func EnableAutoFSTrim() {
 			if majorVer < 2 || (majorVer == 2 && minorVer < 10) {
 				log.Warnf("Auto FSTrim cannot be enabled on PX version %s", pxVersion)
 			} else {
-				err = Inst().V.SetClusterOpts(nodes[0], map[string]string{
+				err = Inst().V.SetClusterOpts(pxNode, map[string]string{
 					"--auto-fstrim": "on"})
 				log.FailOnError(err, "Autofstrim is enabled on the cluster ?")
 				log.Infof("Auto FSTrim enabled on the cluster")
