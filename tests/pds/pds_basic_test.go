@@ -28,6 +28,7 @@ const (
 	mysql                   = "MySQL"
 	kafka                   = "Kafka"
 	zookeeper               = "ZooKeeper"
+	pdsNamespaceLabel       = "pds.portworx.com/available"
 )
 
 var (

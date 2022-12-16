@@ -146,7 +146,7 @@ var _ = Describe("{Enable/DisableNamespace}", func() {
 			// Modifies the namespace multiple times
 			for index := 0; index < 5; index++ {
 				nsLables := map[string]string{
-					"pds.portworx.com/available": "true",
+					pdsNamespaceLabel: "true",
 				}
 				testns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
 				log.FailOnError(err, "Error while updating pds namespace")
@@ -157,7 +157,7 @@ var _ = Describe("{Enable/DisableNamespace}", func() {
 				log.FailOnError(err, "Error while validating pds namespace")
 
 				nsLables = map[string]string{
-					"pds.portworx.com/available": "false",
+					pdsNamespaceLabel: "false",
 				}
 				testns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
 				log.FailOnError(err, "Error while updating pds namespace")
