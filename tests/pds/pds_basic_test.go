@@ -100,7 +100,7 @@ var _ = BeforeSuite(func() {
 		dash.VerifyFatal(bool(true), isavailable, "Namespace is not available for pds to deploy data services")
 		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
 		log.FailOnError(err, "Error while getting namespace id")
-		Expect(namespaceID).NotTo(BeEmpty())
+		dash.VerifyFatal(namespaceID != "", true, "validating namespace ID")
 	})
 })
 
