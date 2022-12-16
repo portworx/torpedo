@@ -5051,7 +5051,7 @@ func EnableAutoFSTrim() {
 		if isPxInstalled {
 			isPXNodeAvailable = true
 			pxVersion, err := Inst().V.GetPxVersionOnNode(pxNode)
-			log.FailOnError(err, "Is autofstrim supported on the cluster ?")
+			log.FailOnError(err, "Unable to get pxversion on node %s",pxNode.Name)
 			log.Infof("PX version %s", pxVersion)
 			pxVersionList := []string{}
 			pxVersionList = strings.Split(pxVersion, ".")
