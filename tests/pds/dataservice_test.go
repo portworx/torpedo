@@ -223,7 +223,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 							log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
 							err = pdslib.DeleteK8sPods(pod.Name, namespace)
 						}
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error deleting workload generating pods")
 					}
 				})
 			}
@@ -802,7 +802,7 @@ var _ = Describe("{RestartPXPods}", func() {
 					for _, pod := range deploymentPods {
 						log.InfoD("The pod spec node name: %v", pod.Spec.NodeName)
 						nodeObject, err := pdslib.GetK8sNodeObjectUsingPodName(pod.Spec.NodeName)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while getting node object")
 						nodeList = append(nodeList, nodeObject)
 					}
 				})
@@ -811,7 +811,7 @@ var _ = Describe("{RestartPXPods}", func() {
 
 					for _, node := range nodeList {
 						err := pdslib.LabelK8sNode(node, "px/service=stop")
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while labelling node")
 					}
 
 					log.InfoD("Finished labeling the nodes...")
@@ -821,27 +821,27 @@ var _ = Describe("{RestartPXPods}", func() {
 
 				Step("Validate that the deployment is healthy", func() {
 					err := pdslib.ValidateDataServiceDeployment(deployment, namespace)
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "error while validating dataservice")
 				})
 
 				Step("Cleanup: Start px on the node and uncordon the node", func() {
 					for _, node := range nodeList {
 						err := pdslib.RemoveLabelFromK8sNode(node, "px/service")
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while removing label from k8s node")
 					}
 
 					log.InfoD("Finished removing labels from the nodes...")
 
 					for _, node := range nodeList {
 						err := pdslib.DrainPxPodOnK8sNode(node, pxnamespace)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while draining node")
 					}
 
 					log.InfoD("Finished draining px pods from the nodes...")
 
 					for _, node := range nodeList {
 						err := pdslib.UnCordonK8sNode(node)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while uncordoning node")
 					}
 
 					log.InfoD("Finished uncordoning the node...")
@@ -849,16 +849,16 @@ var _ = Describe("{RestartPXPods}", func() {
 					// Read log lines of the px pod on the node to see if the service is running
 					for _, node := range nodeList {
 						rc, err := pdslib.VerifyPxPodOnNode(node.Name, pxnamespace)
-						Expect(rc).To(BeTrue())
-						Expect(err).NotTo(HaveOccurred())
+						dash.VerifyFatal(rc, bool(true), "validating px pod on node")
+						log.FailOnError(err, "error while validating px pod")
 					}
 
 				})
 
 				Step("Delete Deployments", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					Expect(err).NotTo(HaveOccurred())
-					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					log.FailOnError(err, "error deleting deployment")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
 				})
 			}
@@ -871,8 +871,8 @@ var _ = Describe("{RestartPXPods}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "error deleting deployment")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 
@@ -1023,14 +1023,14 @@ var _ = Describe("{RollingRebootNodes}", func() {
 				Step("Validate Deployments after nodes are up", func() {
 					log.Info("Validate Deployments after nodes are up")
 					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "error validating deployment")
 					log.Info("Deployments pods are up and healthy")
 				})
 
 				Step("Delete the deployment", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					Expect(err).NotTo(HaveOccurred())
-					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					log.FailOnError(err, "error deleting deployment")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
 				})
 			}
@@ -1042,8 +1042,8 @@ var _ = Describe("{RollingRebootNodes}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "error deleting deployment")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 

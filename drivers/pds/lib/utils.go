@@ -315,7 +315,6 @@ func CheckNamespace(namespace string) (bool, error) {
 			log.InfoD("Creating namespace %v", namespace)
 			ns, err = k8sCore.CreateNamespace(nsName)
 			if err != nil {
-				//log.FailOnError(err, "Error while creating namespace")
 				return false, err
 			}
 			isavailable = true
@@ -348,25 +347,21 @@ func ReadParams(filename string) (*Parameter, error) {
 		log.Infof("filename %v", filename)
 		if err != nil {
 			return nil, err
-			//log.FailOnError(err, "FilePath err")
 		}
 		log.Infof("Parameter json file is not used, use initial parameters value.")
 		log.InfoD("Reading params from %v ", filename)
 		file, err := ioutil.ReadFile(filename)
 		if err != nil {
 			return nil, err
-			//log.FailOnError(err, "File error: ")
 		}
 		err = json.Unmarshal(file, &jsonPara)
 		if err != nil {
 			return nil, err
-			//log.FailOnError(err, "Error while unmarshalling json:")
 		}
 	} else {
 		cm, err := core.Instance().GetConfigMap(pdsParamsConfigmap, configmapNamespace)
 		if err != nil {
 			return nil, err
-			//log.FailOnError(err, "Error reading config map:")
 		}
 		if len(cm.Data) > 0 {
 			configmap := &cm.Data
