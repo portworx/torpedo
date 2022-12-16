@@ -40,7 +40,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				log.FailOnError(err, "Error while getting app configuration template")
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
@@ -130,8 +130,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				log.FailOnError(err, "Error while getting app config template id")
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
-
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "validating dataServiceDefaultAppConfigID not to be empty")
 				log.InfoD("dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
@@ -311,7 +310,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				log.FailOnError(err, "Error while getting app configuration template")
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
@@ -450,7 +449,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
 		log.FailOnError(err, "Error while getting app configuration template")
-		Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 		log.InfoD("Deploying DataService %v ", dataservice)
@@ -636,7 +635,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				log.FailOnError(err, "Error while getting app configuration template")
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
@@ -729,7 +728,7 @@ var _ = Describe("{RestartPXPods}", func() {
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				log.FailOnError(err, "Error while getting app config template id")
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
@@ -917,7 +916,7 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 
 		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
@@ -964,7 +963,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 				log.FailOnError(err, "Error while getting app config template id")
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,

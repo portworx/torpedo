@@ -230,7 +230,6 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	accounts, err := acc.GetAccountsList()
 	if err != nil {
 		return "", "", "", "", "", err
-		//log.FailOnError(err, "An Error Occured while getting account list")
 	}
 
 	isAccountAvailable = false
