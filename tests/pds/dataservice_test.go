@@ -35,17 +35,15 @@ var _ = Describe("{DeletePDSPods}", func() {
 				log.InfoD("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-
-				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.FailOnError(err, "Error while getting resource template")
+				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+				log.FailOnError(err, "Error while getting app configuration template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
-				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-
-				deployment, _, _, err = pdslib.DeployDataServices(ds.Name, projectID,
+				deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
 					dnsZone,
 					deploymentName,
@@ -59,36 +57,17 @@ var _ = Describe("{DeletePDSPods}", func() {
 					ds.Image,
 					namespace,
 				)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while deploying data services")
 
 				Step("Validate Storage Configurations", func() {
-					log.Infof("data service deployed %v ", ds.Name)
-					log.InfoD("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-					Expect(err).NotTo(HaveOccurred())
-					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					log.Infof("volume group %v ", storageOp.VolumeGroup)
-
-					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 				})
 
 				Step("get pods from pds-system namespace")
 				podList, err := pdslib.GetPods("pds-system")
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while getting pods")
 
 				log.Info("PDS System Pods")
 				for _, pod := range podList.Items {
@@ -98,20 +77,20 @@ var _ = Describe("{DeletePDSPods}", func() {
 				Step("delete pods from pds-system namespace")
 				log.InfoD("Deleting PDS System Pods")
 				err = pdslib.DeleteDeploymentPods(podList)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while deleting pods")
 
 				Step("Validate Deployments after pods are up", func() {
 					log.InfoD("Validate Deployments after pds pods are up")
 					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "Error while validating data services")
 					log.InfoD("Deployments pods are up and healthy")
 				})
 
 				Step("Delete Deployments", func() {
 					log.InfoD("Deleting DataService %v ", ds.Name)
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					Expect(err).NotTo(HaveOccurred())
-					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
 				})
 			}
@@ -122,8 +101,8 @@ var _ = Describe("{DeletePDSPods}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 
@@ -194,17 +173,15 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				log.InfoD("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-
-				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.FailOnError(err, "Error while getting resource template id")
+				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+				log.FailOnError(err, "Error while getting app config template id")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "validating dataServiceDefaultAppConfigID not to be empty")
+				log.InfoD("dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
-				log.Infof("dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-
-				deployment, _, _, err = pdslib.DeployDataServices(ds.Name, projectID,
+				deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
 					dnsZone,
 					deploymentName,
@@ -218,31 +195,12 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					ds.Image,
 					namespace,
 				)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while deploying data services")
 
 				Step("Validate Storage Configurations", func() {
-					log.Infof("data service deployed %v ", ds.Name)
-					log.InfoD("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-					Expect(err).NotTo(HaveOccurred())
-					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					log.Infof("volume group %v ", storageOp.VolumeGroup)
-
-					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 				})
 
 				Step("Running Workloads before scaling up of dataservices ", func() {
@@ -251,32 +209,32 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 						deploymentName := "pgload"
 						log.Infof("Running Workloads on DataService %v ", ds.Name)
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "100", "1", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "Error while genearating workloads")
 					}
 					if ds.Name == rabbitmq {
 						deploymentName := "rmq"
 						log.Infof("Running Workloads on DataService %v ", ds.Name)
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "Error while genearating workloads")
 					}
 					if ds.Name == redis {
 						deploymentName := "redisbench"
 						log.Infof("Running Workloads on DataService %v ", ds.Name)
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "Error while genearating workloads")
 					}
 					if ds.Name == cassandra {
 						deploymentName := "cassandra-stress"
 						log.Infof("Running Workloads on DataService %v ", ds.Name)
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "Error while genearating workloads")
 					}
 				})
 
 				Step("Validate Deployments before scale up", func() {
 					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
-					Expect(err).NotTo(HaveOccurred())
-					log.Info("Deployments pods are up and healthy")
+					log.FailOnError(err, "Error while validating dataservices")
+					log.InfoD("Deployments pods are up and healthy")
 				})
 
 				Step("Scaling up the dataservice replicas", func() {
@@ -284,41 +242,22 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 						dataServiceDefaultAppConfigID, deployment.GetImageId(),
 						int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
 
-					Expect(err).NotTo(HaveOccurred())
-
-					log.Infof("Scaling up DataService %v ", ds.Name)
+					log.FailOnError(err, "Error while updating dataservices")
 					log.InfoD("Scaling up DataService %v ", ds.Name)
+
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-					Expect(err).NotTo(HaveOccurred())
-
-					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					log.Infof("volume group %v ", storageOp.VolumeGroup)
-					log.Infof("version/images used %v ", config.Spec.Version)
-
-					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-					Expect(config.Spec.Nodes).Should(Equal(int32(ds.ScaleReplicas)))
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.ScaleReplicas, dataServiceVersionBuildMap)
 					for version, build := range dataServiceVersionBuildMap {
-						Expect(config.Spec.Version).Should(Equal(version + "-" + build[0]))
+						dash.VerifyFatal(config.Spec.Version, version+"-"+build[0], "validating ds build and version")
 					}
 				})
+
 				Step("Delete Deployments", func() {
 					log.InfoD("Deleting DataService %v ", ds.Name)
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					Expect(err).NotTo(HaveOccurred())
-					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
 				})
 
@@ -331,7 +270,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 							log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
 							err = pdslib.DeleteK8sPods(pod.Name, namespace)
 						}
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error deleting workload generating pods")
 					}
 				})
 			}
@@ -342,8 +281,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 
@@ -367,8 +306,8 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 
@@ -392,8 +331,8 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 
@@ -414,17 +353,15 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 				log.InfoD("Deploying DataService %v ", ds.Name)
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-
-				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.FailOnError(err, "Error while getting resource template")
+				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+				log.FailOnError(err, "Error while getting app configuration template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
-				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-
-				deployment, _, _, err = pdslib.DeployDataServices(ds.Name, projectID,
+				deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
 					dnsZone,
 					deploymentName,
@@ -438,38 +375,19 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 					ds.Image,
 					namespace,
 				)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while deploying data services")
 
 				Step("Validate Storage Configurations", func() {
-					log.Infof("data service deployed %v ", ds.Name)
-					log.InfoD("Validating DataService %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-					Expect(err).NotTo(HaveOccurred())
-					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					log.Infof("volume group %v ", storageOp.VolumeGroup)
-
-					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 				})
 
 				Step("Delete Deployments", func() {
 					log.InfoD("Deleting DataService %v ", ds.Name)
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					Expect(err).NotTo(HaveOccurred())
-					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
 				})
 			}
@@ -480,8 +398,8 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 
@@ -574,15 +492,14 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 	Step("Deploy, Validate and Update Data Services", func() {
 		isDeploymentsDeleted = false
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, dataservice)
-		Expect(err).NotTo(HaveOccurred())
-
-		log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+		log.FailOnError(err, "Error while getting resource template")
+		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+		log.FailOnError(err, "Error while getting app configuration template")
+		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-		log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 		log.InfoD("Deploying DataService %v ", dataservice)
 		deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
 			deploymentTargetID,
@@ -598,52 +515,34 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			oldImage,
 			namespace,
 		)
-		Expect(err).NotTo(HaveOccurred())
+		log.FailOnError(err, "Error while deploying data services")
 
 		Step("Validate Storage Configurations", func() {
-			log.Infof("data service deployed %v ", dataservice)
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-			Expect(err).NotTo(HaveOccurred())
-			log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-			log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-			log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-			log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-			log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-			log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-			log.Infof("volume group %v ", storageOp.VolumeGroup)
-
-			Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-			Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-			Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-			Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-			Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-			repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-			Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-			Expect(config.Spec.Nodes).Should(Equal(replicas))
+			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
 		})
 
 		Step("Running Workloads before scaling up of dataservices ", func() {
 			if dataservice == postgresql {
 				deploymentName := "pgload"
 				pod, dep, err = pdslib.CreateDataServiceWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while genearating workloads")
 			}
 			if dataservice == rabbitmq {
 				deploymentName := "rmq"
 				pod, dep, err = pdslib.CreateDataServiceWorkloads(dataservice, deployment.GetId(), "", "", deploymentName, namespace)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while genearating workloads")
 			}
 			if dataservice == redis {
 				deploymentName := "redisbench"
 				pod, dep, err = pdslib.CreateDataServiceWorkloads(dataservice, deployment.GetId(), "", "", deploymentName, namespace)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while genearating workloads")
 			}
 			if dataservice == cassandra {
 				deploymentName := "cassandra-stress"
 				pod, dep, err = pdslib.CreateDataServiceWorkloads(dataservice, deployment.GetId(), "", "", deploymentName, namespace)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while genearating workloads")
 			}
 		})
 
@@ -652,38 +551,19 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			updatedDeployment, err := pdslib.UpdateDataServiceVerison(deployment.GetDataServiceId(), deployment.GetId(),
 				dataServiceDefaultAppConfigID,
 				replicas, dataServiceDefaultResourceTemplateID, dsBuild, namespace, dsVersion)
+			log.FailOnError(err, "Error while updating data services")
+			log.InfoD("data service deployed %v ", dataservice)
 
-			Expect(err).NotTo(HaveOccurred())
-			log.Infof("data service deployed %v ", dataservice)
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-			Expect(err).NotTo(HaveOccurred())
-
-			log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-			log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-			log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-			log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-			log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-			log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-			log.Infof("volume group %v ", storageOp.VolumeGroup)
-			log.Infof("version/images used %v ", config.Spec.Version)
-
-			Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-			Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-			Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-			Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-			Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-			repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-			Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-			Expect(config.Spec.Nodes).Should(Equal(replicas))
-			Expect(config.Spec.Version).Should(Equal(dsVersion + "-" + dsBuild))
+			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+			dash.VerifyFatal(config.Spec.Version, dsVersion+"-"+dsBuild, "validating ds build and version")
 		})
 
 		Step("Delete Deployments", func() {
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			isDeploymentsDeleted = true
 		})
 
@@ -695,7 +575,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 					} else {
 						err = pdslib.DeleteK8sPods(pod.Name, namespace)
 					}
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "error while deleting workload deployments")
 				}
 			})
 		}()
@@ -714,9 +594,8 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 		for i := 0; i < 2; i++ {
 			nname := "namespace-" + strconv.Itoa(i)
 			ns, err := pdslib.CreateK8sPDSNamespace(nname)
-			log.Infof("Created namespace: %v", nname)
 			log.InfoD("Created namespace: %v", nname)
-			Expect(err).NotTo(HaveOccurred())
+			log.FailOnError(err, "error while creating namespace")
 			namespaces = append(namespaces, ns)
 		}
 		isNamespacesDeleted = false
@@ -725,47 +604,41 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 			if !isNamespacesDeleted {
 				Step("Delete created namespaces", func() {
 					for _, namespace := range namespaces {
-						log.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
 						log.InfoD("Cleanup: Deleting created namespace %v", namespace.Name)
 						err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while deleting namespaces")
 					}
 				})
 			}
 		}()
-
-		log.Info("Waiting for created namespaces to be available in PDS")
 		log.InfoD("Waiting for created namespaces to be available in PDS")
 		time.Sleep(10 * time.Second)
 
 		Step("Deploy All Supported Data Services", func() {
 			var cleanupall []string
 			for _, namespace := range namespaces {
-				log.Infof("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
 				log.InfoD("Deploying deployment %v in namespace: %v", deploymentTargetID, namespace.Name)
 				newNamespaceID, err := pdslib.GetnameSpaceID(namespace.Name, deploymentTargetID)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "error while getting namespaceid")
 				Expect(newNamespaceID).NotTo(BeEmpty())
 
 				deps := DeployInANamespaceAndVerify(namespace.Name, newNamespaceID)
 				cleanupall = append(cleanupall, deps...)
 			}
 
-			log.Infof("List of created deployments: %v ", cleanupall)
 			log.InfoD("List of created deployments: %v ", cleanupall)
 			Step("Delete created deployments", func() {
 				for _, dep := range cleanupall {
 					_, err := pdslib.DeleteDeployment(dep)
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "error while deleting deployments")
 				}
 			})
 
 			Step("Delete created namespaces", func() {
 				for _, namespace := range namespaces {
-					log.Infof("Cleanup: Deleting created namespace %v", namespace.Name)
 					log.InfoD("Cleanup: Deleting created namespace %v", namespace.Name)
 					err := pdslib.DeleteK8sPDSNamespace(namespace.Name)
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "error while deleting pds namespace")
 				}
 				isNamespacesDeleted = true
 			})
@@ -787,39 +660,30 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 
 		nname := "test-namespace-0"
 		_, err := pdslib.CreateK8sPDSNamespace(nname)
-		Expect(err).NotTo(HaveOccurred())
+		log.FailOnError(err, "error while creating pds namespace")
 		isNamespacesDeleted = false
-		log.Infof("Created namespace: %v", nname)
 		log.InfoD("Created namespace: %v", nname)
-
-		log.Info("Waiting for created namespaces to be available in PDS")
 		log.InfoD("Waiting for created namespaces to be available in PDS")
 		time.Sleep(10 * time.Second)
-
-		log.Info("Create dataservices")
 		log.InfoD("Create dataservices")
 
 		Step("Deploy All Supported Data Services in the namespace", func() {
 
-			log.Infof("Deploying deployment %v in namespace: %v", deploymentTargetID, nname)
+			log.InfoD("Deploying deployment %v in namespace: %v", deploymentTargetID, nname)
 			newNamespaceID, err := pdslib.GetnameSpaceID(nname, deploymentTargetID)
-			Expect(err).NotTo(HaveOccurred())
+			log.FailOnError(err, "error while getting namespaceid")
 			Expect(newNamespaceID).NotTo(BeEmpty())
 
 			var cleanup []*pds.ModelsDeployment
 			for _, ds := range params.DataServiceToTest {
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-
-				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.FailOnError(err, "Error while getting resource template")
 				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
-
-				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.FailOnError(err, "Error while getting app configuration template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
@@ -836,58 +700,37 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 					ds.Image,
 					nname,
 				)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "error while creating deployment")
 
 				Step("Validate Storage Configurations", func() {
-
 					log.Infof("data service deployed %v ", ds)
 					log.InfoD("data service deployed %v ", ds)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, nname)
-					Expect(err).NotTo(HaveOccurred())
-					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					log.Infof("volume group %v ", storageOp.VolumeGroup)
-
-					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 					cleanup = append(cleanup, deployment)
 
 				})
 
 			}
-
-			log.Infof("List of created deployments: %v ", cleanup)
 			log.InfoD("List of created deployments: %v ", cleanup)
 
 			Step("Delete created namespace", func() {
-				log.Infof("Cleanup: Deleting created namespace %v", nname)
 				log.InfoD("Cleanup: Deleting created namespace %v", nname)
 				err := pdslib.DeleteK8sPDSNamespace(nname)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while deleting namespace")
 			})
 
 			Step("Verify that the namespace was deleted", func() {
 				err := pdslib.ValidateK8sNamespaceDeleted(nname)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while validating namespace deletion")
 				isNamespacesDeleted = true
 			})
 
 			Step("Verify created deployments have been deleted", func() {
 				for _, dep := range cleanup {
 					err := pdslib.ValidateDataServiceDeploymentNegative(dep, nname)
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "Error while cleaning up data services")
 				}
 				isDeploymentsDeleted = true
 			})
@@ -901,15 +744,15 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 
 		defer func() {
 			if !isNamespacesDeleted {
 				err := pdslib.DeleteK8sPDSNamespace("test-namespace-0")
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while deleting namespace")
 			}
 		}()
 
@@ -928,15 +771,12 @@ var _ = Describe("{RestartPXPods}", func() {
 			for _, ds := range params.DataServiceToTest {
 				isDeploymentsDeleted = false
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-
-				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.FailOnError(err, "Error while getting resource template id")
+				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
-
-				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.FailOnError(err, "Error while getting app config template id")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
@@ -952,52 +792,35 @@ var _ = Describe("{RestartPXPods}", func() {
 					ds.Image,
 					namespace,
 				)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while deploying data services")
 
 				Step("Validate Storage Configurations", func() {
 					log.Infof("data service deployed %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-					Expect(err).NotTo(HaveOccurred())
-					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					log.Infof("volume group %v ", storageOp.VolumeGroup)
-
-					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 				})
 
 				Step("Running Workloads before scaling up of dataservices ", func() {
 					if ds.Name == postgresql {
 						deploymentName := "pgload"
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "100", "1", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "Error while genearating workloads")
 					}
 					if ds.Name == rabbitmq {
 						deploymentName := "rmq"
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "Error while genearating workloads")
 					}
 					if ds.Name == redis {
 						deploymentName := "redisbench"
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "Error while genearating workloads")
 					}
 					if ds.Name == cassandra {
 						deploymentName := "cassandra-stress"
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "Error while genearating workloads")
 					}
 				})
 
@@ -1009,7 +832,7 @@ var _ = Describe("{RestartPXPods}", func() {
 							} else {
 								err = pdslib.DeleteK8sPods(pod.Name, namespace)
 							}
-							Expect(err).NotTo(HaveOccurred())
+							log.FailOnError(err, "Error while deleting workloads")
 						}
 					})
 				}()
@@ -1017,17 +840,16 @@ var _ = Describe("{RestartPXPods}", func() {
 				var deploymentPods []corev1.Pod
 				Step("Get a list of pod names that belong to the deployment", func() {
 					deploymentPods, err = pdslib.GetPodsFromK8sStatefulSet(deployment, namespace)
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "Error while getting deployment pods")
 					Expect(deploymentPods).NotTo(BeEmpty())
 				})
 
 				var nodeList []*corev1.Node
 				Step("Get the node that the PV of the pod resides on", func() {
 					for _, pod := range deploymentPods {
-						log.Infof("The pod spec node name: %v", pod.Spec.NodeName)
 						log.InfoD("The pod spec node name: %v", pod.Spec.NodeName)
 						nodeObject, err := pdslib.GetK8sNodeObjectUsingPodName(pod.Spec.NodeName)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while getting node object")
 						nodeList = append(nodeList, nodeObject)
 					}
 				})
@@ -1036,10 +858,9 @@ var _ = Describe("{RestartPXPods}", func() {
 
 					for _, node := range nodeList {
 						err := pdslib.LabelK8sNode(node, "px/service=stop")
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while labelling node")
 					}
 
-					log.Info("Finished labeling the nodes...")
 					log.InfoD("Finished labeling the nodes...")
 					time.Sleep(30 * time.Second)
 
@@ -1047,49 +868,44 @@ var _ = Describe("{RestartPXPods}", func() {
 
 				Step("Validate that the deployment is healthy", func() {
 					err := pdslib.ValidateDataServiceDeployment(deployment, namespace)
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "error while validating dataservice")
 				})
 
 				Step("Cleanup: Start px on the node and uncordon the node", func() {
 					for _, node := range nodeList {
 						err := pdslib.RemoveLabelFromK8sNode(node, "px/service")
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while removing label from k8s node")
 					}
 
-					log.Info("Finished removing labels from the nodes...")
 					log.InfoD("Finished removing labels from the nodes...")
 
 					for _, node := range nodeList {
 						err := pdslib.DrainPxPodOnK8sNode(node, pxnamespace)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while draining node")
 					}
 
-					log.Info("Finished draining px pods from the nodes...")
 					log.InfoD("Finished draining px pods from the nodes...")
 
 					for _, node := range nodeList {
 						err := pdslib.UnCordonK8sNode(node)
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "error while uncordoning node")
 					}
 
-					log.Infof("Finished uncordoning the node...")
 					log.InfoD("Finished uncordoning the node...")
-
-					log.Info("Verify that the px pod has started on node...")
 					log.InfoD("Verify that the px pod has started on node...")
 					// Read log lines of the px pod on the node to see if the service is running
 					for _, node := range nodeList {
 						rc, err := pdslib.VerifyPxPodOnNode(node.Name, pxnamespace)
-						Expect(rc).To(BeTrue())
-						Expect(err).NotTo(HaveOccurred())
+						dash.VerifyFatal(rc, bool(true), "validating px pod on node")
+						log.FailOnError(err, "error while validating px pod")
 					}
 
 				})
 
 				Step("Delete Deployments", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					Expect(err).NotTo(HaveOccurred())
-					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					log.FailOnError(err, "error deleting deployment")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
 				})
 			}
@@ -1102,8 +918,8 @@ var _ = Describe("{RestartPXPods}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "error deleting deployment")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 
@@ -1112,6 +928,31 @@ var _ = Describe("{RestartPXPods}", func() {
 
 })
 
+func ValidateDeployments(resourceTemp pdslib.ResourceSettingTemplate, storageOp pdslib.StorageOptions, config pdslib.StorageClassConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
+	log.InfoD("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+	log.InfoD("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+	log.InfoD("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+	log.InfoD("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+	log.InfoD("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+	log.InfoD("No of nodes requested %v ", config.Spec.Nodes)
+	log.InfoD("volume group %v ", storageOp.VolumeGroup)
+
+	dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Spec.Resources.Requests.CPU, "Validating CPU Request")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Spec.Resources.Requests.Memory, "Validating Memory Request")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Spec.Resources.Requests.Storage, "Validating storage")
+	dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Spec.Resources.Limits.CPU, "Validating CPU Limits")
+	dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Spec.Resources.Limits.Memory, "Validating Memory Limits")
+	repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+	log.FailOnError(err, "failed on atoi method")
+	dash.VerifyFatal(storageOp.Replicas, int32(repl), "Validating storage replicas")
+	dash.VerifyFatal(storageOp.Filesystem, config.Spec.StorageOptions.Filesystem, "Validating filesystems")
+	dash.VerifyFatal(config.Spec.Nodes, int32(replicas), "Validating node replicas")
+
+	for version, build := range dataServiceVersionBuildMap {
+		dash.VerifyFatal(config.Spec.Version, version+"-"+build[0], "validating ds build and version")
+	}
+}
+
 func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 
 	var cleanup []string
@@ -1119,17 +960,15 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 		Expect(err).NotTo(HaveOccurred())
 
-		log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-		log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
-		deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
+		deployment, _, dataServiceVersionBuildMap, err := pdslib.DeployDataServices(ds.Name, projectID,
 			deploymentTargetID,
 			dnsZone,
 			deploymentName,
@@ -1146,29 +985,9 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 		Expect(err).NotTo(HaveOccurred())
 
 		Step("Validate Storage Configurations", func() {
-
-			log.Infof("data service deployed %v ", ds)
-			log.InfoD("data service deployed %v ", ds)
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, nname)
-			Expect(err).NotTo(HaveOccurred())
-			log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-			log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-			log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-			log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-			log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-			log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-			log.Infof("volume group %v ", storageOp.VolumeGroup)
-
-			Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-			Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-			Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-			Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-			Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-			repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-			Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-			Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+			ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 			cleanup = append(cleanup, deployment.GetId())
 
 		})
@@ -1185,17 +1004,15 @@ var _ = Describe("{RollingRebootNodes}", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				isDeploymentsDeleted = false
-				log.Infof("Deploying DataService %v ", ds.Name)
+				log.InfoD("Deploying DataService %v ", ds.Name)
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				dash.VerifyFatal(err, nil, "Verifying data service deployment.")
-
-				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
-
-				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.FailOnError(err, "Error while getting app config template id")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
 					deploymentTargetID,
@@ -1211,30 +1028,13 @@ var _ = Describe("{RollingRebootNodes}", func() {
 					ds.Image,
 					namespace,
 				)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Error while deploying data services")
 
 				Step("Validate Storage Configurations", func() {
-					log.Infof("data service deployed %v ", ds.Name)
+					log.InfoD("data service deployed %v ", ds.Name)
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-					Expect(err).NotTo(HaveOccurred())
-					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-					log.Infof("volume group %v ", storageOp.VolumeGroup)
-
-					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 				})
 
 				// TODO: Running workload for all datasevices
@@ -1252,7 +1052,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 								TimeBeforeRetry: defaultCommandRetry,
 							},
 						})
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "Error while rebooting nodes")
 
 						log.Infof("wait for node: %s to be back up", n.Name)
 						err = Inst().N.TestConnection(n, node.ConnectionOpts{
@@ -1262,7 +1062,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 						if err != nil {
 							log.FailOnError(err, "Error while testing node status %v, err: %v", n.Name, err.Error())
 						}
-						Expect(err).NotTo(HaveOccurred())
+						log.FailOnError(err, "Error while testing connection")
 					}
 
 				})
@@ -1270,14 +1070,14 @@ var _ = Describe("{RollingRebootNodes}", func() {
 				Step("Validate Deployments after nodes are up", func() {
 					log.Info("Validate Deployments after nodes are up")
 					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
-					Expect(err).NotTo(HaveOccurred())
+					log.FailOnError(err, "error validating deployment")
 					log.Info("Deployments pods are up and healthy")
 				})
 
 				Step("Delete the deployment", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					Expect(err).NotTo(HaveOccurred())
-					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+					log.FailOnError(err, "error deleting deployment")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
 				})
 			}
@@ -1289,8 +1089,8 @@ var _ = Describe("{RollingRebootNodes}", func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				log.FailOnError(err, "error deleting deployment")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
 
