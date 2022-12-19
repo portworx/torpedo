@@ -2,6 +2,8 @@ package csi
 
 import (
 	"fmt"
+
+	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -40,11 +42,19 @@ func (d *genericCsi) RefreshDriverEndpoints() error {
 	return nil
 }
 
-func (d *genericCsi) ValidateStorageCluster(endpointURL, endpointVersion string) error {
+func (d *genericCsi) ValidateStorageCluster(endpointURL, endpointVersion string, autoUpdateComponents bool) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateStorageCluster()",
+	}
+}
+
+func (d *genericCsi) UpdateAndValidateStorageCluster(cluster *v1.StorageCluster, f func(*v1.StorageCluster) *v1.StorageCluster, specGenUrl string, autoUpdateComponents bool) (*v1.StorageCluster, error) {
+	// TODO: Add implementation
+	return &v1.StorageCluster{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateAndValidateStorageCluster()",
 	}
 }
 

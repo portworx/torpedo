@@ -295,17 +295,20 @@ type Driver interface {
 	// RunSecretsLogin runs secrets login using pxctl
 	RunSecretsLogin(n node.Node, secretType string) error
 
-	// GetStorageCluster returns the storageCluster object
+	// GetStorageCluster returns the StorageCluster object
 	GetStorageCluster() (*v1.StorageCluster, error)
 
-	//UpdateStorageClusterImage update storage cluster image version
+	//UpdateStorageClusterImage update StorageCluster image version
 	UpdateStorageClusterImage(string) error
 
-	//GetPXStorageCluster returns portworx storage cluster
+	//GetPXStorageCluster returns portworx StorageCluster
 	GetPXStorageCluster() (*v1.StorageCluster, error)
 
-	// ValidateStorageCluster validates all the storage cluster components
-	ValidateStorageCluster(endpointURL, endpointVersion string) error
+	// ValidateStorageCluster validates all StorageCluster components
+	ValidateStorageCluster(endpointURL, endpointVersion string, autoUpdateComponents bool) error
+
+	// UpdateAndValidateStorageCluster updates StorageCluster and then validates all StorageCluster components
+	UpdateAndValidateStorageCluster(cluster *v1.StorageCluster, f func(*v1.StorageCluster) *v1.StorageCluster, specGenUrl string, autoUpdateComponents bool) (*v1.StorageCluster, error)
 
 	// ExpandPool resizes a pool of a given ID
 	ExpandPool(poolUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64) error

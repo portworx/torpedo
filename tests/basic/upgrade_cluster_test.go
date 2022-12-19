@@ -38,7 +38,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 			})
 
 			Step("validate storage components", func() {
-				err := Inst().V.ValidateStorageCluster(Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				err := Inst().V.ValidateStorageCluster(Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion, true)
 				Expect(err).NotTo(HaveOccurred())
 			})
 

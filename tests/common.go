@@ -7,13 +7,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
 	"regexp"
+
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
+	"github.com/sirupsen/logrus"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -45,6 +46,8 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
+	opv1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	optestutil "github.com/libopenstorage/operator/pkg/util/test"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo"
@@ -119,6 +122,9 @@ import (
 const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
 	SkipClusterScopedObjects = "skipClusterScopedObjects"
+
+	// PxReleaseManifestURLEnvVarName is a release manifest URL Env variable name
+	PxReleaseManifestURLEnvVarName = "PX_RELEASE_MANIFEST_URL"
 )
 
 const (
@@ -140,6 +146,7 @@ const (
 	hyperConvergedFlag                   = "hyper-converged"
 	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
 	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
+	specGeneratorUpgradeUrlListFlag      = "spec-generator-upgrade-url-list"
 	provisionerFlag                      = "provisioner"
 	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
 	configMapFlag                        = "config-map"
@@ -2296,7 +2303,83 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 	wg.Wait()
 }
 
+// UpgradePxStorageClusterNew perform PX StorageCluster upgrade
+func UpgradePxStorageClusterNew(specGenUrl string) (bool, error) {
+	log.InfoD("Upgrading StorageCluster")
+	var k8sCore = core.Instance()
+
+	k8sVersion, err := k8sCore.GetVersion()
+	if err != nil {
+		return false, err
+	}
+
+	imageList, err := optestutil.GetImagesFromVersionURL(specGenUrl, k8sVersion.String())
+	if err != nil {
+		return false, fmt.Errorf("error getting latest operator version. Cause: %v", err)
+	}
+
+	cluster, err := Inst().V.GetPXStorageCluster()
+	if err != nil {
+		return false, err
+	}
+
+	updateParamFunc := func(cluster *opv1.StorageCluster) *opv1.StorageCluster {
+		// Set oci-mon version
+		cluster.Spec.Image = imageList["version"]
+		// Add Release Manifest URL incase of edge spec
+		if strings.Contains(specGenUrl, "edge") {
+			env, err := addPxReleaseManifestEnvVars(cluster.Spec.Env, specGenUrl)
+			if err != nil {
+				return nil
+			}
+			cluster.Spec.Env = env
+		}
+		return cluster
+	}
+
+	_, err = Inst().V.UpdateAndValidateStorageCluster(cluster, updateParamFunc, specGenUrl, false)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func addPxReleaseManifestEnvVars(origEnvVarList []v1.EnvVar, specGenURL string) ([]v1.EnvVar, error) {
+	var envVarList []v1.EnvVar
+
+	// Set release manifest URL in case of edge-install.portworx.com
+	if strings.Contains(specGenURL, "edge") {
+		releaseManifestURL, err := optestutil.ConstructPxReleaseManifestURL(specGenURL)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add release manifest URL to Env Vars
+		envVarList = append(envVarList, v1.EnvVar{Name: PxReleaseManifestURLEnvVarName, Value: releaseManifestURL})
+	}
+
+	return mergeEnvVars(origEnvVarList, envVarList), nil
+}
+
+// mergeEnvVars will overwrite existing or add new env variables
+func mergeEnvVars(origList, newList []v1.EnvVar) []v1.EnvVar {
+	envMap := make(map[string]v1.EnvVar)
+	var mergedList []v1.EnvVar
+	for _, env := range origList {
+		envMap[env.Name] = env
+	}
+	for _, env := range newList {
+		envMap[env.Name] = env
+	}
+	for _, env := range envMap {
+		mergedList = append(mergedList, *(env.DeepCopy()))
+	}
+	return mergedList
+}
+
 // UpgradePxStorageCluster perform storage cluster upgrade
+// TODO: This needs to be removed, leaving it as is to not break existing jobs and other tests that are using this func
 func UpgradePxStorageCluster() (bool, error) {
 	log.InfoD("Initiating operator based install upgrade")
 	operatorTag, err := getOperatorLatestVersion()
@@ -3886,6 +3969,7 @@ type Torpedo struct {
 	GlobalScaleFactor                   int
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
+	StorageClusterUpgradeSpecGenUrlList string
 	EnableStorkUpgrade                  bool
 	MinRunTimeMins                      int
 	ChaosLevel                          int
@@ -3931,6 +4015,7 @@ func ParseFlags() {
 	var appScaleFactor int
 	var volUpgradeEndpointURL string
 	var volUpgradeEndpointVersion string
+	var specGeneratorUrlList string
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
@@ -3984,6 +4069,7 @@ func ParseFlags() {
 		"Endpoint URL link which will be used for upgrade storage driver")
 	flag.StringVar(&volUpgradeEndpointVersion, storageUpgradeEndpointVersionCliFlag, defaultStorageUpgradeEndpointVersion,
 		"Endpoint version which will be used for checking version after upgrade storage driver")
+	flag.StringVar(&specGeneratorUrlList, specGeneratorUpgradeUrlListFlag, "", "Semicolon separated list of Spec Generator URLs for performing upgrade hops for StorageCluster")
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
@@ -4151,6 +4237,7 @@ func ParseFlags() {
 				ChaosLevel:                          chaosLevel,
 				StorageDriverUpgradeEndpointURL:     volUpgradeEndpointURL,
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
+				StorageClusterUpgradeSpecGenUrlList: specGeneratorUrlList,
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
 				SecureAppList:                       secureAppList,
@@ -5051,7 +5138,7 @@ func EnableAutoFSTrim() {
 		if isPxInstalled {
 			isPXNodeAvailable = true
 			pxVersion, err := Inst().V.GetPxVersionOnNode(pxNode)
-			log.FailOnError(err, "Unable to get pxversion on node %s",pxNode.Name)
+			log.FailOnError(err, "Unable to get pxversion on node %s", pxNode.Name)
 			log.Infof("PX version %s", pxVersion)
 			pxVersionList := []string{}
 			pxVersionList = strings.Split(pxVersion, ".")

@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"io"
 	"math"
 	"net"
@@ -19,6 +17,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
+	"gopkg.in/yaml.v2"
 
 	"github.com/portworx/torpedo/pkg/s3utils"
 
@@ -52,7 +54,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"gopkg.in/yaml.v2"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -3934,7 +3935,7 @@ func (d *portworx) GetPXStorageCluster() (*v1.StorageCluster, error) {
 
 }
 
-func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) error {
+func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string, autoUpdateComponents bool) error {
 	// check if storagecluster CRD is present, in case yes, we continue validation
 	// otherwise px was deployed using daemonset, we skip this validation
 	_, err := apiExtentions.GetCRD("storageclusters.core.libopenstorage.org", metav1.GetOptions{})
@@ -3943,17 +3944,23 @@ func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) e
 	} else if k8serrors.IsNotFound(err) {
 		return nil
 	}
-	pxOps, err := pxOperator.ListStorageClusters(d.namespace)
+	stcList, err := pxOperator.ListStorageClusters(d.namespace)
 	if err != nil {
 		return err
 	}
-	if len(pxOps.Items) > 0 {
-		// Auto update components as operator doesn't do it between k8s/ocp version upgrades
-		updateStrategy := v1.OnceAutoUpdate
-		pxOps.Items[0].Spec.AutoUpdateComponents = &updateStrategy
-		stc, err := pxOperator.UpdateStorageCluster(&pxOps.Items[0])
-		if err != nil {
-			return err
+	//var stc *v1.StorageCluster
+
+	if len(stcList.Items) > 0 {
+		stc := stcList.Items[0]
+		var newStc *v1.StorageCluster
+		if autoUpdateComponents {
+			// Auto update components as operator doesn't do it between k8s/ocp version upgrades
+			updateStrategy := v1.OnceAutoUpdate
+			stc.Spec.AutoUpdateComponents = &updateStrategy
+			newStc, err = pxOperator.UpdateStorageCluster(&stc)
+			if err != nil {
+				return err
+			}
 		}
 
 		k8sVersion, err := k8sCore.GetVersion()
@@ -3964,11 +3971,52 @@ func (d *portworx) ValidateStorageCluster(endpointURL, endpointVersion string) e
 		if err != nil {
 			return err
 		}
-		if err = optest.ValidateStorageCluster(imageList, stc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+		if err = optest.ValidateStorageCluster(imageList, newStc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (d *portworx) UpdateAndValidateStorageCluster(cluster *v1.StorageCluster, f func(*v1.StorageCluster) *v1.StorageCluster, specGenUrl string, autoUpdateComponents bool) (*v1.StorageCluster, error) {
+	liveCluster, err := pxOperator.GetStorageCluster(cluster.Name, cluster.Namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	newCluster := f(liveCluster)
+
+	stc, err := pxOperator.UpdateStorageCluster(newCluster)
+	if err != nil {
+		return nil, err
+	}
+
+	k8sVersion, err := k8sCore.GetVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	imageList, err := optest.GetImagesFromVersionURL(specGenUrl, k8sVersion.String())
+	if err != nil {
+		return nil, err
+	}
+
+	if autoUpdateComponents {
+		if autoUpdateComponents {
+			// Auto update components as operator doesn't do it between k8s/ocp version upgrades
+			updateStrategy := v1.OnceAutoUpdate
+			stc.Spec.AutoUpdateComponents = &updateStrategy
+			stc, err = pxOperator.UpdateStorageCluster(stc)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if err = optest.ValidateStorageCluster(imageList, stc, validateStorageClusterTimeout, defaultRetryInterval, true); err != nil {
+		return nil, err
+	}
+	return stc, nil
 }
 
 func (d *portworx) getPxctlPath(n node.Node) string {
@@ -4152,6 +4200,7 @@ func (d *portworx) getSDKContainerPort() (int32, error) {
 	return 0, fmt.Errorf("px-sdk target port not found in service")
 }
 
+// TODO: This needs to be removed and we should use GetImagesFromVersionURL() func from github.com/libopenstorage/operator
 func getImageList(endpointURL, pxVersion, k8sVersion string, d *portworx) (map[string]string, error) {
 	var imageList map[string]string
 	client := &http.Client{}

@@ -2,9 +2,10 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
@@ -85,7 +86,6 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				timeAfterUpgrade = time.Now()
 				dash.VerifyFatal(err, nil, "Volume drive upgrade for daemon set based set up successful?")
 			}
-
 			durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
 			expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
 			dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
@@ -196,6 +196,82 @@ func getImages(version string) []volume.Image {
 	}
 	return images
 }
+
+var _ = Describe("{UpgradeStorageCluster}", func() {
+	JustBeforeEach(func() {
+		upgradeSpecGenUrlList := make(map[string]string)
+		upgradeSpecGenUrlList["upgradeHops"] = Inst().StorageClusterUpgradeSpecGenUrlList
+		StartTorpedoTest("UpgradeStorageCluster", "Validating volume driver upgrade", upgradeSpecGenUrlList, 0)
+		log.InfoD("Upgrade Spec Gen URL list [%s]", upgradeSpecGenUrlList)
+	})
+	var contexts []*scheduler.Context
+
+	It("upgrade volume driver and ensure everything is running fine", func() {
+		log.InfoD("upgrade volume driver and ensure everything is running fine")
+		contexts = make([]*scheduler.Context, 0)
+
+		log.InfoD("Scheduling applications and validating")
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+		var timeBeforeUpgrade time.Time
+		var timeAfterUpgrade time.Time
+
+		Step("start the upgrade of volume driver", func() {
+			log.InfoD("start the upgrade of volume driver")
+
+			if len(Inst().StorageClusterUpgradeSpecGenUrlList) == 0 {
+				log.Fatalf("Unable to perform StorageCluster upgrade hops, none were given")
+			}
+
+			// Perform PX StorageCluster upgrade hops based on a list of Spec Gen URLs passed
+			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
+			for _, urlUpgradeHop := range strings.Split(Inst().StorageClusterUpgradeSpecGenUrlList, ";") {
+				if IsOperatorBasedInstall {
+					timeBeforeUpgrade = time.Now()
+					log.InfoD("Using Spec Gen URL for PX StorageCluster upgrade hop [%s]", urlUpgradeHop)
+					status, err := UpgradePxStorageClusterNew(urlUpgradeHop)
+					timeAfterUpgrade = time.Now()
+					if err != nil {
+						log.Fatalf("Failed to Upgrade PX StorageCluster to [%s], Err: %v", urlUpgradeHop, err)
+					}
+					log.InfoD("Successfully upgraded PX StorageCluster to [%s]", urlUpgradeHop)
+					dash.VerifyFatal(status, true, "Volume driver upgrade successful?")
+				} else {
+					log.Fatalf("Cannot perform StorageCluster upgrade hops on a non PX Operator deployment")
+				}
+
+				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+				dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
+				if durationInMins <= expectedUpgradeTime {
+					log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+				} else {
+					log.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutes", durationInMins, expectedUpgradeTime)
+					dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Upgrade took more than expected time to complete")
+				}
+
+				// Validate Apps after the PX StorageCluster upgrade
+				ValidateApplications(contexts)
+			}
+		})
+
+		Step("Destroy apps", func() {
+			log.InfoD("Destroy apps")
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
 
 /* We don't support downgrade volume drive, so comment it out
 var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
