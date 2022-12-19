@@ -323,14 +323,12 @@ func ValidateNamespaces(deploymentTargetID string, ns string, status string) err
 
 //DeletePDSNamespace deletes the given namespace
 func DeletePDSNamespace(namespace string) error {
-	k8sOps := k8sCore
-	err := k8sOps.DeleteNamespace(namespace)
+	err := k8sCore.DeleteNamespace(namespace)
 	return err
 }
 
 //UpdatePDSNamespce updates the namespace
 func UpdatePDSNamespce(name string, nsLables map[string]string) (*corev1.Namespace, error) {
-	k8sOps := k8sCore
 	nsSpec := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -341,8 +339,7 @@ func UpdatePDSNamespce(name string, nsLables map[string]string) (*corev1.Namespa
 			Labels: nsLables,
 		},
 	}
-	ns, err := k8sOps.UpdateNamespace(nsSpec)
-	time.Sleep(10 * time.Second)
+	ns, err := k8sCore.UpdateNamespace(nsSpec)
 	if err != nil {
 		return nil, err
 	}

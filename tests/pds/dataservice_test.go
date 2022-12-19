@@ -122,6 +122,11 @@ var _ = Describe("{Enable/DisableNamespace}", func() {
 			log.FailOnError(err, "Error while creating pds namespace")
 			log.InfoD("PDS Namespace created %v", testns)
 
+			defer func() {
+				err := pdslib.DeletePDSNamespace(pdsNamespace)
+				log.FailOnError(err, "Error while deleting namespace")
+			}()
+
 			// Modifies the namespace multiple times
 			for index := 0; index < 5; index++ {
 				nsLables := map[string]string{
@@ -148,12 +153,10 @@ var _ = Describe("{Enable/DisableNamespace}", func() {
 
 			}
 
-			defer func() {
-				err := pdslib.DeletePDSNamespace(pdsNamespace)
-				Expect(err).NotTo(HaveOccurred())
-			}()
-
 		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 
 })
@@ -277,6 +280,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
 		defer func() {
 			if !isDeploymentsDeleted {
 				Step("Delete created deployments")
@@ -285,8 +290,6 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 			}
 		}()
-
-		defer EndTorpedoTest()
 	})
 })
 
