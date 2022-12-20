@@ -1,10 +1,8 @@
 package tests
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -156,7 +154,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 
 				Step("Delete pods from pds-system namespace", func() {
 					log.InfoD("Getting PDS System Pods")
-					agentPod := GetPDSAgentPods(pdsNamespace)
+					agentPod := pdslib.GetPDSAgentPods(pdsNamespace)
 
 					var wg sync.WaitGroup
 					wg.Add(2)
@@ -177,7 +175,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 					wg.Wait()
 
 					log.Infof("Getting new PDS agent Pod")
-					agentPod = GetPDSAgentPods(pdsNamespace)
+					agentPod = pdslib.GetPDSAgentPods(pdsNamespace)
 
 					log.InfoD("Validating new PDS agent Pod")
 					err = k8sCore.ValidatePod(&agentPod, 5*time.Minute, 10*time.Second)
@@ -213,7 +211,8 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 			}
 		}()
 	})
-	
+})
+
 var _ = Describe("{Enable/DisableNamespace}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
@@ -1034,23 +1033,6 @@ var _ = Describe("{RestartPXPods}", func() {
 	})
 
 })
-
-func GetPDSAgentPods(pdsNamespace string) corev1.Pod {
-	steplog := fmt.Sprintf("Get agent pod from %v namespace", pdsNamespace)
-	Step(steplog, func() {
-		podList, err := pdslib.GetPods(pdsNamespace)
-		log.FailOnError(err, "Error while getting pods")
-		for _, pod := range podList.Items {
-			if strings.Contains(pod.Name, "pds-agent") {
-				log.Infof("%v", pod.Name)
-				pdsAgentpod = pod
-				break
-			}
-		}
-
-	})
-	return pdsAgentpod
-}
 
 func ValidateDeployments(resourceTemp pdslib.ResourceSettingTemplate, storageOp pdslib.StorageOptions, config pdslib.StorageClassConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
 	log.InfoD("filesystem used %v ", config.Spec.StorageOptions.Filesystem)

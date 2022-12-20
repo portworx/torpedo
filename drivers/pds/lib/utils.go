@@ -155,6 +155,7 @@ var (
 	deployment                            *pds.ModelsDeployment
 	apiClient                             *pds.APIClient
 	ns                                    *corev1.Namespace
+	pdsAgentpod                           corev1.Pod
 	err                                   error
 	isavailable                           bool
 	isTemplateavailable                   bool
@@ -1490,9 +1491,25 @@ func CreateK8sPDSNamespace(nname string) (*corev1.Namespace, error) {
 
 }
 
+//DeleteK8sPDSNamespace deletes the pdsnamespace
 func DeleteK8sPDSNamespace(nname string) error {
 	err := k8sCore.DeleteNamespace(nname)
 	return err
+}
+
+//GetPDSAgentPods returns the pds agent pod
+func GetPDSAgentPods(pdsNamespace string) corev1.Pod {
+	log.InfoD("Get agent pod from %v namespace", pdsNamespace)
+	podList, err := GetPods(pdsNamespace)
+	log.FailOnError(err, "Error while getting pods")
+	for _, pod := range podList.Items {
+		if strings.Contains(pod.Name, "pds-agent") {
+			log.Infof("%v", pod.Name)
+			pdsAgentpod = pod
+			break
+		}
+	}
+	return pdsAgentpod
 }
 
 func GetPodsFromK8sStatefulSet(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {

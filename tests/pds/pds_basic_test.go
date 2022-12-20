@@ -64,7 +64,6 @@ var (
 	dash                                    *aetosutil.Dashboard
 	deployment                              *pds.ModelsDeployment
 	k8sCore                                 = core.Instance()
-	pdsAgentpod                             corev1.Pod
 )
 
 func TestDataService(t *testing.T) {
