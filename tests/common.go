@@ -46,8 +46,6 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
-	opv1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	optestutil "github.com/libopenstorage/operator/pkg/util/test"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo"
@@ -122,9 +120,6 @@ import (
 const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
 	SkipClusterScopedObjects = "skipClusterScopedObjects"
-
-	// PxReleaseManifestURLEnvVarName is a release manifest URL Env variable name
-	PxReleaseManifestURLEnvVarName = "PX_RELEASE_MANIFEST_URL"
 )
 
 const (
@@ -146,7 +141,7 @@ const (
 	hyperConvergedFlag                   = "hyper-converged"
 	storageUpgradeEndpointURLCliFlag     = "storage-upgrade-endpoint-url"
 	storageUpgradeEndpointVersionCliFlag = "storage-upgrade-endpoint-version"
-	specGeneratorUpgradeUrlListFlag      = "spec-generator-upgrade-url-list"
+	upgradeStorageDriverEndpointListFlag = "upgrade-storage-driver-endpoint-list"
 	provisionerFlag                      = "provisioner"
 	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
 	configMapFlag                        = "config-map"
@@ -2303,158 +2298,6 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 	wg.Wait()
 }
 
-// UpgradePxStorageClusterNew perform PX StorageCluster upgrade
-func UpgradePxStorageClusterNew(specGenUrl string) (bool, error) {
-	log.InfoD("Upgrading StorageCluster")
-	var k8sCore = core.Instance()
-
-	k8sVersion, err := k8sCore.GetVersion()
-	if err != nil {
-		return false, err
-	}
-
-	imageList, err := optestutil.GetImagesFromVersionURL(specGenUrl, k8sVersion.String())
-	if err != nil {
-		return false, fmt.Errorf("error getting latest operator version. Cause: %v", err)
-	}
-
-	cluster, err := Inst().V.GetPXStorageCluster()
-	if err != nil {
-		return false, err
-	}
-
-	updateParamFunc := func(cluster *opv1.StorageCluster) *opv1.StorageCluster {
-		// Set oci-mon version
-		cluster.Spec.Image = imageList["version"]
-		// Add Release Manifest URL incase of edge spec
-		if strings.Contains(specGenUrl, "edge") {
-			env, err := addPxReleaseManifestEnvVars(cluster.Spec.Env, specGenUrl)
-			if err != nil {
-				return nil
-			}
-			cluster.Spec.Env = env
-		}
-		return cluster
-	}
-
-	_, err = Inst().V.UpdateAndValidateStorageCluster(cluster, updateParamFunc, specGenUrl, false)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
-
-func addPxReleaseManifestEnvVars(origEnvVarList []v1.EnvVar, specGenURL string) ([]v1.EnvVar, error) {
-	var envVarList []v1.EnvVar
-
-	// Set release manifest URL in case of edge-install.portworx.com
-	if strings.Contains(specGenURL, "edge") {
-		releaseManifestURL, err := optestutil.ConstructPxReleaseManifestURL(specGenURL)
-		if err != nil {
-			return nil, err
-		}
-
-		// Add release manifest URL to Env Vars
-		envVarList = append(envVarList, v1.EnvVar{Name: PxReleaseManifestURLEnvVarName, Value: releaseManifestURL})
-	}
-
-	return mergeEnvVars(origEnvVarList, envVarList), nil
-}
-
-// mergeEnvVars will overwrite existing or add new env variables
-func mergeEnvVars(origList, newList []v1.EnvVar) []v1.EnvVar {
-	envMap := make(map[string]v1.EnvVar)
-	var mergedList []v1.EnvVar
-	for _, env := range origList {
-		envMap[env.Name] = env
-	}
-	for _, env := range newList {
-		envMap[env.Name] = env
-	}
-	for _, env := range envMap {
-		mergedList = append(mergedList, *(env.DeepCopy()))
-	}
-	return mergedList
-}
-
-// UpgradePxStorageCluster perform storage cluster upgrade
-// TODO: This needs to be removed, leaving it as is to not break existing jobs and other tests that are using this func
-func UpgradePxStorageCluster() (bool, error) {
-	log.InfoD("Initiating operator based install upgrade")
-	operatorTag, err := getOperatorLatestVersion()
-
-	if err != nil {
-		return false, fmt.Errorf("error getting latest operator version. Cause: %v", err)
-	}
-	operatorImage := fmt.Sprintf("portworx/oci-monitor:%s", operatorTag)
-	log.InfoD("OCI-Monitor Image: %s", operatorImage)
-
-	err = Inst().V.UpdateStorageClusterImage(operatorImage)
-	if err != nil {
-		return false, fmt.Errorf("error updating storage cluster image. Cause: %v", err)
-	}
-	expectedVersion := operatorTag
-	checkTag := false
-	if strings.Contains(operatorImage, "-") {
-		expectedTag := strings.Split(operatorImage, "_")[1]
-		expectedVersion = fmt.Sprintf("%v-%v", Inst().StorageDriverUpgradeEndpointVersion, expectedTag)
-		checkTag = true
-	}
-
-	log.InfoD("Expected PX version %s", expectedVersion)
-
-	nodes := node.GetStorageDriverNodes()
-	nodesUpgradeMap := make(map[string]bool)
-	nodesMap := make(map[string]node.Node)
-
-	for _, n := range nodes {
-		nodesUpgradeMap[n.Name] = false
-		nodesMap[n.Name] = n
-
-	}
-	isUpgradeDone := false
-	waitCount := 2 * len(nodes)
-	for {
-		isNodeUpgraded := true
-		for k, v := range nodesMap {
-			if !nodesUpgradeMap[k] {
-				t := func() (interface{}, bool, error) {
-
-					pxVersion, err := Inst().V.GetPxVersionOnNode(v)
-					if err != nil {
-						return pxVersion, true, err
-					}
-					return pxVersion, false, nil
-				}
-				versionVal, err := task.DoRetryWithTimeout(t, defaultTimeout, 10*time.Second)
-				if err != nil {
-					return false, fmt.Errorf("error getting PX version for node %s. Cause: %v", k, err)
-				}
-				pxVersion := fmt.Sprintf("%v", versionVal)
-				log.Infof("Node : %s, Current version: %s, Expected Version : %s", k, pxVersion, expectedVersion)
-
-				if (checkTag && pxVersion == expectedVersion) || strings.Contains(pxVersion, expectedVersion) {
-					log.InfoD("Node %s successfully upgraded to version %s", k, pxVersion)
-					nodesUpgradeMap[k] = true
-				}
-			}
-		}
-		for _, val := range nodesUpgradeMap {
-			isNodeUpgraded = isNodeUpgraded && val
-		}
-
-		if isNodeUpgraded || waitCount == 0 {
-			isUpgradeDone = isNodeUpgraded
-			break
-		}
-		log.Infof("Volume driver upgrade not yet completed, Waiting for 2 mins and checking again.")
-		time.Sleep(2 * time.Minute)
-		waitCount--
-	}
-	return isUpgradeDone, nil
-}
-
 // CreateBackupGetErr creates backup without ending the test if it errors
 func CreateBackupGetErr(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string) (err error) {
@@ -3969,7 +3812,7 @@ type Torpedo struct {
 	GlobalScaleFactor                   int
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
-	StorageClusterUpgradeSpecGenUrlList string
+	UpgradeStorageDriverEndpointList    string
 	EnableStorkUpgrade                  bool
 	MinRunTimeMins                      int
 	ChaosLevel                          int
@@ -4015,7 +3858,7 @@ func ParseFlags() {
 	var appScaleFactor int
 	var volUpgradeEndpointURL string
 	var volUpgradeEndpointVersion string
-	var specGeneratorUrlList string
+	var upgradeStorageDriverEndpointList string
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
@@ -4069,7 +3912,7 @@ func ParseFlags() {
 		"Endpoint URL link which will be used for upgrade storage driver")
 	flag.StringVar(&volUpgradeEndpointVersion, storageUpgradeEndpointVersionCliFlag, defaultStorageUpgradeEndpointVersion,
 		"Endpoint version which will be used for checking version after upgrade storage driver")
-	flag.StringVar(&specGeneratorUrlList, specGeneratorUpgradeUrlListFlag, "", "Semicolon separated list of Spec Generator URLs for performing upgrade hops for StorageCluster")
+	flag.StringVar(&upgradeStorageDriverEndpointList, upgradeStorageDriverEndpointListFlag, "", "Comma separated list of Spec Generator URLs for performing upgrade hops for StorageCluster")
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
@@ -4237,7 +4080,7 @@ func ParseFlags() {
 				ChaosLevel:                          chaosLevel,
 				StorageDriverUpgradeEndpointURL:     volUpgradeEndpointURL,
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
-				StorageClusterUpgradeSpecGenUrlList: specGeneratorUrlList,
+				UpgradeStorageDriverEndpointList:    upgradeStorageDriverEndpointList,
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
 				SecureAppList:                       secureAppList,
@@ -5102,9 +4945,9 @@ func GetCloudDriveDeviceSpecs() ([]string, error) {
 	}
 
 	if !IsOperatorBasedInstall {
-		return deviceSpecs, fmt.Errorf("it is not operator based install,cannot get device spec")
+		return deviceSpecs, fmt.Errorf("it is not operator based install, cannot get device spec")
 	}
-	stc, err := Inst().V.GetStorageCluster()
+	stc, err := Inst().V.GetDriver()
 	if err != nil {
 		return deviceSpecs, err
 	}
@@ -5131,13 +4974,13 @@ func EnableAutoFSTrim() {
 	nodes := node.GetWorkerNodes()
 	var isPXNodeAvailable bool
 	for _, pxNode := range nodes {
-		isPxInstalled, err := Inst().V.IsPxInstalled(pxNode)
+		isPxInstalled, err := Inst().V.IsDriverInstalled(pxNode)
 		if err != nil {
 			log.Debugf("Could not get PX status on %s", pxNode.Name)
 		}
 		if isPxInstalled {
 			isPXNodeAvailable = true
-			pxVersion, err := Inst().V.GetPxVersionOnNode(pxNode)
+			pxVersion, err := Inst().V.GetDriverVersionOnNode(pxNode)
 			log.FailOnError(err, "Unable to get pxversion on node %s", pxNode.Name)
 			log.Infof("PX version %s", pxVersion)
 			pxVersionList := []string{}

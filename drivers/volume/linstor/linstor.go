@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
-	"github.com/portworx/torpedo/pkg/log"
-
 	lclient "github.com/LINBIT/golinstor/client"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
@@ -15,7 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -123,22 +120,6 @@ func (d *linstor) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 
 	log.Debugf("LINSTOR is fully operational on node: %s", n.Name)
 	return nil
-}
-
-func (d *linstor) ValidateStorageCluster(endpointURL, endpointVersion string, autoUpdateComponents bool) error {
-	// TODO: Add implementation
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "ValidateStorageCluster()",
-	}
-}
-
-func (d *linstor) UpdateAndValidateStorageCluster(cluster *v1.StorageCluster, f func(*v1.StorageCluster) *v1.StorageCluster, specGenUrl string, autoUpdateComponents bool) (*v1.StorageCluster, error) {
-	// TODO: Add implementation
-	return &v1.StorageCluster{}, &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "UpdateAndValidateStorageCluster()",
-	}
 }
 
 func init() {
