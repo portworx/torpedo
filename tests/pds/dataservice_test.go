@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"sync"
@@ -24,6 +25,29 @@ const (
 	defaultTestConnectionTimeout = 15 * time.Minute
 	defaultRebootTimeRange       = 5 * time.Minute
 )
+
+var _ = Describe("{CollectLogs}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", nil, 0)
+	})
+
+	It("Collect logs", func() {
+		Step("collect container logs", func() {
+			isDeploymentsDeleted = false
+			err = pdslib.CollectPodLogsandValidateWorkloads()
+			err = errors.New("an error message")
+			Expect(err).ShouldNot(HaveOccurred())
+			//log.FailOnError(err, "Failed while collecting pod logs")
+		})
+	})
+	JustAfterEach(func() {
+		if !isDeploymentsDeleted {
+			Step("Delete created deployments")
+		}
+
+		defer EndTorpedoTest()
+	})
+})
 
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
@@ -348,7 +372,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 						dataServiceDefaultAppConfigID, deployment.GetImageId(),
 						int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
 
-					log.FailOnError(err, "Error while updating dataservices")
+					// log.FailOnError(err, "Error while updating dataservices")
+					Expect(err).ShouldNot(HaveOccurred())
 					log.InfoD("Scaling up DataService %v ", ds.Name)
 
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
@@ -385,14 +410,13 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
+		if !isDeploymentsDeleted {
+			Step("Delete created deployments")
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		}
+
 	})
 })
 
