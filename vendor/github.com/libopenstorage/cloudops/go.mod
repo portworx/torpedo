@@ -13,6 +13,7 @@ require (
 	github.com/aws/aws-sdk-go v1.40.39
 	github.com/codeskyblue/go-sh v0.0.0-20170112005953-b097669b1569
 	github.com/golang/mock v1.4.4
+	github.com/google/uuid v1.1.2
 	github.com/hashicorp/go-version v1.2.1
 	github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible
 	github.com/libopenstorage/secrets v0.0.0-20210908194121-a1d19aa9713a

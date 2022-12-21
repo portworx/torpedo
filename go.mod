@@ -3,6 +3,7 @@ module github.com/portworx/torpedo
 go 1.12
 
 require (
+	cloud.google.com/go/iam v0.9.0 // indirect
 	github.com/Azure/azure-storage-blob-go v0.9.0
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/andygrunwald/go-jira v1.15.0
@@ -12,49 +13,46 @@ require (
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/educlos/testrail v0.0.0-20210915115134-adb5e6f62a6d
 	github.com/fatih/color v1.13.0
-	github.com/frankban/quicktest v1.14.2 // indirect
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/protobuf v1.5.2
-	github.com/hashicorp/go-version v1.2.1
+	github.com/hashicorp/go-version v1.6.0
 	github.com/hashicorp/vault/api v1.0.5-0.20200902155336-f9d5ce5a171a
 	github.com/heptio/velero v0.0.0-00010101000000-000000000000 // indirect
-	github.com/ktrysmt/go-bitbucket v0.9.55
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7
 	github.com/libopenstorage/autopilot-api v1.3.0
-	github.com/libopenstorage/cloudops v0.0.0-20221104040503-78e71ce44fb7
+	github.com/libopenstorage/cloudops v0.0.0-20221107233229-3fa4664e96b1
 	github.com/libopenstorage/openstorage v9.4.20+incompatible
-	github.com/libopenstorage/operator v0.0.0-20221017204507-4328e80ff06f
+	github.com/libopenstorage/operator v0.0.0-20221221033638-7ced5ec9d100
 	github.com/libopenstorage/stork v1.4.1-0.20220414104250-3c18fd21ed95
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.19.0
+	github.com/onsi/gomega v1.20.0
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
-	github.com/go-git/go-git/v5 v5.4.2
 	github.com/portworx/pds-api-go-client v0.0.0-20220901142946-b6ecf97f5e71
 	github.com/portworx/px-backup-api v1.2.2-0.20220822053657-49308ab319f1
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20220725231657-5a6a43c6a5b3
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20221208153443-c95ed6d757fa
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.12.2
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.1
 	github.com/trivago/tgo v1.0.7
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
-	golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be
-	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
-	google.golang.org/genproto v0.0.0-20220819174105-e9f053255caa
-	google.golang.org/grpc v1.48.0
+	golang.org/x/crypto v0.1.0
+	golang.org/x/net v0.1.0
+	google.golang.org/genproto v0.0.0-20221205194025-8222ab48f5fc
+	google.golang.org/grpc v1.51.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000
-	k8s.io/api v0.24.0
-	k8s.io/apiextensions-apiserver v0.21.4
-	k8s.io/apimachinery v0.24.3
+	k8s.io/api v0.25.1
+	k8s.io/apiextensions-apiserver v0.25.1
+	k8s.io/apimachinery v0.25.1
 	k8s.io/client-go v12.0.0+incompatible
 )
 
