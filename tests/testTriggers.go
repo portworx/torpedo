@@ -386,7 +386,8 @@ const (
 	// stork application backup volume resize runs stork backups for applications and inject volume ha-update in between
 	StorkAppBkpHaUpdate = "storkappbkphaupdate"
 	// stork application backup runs with px restart
-	StorkAppBkpPxRestart = "storkappbkppxrestart"
+	StorkAppBkpPxRestart  = "storkappbkppxrestart"
+	StorkAppBkpPoolResize = "storkappbkppoolresize"
 	// HAIncreaseAndReboot performs repl-add
 	HAIncreaseAndReboot = "haIncreaseAndReboot"
 	// AddDrive performs drive add for on-prem cluster
@@ -5941,7 +5942,7 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 		s3SecretName     = "s3secret"
 		backupNamespaces []string
 		timeout          = 5 * time.Minute
-		taskNamePrefix   = "stork-app-backup-"
+		taskNamePrefix   = "stork-app-backup"
 	)
 
 	Step(fmt.Sprintf("Deploy applications for backup, with frequency: %v", chaosLevel), func() {
@@ -5971,22 +5972,24 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 		log.Infof("Backup applications, present in namespaces - %v", backupNamespaces)
 		log.Infof("Start backup application")
 		for i, currbkNamespace := range backupNamespaces {
-			taskNamePrefix = taskNamePrefix + fmt.Sprintf("%d", i)
-			currBackupLocation, err := applicationbackup.CreateBackupLocation(taskNamePrefix+"-location", currbkNamespace, s3SecretName)
+			taskNamePrefix = taskNamePrefix + fmt.Sprintf("-%d", i)
+			backuplocationname := taskNamePrefix + "-location" + time.Now().Format("15h03m05s")
+			backupname := taskNamePrefix + time.Now().Format("15h03m05s")
+			currBackupLocation, err := applicationbackup.CreateBackupLocation(backuplocationname, currbkNamespace, s3SecretName)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
 				return
 			}
-			bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(taskNamePrefix+"-backup", currbkNamespace, currBackupLocation)
+			_, bkp_create_err := applicationbackup.CreateApplicationBackup(backupname, currbkNamespace, currBackupLocation)
 			if bkp_create_err != nil {
 				UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
 			}
-			bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(taskNamePrefix+"-backup", currbkNamespace, timeout)
+			bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(backupname, currbkNamespace, timeout)
 			if bkp_comp_err != nil {
 				UpdateOutcome(event, fmt.Errorf("backup successful failed with %v", bkp_comp_err))
 				return
 			}
-			log.InfoD("backup successful, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+			log.InfoD("backup successful, backup name - %v, backup location - %v", backupname, backuplocationname)
 		}
 		updateMetrics(*event)
 	})
@@ -6015,7 +6018,7 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 	var (
 		s3SecretName   = "s3secret"
 		timeout        = 5 * time.Minute
-		taskNamePrefix = "stork-app-backup"
+		taskNamePrefix = "stork-appbkp-volresize"
 		appVolumes     []*volume.Volume
 		requestedVols  []*volume.Volume
 	)
@@ -6050,23 +6053,25 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
 				log.Infof("Start backup application")
-				taskNamePrefix = taskNamePrefix + fmt.Sprintf("%d", i)
-				currBackupLocation, err := applicationbackup.CreateBackupLocation(taskNamePrefix+"-location", currbkNamespace, s3SecretName)
+				taskNamePrefix = taskNamePrefix + fmt.Sprintf("-%d", i)
+				backuplocationname := taskNamePrefix + "-location" + time.Now().Format("15h03m05s")
+				backupname := taskNamePrefix + time.Now().Format("15h03m05s")
+				currBackupLocation, err := applicationbackup.CreateBackupLocation(backuplocationname, currbkNamespace, s3SecretName)
 				if err != nil {
 					UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
 					return
 				}
-				bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(taskNamePrefix+"-backup", currbkNamespace, currBackupLocation)
+				_, bkp_create_err := applicationbackup.CreateApplicationBackup(backupname, currbkNamespace, currBackupLocation)
 				if bkp_create_err != nil {
 					UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
 					return
 				}
-				bkp_start_err := applicationbackup.WaitForAppBackupToStart(bkp.Name, currbkNamespace, timeout)
+				bkp_start_err := applicationbackup.WaitForAppBackupToStart(backupname, currbkNamespace, timeout)
 				if bkp_start_err == nil {
 					log.Info("Application backup is in progress, starting volume resize")
 					requestedVols, _ = Inst().S.ResizeVolume(ctx, "")
 					log.Info("verify application backup successful")
-					bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(taskNamePrefix+"-backup", currbkNamespace, timeout)
+					bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(backupname, currbkNamespace, timeout)
 					if bkp_comp_err != nil {
 						UpdateOutcome(event, fmt.Errorf("backup successful failed with %v", bkp_comp_err))
 						return
@@ -6083,7 +6088,7 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 					UpdateOutcome(event, fmt.Errorf("backup start fail %v", bkp_start_err))
 					return
 				}
-				log.InfoD("backup successful and volume resize injected during backup successfully, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+				log.InfoD("backup successful and volume resize injected during backup successfully, backup name - %v, backup location - %v", backupname, backuplocationname)
 			}
 			updateMetrics(*event)
 		}
@@ -6113,7 +6118,7 @@ func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan
 	var (
 		s3SecretName   = "s3secret"
 		timeout        = 5 * time.Minute
-		taskNamePrefix = "stork-app-backup"
+		taskNamePrefix = "stork-appbkp-haupdate"
 		appVolumes     []*volume.Volume
 	)
 
@@ -6148,18 +6153,20 @@ func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan
 					return
 				}
 				log.Infof("Start backup application")
-				taskNamePrefix = taskNamePrefix + fmt.Sprintf("%d", i)
-				currBackupLocation, err := applicationbackup.CreateBackupLocation(taskNamePrefix+"-location", currbkNamespace, s3SecretName)
+				taskNamePrefix = taskNamePrefix + fmt.Sprintf("-%d", i)
+				backuplocationname := taskNamePrefix + "-location" + time.Now().Format("15h03m05s")
+				backupname := taskNamePrefix + time.Now().Format("15h03m05s")
+				currBackupLocation, err := applicationbackup.CreateBackupLocation(backuplocationname, currbkNamespace, s3SecretName)
 				if err != nil {
 					UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
 					return
 				}
-				bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(taskNamePrefix+"-backup", currbkNamespace, currBackupLocation)
+				bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(backupname, currbkNamespace, currBackupLocation)
 				if bkp_create_err != nil {
 					UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
 					return
 				}
-				bkp_start_err := applicationbackup.WaitForAppBackupToStart(bkp.Name, currbkNamespace, timeout)
+				bkp_start_err := applicationbackup.WaitForAppBackupToStart(backupname, currbkNamespace, timeout)
 				if bkp_start_err == nil {
 					failure := false
 					for _, v := range appVolumes {
@@ -6185,11 +6192,10 @@ func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan
 						expRF := currRep + 1
 						log.InfoD("Expected replication factor is: %v\n", expRF)
 						if expRF > MaxRF {
-							UpdateOutcome(event, fmt.Errorf("skipping this test as replicas more than expRF, %v is expRF and %v is MaxRF", expRF, MaxRF))
-							failure = true
-							return
+							expRF = currRep - 1
+							log.InfoD("as expRF is more than maxRF, will reduce the HA, new expected replication factor is %v", expRF)
 						}
-						err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, true)
+						err = Inst().V.SetReplicationFactor(v, expRF, nil, nil, true)
 						if err != nil {
 							UpdateOutcome(event, fmt.Errorf("failed to set replication factor %v", err))
 							failure = true
@@ -6202,15 +6208,22 @@ func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan
 							return
 						}
 						dash.VerifySafely(newRepl, expRF, fmt.Sprintf("validate repl update for volume %s", v.Name))
-						log.InfoD("repl increase validation completed on app %s", v.Name)
+						log.InfoD("repl increase validation completed on volume %s", v.Name)
+						log.InfoD("Reset replication factor on volume")
+						err = Inst().V.SetReplicationFactor(v, currRep, nil, nil, true)
+						if err != nil {
+							UpdateOutcome(event, fmt.Errorf("failed to set replication factor %v", err))
+							failure = true
+							return
+						}
 					}
 					if !failure {
-						bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(taskNamePrefix+"-backup", currbkNamespace, timeout)
+						bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(bkp.Name, bkp.Namespace, timeout)
 						if bkp_comp_err != nil {
 							UpdateOutcome(event, fmt.Errorf("backup completion failed with %v", bkp_comp_err))
 							return
 						}
-						log.InfoD("backup successful and volume ha-update injected during backup successfully, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+						log.InfoD("backup successful and volume ha-update injected during backup successfully, backup name - %v, backup location - %v", backupname, backuplocationname)
 					}
 				} else {
 					UpdateOutcome(event, fmt.Errorf("backup start fail %v", bkp_start_err))
@@ -6245,7 +6258,7 @@ func TriggerStorkAppBkpPxRestart(contexts *[]*scheduler.Context, recordChan *cha
 	var (
 		s3SecretName   = "s3secret"
 		timeout        = 5 * time.Minute
-		taskNamePrefix = "stork-app-backup"
+		taskNamePrefix = "stork-appbkp-pxrestart"
 	)
 
 	Step(fmt.Sprintf("Deploy applications for backup, with frequency: %v", chaosLevel), func() {
@@ -6272,18 +6285,20 @@ func TriggerStorkAppBkpPxRestart(contexts *[]*scheduler.Context, recordChan *cha
 				currbkNamespace := GetAppNamespace(ctx, taskName)
 				log.Infof("Backup applications, present in namespaces - %v", currbkNamespace)
 				log.Infof("Start backup application")
-				taskNamePrefix = taskNamePrefix + fmt.Sprintf("%d", i)
-				currBackupLocation, err := applicationbackup.CreateBackupLocation(taskNamePrefix+"-location", currbkNamespace, s3SecretName)
+				taskNamePrefix = taskNamePrefix + fmt.Sprintf("-%d", i)
+				backuplocationname := taskNamePrefix + "-location" + time.Now().Format("15h03m05s")
+				backupname := taskNamePrefix + time.Now().Format("15h03m05s")
+				currBackupLocation, err := applicationbackup.CreateBackupLocation(backuplocationname, currbkNamespace, s3SecretName)
 				if err != nil {
 					UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
 					return
 				}
-				bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(taskNamePrefix+"-backup", currbkNamespace, currBackupLocation)
+				bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(backupname, currbkNamespace, currBackupLocation)
 				if bkp_create_err != nil {
 					UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
 					return
 				}
-				bkp_start_err := applicationbackup.WaitForAppBackupToStart(bkp.Name, currbkNamespace, timeout)
+				bkp_start_err := applicationbackup.WaitForAppBackupToStart(bkp.Name, bkp.Namespace, timeout)
 				if bkp_start_err == nil {
 					Step("Restart Portworx", func() {
 						nodes := node.GetStorageDriverNodes()
@@ -6299,7 +6314,130 @@ func TriggerStorkAppBkpPxRestart(contexts *[]*scheduler.Context, recordChan *cha
 					UpdateOutcome(event, fmt.Errorf("backup start fail %v", bkp_start_err))
 					return
 				}
+				bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(bkp.Name, bkp.Namespace, timeout)
+				if bkp_comp_err != nil {
+					UpdateOutcome(event, fmt.Errorf("backup completion failed with %v", bkp_comp_err))
+					return
+				}
 				log.InfoD("backup successful and px restart injected during backup successfully, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+			}
+		}
+		updateMetrics(*event)
+	})
+}
+
+func TriggerStorkAppBkpPoolResize(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(StorkAppBkpPoolResize)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork Appplication Backup with Pool resize triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppTasksDown,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	chaosLevel := ChaosMap[StorkAppBkpPoolResize]
+
+	var (
+		s3SecretName   = "s3secret"
+		timeout        = 5 * time.Minute
+		taskNamePrefix = "stork-appbkp-poolresize"
+	)
+
+	Step(fmt.Sprintf("Deploy applications for backup, with frequency: %v", chaosLevel), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("unable to write kubeconfigs, getting error %v", err))
+			return
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("getting error in setting source kubeconfig %v", err))
+			return
+		}
+		UpdateOutcome(event, err)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				currbkNamespace := GetAppNamespace(ctx, taskName)
+				log.Infof("Backup applications, present in namespaces - %v", currbkNamespace)
+				log.Infof("Start backup application")
+				taskNamePrefix = taskNamePrefix + fmt.Sprintf("-%d", i)
+				backuplocationname := taskNamePrefix + "-location" + time.Now().Format("15h03m05s")
+				backupname := taskNamePrefix + time.Now().Format("15h03m05s")
+				currBackupLocation, err := applicationbackup.CreateBackupLocation(backuplocationname, currbkNamespace, s3SecretName)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
+					return
+				}
+				bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(backupname, currbkNamespace, currBackupLocation)
+				if bkp_create_err != nil {
+					UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
+					return
+				}
+				bkp_start_err := applicationbackup.WaitForAppBackupToStart(bkp.Name, bkp.Namespace, timeout)
+				if bkp_start_err == nil {
+					chaosLevel := getPoolExpandPercentage(StorkAppBkpPoolResize)
+					stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
+					Step(stepLog, func() {
+						poolsToBeResized, err := getStoragePoolsToExpand()
+						if err != nil {
+							log.Error(err.Error())
+							UpdateOutcome(event, err)
+							return
+						}
+						log.InfoD("Pools to resize-disk [%v]", poolsToBeResized)
+						var wg sync.WaitGroup
+
+						for _, pool := range poolsToBeResized {
+							//Skipping pool resize if pool rebalance is enabled for the pool
+							if !isPoolRebalanceEnabled(pool.Uuid) {
+								//Initiating multiple pool expansions by resize-disk
+								go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
+								wg.Add(1)
+							}
+
+						}
+						wg.Wait()
+					})
+					stepLog = "validate all apps after pool resize using resize-disk operation"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						errorChan := make(chan error, errorChannelSize)
+						for _, ctx := range *contexts {
+							ValidateContext(ctx, &errorChan)
+							if strings.Contains(ctx.App.Key, fastpathAppName) {
+								err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+								UpdateOutcome(event, err)
+
+							}
+						}
+					})
+				} else {
+					UpdateOutcome(event, fmt.Errorf("backup start fail %v", bkp_start_err))
+					return
+				}
+				bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(bkp.Name, bkp.Namespace, timeout)
+				if bkp_comp_err != nil {
+					UpdateOutcome(event, fmt.Errorf("backup completion failed with %v", bkp_comp_err))
+					return
+				}
+				log.InfoD("backup successful and pool resize injected during backup successfully, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+
 			}
 		}
 		updateMetrics(*event)
