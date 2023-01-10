@@ -2,15 +2,17 @@ package tests
 
 import (
 	"fmt"
+
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	"github.com/portworx/torpedo/pkg/log"
 
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
@@ -2051,5 +2053,94 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+
+	var _ = Describe("{StoPoolExpMulPools}", func() {
+		/*
+			Steps : Verify if Multiple Pools exist in the system
+					Expand one of the available pools present from the list of available pools
+		*/
+		var testrailID = 51298
+		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51298
+		// testrailID Description : Having multiple pools and resize only one pool
+		var runID int
+		JustBeforeEach(func() {
+			StartTorpedoTest("StoPoolExpMulPools", "Validate storage pool expansion using resize-disk option when multiple pools are present on the cluster", nil, testrailID)
+			runID = testrailuttils.AddRunsToMilestone(testrailID)
+		})
+
+		// Schedule the applications to run on K8s cluster
+		var contexts []*scheduler.Context
+		stepLog := "Has to schedule apps, and expand it by resizing a pool "
+		It(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
+			}
+			ValidateApplications(contexts)
+
+			// Get all the storage Nodes present in the system
+			stNodes := node.GetStorageNodes()
+			if len(stNodes) == 0 {
+				dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found!")
+			}
+			log.InfoD("All Storage Nodes present on the kubernetes cluster %s", stNodes)
+
+			// List of all the Storage pools available on the cluster
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+
+			// With this we are verifying multiple pools present on the cluster .
+			log.InfoD("Verify if multiple pools are present on the system")
+			dash.VerifyFatal(len(pools) > 1, true, " Storage pools exist?")
+
+			// Select the Node to Expand on which the IO is running
+			var selectedNode node.Node
+			var selectedPool *api.StoragePool
+			for _, stNode := range stNodes {
+				selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
+				if selectedPool != nil {
+					selectedNode = stNode
+					break
+				}
+			}
+
+			stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
+			Step(stepLog, func() {
+				poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
+				log.FailOnError(err, "Failed to get pool using UUID ")
+				expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
+
+				isjournal, err := isJournalEnabled()
+				log.FailOnError(err, "Failed to check if Journal enabled")
+
+				log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+				err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+				resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using auto", selectedPool.Uuid, selectedNode.Name))
+			})
+
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			ValidateAndDestroy(contexts, opts)
+
+			stepLog = "destroy all the applications created before test runs"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for _, ctx := range contexts {
+					TearDownContext(ctx, opts)
+				}
+			})
+		})
+		JustAfterEach(func() {
+			defer EndTorpedoTest()
+			AfterEachTest(contexts, testrailID, runID)
+		})
 	})
 })
