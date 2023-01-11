@@ -125,7 +125,8 @@ const (
 const (
 	k8sNodeReadyTimeout    = 5 * time.Minute
 	volDirCleanupTimeout   = 5 * time.Minute
-	k8sObjectCreateTimeout = 4 * time.Minute
+	k8sObjectCreateTimeout = 2 * time.Minute
+	k8sObjectCloneSnapshotTimeout = 4 * time.Minute
 	k8sDestroyTimeout      = 5 * time.Minute
 	// FindFilesOnWorkerTimeout timeout for find files on worker
 	FindFilesOnWorkerTimeout = 1 * time.Minute
@@ -5961,7 +5962,7 @@ func (k *K8s) waitForPodToBeReady(podname string, namespace string) error {
 		}
 		return "", false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, k8sObjectCloneSnapshotTimeout, DefaultRetryInterval); err != nil {
 		return err
 	}
 	log.Infof("Pod is up and running: %s", pod.Name)
