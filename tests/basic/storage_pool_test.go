@@ -2074,6 +2074,7 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 		stepLog := "Has to schedule apps, and expand it by resizing a pool "
 		It(stepLog, func() {
 			log.InfoD(stepLog)
+
 			contexts = make([]*scheduler.Context, 0)
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2088,24 +2089,25 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 			}
 			log.InfoD("All Storage Nodes present on the kubernetes cluster %s", stNodes)
 
-			// List of all the Storage pools available on the cluster
-			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-			log.FailOnError(err, "Failed to list storage pools")
-
-			// With this we are verifying multiple pools present on the cluster .
-			log.InfoD("Verify if multiple pools are present on the system")
-			dash.VerifyFatal(len(pools) > 1, true, " Storage pools exist?")
-
-			// Select the Node to Expand on which the IO is running
+			/* Validate if the Node with Multiple pools are available ,
+			if, any node has multiple pools present , then use that Node for expanding
+			else, Fail the test case
+			*/
 			var selectedNode node.Node
-			var selectedPool *api.StoragePool
-			for _, stNode := range stNodes {
-				selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
-				if selectedPool != nil {
-					selectedNode = stNode
+			isMultiPoolNode := false
+			for _, selNode := range stNodes {
+				log.InfoD("Validating Node %s for multipool configuraitons", selNode.Name)
+				if len(selNode.StoragePools) > 1 {
+					isMultiPoolNode = true
+					selectedNode = selNode
 					break
 				}
 			}
+
+			dash.VerifyFatal(isMultiPoolNode, true, "Multipool Node found ?")
+			// Selecting Storage pool based on Pools present on the Node
+			selectedPool, err := GetPoolWithIOsInGivenNode(selectedNode)
+			log.FailOnError(err, "error identifying volume")
 
 			stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
 			Step(stepLog, func() {
