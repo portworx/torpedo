@@ -983,8 +983,7 @@ func (d *portworx) EnterPoolMaintenance(n node.Node) error {
 			TimeBeforeRetry: defaultRetryInterval,
 		})
 	if err != nil {
-		log.Errorf(fmt.Sprintf("error when entering pool maintenance, Err: %v", err))
-		return err
+		return fmt.Errorf("error when entering pool maintenance on node [%s], Err: %v", n.Name, err)
 	}
 	log.Infof("Enter pool maintenance %s", out)
 	return nil
@@ -1000,8 +999,7 @@ func (d *portworx) ExitPoolMaintenance(n node.Node) error {
 			TimeBeforeRetry: defaultRetryInterval,
 		})
 	if err != nil {
-		log.Errorf(fmt.Sprintf("error when exiting pool maintenance, Err: %v", err))
-		return err
+		return fmt.Errorf("error when exiting pool maintenance on node [%s], Err: %v", n.Name, err)
 	}
 	log.Infof("Exit pool maintenance %s", out)
 	return nil

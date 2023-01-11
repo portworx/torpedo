@@ -66,7 +66,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID ")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -100,7 +100,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
@@ -164,7 +164,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID ")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -198,7 +198,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize >= expectedSizeWithJournal {
@@ -263,7 +263,7 @@ var _ = Describe("{StoragePoolExpandDiskAuto}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID ")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -295,7 +295,7 @@ var _ = Describe("{StoragePoolExpandDiskAuto}", func() {
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
@@ -365,7 +365,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID ")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -393,7 +393,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			log.FailOnError(err, "Expansion is not started")
 
 			storageNode, err := GetNodeWithGivenPoolID(poolIDToResize)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			err = RebootNodeAndWait(*storageNode)
 			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
@@ -406,7 +406,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
@@ -475,7 +475,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -502,7 +502,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 			log.FailOnError(err, "Failed while waiting for expansion to start")
 
 			storageNode, err := GetNodeWithGivenPoolID(poolIDToResize)
-			log.FailOnError(err, " Failed to get pool using UUID")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			err = RebootNodeAndWait(*storageNode)
 			log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
@@ -514,7 +514,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			log.FailOnError(err, " Failed to get pool using UUID")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize == expectedSize || newPoolSize == expectedSizeWithJournal {
@@ -1662,7 +1662,7 @@ var _ = Describe("{PoolResizeMul}", func() {
 		stepLog = fmt.Sprintf("Expanding pool  on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
@@ -1746,7 +1746,7 @@ var _ = Describe("{MultiDriveResizeDisk}", func() {
 		stepLog = fmt.Sprintf("Expanding pool  on node %s and pool UUID: %s using resize-disk", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
@@ -1806,7 +1806,7 @@ var _ = Describe("{ResizeWithPXRestart}", func() {
 			log.InfoD(stepLog)
 
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
@@ -1873,7 +1873,7 @@ var _ = Describe("{AddWithPXRestart}", func() {
 			log.InfoD(stepLog)
 
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
@@ -1957,7 +1957,7 @@ var _ = Describe("{ResizeDiskVolUpdate}", func() {
 			log.InfoD(stepLog)
 
 			poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
@@ -2056,7 +2056,7 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 		selectedPool := stNode.Pools[0]
 		var poolToBeResized *api.StoragePool
 		poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
-		log.FailOnError(err, "Failed to get pool using UUID ")
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 
 		stepLog = "Expand volume to the expanded pool"
 		var newRep int64
@@ -2163,7 +2163,7 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 		selectedPool := stNode.Pools[0]
 		var poolToBeResized *api.StoragePool
 		poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
-		log.FailOnError(err, "Failed to get pool using UUID ")
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 
 		stepLog = "Expand volume to the expanded pool"
 		var newRep int64
@@ -2345,7 +2345,7 @@ var _ = Describe("{MulPoolsResize}", func() {
 			resizedPoolsMap := make(map[string]uint64)
 			for _, selPool := range poolsToBeResized {
 				poolToBeResized, err := GetStoragePoolByUUID(selPool.Uuid)
-				log.FailOnError(err, "Failed to get pool using UUID ")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selPool.Uuid))
 				expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 				resizedPoolsMap[poolToBeResized.Uuid] = expectedSize
 
@@ -2421,7 +2421,7 @@ var _ = Describe("{MulPoolsAddDisk}", func() {
 			resizedPoolsMap := make(map[string]uint64)
 			for _, selPool := range poolsToBeResized {
 				poolToBeResized, err := GetStoragePoolByUUID(selPool.Uuid)
-				log.FailOnError(err, "Failed to get pool using UUID ")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selPool.Uuid))
 				expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 				resizedPoolsMap[poolToBeResized.Uuid] = expectedSize
 
@@ -2501,7 +2501,7 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 			log.InfoD(stepLog)
 
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			log.FailOnError(err, "Failed to check if Journal enabled")
@@ -2568,7 +2568,7 @@ var _ = Describe("{PoolExpandWhileIOAndPXRestart}", func() {
 
 		var poolToBeResized *api.StoragePool
 		poolToBeResized, err = GetStoragePoolByUUID(selectedPool)
-		log.FailOnError(err, "Failed to get pool using UUID ")
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool))
 
 		stepLog := "Initiate pool expansion drive on n2 and restart PX on n1"
 		Step(stepLog, func() {
@@ -2648,7 +2648,7 @@ var _ = Describe("{ResizeNodeMaintenanceCycle}", func() {
 
 		var poolToBeResized *api.StoragePool
 		poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
-		log.FailOnError(err, "Failed to get pool using UUID ")
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 
 		stepLog := "Initiate pool expansion drive start node maintenance"
 		Step(stepLog, func() {
@@ -2731,7 +2731,7 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", func() {
 
 		var poolToBeResized *api.StoragePool
 		poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
-		log.FailOnError(err, "Failed to get pool using UUID ")
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 
 		stepLog := "Initiate pool expansion drive start node maintenance"
 		Step(stepLog, func() {
@@ -2811,7 +2811,7 @@ var _ = Describe("{ResizePoolMaintenanceCycle}", func() {
 
 		var poolToBeResized *api.StoragePool
 		poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
-		log.FailOnError(err, "Failed to get pool using UUID ")
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 
 		stepLog := "Initiate pool expansion drive start pool maintenance"
 		Step(stepLog, func() {
@@ -2891,7 +2891,7 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", func() {
 
 		var poolToBeResized *api.StoragePool
 		poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
-		log.FailOnError(err, "Failed to get pool using UUID ")
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 
 		stepLog := "Initiate pool expansion drive start pool maintenance"
 		Step(stepLog, func() {
@@ -2972,7 +2972,7 @@ var _ = Describe("{NodeMaintenanceResize}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -3070,7 +3070,7 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -3163,7 +3163,7 @@ var _ = Describe("{PoolMaintenanceModeResize}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -3253,7 +3253,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -3344,7 +3344,7 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -3439,7 +3439,7 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -3534,7 +3534,7 @@ var _ = Describe("{ResizePoolMaintenanceMode}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -3628,7 +3628,7 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID")
+				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			}
 		})
 
@@ -3720,7 +3720,7 @@ var _ = Describe("{PXRestartResize}", func() {
 			log.InfoD(stepLog)
 
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
@@ -3785,7 +3785,7 @@ var _ = Describe("{PXRestartAddDisk}", func() {
 			log.InfoD(stepLog)
 
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
@@ -3856,7 +3856,7 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", func() {
 
 		var poolToBeResized *api.StoragePool
 		poolToBeResized, err = GetStoragePoolByUUID(selectedPool)
-		log.FailOnError(err, "Failed to get pool using UUID ")
+		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool))
 
 		stepLog := "Stop PX on n1 and validate volume data and start PX on n1"
 		Step(stepLog, func() {
