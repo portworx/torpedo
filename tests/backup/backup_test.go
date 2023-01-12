@@ -176,7 +176,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 	})
 	It("Basic Backup Creation", func() {
-
+                timestamp := strconv.Itoa(int(time.Now().Unix()))
 		Step("Validate applications and get their labels", func() {
 			ValidateApplications(contexts)
 			log.Infof("Create list of pod selector for the apps deployed")
@@ -198,18 +198,19 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Creating rules for backup", func() {
 
 			log.InfoD("Creating pre rule for deployed apps")
-			preRuleStatus, preRuleUid = Inst().Backup.CreateRuleForBackup("backup-pre-rule", "default", appList, "pre", ps)
+			PreRuleName := fmt.Sprintf("%s-%s", "backup-pre-rule", timestamp)
+			preRuleStatus, preRuleUid = Inst().Backup.CreateRuleForBackup(PreRuleName, "default", appList,
+                               "pre", ps)
 			dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
 			log.InfoD("Creating post rule for deployed apps")
-
-			postRuleStatus, postRuleUid = Inst().Backup.CreateRuleForBackup("backup-post-rule", "default", appList, "post", ps)
+                        PostRuleName := fmt.Sprintf("%s-%s", "backup-post-rule", timestamp)
+			postRuleStatus, postRuleUid = Inst().Backup.CreateRuleForBackup(PostRuleName, "default", appList,
+                               "post", ps)
 			dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
 		})
 
 		Step("Creating bucket,backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
-			timestamp := strconv.Itoa(int(time.Now().Unix()))
-			//snapShotClassName := PureSnapShotClass + "." + timestamp
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%s-%s", "bucket", provider, timestamp)
 				CredName := fmt.Sprintf("%s-%s-%s", "cred", provider, timestamp)
