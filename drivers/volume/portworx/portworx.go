@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"io"
 	"math"
 	"net"
@@ -19,6 +17,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 
 	"github.com/portworx/torpedo/pkg/s3utils"
 
@@ -813,6 +814,17 @@ func (d *portworx) DeleteVolume(volumeID string) error {
 
 	log.Infof("successfully deleted Portworx volume %v ", volID)
 	return nil
+}
+
+func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVolumeSnapshotCreateResponse, error) {
+	volDriver := d.getVolDriver()
+	snapshotList, err := volDriver.SnapshotCreate(d.getContext(), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeID, Name: snapName})
+	if err != nil {
+		err = fmt.Errorf("Error while creating snapshot on the volume %v due to %v", volumeID, err)
+		return nil, err
+	}
+	return snapshotList, nil
+
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {

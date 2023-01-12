@@ -176,6 +176,13 @@ func (d *DefaultDriver) InspectVolume(name string) (*api.Volume, error) {
 	}
 }
 
+func (d *DefaultDriver) CreateSnapshot(volumeID string, snapName string) (*api.SdkVolumeSnapshotCreateResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateSnapshot()",
+	}
+}
+
 // GetStorageDevices returns the list of storage devices used by the given node.
 func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
 	// TODO: Implement

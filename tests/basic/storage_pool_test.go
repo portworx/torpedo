@@ -2,7 +2,9 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 
+	"github.com/google/uuid"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 
@@ -2055,94 +2057,217 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 
-	var _ = Describe("{StoPoolExpMulPools}", func() {
-		/*
-			Steps : Verify if Multiple Pools exist in the system
-					Expand one of the available pools present from the list of available pools
+})
+
+var _ = Describe("{StoPoolExpMulPools}", func() {
+	/*
+		Steps : Verify if Multiple Pools exist in the system
+				Expand one of the available pools present from the list of available pools
+	*/
+	var testrailID = 51298
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51298
+	// testrailID Description : Having multiple pools and resize only one pool
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("StoPoolExpMulPools", "Validate storage pool expansion using resize-disk option when multiple pools are present on the cluster", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	// Schedule the applications to run on K8s cluster
+	var contexts []*scheduler.Context
+	stepLog := "Has to schedule apps, and expand it by resizing a pool "
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		// Get all the storage Nodes present in the system
+		stNodes := node.GetStorageNodes()
+		if len(stNodes) == 0 {
+			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found!")
+		}
+		log.InfoD("All Storage Nodes present on the kubernetes cluster %s", stNodes)
+
+		/* Validate if the Node with Multiple pools are available ,
+		if, any node has multiple pools present , then use that Node for expanding
+		else, Fail the test case
 		*/
-		var testrailID = 51298
-		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51298
-		// testrailID Description : Having multiple pools and resize only one pool
-		var runID int
-		JustBeforeEach(func() {
-			StartTorpedoTest("StoPoolExpMulPools", "Validate storage pool expansion using resize-disk option when multiple pools are present on the cluster", nil, testrailID)
-			runID = testrailuttils.AddRunsToMilestone(testrailID)
+		var selectedNode node.Node
+		isMultiPoolNode := false
+		for _, selNode := range stNodes {
+			log.InfoD("Validating Node %s for multipool configuraitons", selNode.Name)
+			if len(selNode.StoragePools) > 1 {
+				isMultiPoolNode = true
+				selectedNode = selNode
+				break
+			}
+		}
+
+		dash.VerifyFatal(isMultiPoolNode, true, "Multipool Node found ?")
+		// Selecting Storage pool based on Pools present on the Node
+		selectedPool, err := GetPoolWithIOsInGivenNode(selectedNode)
+		log.FailOnError(err, "error identifying volume")
+
+		stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
+		Step(stepLog, func() {
+			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
+			log.FailOnError(err, "Failed to get pool using UUID ")
+			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
+
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using auto", selectedPool.Uuid, selectedNode.Name))
 		})
 
-		// Schedule the applications to run on K8s cluster
-		var contexts []*scheduler.Context
-		stepLog := "Has to schedule apps, and expand it by resizing a pool "
-		It(stepLog, func() {
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+
+		stepLog = "destroy all the applications created before test runs"
+		Step(stepLog, func() {
 			log.InfoD(stepLog)
-
-			contexts = make([]*scheduler.Context, 0)
-
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
-			}
-			ValidateApplications(contexts)
-
-			// Get all the storage Nodes present in the system
-			stNodes := node.GetStorageNodes()
-			if len(stNodes) == 0 {
-				dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found!")
-			}
-			log.InfoD("All Storage Nodes present on the kubernetes cluster %s", stNodes)
-
-			/* Validate if the Node with Multiple pools are available ,
-			if, any node has multiple pools present , then use that Node for expanding
-			else, Fail the test case
-			*/
-			var selectedNode node.Node
-			isMultiPoolNode := false
-			for _, selNode := range stNodes {
-				log.InfoD("Validating Node %s for multipool configuraitons", selNode.Name)
-				if len(selNode.StoragePools) > 1 {
-					isMultiPoolNode = true
-					selectedNode = selNode
-					break
-				}
-			}
-
-			dash.VerifyFatal(isMultiPoolNode, true, "Multipool Node found ?")
-			// Selecting Storage pool based on Pools present on the Node
-			selectedPool, err := GetPoolWithIOsInGivenNode(selectedNode)
-			log.FailOnError(err, "error identifying volume")
-
-			stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
-			Step(stepLog, func() {
-				poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-				log.FailOnError(err, "Failed to get pool using UUID ")
-				expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
-
-				isjournal, err := isJournalEnabled()
-				log.FailOnError(err, "Failed to check if Journal enabled")
-
-				log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-				err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
-				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-
-				resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
-				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using auto", selectedPool.Uuid, selectedNode.Name))
-			})
-
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			ValidateAndDestroy(contexts, opts)
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
 
-			stepLog = "destroy all the applications created before test runs"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				opts := make(map[string]bool)
-				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-				for _, ctx := range contexts {
-					TearDownContext(ctx, opts)
+var _ = Describe("{CreateSnapshotsPoolResize}", func() {
+	/*
+		Steps : Try pool resize when lot of volumes are in resync state
+	*/
+	var testrailID = 50652
+	// Testrail Description : Try pool resize when lot of volumes are in resync state
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/50652
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateSnapshotsPoolResize", "Validate storage pool expansion using resize-disk option when multiple pools are present on the cluster", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	var totalSnapshotsPerVol int = 60
+	var snapshotName string
+	snapshotList := make(map[string][]string)
+	var selectedNode node.Node
+	var pickNode string
+
+	// Try pool resize when lot of volumes are in resync state
+	stepLog := "should get the existing storage node and expand the pool by resize-disk"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		//var VolumeMap map[]
+		var stNode node.Node
+
+		// Get List of Volumes presnet in the Node
+
+		stNodes := node.GetStorageNodes()
+		if len(stNodes) == 0 {
+			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
+		}
+		log.InfoD("List of Nodes present %s", stNodes)
+
+		for _, each := range contexts {
+			Volumes, err := Inst().S.GetVolumes(each)
+			fmt.Printf("List of Volumes Present in the system %s", Volumes)
+			log.FailOnError(err, "Listing Volumes Failed ")
+
+			fmt.Printf("Get all the details of Volumes Present")
+			for _, vols := range Volumes {
+				log.InfoD("List of Volumes to inspect %T , %s", vols, vols.ID)
+				volInspect, err := Inst().V.InspectVolume(vols.ID)
+				selectedNode := volInspect.ReplicaSets[0].Nodes
+				randomIndex := rand.Intn(len(selectedNode))
+				pickNode = selectedNode[randomIndex]
+
+				for _, n := range stNodes {
+					if n.Id == pickNode {
+						stNode = n
+					}
 				}
-			})
+				fmt.Printf("Volume Inspect Details %s", volInspect)
+				log.FailOnError(err, "Listing Volumes Failed ")
+				for snap := 0; snap < totalSnapshotsPerVol; snap++ {
+					uuidCreated := uuid.New()
+					snapshotName = fmt.Sprintf("snapshot_%s_%s", vols.ID, uuidCreated.String())
+					snapshotResponse, err := Inst().V.CreateSnapshot(vols.ID, snapshotName)
+					log.FailOnError(err, "error identifying volume")
+					snapshotList[vols.ID] = append(snapshotList[vols.ID], snapshotName)
+					sPrint := fmt.Sprintf("Snapshot %s created with ID %s", snapshotName, snapshotResponse.GetSnapshotId())
+					log.InfoD(sPrint)
+				}
+				break
+
+			}
+			log.InfoD("Snapshots created are %s", snapshotList)
+		}
+
+		// Selecting Storage pool based on Pools present on the Node
+		selectedPool, err := GetPoolWithIOsInGivenNode(stNode)
+		log.FailOnError(err, "error identifying volume")
+
+		stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
+		Step(stepLog, func() {
+			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
+			log.FailOnError(err, "Failed to get pool using UUID ")
+			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
+
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using auto", selectedPool.Uuid, selectedNode.Name))
 		})
-		JustAfterEach(func() {
-			defer EndTorpedoTest()
-			AfterEachTest(contexts, testrailID, runID)
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+
+		stepLog = "destroy all the applications created before test runs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
 		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
