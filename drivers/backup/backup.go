@@ -285,6 +285,9 @@ type Rule interface {
 
 	// UpdateOwnershipRule update ownership of rule
 	UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error)
+
+	// CreateRuleForBackup creates backup rule
+	CreateRuleForBackup(ruleName string, orgID string, appList []string, prePostFlag string, ps map[string]map[string]string) (bool, string)
 }
 
 var backupDrivers = make(map[string]Driver)

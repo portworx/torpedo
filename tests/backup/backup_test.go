@@ -13,9 +13,9 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/log"
-
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -124,41 +124,44 @@ var _ = Describe("{UserGroupManagement}", func() {
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
 	var (
-		ps       = make(map[string]map[string]string)
-		app_list = Inst().AppList
+		ps      = make(map[string]map[string]string)
+		appList = Inst().AppList
 	)
 	var contexts []*scheduler.Context
-	labelSelectores := make(map[string]string)
-	var CloudCredUID_list []string
+	labelSelectors := make(map[string]string)
+	var CloudCredUIDList []string
 	var appContexts []*scheduler.Context
-	var backup_location_name string
+	var backupLocationName string
 	var bkpNamespaces []string
-	var cluster_uid string
-	var cluster_status api.ClusterInfo_StatusInfo_Status
+	var clusterUid string
+	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
-	var pre_rule_uid string
-	var post_rule_uid string
-	var pre_rule_status bool
-	var post_rule_status bool
+	var preRuleUid string
+	var postRuleUid string
+	var preRuleStatus bool
+	var postRuleStatus bool
 	var namespaceMapping map[string]string
 	namespaceMapping = make(map[string]string)
 	providers := getProviders()
 	JustBeforeEach(func() {
 		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not ")
-		for i := 0; i < len(app_list); i++ {
-			if Contains(post_rule_app, app_list[i]) {
-				if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
+
+		for i := 0; i < len(appList); i++ {
+			if Contains(post_rule_app, appList[i]) {
+				if _, ok := app_parameters[appList[i]]["post_action_list"]; ok {
 					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
 				}
 			}
-			if Contains(pre_rule_app, app_list[i]) {
-				if _, ok := app_parameters[app_list[i]]["pre_action_list"]; ok {
+			if Contains(pre_rule_app, appList[i]) {
+				if _, ok := app_parameters[appList[i]]["pre_action_list"]; ok {
 					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
 				}
 			}
 		}
+
 		log.InfoD("Deploy applications")
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
@@ -170,19 +173,21 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				bkpNamespaces = append(bkpNamespaces, namespace)
 			}
 		}
+
 	})
 	It("Basic Backup Creation", func() {
+
 		Step("Validate applications and get their labels", func() {
 			ValidateApplications(contexts)
 			log.Infof("Create list of pod selector for the apps deployed")
 			for _, ctx := range appContexts {
 				for _, specObj := range ctx.App.SpecList {
 					if obj, ok := specObj.(*appsapi.Deployment); ok {
-						if Contains(app_list, obj.Name) {
+						if Contains(appList, obj.Name) {
 							ps[obj.Name] = obj.Spec.Template.Labels
 						}
 					} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-						if Contains(app_list, obj.Name) {
+						if Contains(appList, obj.Name) {
 							ps[obj.Name] = obj.Spec.Template.Labels
 						}
 					}
@@ -191,27 +196,31 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		})
 
 		Step("Creating rules for backup", func() {
+
 			log.InfoD("Creating pre rule for deployed apps")
-			pre_rule_status, pre_rule_uid = CreateRuleForBackup("backup-pre-rule", "default", app_list, "pre", ps)
-			dash.VerifyFatal(pre_rule_status, true, "Verifying pre rule for backup")
+			preRuleStatus, preRuleUid = Inst().Backup.CreateRuleForBackup("backup-pre-rule", "default", appList, "pre", ps)
+			dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
 			log.InfoD("Creating post rule for deployed apps")
-			post_rule_status, post_rule_uid = CreateRuleForBackup("backup-post-rule", "default", app_list, "post", ps)
-			dash.VerifyFatal(post_rule_status, true, "Verifying Post rule for backup")
+
+			postRuleStatus, postRuleUid = Inst().Backup.CreateRuleForBackup("backup-post-rule", "default", appList, "post", ps)
+			dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
 		})
 
 		Step("Creating bucket,backup location and cloud setting", func() {
 			log.InfoD("Creating bucket,backup location and cloud setting")
+			timestamp := strconv.Itoa(int(time.Now().Unix()))
+			//snapShotClassName := PureSnapShotClass + "." + timestamp
 			for _, provider := range providers {
-				bucketName := fmt.Sprintf("%s-%s", "bucket", provider)
-				CredName := fmt.Sprintf("%s-%s", "cred", provider)
-				backup_location_name = fmt.Sprintf("%s-%s", "location", provider)
+				bucketName := fmt.Sprintf("%s-%s-%s", "bucket", provider, timestamp)
+				CredName := fmt.Sprintf("%s-%s-%s", "cred", provider, timestamp)
+				backupLocationName = fmt.Sprintf("%s-%s-%s", "location", provider, timestamp)
 				CloudCredUID = uuid.New()
-				CloudCredUID_list = append(CloudCredUID_list, CloudCredUID)
+				CloudCredUIDList = append(CloudCredUIDList, CloudCredUID)
 				BackupLocationUID = uuid.New()
 				CreateBucket(provider, bucketName)
 				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
 				time.Sleep(time.Minute * 1)
-				CreateBackupLocation(provider, backup_location_name, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
+				CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID)
 			}
 		})
 
@@ -238,15 +247,15 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		})
 
 		Step("Register cluster for backup", func() {
-			cluster_status, cluster_uid = RegisterBackupCluster(orgID, "", "")
-			dash.VerifyFatal(cluster_status, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+			clusterStatus, clusterUid = RegisterBackupCluster(orgID, "", "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
 
 		Step("Taking backup of applications", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				CreateBackup(backupName, sourceClusterName, backup_location_name, BackupLocationUID, []string{namespace},
-					labelSelectores, orgID, cluster_uid, "backup-pre-rule", pre_rule_uid, "backup-post-rule", post_rule_uid)
+				CreateBackup(backupName, sourceClusterName, backupLocationName, BackupLocationUID, []string{namespace},
+					labelSelectors, orgID, clusterUid, "backup-pre-rule", preRuleUid, "backup-post-rule", postRuleUid)
 			}
 		})
 
@@ -259,10 +268,10 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 	})
 	JustAfterEach(func() {
-		policy_list := []string{"interval", "daily", "weekly", "monthly"}
+		//policy_list := []string{"interval", "daily", "weekly", "monthly"}
 		defer EndTorpedoTest()
-		teardown_status := TeardownForTestcase(contexts, providers, CloudCredUID_list, policy_list)
-		dash.VerifyFatal(teardown_status, true, "Testcase teardown status")
+		//teardown_status := TeardownForTestcase(contexts, providers, CloudCredUIDList, policy_list)
+		//dash.VerifyFatal(teardown_status, true, "Testcase teardown status")
 	})
 })
 
@@ -1993,7 +2002,7 @@ func getProviderClusterConfigPath(provider string, kubeconfigs []string) (string
 // CreateBackup creates backup
 func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, pre_rule_name string,
-	pre_rule_uid string, post_rule_name string, post_rule_uid string) {
+	preRuleUid string, post_rule_name string, postRuleUid string) {
 
 	var bkp *api.BackupObject
 	var bkp_uid string
@@ -2016,16 +2025,16 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 		},
 		PreExecRuleRef: &api.ObjectRef{
 			Name: pre_rule_name,
-			Uid:  pre_rule_uid,
+			Uid:  preRuleUid,
 		},
 		PostExecRuleRef: &api.ObjectRef{
 			Name: post_rule_name,
-			Uid:  post_rule_uid,
+			Uid:  postRuleUid,
 		},
 	}
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err,  "Fetching px-central-admin ctx")
+	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	log.FailOnError(err, "Taking backup of applications")

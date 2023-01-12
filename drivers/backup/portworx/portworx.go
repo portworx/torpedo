@@ -1044,6 +1044,7 @@ func (p *portworx) WaitForLicenseActivation(ctx context.Context, req *api.Licens
 }
 
 func (p *portworx) CreateRule(ctx context.Context, req *api.RuleCreateRequest) (*api.RuleCreateResponse, error) {
+
 	return p.ruleManager.Create(ctx, req)
 }
 
@@ -1092,6 +1093,120 @@ func (p *portworx) GetBackupUID(ctx context.Context, orgID, backupName string) (
 	return backupUID, nil
 }
 
+var (
+	CreatePreRule  = false
+	CreatePostRule = false
+	// AppParameters be updated by user for each new app required
+	AppParameters = map[string]map[string]string{
+		"cassandra": {"pre_action_list": "nodetool flush -- keyspace1;", "post_action_list": "nodetool verify -- " +
+			"keyspace1;", "background": "false", "runInSinglePod": "false"},
+		"postgres": {"pre_action_list": "PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";",
+			"background": "false", "runInSinglePod": "false"},
+	}
+)
+
+// CreateRuleForBackup creates backup rule
+func (p *portworx) CreateRuleForBackup(ruleName string, orgID string, appList []string, prePostFlag string,
+	ps map[string]map[string]string) (bool, string) {
+	var podSelector []map[string]string
+	var actionValue []string
+	var container []string
+	var background []bool
+	var runInSinglePod []bool
+	var rulesInfo api.RulesInfo
+	var uid string
+	for i := 0; i < len(appList); i++ {
+		if prePostFlag == "pre" {
+			CreatePreRule = true
+			if _, ok := AppParameters[appList[i]]["pre_action_list"]; ok {
+				podSelector = append(podSelector, ps[appList[i]])
+				actionValue = append(actionValue, AppParameters[appList[i]]["pre_action_list"])
+				backgroundVal, _ := strconv.ParseBool(AppParameters[appList[i]]["background"])
+				background = append(background, backgroundVal)
+				podVal, _ := strconv.ParseBool(AppParameters[appList[i]]["runInSinglePod"])
+				runInSinglePod = append(runInSinglePod, podVal)
+				// Here user has to set env for each app container if required in the format container-<app name>
+				// This is for the optional parameter 'Container' for creating rules
+				containerName := fmt.Sprintf("%s-%s", "container", appList[i])
+				container = append(container, os.Getenv(containerName))
+			} else {
+				log.Infof("Pre rule not required for this application")
+			}
+		} else {
+			CreatePostRule = true
+			if _, ok := AppParameters[appList[i]]["post_action_list"]; ok {
+				podSelector = append(podSelector, ps[appList[i]])
+				actionValue = append(actionValue, AppParameters[appList[i]]["post_action_list"])
+				backgroundVal, _ := strconv.ParseBool(AppParameters[appList[i]]["background"])
+				background = append(background, backgroundVal)
+				podVal, _ := strconv.ParseBool(AppParameters[appList[i]]["runInSinglePod"])
+				runInSinglePod = append(runInSinglePod, podVal)
+				// Here user has to set env for each app container if required in the format container-<app name>
+				// This is for the optional parameter 'Container' for creating rules
+				containerName := fmt.Sprintf("%s-%s", "container", appList[i])
+				container = append(container, os.Getenv(containerName))
+			} else {
+				log.Infof("Post rule not required for this application")
+			}
+		}
+	}
+	totalRules := len(actionValue)
+	if totalRules == 0 {
+		log.Info("Rules not required for the apps")
+		return true, ""
+	}
+
+	rulesInfoRuleItem := make([]api.RulesInfo_RuleItem, totalRules)
+	for i := 0; i < totalRules; i++ {
+		ruleAction := api.RulesInfo_Action{Background: background[i], RunInSinglePod: runInSinglePod[i],
+			Value: actionValue[i]}
+		var actions = []*api.RulesInfo_Action{&ruleAction}
+		rulesInfoRuleItem[i].PodSelector = podSelector[i]
+		rulesInfoRuleItem[i].Actions = actions
+		rulesInfoRuleItem[i].Container = container[i]
+		rulesInfo.Rules = append(rulesInfo.Rules, &rulesInfoRuleItem[i])
+	}
+	RuleCreateReq := &api.RuleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  ruleName,
+			OrgId: orgID,
+		},
+		RulesInfo: &rulesInfo,
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+		return false, ""
+	}
+
+	_, err = p.CreateRule(ctx, RuleCreateReq)
+	if err != nil {
+		log.Errorf("Failed to create backup rules: [%v]", err)
+		return false, ""
+	}
+	log.Infof("Validate rules for backup")
+	RuleEnumerateReq := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	ruleList, err := p.EnumerateRule(ctx, RuleEnumerateReq)
+	for i := 0; i < len(ruleList.Rules); i++ {
+		if ruleList.Rules[i].Metadata.Name == ruleName {
+			uid = ruleList.Rules[i].Metadata.Uid
+			break
+		}
+	}
+	RuleInspectReq := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  ruleName,
+		Uid:   uid,
+	}
+	_, err1 := p.InspectRule(ctx, RuleInspectReq)
+	if err1 != nil {
+		log.Errorf("Failed to validate the created rule with Error: [%v]", err)
+		return false, uid
+	}
+	return true, uid
+}
 func init() {
 	backup.Register(driverName, &portworx{})
 }

@@ -7,13 +7,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
 	"regexp"
-	"github.com/portworx/torpedo/pkg/aetosutil"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -4687,98 +4687,6 @@ func Contains(app_list []string, app string) bool {
 	return false
 }
 
-func CreateRuleForBackup(rule_name string, orgID string, app_list []string, pre_post_flag string,
-	ps map[string]map[string]string) (bool, string) {
-	pod_selector := []map[string]string{}
-	action_value := []string{}
-	container := []string{}
-	background := []bool{}
-	run_in_single_pod := []bool{}
-	var rulesinfo api.RulesInfo
-	var uid string
-	for i := 0; i < len(app_list); i++ {
-		if pre_post_flag == "pre" {
-			create_pre_rule = true
-			if _, ok := app_parameters[app_list[i]]["pre_action_list"]; ok {
-				pod_selector = append(pod_selector, ps[app_list[i]])
-				action_value = append(action_value, app_parameters[app_list[i]]["pre_action_list"])
-				background_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["background"])
-				background = append(background, background_val)
-				pod_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["run_in_single_pod"])
-				run_in_single_pod = append(run_in_single_pod, pod_val)
-				// Here user has to set env for each app container if required in the format container<app name> eg: containersql
-				container_name := fmt.Sprintf("%s-%s", "container", app_list[i])
-				container = append(container, os.Getenv(container_name))
-			} else {
-				log.Infof("Pre rule not required for this application")
-			}
-		} else {
-			create_post_rule = true
-			if _, ok := app_parameters[app_list[i]]["post_action_list"]; ok {
-				pod_selector = append(pod_selector, ps[app_list[i]])
-				action_value = append(action_value, app_parameters[app_list[i]]["post_action_list"])
-				background_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["background"])
-				background = append(background, background_val)
-				pod_val, _ := strconv.ParseBool(app_parameters[app_list[i]]["run_in_single_pod"])
-				run_in_single_pod = append(run_in_single_pod, pod_val)
-				// Here user has to set env for each app container if required in the format container<app name> eg: containersql
-				container_name := fmt.Sprintf("%s-%s", "container", app_list[i])
-				container = append(container, os.Getenv(container_name))
-			} else {
-				log.Infof("Post rule not required for this application")
-			}
-		}
-	}
-	total_rules := len(action_value)
-	if total_rules == 0 {
-		log.Info("Rules not required for the apps")
-		return true, ""
-	}
-
-	rulesinfo_ruleitem := make([]api.RulesInfo_RuleItem, total_rules)
-	for i := 0; i < total_rules; i++ {
-		rule_action := api.RulesInfo_Action{Background: background[i], RunInSinglePod: run_in_single_pod[i], Value: action_value[i]}
-		var actions []*api.RulesInfo_Action = []*api.RulesInfo_Action{&rule_action}
-		rulesinfo_ruleitem[i].PodSelector = pod_selector[i]
-		rulesinfo_ruleitem[i].Actions = actions
-		rulesinfo_ruleitem[i].Container = container[i]
-		rulesinfo.Rules = append(rulesinfo.Rules, &rulesinfo_ruleitem[i])
-	}
-	RuleCreateReq := &api.RuleCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  rule_name,
-			OrgId: orgID,
-		},
-		RulesInfo: &rulesinfo,
-	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
-	_, err = Inst().Backup.CreateRule(ctx, RuleCreateReq)
-	log.FailOnError(err, "Failed to create backup rules")
-	log.InfoD("Validate rules for backup")
-	RuleEnumerateReq := &api.RuleEnumerateRequest{
-		OrgId: orgID,
-	}
-	rule_list, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
-	for i := 0; i < len(rule_list.Rules); i++ {
-		if rule_list.Rules[i].Metadata.Name == rule_name {
-			uid = rule_list.Rules[i].Metadata.Uid
-			break
-		}
-	}
-	RuleInspectReq := &api.RuleInspectRequest{
-		OrgId: orgID,
-		Name:  rule_name,
-		Uid:   uid,
-	}
-	_, err1 := Inst().Backup.InspectRule(ctx, RuleInspectReq)
-	if err1 != nil {
-		log.Errorf("Failed to validate the created rule with Error: [%v]", err)
-		return false, uid
-	}
-	return true, uid
-}
-
 func TeardownForTestcase(contexts []*scheduler.Context, providers []string, CloudCredUID_list []string, policy_list []string) bool {
 	var flag bool = true
 	log.InfoD("Deleting the deployed apps after the testcase")
@@ -5051,7 +4959,7 @@ func EnableAutoFSTrim() {
 		if isPxInstalled {
 			isPXNodeAvailable = true
 			pxVersion, err := Inst().V.GetPxVersionOnNode(pxNode)
-			log.FailOnError(err, "Unable to get pxversion on node %s",pxNode.Name)
+			log.FailOnError(err, "Unable to get pxversion on node %s", pxNode.Name)
 			log.Infof("PX version %s", pxVersion)
 			pxVersionList := []string{}
 			pxVersionList = strings.Split(pxVersion, ".")
