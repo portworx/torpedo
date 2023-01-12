@@ -231,7 +231,7 @@ func (d *DefaultDriver) RecoverPool(n node.Node) error {
 	}
 }
 
-// EnterPoolMaintenance puts pools in the given node in maintenance mode
+// EnterPoolMaintenance puts pools on the given node in maintenance mode
 func (d *DefaultDriver) EnterPoolMaintenance(n node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -239,7 +239,7 @@ func (d *DefaultDriver) EnterPoolMaintenance(n node.Node) error {
 	}
 }
 
-// ExitPoolMaintenance exits pools in the given node from maintenance mode
+// ExitPoolMaintenance exits pools on the given node from maintenance mode
 func (d *DefaultDriver) ExitPoolMaintenance(n node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
