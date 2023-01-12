@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"strings"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -24,6 +24,120 @@ const (
 )
 
 // UpgradeStork test performs upgrade hops of Stork based on a given list of upgradeEndpoints
+
+var _ = Describe("{UpgradeVolumeDriver}", func() {
+	var testrailID = 35269
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
+	var runID int
+	JustBeforeEach(func() {
+		tags := make(map[string]string)
+		tags["upgradeTo"] = Inst().StorageDriverUpgradeEndpointVersion
+		StartTorpedoTest("UpgradeVolumeDriver", "Validating volume driver upgrade", tags, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	It("upgrade volume driver and ensure everything is running fine", func() {
+		log.InfoD("upgrade volume driver and ensure everything is running fine")
+		contexts = make([]*scheduler.Context, 0)
+
+		storageNodes := node.GetStorageNodes()
+
+		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
+		log.FailOnError(err, "Cloud drive installation failed")
+
+		if !isCloudDrive {
+			for _, storageNode := range storageNodes {
+				err := Inst().V.AddBlockDrives(&storageNode, nil)
+				if err != nil && strings.Contains(err.Error(), "no block drives available to add") {
+					continue
+				}
+				log.FailOnError(err, "Adding block drive(s) failed.")
+			}
+		}
+		log.InfoD("Scheduling applications and validating")
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+		currPXVersion, err := Inst().V.GetPxVersionOnNode(storageNodes[0])
+		if err != nil {
+			log.Warnf(fmt.Sprintf("error getting px version, err %v", err))
+		}
+
+		var timeBeforeUpgrade time.Time
+		var timeAfterUpgrade time.Time
+
+		Step("start the upgrade of volume driver", func() {
+			log.InfoD("start the upgrade of volume driver")
+
+			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
+			if IsOperatorBasedInstall {
+				timeBeforeUpgrade = time.Now()
+				status, err := UpgradePxStorageCluster()
+				timeAfterUpgrade = time.Now()
+				if err != nil {
+					log.Fatalf("Failed to Upgrade Px Storage Cluster. ERR: %v", err)
+				}
+				dash.VerifyFatal(status, true, "Volume driver upgrade successful?")
+
+			} else {
+				timeBeforeUpgrade = time.Now()
+				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
+					Inst().StorageDriverUpgradeEndpointVersion,
+					false)
+				timeAfterUpgrade = time.Now()
+				dash.VerifyFatal(err, nil, "Volume drive upgrade for daemon set based set up successful?")
+			}
+
+			durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
+			expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+			dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
+			upgradeStatus := "PASS"
+			if durationInMins <= expectedUpgradeTime {
+				log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)
+			} else {
+				log.Errorf("Upgrade took %d minutes to completed which is greater than expected time %d minutes", durationInMins, expectedUpgradeTime)
+				dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Upgrade took more than expected time to complete")
+				upgradeStatus = "FAIL"
+			}
+			updatedPXVersion, err := Inst().V.GetPxVersionOnNode(storageNodes[0])
+			if err != nil {
+				log.Warnf(fmt.Sprintf("error getting px version, err %v", err))
+			}
+			majorVersion := strings.Split(currPXVersion, "-")[0]
+			statsData := make(map[string]string)
+			statsData["fromVersion"] = currPXVersion
+			statsData["toVersion"] = updatedPXVersion
+			statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
+			statsData["status"] = upgradeStatus
+			dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
+		})
+
+		Step("reinstall and validate all apps after upgrade", func() {
+			log.InfoD("reinstall and validate all apps after upgrade")
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradedvolumedriver-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		Step("Destroy apps", func() {
+			log.InfoD("Destroy apps")
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 var _ = Describe("{UpgradeStork}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35269
 	JustBeforeEach(func() {
@@ -81,6 +195,17 @@ var _ = Describe("{UpgradeStork}", func() {
 				for _, ctx := range contexts {
 					TearDownContext(ctx, opts)
 				}
+			})
+
+			Step("validate stork pods after upgrade", func() {
+				log.InfoD("validate stork pods after upgrade")
+				k8sApps := apps.Instance()
+
+				storkDeploy, err := k8sApps.GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+				log.FailOnError(err, "Error getting stork deployment")
+
+				err = k8sApps.ValidateDeployment(storkDeploy, k8s.DefaultTimeout, k8s.DefaultRetryInterval)
+				dash.VerifyFatal(err, nil, "Stork deployment successful?")
 			})
 
 		})
