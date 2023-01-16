@@ -7,13 +7,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
 	"regexp"
+
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
+	"github.com/sirupsen/logrus"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -5051,7 +5052,7 @@ func EnableAutoFSTrim() {
 		if isPxInstalled {
 			isPXNodeAvailable = true
 			pxVersion, err := Inst().V.GetPxVersionOnNode(pxNode)
-			log.FailOnError(err, "Unable to get pxversion on node %s",pxNode.Name)
+			log.FailOnError(err, "Unable to get pxversion on node %s", pxNode.Name)
 			log.Infof("PX version %s", pxVersion)
 			pxVersionList := []string{}
 			pxVersionList = strings.Split(pxVersion, ".")
@@ -5290,4 +5291,35 @@ func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
 		randomIndex--
 	}
 	return node.Node{}
+}
+
+// Function will list all the pools associated with the volume
+func GetPoolIDsFromVolName(volName string) ([]string, error) {
+	/* This method will pick all the pools associcated with the volume
+	and return the UUID of the pools in array format
+	*/
+	var poolUuids []string
+	volDetails, err := Inst().V.InspectVolume(volName)
+	if err != nil {
+		return nil, err
+	}
+	for _, each := range volDetails.ReplicaSets {
+		for _, uuids := range each.PoolUuids {
+			if len(poolUuids) == 0 {
+				poolUuids = append(poolUuids, uuids)
+			} else {
+				isPresent := false
+				for i := 0; i < len(poolUuids); i++ {
+					if uuids == poolUuids[i] {
+						isPresent = true
+					}
+				}
+				if isPresent == false {
+					poolUuids = append(poolUuids, uuids)
+				}
+			}
+		}
+
+	}
+	return poolUuids, err
 }
