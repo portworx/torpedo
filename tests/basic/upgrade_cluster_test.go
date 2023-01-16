@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	. "github.com/onsi/ginkgo"
@@ -13,7 +14,7 @@ import (
 var _ = Describe("{UpgradeCluster}", func() {
 	var contexts []*scheduler.Context
 
-	JustAfterEach(func() {
+	JustBeforeEach(func() {
 		StartTorpedoTest("UpgradeCluster", "Upgrade cluster test", nil, 0)
 	})
 	It("upgrade scheduler and ensure everything is running fine", func() {
@@ -38,7 +39,9 @@ var _ = Describe("{UpgradeCluster}", func() {
 			})
 
 			Step("validate storage components", func() {
-				err := Inst().V.ValidateStorageCluster(Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+				u, err := url.Parse(fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion))
+				Expect(err).NotTo(HaveOccurred())
+				err = Inst().V.ValidateDriver(u.String(), true)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
