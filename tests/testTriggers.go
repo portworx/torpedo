@@ -3,10 +3,8 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/rand"
-	"net/http"
 	"os"
 	"os/exec"
 	"reflect"
@@ -383,6 +381,10 @@ const (
 	StorkApplicationBackup = "storkapplicationbackup"
 	// stork application backup volume resize runs stork backups for applications and inject volume resize in between
 	StorkAppBkpVolResize = "storkappbkpvolresize"
+	// stork application backup volume resize runs stork backups for applications and inject volume ha-update in between
+	StorkAppBkpHaUpdate = "storkappbkphaupdate"
+	// stork application backup runs with px restart
+	StorkAppBkpPxRestart = "storkappbkppxrestart"
 	// HAIncreaseAndReboot performs repl-add
 	HAIncreaseAndReboot = "haIncreaseAndReboot"
 	// AddDrive performs drive add for on-prem cluster
@@ -2412,7 +2414,7 @@ func TriggerEmailReporter() {
 				pxStatus = status.String()
 			}
 
-			pxVersion, err := Inst().V.GetPxVersionOnNode(n)
+			pxVersion, err := Inst().V.GetDriverVersionOnNode(n)
 			if err != nil {
 				pxVersion = pxVersionError
 			}
@@ -2441,23 +2443,16 @@ func TriggerEmailReporter() {
 		log.Errorf("Failed to prepare email body. Error: [%v]", err)
 	}
 
-	emailSub := subject
-	stc, err := Inst().V.GetPXStorageCluster()
-	if err == nil {
-		emailSub = stc.GetName()
-	}
-
 	emailDetails := &email.Email{
-		Subject:        emailSub,
+		Subject:        subject,
 		Content:        content,
 		From:           from,
 		To:             EmailRecipients,
 		SendGridAPIKey: SendGridEmailAPIKey,
 	}
 
-	err = emailDetails.SendEmail()
-	if err != nil {
-		log.Errorf("Failed to send out email, because of Error: %q", err)
+	if err := emailDetails.SendEmail(); err != nil {
+		log.Errorf("Failed to send out email, Err: %q", err)
 	}
 }
 
@@ -4365,75 +4360,38 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 
 	setMetrics(*event)
 
-	stepLog := "upgrade volume driver to the latest version"
+	stepLog := "upgrade volume driver"
 	context(stepLog, func() {
-		stepLog = "start the volume driver upgrade"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			IsOperatorBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
-			if IsOperatorBasedInstall {
-				status, err := UpgradePxStorageCluster()
-				if status {
-					log.InfoD("Volume Driver upgrade is successful")
-				} else {
-					log.Error("Volume Driver upgrade failed")
-					UpdateOutcome(event, err)
-				}
-
-			} else {
-				log.InfoD("Initiating Daemon set based install upgrade")
-				err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
-					Inst().StorageDriverUpgradeEndpointVersion,
-					Inst().EnableStorkUpgrade)
+		if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+			log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
+		}
+		for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+			stepLog = "start the volume driver upgrade"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := Inst().V.UpgradeDriver(upgradeHop)
 				if err != nil {
-					log.InfoD("Error upgrading: %v", err.Error())
+					log.InfoD("Error upgrading volume driver, Err: %v", err.Error())
 				}
 				UpdateOutcome(event, err)
 
-			}
-
-		})
-		stepLog = "validate all apps after upgrade"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			errorChan := make(chan error, errorChannelSize)
-			for _, ctx := range *contexts {
-				ctx.SkipVolumeValidation = true
-				ValidateContext(ctx, &errorChan)
-				if strings.Contains(ctx.App.Key, fastpathAppName) {
-					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-					UpdateOutcome(event, err)
+			})
+			stepLog = "validate all apps after upgrade"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				errorChan := make(chan error, errorChannelSize)
+				for _, ctx := range *contexts {
+					ctx.SkipVolumeValidation = true
+					ValidateContext(ctx, &errorChan)
+					if strings.Contains(ctx.App.Key, fastpathAppName) {
+						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+						UpdateOutcome(event, err)
+					}
 				}
-			}
-		})
+			})
+		}
 	})
 	updateMetrics(*event)
-}
-
-func getOperatorLatestVersion() (string, error) {
-	url := fmt.Sprintf("%s/%s/version", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-	log.Infof("URL is : %v", url)
-	resp, err := http.Get(url)
-	if err != nil {
-		return "", fmt.Errorf("failed to send GET request to %s, Err: %v", url, err)
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %+v", resp.Body)
-	}
-
-	// Convert response body to string
-	bodyString := string(bodyBytes)
-	for _, line := range strings.Split(bodyString, "\n") {
-		if strings.Contains(line, "version:") {
-			operatorTag := strings.Split(strings.TrimSpace(line), ": ")[1]
-			return operatorTag, nil
-		}
-	}
-	return Inst().StorageDriverUpgradeEndpointVersion, nil
-
 }
 
 // TriggerUpgradeStork peforms upgrade of the stork
@@ -4459,10 +4417,14 @@ func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *Event
 	stepLog := "Upgrading stork to latest version based on the compatible PX and storage driver upgrade version "
 	Step(stepLog,
 		func() {
-			log.InfoD(stepLog)
-			err := Inst().V.UpgradeStork(Inst().StorageDriverUpgradeEndpointURL,
-				Inst().StorageDriverUpgradeEndpointVersion)
-			UpdateOutcome(event, err)
+			if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
+				log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
+			}
+			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+				log.InfoD(stepLog)
+				err := Inst().V.UpgradeStork(upgradeHop)
+				UpdateOutcome(event, err)
+			}
 
 		})
 	updateMetrics(*event)
@@ -5061,7 +5023,7 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							log.Errorf("Error refreshing node registry, Error : %v", err)
 							return "", true, err
 						}
-						latestNodes, err := Inst().V.GetPxNodes()
+						latestNodes, err := Inst().V.GetDriverNodes()
 						if err != nil {
 							log.Errorf("Error getting px nodes, Error : %v", err)
 							return "", true, err
@@ -5623,7 +5585,7 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 		for _, n := range node.GetWorkerNodes() {
 			log.InfoD("Validating the node: %v", n.Name)
 			expectedDevMapperCount := 0
-			storageNode, err := Inst().V.GetPxNode(&n)
+			storageNode, err := Inst().V.GetDriverNode(&n)
 			if err != nil {
 				log.Error(err.Error())
 				UpdateOutcome(event, err)
@@ -5937,7 +5899,7 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 		s3SecretName     = "s3secret"
 		backupNamespaces []string
 		timeout          = 5 * time.Minute
-		taskNamePrefix   = "stork-app-backup-"
+		taskNamePrefix   = "stork-app-backup"
 	)
 
 	Step(fmt.Sprintf("Deploy applications for backup, with frequency: %v", chaosLevel), func() {
@@ -5967,22 +5929,24 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 		log.Infof("Backup applications, present in namespaces - %v", backupNamespaces)
 		log.Infof("Start backup application")
 		for i, currbkNamespace := range backupNamespaces {
-			taskNamePrefix = taskNamePrefix + fmt.Sprintf("%d", i)
-			currBackupLocation, err := applicationbackup.CreateBackupLocation(taskNamePrefix+"-location", currbkNamespace, s3SecretName)
+			taskNamePrefix = taskNamePrefix + fmt.Sprintf("-%d", i)
+			backuplocationname := taskNamePrefix + "-location" + time.Now().Format("15h03m05s")
+			backupname := taskNamePrefix + time.Now().Format("15h03m05s")
+			currBackupLocation, err := applicationbackup.CreateBackupLocation(backuplocationname, currbkNamespace, s3SecretName)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
 				return
 			}
-			bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(taskNamePrefix+"-backup", currbkNamespace, currBackupLocation)
+			_, bkp_create_err := applicationbackup.CreateApplicationBackup(backupname, currbkNamespace, currBackupLocation)
 			if bkp_create_err != nil {
 				UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
 			}
-			bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(taskNamePrefix+"-backup", currbkNamespace, timeout)
+			bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(backupname, currbkNamespace, timeout)
 			if bkp_comp_err != nil {
 				UpdateOutcome(event, fmt.Errorf("backup successful failed with %v", bkp_comp_err))
 				return
 			}
-			log.InfoD("backup successful, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+			log.InfoD("backup successful, backup name - %v, backup location - %v", backupname, backuplocationname)
 		}
 		updateMetrics(*event)
 	})
@@ -6011,7 +5975,7 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 	var (
 		s3SecretName   = "s3secret"
 		timeout        = 5 * time.Minute
-		taskNamePrefix = "stork-app-backup"
+		taskNamePrefix = "stork-appbkp-volresize"
 		appVolumes     []*volume.Volume
 		requestedVols  []*volume.Volume
 	)
@@ -6046,23 +6010,25 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
 				log.Infof("Start backup application")
-				taskNamePrefix = taskNamePrefix + fmt.Sprintf("%d", i)
-				currBackupLocation, err := applicationbackup.CreateBackupLocation(taskNamePrefix+"-location", currbkNamespace, s3SecretName)
+				taskNamePrefix = taskNamePrefix + fmt.Sprintf("-%d", i)
+				backuplocationname := taskNamePrefix + "-location" + time.Now().Format("15h03m05s")
+				backupname := taskNamePrefix + time.Now().Format("15h03m05s")
+				currBackupLocation, err := applicationbackup.CreateBackupLocation(backuplocationname, currbkNamespace, s3SecretName)
 				if err != nil {
 					UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
 					return
 				}
-				bkp, bkp_create_err := applicationbackup.CreateApplicationBackup(taskNamePrefix+"-backup", currbkNamespace, currBackupLocation)
+				_, bkp_create_err := applicationbackup.CreateApplicationBackup(backupname, currbkNamespace, currBackupLocation)
 				if bkp_create_err != nil {
 					UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
 					return
 				}
-				bkp_start_err := applicationbackup.WaitForAppBackupToStart(bkp.Name, currbkNamespace, timeout)
+				bkp_start_err := applicationbackup.WaitForAppBackupToStart(backupname, currbkNamespace, timeout)
 				if bkp_start_err == nil {
 					log.Info("Application backup is in progress, starting volume resize")
 					requestedVols, _ = Inst().S.ResizeVolume(ctx, "")
 					log.Info("verify application backup successful")
-					bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(taskNamePrefix+"-backup", currbkNamespace, timeout)
+					bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(backupname, currbkNamespace, timeout)
 					if bkp_comp_err != nil {
 						UpdateOutcome(event, fmt.Errorf("backup successful failed with %v", bkp_comp_err))
 						return
@@ -6075,11 +6041,240 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 							UpdateOutcome(event, fmt.Errorf("volume resize failed for %v volume", v))
 						}
 					}
+				} else {
+					UpdateOutcome(event, fmt.Errorf("backup start fail %v", bkp_start_err))
+					return
 				}
-				log.InfoD("backup successful and volume resize injected during backup successfully, backup name - %v, backup location - %v", bkp.Name, currBackupLocation.Name)
+				log.InfoD("backup successful and volume resize injected during backup successfully, backup name - %v, backup location - %v", backupname, backuplocationname)
 			}
 			updateMetrics(*event)
 		}
+	})
+}
+
+func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(StorkAppBkpHaUpdate)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork Appplication Backup with HA update triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppTasksDown,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	chaosLevel := ChaosMap[StorkAppBkpHaUpdate]
+
+	var (
+		s3SecretName   = "s3secret"
+		timeout        = 5 * time.Minute
+		taskNamePrefix = "stork-appbkp-haupdate"
+		appVolumes     []*volume.Volume
+	)
+
+	Step(fmt.Sprintf("Deploy applications for backup, with frequency: %v", chaosLevel), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("unable to write kubeconfigs, getting error %v", err))
+			return
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("getting error in setting source kubeconfig %v", err))
+			return
+		}
+		UpdateOutcome(event, err)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				currbkNamespace := GetAppNamespace(ctx, taskName)
+				log.Infof("Backup applications, present in namespaces - %v", currbkNamespace)
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				log.Infof("len of app volumes is : %v", len(appVolumes))
+				UpdateOutcome(event, err)
+				if len(appVolumes) == 0 {
+					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+					return
+				}
+				log.Infof("Start backup application")
+				taskNamePrefix = taskNamePrefix + fmt.Sprintf("-%d", i)
+				backuplocationname := taskNamePrefix + "-location" + time.Now().Format("15h03m05s")
+				backupname := taskNamePrefix + time.Now().Format("15h03m05s")
+				currBackupLocation, err := applicationbackup.CreateBackupLocation(backuplocationname, currbkNamespace, s3SecretName)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
+					return
+				}
+				_, bkp_create_err := applicationbackup.CreateApplicationBackup(backupname, currbkNamespace, currBackupLocation)
+				if bkp_create_err != nil {
+					UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
+					return
+				}
+				bkp_start_err := applicationbackup.WaitForAppBackupToStart(backupname, currbkNamespace, timeout)
+				if bkp_start_err == nil {
+					failure := false
+					for _, v := range appVolumes {
+						MaxRF := Inst().V.GetMaxReplicationFactor()
+						log.Infof("Maximum replication factor is: %v\n", MaxRF)
+						currAggr, err := Inst().V.GetAggregationLevel(v)
+						if err != nil {
+							UpdateOutcome(event, fmt.Errorf("failed to get aggregation level %v", bkp_create_err))
+							failure = true
+							return
+						}
+						log.Infof("Aggregation level is: %v\n", currAggr)
+						if currAggr > 1 {
+							MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
+						}
+						currRep, err := Inst().V.GetReplicationFactor(v)
+						if err != nil {
+							UpdateOutcome(event, fmt.Errorf("failed to get replication factor %v", err))
+							failure = true
+							return
+						}
+						log.InfoD("Current replication factor is: %v\n", currRep)
+						expRF := currRep + 1
+						log.InfoD("Expected replication factor is: %v\n", expRF)
+						if expRF > MaxRF {
+							expRF = currRep - 1
+							log.InfoD("as expRF is more than maxRF, will reduce the HA, new expected replication factor is %v", expRF)
+						}
+						err = Inst().V.SetReplicationFactor(v, expRF, nil, nil, true)
+						if err != nil {
+							UpdateOutcome(event, fmt.Errorf("failed to set replication factor %v", err))
+							failure = true
+							return
+						}
+						newRepl, err := Inst().V.GetReplicationFactor(v)
+						if err != nil {
+							UpdateOutcome(event, fmt.Errorf("failed to get replication factor %v", err))
+							failure = true
+							return
+						}
+						dash.VerifySafely(newRepl, expRF, fmt.Sprintf("validate repl update for volume %s", v.Name))
+						log.InfoD("repl increase validation completed on volume %s", v.Name)
+						log.InfoD("Reset replication factor on volume")
+						err = Inst().V.SetReplicationFactor(v, currRep, nil, nil, true)
+						if err != nil {
+							UpdateOutcome(event, fmt.Errorf("failed to set replication factor %v", err))
+							failure = true
+							return
+						}
+					}
+					if !failure {
+						bkp_comp_err := applicationbackup.WaitForAppBackupCompletion(backupname, currbkNamespace, timeout)
+						if bkp_comp_err != nil {
+							UpdateOutcome(event, fmt.Errorf("backup completion failed with %v", bkp_comp_err))
+							return
+						}
+						log.InfoD("backup successful and volume ha-update injected during backup successfully, backup name - %v, backup location - %v", backupname, backuplocationname)
+					}
+				} else {
+					UpdateOutcome(event, fmt.Errorf("backup start fail %v", bkp_start_err))
+					return
+				}
+				updateMetrics(*event)
+			}
+		}
+	})
+}
+
+func TriggerStorkAppBkpPxRestart(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(StorkAppBkpPxRestart)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("Stork Appplication Backup with PX restart triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppTasksDown,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	chaosLevel := ChaosMap[StorkAppBkpPxRestart]
+
+	var (
+		s3SecretName   = "s3secret"
+		timeout        = 5 * time.Minute
+		taskNamePrefix = "stork-appbkp-pxrestart"
+	)
+
+	Step(fmt.Sprintf("Deploy applications for backup, with frequency: %v", chaosLevel), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("unable to write kubeconfigs, getting error %v", err))
+			return
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("getting error in setting source kubeconfig %v", err))
+			return
+		}
+		UpdateOutcome(event, err)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				currbkNamespace := GetAppNamespace(ctx, taskName)
+				log.Infof("Backup applications, present in namespaces - %v", currbkNamespace)
+				log.Infof("Start backup application")
+				taskNamePrefix = taskNamePrefix + fmt.Sprintf("-%d", i)
+				backuplocationname := taskNamePrefix + "-location" + time.Now().Format("15h03m05s")
+				backupname := taskNamePrefix + time.Now().Format("15h03m05s")
+				currBackupLocation, err := applicationbackup.CreateBackupLocation(backuplocationname, currbkNamespace, s3SecretName)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("backup location creation failed with %v", err))
+					return
+				}
+				_, bkp_create_err := applicationbackup.CreateApplicationBackup(backupname, currbkNamespace, currBackupLocation)
+				if bkp_create_err != nil {
+					UpdateOutcome(event, fmt.Errorf("backup creation failed with %v", bkp_create_err))
+					return
+				}
+				bkp_start_err := applicationbackup.WaitForAppBackupToStart(backupname, currbkNamespace, timeout)
+				if bkp_start_err == nil {
+					Step("Restart Portworx", func() {
+						nodes := node.GetStorageDriverNodes()
+						nodeIndex := rand.Intn(len(nodes))
+						log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+						StopVolDriverAndWait([]node.Node{nodes[nodeIndex]})
+						log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+						StartVolDriverAndWait([]node.Node{nodes[nodeIndex]})
+						log.Infof("Giving a few seconds for volume driver to stabilize")
+						time.Sleep(20 * time.Second)
+					})
+				} else {
+					UpdateOutcome(event, fmt.Errorf("backup start fail %v", bkp_start_err))
+					return
+				}
+				log.InfoD("backup successful and px restart injected during backup successfully, backup name - %v, backup location - %v", backupname, backuplocationname)
+			}
+		}
+		updateMetrics(*event)
 	})
 }
 
