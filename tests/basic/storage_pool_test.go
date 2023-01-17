@@ -2184,7 +2184,6 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 		}
 		ValidateApplications(contexts)
 
-		//var VolumeMap map[]
 		var stNode node.Node
 
 		// Get List of Volumes presnet in the Node
@@ -2197,10 +2196,9 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 		for _, each := range contexts {
 			Volumes, err := Inst().S.GetVolumes(each)
-			fmt.Printf("List of Volumes Present in the system %s", Volumes)
 			log.FailOnError(err, "Listing Volumes Failed ")
 
-			fmt.Printf("Get all the details of Volumes Present")
+			log.InfoD("Get all the details of Volumes Present")
 			for _, vols := range Volumes {
 				log.InfoD("List of Volumes to inspect %T , %s", vols, vols.ID)
 				volInspect, err := Inst().V.InspectVolume(vols.ID)
@@ -2221,13 +2219,12 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 					snapshotResponse, err := Inst().V.CreateSnapshot(vols.ID, snapshotName)
 					log.FailOnError(err, "error identifying volume")
 					snapshotList[vols.ID] = append(snapshotList[vols.ID], snapshotName)
-					sPrint := fmt.Sprintf("Snapshot %s created with ID %s", snapshotName, snapshotResponse.GetSnapshotId())
+					sPrint := log.InfoD("Snapshot %s created with ID %s", snapshotName, snapshotResponse.GetSnapshotId())
 					log.InfoD(sPrint)
 				}
 				break
 
 			}
-			log.InfoD("Snapshots created are %s", snapshotList)
 		}
 
 		// Selecting Storage pool based on Pools present on the Node
@@ -2364,8 +2361,9 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			rebootPoolID := poolUUIDs[randomIndex]
 
 			// Rebooting Node
+			log.InfoD("Get the Node for Restart %v", randomPoolID)
 			restartDriver, err := GetNodeWithGivenPoolID(rebootPoolID)
-			log.InfoD("Rebooting Node %v", restartDriver)
+			log.FailOnError(err, "Geting Node Driver for restart failed")
 
 			isjournal, err := isJournalEnabled()
 			log.FailOnError(err, "Failed to check if Journal enabled")
@@ -2401,7 +2399,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			log.InfoD("Waiting till Volume is In Resync Mode ")
 			if WaitTillVolumeInResync(randomVolIDs) == false {
-				fmt.Println("Failed to get Volume in Resync state")
+				log.InfoD("Failed to get Volume in Resync state")
 			}
 
 			log.InfoD("Current Size of the pool %s is %d", rebootPoolID, poolToBeResized.TotalSize/units.GiB)
@@ -2484,7 +2482,6 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 		var expectedSizeWithJournal uint64
 
 		expectedSize = (2048 * 1024 * 1024 * 1024 * 1024) / units.TiB
-		fmt.Println(expectedSize)
 
 		stepLog = "Calculate expected pool size and trigger pool resize"
 		Step(stepLog, func() {
@@ -2540,3 +2537,4 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 	})
 
 })
+
