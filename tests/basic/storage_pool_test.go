@@ -2166,7 +2166,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 	var contexts []*scheduler.Context
 	var totalSnapshotsPerVol int = 60
-	var snapshotName string
+	
 	snapshotList := make(map[string][]string)
 	var selectedNode node.Node
 	var pickNode string
@@ -2215,11 +2215,11 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 				log.FailOnError(err, "Listing Volumes Failed ")
 				for snap := 0; snap < totalSnapshotsPerVol; snap++ {
 					uuidCreated := uuid.New()
-					snapshotName = fmt.Sprintf("snapshot_%s_%s", vols.ID, uuidCreated.String())
+					snapshotName := fmt.Sprintf("snapshot_%s_%s", vols.ID, uuidCreated.String())
 					snapshotResponse, err := Inst().V.CreateSnapshot(vols.ID, snapshotName)
 					log.FailOnError(err, "error identifying volume")
 					snapshotList[vols.ID] = append(snapshotList[vols.ID], snapshotName)
-					sPrint := log.InfoD("Snapshot %s created with ID %s", snapshotName, snapshotResponse.GetSnapshotId())
+					sPrint := fmt.Sprintf("Snapshot %s created with ID %s", snapshotName, snapshotResponse.GetSnapshotId())
 					log.InfoD(sPrint)
 				}
 				break
@@ -2361,7 +2361,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			rebootPoolID := poolUUIDs[randomIndex]
 
 			// Rebooting Node
-			log.InfoD("Get the Node for Restart %v", randomPoolID)
+			log.InfoD("Get the Node for Restart %v", rebootPoolID)
 			restartDriver, err := GetNodeWithGivenPoolID(rebootPoolID)
 			log.FailOnError(err, "Geting Node Driver for restart failed")
 
