@@ -2317,9 +2317,9 @@ func WaitTillVolumeInResync(vol string) bool {
 }
 
 var _ = Describe("{PoolResizeVolumesResync}", func() {
-	var testrailID = 50652
+	var testrailID = 51301
 	// Testrail Description : Try pool resize when lot of volumes are in resync state
-	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/50652
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/51301
 	var runID int
 
 	JustBeforeEach(func() {
@@ -2361,13 +2361,16 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			// Select the random pools from UUIDs for PxDriver Restart
 			randomIndex = rand.Intn(len(poolUUIDs))
-			rebooPoolID := poolUUIDs[randomIndex]
+			rebootPoolID := poolUUIDs[randomIndex]
 
 			// Rebooting Node
-			restartDriver, err := GetNodeWithGivenPoolID(rebooPoolID)
+			restartDriver, err := GetNodeWithGivenPoolID(rebootPoolID)
 			log.InfoD("Rebooting Node %v", restartDriver)
 
-			poolToBeResized, err := GetStoragePoolByUUID(rebooPoolID)
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			poolToBeResized, err := GetStoragePoolByUUID(rebootPoolID)
 			log.InfoD("Pool to be resized %v", poolToBeResized)
 			log.FailOnError(err, "Failed to get pool using UUID ")
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
@@ -2401,11 +2404,12 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				fmt.Println("Failed to get Volume in Resync state")
 			}
 
-			log.InfoD("Current Size of the pool %s is %d", rebooPoolID, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(rebooPoolID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
-			if err == nil {
-				log.Fatalf("Failed as no error is seen while expanding pool")
-			}
+			log.InfoD("Current Size of the pool %s is %d", rebootPoolID, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(rebootPoolID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, rebootPoolID, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using auto", rebootPoolID, restartDriver.Name))
 
 		}
 		opts := make(map[string]bool)
@@ -2421,7 +2425,6 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				TearDownContext(ctx, opts)
 			}
 		})
-
 	})
 
 	JustAfterEach(func() {
@@ -2431,9 +2434,9 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 })
 
 var _ = Describe("{PoolIncreaseSize20TB}", func() {
-	var testrailID = 50652
-	// Testrail Description : Try pool resize when lot of volumes are in resync state
-	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/50652
+	var testrailID = 51292
+	// Testrail Description : Resize a pool of capacity of 100GB to 20TB
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/51292
 	var runID int
 
 	JustBeforeEach(func() {
@@ -2452,8 +2455,6 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
 		}
 		ValidateApplications(contexts)
-
-		Size20Tb := 20 * units.TiB
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
@@ -2482,6 +2483,9 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 		var expectedSize uint64
 		var expectedSizeWithJournal uint64
 
+		expectedSize = (2048 * 1024 * 1024 * 1024 * 1024) / units.TiB
+		fmt.Println(expectedSize)
+
 		stepLog = "Calculate expected pool size and trigger pool resize"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -2497,7 +2501,7 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", Size20Tb, expectedSizeWithJournal))
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 		})
 
 		Step("Ensure that new pool has been expanded to the expected size", func() {
@@ -2505,7 +2509,7 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 			log.FailOnError(err, "Failed to get pool using UUID ")
-			newPoolSize := resizedPool.TotalSize / units.GiB
+			newPoolSize := resizedPool.TotalSize / units.TiB
 			isExpansionSuccess := false
 			if newPoolSize >= expectedSizeWithJournal {
 				isExpansionSuccess = true

@@ -772,12 +772,12 @@ func (d *portworx) DeleteVolume(volumeID string) error {
 
 func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVolumeSnapshotCreateResponse, error) {
 	volDriver := d.getVolDriver()
-	snapshotList, err := volDriver.SnapshotCreate(d.getContext(), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeID, Name: snapName})
+	snapshotResponse, err := volDriver.SnapshotCreate(d.getContext(), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeID, Name: snapName})
 	if err != nil {
 		err = fmt.Errorf("Error while creating snapshot on the volume %v due to %v", volumeID, err)
 		return nil, err
 	}
-	return snapshotList, nil
+	return snapshotResponse, nil
 
 }
 
