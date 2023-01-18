@@ -2076,7 +2076,6 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 	var contexts []*scheduler.Context
 	stepLog := "Has to schedule apps, and expand it by resizing a pool "
 	It(stepLog, func() {
-		log.InfoD(stepLog)
 
 		contexts = make([]*scheduler.Context, 0)
 
@@ -2110,12 +2109,12 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 		dash.VerifyFatal(isMultiPoolNode, true, "Multipool Node found ?")
 		// Selecting Storage pool based on Pools present on the Node
 		selectedPool, err := GetPoolWithIOsInGivenNode(selectedNode)
-		log.FailOnError(err, "error identifying volume")
+		log.FailOnError(err, "error while selecting the pool [%s]", selectedPool)
 
 		stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, "Failed to get pool using UUID [%s]", selectedPool.Uuid)
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
@@ -2196,12 +2195,12 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 		for _, each := range contexts {
 			Volumes, err := Inst().S.GetVolumes(each)
-			log.FailOnError(err, "Listing Volumes Failed ")
+			log.FailOnError(err, "Listing Volumes Failed [%s]", err)
 
 			log.InfoD("Get all the details of Volumes Present")
-			for _, vols := range Volumes {
-				log.InfoD("List of Volumes to inspect %T , %s", vols, vols.ID)
-				volInspect, err := Inst().V.InspectVolume(vols.ID)
+			for _, vol := range Volumes {
+				log.InfoD("List of Volumes to inspect %T , %s", vol, vol.ID)
+				volInspect, err := Inst().V.InspectVolume(vol.ID)
 				selectedNode := volInspect.ReplicaSets[0].Nodes
 				randomIndex := rand.Intn(len(selectedNode))
 				pickNode = selectedNode[randomIndex]
@@ -2211,16 +2210,17 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 						stNode = n
 					}
 				}
-				fmt.Printf("Volume Inspect Details %s", volInspect)
+				log.InfoD("Volume Inspect Details [%s]", volInspect)
 				log.FailOnError(err, "Listing Volumes Failed ")
 				for snap := 0; snap < totalSnapshotsPerVol; snap++ {
 					uuidCreated := uuid.New()
-					snapshotName := fmt.Sprintf("snapshot_%s_%s", vols.ID, uuidCreated.String())
-					snapshotResponse, err := Inst().V.CreateSnapshot(vols.ID, snapshotName)
-					log.FailOnError(err, "error identifying volume")
-					snapshotList[vols.ID] = append(snapshotList[vols.ID], snapshotName)
-					sPrint := fmt.Sprintf("Snapshot %s created with ID %s", snapshotName, snapshotResponse.GetSnapshotId())
-					log.InfoD(sPrint)
+					snapshotName := fmt.Sprintf("snapshot_%s_%s", vol.ID, uuidCreated.String())
+					snapshotResponse, err := Inst().V.CreateSnapshot(vol.ID, snapshotName)
+					log.FailOnError(err, "error identifying volume [%s]", vol.ID)
+					snapshotList[vol.ID] = append(snapshotList[vol.ID], snapshotName)
+					//sPrint := fmt.Sprintf("Snapshot %s created with ID %s", snapshotName, snapshotResponse.GetSnapshotId())
+					log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+					// log.InfoD(sPrint)
 				}
 				break
 
@@ -2229,7 +2229,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 		// Selecting Storage pool based on Pools present on the Node
 		selectedPool, err := GetPoolWithIOsInGivenNode(stNode)
-		log.FailOnError(err, "error identifying volume")
+		log.FailOnError(err, "error identifying pool running IO  [%s]", stNode.Name)
 
 		stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
@@ -2340,7 +2340,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		for _, each := range contexts {
 			Volumes, err := Inst().S.GetVolumes(each)
 			fmt.Printf("List of Volumes Present in the system %s \n", Volumes)
-			log.FailOnError(err, "Listing Volumes Failed ")
+			log.FailOnError(err, "Failed while listing the volume with error %s", err)
 
 			// Appending all the volume IDs to array so that one random volume can be picked for resizeing
 			for _, vol := range Volumes {
@@ -2354,7 +2354,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			// From each volume pick the random pool and restart pxdriver
 			poolUUIDs, err := GetPoolIDsFromVolName(randomVolIDs)
 			log.InfoD("List of pool IDs %v", poolUUIDs)
-			log.FailOnError(err, "Failed to check if Journal enabled")
+			log.FailOnError(err, "Failed to get Pool IDs from the volume [%s]", poolUUIDs)
 
 			// Select the random pools from UUIDs for PxDriver Restart
 			randomIndex = rand.Intn(len(poolUUIDs))
@@ -2373,7 +2373,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			log.FailOnError(err, "Failed to get pool using UUID [%s]", rebootPoolID)
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
-			log.InfoD("Restarting the Driver on Node %s", restartDriver.Name)
+			log.InfoD("Restarting the Driver on Node [%s]", restartDriver.Name)
 			err = Inst().N.RebootNode(*restartDriver, node.RebootNodeOpts{
 				Force: true,
 				ConnectionOpts: node.ConnectionOpts{
@@ -2491,7 +2491,7 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 			ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, "Failed to get pool using UUID [%s]", poolIDToResize)
 			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize >= expectedSizeWithJournal {
