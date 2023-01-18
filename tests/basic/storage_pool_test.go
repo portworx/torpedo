@@ -2218,9 +2218,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 					snapshotResponse, err := Inst().V.CreateSnapshot(vol.ID, snapshotName)
 					log.FailOnError(err, "error identifying volume [%s]", vol.ID)
 					snapshotList[vol.ID] = append(snapshotList[vol.ID], snapshotName)
-					//sPrint := fmt.Sprintf("Snapshot %s created with ID %s", snapshotName, snapshotResponse.GetSnapshotId())
 					log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
-					// log.InfoD(sPrint)
 				}
 				break
 
@@ -2384,7 +2382,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			log.InfoD("Waiting till Volume is In Resync Mode ")
 			if WaitTillVolumeInResync(randomVolIDs) == false {
-				log.InfoD("Failed to get Volume in Resync state")
+				log.InfoD("Failed to get Volume in Resync state %s ", randomVolIDs)
 			}
 
 			log.InfoD("Current Size of the pool %s is %d", rebootPoolID, poolToBeResized.TotalSize/units.GiB)
