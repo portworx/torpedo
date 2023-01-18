@@ -255,6 +255,14 @@ func (d *DefaultDriver) ExitPoolMaintenance(n node.Node) error {
 	}
 }
 
+//DeletePool deletes the pool with given poolID
+func (d *DefaultDriver) DeletePool(n node.Node, poolID string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeletePool()",
+	}
+}
+
 // GetDriverVersion Returns the pxctl version
 func (d *DefaultDriver) GetDriverVersion() (string, error) {
 	return "", &errors.ErrNotSupported{
@@ -923,6 +931,14 @@ func (d *DefaultDriver) AddBlockDrives(n *node.Node, drivePath []string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "AddBlockDrives()",
+	}
+}
+
+// GetPoolDrives returns the map of poolID and drive name
+func (d *DefaultDriver) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetPoolDrives()",
 	}
 }
 

@@ -233,6 +233,24 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 	return nil
 }
 
+//DeletePool deletes the pool with given poolID
+func (d *portworx) DeletePool(n node.Node, poolID string) error {
+	log.Infof("Initiating pool deletion for ID %s on node %s", poolID, n.Name)
+	cmd := fmt.Sprintf("pxctl sv pool delete %s", poolID)
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("error deleting pool on node [%s], Err: %v", n.Name, err)
+	}
+	log.Infof("poolID %s deletion: %s", poolID, out)
+	return nil
+}
+
 // GetStorageSpec get the storage spec used to deploy portworx
 func (d *portworx) GetStorageSpec() (*pxapi.StorageSpec, error) {
 	storageSpecResp, err := d.portworxServiceClient.GetStorageSpec(d.getContext(), &pxapi.PxGetStorageSpecRequest{})
@@ -4506,6 +4524,31 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 		}
 	}
 	return nil
+}
+
+// GetPoolDrives returns the map of poolID and drive name
+func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         startDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	poolDrives := make(map[string][]string, 0)
+	log.Infof("Getting available block drives on node [%s]", n.Name)
+	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
+
+	if err != nil {
+		return poolDrives, err
+	}
+	for _, v := range blockDrives {
+		labelsMap := v.Labels
+		if pm, ok := labelsMap["pxpool"]; ok {
+			poolDrives[pm] = append(poolDrives[pm], v.Path)
+		}
+	}
+	return poolDrives, err
 }
 
 // AddCloudDrive add cloud drives to the node using PXCTL
