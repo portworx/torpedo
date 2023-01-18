@@ -2297,11 +2297,11 @@ func inResync(vol string) bool {
 
 func WaitTillVolumeInResync(vol string) bool {
 	now := time.Now()
-	targetTime := now.Add(20 * time.Minute)
+	targetTime := now.Add(30 * time.Minute)
 
 	for {
 		if now.After(targetTime) {
-			log.Error("Current time is greater than 1 hour from now")
+			log.Error("Failed as the timeout of 30 Min is reached before resync triggered ")
 			return false
 		} else {
 			if inResync(vol) {
