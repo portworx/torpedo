@@ -10,6 +10,7 @@ import (
 
 	"github.com/portworx/torpedo/pkg/log"
 
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -2106,7 +2107,7 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 			}
 		}
 
-		dash.VerifyFatal(isMultiPoolNode, true, "Multipool Node found ?")
+		dash.VerifyFatal(isMultiPoolNode, true, "Failed as Multipool configuration doesnot exists!")
 		// Selecting Storage pool based on Pools present on the Node
 		selectedPool, err := GetPoolWithIOsInGivenNode(selectedNode)
 		log.FailOnError(err, "error while selecting the pool [%s]", selectedPool)
@@ -2189,7 +2190,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
-			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
+			dash.VerifyFatal(len(stNodes) > 0, true, "No Storage Node exists !! ")
 		}
 		log.InfoD("List of Nodes present %s", stNodes)
 
@@ -2211,7 +2212,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 					}
 				}
 				log.InfoD("Volume Inspect Details [%s]", volInspect)
-				log.FailOnError(err, "Listing Volumes Failed ")
+				log.FailOnError(err, "Failed to list the volumes present Err : %s", err)
 				for snap := 0; snap < totalSnapshotsPerVol; snap++ {
 					uuidCreated := uuid.New()
 					snapshotName := fmt.Sprintf("snapshot_%s_%s", vol.ID, uuidCreated.String())
@@ -2301,7 +2302,7 @@ func WaitTillVolumeInResync(vol string) bool {
 
 	for {
 		if now.After(targetTime) {
-			log.Error("Failed as the timeout of 30 Min is reached before resync triggered ")
+			log.Error("Failed as the timeout of 0 Min is reached before resync triggered ")
 			return false
 		} else {
 			if inResync(vol) {
@@ -2520,4 +2521,132 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 
+})
+
+func addDiskToNode(node node.Node, sizeOfDisk uint64, poolID int32) bool {
+	// Get the Spec to add the disk to the Node
+	//  if the diskSize ( sizeOfDisK ) is 0 , then Disk of default spec size will be picked
+	driveSpecs, err := GetCloudDriveDeviceSpecs()
+	log.FailOnError(err, fmt.Sprintf("Error getting cloud drive specs : %v", err))
+	log.InfoD("Cloud Drive Spec %s", driveSpecs)
+
+	// Update the device spec to update the disk size
+	deviceSpec := driveSpecs[0]
+	deviceSpecParams := strings.Split(deviceSpec, ",")
+	paramsArr := make([]string, 0)
+	for _, param := range deviceSpecParams {
+		if strings.Contains(param, "size") {
+			if sizeOfDisk == 0 {
+				var specSize uint64
+				val := strings.Split(param, "=")[1]
+				specSize, err = strconv.ParseUint(val, 10, 64)
+				log.FailOnError(err, "Error converting size [%v] to uint64", val)
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", specSize))
+			} else {
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%d", sizeOfDisk))
+			}
+		} else {
+			paramsArr = append(paramsArr, param)
+		}
+	}
+	newSpec := strings.Join(paramsArr, ",")
+	log.InfoD("New Spec Details %v", newSpec)
+
+	// Add Drive to the Volume
+	err = Inst().V.AddCloudDrive(&node, newSpec, poolID)
+	if err != nil {
+		// Regex to check if the error message is reported
+		re := regexp.MustCompile(`Drive not compatible with specified pool.*`)
+		if re.MatchString(fmt.Sprintf("%v", err)) {
+			log.InfoD("Error while adding Disk %v", err)
+			return false
+		}
+	}
+	return true
+}
+
+var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
+	var testrailID = 51320
+	// Testrail Description : Resizing the pool should fail when drives in the pool have been resized to different size
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/51320
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResizePoolDrivesInDifferentSize",
+			"Resizing the pool should fail when drives in the pool have been resized to different size",
+			nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "should get the existing storage node and expand the pool by resize-disk"
+	It(stepLog, func() {
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		// Select a Pool with IO Runing poolID returns UUID ( String )
+		var poolID int32
+
+		poolUUID, err := GetPoolIDWithIOs()
+		log.InfoD("Pool UUID on which IO is running %s", poolUUID)
+		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolID)
+
+		allPools, _ := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.InfoD("List of all the Pools present in the system %s", allPools)
+
+		// Get Pool ID of pool selected for Resize
+		for uuid, each := range allPools {
+			if uuid == poolUUID {
+				poolID = each.ID
+				break
+			}
+
+		}
+		log.InfoD("Getting Pool with ID [%v] and UUID [%v] for Drive Addition", poolID, poolUUID)
+
+		// Get the Node from the PoolID (nodeDetails returns node.Node)
+		nodeDetails, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Getting NodeID from the given poolID [%v] Failed", poolID)
+		log.InfoD("Node Details %v", nodeDetails)
+
+		// Add disk to the Node
+		var diskSize uint64
+		minDiskSize := 50
+		maxDiskSize := 150
+		size := rand.Intn(maxDiskSize-minDiskSize) + minDiskSize
+		diskSize = (uint64(size) * 1024 * 1024 * 1024) / units.GiB
+
+		log.InfoD("Adding New Disk with Size %v", diskSize)
+		response := addDiskToNode(*nodeDetails, diskSize, poolID)
+		dash.VerifyFatal(response, false,
+			fmt.Sprintf("Pool expansion with Disk Resize with Disk size [%v GiB] Succeeded?", diskSize))
+
+		log.InfoD("Attempt Adding Disk with size same as pool size")
+		response = addDiskToNode(*nodeDetails, 0, poolID)
+		dash.VerifyFatal(response, true,
+			fmt.Sprintf("Pool expansion with Disk size same as pool size [%v GiB] Succeeded?", diskSize))
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+
+		stepLog = "destroy all the applications created before test runs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
 })
