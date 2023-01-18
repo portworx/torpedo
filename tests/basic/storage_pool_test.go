@@ -2166,7 +2166,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 	var contexts []*scheduler.Context
 	var totalSnapshotsPerVol int = 60
-	
+
 	snapshotList := make(map[string][]string)
 	var selectedNode node.Node
 	var pickNode string
@@ -2234,7 +2234,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 		stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, "Failed to get pool using UUID [%s]", selectedPool.Uuid)
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			isjournal, err := isJournalEnabled()
@@ -2342,9 +2342,9 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			fmt.Printf("List of Volumes Present in the system %s \n", Volumes)
 			log.FailOnError(err, "Listing Volumes Failed ")
 
-			for _, vols := range Volumes {
-				log.InfoD("Validating Node ID %s", vols.ID)
-				vol_ids = append(vol_ids, vols.ID)
+			// Appending all the volume IDs to array so that one random volume can be picked for resizeing
+			for _, vol := range Volumes {
+				vol_ids = append(vol_ids, vol.ID)
 			}
 
 			// Select Random Volumes for pool Expand
@@ -2370,7 +2370,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			poolToBeResized, err := GetStoragePoolByUUID(rebootPoolID)
 			log.InfoD("Pool to be resized %v", poolToBeResized)
-			log.FailOnError(err, "Failed to get pool using UUID ")
+			log.FailOnError(err, "Failed to get pool using UUID [%s]", rebootPoolID)
 			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
 
 			log.InfoD("Restarting the Driver on Node %s", restartDriver.Name)
@@ -2381,21 +2381,6 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 					TimeBeforeRetry: 5 * time.Second,
 				},
 			})
-
-			// Below lines are commented for now,
-			// will be either deleted or uncommented after checking the behaviour after running multiple applications
-
-			/*
-				service := "portworx"
-				ConnectOpts := node.ConnectionOpts{
-					Timeout:         20 * time.Second,
-					TimeBeforeRetry: 10 * time.Second,
-					Sudo:            true}
-
-				err = Inst().N.Systemctl(*restartDriver, service, node.SystemctlOpts{
-					Action:         "restart",
-					ConnectionOpts: ConnectOpts,
-				})*/
 
 			log.InfoD("Waiting till Volume is In Resync Mode ")
 			if WaitTillVolumeInResync(randomVolIDs) == false {
@@ -2474,13 +2459,14 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 			if poolResizeIsInProgress(poolToBeResized) {
 				// wait until resize is completed and get the updated pool again
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
-				log.FailOnError(err, "Failed to get pool using UUID ")
+				log.FailOnError(err, "Failed to get pool using UUID [%s]", poolIDToResize)
 			}
 		})
 
 		var expectedSize uint64
 		var expectedSizeWithJournal uint64
 
+		// Marking the expected size to be 2TB
 		expectedSize = (2048 * 1024 * 1024 * 1024 * 1024) / units.TiB
 
 		stepLog = "Calculate expected pool size and trigger pool resize"
@@ -2506,7 +2492,7 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 			log.FailOnError(err, "Failed to get pool using UUID ")
-			newPoolSize := resizedPool.TotalSize / units.TiB
+			newPoolSize := resizedPool.TotalSize / units.GiB
 			isExpansionSuccess := false
 			if newPoolSize >= expectedSizeWithJournal {
 				isExpansionSuccess = true
@@ -2537,4 +2523,3 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 	})
 
 })
-

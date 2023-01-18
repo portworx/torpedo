@@ -5222,7 +5222,7 @@ func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
 	return node.Node{}
 }
 
-// Function will list all the pools associated with the volume
+// GetPoolIDsFromVolName returns list of pool IDs associated with a given volume name
 func GetPoolIDsFromVolName(volName string) ([]string, error) {
 	/* This method will pick all the pools associcated with the volume
 	and return the UUID of the pools in array format
