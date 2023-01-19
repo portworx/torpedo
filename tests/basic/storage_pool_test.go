@@ -2179,6 +2179,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 		log.InfoD("List of Nodes present [%s]", stNodes)
 
 		for _, each := range contexts {
+			log.InfoD("Getting context Info [%v]", each)
 			Volumes, err := Inst().S.GetVolumes(each)
 			log.FailOnError(err, "Listing Volumes Failed ")
 
@@ -2186,6 +2187,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 			for _, vol := range Volumes {
 				log.InfoD("List of Volumes to inspect [%T] , [%s]", vol, vol.ID)
 				volInspect, err := Inst().V.InspectVolume(vol.ID)
+				log.FailOnError(err, "Failed to Inpect volumes present Err : [%s]", volInspect)
 				selectedNode := volInspect.ReplicaSets[0].Nodes
 				randomIndex := rand.Intn(len(selectedNode))
 				pickNode = selectedNode[randomIndex]
@@ -2195,7 +2197,6 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 						stNode = n
 					}
 				}
-				log.FailOnError(err, "Failed to Inpect volumes present Err : [%s]", volInspect)
 				for snap := 0; snap < totalSnapshotsPerVol; snap++ {
 					uuidCreated := uuid.New()
 					snapshotName := fmt.Sprintf("snapshot_%s_%s", vol.ID, uuidCreated.String())
@@ -2358,6 +2359,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 					TimeBeforeRetry: 5 * time.Second,
 				},
 			})
+			log.FailOnError(err, "Rebooting Node failed ?")
 
 			log.InfoD("Waiting till Volume is In Resync Mode ")
 			if WaitTillVolumeInResync(randomVolIDs) == false {
@@ -2497,7 +2499,7 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 
 })
 
-func addDiskToNode(node node.Node, sizeOfDisk uint64, poolID int32) bool {
+func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) bool {
 	// Get the Spec to add the disk to the Node
 	//  if the diskSize ( sizeOfDisK ) is 0 , then Disk of default spec size will be picked
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
@@ -2594,12 +2596,12 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		diskSize = (uint64(size) * 1024 * 1024 * 1024) / units.GiB
 
 		log.InfoD("Adding New Disk with Size [%v]", diskSize)
-		response := addDiskToNode(*nodeDetails, diskSize, poolID)
+		response := addDiskToSpecificPool(*nodeDetails, diskSize, poolID)
 		dash.VerifyFatal(response, false,
 			fmt.Sprintf("Pool expansion with Disk Resize with Disk size [%v GiB] Succeeded?", diskSize))
 
 		log.InfoD("Attempt Adding Disk with size same as pool size")
-		response = addDiskToNode(*nodeDetails, 0, poolID)
+		response = addDiskToSpecificPool(*nodeDetails, 0, poolID)
 		dash.VerifyFatal(response, true,
 			fmt.Sprintf("Pool expansion with Disk size same as pool size [%v GiB] Succeeded?", diskSize))
 
