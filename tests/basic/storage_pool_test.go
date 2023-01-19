@@ -2010,7 +2010,7 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 		selectedPool := stNode.Pools[0]
 		var poolToBeResized *api.StoragePool
 		poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
-		log.FailOnError(err, "Failed to get pool using UUID ")
+		log.FailOnError(err, "Failed to get pool using UUID")
 
 		var newRep int64
 		Step("Expand volume to the expanded pool", func() {
@@ -2179,14 +2179,14 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
-			dash.VerifyFatal(len(stNodes) > 0, true, "No Storage Node exists !! ")
+			dash.VerifyFatal(len(stNodes) > 0, true, "No Storage Node exists !!")
 		}
 		log.InfoD("List of Nodes present [%s]", stNodes)
 
 		for _, each := range contexts {
 			log.InfoD("Getting context Info [%v]", each)
 			Volumes, err := Inst().S.GetVolumes(each)
-			log.FailOnError(err, "Listing Volumes Failed ")
+			log.FailOnError(err, "Listing Volumes Failed")
 
 			log.InfoD("Get all the details of Volumes Present")
 			for _, vol := range Volumes {
