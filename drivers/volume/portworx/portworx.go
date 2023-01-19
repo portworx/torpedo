@@ -774,7 +774,7 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 	volDriver := d.getVolDriver()
 	snapshotResponse, err := volDriver.SnapshotCreate(d.getContext(), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeID, Name: snapName})
 	if err != nil {
-		return nil, fmt.Errorf("Error while creating snapshot on the volume %v due to %v", volumeID, err)
+		return nil, fmt.Errorf("Error while creating snapshot [%s] on the volume [%s], Err: %v", snapName, volumeID, err)
 	}
 	return snapshotResponse, nil
 
