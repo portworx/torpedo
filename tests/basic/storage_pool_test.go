@@ -2369,11 +2369,11 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 					TimeBeforeRetry: 5 * time.Second,
 				},
 			})
-			log.FailOnError(err, "Rebooting Node failed ?")
+			log.FailOnError(err, "Rebooting Node failed?")
 
 			log.InfoD("Waiting till Volume is In Resync Mode ")
 			if WaitTillVolumeInResync(randomVolIDs) == false {
-				log.InfoD("Failed to get Volume in Resync state [%s] ", randomVolIDs)
+				log.InfoD("Failed to get Volume in Resync state [%s]", randomVolIDs)
 			}
 
 			log.InfoD("Current Size of the pool %s is %d", rebootPoolID, poolToBeResized.TotalSize/units.GiB)
