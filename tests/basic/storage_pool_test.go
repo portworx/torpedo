@@ -2328,7 +2328,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		time.Sleep(5 * time.Second)
 		for _, each := range contexts {
 			Volumes, err := Inst().S.GetVolumes(each)
-			log.FailOnError(err, "Failed while listing the volume with error [%s]", err)
+			log.FailOnError(err, "Failed while listing the volume with error")
 
 			// Appending all the volume IDs to array so that one random volume can be picked for resizeing
 			for _, vol := range Volumes {
