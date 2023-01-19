@@ -2263,7 +2263,6 @@ func unique(arrayEle []string) []string {
 
 func inResync(vol string) bool {
 	volDetails, err := Inst().V.InspectVolume(vol)
-	fmt.Println(volDetails)
 	if err != nil {
 		log.Error("not in Resync State")
 		return false
