@@ -89,7 +89,7 @@ type Driver interface {
 	// used during orchestration simulations.
 	CleanupVolume(name string) error
 
-	// Create Snapshot on the volume
+	// CreateSnapshot creates snapshot for a given volume ID with a given snapshot name
 	CreateSnapshot(volumeID string, snapName string) (*api.SdkVolumeSnapshotCreateResponse, error)
 
 	// ValidateCreateVolume validates whether a volume has been created properly.
