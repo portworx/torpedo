@@ -2012,10 +2012,8 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 		poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
 		log.FailOnError(err, "Failed to get pool using UUID ")
 
-		stepLog = "Expand volume to the expanded pool"
 		var newRep int64
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
+		Step("Expand volume to the expanded pool", func() {
 			currRep, err := Inst().V.GetReplicationFactor(volSelected)
 			log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
 			opts := volume.Options{
@@ -2033,9 +2031,7 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expansion triggered successfully on node %s", volSelected.Name, stNode.Name))
 		})
 
-		stepLog := "Initiate pool expansion using add drive"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
+		Step("Initiate pool expansion using add drive", func() {
 			err = addCloudDrive(stNode, poolToBeResized.ID)
 			log.FailOnError(err, "error adding cloud drive")
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("Verify pool %s on node %s expansion using add drive", poolToBeResized.Uuid, stNode.Name))
@@ -2060,10 +2056,6 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 })
 
 var _ = Describe("{StoPoolExpMulPools}", func() {
-	/*
-		Steps : Verify if Multiple Pools exist in the system
-				Expand one of the available pools present from the list of available pools
-	*/
 	var testrailID = 51298
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51298
 	// testrailID Description : Having multiple pools and resize only one pool
@@ -2073,10 +2065,9 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
-	// Schedule the applications to run on K8s cluster
 	var contexts []*scheduler.Context
-	stepLog := "Has to schedule apps, and expand it by resizing a pool "
-	It(stepLog, func() {
+
+	It("Has to schedule apps, and expand it by resizing a pool ", func() {
 
 		contexts = make([]*scheduler.Context, 0)
 
@@ -2108,11 +2099,12 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 		}
 
 		dash.VerifyFatal(isMultiPoolNode, true, "Failed as Multipool configuration doesnot exists!")
-		// Selecting Storage pool based on Pools present on the Node
+
+		// Selecting Storage pool based on Pools present on the Node with IO running
 		selectedPool, err := GetPoolWithIOsInGivenNode(selectedNode)
 		log.FailOnError(err, "error while selecting the pool [%s]", selectedPool)
 
-		stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
+		stepLog := fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPool.Uuid)
 			log.FailOnError(err, "Failed to get pool using UUID [%s]", selectedPool.Uuid)
@@ -2133,9 +2125,7 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
 
-		stepLog = "destroy all the applications created before test runs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
+		Step("destroy all the applications created before test runs", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
@@ -2150,13 +2140,9 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 })
 
 var _ = Describe("{CreateSnapshotsPoolResize}", func() {
-	/*
-		Steps : Try pool resize when ot of snapshots are created on the volume
-
-	*/
 	var testrailID = 50652
 	// Testrail Description : Try pool resize when lot of snapshots are created on the volume
-
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50652
 	var runID int
 
 	JustBeforeEach(func() {
@@ -2173,9 +2159,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 	// Try pool resize when ot of snapshots are created on the volume
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
-
 	It(stepLog, func() {
-		log.InfoD(stepLog)
 
 		contexts = make([]*scheduler.Context, 0)
 
@@ -2196,7 +2180,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 		for _, each := range contexts {
 			Volumes, err := Inst().S.GetVolumes(each)
-			log.FailOnError(err, "Listing Volumes Failed [%s]", err)
+			log.FailOnError(err, "Listing Volumes Failed ")
 
 			log.InfoD("Get all the details of Volumes Present")
 			for _, vol := range Volumes {
@@ -2211,8 +2195,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 						stNode = n
 					}
 				}
-				log.InfoD("Volume Inspect Details [%s]", volInspect)
-				log.FailOnError(err, "Failed to list the volumes present Err : %s", err)
+				log.FailOnError(err, "Failed to Inpect volumes present Err : %s", volInspect)
 				for snap := 0; snap < totalSnapshotsPerVol; snap++ {
 					uuidCreated := uuid.New()
 					snapshotName := fmt.Sprintf("snapshot_%s_%s", vol.ID, uuidCreated.String())
@@ -2228,7 +2211,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 		// Selecting Storage pool based on Pools present on the Node
 		selectedPool, err := GetPoolWithIOsInGivenNode(stNode)
-		log.FailOnError(err, "error identifying pool running IO  [%s]", stNode.Name)
+		log.FailOnError(err, "error identifying pool running IO [%s]", stNode.Name)
 
 		stepLog = fmt.Sprintf("Expanding pool on node %s and pool UUID: %s using auto", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
@@ -2251,9 +2234,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
 
-		stepLog = "destroy all the applications created before test runs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
+		Step("destroy all the applications created before test runs", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
@@ -2325,9 +2306,8 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 	var contexts []*scheduler.Context
 	var vol_ids []string
-	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
-	It(stepLog, func() {
+	It("should get the existing storage node and expand the pool by resize-disk", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2338,7 +2318,6 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		time.Sleep(5 * time.Second)
 		for _, each := range contexts {
 			Volumes, err := Inst().S.GetVolumes(each)
-			fmt.Printf("List of Volumes Present in the system %s \n", Volumes)
 			log.FailOnError(err, "Failed while listing the volume with error %s", err)
 
 			// Appending all the volume IDs to array so that one random volume can be picked for resizeing
@@ -2398,9 +2377,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
 
-		stepLog = "destroy all the applications created before test runs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
+		Step("destroy all the applications created before test runs", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
@@ -2504,9 +2481,7 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
 
-		stepLog = "destroy all the applications created before test runs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
+		Step("destroy all the applications created before test runs", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
@@ -2579,8 +2554,7 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 	})
 
 	var contexts []*scheduler.Context
-	stepLog := "should get the existing storage node and expand the pool by resize-disk"
-	It(stepLog, func() {
+	It("should get the existing storage node and expand the pool by resize-disk", func() {
 
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2610,7 +2584,7 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 
 		// Get the Node from the PoolID (nodeDetails returns node.Node)
 		nodeDetails, err := GetNodeWithGivenPoolID(poolUUID)
-		log.FailOnError(err, "Getting NodeID from the given poolID [%v] Failed", poolID)
+		log.FailOnError(err, "Getting NodeID from the given poolUUID [%v] Failed", poolUUID)
 		log.InfoD("Node Details %v", nodeDetails)
 
 		// Add disk to the Node
@@ -2634,9 +2608,7 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
 
-		stepLog = "destroy all the applications created before test runs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
+		Step("destroy all the applications created before test runs", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
