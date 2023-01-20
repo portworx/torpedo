@@ -2166,6 +2166,8 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 	It(stepLog, func() {
 
+		log.InfoD(stepLog)
+
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2318,6 +2320,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
