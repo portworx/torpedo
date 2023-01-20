@@ -1828,9 +1828,11 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
-					log.Errorf("an error occurred, collecting bundle")
-					CollectSupport()
-					dash.VerifySafely(file == "", true, fmt.Sprintf("Core generated on node %s, Core Path: %s", n.Name, file))
+					dash.Errorf("Core generated on node %s, Core Path: %s", n.Name, file)
+					// Collect Support Bundle only once
+					if !foundCore {
+						CollectSupport()
+					}
 					foundCore = true
 				}
 				log.FailOnError(err, "Error occurred while checking for core on node %s", n.Name)
