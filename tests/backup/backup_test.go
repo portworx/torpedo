@@ -312,6 +312,52 @@ func TeardownForTestcase(contexts []*scheduler.Context, providers []string, Clou
 
 }
 
+// This is to create multiple users and groups
+var _ = Describe("{CreateMultipleUserAndGroup}", func() {
+	numberOfUsers := 4
+	numberOfGroups := 2
+	users := make([]string, 0)
+	groups := make([]string, 0)
+
+	It("Create multiple users and Group", func() {
+		Step("Create Groups", func() {
+			log.InfoD("Creating %d groups", numberOfGroups)
+			var wg sync.WaitGroup
+			for i := 1; i <= numberOfGroups; i++ {
+				groupName := fmt.Sprintf("testGroup%v", i)
+				wg.Add(1)
+				go func(groupName string) {
+					err := backup.AddGroup(groupName)
+					log.FailOnError(err, "Failed to create group - %v", groupName)
+					groups = append(groups, groupName)
+					wg.Done()
+				}(groupName)
+			}
+			wg.Wait()
+		})
+
+		Step("Create Users", func() {
+			log.InfoD("Creating %d users", numberOfUsers)
+			var wg sync.WaitGroup
+			for i := 1; i <= numberOfUsers; i++ {
+				userName := fmt.Sprintf("testuser%v", i)
+				firstName := fmt.Sprintf("FirstName%v", i)
+				lastName := fmt.Sprintf("LastName%v", i)
+				email := fmt.Sprintf("testuser%v@cnbu.com", i)
+				wg.Add(1)
+				go func(userName, firstName, lastName, email string) {
+					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+					log.FailOnError(err, "Failed to create user - %s", userName)
+					users = append(users, userName)
+					wg.Done()
+				}(userName, firstName, lastName, email)
+			}
+			wg.Wait()
+		})
+	})
+
+})
+
 var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 	numberOfUsers := 30
 	numberOfGroups := 3
