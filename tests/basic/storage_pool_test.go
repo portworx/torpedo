@@ -47,6 +47,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		}
 
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		var poolIDToResize string
 
@@ -114,15 +115,6 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 			dash.VerifyFatal(isExpansionSuccess, true, fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 		})
 
-		stepLog = "destroy apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -146,6 +138,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		}
 
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		var poolIDToResize string
 
@@ -212,15 +205,6 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			dash.VerifyFatal(isExpansionSuccess, true,
 				fmt.Sprintf("expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 		})
-		stepLog = "destroy apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -244,6 +228,7 @@ var _ = Describe("{StoragePoolExpandDiskAuto}", func() {
 		}
 
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		var poolIDToResize string
 
@@ -309,15 +294,7 @@ var _ = Describe("{StoragePoolExpandDiskAuto}", func() {
 			dash.VerifyFatal(isExpansionSuccess, true, fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 
 		})
-		stepLog = "destroy apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -346,6 +323,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 		}
 
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		var poolIDToResize string
 
@@ -420,15 +398,7 @@ var _ = Describe("{PoolResizeDiskReboot}", func() {
 			dash.VerifyFatal(isExpansionSuccess, true,
 				fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 		})
-		stepLog = "destroy apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -457,6 +427,7 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 		}
 
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		var poolIDToResize string
 
@@ -528,15 +499,6 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 			dash.VerifyFatal(isExpansionSuccess, true,
 				fmt.Sprintf("Expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 		})
-		stepLog = "destroy apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -583,6 +545,7 @@ func nodePoolsExpansion(testName string) {
 		}
 
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		var poolsToBeResized []*api.StoragePool
 
@@ -677,15 +640,6 @@ func nodePoolsExpansion(testName string) {
 			}
 
 		})
-		stepLog = "destroy apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -723,6 +677,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 		}
 
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		var poolIDToResize string
 
@@ -860,15 +815,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", stNode.Name))
 			}
 		})
-		stepLog = "destroy apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -1030,6 +977,7 @@ var _ = Describe("{PoolAddDrive}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddrive-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1039,15 +987,7 @@ var _ = Describe("{PoolAddDrive}", func() {
 		log.FailOnError(err, "error identifying node to run test")
 		err = addCloudDrive(stNode, -1)
 		log.FailOnError(err, "error adding cloud drive")
-		stepLog = "destroy apps"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -1079,6 +1019,7 @@ var _ = Describe("{AddDriveAndPXRestart}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvrestrt-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1097,10 +1038,6 @@ var _ = Describe("{AddDriveAndPXRestart}", func() {
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after restarting on node %s", stNode.Name))
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
-
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -1133,6 +1070,7 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrst-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1189,9 +1127,6 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 			}
 			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -1224,6 +1159,7 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladdvolrz-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1269,15 +1205,7 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep+1, volSelected.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expanded successfully on node %s", volSelected.Name, stNode.Name))
 		})
-		for _, ctx := range contexts {
-			ctx.SkipVolumeValidation = true
-			ValidateContext(ctx)
-		}
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -1304,6 +1232,7 @@ var _ = Describe("{AddDriveMaintenanceMode}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrvmnt-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1335,10 +1264,9 @@ var _ = Describe("{AddDriveMaintenanceMode}", func() {
 		_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
 		log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode in node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(stNode)
+		log.FailOnError(err, fmt.Sprintf("srr getting node [%s] status", stNode.Name))
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
+
 	})
 
 	JustAfterEach(func() {
@@ -1366,6 +1294,7 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrvsl-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		slNodes := node.GetStorageLessNodes()
 		if len(slNodes) == 0 {
@@ -1454,9 +1383,6 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToResize.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSizeWithJournal))
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -1655,6 +1581,7 @@ var _ = Describe("{PoolResizeMul}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolresizemul-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1698,9 +1625,6 @@ var _ = Describe("{PoolResizeMul}", func() {
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using auto", selectedPool.Uuid, selectedNode.Name))
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -1734,6 +1658,7 @@ var _ = Describe("{PoolResizeDiskDiff}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszediff-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1794,9 +1719,6 @@ var _ = Describe("{PoolResizeDiskDiff}", func() {
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, selectedNode.Name))
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -1830,6 +1752,7 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plradddiff-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1890,9 +1813,6 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, selectedNode.Name))
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -1924,6 +1844,7 @@ var _ = Describe("{MultiDriveResizeDisk}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("muldrvresize-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1971,9 +1892,6 @@ var _ = Describe("{MultiDriveResizeDisk}", func() {
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, selectedNode.Name))
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -2006,6 +1924,7 @@ var _ = Describe("{ResizeWithPXRestart}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizedskrst-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2040,10 +1959,6 @@ var _ = Describe("{ResizeWithPXRestart}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, stNode.Name))
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
-
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -2073,6 +1988,7 @@ var _ = Describe("{AddWithPXRestart}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddskwrst-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2107,9 +2023,6 @@ var _ = Describe("{AddWithPXRestart}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, stNode.Name))
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -2142,6 +2055,7 @@ var _ = Describe("{ResizeDiskVolUpdate}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszvolupdt-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2206,15 +2120,6 @@ var _ = Describe("{ResizeDiskVolUpdate}", func() {
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expanded successfully on node %s", volSelected.Name, stNode.Name))
 		})
 
-		for _, ctx := range contexts {
-			ctx.SkipVolumeValidation = true
-			ValidateContext(ctx)
-		}
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -2245,6 +2150,7 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdtplrsz-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2313,15 +2219,6 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 		})
 		ValidateReplFactorUpdate(volSelected, newRep+1)
 
-		for _, ctx := range contexts {
-			ctx.SkipVolumeValidation = true
-			ValidateContext(ctx)
-		}
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -2352,6 +2249,7 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszvolupdt-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2410,15 +2308,7 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 
 		})
 		ValidateReplFactorUpdate(volSelected, newRep+1)
-		for _, ctx := range contexts {
-			ctx.SkipVolumeValidation = true
-			ValidateContext(ctx)
-		}
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -2450,6 +2340,7 @@ var _ = Describe("{AddDriveWithNodeReboot}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrbt-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2503,9 +2394,6 @@ var _ = Describe("{AddDriveWithNodeReboot}", func() {
 			}
 			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -2539,6 +2427,7 @@ var _ = Describe("{MulPoolsResize}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mulpoolsresiz-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		var poolsToBeResized []*api.StoragePool
 
@@ -2581,9 +2470,6 @@ var _ = Describe("{MulPoolsResize}", func() {
 			}
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -2616,6 +2502,7 @@ var _ = Describe("{MulPoolsAddDisk}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mulpooladd-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		var poolsToBeResized []*api.StoragePool
 
@@ -2655,9 +2542,6 @@ var _ = Describe("{MulPoolsAddDisk}", func() {
 			}
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -2693,6 +2577,7 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizedrvmeta-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetMetadataNodes()
 
@@ -2729,9 +2614,6 @@ var _ = Describe("{ResizeWithJrnlAndMeta}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, stNode.Name))
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -2765,6 +2647,7 @@ var _ = Describe("{PoolExpandWhileIOAndPXRestart}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizerepl-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2806,9 +2689,6 @@ var _ = Describe("{PoolExpandWhileIOAndPXRestart}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", poolToBeResized.Uuid, storageNode2.Name))
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -2843,6 +2723,7 @@ var _ = Describe("{ResizeNodeMaintenanceCycle}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizenodem-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2889,9 +2770,6 @@ var _ = Describe("{ResizeNodeMaintenanceCycle}", func() {
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -2926,6 +2804,7 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addnodem-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -2972,9 +2851,6 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", func() {
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -3006,6 +2882,7 @@ var _ = Describe("{ResizePoolMaintenanceCycle}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizepoolm-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3050,11 +2927,7 @@ var _ = Describe("{ResizePoolMaintenanceCycle}", func() {
 			err = Inst().V.WaitDriverUpOnNode(selectedNode, 2*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", selectedNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
-
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -3086,6 +2959,7 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addpoolm-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3132,9 +3006,6 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", func() {
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", selectedNode.Name))
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -3163,6 +3034,7 @@ var _ = Describe("{NodeMaintenanceResize}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rszedskmnt-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3231,9 +3103,6 @@ var _ = Describe("{NodeMaintenanceResize}", func() {
 		log.FailOnError(err, fmt.Sprintf("Error getting status on node %s", stNode.Name))
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 	})
 
 	JustAfterEach(func() {
@@ -3261,6 +3130,7 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddskmnt-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3326,9 +3196,6 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", func() {
 		status, err = Inst().V.GetNodeStatus(*stNode)
 		log.FailOnError(err, fmt.Sprintf("Error getting status on node %s", stNode.Name))
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 	})
 
 	JustAfterEach(func() {
@@ -3354,6 +3221,7 @@ var _ = Describe("{PoolMaintenanceModeResize}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rszedskmnt-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3416,10 +3284,8 @@ var _ = Describe("{PoolMaintenanceModeResize}", func() {
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(*stNode)
+		log.FailOnError(err, "error get node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 	})
 
 	JustAfterEach(func() {
@@ -3444,6 +3310,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddskmnt-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3506,10 +3373,9 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(*stNode)
+		log.FailOnError(err, "failed to get node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
+
 	})
 
 	JustAfterEach(func() {
@@ -3535,6 +3401,7 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mntadddsk-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3601,10 +3468,8 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after exiting maintenance on node %s", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(*stNode)
+		log.FailOnError(err, "error get node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 	})
 
 	JustAfterEach(func() {
@@ -3630,6 +3495,7 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("mntrsze-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3696,10 +3562,9 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", func() {
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after exiting maintenance on node %s", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(*stNode)
+		log.FailOnError(err, "error getting node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
+
 	})
 
 	JustAfterEach(func() {
@@ -3725,6 +3590,7 @@ var _ = Describe("{ResizePoolMaintenanceMode}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plmntrsze-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3790,10 +3656,8 @@ var _ = Describe("{ResizePoolMaintenanceMode}", func() {
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(*stNode)
+		log.FailOnError(err, "error getting node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 	})
 
 	JustAfterEach(func() {
@@ -3819,6 +3683,7 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plmntadddsk-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3884,10 +3749,9 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err := Inst().V.GetNodeStatus(*stNode)
+		log.FailOnError(err, "error getting node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
+
 	})
 
 	JustAfterEach(func() {
@@ -3917,6 +3781,7 @@ var _ = Describe("{PXRestartResize}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rstrszedsk-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -3949,9 +3814,6 @@ var _ = Describe("{PXRestartResize}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", selectedPool.Uuid, stNode.Name))
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -3982,6 +3844,7 @@ var _ = Describe("{PXRestartAddDisk}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rstadddsk-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -4014,9 +3877,6 @@ var _ = Describe("{PXRestartAddDisk}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, stNode.Name))
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -4053,6 +3913,7 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rsizecln-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -4114,9 +3975,6 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using resize-disk", poolToBeResized.Uuid, storageNode2.Name))
 
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -4187,6 +4045,7 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nwplfullad-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 		//creating a spec to perform add  drive
 		driveSpecs, err := GetCloudDriveDeviceSpecs()
 		log.FailOnError(err, "Error getting cloud drive specs")
@@ -4277,9 +4136,6 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 			status, err := Inst().V.GetNodeStatus(*selectedNode)
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			ValidateAndDestroy(contexts, opts)
 		})
 	})
 
@@ -4335,6 +4191,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sfullrz-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		err = waitForStorageDown(*selectedNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
@@ -4371,9 +4228,6 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 			status, err := Inst().V.GetNodeStatus(*selectedNode)
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			ValidateAndDestroy(contexts, opts)
 		})
 	})
 
@@ -4427,6 +4281,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sfullad-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		err = waitForStorageDown(*selectedNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
@@ -4463,9 +4318,6 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 			status, err := Inst().V.GetNodeStatus(*selectedNode)
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			ValidateAndDestroy(contexts, opts)
 		})
 	})
 
@@ -4521,6 +4373,7 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resiznoqr-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stoageDriverNodes := node.GetStorageDriverNodes()
 
@@ -4565,9 +4418,6 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 				log.FailOnError(err, "error while waiting for driver up on node %s", n.Name)
 
 			}
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			ValidateAndDestroy(contexts, opts)
 
 		})
 
@@ -4589,9 +4439,6 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 			resizeErr := waitForPoolToBeResized(expectedSize, selPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using resize-disk", selPool.Uuid))
 		})
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
 	})
 	JustAfterEach(func() {
@@ -4600,7 +4447,6 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 	})
 })
 
-<<<<<<< HEAD
 var _ = Describe("{StoPoolExpMulPools}", func() {
 	var testrailID = 51298
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51298
@@ -4623,6 +4469,7 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		// Get all the storage Nodes present in the system
 		stNodes := node.GetStorageNodes()
@@ -4670,19 +4517,6 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", selectedPool.Uuid, selectedNode.Name))
 		})
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
-
-		stepLog = "destroy all the applications created before test runs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -4720,6 +4554,7 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		var stNode node.Node
 
@@ -4783,20 +4618,6 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", selectedPool.Uuid, selectedNode.Name))
-		})
-
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
-
-		stepLog = "destroy all the applications created before test runs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
 		})
 
 	})
@@ -4873,6 +4694,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		time.Sleep(5 * time.Second)
 		for _, each := range contexts {
@@ -4933,19 +4755,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", rebootPoolID, restartDriver.Name))
 
 		}
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
-		stepLog = "destroy all the applications created before test runs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
 	})
 
 	JustAfterEach(func() {
@@ -4976,6 +4786,7 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
@@ -5039,20 +4850,6 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 			}
 			dash.VerifyFatal(isExpansionSuccess, true,
 				fmt.Sprintf("expected new pool size to be [%v] or [%v] if pool has journal, got [%v]", expectedSize, expectedSizeWithJournal, newPoolSize))
-		})
-
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
-
-		stepLog = "destroy all the applications created before test runs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
 		})
 
 	})
@@ -5128,6 +4925,7 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resizepooldrivesdiffsize-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		// Select a Pool with IO Runing poolID returns UUID ( String )
 		var poolID int32
@@ -5170,19 +4968,7 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		response = addDiskToSpecificPool(*nodeDetails, 0, poolID)
 		dash.VerifyFatal(response, true,
 			fmt.Sprintf("Pool expansion with Disk size same as pool size [%v GiB] Succeeded?", diskSize))
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		ValidateAndDestroy(contexts, opts)
 
-		stepLog = "destroy all the applications created before test runs"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
 	})
 
 	JustAfterEach(func() {
@@ -5212,6 +4998,7 @@ var _ = Describe("{PoolDelete}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resiznoqr-%d", i))...)
 		}
 		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		var nodeSelected node.Node
@@ -5334,9 +5121,15 @@ var _ = Describe("{PoolDelete}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using auto option", poolIDSelected))
 		})
 
-		JustAfterEach(func() {
-			defer EndTorpedoTest()
-			AfterEachTest(contexts)
-		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
+
+func appsValidateAndDestroy(contexts []*scheduler.Context) {
+	opts := make(map[string]bool)
+	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+	ValidateAndDestroy(contexts, opts)
+}
