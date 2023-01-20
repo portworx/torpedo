@@ -1817,6 +1817,7 @@ func PerformSystemCheck() {
 			log.InfoD("verifying if core files are present on each node")
 			nodes := node.GetNodes()
 			expect(nodes).NotTo(beEmpty())
+			foundCore := false
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
 					continue
@@ -1830,8 +1831,12 @@ func PerformSystemCheck() {
 					log.Errorf("an error occurred, collecting bundle")
 					CollectSupport()
 					dash.VerifySafely(file == "", true, fmt.Sprintf("Core generated on node %s, Core Path: %s", n.Name, file))
+					foundCore = true
 				}
 				log.FailOnError(err, "Error occurred while checking for core on node %s", n.Name)
+			}
+			if foundCore {
+				log.Fatalf("Core generated, please check logs for more details")
 			}
 		})
 	})
@@ -3185,7 +3190,7 @@ func GetSourceClusterConfigPath() (string, error) {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	if len(kubeconfigList) < 2 {
 		return "", fmt.Errorf(`Failed to get source config path.
-				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
 	log.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
@@ -3202,7 +3207,7 @@ func GetDestinationClusterConfigPath() (string, error) {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	if len(kubeconfigList) < 2 {
 		return "", fmt.Errorf(`Failed to get source config path.
-				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
 	log.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
@@ -3682,10 +3687,10 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 	if retainCount > 0 && objectLock == true {
 		// Create object locked bucket
 		_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
-			Bucket: aws.String(bucketName),
+			Bucket:                     aws.String(bucketName),
 			ObjectLockEnabledForBucket: aws.Bool(true),
 		})
-	}else {
+	} else {
 		// Create standard bucket
 		_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
 			Bucket: aws.String(bucketName),
@@ -3709,8 +3714,8 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 				ObjectLockEnabled: aws.String(enabled),
 				Rule: &s3.ObjectLockRule{
 					DefaultRetention: &s3.DefaultRetention{
-							Days: aws.Int64(retainCount),
-							Mode: aws.String(objectLockMode)}}}})
+						Days: aws.Int64(retainCount),
+						Mode: aws.String(objectLockMode)}}}})
 		err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
 	}
 	return err

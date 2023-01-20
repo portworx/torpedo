@@ -108,7 +108,9 @@ var _ = Describe("{Longevity}", func() {
 
 	BeforeEach(func() {
 		if !populateDone {
-			StartTorpedoTest("PX-Longevity", "Validate PX longevity workflow", nil, 0)
+			tags := make(map[string]string, 0)
+			tags["longevity"] = "true"
+			StartTorpedoTest("PX-Longevity", "Validate PX longevity workflow", tags, 0)
 
 			populateIntervals()
 			populateDisruptiveTriggers()

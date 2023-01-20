@@ -15,7 +15,9 @@ var _ = Describe("{UpgradeCluster}", func() {
 	var contexts []*scheduler.Context
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeCluster", "Upgrade cluster test", nil, 0)
+		tags := make(map[string]string, 0)
+		tags["upgradeCluster"] = "true"
+		StartTorpedoTest("UpgradeCluster", "Upgrade cluster test", tags, 0)
 	})
 	It("upgrade scheduler and ensure everything is running fine", func() {
 		contexts = make([]*scheduler.Context, 0)
