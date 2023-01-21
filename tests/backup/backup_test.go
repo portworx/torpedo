@@ -685,6 +685,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Delete backup to confirm that the user has Full Access
 			backupDeleteResponse, err := DeleteBackup(backupNames[0], backupUID, orgID, ctxNonAdmin)
+			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s]", backupNames[0], username)
 			dash.VerifyFatal(backupDeleteResponse.String(), "", "Verifying backup deletion is successful")
 		})
 
@@ -3259,15 +3260,16 @@ func CreateRestore(restoreName string, backupName string,
 
 	restoreSuccessCheck := func() (interface{}, bool, error) {
 		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+		restoreResponseStatus := resp.GetRestore().GetStatus()
 		log.FailOnError(err, "Failed verifying restore for - %s", restoreName)
-		if resp.GetRestore().GetStatus().GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess || resp.GetRestore().GetStatus().GetStatus() == api.RestoreInfo_StatusInfo_Success {
-			log.Infof("Restore status - %s", resp.GetRestore().GetStatus())
+		if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
+			log.Infof("Restore status - %s", restoreResponseStatus)
 			log.InfoD("Status of %s - [%s]",
-				restoreName, resp.GetRestore().GetStatus().GetStatus())
+				restoreName, restoreResponseStatus.GetStatus())
 			return "", false, nil
 		}
 		return "", true, fmt.Errorf("expected status of %s - [%s] or [%s], but got [%s]",
-			restoreName, api.RestoreInfo_StatusInfo_PartialSuccess.String(), api.RestoreInfo_StatusInfo_Success, resp.GetRestore().GetStatus().GetStatus())
+			restoreName, api.RestoreInfo_StatusInfo_PartialSuccess.String(), api.RestoreInfo_StatusInfo_Success, restoreResponseStatus.GetStatus())
 	}
 
 	task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
