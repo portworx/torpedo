@@ -26,8 +26,9 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		nodes = node.GetWorkerNodes()
 		numNodes = len(nodes)
-		tags := make(map[string]string, 0)
-		tags["ipv6"] = "true"
+		tags := map[string]string{
+			"ipv6": "true",
+		}
 		StartTorpedoTest("IPv6PxctlCommands", "Pxctl commands on IPv6 setups test", tags, testrailID)
 	})
 

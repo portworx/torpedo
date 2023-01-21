@@ -108,8 +108,9 @@ var _ = Describe("{Longevity}", func() {
 
 	BeforeEach(func() {
 		if !populateDone {
-			tags := make(map[string]string, 0)
-			tags["longevity"] = "true"
+			tags := map[string]string{
+				"longevity": "true",
+			}
 			StartTorpedoTest("PX-Longevity", "Validate PX longevity workflow", tags, 0)
 
 			populateIntervals()
