@@ -1817,7 +1817,6 @@ func PerformSystemCheck() {
 			log.InfoD("verifying if core files are present on each node")
 			nodes := node.GetNodes()
 			expect(nodes).NotTo(beEmpty())
-			foundCore := false
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
 					continue
@@ -1828,17 +1827,11 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
-					dash.Errorf("Core generated on node %s, Core Path: %s", n.Name, file)
+					dash.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
 					// Collect Support Bundle only once
-					if !foundCore {
-						CollectSupport()
-					}
-					foundCore = true
+					CollectSupport()
+					log.Fatalf("Core generated, please check logs for more details")
 				}
-				log.FailOnError(err, "Error occurred while checking for core on node %s", n.Name)
-			}
-			if foundCore {
-				log.Fatalf("Core generated, please check logs for more details")
 			}
 		})
 	})
