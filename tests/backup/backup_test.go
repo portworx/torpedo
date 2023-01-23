@@ -27,6 +27,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/sched-ops/k8s/core"
 
 	. "github.com/portworx/torpedo/tests"
 
@@ -3954,13 +3955,14 @@ var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 		clusterUid        string
 		clusterStatus     api.ClusterInfo_StatusInfo_Status
 		backupList        []string
-		podList           []string
-		beforeSize        int64
-		afterSize					int64
+		beforeSize        int
+		podsListBefore     []int
+		podListAfter       []int
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
 	BackupLocationMap := make(map[string]string)
+
 	var backupLocation string
 	contexts = make([]*scheduler.Context, 0)
 	bkpNamespaces = make([]string, 0)
@@ -4072,12 +4074,15 @@ var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 					CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
 				})
 				Step("Getting size before resize", func(){
-					podList, err := GetPods(namespace)
+					pods, err := core.Instance().GetPods(namespace, labelSelectors)
 					log.FailOnError(err, "Unable to fetch the pod list")
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					log.FailOnError(err, "Getting kubeconfig path for source cluster")
-					beforeSize, err := getSizeOfMountPoint(podList[0], namespace, srcClusterConfigPath)
-					log.FailOnError(err, "Unable to fetch the size")
+					for _, pod := range pods.Items {
+						beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath)
+						log.FailOnError(err, "Unable to fetch the size")
+						podsListBefore = append(podsListBefore, beforeSize)
+					}
 				})
 				Step("Resize volume after the restore is completed", func() {
 					log.InfoD("Resize volume after the restore is completed")
@@ -4107,17 +4112,22 @@ var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 								}
 							}
 						})
+						Step("Getting size after resize", func(){
+							log.InfoD("Checking volume size after resize")
+							pods, err := core.Instance().GetPods(namespace, labelSelectors)
+							log.FailOnError(err, "Unable to fetch the pod list")
+							srcClusterConfigPath, err := GetSourceClusterConfigPath()
+							log.FailOnError(err, "Getting kubeconfig path for source cluster")
+							for _, pod := range pods.Items {
+								afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath)
+								log.FailOnError(err, "Unable to mount size")
+								podListAfter = append(podListAfter, afterSize)
+							}
+							for i := 0; i < len(podListAfter); i++ {
+							dash.VerifyFatal(podListAfter[i] > podsListBefore[i], true, "Volume size different")}
+						})
 					}
 				}
-			})
-			Step("Getting size after resize", func(){
-				podList, err := GetPods(namespace)
-				log.FailOnError(err, "Unable to fetch the pod list")
-				srcClusterConfigPath, err := GetSourceClusterConfigPath()
-				log.FailOnError(err, "Getting kubeconfig path for source cluster")
-				afterSize, err := getSizeOfMountPoint(podList[0], namespace, srcClusterConfigPath)
-				dash.VerifyFatal(afterSize > beforeSize, true, "Validate volume update successful?")
-				log.FailOnError(err, "Unable to fetch the size")
 			})
 
 	JustAfterEach(func() {
@@ -4739,9 +4749,9 @@ func getBackupUID(backupName, orgID string) string {
 	return backupUID
 }
 
-func getSizeOfMountPoint(podname string, namespace string, kubeconfigfile string) {
-	var number int64
-	ret, err := kubectlExec([]string{podName, "-n", namespace, "--kubeconfig=", kubeconfigfile, " -- /bin/df | grep pxd | awk '{print $4}'"})
+func getSizeOfMountPoint(podname string, namespace string, kubeconfigfile string) (int, error){
+	var number int
+	ret, err := kubectlExec([]string{podname, "-n", namespace, "--kubeconfig=", kubeconfigfile, " -- /bin/df | grep pxd | awk '{print $4}'"})
 	if err != nil {
 		return 0, err
 	}
@@ -4752,7 +4762,7 @@ func getSizeOfMountPoint(podname string, namespace string, kubeconfigfile string
 	return number, nil
 }
 
-func kubectlExec(arguments []string){
+func kubectlExec(arguments []string) (string, error){
 	if len(arguments) == 0 {
 		return "", fmt.Errorf("no arguments supplied for kubectl command")
 	}
@@ -4762,5 +4772,5 @@ func kubectlExec(arguments []string){
 	if err != nil {
 		return "", fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}
-	return output, err
+	return string(output), err
 }
