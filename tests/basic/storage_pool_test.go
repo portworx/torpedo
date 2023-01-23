@@ -27,9 +27,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const poolResizeTimeout = time.Minute * 360
-const retryTimeout = time.Minute * 2
-const addDriveUpTimeOut = time.Minute * 15
+const (
+	replicationUpdateTimeout = 4 * time.Hour
+	poolResizeTimeout        = time.Minute * 360
+	retryTimeout             = time.Minute * 2
+	addDriveUpTimeOut        = time.Minute * 15
+)
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	JustBeforeEach(func() {
@@ -662,7 +665,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51441
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("AddNewPoolWhileRebalance", "Validate adding nee storage pool while another pool rebalancing", nil, testrailID)
+		StartTorpedoTest("AddNewPoolWhileRebalance", "Validate adding new storage pool while another pool rebalancing", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
@@ -1192,7 +1195,7 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 			currRep, err := Inst().V.GetReplicationFactor(volSelected)
 			log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
 			opts := volume.Options{
-				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+				ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
 			}
 			newRep := currRep
 			if currRep == 3 {
@@ -1204,6 +1207,11 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 			err = Inst().V.SetReplicationFactor(volSelected, newRep+1, []string{stNode.Id}, []string{selectedPool.Uuid}, true, opts)
 			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep+1, volSelected.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expanded successfully on node %s", volSelected.Name, stNode.Name))
+			//Reverting to original rep for volume validation
+			if currRep < 3 {
+				err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
+				log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+			}
 		})
 
 	})
@@ -2106,7 +2114,7 @@ var _ = Describe("{ResizeDiskVolUpdate}", func() {
 			currRep, err := Inst().V.GetReplicationFactor(volSelected)
 			log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
 			opts := volume.Options{
-				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+				ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
 			}
 			newRep := currRep
 			if currRep == 3 {
@@ -2118,6 +2126,11 @@ var _ = Describe("{ResizeDiskVolUpdate}", func() {
 			err = Inst().V.SetReplicationFactor(volSelected, newRep+1, []string{stNode.Id}, []string{poolToBeResized.Uuid}, true, opts)
 			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep+1, volSelected.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expanded successfully on node %s", volSelected.Name, stNode.Name))
+			//reverting the replication to volume validation to pass
+			if currRep < 3 {
+				err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
+				log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+			}
 		})
 
 	})
@@ -2186,7 +2199,7 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 			currRep, err := Inst().V.GetReplicationFactor(volSelected)
 			log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
 			opts := volume.Options{
-				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+				ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
 			}
 			newRep = currRep
 			if currRep == 3 {
@@ -2198,6 +2211,11 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 			err = Inst().V.SetReplicationFactor(volSelected, newRep+1, []string{stNode.Id}, []string{poolToBeResized.Uuid}, false, opts)
 			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep+1, volSelected.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expansion triggered successfully on node %s", volSelected.Name, stNode.Name))
+			//reverting the replication for volume validation
+			if currRep < 3 {
+				err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
+				log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+			}
 		})
 
 		stepLog := "Initiate pool expansion using resize-disk"
@@ -2280,13 +2298,15 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 
 		stepLog = "Expand volume to the expanded pool"
 		var newRep int64
+		var currRep int64
+		opts := volume.Options{
+			ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+		}
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			currRep, err := Inst().V.GetReplicationFactor(volSelected)
+			currRep, err = Inst().V.GetReplicationFactor(volSelected)
 			log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
-			opts := volume.Options{
-				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
-			}
+
 			newRep = currRep
 			if currRep == 3 {
 				newRep = currRep - 1
@@ -2308,6 +2328,11 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 
 		})
 		ValidateReplFactorUpdate(volSelected, newRep+1)
+		//Reverting to original repl for volume validation
+		if currRep < 3 {
+			err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
+			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+		}
 
 	})
 	JustAfterEach(func() {
@@ -5004,7 +5029,7 @@ var _ = Describe("{PoolDelete}", func() {
 		var nodeSelected node.Node
 		var nodePools []node.StoragePool
 		for _, stNode := range stNodes {
-			if len(nodePools) > 1 {
+			if len(stNode.StoragePools) > 1 {
 				nodePools = stNode.StoragePools
 				nodeSelected = stNode
 				break
@@ -5036,6 +5061,8 @@ var _ = Describe("{PoolDelete}", func() {
 			log.InfoD("Setting pools in maintenance on node %s", nodeSelected.Name)
 			err = Inst().V.EnterPoolMaintenance(nodeSelected)
 			log.FailOnError(err, "failed to set pool maintenance mode on node %s", nodeSelected.Name)
+
+			time.Sleep(1 * time.Minute)
 
 			err = Inst().V.DeletePool(nodeSelected, poolIDToDelete)
 			log.FailOnError(err, "failed to delete poolID %s on node %s", poolIDToDelete, nodeSelected.Name)

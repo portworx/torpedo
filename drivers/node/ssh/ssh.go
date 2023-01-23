@@ -746,7 +746,7 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 			Cause: err.Error(),
 		}
 	}
-	driveOutput := fmt.Sprint(out)
+	driveOutput := fmt.Sprintf("%s", out)
 
 	for _, line := range strings.Split(strings.TrimSpace(driveOutput), "\n") {
 		drive := &node.BlockDrive{}
@@ -757,13 +757,16 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 				drive.Path = col[lastBin+2 : len(col)-1]
 			}
 			if ok, _ := regexp.MatchString("^LABEL", col); ok {
-				lastBin := strings.LastIndex(col, "=")
+				lastBin := strings.Index(col, "=")
 				labels := col[lastBin+2 : len(col)-1]
 				labelsList := strings.Split(labels, ",")
 				driveLabels := make(map[string]string)
 				for _, label := range labelsList {
-					kv := strings.Split(label, "=")
-					driveLabels[kv[0]] = kv[1]
+					labelBin := strings.LastIndex(label, "=")
+					if labelBin != -1 {
+						kv := strings.Split(label, "=")
+						driveLabels[kv[0]] = kv[1]
+					}
 				}
 				drive.Labels = driveLabels
 			}

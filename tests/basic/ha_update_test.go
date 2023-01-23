@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	validateReplicationUpdateTimeout = 3 * time.Hour
+	validateReplicationUpdateTimeout = 2 * time.Hour
 )
 
 var _ = Describe("{HaIncreaseRebootTarget}", func() {

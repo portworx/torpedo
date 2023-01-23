@@ -236,7 +236,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 //DeletePool deletes the pool with given poolID
 func (d *portworx) DeletePool(n node.Node, poolID string) error {
 	log.Infof("Initiating pool deletion for ID %s on node %s", poolID, n.Name)
-	cmd := fmt.Sprintf("pxctl sv pool delete %s", poolID)
+	cmd := fmt.Sprintf("pxctl sv pool delete %s -y", poolID)
 	out, err := d.nodeDriver.RunCommand(
 		n,
 		cmd,
@@ -934,6 +934,8 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 	if err := d.EnterMaintenance(n); err != nil {
 		return err
 	}
+	//wait for node to enter maintenance mode
+	time.Sleep(1 * time.Minute)
 
 	if err := d.ExitMaintenance(n); err != nil {
 		return err
@@ -1038,6 +1040,9 @@ func (d *portworx) RecoverPool(n node.Node) error {
 	if err := d.EnterPoolMaintenance(n); err != nil {
 		return err
 	}
+
+	//wait for pool to enter maintenance mode
+	time.Sleep(1 * time.Minute)
 
 	if err := d.ExitPoolMaintenance(n); err != nil {
 		return err
