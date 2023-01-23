@@ -1270,7 +1270,8 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for range bkpNamespaces {
 				for _, backupName := range backupList {
-					CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
+					err = CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
+					dash.VerifyFatal(err, nil, "Restore failed")
 				}
 			}
 		})
@@ -3241,7 +3242,8 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
-				CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
+				ret = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
+				dash.VerifyFatal(err, nil, "Restore failed")
 			}
 		})
 
