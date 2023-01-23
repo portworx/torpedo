@@ -6,6 +6,7 @@ import (
 	"math/rand"
 
 	"os"
+	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -3918,6 +3919,11 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 					}
 			}
 		})
+
+		Step("Validate applications post restore", func() {
+			ValidateApplications(contexts)
+		})
+
 	})
 
 	JustAfterEach(func() {
@@ -3935,7 +3941,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		})
 })
 
-// This testcase verifies resize after the volume is restored from a backup stored in a locked bucket
+// This testcase verifies resize after same original volume is restored from a backup stored in a locked bucket
 var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 	var (
 		appList           = Inst().AppList
@@ -3948,6 +3954,9 @@ var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 		clusterUid        string
 		clusterStatus     api.ClusterInfo_StatusInfo_Status
 		backupList        []string
+		podList           []string
+		beforeSize        int64
+		afterSize					int64
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -4062,6 +4071,14 @@ var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
 				})
+				Step("Getting size before resize", func(){
+					podList, err := GetPods(namespace)
+					log.FailOnError(err, "Unable to fetch the pod list")
+					srcClusterConfigPath, err := GetSourceClusterConfigPath()
+					log.FailOnError(err, "Getting kubeconfig path for source cluster")
+					beforeSize, err := getSizeOfMountPoint(podList[0], namespace, srcClusterConfigPath)
+					log.FailOnError(err, "Unable to fetch the size")
+				})
 				Step("Resize volume after the restore is completed", func() {
 					log.InfoD("Resize volume after the restore is completed")
 					var err error
@@ -4092,6 +4109,15 @@ var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
 						})
 					}
 				}
+			})
+			Step("Getting size after resize", func(){
+				podList, err := GetPods(namespace)
+				log.FailOnError(err, "Unable to fetch the pod list")
+				srcClusterConfigPath, err := GetSourceClusterConfigPath()
+				log.FailOnError(err, "Getting kubeconfig path for source cluster")
+				afterSize, err := getSizeOfMountPoint(podList[0], namespace, srcClusterConfigPath)
+				dash.VerifyFatal(afterSize > beforeSize, true, "Validate volume update successful?")
+				log.FailOnError(err, "Unable to fetch the size")
 			})
 
 	JustAfterEach(func() {
@@ -4711,4 +4737,30 @@ func getBackupUID(backupName, orgID string) string {
 		fmt.Sprintf("Failed to get backup uid for org %s backup %s ctx: [%v]",
 			orgID, backupName, err))
 	return backupUID
+}
+
+func getSizeOfMountPoint(podname string, namespace string, kubeconfigfile string) {
+	var number int64
+	ret, err := kubectlExec([]string{podName, "-n", namespace, "--kubeconfig=", kubeconfigfile, " -- /bin/df | grep pxd | awk '{print $4}'"})
+	if err != nil {
+		return 0, err
+	}
+	number, err = strconv.Atoi(ret)
+	if err != nil {
+		return 0, err
+	}
+	return number, nil
+}
+
+func kubectlExec(arguments []string){
+	if len(arguments) == 0 {
+		return "", fmt.Errorf("no arguments supplied for kubectl command")
+	}
+	cmd := exec.Command("kubectl exec -it", arguments...)
+	output, err := cmd.Output()
+	log.Debugf("command output for '%s': %s", cmd.String(), string(output))
+	if err != nil {
+		return "", fmt.Errorf("error on executing kubectl command, Err: %+v", err)
+	}
+	return output, err
 }
