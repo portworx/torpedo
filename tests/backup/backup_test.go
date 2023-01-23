@@ -815,10 +815,8 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			// Start Restore
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			err = CreateRestore(restoreName, backupNames[4], make(map[string]string), destinationClusterName, orgID, ctxNonAdmin)
-			log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupNames[4], restoreName)
-
-			// Restore validation to make sure that the user with cannot restore
-			log.InfoD("Restoring of backup [%s] was not possible", backupNames[4])
+			// Restore validation to make sure that the user with View Access cannot restore
+			dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to restore backup"), true, "Verifying backup restore is not possible")
 
 			// Get Admin Context - needed to get backup UID
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -835,7 +833,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		})
 	})
 	JustAfterEach(func() {
-
+		defer EndTorpedoTest()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -845,7 +843,6 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 		}
 		var wg sync.WaitGroup
-		defer EndTorpedoTest()
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
 			wg.Add(1)
@@ -948,9 +945,8 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 	})
 	It("Share all backups at cluster level with a user group and revoke it and validate", func() {
 		Step("Validate applications and get their labels", func() {
-			log.InfoD("Validate applications and get their labels")
+			log.InfoD("Validate applications")
 			ValidateApplications(contexts)
-			log.Infof("Create list of pod selector for the apps deployed")
 		})
 
 		Step("Create Users", func() {
@@ -1323,7 +1319,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 
 	})
 	JustAfterEach(func() {
-
+		defer EndTorpedoTest()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -1333,7 +1329,6 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 		}
 		var wg sync.WaitGroup
-		defer EndTorpedoTest()
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
 			wg.Add(1)
@@ -2672,7 +2667,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 		storageNodes := node.GetWorkerNodes()
 		Step(fmt.Sprintf("Restart volume driver nodes starts"), func() {
 			log.InfoD("Restart PX on nodes")
-			for index, _ := range storageNodes {
+			for index := range storageNodes {
 				// Just restart storage driver on one of the node where volume backup is in progress
 				Inst().V.RestartDriver(storageNodes[index], nil)
 			}
