@@ -4751,9 +4751,14 @@ func getBackupUID(backupName, orgID string) string {
 
 func getSizeOfMountPoint(podname string, namespace string, kubeconfigfile string) (int, error){
 	var number int
-	ret, err := kubectlExec([]string{podname, "-n", namespace, "--kubeconfig=", kubeconfigfile, " -- /bin/df | grep pxd | awk '{print $4}'"})
+	ret, err := kubectlExec([]string{podname, "-n", namespace, "--kubeconfig=", kubeconfigfile, " -- /bin/df"})
 	if err != nil {
 		return 0, err
+	}
+  for _, line := range strings.SplitAfter(ret, "\n") {
+		if strings.Contains(line, "pxd"){
+			ret = strings.Fields(line)[3]
+		}
 	}
 	number, err = strconv.Atoi(ret)
 	if err != nil {
