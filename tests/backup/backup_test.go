@@ -274,6 +274,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Getting context")
 			preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
+			log.FailOnError(err, "Error getting UID for role")
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
@@ -3918,6 +3919,180 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			}
 		})
 	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		log.InfoD("Deleting the deployed apps after the testcase")
+		for i := 0; i < len(contexts); i++ {
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			err := Inst().S.Destroy(contexts[i], opts)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+		}
+		log.InfoD("Deleting backup location, cloud creds and clusters")
+		DeleteCloudAccounts(BackupLocationMap, CredName, CloudCredUID)
+		})
+})
+
+// This testcase verifies resize after the volume is restored from a backup stored in a locked bucket
+var _ = Describe("{ResizeOnRestoredVolumeFromLockedBucket}", func() {
+	var (
+		appList           = Inst().AppList
+		backupName        string
+		contexts          []*scheduler.Context
+		preRuleNameList   []string
+		postRuleNameList  []string
+		appContexts       []*scheduler.Context
+		bkpNamespaces     []string
+		clusterUid        string
+		clusterStatus     api.ClusterInfo_StatusInfo_Status
+		backupList        []string
+	)
+	labelSelectors := make(map[string]string)
+	CloudCredUIDMap := make(map[string]string)
+	BackupLocationMap := make(map[string]string)
+	var backupLocation string
+	contexts = make([]*scheduler.Context, 0)
+	bkpNamespaces = make([]string, 0)
+	providers := getProviders()
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResizeOnRestoredVolumeFromLockedBucket", "Resize after the volume is restored from a backup from locked bucket", nil, 0)
+		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
+		for i := 0; i < len(appList); i++ {
+			if Contains(postRuleApp, appList[i]) {
+				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
+				}
+			}
+			if Contains(preRuleApp, appList[i]) {
+				if _, ok := portworx.AppParameters[appList[i]]["pre_action_list"]; ok {
+					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
+				}
+			}
+		}
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+	})
+	It("Resize after the volume is restored from a backup", func() {
+		Step("Validate applications", func() {
+			ValidateApplications(contexts)
+		})
+
+		Step("Creating rules for backup", func() {
+			log.InfoD("Creating pre rule for deployed apps")
+			for i := 0; i < len(appList); i++ {
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+				log.FailOnError(err, "Creating pre rule for deployed apps failed")
+				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
+				preRuleNameList = append(preRuleNameList, ruleName)
+			}
+			log.InfoD("Creating post rule for deployed apps")
+			for i := 0; i < len(appList); i++ {
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+				log.FailOnError(err, "Creating post rule for deployed apps failed")
+				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
+				postRuleNameList = append(postRuleNameList, ruleName)
+			}
+		})
+
+		Step("Creating cloud credentials", func() {
+			log.InfoD("Creating cloud credentials")
+			for _, provider := range providers {
+				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				CloudCredUID = uuid.New()
+				CloudCredUIDMap[CloudCredUID] = CredName
+				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
+			}
+		})
+
+		Step("Creating a locked bucket and backup location", func() {
+			log.InfoD("Creating locked buckets and backup location")
+			bucketNames := getBucketName()
+			modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
+			for _, provider := range providers {
+				for _, mode := range modes {
+					CredName := fmt.Sprintf("%s-%s", "cred", provider)
+					bucketName := fmt.Sprintf("%s-%s-%s", provider, bucketNames[1], strings.ToLower(mode))
+					backupLocation = fmt.Sprintf("%s-%s-%s-lock", provider, bucketNames[1], strings.ToLower(mode))
+					err := CreateS3Bucket(bucketName, true, 3, mode)
+					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
+					BackupLocationUID = uuid.New()
+					BackupLocationMap[BackupLocationUID] = backupLocation
+					CreateBackupLocation(provider, backupLocation, BackupLocationUID, CredName, CloudCredUID,
+						bucketName, orgID, "")
+				}
+			}
+			log.InfoD("Successfully created locked buckets and backup location")
+		})
+
+		Step("Register cluster for backup", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			CreateSourceAndDestClusters(orgID, "", "", ctx)
+			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+		})
+
+		for _, namespace := range bkpNamespaces {
+			for backupLocationUID, backupLocationName := range BackupLocationMap {
+				Step("Taking backup of application to locked bucket", func() {
+					ctx, err := backup.GetAdminCtxFromSecret()
+					dash.VerifyFatal(err, nil, "Getting context")
+					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
+					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
+					backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+					backupList = append(backupList, backupName)
+					CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
+						labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
+				})
+				Step("Restoring the backups application", func() {
+					ctx, err := backup.GetAdminCtxFromSecret()
+					log.FailOnError(err, "Fetching px-central-admin ctx")
+					CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
+				})
+				Step("Resize volume after the restore is completed", func() {
+					log.InfoD("Resize volume after the restore is completed")
+					var err error
+					for _, ctx := range contexts {
+						var appVolumes []*volume.Volume
+						log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
+						appVolumes, err = Inst().S.GetVolumes(ctx)
+						log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+						dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
+						var requestedVols []*volume.Volume
+						log.InfoD(fmt.Sprintf("Increase volume size %s on app %s's volumes: %v",
+							Inst().V.String(), ctx.App.Key, appVolumes))
+							requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
+							log.FailOnError(err, "Volume resize successful ?")
+							log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+								ctx.App.Key, appVolumes))
+								for _, v := range requestedVols {
+									// Need to pass token before validating volume
+									params := make(map[string]string)
+									if Inst().ConfigMap != "" {
+										params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+										log.FailOnError(err, "Failed to get token from configMap")
+									}
+									err := Inst().V.ValidateUpdateVolume(v, params)
+									dash.VerifyFatal(err, nil, "Validate volume update successful?")
+								}
+							}
+						})
+					}
+				}
+			})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
