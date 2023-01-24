@@ -1706,7 +1706,6 @@ var _ = Describe("{SharedBackupDelete}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(contexts)
-			log.Infof("Create list of pod selector for the apps deployed")
 		})
 		Step("Create Users", func() {
 			users = createUsers(numberOfUsers)
@@ -1761,6 +1760,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 			}
 			log.Infof("List of backups - %v", backupNames)
 		})
+		backupMap := make(map[string]string, 0)
 		Step("Share backup with multiple users", func() {
 			log.InfoD("Share backup with multiple users")
 			// Get Admin Context - needed to share backup and get backup UID
@@ -1788,18 +1788,21 @@ var _ = Describe("{SharedBackupDelete}", func() {
 					backupDriver := Inst().Backup
 					backupUID, err := backupDriver.GetBackupUID(ctx, backup, orgID)
 					log.FailOnError(err, "Failed while trying to get backup UID for - %s", backup)
+					backupMap[backup] = backupUID
 
 					// Start Restore
 					restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 					err = CreateRestore(restoreName, backup, nil, destinationClusterName, orgID, ctxNonAdmin)
 
 					// Restore validation to make sure that the user with cannot restore
-					dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
+					dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true,
+						fmt.Sprintf("Verifying backup restore [%s] is not possible for backup [%s] with user [%s]", restoreName, backup, user))
 
 					// Delete backup to confirm that the user cannot delete the backup
 					_, err = DeleteBackup(backup, backupUID, orgID, ctxNonAdmin)
 					log.Infof("Error message - %s", err.Error())
-					dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
+					dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true,
+						fmt.Sprintf("Verifying backup deletion is not possible for backup [%s] with user [%s]", backup, user))
 				}
 			}
 		})
@@ -1815,9 +1818,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 				wg.Add(1)
 				go func(backup string) {
 					defer wg.Done()
-					backupUID, err := backupDriver.GetBackupUID(ctx, backup, orgID)
-					log.FailOnError(err, "Failed while trying to get backup UID for - %s", backup)
-					_, err = DeleteBackup(backup, backupUID, orgID, ctx)
+					_, err = DeleteBackup(backup, backupMap[backup], orgID, ctx)
 					log.FailOnError(err, "Failed to delete backup - %s", backup)
 					err = backupDriver.WaitForBackupDeletion(ctx, backup, orgID, time.Minute*10, time.Minute*1)
 					log.FailOnError(err, "Error waiting for backup deletion %v", backup)
@@ -1829,11 +1830,8 @@ var _ = Describe("{SharedBackupDelete}", func() {
 			// Get user context
 			for _, user := range users {
 				log.Infof("Validating user %s has access to no backups", user)
-				userBackups1, err := GetAllBackupsForUser(user, "Password1")
-				if len(userBackups1) != 0 {
-					log.FailOnError(err, "No backups expected for user %s", user)
-					dash.VerifyFatal(len(userBackups1), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", user))
-				}
+				userBackups1, _ := GetAllBackupsForUser(user, "Password1")
+				dash.VerifyFatal(len(userBackups1), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", user))
 			}
 		})
 	})
