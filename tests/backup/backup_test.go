@@ -1828,20 +1828,13 @@ var _ = Describe("{SharedBackupDelete}", func() {
 			//Validate that backups are not listing with shared users
 			// Get user context
 			for _, user := range users {
-				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
-				log.FailOnError(err, "Fetching px-central-admin ctx")
-
-				for _, backup := range backupNames {
-					// Get Backup UID
-					backupDriver := Inst().Backup
-					backupuid, err := backupDriver.GetBackupUID(ctxNonAdmin, backup, orgID)
-					if backupuid != "" {
-						log.FailOnError(err, "Backup UID %s found for deleted backup - %s", backupuid, backup)
-					}
+				log.Infof("Validating user %s has access to no backups", user)
+				userBackups1, err := GetAllBackupsForUser(user, "Password1")
+				if len(userBackups1) != 0 {
+					log.FailOnError(err, "No backups expected for user %s", user)
+					dash.VerifyFatal(len(userBackups1), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", user))
 				}
 			}
-
 		})
 	})
 	JustAfterEach(func() {
