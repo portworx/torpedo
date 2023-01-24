@@ -1666,27 +1666,6 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 	})
 })
 
-func createUsers(numberOfUsers int) []string {
-	users := make([]string, 0)
-	log.InfoD("Creating %d users", numberOfUsers)
-	var wg sync.WaitGroup
-	for i := 1; i <= numberOfUsers; i++ {
-		userName := fmt.Sprintf("testuser%v", i)
-		firstName := fmt.Sprintf("FirstName%v", i)
-		lastName := fmt.Sprintf("LastName%v", i)
-		email := fmt.Sprintf("testuser%v@cnbu.com", i)
-		wg.Add(1)
-		go func(userName, firstName, lastName, email string) {
-			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
-			log.FailOnError(err, "Failed to create user - %s", userName)
-			users = append(users, userName)
-			wg.Done()
-		}(userName, firstName, lastName, email)
-	}
-	wg.Wait()
-	return users
-}
-
 var _ = Describe("{SharedBackupDelete}", func() {
 	numberOfUsers := 10
 	numberOfBackups := 10
@@ -1724,8 +1703,8 @@ var _ = Describe("{SharedBackupDelete}", func() {
 		}
 	})
 	It("Share the backups and delete", func() {
-		Step("Validate applications and get their labels", func() {
-			log.InfoD("Validate applications and get their labels")
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
 			ValidateApplications(contexts)
 			log.Infof("Create list of pod selector for the apps deployed")
 		})
@@ -1784,13 +1763,11 @@ var _ = Describe("{SharedBackupDelete}", func() {
 		})
 		Step("Share backup with multiple users", func() {
 			log.InfoD("Share backup with multiple users")
-			log.Infof("Sharing backup with  multiple users")
-
 			// Get Admin Context - needed to share backup and get backup UID
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
-			// Share backups with aal the users
+			// Share backups with all the users
 			for _, backup := range backupNames {
 				err = ShareBackup(backup, nil, users, ViewOnlyAccess, ctx)
 				log.FailOnError(err, "Failed to share backup %s", backup)
@@ -1802,21 +1779,35 @@ var _ = Describe("{SharedBackupDelete}", func() {
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				userContexts = append(userContexts, ctxNonAdmin)
 
+				// Register Source and Destination cluster
+				log.InfoD("Registering Source and Destination clusters from user context for user -%s", user)
+				CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+
 				for _, backup := range backupNames {
 					// Get Backup UID
 					backupDriver := Inst().Backup
 					backupUID, err := backupDriver.GetBackupUID(ctx, backup, orgID)
 					log.FailOnError(err, "Failed while trying to get backup UID for - %s", backup)
 
+					// Start Restore
+					restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+					err = CreateRestore(restoreName, backup, nil, destinationClusterName, orgID, ctxNonAdmin)
+
+					// Restore validation to make sure that the user with cannot restore
+					dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
+
 					// Delete backup to confirm that the user cannot delete the backup
 					_, err = DeleteBackup(backup, backupUID, orgID, ctxNonAdmin)
 					log.Infof("Error message - %s", err.Error())
 					dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
-
 				}
 			}
+		})
+
+		Step("Delete the backups and validate", func() {
+			log.InfoD("Delete the backups and validate")
 			// Delete the backups
-			ctx, err = backup.GetAdminCtxFromSecret()
+			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
 			backupDriver := Inst().Backup
@@ -1833,6 +1824,24 @@ var _ = Describe("{SharedBackupDelete}", func() {
 				}(backup)
 			}
 			wg.Wait()
+
+			//Validate that backups are not listing with shared users
+			// Get user context
+			for _, user := range users {
+				// Get user context
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+
+				for _, backup := range backupNames {
+					// Get Backup UID
+					backupDriver := Inst().Backup
+					backupuid, err := backupDriver.GetBackupUID(ctxNonAdmin, backup, orgID)
+					if backupuid != "" {
+						log.FailOnError(err, "Backup UID %s found for deleted backup - %s", backupuid, backup)
+					}
+				}
+			}
+
 		})
 	})
 	JustAfterEach(func() {
@@ -1863,6 +1872,12 @@ var _ = Describe("{SharedBackupDelete}", func() {
 		log.Infof("Deleting registered clusters for admin context")
 		DeleteCluster(SourceClusterName, orgID, ctx)
 		DeleteCluster(destinationClusterName, orgID, ctx)
+
+		log.Infof("Deleting registered clusters for non-admin context")
+		for _, ctxNonAdmin := range userContexts {
+			DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
+			DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
+		}
 
 		log.Infof("Cleaning up backup location - %s", BackupLocationName)
 		DeleteBackupLocation(BackupLocationName, backupLocationUID, orgID)
@@ -5010,4 +5025,25 @@ func kubectlExec(arguments []string) (string, error) {
 		return "", fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}
 	return string(output), err
+}
+
+func createUsers(numberOfUsers int) []string {
+	users := make([]string, 0)
+	log.InfoD("Creating %d users", numberOfUsers)
+	var wg sync.WaitGroup
+	for i := 1; i <= numberOfUsers; i++ {
+		userName := fmt.Sprintf("testuser%v", i)
+		firstName := fmt.Sprintf("FirstName%v", i)
+		lastName := fmt.Sprintf("LastName%v", i)
+		email := fmt.Sprintf("testuser%v@cnbu.com", i)
+		wg.Add(1)
+		go func(userName, firstName, lastName, email string) {
+			err := backup.AddUser(userName, firstName, lastName, email, "Password1")
+			log.FailOnError(err, "Failed to create user - %s", userName)
+			users = append(users, userName)
+			wg.Done()
+		}(userName, firstName, lastName, email)
+	}
+	wg.Wait()
+	return users
 }
