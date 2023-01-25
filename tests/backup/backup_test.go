@@ -1048,10 +1048,10 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 })
 
 var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
-	numberOfUsers := getEnvInt(usersToBeCreated, "200")
-	numberOfGroups := getEnvInt(groupsToBeCreated, "100")
-	groupSize := getEnvInt(maxUsersInGroup, "2")
-	numberOfBackups := getEnvInt(maxBackupsToBeCreated, "100")
+	numberOfUsers := getEnv(usersToBeCreated, "200").(int)
+	numberOfGroups := getEnv(groupsToBeCreated, "100").(int)
+	groupSize := getEnv(maxUsersInGroup, "2").(int)
+	numberOfBackups := getEnv(maxBackupsToBeCreated, "100").(int)
 	timeBetweenConsecutiveBackups := 4 * time.Second
 	users := make([]string, 0)
 	groups := make([]string, 0)
@@ -1105,10 +1105,10 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 				email := fmt.Sprintf("testuser%v@cnbu.com", i)
 				wg.Add(1)
 				go func(userName, firstName, lastName, email string) {
+					defer wg.Done()
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
-					wg.Done()
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -1121,10 +1121,10 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 				groupName := fmt.Sprintf("testGroup%v", i)
 				wg.Add(1)
 				go func(groupName string) {
+					defer wg.Done()
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
 					groups = append(groups, groupName)
-					wg.Done()
 				}(groupName)
 			}
 			wg.Wait()
@@ -1137,9 +1137,9 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 				groupIndex := i / groupSize
 				wg.Add(1)
 				go func(i, groupIndex int) {
+					defer wg.Done()
 					err := backup.AddGroupToUser(users[i], groups[groupIndex])
 					log.FailOnError(err, "Failed to assign group to user")
-					wg.Done()
 				}(i, groupIndex)
 			}
 			wg.Wait()
@@ -5035,20 +5035,10 @@ func createUsers(numberOfUsers int) []string {
 	return users
 }
 
-func getEnvString(environmentVariable, defaultValue string) string {
+func getEnv(environmentVariable string, defaultValue string) interface{} {
 	value, present := os.LookupEnv(environmentVariable)
 	if !present {
 		value = defaultValue
 	}
 	return value
-}
-
-func getEnvInt(environmentVariable, defaultValue string) int {
-	value, present := os.LookupEnv(environmentVariable)
-	if !present {
-		value = defaultValue
-	}
-	intValue, err := strconv.Atoi(value)
-	log.FailOnError(err, "Failed to convert string to int after getting env variable - %s", environmentVariable)
-	return intValue
 }
