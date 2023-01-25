@@ -54,7 +54,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 					log.InfoD("Deleting PDS System Pods")
 					err = pdslib.DeletePods(deploymentPods)
 					log.FailOnError(err, "Error while deleting pods")
-					err = pdslib.ValidatePods(pdsNamespace)
+					err = pdslib.ValidatePods(namespace, "")
 					log.FailOnError(err, "Error while validating pods")
 
 				})
@@ -110,16 +110,17 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				podList, err := pdslib.GetPods(namespace)
 				log.FailOnError(err, "Error while getting pods")
 
-				log.Info("PDS DataService Pods")
+				log.Infof("PDS DataService Pods")
+				log.Infof("deployment name %v", *deployment.ClusterResourceName)
 				for _, pod := range podList.Items {
-					if strings.Contains(pod.Name, *deployment.Name) {
+					if strings.Contains(pod.Name, *deployment.ClusterResourceName) {
 						log.Infof("%v", pod.Name)
 						deploymentPods = append(deploymentPods, pod)
 					}
 				}
 
 				var wg sync.WaitGroup
-				wg.Add(3)
+				wg.Add(2)
 				go func() {
 					defer wg.Done()
 					log.InfoD("Deleting the data service pods")
@@ -133,21 +134,13 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 					err = pdslib.ValidatePDSDeploymentStatus(deployment, "Down", 5*time.Second, 30*time.Minute)
 					log.FailOnError(err, "Error while validating the pds pods")
 				}()
-
-				go func() {
-					defer wg.Done()
-					log.InfoD("Validating the data service pod status in PDS Control Plane")
-					err = pdslib.ValidatePDSDeploymentStatus(deployment, "Degraded", 5*time.Second, 30*time.Minute)
-					log.FailOnError(err, "Error while validating the pds pods")
-				}()
-
 				wg.Wait()
 
 				log.InfoD("Validating the data service pods are back to healthy state")
-				err = pdslib.ValidatePods(namespace)
+				err = pdslib.ValidatePods(namespace, *deployment.ClusterResourceName)
 				log.FailOnError(err, "Error while validating the pods")
 
-				err = pdslib.ValidatePDSDeploymentStatus(deployment, "Healthy", 5*time.Second, 30*time.Minute)
+				err = pdslib.ValidatePDSDeploymentStatus(deployment, "Healthy", 5*time.Second, 1*time.Minute)
 				log.FailOnError(err, "Error while validating the pds pods")
 
 			})

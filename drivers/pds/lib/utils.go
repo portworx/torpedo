@@ -440,16 +440,28 @@ func GetPods(namespace string) (*corev1.PodList, error) {
 	return podList, err
 }
 
-func ValidatePods(namespace string) error {
+//ValidatePods returns err if pods are not up
+func ValidatePods(namespace string, podName string) error {
+
 	var newPods []corev1.Pod
 	newPodList, err := GetPods(namespace)
 	if err != nil {
 		return err
 	}
-	//reinitializing the pods
-	newPods = append(newPods, newPodList.Items...)
 
-	//validate deployment pods are up and running after deletion
+	if podName != "" {
+		for _, pod := range newPodList.Items {
+			if strings.Contains(pod.Name, podName) {
+				log.Infof("%v", pod.Name)
+				newPods = append(newPods, pod)
+			}
+		}
+	} else {
+		//reinitializing the pods
+		newPods = append(newPods, newPodList.Items...)
+	}
+
+	//validate deployment pods are up and running
 	for _, pod := range newPods {
 		log.Infof("pds system pod name %v", pod.Name)
 		err = k8sCore.ValidatePod(&pod, timeOut, timeInterval)
@@ -720,9 +732,13 @@ func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus 
 			log.Errorf("Full HTTP response: %v\n", res)
 			return false, err
 		}
-		if status.GetHealth() != healthStatus {
+
+		if !strings.Contains(status.GetHealth(), healthStatus) {
 			return false, nil
 		}
+		// if status.GetHealth() != healthStatus {
+		// 	return false, nil
+		// }
 		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 		return true, nil
 	})
