@@ -396,6 +396,60 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 	})
 })
 
+var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RunIndependentAppNonPdsNS", "Runs an independent app on a non-PDS namespace and then enables PDS on this namespace", nil, 0)
+	})
+	ns := ""
+	result := false
+	var podName string
+
+	It("Create an independent app in a non PDS namespace and then enable PDS on this namespace", func() {
+		Step("Create a temporary namespace on the cluster for creating an independent app", func() {
+			ns, result = pdslib.CreateTempNS()
+			if !result {
+				dash.VerifyFatal(result, true, "Failure in creating namespace on the target cluster. Exiting the Test case with failure")
+			}
+		})
+		Step("Create an Independent app in a non-PDS namespace", func() {
+			if pdslib.CreateIndependentPV() {
+				if pdslib.CreateIndependentPVC(ns) {
+					podName, result = pdslib.CreateIndependentApp(ns)
+					if !result {
+						dash.VerifyFatal(result, true, "Failure in creating the application in non-pds namespace")
+					}
+				} else {
+					dash.VerifyFatal(result, true, "Failure in creating PVC on Target Cluster. Exiting the Test case with failure")
+				}
+			} else {
+				dash.VerifyFatal(result, true, "Failure in creating Persistent Volume on target cluster. Exiting the Test case with failure")
+			}
+		})
+		Step("Add PDS Label to Non-PDS Namespace running a DB Service already", func() {
+			nsLables := map[string]string{
+				pdsNamespaceLabel: "true",
+			}
+			testns, err := pdslib.UpdatePDSNamespce(ns, nsLables)
+			log.FailOnError(err, "Error while updating pds namespace")
+			log.Infof("PDS Namespace Updated %v", testns)
+		})
+		Step("Cleanup of all apps and namespaces", func() {
+			log.Infof("Trying to Delete Independent App pod now : %s", podName)
+			pdslib.DeleteK8sPods(podName, ns)
+			log.Infof("Trying to Delete Independent PVC now from ns : %s", ns)
+			k8sCore.DeletePersistentVolumeClaim("mysql-pvc", ns)
+			log.Infof("Trying to delete Independent PV now")
+			k8sCore.DeletePersistentVolume("mysql-pv")
+			log.Infof("Trying to delete NS now: %s", ns)
+			pdslib.DeletePDSNamespace(ns)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	}()
+})
+
+
 var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RunTpccWorkloadOnDataServices", "Runs TPC-C Workload on Postgres and MySQL Deployment", nil, 0)

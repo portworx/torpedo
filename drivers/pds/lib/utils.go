@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -1022,6 +1024,129 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	log.InfoD("Will delete TPCC Worklaod Deployment now.....")
 	DeleteK8sDeployments(deployment.Name, namespace)
 	return flag
+}
+
+func CreateTempNS() (string, bool) {
+	length := 6
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, length)
+	rand.Read(b)
+	namespace := fmt.Sprintf("%x", b)[:length]
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	ns, err = k8sCore.CreateNamespace(ns)
+	if err != nil {
+		log.Errorf("Error while creating namespace %v", err)
+		return "", false
+	}
+	return namespace, true
+}
+
+func CreateIndependentPV() bool {
+	name := "mysql-pv"
+	pv := &corev1.PersistentVolume{
+
+		TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+
+		Spec: corev1.PersistentVolumeSpec{
+			//VolumeMode: v1.PersistentVolumeMode(),
+
+			StorageClassName: "manual",
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				"ReadWriteOnce",
+			},
+			Capacity: corev1.ResourceList{
+				corev1.ResourceName(corev1.ResourceStorage): resource.MustParse("5Gi"),
+			},
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/mnt/data",
+				},
+			},
+		},
+	}
+	_, err := k8sCore.CreatePersistentVolume(pv)
+	if err != nil {
+		log.Errorf("PV Could not be created. Exiting")
+		return false
+	}
+	return true
+}
+
+func CreateIndependentPVC(namespace string) bool {
+	name := "mysql-pvc"
+	ns := namespace
+	storageClass := "manual"
+	createOpts := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			StorageClassName: &storageClass,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("5Gi"),
+				},
+			},
+		},
+	}
+	_, err := k8sCore.CreatePersistentVolumeClaim(createOpts)
+	if err != nil {
+		log.Errorf("PVC Could not be created. Exiting. %v", err)
+		return false
+	}
+	return true
+}
+
+func CreateIndependentApp(ns string) (string, bool) {
+	namespace := ns
+	podName := "mysql-app"
+	podSpec := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: podName + "-",
+			Namespace:    namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  podName,
+					Image: "mysql:8.0",
+					Env:   make([]corev1.EnvVar, 1),
+				},
+			},
+			RestartPolicy: corev1.RestartPolicyOnFailure,
+		},
+	}
+	volumename := "mysql-persistent-storage"
+	var volumes = make([]corev1.Volume, 1)
+	volumes[0] = corev1.Volume{Name: volumename, VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "mysql-pvc", ReadOnly: false}}}
+	podSpec.Spec.Volumes = volumes
+	env := []string{"MYSQL_ROOT_PASSWORD"}
+	var value []string
+	value = append(value, "password")
+	for index := range env {
+		podSpec.Spec.Containers[0].Env[index].Name = env[index]
+		podSpec.Spec.Containers[0].Env[index].Value = value[index]
+	}
+
+	_, err := k8sCore.CreatePod(podSpec)
+	if err != nil {
+		log.Errorf("An Error Occured while creating %v", err)
+		return "", false
+	}
+	return podName, true
 }
 
 // CreatecassandraWorkload generate workloads on the cassandra db
