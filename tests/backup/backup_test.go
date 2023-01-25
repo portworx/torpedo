@@ -29,7 +29,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/portworx/torpedo/tests"
-
 )
 
 var (
@@ -169,7 +168,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 					err := backup.AddGroup(groupName)
 					log.FailOnError(err, "Failed to create group - %v", groupName)
 					groups = append(groups, groupName)
-					
+
 				}(groupName)
 			}
 			wg.Wait()
@@ -189,7 +188,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 					err := backup.AddUser(userName, firstName, lastName, email, "Password1")
 					log.FailOnError(err, "Failed to create user - %s", userName)
 					users = append(users, userName)
-					
+
 				}(userName, firstName, lastName, email)
 			}
 			wg.Wait()
@@ -1058,7 +1057,6 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 	groups := make([]string, 0)
 	backupNames := make([]string, 0)
 	numberOfSimultaneousBackups := 20
-	//userContexts := make([]context.Context, 0)
 	var contexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	var backupLocationUID string
@@ -1072,7 +1070,6 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 	var customBackupLocationName string
 	var credName string
 	var chosenUser string
-	//var chosenUser string
 	bkpNamespaces = make([]string, 0)
 	providers := getProviders()
 
@@ -1156,7 +1153,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
-			log.InfoD("Creating bucket, cloud credentials and backup location")
+			log.InfoD("Using pre-provisioned bucket. Creating cloud credentials and backup location.")
 			bucketNames := getBucketName()
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
@@ -3599,7 +3596,6 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
 
-
 	JustBeforeEach(func() {
 		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Strok when backups and restores in progress", nil, 0)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
@@ -3791,15 +3787,15 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 						log.InfoD("Status of %s - [%s]", restoreName, restoreResponseStatus.GetStatus())
 						return "", true, fmt.Errorf("restore status expected was [%s] but got [%s]", expected, actual)
 					}
-          return "", false, nil
+					return "", false, nil
 				}
 				task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
-				restoreInspectRequest := &api.RestoreInspectRequest {
+				restoreInspectRequest := &api.RestoreInspectRequest{
 					Name:  restoreName,
 					OrgId: orgID,
 				}
 				resp, _ := backupDriver.InspectRestore(ctx, restoreInspectRequest)
-				dash.VerifyFatal(resp.GetRestore().GetStatus().Status, api.RestoreInfo_StatusInfo_PartialSuccess , "Inspecting the Restore success for - "+resp.GetRestore().GetName())
+				dash.VerifyFatal(resp.GetRestore().GetStatus().Status, api.RestoreInfo_StatusInfo_PartialSuccess, "Inspecting the Restore success for - "+resp.GetRestore().GetName())
 			}
 		})
 		Step("Validate applications", func() {
