@@ -192,6 +192,9 @@ type Driver interface {
 	// ExitPoolMaintenance exits pools in the given node from maintenance mode
 	ExitPoolMaintenance(n node.Node) error
 
+	//GetNodePoolsStatus returns map of pool UUID and status
+	GetNodePoolsStatus(n node.Node) (map[string]string, error)
+
 	//DeletePool deletes the pool with given poolID
 	DeletePool(n node.Node, poolID string) error
 

@@ -263,6 +263,14 @@ func (d *DefaultDriver) DeletePool(n node.Node, poolID string) error {
 	}
 }
 
+// GetNodePoolsStatus returns map of pool UUID and status
+func (d *DefaultDriver) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodePoolsStatus()",
+	}
+}
+
 // GetDriverVersion Returns the pxctl version
 func (d *DefaultDriver) GetDriverVersion() (string, error) {
 	return "", &errors.ErrNotSupported{

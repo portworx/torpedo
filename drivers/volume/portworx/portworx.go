@@ -1051,6 +1051,42 @@ func (d *portworx) RecoverPool(n node.Node) error {
 	return nil
 }
 
+func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
+	cmd := fmt.Sprintf("%s sv pool show | grep -e UUID -e Status", d.getPxctlPath(n))
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         validatePXStartTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("error getting pool status on node [%s], Err: %v", n.Name, err)
+	}
+	outLines := strings.Split(out, "\n")
+
+	poolsData := make(map[string]string)
+	var poolId string
+	var status string
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		if strings.Contains(line, "UUID") {
+			poolId = strings.Split(line, ":")[1]
+			poolId = strings.Trim(poolId, " ")
+		}
+		if strings.Contains(line, "Status") {
+			status = strings.Split(line, ":")[1]
+			status = strings.Trim(status, " ")
+		}
+		if poolId != "" && status != "" {
+			poolsData[poolId] = status
+			poolId = ""
+			status = ""
+		}
+	}
+	return poolsData, nil
+}
+
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)

@@ -5017,13 +5017,6 @@ var _ = Describe("{PoolDelete}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
-
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resiznoqr-%d", i))...)
-		}
-		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		var nodeSelected node.Node
@@ -5047,6 +5040,7 @@ var _ = Describe("{PoolDelete}", func() {
 		poolIDToDelete := fmt.Sprintf("%d", poolToDelete.ID)
 		poolsMap, err := Inst().V.GetPoolDrives(&nodeSelected)
 		log.FailOnError(err, "error getting pool drive from the node [%s]", nodeSelected.Name)
+		poolsCount := len(poolsMap)
 		if _, ok := poolsMap[poolIDToDelete]; !ok {
 			log.FailOnError(fmt.Errorf("error idetifying pool drive"), "poolID %s not found in the node %s", poolIDToDelete, nodeSelected.Name)
 		}
@@ -5063,6 +5057,9 @@ var _ = Describe("{PoolDelete}", func() {
 			log.FailOnError(err, "failed to set pool maintenance mode on node %s", nodeSelected.Name)
 
 			time.Sleep(1 * time.Minute)
+			expectedStatus := "In Maintenance"
+			err = waitForPoolStatusToUpdate(nodeSelected, expectedStatus)
+			log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeSelected.Name, expectedStatus))
 
 			err = Inst().V.DeletePool(nodeSelected, poolIDToDelete)
 			log.FailOnError(err, "failed to delete poolID %s on node %s", poolIDToDelete, nodeSelected.Name)
@@ -5072,6 +5069,10 @@ var _ = Describe("{PoolDelete}", func() {
 
 			err = Inst().V.WaitDriverUpOnNode(nodeSelected, 5*time.Minute)
 			log.FailOnError(err, "volume driver down on node %s", nodeSelected.Name)
+
+			expectedStatus = "Online"
+			err = waitForPoolStatusToUpdate(nodeSelected, expectedStatus)
+			log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeSelected.Name, expectedStatus))
 
 			poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			log.FailOnError(err, "Failed to list storage pools")
@@ -5084,6 +5085,14 @@ var _ = Describe("{PoolDelete}", func() {
 			dash.VerifyFatal(ok, false, "verify drive is deleted from the node")
 
 		})
+
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resiznoqr-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		newSpecSize := (poolToDelete.TotalSize / units.GiB) / 2
 		///creating a spec to perform add  drive
@@ -5119,7 +5128,7 @@ var _ = Describe("{PoolDelete}", func() {
 			dash.VerifyFatal(len(poolsBfr) == len(poolsAfr), true, "verify new pool is created")
 			newPoolsMap, err := Inst().V.GetPoolDrives(&nodeSelected)
 			log.FailOnError(err, "error getting pool drive from the node [%s]", nodeSelected.Name)
-			dash.VerifyFatal(len(poolsMap) == len(newPoolsMap), true, "verify new drive is created")
+			dash.VerifyFatal(poolsCount == len(newPoolsMap), true, "verify new drive is created")
 		})
 		stepLog = fmt.Sprintf("Expand newly added pool on node [%s]", nodeSelected.Name)
 		Step(stepLog, func() {
@@ -5159,4 +5168,27 @@ func appsValidateAndDestroy(contexts []*scheduler.Context) {
 	opts := make(map[string]bool)
 	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 	ValidateAndDestroy(contexts, opts)
+}
+
+func waitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
+	t := func() (interface{}, bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
+		if err != nil {
+			return nil, true, fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
+		}
+
+		if poolsStatus == nil {
+			return nil, false, fmt.Errorf("pools status is nil")
+		}
+
+		for k, v := range poolsStatus {
+			if v != expectedStatus {
+				return nil, true, fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
+			}
+		}
+
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	return err
 }

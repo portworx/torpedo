@@ -747,6 +747,7 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 		}
 	}
 	driveOutput := fmt.Sprintf("%s", out)
+	fmt.Println(out)
 
 	for _, line := range strings.Split(strings.TrimSpace(driveOutput), "\n") {
 		drive := &node.BlockDrive{}
