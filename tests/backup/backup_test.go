@@ -4580,7 +4580,6 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 	if err != nil {
 		return err
 	}
-	log.FailOnError(err, "Failed to take Restore with request -\n%v", createRestoreReq)
 	return nil
 }
 
