@@ -728,13 +728,13 @@ func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus 
 			return false, nil
 		}
 		if res.StatusCode != state.StatusOK {
-			log.Errorf("Error when calling `ApiDeploymentsIdCredentialsGet``: %v\n", err)
 			log.Errorf("Full HTTP response: %v\n", res)
+			err = fmt.Errorf("unexpected status code")
 			return false, err
 		}
-
 		if !strings.Contains(status.GetHealth(), healthStatus) {
-			return false, nil
+			err = fmt.Errorf("status %v", status.GetHealth())
+			return false, err
 		}
 		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 		return true, nil
