@@ -1032,7 +1032,6 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 })
 
 var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
-	numberOfUsers := getEnv(usersToBeCreated, "200").(int)
 	numberOfUsers, _ := strconv.Atoi(getEnv(usersToBeCreated, "200"))
 	numberOfGroups, _ := strconv.Atoi(getEnv(groupsToBeCreated, "100"))
 	groupSize, _ := strconv.Atoi(getEnv(maxUsersInGroup, "2"))
