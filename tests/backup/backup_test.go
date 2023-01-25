@@ -3338,7 +3338,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			}
 		})
 
-		Step(fmt.Sprintf("Kill stork when backup in progress"), func() {
+		Step("Kill stork when backup in progress", func() {
 			log.InfoD("Kill stork when backup in progress")
 			storkLabel := make(map[string]string)
 			storkLabel["name"] = "stork"
@@ -3399,7 +3399,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 				CreateRestoreWithoutCheck(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
 			}
 		})
-		Step(fmt.Sprintf("Kill stork when restore in-progress"), func() {
+		Step("Kill stork when restore in-progress", func() {
 			log.InfoD("Kill stork when restore in-progress")
 			storkLabel := make(map[string]string)
 			storkLabel["name"] = "stork"
