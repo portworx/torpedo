@@ -1049,11 +1049,11 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 })
 
 var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
-	numberOfUsers := 200
-	numberOfGroups := 100
-	groupSize := 2
-	numberOfBackups := 20
-	timeBetweenConsecutiveBackups := 4 * time.Minute
+	numberOfUsers := getEnvInt(usersToBeCreated, "200")
+	numberOfGroups := getEnvInt(groupsToBeCreated, "100")
+	groupSize := getEnvInt(maxUsersInGroup, "2")
+	numberOfBackups := getEnvInt(maxBackupsToBeCreated, "100")
+	timeBetweenConsecutiveBackups := 4 * time.Second
 	users := make([]string, 0)
 	groups := make([]string, 0)
 	backupNames := make([]string, 0)
@@ -4543,7 +4543,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 		return "", false, nil
 	}
 
-	task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+	task.DoRetryWithTimeout(backupSuccessCheck, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 
 	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
 	log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
@@ -4556,6 +4556,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	if err != nil {
 		return err
 	}
+	log.Infof("Backup [%s] created successfully", backupName)
 	return nil
 }
 func UpdateBackup(backupName string, backupuid string, org_id string, cloudCred string, cloudCredUID string, ctx context.Context) {
@@ -5036,4 +5037,22 @@ func createUsers(numberOfUsers int) []string {
 	}
 	wg.Wait()
 	return users
+}
+
+func getEnvString(environmentVariable, defaultValue string) string {
+	value, present := os.LookupEnv(environmentVariable)
+	if !present {
+		value = defaultValue
+	}
+	return value
+}
+
+func getEnvInt(environmentVariable, defaultValue string) int {
+	value, present := os.LookupEnv(environmentVariable)
+	if !present {
+		value = defaultValue
+	}
+	intValue, err := strconv.Atoi(value)
+	log.FailOnError(err, "Failed to convert string to int after getting env variable - %s", environmentVariable)
+	return intValue
 }
