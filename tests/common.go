@@ -259,6 +259,7 @@ const (
 )
 
 var pxRuntimeOpts string
+var UserContextBackupLocation string = ""
 
 const (
 	taskNamePrefix = "backupcreaterestore"
@@ -2890,11 +2891,19 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 					},
 				},
 			}
-			//ctx, err := backup.GetPxCentralAdminCtx()
-			ctx, err := backup.GetAdminCtxFromSecret()
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-					err))
+			var ctx context1.Context
+			var err error
+			if UserContextBackupLocation == "" {
+				//ctx, err := backup.GetPxCentralAdminCtx()
+				ctx, err = backup.GetAdminCtxFromSecret()
+				expect(err).NotTo(haveOccurred(),
+					fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+			} else {
+				ctx, err = backup.GetNonAdminCtx(UserContextBackupLocation, "Password1")
+				expect(err).NotTo(haveOccurred(),
+					fmt.Sprintf("Failed to fetch ctx for custom user: [%v]", err))
+			}
+
 			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
 			if err != nil && strings.Contains(err.Error(), "already exists") {
 				return
@@ -2969,11 +2978,19 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			},
 		},
 	}
-	//ctx, err := backup.GetPxCentralAdminCtx()
-	ctx, err := backup.GetAdminCtxFromSecret()
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-			err))
+	var ctx context1.Context
+	var err error
+	if UserContextBackupLocation == "" {
+		//ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+	} else {
+		ctx, err = backup.GetNonAdminCtx(UserContextBackupLocation, "Password1")
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch ctx for custom user: [%v]", err))
+	}
+
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil && strings.Contains(err.Error(), "already exists") {
 		return

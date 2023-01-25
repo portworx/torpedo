@@ -47,6 +47,8 @@ const (
 	defaultTimeout        = 5 * time.Minute
 )
 
+var UserContextRegisterCluster string = ""
+
 type portworx struct {
 	clusterManager         api.ClusterClient
 	backupLocationManager  api.BackupLocationClient
@@ -1318,8 +1320,16 @@ func (p *portworx) BackupSchedulePolicy(name string, uid string, orgId string, s
 }
 
 func (p *portworx) RegisterBackupCluster(orgID, clusterName, uid string) (api.ClusterInfo_StatusInfo_Status, string) {
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
+	var ctx context.Context
+	var err error
+	if UserContextRegisterCluster == "" {
+		//ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Failed to fetch px-central-admin ctx")
+	} else {
+		ctx, _ = backup.GetNonAdminCtx(UserContextRegisterCluster, "Password1")
+		log.FailOnError(err, "Failed to fetch ctx for custom user")
+	}
 	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
 	clusterResp, err := p.InspectCluster(ctx, clusterReq)
 	log.FailOnError(err, "Cluster Object for cluster %s and Org id %s is empty", clusterName, orgID)
