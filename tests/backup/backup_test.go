@@ -2290,7 +2290,6 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 	})
 })
 
-// This test performs basic test of starting an application, backing it up and killing stork while
 // This test restarts volume driver (PX) while backup is in progress
 var _ = Describe("{BackupRestartPX}", func() {
 	var (
