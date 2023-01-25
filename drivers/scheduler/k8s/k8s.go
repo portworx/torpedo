@@ -270,6 +270,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	}
 
 	for _, n := range nodes.Items {
+		fmt.Printf("Adding node : %s\n", n.Name)
 		if err = k.AddNewNode(n); err != nil {
 			return err
 		}
