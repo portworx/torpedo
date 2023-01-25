@@ -736,9 +736,6 @@ func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus 
 		if !strings.Contains(status.GetHealth(), healthStatus) {
 			return false, nil
 		}
-		// if status.GetHealth() != healthStatus {
-		// 	return false, nil
-		// }
 		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 		return true, nil
 	})
