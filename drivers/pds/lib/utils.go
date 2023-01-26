@@ -1026,6 +1026,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	return flag
 }
 
+// Creates a temporary non PDS namespace of 6 letters length randomly chosen
 func CreateTempNS() (string, bool) {
 	length := 6
 	rand.Seed(time.Now().UnixNano())
@@ -1045,6 +1046,7 @@ func CreateTempNS() (string, bool) {
 	return namespace, true
 }
 
+// Create a Persistent Vol of 5G manual Storage Class
 func CreateIndependentPV() bool {
 	name := "mysql-pv"
 	pv := &corev1.PersistentVolume{
@@ -1079,6 +1081,7 @@ func CreateIndependentPV() bool {
 	return true
 }
 
+// Create a PV Claim of 5G Storage
 func CreateIndependentPVC(namespace string) bool {
 	name := "mysql-pvc"
 	ns := namespace
@@ -1106,6 +1109,7 @@ func CreateIndependentPVC(namespace string) bool {
 	return true
 }
 
+// Create an Independant MySQL non PDS App running in a namespace
 func CreateIndependentApp(ns string) (string, bool) {
 	namespace := ns
 	podName := "mysql-app"
