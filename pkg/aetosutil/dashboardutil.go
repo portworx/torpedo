@@ -145,7 +145,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 		}
 
 		if testSet.Product == "" {
-			testSet.Product = "Portworx Enterprise"
+			testSet.Product = "px-enterprise"
 		}
 
 		if testSet.HostOs == "" {
