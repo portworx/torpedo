@@ -4076,10 +4076,10 @@ func ParseFlags() {
 			dash.TestSetID = testsetID
 		} else if ok && (val != "" && val != "0") {
 			testsetID, err = strconv.Atoi(val)
+			log.Infof(fmt.Sprintf("Using TestSetID: %s set as enviornment variable", val))
 			if err != nil {
 				log.Warnf("Failed to convert environment testset id  %v to int, err: %v", val, err)
 			}
-			log.Infof(fmt.Sprintf("Using TestSetID: %s set as enviornment variable", val))
 		} else {
 			fileName := "/build.properties"
 			readFile, err := os.Open(fileName)
