@@ -1210,7 +1210,7 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 			//Reverting to original rep for volume validation
 			if currRep < 3 {
 				err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
-				log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+				log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 			}
 		})
 
@@ -1272,7 +1272,7 @@ var _ = Describe("{AddDriveMaintenanceMode}", func() {
 		_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
 		log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode in node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(stNode)
-		log.FailOnError(err, fmt.Sprintf("srr getting node [%s] status", stNode.Name))
+		log.FailOnError(err, fmt.Sprintf("err getting node [%s] status", stNode.Name))
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
 
 	})
@@ -2129,7 +2129,7 @@ var _ = Describe("{ResizeDiskVolUpdate}", func() {
 			//reverting the replication to volume validation to pass
 			if currRep < 3 {
 				err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
-				log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+				log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 			}
 		})
 
@@ -2214,7 +2214,7 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 			//reverting the replication for volume validation
 			if currRep < 3 {
 				err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
-				log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+				log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 			}
 		})
 
@@ -2331,7 +2331,7 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 		//Reverting to original repl for volume validation
 		if currRep < 3 {
 			err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
-			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+			log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 		}
 
 	})
@@ -3309,7 +3309,7 @@ var _ = Describe("{PoolMaintenanceModeResize}", func() {
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(*stNode)
-		log.FailOnError(err, "error get node [%s] status", stNode.Name)
+		log.FailOnError(err, "err getting node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
 	})
 
@@ -3398,7 +3398,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(*stNode)
-		log.FailOnError(err, "failed to get node [%s] status", stNode.Name)
+		log.FailOnError(err, "err getting node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
 
 	})
@@ -5117,7 +5117,7 @@ var _ = Describe("{PoolDelete}", func() {
 			log.InfoD(stepLog)
 			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
 			log.FailOnError(err, "error adding new drive to node %s", nodeSelected.Name)
-			log.InfoD("Validate pool rebalance after drive add")
+			log.InfoD("Validate pool rebalance after drive add to the node %s", nodeSelected.Name)
 			err = ValidatePoolRebalance()
 			log.FailOnError(err, "pool re-balance failed on node %s", nodeSelected.Name)
 			err = Inst().V.WaitDriverUpOnNode(nodeSelected, addDriveUpTimeOut)

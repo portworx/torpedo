@@ -4589,7 +4589,7 @@ func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
 			poolDrives[pm] = append(poolDrives[pm], v.Path)
 		}
 	}
-	return poolDrives, err
+	return poolDrives, nil
 }
 
 // AddCloudDrive add cloud drives to the node using PXCTL
