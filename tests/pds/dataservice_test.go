@@ -41,7 +41,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 				})
 
 				Step("get pods from pds-system namespace", func() {
-					podList, err := pdslib.GetPods("pds-system")
+					podList, err := pdslib.GetPods(pdsNamespace)
 					log.FailOnError(err, "Error while getting pods")
 					log.Infof("PDS System Pods")
 					for _, pod := range podList.Items {
@@ -54,7 +54,8 @@ var _ = Describe("{DeletePDSPods}", func() {
 					log.InfoD("Deleting PDS System Pods")
 					err = pdslib.DeletePods(deploymentPods)
 					log.FailOnError(err, "Error while deleting pods")
-					err = pdslib.ValidatePods(namespace, "")
+					log.InfoD("Validating PDS System Pods")
+					err = pdslib.ValidatePods(pdsNamespace, "")
 					log.FailOnError(err, "Error while validating pods")
 
 				})
