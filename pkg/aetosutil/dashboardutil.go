@@ -164,6 +164,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 				logrus.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
 			dashURL = fmt.Sprintf("Dashboard URL : %s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID)
+			os.Setenv("DASH_UID", fmt.Sprint(d.TestSetID))
 		}
 	}
 	logrus.Info(dashURL)
