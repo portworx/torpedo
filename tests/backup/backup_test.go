@@ -6098,8 +6098,7 @@ func CreateRestoreWithCustomStorageClass(restoreName string, backupName string,
 		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
 		restoreResponseStatus := resp.GetRestore().GetStatus()
 		if err != nil {
-			err = fmt.Errorf(err, "Failed verifying restore for - %s", restoreName)
-			return err
+			return "", true, fmt.Errorf("Failed verifying restore for - %s", restoreName)
 		}
 		if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
 			log.Infof("Restore status - %s", restoreResponseStatus)
@@ -6110,9 +6109,6 @@ func CreateRestoreWithCustomStorageClass(restoreName string, backupName string,
 		return "", true, fmt.Errorf("expected status of %s - [%s] or [%s], but got [%s]",
 			restoreName, api.RestoreInfo_StatusInfo_PartialSuccess.String(), api.RestoreInfo_StatusInfo_Success, restoreResponseStatus.GetStatus())
 	}
-	_, err := task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+	return err
 }
