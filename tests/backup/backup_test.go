@@ -325,7 +325,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			bucketNames := getBucketName()
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
-				cloudCredName = fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, bucketNames[0])
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
@@ -497,7 +497,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			providers := getProviders()
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
-				cloudCredName = fmt.Sprintf("%s-%s", "cloudcred", provider)
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, bucketNames[0])
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
@@ -2344,6 +2344,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
 	providers := getProviders()
+	timeStamp := time.Now().Unix()
 	JustBeforeEach(func() {
 		StartTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBucket", "Deploying backup", nil, 0)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
@@ -2397,7 +2398,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
 			for _, provider := range providers {
-				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				CredName := fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				CloudCredUID = uuid.New()
 				CloudCredUIDMap[CloudCredUID] = CredName
 				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
@@ -2410,7 +2411,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
 			for _, provider := range providers {
 				for _, mode := range modes {
-					CredName := fmt.Sprintf("%s-%s", "cred", provider)
+					CredName := fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 					bucketName := fmt.Sprintf("%s-%s-%s-locked", provider, bucketNames[1], strings.ToLower(mode))
 					backupLocation = fmt.Sprintf("%s-%s-%s-lock", provider, bucketNames[1], strings.ToLower(mode))
 					err := CreateS3Bucket(bucketName, true, 3, mode)
@@ -2428,7 +2429,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			log.InfoD("Creating backup location for unlocked bucket")
 			bucketNames := getBucketName()
 			for _, provider := range providers {
-				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				CredName := fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				backupLocation = fmt.Sprintf("%s-%s-unlockedbucket", provider, bucketNames[0])
 				BackupLocationUID = uuid.New()
@@ -2560,7 +2561,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			providers := getProviders()
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
-				cloudCredName = fmt.Sprintf("%s-%s", "cloudcred", provider)
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, bucketNames[0])
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
@@ -2702,7 +2703,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 			providers := getProviders()
 			for _, provider := range providers {
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
-				cloudCredName = fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, bucketNames[0])
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
@@ -2994,23 +2995,6 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 })
 
-func GetAllBackupsAdmin() ([]string, error) {
-	var bkp *api.BackupObject
-	backupNames := make([]string, 0)
-	backupDriver := Inst().Backup
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching ctx")
-
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
-	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-	log.FailOnError(err, "Falied to enumerate on backup objects")
-	for _, bkp = range curBackups.GetBackups() {
-		backupNames = append(backupNames, bkp.GetName())
-	}
-	return backupNames, err
-}
-
 // This test restarts volume driver (PX) while backup is in progress
 var _ = Describe("{BackupRestartPX}", func() {
 	var (
@@ -3030,6 +3014,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 	var clusterUid string
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	timeStamp := time.Now().Unix()
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
@@ -3086,9 +3071,9 @@ var _ = Describe("{BackupRestartPX}", func() {
 			log.InfoD("Creating cloud credentials")
 			providers := getProviders()
 			for _, provider := range providers {
-				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				cloudCredUID = uuid.New()
-				CloudCredUIDMap[cloudCredUID] = CredName
+				CloudCredUIDMap[cloudCredUID] = cloudCredName
 				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
 			}
 		})
@@ -3105,7 +3090,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 			bucketNames := getBucketName()
 			providers := getProviders()
 			for _, provider := range providers {
-				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				backupLocation = fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				backupLocationUID = uuid.New()
@@ -3963,6 +3948,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var clusterUid string
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	timeStamp := time.Now().Unix()
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
@@ -4019,9 +4005,9 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.InfoD("Creating cloud credentials")
 			providers := getProviders()
 			for _, provider := range providers {
-				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				cloudCredUID = uuid.New()
-				CloudCredUIDMap[cloudCredUID] = CredName
+				CloudCredUIDMap[cloudCredUID] = cloudCredName
 				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
 			}
 		})
@@ -4038,7 +4024,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			bucketNames := getBucketName()
 			providers := getProviders()
 			for _, provider := range providers {
-				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				backupLocation = fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				backupLocationUID = uuid.New()
@@ -4188,57 +4174,15 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	})
 })
 
-// TODO: There is no delete org API
-/*func DeleteOrganization(orgID string) {
-	Step(fmt.Sprintf("Delete organization [%s]", orgID), func() {
-		backupDriver := Inst().Backup
-		req := &api.Delete{
-			CreateMetadata: &api.CreateMetadata{
-				Name: orgID,
-			},
-		}
-		_, err := backupDriver.Delete(req)
-		Expect(err).NotTo(HaveOccurred())
-	})
-}*/
-
-func generateEncryptionKey() string {
-	var lower = []byte("abcdefghijklmnopqrstuvwxyz")
-	var upper = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	var number = []byte("0123456789")
-	var special = []byte("~=+%^*/()[]{}/!@#$?|")
-	allChar := append(lower, upper...)
-	allChar = append(allChar, number...)
-	allChar = append(allChar, special...)
-
-	b := make([]byte, 12)
-	// select 1 upper, 1 lower, 1 number and 1 special
-	b[0] = lower[rand.Intn(len(lower))]
-	b[1] = upper[rand.Intn(len(upper))]
-	b[2] = number[rand.Intn(len(number))]
-	b[3] = special[rand.Intn(len(special))]
-	for i := 4; i < 12; i++ {
-		// randomly select 1 character from given charset
-		b[i] = allChar[rand.Intn(len(allChar))]
-	}
-
-	//shuffle character
-	rand.Shuffle(len(b), func(i, j int) {
-		b[i], b[j] = b[j], b[i]
-	})
-
-	return string(b)
-}
-
 // This test case creates a backup location with encryption
 var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	var contexts []*scheduler.Context
 	var appContexts []*scheduler.Context
 	var bkpNamespaces []string
 	var backupLocationName string
-	var CloudCredUID string
+	var cloudCredUID string
 	var clusterUid string
-	var CredName string
+	var cloudCredName string
 	var restoreName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	JustBeforeEach(func() {
@@ -4249,13 +4193,13 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		providers := getProviders()
 		bucketNames := getBucketName()
 		bucketName = fmt.Sprintf("%s-%s", providers[0], bucketNames[0])
-		CredName = fmt.Sprintf("%s-%s", "cred", providers[0])
+		cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", providers[0], time.Now().Unix())
 		backupLocationName = fmt.Sprintf("%s-%s", "location", providers[0])
-		CloudCredUID = uuid.New()
+		cloudCredUID = uuid.New()
 		BackupLocationUID = uuid.New()
 		encryptionKey := generateEncryptionKey()
-		CreateCloudCredential(providers[0], CredName, CloudCredUID, orgID)
-		CreateBackupLocation(providers[0], backupLocationName, BackupLocationUID, CredName, CloudCredUID, bucketName, orgID, encryptionKey)
+		CreateCloudCredential(providers[0], cloudCredName, CloudCredUID, orgID)
+		CreateBackupLocation(providers[0], backupLocationName, BackupLocationUID, cloudCredName, CloudCredUID, bucketName, orgID, encryptionKey)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4313,7 +4257,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			DeleteBackup(backupName, backupUID, orgID, ctx)
 		}
 		DeleteBackupLocation(backupLocationName, BackupLocationUID, orgID)
-		DeleteCloudCredential(CredName, orgID, CloudCredUID)
+		DeleteCloudCredential(cloudCredName, orgID, cloudCredUID)
 	})
 
 })
@@ -4331,6 +4275,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		clusterStatus    api.ClusterInfo_StatusInfo_Status
 		restoreName      string
 		namespaceMapping map[string]string
+		credName         string
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -4339,6 +4284,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	contexts = make([]*scheduler.Context, 0)
 	bkpNamespaces = make([]string, 0)
 	providers := getProviders()
+	timeStamp := time.Now().Unix()
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizeAfterRestoredVolume", "Resize after the volume is restored from a backup", nil, 0)
@@ -4393,10 +4339,10 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
 			for _, provider := range providers {
-				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				CloudCredUID = uuid.New()
-				CloudCredUIDMap[CloudCredUID] = CredName
-				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
+				CloudCredUIDMap[CloudCredUID] = credName
+				CreateCloudCredential(provider, credName, CloudCredUID, orgID)
 			}
 		})
 
@@ -4404,12 +4350,12 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 			log.InfoD("Creating backup location")
 			bucketNames := getBucketName()
 			for _, provider := range providers {
-				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				backupLocation = fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				BackupLocationUID = uuid.New()
 				BackupLocationMap[BackupLocationUID] = backupLocation
-				CreateBackupLocation(provider, backupLocation, BackupLocationUID, CredName, CloudCredUID,
+				CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID,
 					bucketName, orgID, "")
 			}
 		})
@@ -4493,7 +4439,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteCloudAccounts(BackupLocationMap, CredName, CloudCredUID, ctx)
+		DeleteCloudAccounts(BackupLocationMap, credName, CloudCredUID, ctx)
 	})
 })
 
@@ -4513,6 +4459,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		beforeSize       int
 		podsListBefore   []int
 		podListAfter     []int
+		credName         string
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -4522,6 +4469,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	contexts = make([]*scheduler.Context, 0)
 	bkpNamespaces = make([]string, 0)
 	providers := getProviders()
+	timeStamp := time.Now().Unix()
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizeOnRestoredVolumeFromLockedBucket", "Resize after the volume is restored from a backup from locked bucket", nil, 0)
@@ -4576,10 +4524,10 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
 			for _, provider := range providers {
-				CredName := fmt.Sprintf("%s-%s", "cred", provider)
+				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				CloudCredUID = uuid.New()
-				CloudCredUIDMap[CloudCredUID] = CredName
-				CreateCloudCredential(provider, CredName, CloudCredUID, orgID)
+				CloudCredUIDMap[CloudCredUID] = credName
+				CreateCloudCredential(provider, credName, CloudCredUID, orgID)
 			}
 		})
 
@@ -4589,14 +4537,14 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 			modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
 			for _, provider := range providers {
 				for _, mode := range modes {
-					CredName := fmt.Sprintf("%s-%s", "cred", provider)
+					credName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 					bucketName := fmt.Sprintf("%s-%s-%s", provider, bucketNames[1], strings.ToLower(mode))
 					backupLocation = fmt.Sprintf("%s-%s-%s-lock", provider, bucketNames[1], strings.ToLower(mode))
 					err := CreateS3Bucket(bucketName, true, 3, mode)
 					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
 					BackupLocationUID = uuid.New()
 					BackupLocationMap[BackupLocationUID] = backupLocation
-					CreateBackupLocation(provider, backupLocation, BackupLocationUID, CredName, CloudCredUID,
+					CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID,
 						bucketName, orgID, "")
 				}
 			}
@@ -4699,7 +4647,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteCloudAccounts(BackupLocationMap, CredName, CloudCredUID, ctx)
+		DeleteCloudAccounts(BackupLocationMap, credName, CloudCredUID, ctx)
 	})
 })
 
@@ -4716,6 +4664,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	var BackupLocation1UID string
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	var credName string
 	providers := getProviders()
 	bucketNames := getBucketName()
 	JustBeforeEach(func() {
@@ -4729,14 +4678,15 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		backupLocationNames = append(backupLocationNames, backupLocationName)
 		backupLocationName = fmt.Sprintf("%s-%s", "encryption-location", providers[0])
 		backupLocationNames = append(backupLocationNames, backupLocationName)
+		credName = fmt.Sprintf("%s-%s-%v", "cred", providers[0], time.Now().Unix())
 		CloudCredUID = uuid.New()
 		BackupLocationUID = uuid.New()
 		BackupLocation1UID = uuid.New()
 		encryptionkey := "px-b@ckup-@utomat!on"
 		CreateBucket(providers[0], encryptionBucketName)
-		CreateCloudCredential(providers[0], CredName, CloudCredUID, orgID)
-		CreateBackupLocation(providers[0], backupLocationNames[0], BackupLocationUID, CredName, CloudCredUID, bucketName, orgID, "")
-		CreateBackupLocation(providers[0], backupLocationNames[1], BackupLocation1UID, CredName, CloudCredUID, encryptionBucketName, orgID, encryptionkey)
+		CreateCloudCredential(providers[0], credName, CloudCredUID, orgID)
+		CreateBackupLocation(providers[0], backupLocationNames[0], BackupLocationUID, credName, CloudCredUID, bucketName, orgID, "")
+		CreateBackupLocation(providers[0], backupLocationNames[1], BackupLocation1UID, credName, CloudCredUID, encryptionBucketName, orgID, encryptionkey)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4805,7 +4755,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		}
 		DeleteBackupLocation(backupLocationNames[0], BackupLocationUID, orgID)
 		DeleteBackupLocation(backupLocationNames[1], BackupLocation1UID, orgID)
-		DeleteCloudCredential(CredName, orgID, CloudCredUID)
+		DeleteCloudCredential(credName, orgID, CloudCredUID)
 		encryptionBucketName := fmt.Sprintf("%s-%s-%s", providers[0], bucketNames[0], "encryptionbucket")
 		DeleteBucket(providers[0], encryptionBucketName)
 	})
@@ -4827,6 +4777,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 	var clusterUid string
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	timeStamp := time.Now().Unix()
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
@@ -4853,9 +4804,9 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			log.InfoD("Creating cloud credentials")
 			providers := getProviders()
 			for _, provider := range providers {
-				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				cloudCredUID = uuid.New()
-				CloudCredUIDMap[cloudCredUID] = CredName
+				CloudCredUIDMap[cloudCredUID] = cloudCredName
 				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
 			}
 		})
@@ -4872,7 +4823,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			bucketNames := getBucketName()
 			providers := getProviders()
 			for _, provider := range providers {
-				cloudCredName := fmt.Sprintf("%s-%s", "cred", provider)
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				bucketName := fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				backupLocation = fmt.Sprintf("%s-%s", provider, bucketNames[0])
 				backupLocationUID = uuid.New()
@@ -5732,4 +5683,64 @@ func getEnv(environmentVariable string, defaultValue string) string {
 		value = defaultValue
 	}
 	return value
+}
+
+// GetAllBackupsAdmin returns all the backups that px-central-admin has access toGetAllBackupsAdmin
+func GetAllBackupsAdmin() ([]string, error) {
+	var bkp *api.BackupObject
+	backupNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching ctx")
+
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	log.FailOnError(err, "Falied to enumerate on backup objects")
+	for _, bkp = range curBackups.GetBackups() {
+		backupNames = append(backupNames, bkp.GetName())
+	}
+	return backupNames, err
+}
+
+// TODO: There is no delete org API
+/*func DeleteOrganization(orgID string) {
+	Step(fmt.Sprintf("Delete organization [%s]", orgID), func() {
+		backupDriver := Inst().Backup
+		req := &api.Delete{
+			CreateMetadata: &api.CreateMetadata{
+				Name: orgID,
+			},
+		}
+		_, err := backupDriver.Delete(req)
+		Expect(err).NotTo(HaveOccurred())
+	})
+}*/
+
+func generateEncryptionKey() string {
+	var lower = []byte("abcdefghijklmnopqrstuvwxyz")
+	var upper = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	var number = []byte("0123456789")
+	var special = []byte("~=+%^*/()[]{}/!@#$?|")
+	allChar := append(lower, upper...)
+	allChar = append(allChar, number...)
+	allChar = append(allChar, special...)
+
+	b := make([]byte, 12)
+	// select 1 upper, 1 lower, 1 number and 1 special
+	b[0] = lower[rand.Intn(len(lower))]
+	b[1] = upper[rand.Intn(len(upper))]
+	b[2] = number[rand.Intn(len(number))]
+	b[3] = special[rand.Intn(len(special))]
+	for i := 4; i < 12; i++ {
+		// randomly select 1 character from given charset
+		b[i] = allChar[rand.Intn(len(allChar))]
+	}
+
+	//shuffle character
+	rand.Shuffle(len(b), func(i, j int) {
+		b[i], b[j] = b[j], b[i]
+	})
+
+	return string(b)
 }
