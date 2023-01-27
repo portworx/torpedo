@@ -41,7 +41,10 @@ var _ = Describe("{DeletePDSPods}", func() {
 				})
 
 				Step("get pods from pds-system namespace", func() {
-					podList, err := pdslib.GetPods(pdsNamespace)
+					if len(deploymentPods) != 0 {
+						deploymentPods = nil
+					}
+					podList, err = pdslib.GetPods(pdsNamespace)
 					log.FailOnError(err, "Error while getting pods")
 					log.Infof("PDS System Pods")
 					for _, pod := range podList.Items {
@@ -68,11 +71,12 @@ var _ = Describe("{DeletePDSPods}", func() {
 				})
 
 				Step("Delete Deployments", func() {
-					log.InfoD("Deleting Deployment %v ", deployment.Name)
+					log.InfoD("Deleting Deployment %v ", *deployment.Name)
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
+					log.InfoD("Deployment %v Deleted Successfully", *deployment.Name)
 				})
 			}
 
