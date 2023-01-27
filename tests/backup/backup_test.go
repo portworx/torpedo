@@ -4830,7 +4830,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("CustomResourceBackupAndRestore", "Create custom resource backup and restore", nil, 0)
+		StartTorpedoTest("CustomResourceBackupAndRestore", "Create custom resource backup and restore", nil, 58043)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4888,7 +4888,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				err = CreateBackupWithCustomResourceType(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace}, nil, orgID, clusterUid, "", "", "", "", []string{"PersistentVolumeClaim"}, ctx)
-				dash.VerifyFatal(err, nil, "Verifying backup creation")
+				dash.VerifyFatal(err, nil, "Verifying backup creation with custom resources")
 			}
 		})
 
@@ -4901,7 +4901,8 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 				restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
 				restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
 				namespaceMapping[namespace] = restoredNameSpace
-				CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx)
+				err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx)
+				log.FailOnError(err, "Restoring of backup [%s] has failed with name - [%s]", backupName, restoreName)
 			}
 		})
 		Step("Compare PVCs on both namespaces", func() {
@@ -4910,7 +4911,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 				pvcs, _ := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
 				restoreNamespace := fmt.Sprintf("%s-%s", namespace, "restored")
 				restoredpvcs, _ := core.Instance().GetPersistentVolumeClaims(restoreNamespace, labelSelectors)
-				dash.VerifyFatal(len(pvcs.Items), len(restoredpvcs.Items), "Compare  number of PVCs")
+				dash.VerifyFatal(len(pvcs.Items), len(restoredpvcs.Items), "Compare number of PVCs")
 			}
 		})
 	})
@@ -4923,7 +4924,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			opts[SkipClusterScopedObjects] = true
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s", taskName))
 		}
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
@@ -5068,7 +5069,7 @@ func UpdateBackup(backupName string, backupuid string, org_id string, cloudCred 
 // CreateBackup creates backup with custom resources
 func CreateBackupWithCustomResourceType(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, resourceType []string ,ctx context.Context) error {
+	preRuleUid string, postRuleName string, postRuleUid string, resourceType []string, ctx context.Context) error {
 
 	var bkpUid string
 	backupDriver := Inst().Backup
