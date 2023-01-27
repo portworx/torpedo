@@ -410,16 +410,16 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 			if !result {
 				dash.VerifyFatal(result, true, "Failure in creating namespace on the target cluster. Exiting the Test case with failure")
 			}
-			log.Infof("Namespace %s created for creating a Non-PDS App", ns)
+			log.InfoD("Namespace %s created for creating a Non-PDS App", ns)
 		})
 		Step("Create an Independent app in a non-PDS namespace", func() {
-			if pdslib.CreateIndependentPV() {
-				if pdslib.CreateIndependentPVC(ns) {
-					podName, result = pdslib.CreateIndependentApp(ns)
+			if pdslib.CreateIndependentPV("mysql-pv") {
+				if pdslib.CreateIndependentPVC(ns, "mysql-pvc") {
+					podName, result = pdslib.CreateIndependentMySqlApp(ns, "mysql:8.0", "mysql-pvc")
 					if !result {
 						dash.VerifyFatal(result, true, "Failure in creating the application in non-pds namespace")
 					}
-					log.Infof("Non PDS MySQL App with name : %s is created", podName)
+					log.InfoD("Non PDS MySQL App with name : %s is created", podName)
 				} else {
 					dash.VerifyFatal(result, true, "Failure in creating PVC on Target Cluster. Exiting the Test case with failure")
 				}
@@ -433,7 +433,7 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 			}
 			testns, err := pdslib.UpdatePDSNamespce(ns, nsLables)
 			log.FailOnError(err, "Error while updating pds namespace")
-			log.Infof("PDS Namespace Updated with PDS Label %v", testns)
+			log.InfoD("PDS Namespace Updated with PDS Label %v", testns)
 		})
 		Step("Deploy, Validate and Delete Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
@@ -482,16 +482,20 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 				}
 			}
 		})
-		Step("Cleanup of all apps and namespaces", func() {
-			log.Infof("Trying to Delete Independent App pod now : %s", podName)
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		defer func() {
+			log.InfoD("Trying to Delete Independent App pod now : %s", podName)
 			pdslib.DeleteK8sPods(podName, ns)
-			log.Infof("Trying to Delete Independent PVC now from ns : %s", ns)
+			log.InfoD("Trying to Delete Independent PVC now from ns : %s", ns)
 			k8sCore.DeletePersistentVolumeClaim("mysql-pvc", ns)
-			log.Infof("Trying to delete Independent PV now")
+			log.InfoD("Trying to delete Independent PV now")
 			k8sCore.DeletePersistentVolume("mysql-pv")
-			log.Infof("Trying to delete NS now: %s", ns)
+			log.InfoD("Trying to delete NS now: %s", ns)
 			pdslib.DeletePDSNamespace(ns)
-		})
+		}()
 	})
 })
 

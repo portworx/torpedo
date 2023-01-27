@@ -1047,8 +1047,7 @@ func CreateTempNS() (string, bool) {
 }
 
 // Create a Persistent Vol of 5G manual Storage Class
-func CreateIndependentPV() bool {
-	name := "mysql-pv"
+func CreateIndependentPV(name string) bool {
 	pv := &corev1.PersistentVolume{
 
 		TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
@@ -1057,8 +1056,6 @@ func CreateIndependentPV() bool {
 		},
 
 		Spec: corev1.PersistentVolumeSpec{
-			//VolumeMode: v1.PersistentVolumeMode(),
-
 			StorageClassName: "manual",
 			AccessModes: []corev1.PersistentVolumeAccessMode{
 				"ReadWriteOnce",
@@ -1082,8 +1079,7 @@ func CreateIndependentPV() bool {
 }
 
 // Create a PV Claim of 5G Storage
-func CreateIndependentPVC(namespace string) bool {
-	name := "mysql-pvc"
+func CreateIndependentPVC(namespace string, name string) bool {
 	ns := namespace
 	storageClass := "manual"
 	createOpts := &corev1.PersistentVolumeClaim{
@@ -1110,7 +1106,7 @@ func CreateIndependentPVC(namespace string) bool {
 }
 
 // Create an Independant MySQL non PDS App running in a namespace
-func CreateIndependentApp(ns string) (string, bool) {
+func CreateIndependentMySqlApp(ns string, appImage string, pvcName string) (string, bool) {
 	namespace := ns
 	podName := "mysql-app"
 	podSpec := &corev1.Pod{
@@ -1126,16 +1122,16 @@ func CreateIndependentApp(ns string) (string, bool) {
 			Containers: []corev1.Container{
 				{
 					Name:  podName,
-					Image: "mysql:8.0",
+					Image: appImage,
 					Env:   make([]corev1.EnvVar, 1),
 				},
 			},
 			RestartPolicy: corev1.RestartPolicyOnFailure,
 		},
 	}
-	volumename := "mysql-persistent-storage"
+	volumename := "app-persistent-storage"
 	var volumes = make([]corev1.Volume, 1)
-	volumes[0] = corev1.Volume{Name: volumename, VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "mysql-pvc", ReadOnly: false}}}
+	volumes[0] = corev1.Volume{Name: volumename, VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName, ReadOnly: false}}}
 	podSpec.Spec.Volumes = volumes
 	env := []string{"MYSQL_ROOT_PASSWORD"}
 	var value []string
