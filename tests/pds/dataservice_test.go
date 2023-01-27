@@ -413,9 +413,11 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 			log.InfoD("Namespace %s created for creating a Non-PDS App", ns)
 		})
 		Step("Create an Independent app in a non-PDS namespace", func() {
-			if pdslib.CreateIndependentPV("mysql-pv") {
-				if pdslib.CreateIndependentPVC(ns, "mysql-pvc") {
-					podName, result = pdslib.CreateIndependentMySqlApp(ns, "mysql:8.0", "mysql-pvc")
+			_, pv_creation_result := pdslib.CreateIndependentPV("mysql-pv")
+			if pv_creation_result {
+				_, pvc_creation_result := pdslib.CreateIndependentPVC(ns, "mysql-pvc")
+				if pvc_creation_result {
+					_, podName, result = pdslib.CreateIndependentMySqlApp(ns, "mysql-app", "mysql:8.0", "mysql-pvc")
 					if !result {
 						dash.VerifyFatal(result, true, "Failure in creating the application in non-pds namespace")
 					}

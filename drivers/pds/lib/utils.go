@@ -1047,7 +1047,7 @@ func CreateTempNS() (string, bool) {
 }
 
 // Create a Persistent Vol of 5G manual Storage Class
-func CreateIndependentPV(name string) bool {
+func CreateIndependentPV(name string) (*corev1.PersistentVolume, bool) {
 	pv := &corev1.PersistentVolume{
 
 		TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
@@ -1070,16 +1070,16 @@ func CreateIndependentPV(name string) bool {
 			},
 		},
 	}
-	_, err := k8sCore.CreatePersistentVolume(pv)
+	pv, err := k8sCore.CreatePersistentVolume(pv)
 	if err != nil {
 		log.Errorf("PV Could not be created. Exiting")
-		return false
+		return pv, false
 	}
-	return true
+	return pv, true
 }
 
 // Create a PV Claim of 5G Storage
-func CreateIndependentPVC(namespace string, name string) bool {
+func CreateIndependentPVC(namespace string, name string) (*corev1.PersistentVolumeClaim, bool) {
 	ns := namespace
 	storageClass := "manual"
 	createOpts := &corev1.PersistentVolumeClaim{
@@ -1097,26 +1097,25 @@ func CreateIndependentPVC(namespace string, name string) bool {
 			},
 		},
 	}
-	_, err := k8sCore.CreatePersistentVolumeClaim(createOpts)
+	pvc, err := k8sCore.CreatePersistentVolumeClaim(createOpts)
 	if err != nil {
 		log.Errorf("PVC Could not be created. Exiting. %v", err)
-		return false
+		return pvc, false
 	}
-	return true
+	return pvc, true
 }
 
 // Create an Independant MySQL non PDS App running in a namespace
-func CreateIndependentMySqlApp(ns string, appImage string, pvcName string) (string, bool) {
+func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcName string) (*corev1.Pod, string, bool) {
 	namespace := ns
-	podName := "mysql-app"
 	podSpec := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: podName + "-",
-			Namespace:    namespace,
+			Name:      podName,
+			Namespace: namespace,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -1141,12 +1140,12 @@ func CreateIndependentMySqlApp(ns string, appImage string, pvcName string) (stri
 		podSpec.Spec.Containers[0].Env[index].Value = value[index]
 	}
 
-	_, err := k8sCore.CreatePod(podSpec)
+	pod, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
 		log.Errorf("An Error Occured while creating %v", err)
-		return "", false
+		return pod, "", false
 	}
-	return podName, true
+	return pod, podName, true
 }
 
 // CreatecassandraWorkload generate workloads on the cassandra db
