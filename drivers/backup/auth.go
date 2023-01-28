@@ -1170,6 +1170,9 @@ func GetRandomUserFromGroup(groupName string) (string, error) {
 		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
+	if len(users) == 0 {
+		return "", fmt.Errorf("%s: No users added to the group - [%s]", fn, groupName)
+	}
 	rand.Seed(time.Now().Unix())
 	userName := users[rand.Intn(len(users))]
 	return userName, nil

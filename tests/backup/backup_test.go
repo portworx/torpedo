@@ -18,19 +18,19 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	storage "github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
-	storageapi "k8s.io/api/storage/v1"
-	storage "github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/portworx/torpedo/tests"
 )
@@ -1386,8 +1386,13 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			log.InfoD("Validate Full Access of backups shared at cluster level for a user of a group")
 			// Get user from group
 			var err error
-			chosenUser, err = backup.GetRandomUserFromGroup(groups[rand.Intn(numberOfGroups-1)])
-			log.FailOnError(err, "Failed to get a random user from group [%s]", groups[0])
+			for {
+				chosenUser, err = backup.GetRandomUserFromGroup(groups[rand.Intn(numberOfGroups-1)])
+				if !strings.Contains(err.Error(), "No users added to the group") {
+					break
+				}
+			}
+
 			log.Infof("User chosen to validate full access - %s", chosenUser)
 
 			// Get Admin Context - needed to share backup and get backup UID
@@ -6290,7 +6295,6 @@ func getEnv(environmentVariable string, defaultValue string) string {
 	return value
 }
 
-
 // ShareBackupWithUsersAndAccessAssignment shares backup with multiple users with different access levels
 // It returns a map with key as userAccessContext and value as backup shared
 func ShareBackupWithUsersAndAccessAssignment(backupNames []string, users []string, ctx context.Context) (map[userAccessContext]string, error) {
@@ -6320,13 +6324,14 @@ func ShareBackupWithUsersAndAccessAssignment(backupNames []string, users []strin
 		}
 		ctxNonAdmin, err = backup.GetNonAdminCtx(users[i], "Password1")
 		if err != nil {
-			return accessUserBackupContext, fmt.Errorf("unable to get user context: %v",err)
+			return accessUserBackupContext, fmt.Errorf("unable to get user context: %v", err)
 		}
 		accessContextUser := userAccessContext{users[i], access, ctxNonAdmin}
 		accessUserBackupContext[accessContextUser] = backupNames[i]
 	}
 	return accessUserBackupContext, nil
 }
+
 // GetAllBackupsAdmin returns all the backups that px-central-admin has access toGetAllBackupsAdmin
 func GetAllBackupsAdmin() ([]string, error) {
 	var bkp *api.BackupObject
@@ -6384,7 +6389,7 @@ func generateEncryptionKey() string {
 		b[i], b[j] = b[j], b[i]
 	})
 
-return string(b)
+	return string(b)
 }
 
 // CreateRestoreWithCustomStorageClass creates restore with StorageClass mapping
@@ -6410,9 +6415,9 @@ func CreateRestoreWithCustomStorageClass(restoreName string, backupName string,
 			Name:  restoreName,
 			OrgId: orgID,
 		},
-		Backup:           backupName,
-		Cluster:          clusterName,
-		NamespaceMapping: namespaceMapping,
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
 		StorageClassMapping: storageClassMapping,
 		BackupRef: &api.ObjectRef{
 			Name: backupName,
