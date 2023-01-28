@@ -1483,8 +1483,8 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			log.FailOnError(err, "Failed sharing all backups for cluster [%s]", SourceClusterName)
 		})
 
-		Step("Validate Restore Access of backups shared at cluster level", func() {
-			log.InfoD("Validate Restore Access of backups shared at cluster level")
+		Step("Validate View Only Access of backups shared at cluster level", func() {
+			log.InfoD("Validate View Only Access of backups shared at cluster level")
 			log.Infof("User chosen to validate restore access - %s", chosenUser)
 
 			// Get Admin Context - needed to share backup and get backup UID
@@ -5939,7 +5939,7 @@ func CreateRestore(restoreName string, backupName string,
 	var bkp *api.BackupObject
 	var bkpUid string
 	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup needed to be restored")
+	log.Infof("Getting the UID of the backup - [%s] needed to be restored", backupName)
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgID}
 	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
@@ -5950,6 +5950,7 @@ func CreateRestore(restoreName string, backupName string,
 			break
 		}
 	}
+	log.Infof("Backup UID for backup [%s] - %s", backupName, bkpUid)
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
