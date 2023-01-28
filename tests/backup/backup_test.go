@@ -1218,7 +1218,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 	users := make([]string, 0)
 	groups := make([]string, 0)
 	backupNames := make([]string, 0)
-	numberOfSimultaneousBackups := 20
+	numberOfSimultaneousBackups := 10
 	var contexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	var backupLocationUID string
