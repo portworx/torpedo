@@ -1386,12 +1386,14 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			log.InfoD("Validate Full Access of backups shared at cluster level for a user of a group")
 			// Get user from group
 			var err error
-			for {
+			getRandomUser := func() (interface{}, bool, error) {
 				chosenUser, err = backup.GetRandomUserFromGroup(groups[rand.Intn(numberOfGroups-1)])
-				if !strings.Contains(err.Error(), "No users added to the group") {
-					break
+				if err != nil {
+					return "", true, err
 				}
+				return "", false, nil
 			}
+			task.DoRetryWithTimeout(getRandomUser, 1*time.Minute, 5*time.Second)
 
 			log.Infof("User chosen to validate full access - %s", chosenUser)
 
