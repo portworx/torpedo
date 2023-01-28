@@ -1409,7 +1409,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-			dash.VerifyFatal(err, "", "Creating source and destination cluster")
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
 			backupName := backupNames[rand.Intn(numberOfBackups-1)]
