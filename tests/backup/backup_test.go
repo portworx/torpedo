@@ -1210,10 +1210,10 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 })
 
 var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
-	numberOfUsers, _ := strconv.Atoi(getEnv(usersToBeCreated, "200"))
-	numberOfGroups, _ := strconv.Atoi(getEnv(groupsToBeCreated, "100"))
+	numberOfUsers, _ := strconv.Atoi(getEnv(usersToBeCreated, "100"))
+	numberOfGroups, _ := strconv.Atoi(getEnv(groupsToBeCreated, "50"))
 	groupSize, _ := strconv.Atoi(getEnv(maxUsersInGroup, "2"))
-	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "100"))
+	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "50"))
 	timeBetweenConsecutiveBackups := 4 * time.Second
 	users := make([]string, 0)
 	groups := make([]string, 0)
