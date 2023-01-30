@@ -787,7 +787,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 	})
 	It("Share large number of backups", func() {
 		Step("Validate applications", func() {
-			log.InfoD("Validate applications and get their labels")
+			log.InfoD("Validate applications")
 			ValidateApplications(contexts)
 		})
 
@@ -5520,9 +5520,9 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			}
 		}
 	})
-	It("Share large number of backups", func() {
-		Step("Validate applications and get t", func() {
-			log.InfoD("Validate applications and get their labels")
+	It("Full backup view only and incremental backup restore access", func() {
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
 			ValidateApplications(contexts)
 		})
 
