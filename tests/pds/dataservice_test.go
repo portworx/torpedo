@@ -401,32 +401,28 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 		StartTorpedoTest("RunIndependentAppNonPdsNS", "Runs an independent app on a non-PDS namespace and then enables PDS on this namespace", nil, 0)
 	})
 	ns := ""
-	result := false
+	var err error
 	var podName string
 
 	It("Create an independent app in a non PDS namespace and then enable PDS on this namespace", func() {
 		Step("Create a temporary namespace on the cluster for creating an independent app", func() {
-			ns, result = pdslib.CreateTempNS()
-			if !result {
-				dash.VerifyFatal(result, true, "Failure in creating namespace on the target cluster. Exiting the Test case with failure")
-			}
+			ns, err = pdslib.CreateTempNS(6)
+			log.FailOnError(err, "Failure in creating namespace on the target cluster. Exiting the Test case with failure")
 			log.InfoD("Namespace %s created for creating a Non-PDS App", ns)
 		})
 		Step("Create an Independent app in a non-PDS namespace", func() {
-			_, pv_creation_result := pdslib.CreateIndependentPV("mysql-pv")
-			if pv_creation_result {
-				_, pvc_creation_result := pdslib.CreateIndependentPVC(ns, "mysql-pvc")
-				if pvc_creation_result {
-					_, podName, result = pdslib.CreateIndependentMySqlApp(ns, "mysql-app", "mysql:8.0", "mysql-pvc")
-					if !result {
-						dash.VerifyFatal(result, true, "Failure in creating the application in non-pds namespace")
-					}
+			_, pv_creation_err := pdslib.CreateIndependentPV("mysql-pv")
+			if pv_creation_err == nil {
+				_, pvc_creation_err := pdslib.CreateIndependentPVC(ns, "mysql-pvc")
+				if pvc_creation_err == nil {
+					_, podName, err = pdslib.CreateIndependentMySqlApp(ns, "mysql-app", "mysql:8.0", "mysql-pvc")
+					log.FailOnError(err, "Failure in creating the application in non-pds namespace")
 					log.InfoD("Non PDS MySQL App with name : %s is created", podName)
 				} else {
-					dash.VerifyFatal(result, true, "Failure in creating PVC on Target Cluster. Exiting the Test case with failure")
+					log.FailOnError(pvc_creation_err, "Failure in creating PVC on Target Cluster. Exiting the Test case with failure")
 				}
 			} else {
-				dash.VerifyFatal(result, true, "Failure in creating Persistent Volume on target cluster. Exiting the Test case with failure")
+				log.FailOnError(pv_creation_err, "Failure in creating Persistent Volume on target cluster. Exiting the Test case with failure")
 			}
 		})
 		Step("Add PDS Label to Non-PDS Namespace running a DB Service already", func() {
@@ -479,7 +475,6 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 						resp, err := pdslib.DeleteDeployment(deployment.GetId())
 						log.FailOnError(err, "Error while deleting data services")
 						dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-						isDeploymentsDeleted = true
 					})
 				}
 			}
@@ -490,13 +485,17 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 
 		defer func() {
 			log.InfoD("Trying to Delete Independent App pod now : %s", podName)
-			pdslib.DeleteK8sPods(podName, ns)
+			err = pdslib.DeleteK8sPods(podName, ns)
+			log.FailOnError(err, "Error while deleting K8s pods")
 			log.InfoD("Trying to Delete Independent PVC now from ns : %s", ns)
-			k8sCore.DeletePersistentVolumeClaim("mysql-pvc", ns)
+			err = k8sCore.DeletePersistentVolumeClaim("mysql-pvc", ns)
+			log.FailOnError(err, "Error while deleting Independent PVC")
 			log.InfoD("Trying to delete Independent PV now")
-			k8sCore.DeletePersistentVolume("mysql-pv")
+			err = k8sCore.DeletePersistentVolume("mysql-pv")
+			log.FailOnError(err, "Error while deleting Independent PV")
 			log.InfoD("Trying to delete NS now: %s", ns)
-			pdslib.DeletePDSNamespace(ns)
+			err = pdslib.DeletePDSNamespace(ns)
+			log.FailOnError(err, "Error while deleting Independent Namespace")
 		}()
 	})
 })

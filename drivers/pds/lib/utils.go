@@ -1027,8 +1027,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 }
 
 // Creates a temporary non PDS namespace of 6 letters length randomly chosen
-func CreateTempNS() (string, bool) {
-	length := 6
+func CreateTempNS(length int32) (string, error) {
 	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, length)
 	rand.Read(b)
@@ -1041,13 +1040,13 @@ func CreateTempNS() (string, bool) {
 	ns, err = k8sCore.CreateNamespace(ns)
 	if err != nil {
 		log.Errorf("Error while creating namespace %v", err)
-		return "", false
+		return "", err
 	}
-	return namespace, true
+	return namespace, nil
 }
 
 // Create a Persistent Vol of 5G manual Storage Class
-func CreateIndependentPV(name string) (*corev1.PersistentVolume, bool) {
+func CreateIndependentPV(name string) (*corev1.PersistentVolume, error) {
 	pv := &corev1.PersistentVolume{
 
 		TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
@@ -1073,13 +1072,13 @@ func CreateIndependentPV(name string) (*corev1.PersistentVolume, bool) {
 	pv, err := k8sCore.CreatePersistentVolume(pv)
 	if err != nil {
 		log.Errorf("PV Could not be created. Exiting")
-		return pv, false
+		return pv, err
 	}
-	return pv, true
+	return pv, nil
 }
 
 // Create a PV Claim of 5G Storage
-func CreateIndependentPVC(namespace string, name string) (*corev1.PersistentVolumeClaim, bool) {
+func CreateIndependentPVC(namespace string, name string) (*corev1.PersistentVolumeClaim, error) {
 	ns := namespace
 	storageClass := "manual"
 	createOpts := &corev1.PersistentVolumeClaim{
@@ -1100,13 +1099,13 @@ func CreateIndependentPVC(namespace string, name string) (*corev1.PersistentVolu
 	pvc, err := k8sCore.CreatePersistentVolumeClaim(createOpts)
 	if err != nil {
 		log.Errorf("PVC Could not be created. Exiting. %v", err)
-		return pvc, false
+		return pvc, err
 	}
-	return pvc, true
+	return pvc, nil
 }
 
 // Create an Independant MySQL non PDS App running in a namespace
-func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcName string) (*corev1.Pod, string, bool) {
+func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcName string) (*corev1.Pod, string, error) {
 	namespace := ns
 	podSpec := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -1143,9 +1142,9 @@ func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcNa
 	pod, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
 		log.Errorf("An Error Occured while creating %v", err)
-		return pod, "", false
+		return pod, "", err
 	}
-	return pod, podName, true
+	return pod, podName, nil
 }
 
 // CreatecassandraWorkload generate workloads on the cassandra db
