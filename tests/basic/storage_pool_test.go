@@ -4098,6 +4098,19 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 		err = waitForStorageDown(*selectedNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
 
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+		log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+
+		var offlinePoolUUID string
+		for i, s := range poolsStatus {
+			if s == "Offline" {
+				offlinePoolUUID = i
+				break
+			}
+		}
+		selectedPool, err = GetStoragePoolByUUID(offlinePoolUUID)
+		log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
+
 		stepLog = fmt.Sprintf("expand pool %s using resize-disk", selectedPool.Uuid)
 		var expandedExpectedPoolSize uint64
 		Step("", func() {
@@ -4222,9 +4235,23 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 		err = waitForStorageDown(*selectedNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
 
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+		log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+
+		var offlinePoolUUID string
+		for i, s := range poolsStatus {
+			if s == "Offline" {
+				offlinePoolUUID = i
+				break
+			}
+		}
+		selectedPool, err = GetStoragePoolByUUID(offlinePoolUUID)
+		log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
+
 		stepLog = fmt.Sprintf("expand pool %s using resize-disk", selectedPool.Uuid)
 		var expandedExpectedPoolSize uint64
-		Step("", func() {
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) + 500
 
 			log.FailOnError(err, "Failed to check if Journal enabled")
@@ -4312,9 +4339,23 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 		err = waitForStorageDown(*selectedNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to make node %s storage down", selectedNode.Name))
 
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+		log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+
+		var offlinePoolUUID string
+		for i, s := range poolsStatus {
+			if s == "Offline" {
+				offlinePoolUUID = i
+				break
+			}
+		}
+		selectedPool, err = GetStoragePoolByUUID(offlinePoolUUID)
+		log.FailOnError(err, "error getting pool with UUID [%s]", offlinePoolUUID)
+
 		stepLog = fmt.Sprintf("expand pool %s using add-disk", selectedPool.Uuid)
 		var expandedExpectedPoolSize uint64
-		Step("", func() {
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) + 500
 
 			log.FailOnError(err, "Failed to check if Journal enabled")
