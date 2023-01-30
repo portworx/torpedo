@@ -1458,6 +1458,7 @@ func ValidateStorkEnabled(pxImageList map[string]string, cluster *corev1.Storage
 		if err != nil {
 			return nil, true, err
 		}
+		fmt.Printf("kubeversion is %s\n",kubeVersion)
 
 		if kubeVersion != nil && kubeVersion.GreaterThanOrEqual(K8sVer1_22) {
 			// TODO Image tag for stork-scheduler is hardcoded to v1.21.4 for clusters 1.22 and up
