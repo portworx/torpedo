@@ -4406,33 +4406,43 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 		nonKvdbNodes := make([]node.Node, 0)
 		kvdbNodes := make([]node.Node, 0)
 		driverDownNodes := make([]node.Node, 0)
+
+		kvdbNodesIDs := make([]string, 0)
+		kvdbMembers, err := Inst().V.GetKvdbMembers(stoageDriverNodes[0])
+		log.FailOnError(err, "Error getting KVDB members")
+		log.InfoD("len kvdbMembers : %d", len(kvdbMembers))
+		for k, _ := range kvdbMembers {
+			kvdbNodesIDs = append(kvdbNodesIDs, k)
+		}
 		for _, n := range stoageDriverNodes {
-			if !n.IsMetadataNode {
-				nonKvdbNodes = append(nonKvdbNodes, n)
-			} else {
+			if Contains(kvdbNodesIDs, n.Id) {
 				kvdbNodes = append(kvdbNodes, n)
+			} else {
+				nonKvdbNodes = append(nonKvdbNodes, n)
 			}
 		}
 		numNodesToBeDown := (len(stoageDriverNodes) / 2) + 1
-
 		if len(nonKvdbNodes) < numNodesToBeDown {
 			numNodesToBeDown = len(nonKvdbNodes)
 		}
 
 		stepLog = "Make cluster out of quorum"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			i := 1
+			for _, n := range nonKvdbNodes {
+				if i == numNodesToBeDown {
+					break
+				}
+				err := Inst().V.StopDriver([]node.Node{n}, false, nil)
+				log.FailOnError(err, "error stopping driver on node %s", n.Name)
 
-		i := 1
-		for _, n := range nonKvdbNodes {
-			if i == numNodesToBeDown {
-				break
+				err = Inst().V.WaitDriverDownOnNode(n)
+				log.FailOnError(err, "error while waiting for driver down on node %s", n.Name)
+				driverDownNodes = append(driverDownNodes, n)
+				i += 1
 			}
-			err := Inst().V.StopDriver([]node.Node{n}, false, nil)
-			log.FailOnError(err, "error stopping driver on node %s", n.Name)
-
-			err = Inst().V.WaitDriverDownOnNode(n)
-			log.FailOnError(err, "error while waiting for driver down on node %s", n.Name)
-			driverDownNodes = append(driverDownNodes, n)
-		}
+		})
 
 		defer Step("set cluster to running", func() {
 			log.InfoD("set cluster to running")
@@ -5168,7 +5178,21 @@ var _ = Describe("{PoolDelete}", func() {
 func appsValidateAndDestroy(contexts []*scheduler.Context) {
 	opts := make(map[string]bool)
 	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-	ValidateAndDestroy(contexts, opts)
+
+	Step("validate apps", func() {
+		log.InfoD("Validating apps")
+		for _, ctx := range contexts {
+			ctx.ReadinessTimeout = 15 * time.Minute
+			ValidateContext(ctx)
+		}
+	})
+
+	Step("destroy apps", func() {
+		log.InfoD("Destroying apps")
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
 }
 
 func waitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
