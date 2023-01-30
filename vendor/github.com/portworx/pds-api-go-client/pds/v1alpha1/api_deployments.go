@@ -875,6 +875,7 @@ type ApiApiProjectsIdDeploymentsGetRequest struct {
 	ctx context.Context
 	ApiService *DeploymentsApiService
 	id string
+	expand *string
 	sortBy *string
 	limit *string
 	continuation *string
@@ -888,6 +889,11 @@ type ApiApiProjectsIdDeploymentsGetRequest struct {
 	state *string
 }
 
+// Expand the result with related entities (allowed values: deployment_target, namespace)
+func (r ApiApiProjectsIdDeploymentsGetRequest) Expand(expand string) ApiApiProjectsIdDeploymentsGetRequest {
+	r.expand = &expand
+	return r
+}
 // A given Deployment attribute to sort results by (one of: id, name, cluster_resource_name, created_at)
 func (r ApiApiProjectsIdDeploymentsGetRequest) SortBy(sortBy string) ApiApiProjectsIdDeploymentsGetRequest {
 	r.sortBy = &sortBy
@@ -944,7 +950,7 @@ func (r ApiApiProjectsIdDeploymentsGetRequest) State(state string) ApiApiProject
 	return r
 }
 
-func (r ApiApiProjectsIdDeploymentsGetRequest) Execute() (*ControllersPaginatedDeployments, *http.Response, error) {
+func (r ApiApiProjectsIdDeploymentsGetRequest) Execute() (*ModelsPaginatedResultModelsDeployment, *http.Response, error) {
 	return r.ApiService.ApiProjectsIdDeploymentsGetExecute(r)
 }
 
@@ -966,13 +972,13 @@ func (a *DeploymentsApiService) ApiProjectsIdDeploymentsGet(ctx context.Context,
 }
 
 // Execute executes the request
-//  @return ControllersPaginatedDeployments
-func (a *DeploymentsApiService) ApiProjectsIdDeploymentsGetExecute(r ApiApiProjectsIdDeploymentsGetRequest) (*ControllersPaginatedDeployments, *http.Response, error) {
+//  @return ModelsPaginatedResultModelsDeployment
+func (a *DeploymentsApiService) ApiProjectsIdDeploymentsGetExecute(r ApiApiProjectsIdDeploymentsGetRequest) (*ModelsPaginatedResultModelsDeployment, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *ControllersPaginatedDeployments
+		localVarReturnValue  *ModelsPaginatedResultModelsDeployment
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DeploymentsApiService.ApiProjectsIdDeploymentsGet")
@@ -987,6 +993,9 @@ func (a *DeploymentsApiService) ApiProjectsIdDeploymentsGetExecute(r ApiApiProje
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.expand != nil {
+		localVarQueryParams.Add("expand", parameterToString(*r.expand, ""))
+	}
 	if r.sortBy != nil {
 		localVarQueryParams.Add("sort_by", parameterToString(*r.sortBy, ""))
 	}

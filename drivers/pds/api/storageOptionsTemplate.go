@@ -55,7 +55,7 @@ func (st *StorageSettingsTemplate) GetTemplate(templateID string) (*pds.ModelsSt
 func (st *StorageSettingsTemplate) CreateTemplate(tenantID string, fg bool, fs string, name string, repl int32, secure bool) (*pds.ModelsStorageOptionsTemplate, error) {
 	stClient := st.apiClient.StorageOptionsTemplatesApi
 	log.Info("Create new storage template.")
-	createRequest := pds.ControllersCreateStorageOptionsTemplatesRequest{Fg: &fg, Fs: &fs, Name: &name, Repl: &repl, Secure: &secure}
+	createRequest := pds.ControllersCreateStorageOptionsTemplateRequest{Fg: &fg, Fs: &fs, Name: &name, Repl: &repl, Secure: &secure}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)

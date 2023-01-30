@@ -14,14 +14,14 @@ type DefaultTemplates struct {
 }
 
 // ListApplicationConfigurationTemplates func
-func (ds *DefaultTemplates) ListApplicationConfigurationTemplates() ([]pds.ModelsApplicationConfigurationTemplate, error) {
-	dsClient := ds.apiClient.DefaultTemplatesApi
+func (ds *DefaultTemplates) ListApplicationConfigurationTemplates(tenantID string) ([]pds.ModelsApplicationConfigurationTemplate, error) {
+	dsClient := ds.apiClient.ApplicationConfigurationTemplatesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err
 	}
-	dsModels, res, err := dsClient.ApiDefaultTemplatesApplicationConfigurationGet(ctx).Execute()
+	dsModels, res, err := dsClient.ApiTenantsIdApplicationConfigurationTemplatesGet(ctx, tenantID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDataServicesGet``: %v\n", err)
@@ -31,14 +31,14 @@ func (ds *DefaultTemplates) ListApplicationConfigurationTemplates() ([]pds.Model
 }
 
 // ListResourceSettingTemplates func
-func (ds *DefaultTemplates) ListResourceSettingTemplates() ([]pds.ModelsResourceSettingsTemplate, error) {
-	dsClient := ds.apiClient.DefaultTemplatesApi
+func (ds *DefaultTemplates) ListResourceSettingTemplates(tenantID string) ([]pds.ModelsResourceSettingsTemplate, error) {
+	dsClient := ds.apiClient.ResourceSettingsTemplatesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err
 	}
-	dsModels, res, err := dsClient.ApiDefaultTemplatesResourceSettingsGet(ctx).Execute()
+	dsModels, res, err := dsClient.ApiTenantsIdResourceSettingsTemplatesGet(ctx, tenantID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDataServicesGet``: %v\n", err)
@@ -48,14 +48,14 @@ func (ds *DefaultTemplates) ListResourceSettingTemplates() ([]pds.ModelsResource
 }
 
 // ListStorageOptionsTemplates func
-func (ds *DefaultTemplates) ListStorageOptionsTemplates() ([]pds.ModelsStorageOptionsTemplate, error) {
-	dsClient := ds.apiClient.DefaultTemplatesApi
+func (ds *DefaultTemplates) ListStorageOptionsTemplates(tenantID string) ([]pds.ModelsStorageOptionsTemplate, error) {
+	dsClient := ds.apiClient.StorageOptionsTemplatesApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err
 	}
-	dsModels, res, err := dsClient.ApiDefaultTemplatesStorageOptionsGet(ctx).Execute()
+	dsModels, res, err := dsClient.ApiTenantsIdStorageOptionsTemplatesGet(ctx, tenantID).Execute()
 
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiDataServicesGet``: %v\n", err)

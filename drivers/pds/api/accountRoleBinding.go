@@ -75,8 +75,7 @@ func (accountRoleBinding *AccountRoleBinding) AddUser(accountID string, email st
 	if isAdmin {
 		rBinding = "account-admin"
 	}
-	invitationRequest := pds.ControllersInvitationRequest{Email: &email, RoleName: &rBinding}
-	log.Info("Get list of Accounts.")
+	invitationRequest := pds.RequestsInvitationAccountRequest{Email: &email, RoleName: &rBinding}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
@@ -89,4 +88,21 @@ func (accountRoleBinding *AccountRoleBinding) AddUser(accountID string, email st
 		return err
 	}
 	return nil
+}
+
+// RemoveUser function delete the user from given account.
+func (accountRoleBinding *AccountRoleBinding) RemoveUser(userID string) (*status.Response, error) {
+	client := accountRoleBinding.apiClient.AccountRoleBindingsApi
+	ctx, err := pdsutils.GetContext()
+	if err != nil {
+		log.Errorf("Error in getting context for api call: %v\n", err)
+		return nil, err
+	}
+	res, err := client.ApiAccountsIdRoleBindingsDelete(ctx, userID).Execute()
+	if err != nil && res.StatusCode != status.StatusOK {
+		log.Errorf("Error when calling `ApiBackupTargetsIdDelete``: %v\n", err)
+		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, err
+	}
+	return res, nil
 }

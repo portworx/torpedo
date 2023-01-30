@@ -59,6 +59,8 @@ type APIClient struct {
 
 	AccountsMAASDetailsApi *AccountsMAASDetailsApiService
 
+	AccountsRoleInvitationsApi *AccountsRoleInvitationsApiService
+
 	ApplicationConfigurationTemplatesApi *ApplicationConfigurationTemplatesApiService
 
 	AuthenticationApi *AuthenticationApiService
@@ -76,8 +78,6 @@ type APIClient struct {
 	BackupsApi *BackupsApiService
 
 	DataServicesApi *DataServicesApiService
-
-	DefaultTemplatesApi *DefaultTemplatesApiService
 
 	DeploymentTargetsApi *DeploymentTargetsApiService
 
@@ -99,6 +99,8 @@ type APIClient struct {
 
 	RolesApi *RolesApiService
 
+	SampleTemplatesApi *SampleTemplatesApiService
+
 	ServiceAccountsApi *ServiceAccountsApiService
 
 	StorageOptionsTemplatesApi *StorageOptionsTemplatesApiService
@@ -110,6 +112,8 @@ type APIClient struct {
 	TenantRoleBindingsApi *TenantRoleBindingsApiService
 
 	TenantsApi *TenantsApiService
+
+	UserAPIKeyApi *UserAPIKeyApiService
 
 	UsersApi *UsersApiService
 
@@ -139,6 +143,7 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	c.AccountsApi = (*AccountsApiService)(&c.common)
 	c.AccountsDNSApi = (*AccountsDNSApiService)(&c.common)
 	c.AccountsMAASDetailsApi = (*AccountsMAASDetailsApiService)(&c.common)
+	c.AccountsRoleInvitationsApi = (*AccountsRoleInvitationsApiService)(&c.common)
 	c.ApplicationConfigurationTemplatesApi = (*ApplicationConfigurationTemplatesApiService)(&c.common)
 	c.AuthenticationApi = (*AuthenticationApiService)(&c.common)
 	c.AuthorizerApi = (*AuthorizerApiService)(&c.common)
@@ -148,7 +153,6 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	c.BackupTargetsApi = (*BackupTargetsApiService)(&c.common)
 	c.BackupsApi = (*BackupsApiService)(&c.common)
 	c.DataServicesApi = (*DataServicesApiService)(&c.common)
-	c.DefaultTemplatesApi = (*DefaultTemplatesApiService)(&c.common)
 	c.DeploymentTargetsApi = (*DeploymentTargetsApiService)(&c.common)
 	c.DeploymentsApi = (*DeploymentsApiService)(&c.common)
 	c.GlobalRoleBindingsApi = (*GlobalRoleBindingsApiService)(&c.common)
@@ -159,12 +163,14 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	c.ProjectsApi = (*ProjectsApiService)(&c.common)
 	c.ResourceSettingsTemplatesApi = (*ResourceSettingsTemplatesApiService)(&c.common)
 	c.RolesApi = (*RolesApiService)(&c.common)
+	c.SampleTemplatesApi = (*SampleTemplatesApiService)(&c.common)
 	c.ServiceAccountsApi = (*ServiceAccountsApiService)(&c.common)
 	c.StorageOptionsTemplatesApi = (*StorageOptionsTemplatesApiService)(&c.common)
 	c.TasksApi = (*TasksApiService)(&c.common)
 	c.TeamsApi = (*TeamsApiService)(&c.common)
 	c.TenantRoleBindingsApi = (*TenantRoleBindingsApiService)(&c.common)
 	c.TenantsApi = (*TenantsApiService)(&c.common)
+	c.UserAPIKeyApi = (*UserAPIKeyApiService)(&c.common)
 	c.UsersApi = (*UsersApiService)(&c.common)
 	c.VersionsApi = (*VersionsApiService)(&c.common)
 	c.WhoAmIApi = (*WhoAmIApiService)(&c.common)

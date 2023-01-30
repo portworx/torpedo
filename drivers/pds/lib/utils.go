@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -24,7 +23,6 @@ import (
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -46,6 +44,12 @@ type Parameter struct {
 		Namespace       string `json:"Namespace"`
 		PxNamespace     string `json:"PxNamespace"`
 	} `json:"InfraToTest"`
+	Users struct {
+		AdminUsername    string `json:"AdminUsername"`
+		AdminPassord     string `json:"AdminPassord"`
+		NonAdminUsername string `json:"NonAdminUsername"`
+		NonAdminPassword string `json:"NonAdminPassword"`
+	} `json:"Users"`
 }
 
 // ResourceSettingTemplate struct used to store template values
@@ -156,7 +160,7 @@ var (
 	k8sCore = core.Instance()
 	k8sApps = apps.Instance()
 
-	components                            *pdsapi.Components
+	Components                            *pdsapi.Components
 	deployment                            *pds.ModelsDeployment
 	apiClient                             *pds.APIClient
 	ns                                    *corev1.Namespace
@@ -212,30 +216,30 @@ func GetAndExpectBoolEnvVar(varName string) (bool, error) {
 }
 
 // SetupPDSTest returns few params required to run the test
-func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, string, string, string, string, error) {
+func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, string, string, string, string, string, error) {
 	var err error
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", "", "", "", err
 		//log.FailOnError(err, "An Error Occured while parsing the URL")
 	}
 	apiConf.Host = endpointURL.Host
 	apiConf.Scheme = endpointURL.Scheme
 
 	apiClient = pds.NewAPIClient(apiConf)
-	components = pdsapi.NewComponents(apiClient)
-	controlplane := pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
+	Components = pdsapi.NewComponents(apiClient)
+	controlplane := pdscontrolplane.NewControlPlane(ControlPlaneURL, Components)
 
 	if strings.EqualFold(ClusterType, "onprem") || strings.EqualFold(ClusterType, "ocp") {
 		serviceType = "ClusterIP"
 	}
 	log.InfoD("Deployment service type %s", serviceType)
 
-	acc := components.Account
+	acc := Components.Account
 	accounts, err := acc.GetAccountsList()
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", "", "", "", err
 	}
 
 	isAccountAvailable = false
@@ -250,18 +254,18 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 		log.Fatalf("Account %v is not available", AccountName)
 	}
 	log.InfoD("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
-	tnts := components.Tenant
+	tnts := Components.Tenant
 	tenants, _ := tnts.GetTenantsList(accountID)
 	tenantID = tenants[0].GetId()
 	tenantName := tenants[0].GetName()
 	log.InfoD("Tenant Details- Name: %s, UUID: %s ", tenantName, tenantID)
 	dnsZone, err := controlplane.GetDNSZone(tenantID)
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", "", "", "", err
 		//log.FailOnError(err, "Error while getting DNS Zone")
 	}
 	log.InfoD("DNSZone: %s, tenantName: %s, accountName: %s", dnsZone, tenantName, AccountName)
-	projcts := components.Project
+	projcts := Components.Project
 	projects, _ := projcts.GetprojectsList(tenantID)
 	projectID = projects[0].GetId()
 	projectName := projects[0].GetName()
@@ -269,7 +273,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 
 	ns, err = k8sCore.GetNamespace("kube-system")
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", "", "", "", err
 		//log.FailOnError(err, "Error while getting k8s namespace")
 	}
 	clusterID := string(ns.GetObjectMeta().GetUID())
@@ -280,9 +284,9 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	}
 
 	log.InfoD("Get the Target cluster details")
-	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
+	targetClusters, err := Components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", "", "", "", err
 		//log.FailOnError(err, "Error while listing deployments")
 	}
 	if targetClusters == nil {
@@ -301,14 +305,14 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	if !istargetclusterAvailable {
 		log.Fatalf("Target cluster is not available for the account/tenant")
 	}
-	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
+	return accountID, tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
 }
 
 // ValidateNamespaces validates the namespace is available for pds
 func ValidateNamespaces(deploymentTargetID string, ns string, status string) error {
 	isavailable = false
 	waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
-		pdsNamespaces, err := components.Namespace.ListNamespaces(deploymentTargetID)
+		pdsNamespaces, err := Components.Namespace.ListNamespaces(deploymentTargetID)
 		if err != nil {
 			return false, err
 		}
@@ -442,31 +446,30 @@ func GetPods(namespace string) (*corev1.PodList, error) {
 	return podList, err
 }
 
-// ValidatePods returns err if pods are not up
-func ValidatePods(namespace string, podName string) error {
+// DeleteDeploymentPods deletes the given pods
+func DeleteDeploymentPods(podList *corev1.PodList) error {
+	var pods, newPods []corev1.Pod
+	k8sOps := k8sCore
 
-	var newPods []corev1.Pod
-	newPodList, err := GetPods(namespace)
+	pods = append(pods, podList.Items...)
+	err := k8sOps.DeletePods(pods, true)
 	if err != nil {
 		return err
 	}
 
-	if podName != "" {
-		for _, pod := range newPodList.Items {
-			if strings.Contains(pod.Name, podName) {
-				log.Infof("%v", pod.Name)
-				newPods = append(newPods, pod)
-			}
-		}
-	} else {
-		//reinitializing the pods
-		newPods = append(newPods, newPodList.Items...)
+	//get the newly created pods
+	time.Sleep(10 * time.Second)
+	newPodList, err := GetPods("pds-system")
+	if err != nil {
+		return err
 	}
+	//reinitializing the pods
+	newPods = append(newPods, newPodList.Items...)
 
-	//validate deployment pods are up and running
+	//validate deployment pods are up and running after deletion
 	for _, pod := range newPods {
 		log.Infof("pds system pod name %v", pod.Name)
-		err = k8sCore.ValidatePod(&pod, timeOut, timeInterval)
+		err = k8sOps.ValidatePod(&pod, timeOut, timeInterval)
 		if err != nil {
 			return err
 		}
@@ -474,19 +477,10 @@ func ValidatePods(namespace string, podName string) error {
 	return nil
 }
 
-// DeleteDeploymentPods deletes the given pods
-func DeletePods(podList []corev1.Pod) error {
-	err := k8sCore.DeletePods(podList, true)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // GetStorageTemplate return the storage template id
 func GetStorageTemplate(tenantID string) (string, error) {
 	log.InfoD("Get the storage template")
-	storageTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
+	storageTemplates, err := Components.StorageSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
 		return "", err
 	}
@@ -511,7 +505,7 @@ func GetStorageTemplate(tenantID string) (string, error) {
 // GetResourceTemplate get the resource template id
 func GetResourceTemplate(tenantID string, supportedDataService string) (string, error) {
 	log.Infof("Get the resource template for each data services")
-	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
+	resourceTemplates, err := Components.ResourceSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
 		return "", err
 	}
@@ -520,7 +514,7 @@ func GetResourceTemplate(tenantID string, supportedDataService string) (string, 
 	for i := 0; i < len(resourceTemplates); i++ {
 		if resourceTemplates[i].GetName() == resourceTemplateName {
 			isTemplateavailable = true
-			dataService, err := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
+			dataService, err := Components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
 			if err != nil {
 				return "", err
 			}
@@ -547,7 +541,7 @@ func GetResourceTemplate(tenantID string, supportedDataService string) (string, 
 // GetAllDataserviceResourceTemplate get the resource template id's of supported dataservices and forms supported dataserviceNameIdMap
 func GetAllDataserviceResourceTemplate(tenantID string, supportedDataServices []string) (map[string]string, map[string]string, error) {
 	log.Infof("Get the resource template for each data services")
-	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
+	resourceTemplates, err := Components.ResourceSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -556,7 +550,7 @@ func GetAllDataserviceResourceTemplate(tenantID string, supportedDataServices []
 	for i := 0; i < len(resourceTemplates); i++ {
 		if resourceTemplates[i].GetName() == resourceTemplateName {
 			isTemplateavailable = true
-			dataService, err := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
+			dataService, err := Components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
 			if err != nil {
 				return nil, nil, err
 			}
@@ -586,7 +580,7 @@ func GetAllDataserviceResourceTemplate(tenantID string, supportedDataServices []
 
 // GetAppConfTemplate returns the app config template id
 func GetAppConfTemplate(tenantID string, supportedDataService string) (string, error) {
-	appConfigs, err := components.AppConfigTemplate.ListTemplates(tenantID)
+	appConfigs, err := Components.AppConfigTemplate.ListTemplates(tenantID)
 	if err != nil {
 		return "", err
 	}
@@ -611,7 +605,7 @@ func GetAppConfTemplate(tenantID string, supportedDataService string) (string, e
 
 // GetAllDataServiceAppConfTemplate returns the supported app config templates
 func GetAllDataServiceAppConfTemplate(tenantID string, dataServiceNameIDMap map[string]string) (map[string]string, error) {
-	appConfigs, err := components.AppConfigTemplate.ListTemplates(tenantID)
+	appConfigs, err := Components.AppConfigTemplate.ListTemplates(tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -639,7 +633,7 @@ func GetnameSpaceID(namespace string, deploymentTargetID string) (string, error)
 	var namespaceID string
 
 	err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
-		namespaces, err := components.Namespace.ListNamespaces(deploymentTargetID)
+		namespaces, err := Components.Namespace.ListNamespaces(deploymentTargetID)
 		for i := 0; i < len(namespaces); i++ {
 			if namespaces[i].GetName() == namespace {
 				if namespaces[i].GetStatus() == "available" {
@@ -664,7 +658,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
 
-	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
+	versions, err = Components.Version.ListDataServiceVersions(dataServiceID)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -672,7 +666,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	isBuildAvailable = false
 	for i := 0; i < len(versions); i++ {
 		if (*versions[i].Enabled) && (*versions[i].Name == dsVersion) {
-			images, _ = components.Image.ListImages(versions[i].GetId())
+			images, _ = Components.Image.ListImages(versions[i].GetId())
 			for j := 0; j < len(images); j++ {
 				if *images[j].Build == dsBuild {
 					versionID = versions[i].GetId()
@@ -697,13 +691,13 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
 
-	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
+	versions, err = Components.Version.ListDataServiceVersions(dataServiceID)
 	if err != nil {
 		return nil, nil, err
 	}
 	for i := 0; i < len(versions); i++ {
 		if *versions[i].Enabled {
-			images, _ = components.Image.ListImages(versions[i].GetId())
+			images, _ = Components.Image.ListImages(versions[i].GetId())
 			for j := 0; j < len(images); j++ {
 				dataServiceIDImagesMap[versions[i].GetId()] = append(dataServiceIDImagesMap[versions[i].GetId()], images[j].GetId())
 				dataServiceVersionBuildMap[versions[i].GetName()] = append(dataServiceVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
@@ -718,30 +712,6 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 		log.Infof("DS Verion id - %v,DS Image id - %v", key, dataServiceIDImagesMap[key])
 	}
 	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
-}
-
-func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus string, maxtimeInterval time.Duration, timeout time.Duration) error {
-	//validate the deployments in pds
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
-		log.Infof("Health status -  %v", status.GetHealth())
-		if err != nil {
-			log.Errorf("Error occured while getting deployment status %v", err)
-			return false, nil
-		}
-		if res.StatusCode != state.StatusOK {
-			log.Errorf("Full HTTP response: %v\n", res)
-			err = fmt.Errorf("unexpected status code")
-			return false, err
-		}
-		if !strings.Contains(status.GetHealth(), healthStatus) {
-			err = fmt.Errorf("status %v", status.GetHealth())
-			return false, err
-		}
-		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
-		return true, nil
-	})
-	return err
 }
 
 // ValidateDataServiceDeployment checks if deployment is healthy and running
@@ -771,7 +741,7 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 
 	//validate the deployments in pds
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
+		status, res, err := Components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		log.Infof("Health status -  %v", status.GetHealth())
 		if err != nil {
 			log.Errorf("Error occured while getting deployment status %v", err)
@@ -805,7 +775,7 @@ func DeleteK8sDeployments(deployment string, namespace string) error {
 
 // DeleteDeployment deletes the given deployment
 func DeleteDeployment(deploymentID string) (*state.Response, error) {
-	resp, err := components.DataServiceDeployment.DeleteDeployment(deploymentID)
+	resp, err := Components.DataServiceDeployment.DeleteDeployment(deploymentID)
 	if err != nil {
 		log.Errorf("An Error Occured while deleting deployment %v", err)
 		return nil, err
@@ -818,7 +788,7 @@ func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 	var isfound bool
 	var dnsEndpoint string
 
-	dataServiceDeployment := components.DataServiceDeployment
+	dataServiceDeployment := Components.DataServiceDeployment
 	deploymentConnectionDetails, clusterDetails, err := dataServiceDeployment.GetConnectionDetails(deploymentID)
 	deploymentConnectionDetails.MarshalJSON()
 	if err != nil {
@@ -845,7 +815,7 @@ func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 
 // GetDeploymentCredentials returns the password to connect to the dataservice
 func GetDeploymentCredentials(deploymentID string) (string, error) {
-	dataServiceDeployment := components.DataServiceDeployment
+	dataServiceDeployment := Components.DataServiceDeployment
 	dataServicePassword, err := dataServiceDeployment.GetDeploymentCredentials(deploymentID)
 	if err != nil {
 		log.Errorf("An Error Occured %v", err)
@@ -1058,127 +1028,6 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	log.InfoD("Will delete TPCC Worklaod Deployment now.....")
 	DeleteK8sDeployments(deployment.Name, namespace)
 	return flag
-}
-
-// Creates a temporary non PDS namespace of 6 letters length randomly chosen
-func CreateTempNS(length int32) (string, error) {
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, length)
-	rand.Read(b)
-	namespace := fmt.Sprintf("%x", b)[:length]
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
-		},
-	}
-	ns, err = k8sCore.CreateNamespace(ns)
-	if err != nil {
-		log.Errorf("Error while creating namespace %v", err)
-		return "", err
-	}
-	return namespace, nil
-}
-
-// Create a Persistent Vol of 5G manual Storage Class
-func CreateIndependentPV(name string) (*corev1.PersistentVolume, error) {
-	pv := &corev1.PersistentVolume{
-
-		TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-
-		Spec: corev1.PersistentVolumeSpec{
-			StorageClassName: "manual",
-			AccessModes: []corev1.PersistentVolumeAccessMode{
-				"ReadWriteOnce",
-			},
-			Capacity: corev1.ResourceList{
-				corev1.ResourceName(corev1.ResourceStorage): resource.MustParse("5Gi"),
-			},
-			PersistentVolumeSource: corev1.PersistentVolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: "/mnt/data",
-				},
-			},
-		},
-	}
-	pv, err := k8sCore.CreatePersistentVolume(pv)
-	if err != nil {
-		log.Errorf("PV Could not be created. Exiting")
-		return pv, err
-	}
-	return pv, nil
-}
-
-// Create a PV Claim of 5G Storage
-func CreateIndependentPVC(namespace string, name string) (*corev1.PersistentVolumeClaim, error) {
-	ns := namespace
-	storageClass := "manual"
-	createOpts := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: ns,
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-			StorageClassName: &storageClass,
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("5Gi"),
-				},
-			},
-		},
-	}
-	pvc, err := k8sCore.CreatePersistentVolumeClaim(createOpts)
-	if err != nil {
-		log.Errorf("PVC Could not be created. Exiting. %v", err)
-		return pvc, err
-	}
-	return pvc, nil
-}
-
-// Create an Independant MySQL non PDS App running in a namespace
-func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcName string) (*corev1.Pod, string, error) {
-	namespace := ns
-	podSpec := &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Pod",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: namespace,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:  podName,
-					Image: appImage,
-					Env:   make([]corev1.EnvVar, 1),
-				},
-			},
-			RestartPolicy: corev1.RestartPolicyOnFailure,
-		},
-	}
-	volumename := "app-persistent-storage"
-	var volumes = make([]corev1.Volume, 1)
-	volumes[0] = corev1.Volume{Name: volumename, VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName, ReadOnly: false}}}
-	podSpec.Spec.Volumes = volumes
-	env := []string{"MYSQL_ROOT_PASSWORD"}
-	var value []string
-	value = append(value, "password")
-	for index := range env {
-		podSpec.Spec.Containers[0].Env[index].Name = env[index]
-		podSpec.Spec.Containers[0].Env[index].Value = value[index]
-	}
-
-	pod, err := k8sCore.CreatePod(podSpec)
-	if err != nil {
-		log.Errorf("An Error Occured while creating %v", err)
-		return pod, "", err
-	}
-	return pod, podName, nil
 }
 
 // CreatecassandraWorkload generate workloads on the cassandra db
@@ -1499,7 +1348,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 
 func GetDataServiceID(ds string) string {
 	var dataServiceID string
-	dsModel, err := components.DataService.ListDataServices()
+	dsModel, err := Components.DataService.ListDataServices()
 	if err != nil {
 		log.Errorf("An Error Occured while listing dataservices %v", err)
 		return ""
@@ -1560,8 +1409,8 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 	}
 
 	log.Infof("VersionID %v ImageID %v", versionID, imageID)
-	components = pdsapi.NewComponents(apiClient)
-	deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
+	Components = pdsapi.NewComponents(apiClient)
+	deployment, err = Components.DataServiceDeployment.CreateDeployment(projectID,
 		deploymentTargetID,
 		dnsZone,
 		deploymentName,
@@ -1625,8 +1474,8 @@ func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID
 			for index := range dataServiceImageMap[version] {
 				imageID := dataServiceImageMap[version][index]
 				log.Infof("VersionID %v ImageID %v", version, imageID)
-				components = pdsapi.NewComponents(apiClient)
-				deployment, err = components.DataServiceDeployment.CreateDeployment(projectID,
+				Components = pdsapi.NewComponents(apiClient)
+				deployment, err = Components.DataServiceDeployment.CreateDeployment(projectID,
 					deploymentTargetID,
 					dnsZone,
 					deploymentName,
@@ -1660,14 +1509,14 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
 	var dsImageID string
-	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
+	versions, err = Components.Version.ListDataServiceVersions(dataServiceID)
 	if err != nil {
 		return nil, err
 	}
 	isBuildAvailable = false
 	for i := 0; i < len(versions); i++ {
 		if versions[i].GetName() == dsVersion {
-			images, _ = components.Image.ListImages(versions[i].GetId())
+			images, _ = Components.Image.ListImages(versions[i].GetId())
 			for j := 0; j < len(images); j++ {
 				if images[j].GetBuild() == dsImage {
 					dsImageID = images[j].GetId()
@@ -1682,7 +1531,7 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 		log.Fatalf("Version/Build passed is not available")
 	}
 
-	deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, dsImageID, nodeCount, resourceTemplateID, nil)
+	deployment, err = Components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, dsImageID, nodeCount, resourceTemplateID, nil)
 	if err != nil {
 		log.Errorf("An Error Occured while updating the deployment %v", err)
 		return nil, err
@@ -1699,7 +1548,7 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 
 // GetAllSupportedDataServices get the supported datasservices and returns the map
 func GetAllSupportedDataServices() map[string]string {
-	dataService, _ := components.DataService.ListDataServices()
+	dataService, _ := Components.DataService.ListDataServices()
 	for _, ds := range dataService {
 		if !*ds.ComingSoon {
 			dataServiceNameIDMap[ds.GetName()] = ds.GetId()
@@ -1715,7 +1564,7 @@ func GetAllSupportedDataServices() map[string]string {
 func UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
 
 	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
-	deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
+	deployment, err = Components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
 	if err != nil {
 		log.Errorf("An Error Occured while updating deployment %v", err)
 		return nil, err
@@ -1765,7 +1614,7 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 		}
 	}
 
-	rt, err := components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateID)
+	rt, err := Components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateID)
 	if err != nil {
 		log.Errorf("Error Occured while getting resource setting template %v", err)
 	}
@@ -1775,7 +1624,7 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	resourceTemp.Resources.Limits.CPU = *rt.CpuLimit
 	resourceTemp.Resources.Limits.Memory = *rt.MemoryLimit
 
-	st, err := components.StorageSettingsTemplate.GetTemplate(storageTemplateID)
+	st, err := Components.StorageSettingsTemplate.GetTemplate(storageTemplateID)
 	if err != nil {
 		log.Errorf("Error Occured while getting storage template %v", err)
 		return resourceTemp, storageOp, config, err
@@ -1823,7 +1672,7 @@ func ValidateAllDataServiceVolumes(deployment *pds.ModelsDeployment, dataService
 		}
 	}
 
-	rt, err := components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateIDMap[dataService])
+	rt, err := Components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateIDMap[dataService])
 	if err != nil {
 		log.Errorf("Error Occured while getting resource setting template %v", err)
 	}
@@ -1833,7 +1682,7 @@ func ValidateAllDataServiceVolumes(deployment *pds.ModelsDeployment, dataService
 	resourceTemp.Resources.Limits.CPU = *rt.CpuLimit
 	resourceTemp.Resources.Limits.Memory = *rt.MemoryLimit
 
-	st, err := components.StorageSettingsTemplate.GetTemplate(storageTemplateID)
+	st, err := Components.StorageSettingsTemplate.GetTemplate(storageTemplateID)
 	if err != nil {
 		log.Errorf("Error Occured while getting storage template %v", err)
 		return resourceTemp, storageOp, config, err

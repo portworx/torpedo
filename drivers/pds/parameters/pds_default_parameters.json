@@ -81,5 +81,11 @@
     "ClusterType": "onprem",
     "Namespace": "automation",
     "PxNamespace": "portworx"
+  },
+  "Users":{
+    "AdminUsername": "agaurav+2@purestorage.com",
+    "AdminPassord": "Password@2",
+    "NonAdminUsername": "agaurav+3@purestorage.com",
+    "NonAdminPassword": "Password@3"
   }
 }

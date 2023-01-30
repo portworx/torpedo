@@ -21,6 +21,7 @@ type ControllersStatusResponse struct {
 	ReadyReplicas *int32 `json:"readyReplicas,omitempty"`
 	Replicas *int32 `json:"replicas,omitempty"`
 	Resources []DeploymentsResourceConditions `json:"resources,omitempty"`
+	Status *string `json:"status,omitempty"`
 }
 
 // NewControllersStatusResponse instantiates a new ControllersStatusResponse object
@@ -200,6 +201,38 @@ func (o *ControllersStatusResponse) SetResources(v []DeploymentsResourceConditio
 	o.Resources = v
 }
 
+// GetStatus returns the Status field value if set, zero value otherwise.
+func (o *ControllersStatusResponse) GetStatus() string {
+	if o == nil || o.Status == nil {
+		var ret string
+		return ret
+	}
+	return *o.Status
+}
+
+// GetStatusOk returns a tuple with the Status field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ControllersStatusResponse) GetStatusOk() (*string, bool) {
+	if o == nil || o.Status == nil {
+		return nil, false
+	}
+	return o.Status, true
+}
+
+// HasStatus returns a boolean if a field has been set.
+func (o *ControllersStatusResponse) HasStatus() bool {
+	if o != nil && o.Status != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetStatus gets a reference to the given string and assigns it to the Status field.
+func (o *ControllersStatusResponse) SetStatus(v string) {
+	o.Status = &v
+}
+
 func (o ControllersStatusResponse) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Health != nil {
@@ -216,6 +249,9 @@ func (o ControllersStatusResponse) MarshalJSON() ([]byte, error) {
 	}
 	if o.Resources != nil {
 		toSerialize["resources"] = o.Resources
+	}
+	if o.Status != nil {
+		toSerialize["status"] = o.Status
 	}
 	return json.Marshal(toSerialize)
 }

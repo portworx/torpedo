@@ -852,7 +852,7 @@ github.com/pmezard/go-difflib/difflib
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/pds-api-go-client v0.0.0-20220901142946-b6ecf97f5e71
+# github.com/portworx/pds-api-go-client v0.0.0-20230112132458-c195ccb1dc84
 ## explicit; go 1.17
 github.com/portworx/pds-api-go-client/pds/v1alpha1
 # github.com/portworx/px-backup-api v1.2.2-0.20220822053657-49308ab319f1

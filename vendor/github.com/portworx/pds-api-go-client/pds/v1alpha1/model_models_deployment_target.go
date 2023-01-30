@@ -23,6 +23,7 @@ type ModelsDeploymentTarget struct {
 	// ID is auto generated on creation
 	Id *string `json:"id,omitempty"`
 	LastHealthCheck *string `json:"last_health_check,omitempty"`
+	LastOperatorHeartbeat *string `json:"last_operator_heartbeat,omitempty"`
 	Metadata *ModelsDeploymentTargetMetadata `json:"metadata,omitempty"`
 	Name *string `json:"name,omitempty"`
 	Status *string `json:"status,omitempty"`
@@ -208,6 +209,38 @@ func (o *ModelsDeploymentTarget) SetLastHealthCheck(v string) {
 	o.LastHealthCheck = &v
 }
 
+// GetLastOperatorHeartbeat returns the LastOperatorHeartbeat field value if set, zero value otherwise.
+func (o *ModelsDeploymentTarget) GetLastOperatorHeartbeat() string {
+	if o == nil || o.LastOperatorHeartbeat == nil {
+		var ret string
+		return ret
+	}
+	return *o.LastOperatorHeartbeat
+}
+
+// GetLastOperatorHeartbeatOk returns a tuple with the LastOperatorHeartbeat field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeploymentTarget) GetLastOperatorHeartbeatOk() (*string, bool) {
+	if o == nil || o.LastOperatorHeartbeat == nil {
+		return nil, false
+	}
+	return o.LastOperatorHeartbeat, true
+}
+
+// HasLastOperatorHeartbeat returns a boolean if a field has been set.
+func (o *ModelsDeploymentTarget) HasLastOperatorHeartbeat() bool {
+	if o != nil && o.LastOperatorHeartbeat != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetLastOperatorHeartbeat gets a reference to the given string and assigns it to the LastOperatorHeartbeat field.
+func (o *ModelsDeploymentTarget) SetLastOperatorHeartbeat(v string) {
+	o.LastOperatorHeartbeat = &v
+}
+
 // GetMetadata returns the Metadata field value if set, zero value otherwise.
 func (o *ModelsDeploymentTarget) GetMetadata() ModelsDeploymentTargetMetadata {
 	if o == nil || o.Metadata == nil {
@@ -384,6 +417,9 @@ func (o ModelsDeploymentTarget) MarshalJSON() ([]byte, error) {
 	}
 	if o.LastHealthCheck != nil {
 		toSerialize["last_health_check"] = o.LastHealthCheck
+	}
+	if o.LastOperatorHeartbeat != nil {
+		toSerialize["last_operator_heartbeat"] = o.LastOperatorHeartbeat
 	}
 	if o.Metadata != nil {
 		toSerialize["metadata"] = o.Metadata

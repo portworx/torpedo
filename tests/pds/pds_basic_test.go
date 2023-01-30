@@ -34,6 +34,7 @@ const (
 )
 
 var (
+	accountID                               string
 	namespace                               string
 	pxnamespace                             string
 	tenantID                                string
@@ -99,7 +100,7 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Failed to read params from json file")
 		infraParams := params.InfraToTest
 
-		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
+		accountID, tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName)
 		log.InfoD("DeploymentTargetID %v ", deploymentTargetID)
 		log.FailOnError(err, "Failed on SetupPDSTest method")
 	})

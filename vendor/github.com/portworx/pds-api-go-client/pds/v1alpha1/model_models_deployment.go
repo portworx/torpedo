@@ -28,6 +28,7 @@ type ModelsDeployment struct {
 	CreatedAt *string `json:"created_at,omitempty"`
 	// DataServiceID type of data service (models.DataService).
 	DataServiceId *string `json:"data_service_id,omitempty"`
+	DeploymentTarget *ModelsDeploymentTarget `json:"deployment_target,omitempty"`
 	// DeploymentTargetID on which target the data service is deployed (models.DeploymentTarget).
 	DeploymentTargetId *string `json:"deployment_target_id,omitempty"`
 	// DNSZone domain which this deployment should be a part of (eg pds-dns.io).
@@ -43,6 +44,7 @@ type ModelsDeployment struct {
 	LoadBalancerSourceRanges []string `json:"load_balancer_source_ranges,omitempty"`
 	// Name given by user when creating the deployment.
 	Name *string `json:"name,omitempty"`
+	Namespace *ModelsNamespace `json:"namespace,omitempty"`
 	// NamespaceID in which namespace the data service is deployed (models.Namespace).
 	NamespaceId *string `json:"namespace_id,omitempty"`
 	// NodeCount total nodes in the deployment.
@@ -270,6 +272,38 @@ func (o *ModelsDeployment) HasDataServiceId() bool {
 // SetDataServiceId gets a reference to the given string and assigns it to the DataServiceId field.
 func (o *ModelsDeployment) SetDataServiceId(v string) {
 	o.DataServiceId = &v
+}
+
+// GetDeploymentTarget returns the DeploymentTarget field value if set, zero value otherwise.
+func (o *ModelsDeployment) GetDeploymentTarget() ModelsDeploymentTarget {
+	if o == nil || o.DeploymentTarget == nil {
+		var ret ModelsDeploymentTarget
+		return ret
+	}
+	return *o.DeploymentTarget
+}
+
+// GetDeploymentTargetOk returns a tuple with the DeploymentTarget field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeployment) GetDeploymentTargetOk() (*ModelsDeploymentTarget, bool) {
+	if o == nil || o.DeploymentTarget == nil {
+		return nil, false
+	}
+	return o.DeploymentTarget, true
+}
+
+// HasDeploymentTarget returns a boolean if a field has been set.
+func (o *ModelsDeployment) HasDeploymentTarget() bool {
+	if o != nil && o.DeploymentTarget != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetDeploymentTarget gets a reference to the given ModelsDeploymentTarget and assigns it to the DeploymentTarget field.
+func (o *ModelsDeployment) SetDeploymentTarget(v ModelsDeploymentTarget) {
+	o.DeploymentTarget = &v
 }
 
 // GetDeploymentTargetId returns the DeploymentTargetId field value if set, zero value otherwise.
@@ -526,6 +560,38 @@ func (o *ModelsDeployment) HasName() bool {
 // SetName gets a reference to the given string and assigns it to the Name field.
 func (o *ModelsDeployment) SetName(v string) {
 	o.Name = &v
+}
+
+// GetNamespace returns the Namespace field value if set, zero value otherwise.
+func (o *ModelsDeployment) GetNamespace() ModelsNamespace {
+	if o == nil || o.Namespace == nil {
+		var ret ModelsNamespace
+		return ret
+	}
+	return *o.Namespace
+}
+
+// GetNamespaceOk returns a tuple with the Namespace field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeployment) GetNamespaceOk() (*ModelsNamespace, bool) {
+	if o == nil || o.Namespace == nil {
+		return nil, false
+	}
+	return o.Namespace, true
+}
+
+// HasNamespace returns a boolean if a field has been set.
+func (o *ModelsDeployment) HasNamespace() bool {
+	if o != nil && o.Namespace != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetNamespace gets a reference to the given ModelsNamespace and assigns it to the Namespace field.
+func (o *ModelsDeployment) SetNamespace(v ModelsNamespace) {
+	o.Namespace = &v
 }
 
 // GetNamespaceId returns the NamespaceId field value if set, zero value otherwise.
@@ -868,6 +934,9 @@ func (o ModelsDeployment) MarshalJSON() ([]byte, error) {
 	if o.DataServiceId != nil {
 		toSerialize["data_service_id"] = o.DataServiceId
 	}
+	if o.DeploymentTarget != nil {
+		toSerialize["deployment_target"] = o.DeploymentTarget
+	}
 	if o.DeploymentTargetId != nil {
 		toSerialize["deployment_target_id"] = o.DeploymentTargetId
 	}
@@ -891,6 +960,9 @@ func (o ModelsDeployment) MarshalJSON() ([]byte, error) {
 	}
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
+	}
+	if o.Namespace != nil {
+		toSerialize["namespace"] = o.Namespace
 	}
 	if o.NamespaceId != nil {
 		toSerialize["namespace_id"] = o.NamespaceId
