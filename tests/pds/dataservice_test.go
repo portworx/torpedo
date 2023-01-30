@@ -483,20 +483,19 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 
-		defer func() {
-			log.InfoD("Trying to Delete Independent App pod now : %s", podName)
-			err = pdslib.DeleteK8sPods(podName, ns)
-			log.FailOnError(err, "Error while deleting K8s pods")
-			log.InfoD("Trying to Delete Independent PVC now from ns : %s", ns)
-			err = k8sCore.DeletePersistentVolumeClaim("mysql-pvc", ns)
-			log.FailOnError(err, "Error while deleting Independent PVC")
-			log.InfoD("Trying to delete Independent PV now")
-			err = k8sCore.DeletePersistentVolume("mysql-pv")
-			log.FailOnError(err, "Error while deleting Independent PV")
-			log.InfoD("Trying to delete NS now: %s", ns)
-			err = pdslib.DeletePDSNamespace(ns)
-			log.FailOnError(err, "Error while deleting Independent Namespace")
-		}()
+		log.InfoD("Trying to Delete Independent App pod now : %s", podName)
+		err = pdslib.DeleteK8sPods(podName, ns)
+		log.FailOnError(err, "Error while deleting K8s pods")
+		log.InfoD("Trying to Delete Independent PVC now from ns : %s", ns)
+		err = k8sCore.DeletePersistentVolumeClaim("mysql-pvc", ns)
+		log.FailOnError(err, "Error while deleting Independent PVC")
+		log.InfoD("Trying to delete Independent PV now")
+		err = k8sCore.DeletePersistentVolume("mysql-pv")
+		log.FailOnError(err, "Error while deleting Independent PV")
+		log.InfoD("Trying to delete NS now: %s", ns)
+		err = pdslib.DeletePDSNamespace(ns)
+		log.FailOnError(err, "Error while deleting Independent Namespace")
+
 	})
 })
 
