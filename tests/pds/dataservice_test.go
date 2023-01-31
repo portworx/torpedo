@@ -1327,14 +1327,14 @@ var _ = Describe("{AddAndValidateUsersWithDifferentRoles}", func() {
 
 var _ = Describe("{AddAndValidateUserRoles}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("AddAndValidateUser", "Add users with admin or non admin priviledges and validate the same.", nil, 0)
+		StartTorpedoTest("AddAndValidateUser", "Add users with admin or non admin privileges and validate the same.", nil, 0)
 	})
 
-	It("add users with admin or non admin priviledges and validate.", func() {
+	It("add users with admin or non admin privileges and validate.", func() {
 		usersParam := params.Users
 
 		Step("Adding users having admin previledges and validating for same.", func() {
-			log.Info("Adding user with admin priviledges.")
+			log.Info("Adding user with admin privileges.")
 			username := usersParam.AdminUsername
 			password := usersParam.AdminPassord
 			log.InfoD("username - %v", username)
@@ -1344,12 +1344,12 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 			log.Info("Validating the admin role by listing users.")
 			_, err = pdslib.Components.AccountRoleBinding.ListAccountsRoleBindings(accountID)
 			if err == nil {
-				log.InfoD("User - %v is able to fetch all the users belong to this account as expected since it has the admin priviledges.", usersParam.AdminUsername)
+				log.InfoD("User - %v is able to fetch all the users belong to this account as expected since it has the admin privileges.", usersParam.AdminUsername)
 			}
 		})
 
 		Step("Adding users having non-admin previledges and validating it.", func() {
-			log.InfoD("Adding user with non admin priviledges.")
+			log.InfoD("Adding user with non admin privileges.")
 			username := usersParam.NonAdminUsername
 			password := usersParam.NonAdminPassword
 			pdslib.Components.AccountRoleBinding.AddUser(accountID, username, false)
@@ -1358,7 +1358,7 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 			log.InfoD("Validating the non-admin role by trying to list users belong to this account.")
 			_, err = pdslib.Components.AccountRoleBinding.ListAccountsRoleBindings(accountID)
 			if err != nil {
-				log.InfoD("User - %v is unable to fetch all the users belong to this account as expected since it doesn't have the admin priviledges.", usersParam.NonAdminUsername)
+				log.InfoD("User - %v is unable to fetch all the users belong to this account as expected since it doesn't have the admin privileges.", usersParam.NonAdminUsername)
 			}
 		})
 		log.InfoD("Resetting to default admin user and validating by listing users.")
@@ -1368,7 +1368,7 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 		os.Setenv("PDS_PASSWORD", defaultAdminPassword)
 		_, err := pdslib.Components.AccountRoleBinding.ListAccountsRoleBindings(accountID)
 		if err == nil {
-			log.InfoD("User - %v is unable to fetch all the users belong to this account as expected since it doesn't have the admin priviledges.", defaultAdmin)
+			log.InfoD("User - %v is unable to fetch all the users belong to this account as expected since it doesn't have the admin privileges.", defaultAdmin)
 		}
 	})
 
