@@ -6,7 +6,7 @@ pipeline {
 	}
 
 	stages {
-	    stage("Build Stork") {
+	    stage("Build Torpedo") {
             steps {
                 build(job: "CBT/torpedo-cbt-build", parameters: [string(name: "GIT_BRANCH", value: GIT_BRANCH)])
             }
