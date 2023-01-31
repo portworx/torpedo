@@ -623,7 +623,7 @@ func populateIntervals() {
 	triggerInterval[AutopilotRebalance] = make(map[int]time.Duration)
 	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
 
-	baseInterval := 10 * time.Minute
+	baseInterval := 1 * time.Minute
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
 	triggerInterval[BackupScaleMongo][9] = 2 * baseInterval
 	triggerInterval[BackupScaleMongo][8] = 3 * baseInterval
@@ -820,7 +820,7 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpPoolResize][2] = 24 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][1] = 27 * baseInterval
 
-	baseInterval = 60 * time.Minute
+	baseInterval = 1 * time.Minute
 
 	triggerInterval[AppTasksDown][10] = 1 * baseInterval
 	triggerInterval[AppTasksDown][9] = 2 * baseInterval
