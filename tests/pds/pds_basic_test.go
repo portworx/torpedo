@@ -24,6 +24,7 @@ const (
 	envDeployAllDataService = "DEPLOY_ALL_DATASERVICE"
 	postgresql              = "PostgreSQL"
 	cassandra               = "Cassandra"
+	elasticSearch           = "Elasticsearch"
 	redis                   = "Redis"
 	rabbitmq                = "RabbitMQ"
 	mongodb                 = "MongoDB"

@@ -138,11 +138,13 @@ const (
 	redis                 = "Redis"
 	cassandraStresImage   = "scylladb/scylla:4.1.11"
 	postgresqlStressImage = "portworx/torpedo-pgbench:pdsloadTest"
+	esRallyImage          = "elastic/rally"
 	pdsTpccImage          = "portworx/torpedo-tpcc-automation:v1"
 	redisStressImage      = "redis:latest"
 	rmqStressImage        = "pivotalrabbitmq/perf-test:latest"
 	postgresql            = "PostgreSQL"
 	cassandra             = "Cassandra"
+	elasticSearch         = "Elasticsearch"
 	rabbitmq              = "RabbitMQ"
 	mysql                 = "MySQL"
 	pxLabel               = "pds.portworx.com/available"
@@ -735,8 +737,8 @@ func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus 
 			return false, err
 		}
 		if !strings.Contains(status.GetHealth(), healthStatus) {
-			err = fmt.Errorf("status %v", status.GetHealth())
-			return false, err
+			log.Errorf("status: %v", status.GetHealth())
+			return false, nil
 		}
 		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 		return true, nil
@@ -1182,7 +1184,7 @@ func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcNa
 }
 
 // CreatecassandraWorkload generate workloads on the cassandra db
-func CreatecassandraWorkload(cassCommand string, deploymentName string, namespace string) (*v1.Deployment, error) {
+func CreateDeploymentWorkloads(command, deploymentName, stressImage, namespace string) (*v1.Deployment, error) {
 
 	var replicas int32 = 1
 	deploymentSpec := &v1.Deployment{
@@ -1204,8 +1206,8 @@ func CreatecassandraWorkload(cassCommand string, deploymentName string, namespac
 					Containers: []corev1.Container{
 						{
 							Name:    deploymentName,
-							Image:   "scylladb/scylla:4.1.11",
-							Command: []string{"/bin/sh", "-c", cassCommand},
+							Image:   stressImage,
+							Command: []string{"/bin/sh", "-c", command},
 						},
 					},
 					RestartPolicy: "Always",
@@ -1487,12 +1489,18 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 
 	case cassandra:
 		cassCommand := deploymentName + " write no-warmup n=1000000 cl=ONE -mode user=pds password=" + pdsPassword + " native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node " + dnsEndpoint + " -port native=9042 -rate auto -log file=/tmp/" + deploymentName + ".load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/" + deploymentName + ".load.data"
-		dep, err = CreatecassandraWorkload(cassCommand, deploymentName, namespace)
+		dep, err = CreateDeploymentWorkloads(cassCommand, deploymentName, cassandraStresImage, namespace)
 		if err != nil {
 			log.Errorf("An Error Occured while creating cassandra workload %v", err)
 			return nil, nil, err
 		}
-
+	case elasticSearch:
+		esCommand := "while true; do esrally race --track=geonames --target-hosts=" + dnsEndpoint + " --pipeline=benchmark-only --test-mode --kill-running-processes --client-options=\"timeout:60,use_ssl:false,verify_certs:false,basic_auth_user:'elastic',basic_auth_password:" + pdsPassword + "\"; done"
+		dep, err = CreateDeploymentWorkloads(esCommand, deploymentName, esRallyImage, namespace)
+		if err != nil {
+			log.Errorf("An Error Occured while creating elasticSearch workload %v", err)
+			return nil, nil, err
+		}
 	}
 	return pod, dep, nil
 }

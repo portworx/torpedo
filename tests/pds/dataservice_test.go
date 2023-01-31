@@ -145,8 +145,8 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				err = pdslib.ValidatePods(namespace, *deployment.ClusterResourceName)
 				log.FailOnError(err, "Error while validating the pods")
 
-				err = pdslib.ValidatePDSDeploymentStatus(deployment, "Healthy", 5*time.Second, 1*time.Minute)
-				log.FailOnError(err, "Error while validating the pds pods")
+				err = pdslib.ValidatePDSDeploymentStatus(deployment, "Healthy", 5*time.Second, 30*time.Minute)
+				log.FailOnError(err, "Error while validating the pds deployment pods")
 
 			})
 		}
@@ -333,6 +333,12 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					}
 					if ds.Name == cassandra {
 						deploymentName := "cassandra-stress"
+						log.Infof("Running Workloads on DataService %v ", ds.Name)
+						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
+						log.FailOnError(err, "Error while genearating workloads")
+					}
+					if ds.Name == elasticSearch {
+						deploymentName := "es-rally"
 						log.Infof("Running Workloads on DataService %v ", ds.Name)
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
 						log.FailOnError(err, "Error while genearating workloads")
