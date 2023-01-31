@@ -5940,7 +5940,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 	bkpNamespaces = make([]string, 0)
 	var namespaceMapping map[string]string
 	namespaceMapping = make(map[string]string)
-	intervalName := fmt.Sprintf("%s-%s", "interval", time.Now().Unix())
+	intervalName := fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteAllBackupObjects", "Create the backup Objects and Delete", nil, 0)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the AppParameters or not ")
