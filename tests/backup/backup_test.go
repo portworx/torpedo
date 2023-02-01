@@ -2842,14 +2842,12 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 	It("Validate shared backups are deleted from owner of backup ", func() {
 		providers := getProviders()
 		buckets := getBucketName()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(contexts)
 		})
 		Step("Create Users", func() {
-			err = backup.AddUser(userName, firstName, lastName, email, password)
+			err := backup.AddUser(userName, firstName, lastName, email, password)
 			dash.VerifyFatal(err, nil, "Verifying user creation")
 
 		})
@@ -2871,6 +2869,8 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		})
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			CreateSourceAndDestClusters(orgID, "", "", ctx)
 			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster status")
@@ -2904,6 +2904,8 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		Step("Share backup with user", func() {
 			log.InfoD("Share backups with user")
 			// Share backups with the user
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backup := range backupNames {
 				err = ShareBackup(backup, nil, []string{userName}, FullAccess, ctx)
 				log.FailOnError(err, "Failed to share backup %s", backup)
