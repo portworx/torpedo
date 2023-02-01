@@ -902,6 +902,11 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 					currentLastMsg = expandedPool.LastOperation.Msg
 					return nil, true, fmt.Errorf("wait for pool rebalance to complete")
 				}
+
+				if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") {
+					return nil, false, nil
+				}
+
 				return nil, true, fmt.Errorf("waiting for pool status to update")
 			}
 		}
@@ -1410,6 +1415,34 @@ func addCloudDrive(stNode node.Node, poolID int32) error {
 	deviceSpec := driveSpecs[0]
 	deviceSpecParams := strings.Split(deviceSpec, ",")
 	var specSize uint64
+	var driveSize string
+
+	if poolID != -1 {
+		systemOpts := node.SystemctlOpts{
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: defaultRetryInterval,
+			},
+			Action: "start",
+		}
+		drivesMap, err := Inst().N.GetBlockDrives(stNode, systemOpts)
+		log.FailOnError(err, "error getting block drives from node %s", stNode.Name)
+
+	outer:
+		for _, v := range drivesMap {
+			labels := v.Labels
+			for _, pID := range labels {
+				if pID == fmt.Sprintf("%d", poolID) {
+					driveSize = v.Size
+					i := strings.Index(driveSize, "G")
+					driveSize = driveSize[:i]
+					break outer
+				}
+			}
+		}
+	}
+
+	paramsArr := make([]string, 0)
 	for _, param := range deviceSpecParams {
 		if strings.Contains(param, "size") {
 			val := strings.Split(param, "=")[1]
@@ -1417,7 +1450,15 @@ func addCloudDrive(stNode node.Node, poolID int32) error {
 			if err != nil {
 				return fmt.Errorf("error converting size to uint64, err: %v", err)
 			}
+			log.FailOnError(err, "Error converting size to uint64")
+			paramsArr = append(paramsArr, fmt.Sprintf("size=%s,", driveSize))
+		} else {
+			paramsArr = append(paramsArr, param)
 		}
+	}
+
+	if driveSize != "" {
+		deviceSpec = strings.Join(paramsArr, ",")
 	}
 
 	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})

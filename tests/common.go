@@ -743,6 +743,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
 			if err != nil {
+				PrintDescribeContext(ctx)
 				processError(err, errChan...)
 			}
 		})
@@ -768,6 +769,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				if err != nil {
+					PrintDescribeContext(ctx)
 					processError(err, errChan...)
 				}
 			})
@@ -4838,6 +4840,9 @@ func ValidatePoolRebalance() error {
 							currentLastMsg = expandedPool.LastOperation.Msg
 							return nil, true, fmt.Errorf("wait for pool rebalance to complete")
 						}
+					}
+					if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") {
+						return nil, false, nil
 					}
 				}
 			}
