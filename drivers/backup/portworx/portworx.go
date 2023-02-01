@@ -47,8 +47,6 @@ const (
 	defaultTimeout        = 5 * time.Minute
 )
 
-var NonAdminUser string
-
 type portworx struct {
 	clusterManager         api.ClusterClient
 	backupLocationManager  api.BackupLocationClient
