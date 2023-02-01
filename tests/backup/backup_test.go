@@ -6598,7 +6598,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				ctx, err := backup.GetNonAdminCtx(user, "Password1")
 				log.FailOnError(err, "Fetching %s ctx", user)
 				CreateSourceAndDestClusters(orgID, "", "", ctx)
-				time.Sleep(time.Minute * 1)
+				time.Sleep(time.Minute * 2)
 				clusterStatus, clusterUid = Inst().Backup.RegisterBackupClusterNonAdminUser(orgID, SourceClusterName, "", ctx)
 				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster status")
 			})
