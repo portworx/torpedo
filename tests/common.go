@@ -259,7 +259,6 @@ const (
 )
 
 var pxRuntimeOpts string
-var NonAdminUserInFocus string
 
 const (
 	taskNamePrefix = "backupcreaterestore"
@@ -2888,15 +2887,10 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 					},
 				},
 			}
-			var ctx context1.Context
-			var err error
-			if NonAdminUserInFocus == "" {
-				ctx, err = backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
-			} else {
-				ctx, err = backup.GetNonAdminCtx(NonAdminUserInFocus, "Password1")
-				log.FailOnError(err, fmt.Sprintf("Failed to fetch ctx for custom user: [%v]", err))
-			}
+
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+
 			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
 			if err != nil && strings.Contains(err.Error(), "already exists") {
 				return
@@ -2943,6 +2937,81 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 	})
 }
 
+// CreateCloudCredential creates cloud credetials
+func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string, ctx context1.Context) {
+	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
+		log.Infof("Create credential name %s for org %s provider %s", name, orgID, provider)
+		backupDriver := Inst().Backup
+		switch provider {
+		case drivers.ProviderAws:
+			log.Infof("Create creds for aws")
+			id := os.Getenv("AWS_ACCESS_KEY_ID")
+			expect(id).NotTo(equal(""),
+				"AWS_ACCESS_KEY_ID Environment variable should not be empty")
+
+			secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
+			expect(secret).NotTo(equal(""),
+				"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+
+			credCreateRequest := &api.CloudCredentialCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					Uid:   uid,
+					OrgId: orgID,
+				},
+				CloudCredential: &api.CloudCredentialInfo{
+					Type: api.CloudCredentialInfo_AWS,
+					Config: &api.CloudCredentialInfo_AwsConfig{
+						AwsConfig: &api.AWSConfig{
+							AccessKey: id,
+							SecretKey: secret,
+						},
+					},
+				},
+			}
+
+			_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
+			if err != nil && strings.Contains(err.Error(), "already exists") {
+				return
+			}
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
+		// TODO: validate CreateCloudCredentialResponse also
+		case drivers.ProviderAzure:
+			log.Infof("Create creds for azure")
+			tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
+			credCreateRequest := &api.CloudCredentialCreateRequest{
+				CreateMetadata: &api.CreateMetadata{
+					Name:  name,
+					Uid:   uid,
+					OrgId: orgID,
+				},
+				CloudCredential: &api.CloudCredentialInfo{
+					Type: api.CloudCredentialInfo_Azure,
+					Config: &api.CloudCredentialInfo_AzureConfig{
+						AzureConfig: &api.AzureConfig{
+							TenantId:       tenantID,
+							ClientId:       clientID,
+							ClientSecret:   clientSecret,
+							AccountName:    accountName,
+							AccountKey:     accountKey,
+							SubscriptionId: subscriptionID,
+						},
+					},
+				},
+			}
+
+			_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
+			if err != nil && strings.Contains(err.Error(), "already exists") {
+				return
+			}
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
+			// TODO: validate CreateCloudCredentialResponse also
+		}
+	})
+}
+
 // CreateS3BackupLocation creates backuplocation for S3
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
 	time.Sleep(60 * time.Second)
@@ -2971,18 +3040,48 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			},
 		},
 	}
-	var ctx context1.Context
-	var err error
-	if NonAdminUserInFocus == "" {
-		ctx, err = backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
-	} else {
-		ctx, err = backup.GetNonAdminCtx(NonAdminUserInFocus, "Password1")
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch ctx for custom user: [%v]", err))
-	}
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	expect(err).NotTo(haveOccurred(),
+	fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+			
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+// CreateS3BackupLocation creates backuplocation for S3
+func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+	time.Sleep(60 * time.Second)
+	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+				},
+			},
+		},
+	}
+
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location: %v", err)
 	}
