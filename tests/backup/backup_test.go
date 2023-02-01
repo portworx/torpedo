@@ -5046,7 +5046,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 		for _, backupName := range backupNames {
 			backupUID := getBackupUID(backupName, orgID)
 			_, err := DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, "Deleting backup")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - %s", backupName))
 		}
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
