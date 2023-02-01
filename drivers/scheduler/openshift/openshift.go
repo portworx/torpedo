@@ -24,6 +24,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/netutil"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -35,6 +36,7 @@ const (
 	SystemdSchedServiceName = "atomic-openshift-node"
 	// OpenshiftMirror is the mirror we use do download ocp client
 	OpenshiftMirror             = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
+	mdFileName                  = "changelog.md"
 	defaultCmdTimeout           = 5 * time.Minute
 	driverUpTimeout             = 10 * time.Minute
 	defaultCmdRetry             = 15 * time.Second
@@ -330,13 +332,66 @@ spec:
 	return err
 }
 
+// getImageSha get Imgae sha
+func getImageSha(ocpVersion string) (string, error) {
+	downloadURL := fmt.Sprintf("%s/%s/%s", OpenshiftMirror,
+		ocpVersion, mdFileName)
+	request := netutil.HttpRequest{
+		Method:   "GET",
+		Url:      downloadURL,
+		Content:  "application/json",
+		Body:     nil,
+		Insecure: true,
+	}
+	log.Infof("URL %s", downloadURL)
+	content, err := netutil.DoRequest(request)
+	if err != nil {
+		log.Errorf("Failed to get Get content from  %s, error %v", downloadURL, err)
+		return "", err
+	}
+	//Convert the body to type string
+	contentInString := string(content)
+	parts := strings.Split(contentInString, "\n")
+	for _, a := range parts {
+		if strings.Contains(a, "Image Digest:") {
+			return strings.Split(a, "`")[1], nil
+		}
+	}
+	return "", fmt.Errorf("Failed to find Image sha: in  %s", downloadURL)
+}
+
 func startUpgrade(upgradeVersion string) error {
 	var output []byte
 	var err error
-
+	var shaName string
 	args := []string{"adm", "upgrade", fmt.Sprintf("--to=%s", upgradeVersion)}
 	t := func() (interface{}, bool, error) {
 		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
+			// If OC upgrade failed for reasons like not recommended upgrade or path does not exist.
+			forceUpgrade := "specify --to-image"
+			notRecommended := "is not one of the recommended updates, but is available"
+			if strings.Contains(string(output), notRecommended) {
+				args = []string{"adm", "upgrade", fmt.Sprintf("--to=%s", upgradeVersion), "--allow-not-recommended"}
+				log.Infof("Retrying with not recommended options")
+				if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
+					return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", string(output), err)
+				}
+				log.Infof("Upgrded successful with notRecommended")
+			} else if strings.Contains(string(output), forceUpgrade) {
+				log.Infof("Upgrade with force call ")
+				if shaName, err = getImageSha(upgradeVersion); err != nil {
+					return "", false, err
+				}
+				imagePath := fmt.Sprintf("--to-image=quay.io/openshift-release-dev/ocp-release@%s", shaName)
+				log.Infof("Full command: %s", imagePath)
+				args = []string{"adm", "upgrade", imagePath, "--force", "--allow-explicit-upgrade", "--allow-upgrade-with-warnings"}
+				log.Infof("Retrying with force upgrade options")
+				if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
+					return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", string(output), err)
+				}
+			} else {
+				log.Infof("Upgrade not possible for unkown reason")
+			}
 			return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", string(output), err)
 		}
 		return output, false, nil
