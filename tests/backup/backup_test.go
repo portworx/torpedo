@@ -563,10 +563,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 
-		log.Infof("Deleting registered clusters for admin context")
-		DeleteCluster(SourceClusterName, orgID, ctx)
-		DeleteCluster(destinationClusterName, orgID, ctx)
-
 		backupDriver := Inst().Backup
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
