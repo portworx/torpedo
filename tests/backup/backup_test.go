@@ -6597,8 +6597,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				log.FailOnError(err, "Fetching %s ctx", user)
 				CreateSourceAndDestClusters(orgID, "", "", ctx)
 				time.Sleep(time.Minute * 1)
-				portworx.NonAdminUser = user
-				clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+				clusterStatus, clusterUid = Inst().Backup.RegisterBackupClusterNonAdminUser(orgID, SourceClusterName, "", ctx)
 				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster status")
 			})
 			Step(fmt.Sprintf("Taking backup of applications as %s", user), func() {
