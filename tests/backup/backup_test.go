@@ -521,7 +521,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Getting context")
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, "Verifying backup creation")
@@ -568,19 +568,12 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		DeleteCluster(destinationClusterName, orgID, ctx)
 
 		backupDriver := Inst().Backup
-		for _, namespace := range bkpNamespaces {
-			backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			DeleteBackup(backupName, backupUID, orgID, ctx)
-		}
-		for _, namespace := range bkpNamespaces {
-			restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = DeleteRestore(restoreName, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
-		}
+		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+		DeleteBackup(backupName, backupUID, orgID, ctx)
+
+		err = DeleteRestore(restoreName, orgID, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 	})
 })
 
@@ -675,7 +668,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
 		Step("Taking backup of applications", func() {
-			backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, bkpNamespaces[0])
+			backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
 			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
 				labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 			dash.VerifyFatal(err, nil, "Verifying backup creation")
@@ -722,13 +715,10 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
 		backupDriver := Inst().Backup
-		for _, namespace := range bkpNamespaces {
-			backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, "Deleting backup")
-		}
+		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		dash.VerifyFatal(err, nil, "Deleting backup")
 		err = backup.DeleteUser(userName)
 		dash.VerifySafely(err, nil, "Deleting user")
 		err = backup.DeleteGroup(groupName)
@@ -4353,6 +4343,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	var clusterUid string
 	var cloudCredName string
 	var restoreName string
+	var backupName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	JustBeforeEach(func() {
 		StartTorpedoTest("BackupLocationWithEncryptionKey", "Creating BackupLoaction with Encryption Keys", nil, 0)
@@ -4396,7 +4387,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				err = CreateBackup(backupName, SourceClusterName, backupLocationName, BackupLocationUID, []string{namespace},
 					nil, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, "Verifying backup creation")
@@ -4407,11 +4398,8 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			log.InfoD("Restoring the backed up application")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
-				CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx, make(map[string]string))
-			}
+			restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
+			CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx, make(map[string]string))
 		})
 	})
 	JustAfterEach(func() {
@@ -4421,12 +4409,9 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
-		for _, namespace := range bkpNamespaces {
-			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-			backupUID := getBackupUID(orgID, backupName)
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, "Deleting backup")
-		}
+		backupUID := getBackupUID(orgID, backupName)
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		dash.VerifyFatal(err, nil, "Deleting backup")
 		err = DeleteBackupLocation(backupLocationName, BackupLocationUID, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
 		DeleteCloudCredential(CredName, orgID, CloudCredUID)
@@ -4835,6 +4820,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	var clusterUid string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	var CredName string
+	var backupName string
 	var encryptionBucketName string
 	providers := getProviders()
 	JustBeforeEach(func() {
@@ -4883,7 +4869,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		Step("Taking encrypted and non-encrypted backups", func() {
 			log.InfoD("Taking encrypted and no-encrypted backups")
 			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNames = append(backupNames, backupName)
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -4900,7 +4886,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 
 		Step("Restoring encrypted and no-encrypted backups", func() {
 			log.InfoD("Restoring encrypted and no-encrypted backups")
-			restorename := fmt.Sprintf("%s-%s", restoreNamePrefix, backupNames[0])
+			restorename := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupNames[0], time.Now().Unix())
 			restoreNames = append(restoreNames, restorename)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -4952,6 +4938,10 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 	var clusterUid string
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
+	var backupName string
+	var restoreName string
+	var backupNames []string
+	var restoreNames []string
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
@@ -5011,7 +5001,8 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				backupNames = append(backupNames, backupName)
 				err = CreateBackupWithCustomResourceType(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace}, nil, orgID, clusterUid, "", "", "", "", []string{"PersistentVolumeClaim"}, ctx)
 				dash.VerifyFatal(err, nil, "Verifying backup creation with custom resources")
 			}
@@ -5022,8 +5013,8 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+				restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
+				restoreNames = append(restoreNames, restoreName)
 				restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
 				namespaceMapping[namespace] = restoredNameSpace
 				err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, make(map[string]string))
@@ -5051,6 +5042,15 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			err := Inst().S.Destroy(contexts[i], opts)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s", taskName))
+		}
+		for _, restore := range restoreNames {
+			err := DeleteRestore(restore, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
+		}
+		for _, backupName := range backupNames {
+			backupUID := getBackupUID(backupName, orgID)
+			_, err := DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, "Deleting backup")
 		}
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
@@ -5163,8 +5163,8 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
 				scName := fmt.Sprintf("replica-sc-%v", time.Now().Unix())
 				pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
 				singlePvc := pvcs.Items[0]
@@ -6032,7 +6032,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 			postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup creation", backupName))
@@ -6042,12 +6042,9 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			log.InfoD("Restoring the backed up applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, namespace := range bkpNamespaces {
-				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-				restoreName = fmt.Sprintf("%s-%s", "test-restore", namespace)
-				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation", backupName, restoreName))
-			}
+			restoreName = fmt.Sprintf("%s-%v", "test-restore", time.Now().Unix())
+			err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation", backupName, restoreName))
 		})
 
 		Step("Delete the restores", func() {
