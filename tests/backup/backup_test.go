@@ -6645,7 +6645,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 					backupCount = backupCount + 1
 				}
 			}
-			dash.VerifyFatal(backupCount, 2, fmt.Sprintf("Validating the shared backup [%s] is present in user context [%s]", backupName, users[1]))
+			dash.VerifyFatal(backupCount, 2, fmt.Sprintf("Validating the shared backup [%s] is present in user context [%s]", backupName, users[0]))
 		})
 	})
 	JustAfterEach(func() {
@@ -6679,8 +6679,8 @@ var _ = Describe("{SwapShareBackup}", func() {
 		log.Infof("Cleaning cloud credential")
 		//TODO: Eliminate time.Sleep
 		time.Sleep(time.Minute * 3)
-		for _, credName := range credNames {
-			DeleteCloudCredential(credName, orgID, cloudCredUID)
+		for _, credName := range credName {
+			DeleteCloudCredential(credName, orgID, cloudCredUid)
 		}
 	})
 })
