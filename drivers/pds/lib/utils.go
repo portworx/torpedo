@@ -145,6 +145,7 @@ const (
 	cassandra             = "Cassandra"
 	rabbitmq              = "RabbitMQ"
 	mysql                 = "MySQL"
+	consul                = "Consul"
 	pxLabel               = "pds.portworx.com/available"
 	defaultParams         = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap    = "pds-params"

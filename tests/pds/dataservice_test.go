@@ -1,7 +1,11 @@
 package tests
 
 import (
+	"bytes"
 	"net/http"
+	"fmt"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -500,6 +504,95 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 
 	})
 })
+
+var _ = Describe("{RunConsulBench}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RunConsulBench", "Run Consul Bench on Host", nil, 0)
+	})
+
+	It("Deploy , Validate and start Consul Workload", func() {
+		for _, ds := range params.DataServiceToTest {
+			log.InfoD("Dataservice Name : %v", ds.Name)
+			if ds.Name == "Consul" {
+				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
+				deployAndRunConsulBench(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+			}
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			}
+		}()
+	})
+})
+
+func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32) bool {
+	// Step("Deploy and Validate Consul Data Service", func() {
+	// 	isDeploymentsDeleted = false
+	// 	dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, dataservice)
+	// 	log.FailOnError(err, "Error while getting resource template")
+	// 	log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+
+	// 	dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
+	// 	dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+
+	// 	log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+	// 	log.InfoD("Deploying DataService %v ", dataservice)
+	// 	deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
+	// 		deploymentTargetID,
+	// 		dnsZone,
+	// 		deploymentName,
+	// 		namespaceID,
+	// 		dataServiceDefaultAppConfigID,
+	// 		replicas,
+	// 		serviceType,
+	// 		dataServiceDefaultResourceTemplateID,
+	// 		storageTemplateID,
+	// 		Version,
+	// 		Image,
+	// 		namespace,
+	// 	)
+	// 	log.FailOnError(err, "Error while deploying data services")
+
+	// 	Step("Validate Storage Configurations", func() {
+	// 		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+	// 		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+	// 		ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+	// 	})
+	// })
+	dataservice = "con-dhruv-consul-long-run-cjqxpm"
+	// namespace := "qa"
+	Step("Compile and Start Consul Bench", func() {
+		log.InfoD("Trying to compile and execute Consul Bench on this host")
+		pwd, err := os.Getwd() // Get Current Working Directory
+		log.FailOnError(err, "Something went wrong while checking for current working directory")
+		// Try to create absolute path till Consul Bench for compiling on this machine
+		res1 := strings.Split(pwd, "/")
+		torpedo_abs_path := res1[:len(res1)-1]
+		consul_bench_path := append(torpedo_abs_path, "drivers", "pds", "third-party", "consul-bench")
+		consul_bench_abs_path := strings.Join(consul_bench_path, "/")
+		log.InfoD("Consul Bench Path : %v", consul_bench_abs_path)
+		var outb, errb bytes.Buffer
+		final_cmd := fmt.Sprintf("./deploy.sh %s %s", dataservice, namespace)
+		
+		log.InfoD("Command to compile and run Consul Bench is : %s", final_cmd)
+		cmd := exec.Command(final_cmd)
+		cmd.Dir = consul_bench_abs_path
+		cmd.Stdout = &outb
+		cmd.Stderr = &errb
+		run_err := cmd.Run()
+		log.InfoD("Error is : %v", run_err)
+		log.InfoD("Output is: %v", outb.String())
+	})
+	return true
+}
 
 var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 	JustBeforeEach(func() {
