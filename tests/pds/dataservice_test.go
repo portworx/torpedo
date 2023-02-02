@@ -3,7 +3,6 @@ package tests
 import (
 	"bytes"
 	"net/http"
-	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
@@ -580,10 +579,10 @@ func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild str
 		consul_bench_abs_path := strings.Join(consul_bench_path, "/")
 		log.InfoD("Consul Bench Path : %v", consul_bench_abs_path)
 		var outb, errb bytes.Buffer
-		final_cmd := fmt.Sprintf("./deploy.sh %s %s", dataservice, namespace)
-		
+		args := []string{dataservice, namespace}
+		final_cmd := "./deploy.sh"
 		log.InfoD("Command to compile and run Consul Bench is : %s", final_cmd)
-		cmd := exec.Command(final_cmd)
+		cmd := exec.Command(final_cmd, args...)
 		cmd.Dir = consul_bench_abs_path
 		cmd.Stdout = &outb
 		cmd.Stderr = &errb
