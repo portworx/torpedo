@@ -518,44 +518,56 @@ var _ = Describe("{RunConsulBench}", func() {
 			}
 		}
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			}
+		}()
+	})
 })
 
 func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32) bool {
-	// Step("Deploy and Validate Consul Data Service", func() {
-	// 	isDeploymentsDeleted = false
-	// 	dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, dataservice)
-	// 	log.FailOnError(err, "Error while getting resource template")
-	// 	log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+	Step("Deploy and Validate Consul Data Service", func() {
+		isDeploymentsDeleted = false
+		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, dataservice)
+		log.FailOnError(err, "Error while getting resource template")
+		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
-	// 	dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
-	// 	dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+		dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, dataservice)
+		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-	// 	log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-	// 	log.InfoD("Deploying DataService %v ", dataservice)
-	// 	deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
-	// 		deploymentTargetID,
-	// 		dnsZone,
-	// 		deploymentName,
-	// 		namespaceID,
-	// 		dataServiceDefaultAppConfigID,
-	// 		replicas,
-	// 		serviceType,
-	// 		dataServiceDefaultResourceTemplateID,
-	// 		storageTemplateID,
-	// 		Version,
-	// 		Image,
-	// 		namespace,
-	// 	)
-	// 	log.FailOnError(err, "Error while deploying data services")
+		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+		log.InfoD("Deploying DataService %v ", dataservice)
+		deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
+			deploymentTargetID,
+			dnsZone,
+			deploymentName,
+			namespaceID,
+			dataServiceDefaultAppConfigID,
+			replicas,
+			serviceType,
+			dataServiceDefaultResourceTemplateID,
+			storageTemplateID,
+			Version,
+			Image,
+			namespace,
+		)
+		log.FailOnError(err, "Error while deploying data services")
 
-	// 	Step("Validate Storage Configurations", func() {
-	// 		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-	// 		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-	// 		ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
-	// 	})
-	// })
-	dataservice = "con-dhruv-consul-long-run-cjqxpm"
-	namespace := "qa"
+		Step("Validate Storage Configurations", func() {
+			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+		})
+	})
+	// dataservice = "con-dhruv-consul-long-run-cjqxpm"
+	// namespace := "qa"
 	Step("Compile and Start Consul Bench", func() {
 		log.InfoD("Trying to compile and execute Consul Bench on this host")
 		pwd, err := os.Getwd() // Get Current Working Directory
@@ -578,6 +590,13 @@ func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild str
 		run_err := cmd.Run()
 		log.InfoD("Error is : %v", run_err)
 		log.InfoD("Output is: %v", outb.String())
+	})
+	Step("Delete Deployments", func() {
+		log.InfoD("Deleting DataService")
+		resp, err := pdslib.DeleteDeployment(deployment.GetId())
+		log.FailOnError(err, "Error while deleting data services")
+		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		isDeploymentsDeleted = true
 	})
 	return true
 }
