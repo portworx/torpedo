@@ -1426,7 +1426,9 @@ func addCloudDrive(stNode node.Node, poolID int32) error {
 			Action: "start",
 		}
 		drivesMap, err := Inst().N.GetBlockDrives(stNode, systemOpts)
-		log.FailOnError(err, "error getting block drives from node %s", stNode.Name)
+		if err != nil {
+			fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+		}
 
 	outer:
 		for _, v := range drivesMap {
@@ -1450,7 +1452,6 @@ func addCloudDrive(stNode node.Node, poolID int32) error {
 			if err != nil {
 				return fmt.Errorf("error converting size to uint64, err: %v", err)
 			}
-			log.FailOnError(err, "Error converting size to uint64")
 			paramsArr = append(paramsArr, fmt.Sprintf("size=%s,", driveSize))
 		} else {
 			paramsArr = append(paramsArr, param)
@@ -2320,7 +2321,7 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 		volSelected, err := getVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
 		appVol, err := Inst().V.InspectVolume(volSelected.ID)
-		log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", volSelected.ID))
+		log.FailOnError(err, fmt.Sprintf("error inspecting vol : %s", volSelected.ID))
 		volNodes := appVol.ReplicaSets[0].Nodes
 		var stNode node.Node
 		for _, n := range stNodes {
@@ -2355,11 +2356,11 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 			if currRep == 3 {
 				newRep = currRep - 1
 				err = Inst().V.SetReplicationFactor(volSelected, newRep, nil, nil, true, opts)
-				log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+				log.FailOnError(err, fmt.Sprintf("error setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 			}
 			log.InfoD(fmt.Sprintf("setting repl factor to %d for vol : %s", newRep+1, volSelected.Name))
 			err = Inst().V.SetReplicationFactor(volSelected, newRep+1, []string{stNode.Id}, []string{poolToBeResized.Uuid}, false, opts)
-			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep+1, volSelected.Name))
+			log.FailOnError(err, fmt.Sprintf("error setting repl factor to %d for vol : %s", newRep+1, volSelected.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expansion triggered successfully on node %s", volSelected.Name, stNode.Name))
 		})
 
@@ -4342,7 +4343,7 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 
 })
 
-func adjustReplPools(firstNode, replNode node.Node, isjournal bool) {
+func adjustReplPools(firstNode, replNode node.Node, isjournal bool) error {
 
 	selectedNodeSize := getTotalPoolSize(firstNode)
 	secondReplSize := getTotalPoolSize(replNode)
@@ -4357,15 +4358,18 @@ func adjustReplPools(firstNode, replNode node.Node, isjournal bool) {
 			}
 		}
 
-		expandSize := maxSize + 100
+		expandSize := maxSize * 2
 		log.InfoD("Current Size of the pool %s is %d", secondPool.Uuid, secondPool.TotalSize/units.GiB)
-		err := Inst().V.ExpandPool(secondPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expandSize)
-		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+		if err := Inst().V.ExpandPool(secondPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expandSize); err != nil {
+			return fmt.Errorf("pool expansion init failed for %s. Err : %v", secondPool.Uuid, err)
+		}
 
 		log.InfoD("expand pool %s using resize-disk", secondPool.Uuid)
-		err = waitForPoolToBeResized(expandSize, secondPool.Uuid, isjournal)
-		log.FailOnError(err, fmt.Sprintf("Error waiting for poor %s resize", secondPool.Uuid))
+		if err := waitForPoolToBeResized(expandSize, secondPool.Uuid, isjournal); err != nil {
+			return fmt.Errorf("error waiting for poor %s resize", secondPool.Uuid)
+		}
 	}
+	return nil
 }
 
 var _ = Describe("{StorageFullPoolResize}", func() {
@@ -4410,7 +4414,8 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 		isjournal, err := isJournalEnabled()
 		log.FailOnError(err, "is journal enabled check failed")
 
-		adjustReplPools(*selectedNode, secondReplNode, isjournal)
+		err = adjustReplPools(*selectedNode, secondReplNode, isjournal)
+		log.FailOnError(err, "Error setting pools for clean volumes")
 
 		Inst().AppList = append(Inst().AppList, "fio-fastpath")
 		contexts = make([]*scheduler.Context, 0)
@@ -4516,7 +4521,8 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 		isjournal, err := isJournalEnabled()
 		log.FailOnError(err, "is journal enabled check failed")
 
-		adjustReplPools(*selectedNode, secondReplNode, isjournal)
+		err = adjustReplPools(*selectedNode, secondReplNode, isjournal)
+		log.FailOnError(err, "Error setting pools for clean volumes")
 
 		Inst().AppList = append(Inst().AppList, "fio-fastpath")
 		contexts = make([]*scheduler.Context, 0)
@@ -5772,17 +5778,16 @@ func addNewPools(n node.Node, numPools int) error {
 		newParams = append(newParams, fmt.Sprintf("size=%d,", newSize))
 		newSpec := strings.Join(newParams, ",")
 
-		err := Inst().V.AddCloudDrive(&n, newSpec, -1)
-		if err != nil {
+		if err := Inst().V.AddCloudDrive(&n, newSpec, -1); err != nil {
 			return fmt.Errorf("add cloud drive failed on node %s, err: %v", n.Name, err)
 		}
+
 		log.InfoD("Validate pool rebalance after drive add on node %s", n.Name)
-		err = ValidatePoolRebalance()
-		if err != nil {
+		if err = ValidatePoolRebalance(); err != nil {
 			return fmt.Errorf("pool re-balance failed on node %s, err: %v", n.Name, err)
 		}
-		err = Inst().V.WaitDriverUpOnNode(n, addDriveUpTimeOut)
-		if err != nil {
+
+		if err = Inst().V.WaitDriverUpOnNode(n, addDriveUpTimeOut); err != nil {
 			return fmt.Errorf("volume driver is down on node %s, err: %v", n.Name, err)
 		}
 		i += 1

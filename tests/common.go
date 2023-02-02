@@ -4679,12 +4679,11 @@ func RebootNodeAndWait(n node.Node) error {
 
 // GetNodeWithGivenPoolID returns node having pool id
 func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
-	err := Inst().V.RefreshDriverEndpoints()
-	if err != nil {
+	if err := Inst().V.RefreshDriverEndpoints(); err != nil {
 		return nil, err
 	}
-	pxNodes, err := GetStorageNodes()
 
+	pxNodes, err := GetStorageNodes()
 	if err != nil {
 		return nil, err
 	}
@@ -4795,7 +4794,7 @@ func ValidatePoolRebalance() error {
 					return nil, false, fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
 				}
 				if currentDone == total {
-					log.InfoD("Rebalance for job %v completed,", job.GetId())
+					log.InfoD("Rebalance for job %v completed", job.GetId())
 					return nil, false, nil
 				}
 			}
