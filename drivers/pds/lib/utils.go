@@ -1279,6 +1279,30 @@ func CreatepostgresqlWorkload(dnsEndpoint string, pdsPassword string, scalefacto
 	return deployment, err
 }
 
+func CollectPodLogsandValidateWorkloads() error {
+	pods, err := k8sCore.GetPods("automation", nil)
+	if err != nil {
+		log.Errorf("An Error occured while getting pods")
+	}
+	failure_messages := []string{"Name or service not known", "could not translate host name", "Connection refused"}
+	for _, pod := range pods.Items {
+		if pod.Name == "pgload-slcww-64b4b7ffdd-bjt7w" {
+			podlogs, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{})
+			if err != nil {
+				log.Errorf("An Error occured while getting pod logs")
+			}
+			log.Infof(podlogs)
+			for _, messages := range failure_messages {
+				if strings.Contains(podlogs, messages) {
+					log.Infof("Unable to connect to the database")
+				}
+			}
+			break
+		}
+	}
+	return err
+}
+
 // CreateRedisWorkload func runs traffic on the Redis deployments
 func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassword string, namespace string, env []string, command string) (*corev1.Pod, error) {
 	var value []string
