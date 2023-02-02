@@ -1565,7 +1565,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 		}
 
 	case couchbase:
-		env := []string{"HOST", "PDS_USER", "PDS_PASS"}
+		env := []string{"HOST", "PDS_USER", "PASSWORD", "COUNT"}
 
 		var creds Creds
 		creds.Host = dnsEndpoint
