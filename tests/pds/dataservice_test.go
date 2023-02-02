@@ -518,18 +518,6 @@ var _ = Describe("{RunConsulBench}", func() {
 			}
 		}
 	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
-	})
 })
 
 func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32) bool {
@@ -567,7 +555,7 @@ func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild str
 	// 	})
 	// })
 	dataservice = "con-dhruv-consul-long-run-cjqxpm"
-	// namespace := "qa"
+	namespace := "qa"
 	Step("Compile and Start Consul Bench", func() {
 		log.InfoD("Trying to compile and execute Consul Bench on this host")
 		pwd, err := os.Getwd() // Get Current Working Directory
@@ -577,11 +565,12 @@ func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild str
 		torpedo_abs_path := res1[:len(res1)-1]
 		consul_bench_path := append(torpedo_abs_path, "drivers", "pds", "third-party", "consul-bench")
 		consul_bench_abs_path := strings.Join(consul_bench_path, "/")
-		log.InfoD("Consul Bench Path : %v", consul_bench_abs_path)
+		log.InfoD("Consul Bench Absolute Path : %v", consul_bench_abs_path)
 		var outb, errb bytes.Buffer
 		args := []string{dataservice, namespace}
 		final_cmd := "./deploy.sh"
 		log.InfoD("Command to compile and run Consul Bench is : %s", final_cmd)
+		// Going to Execute Command to Compile and Run Consul Bench
 		cmd := exec.Command(final_cmd, args...)
 		cmd.Dir = consul_bench_abs_path
 		cmd.Stdout = &outb
