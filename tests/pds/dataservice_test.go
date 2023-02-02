@@ -41,21 +41,21 @@ var _ = Describe("{DeletePDSPods}", func() {
 				})
 
 				Step("get pods from pds-system namespace", func() {
-					if len(deploymentPods) != 0 {
-						deploymentPods = nil
+					if len(pdsPods) != 0 {
+						pdsPods = nil
 					}
 					podList, err = pdslib.GetPods(pdsNamespace)
 					log.FailOnError(err, "Error while getting pods")
 					log.Infof("PDS System Pods")
 					for _, pod := range podList.Items {
 						log.Infof("%v", pod.Name)
-						deploymentPods = append(deploymentPods, pod)
+						pdsPods = append(pdsPods, pod)
 					}
 				})
 
 				Step("delete pods from pds-system namespace", func() {
 					log.InfoD("Deleting PDS System Pods")
-					err = pdslib.DeletePods(deploymentPods)
+					err = pdslib.DeletePods(pdsPods)
 					log.FailOnError(err, "Error while deleting pods")
 					log.InfoD("Validating PDS System Pods")
 					err = pdslib.ValidatePods(pdsNamespace, "")
@@ -117,10 +117,13 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 
 				log.Infof("PDS DataService Pods")
 				log.Infof("deployment name %v", *deployment.ClusterResourceName)
+				if len(pdsPods) != 0 {
+					pdsPods = nil
+				}
 				for _, pod := range podList.Items {
 					if strings.Contains(pod.Name, *deployment.ClusterResourceName) {
 						log.Infof("%v", pod.Name)
-						deploymentPods = append(deploymentPods, pod)
+						pdsPods = append(pdsPods, pod)
 					}
 				}
 
@@ -129,7 +132,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				go func() {
 					defer wg.Done()
 					log.InfoD("Deleting the data service pods")
-					err = pdslib.DeletePods(deploymentPods)
+					err = pdslib.DeletePods(pdsPods)
 					log.FailOnError(err, "Error while deleting pods")
 				}()
 
@@ -343,6 +346,18 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
 						log.FailOnError(err, "Error while genearating workloads")
 					}
+					if ds.Name == elasticSearch {
+						deploymentName := "es-rally"
+						log.Infof("Running Workloads on DataService %v ", ds.Name)
+						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
+						log.FailOnError(err, "Error while genearating workloads")
+					}
+					if ds.Name == couchbase {
+						deploymentName := "cb-load"
+						log.Infof("Running Workloads on DataService %v ", ds.Name)
+						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
+						log.FailOnError(err, "Error while genearating workloads")
+					}
 				})
 
 				Step("Validate Deployments before scale up", func() {
@@ -376,8 +391,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				})
 
 				Step("Delete the workload generating deployments", func() {
-					if ds.Name == cassandra || ds.Name == postgresql || ds.Name == redis || ds.Name == rabbitmq {
-						if ds.Name == cassandra || ds.Name == postgresql {
+					if ds.Name == cassandra || ds.Name == postgresql || ds.Name == redis || ds.Name == rabbitmq || ds.Name == elasticSearch {
+						if ds.Name == cassandra || ds.Name == postgresql || ds.Name == elasticSearch {
 							log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
 							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
 						} else if ds.Name == redis || ds.Name == rabbitmq {

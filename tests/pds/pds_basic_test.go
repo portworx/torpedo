@@ -25,6 +25,7 @@ const (
 	postgresql              = "PostgreSQL"
 	cassandra               = "Cassandra"
 	elasticSearch           = "Elasticsearch"
+	couchbase               = "Couchbase"
 	redis                   = "Redis"
 	rabbitmq                = "RabbitMQ"
 	mongodb                 = "MongoDB"
@@ -58,7 +59,7 @@ var (
 	dataServiceDefaultAppConfigID           string
 	dataServiceVersionBuildMap              map[string][]string
 	dataServiceImageMap                     map[string][]string
-	deploymentPods                          []corev1.Pod
+	pdsPods                                 []corev1.Pod
 	dep                                     *v1.Deployment
 	pod                                     *corev1.Pod
 	params                                  *pdslib.Parameter

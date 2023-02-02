@@ -63,6 +63,13 @@ type ResourceSettingTemplate struct {
 	} `json:"resources"`
 }
 
+// Creds has data service creds
+type Creds struct {
+	Host     string
+	User     string
+	Password string
+}
+
 // StorageOptions struct used to store template values
 type StorageOptions struct {
 	Filesystem  string
@@ -139,12 +146,14 @@ const (
 	cassandraStresImage   = "scylladb/scylla:4.1.11"
 	postgresqlStressImage = "portworx/torpedo-pgbench:pdsloadTest"
 	esRallyImage          = "elastic/rally"
+	cbloadImage           = "portworx/pds-loadtests:couchbase-0.0.2"
 	pdsTpccImage          = "portworx/torpedo-tpcc-automation:v1"
 	redisStressImage      = "redis:latest"
 	rmqStressImage        = "pivotalrabbitmq/perf-test:latest"
 	postgresql            = "PostgreSQL"
 	cassandra             = "Cassandra"
 	elasticSearch         = "Elasticsearch"
+	couchbase             = "Couchbase"
 	rabbitmq              = "RabbitMQ"
 	mysql                 = "MySQL"
 	pxLabel               = "pds.portworx.com/available"
@@ -1183,7 +1192,60 @@ func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcNa
 	return pod, podName, nil
 }
 
-// CreatecassandraWorkload generate workloads on the cassandra db
+//CreatePodWorkloads generate workloads as standalone pods
+func CreatePodWorkloads(name string, image string, creds Creds, namespace string, count string, env []string) (*corev1.Pod, error) {
+	var value []string
+	podSpec := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: name + "-",
+			Namespace:    namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  name,
+					Image: image,
+					Env:   make([]corev1.EnvVar, 4),
+				},
+			},
+			RestartPolicy: corev1.RestartPolicyOnFailure,
+		},
+	}
+
+	value = append(value, creds.Host)
+	value = append(value, "pds")
+	value = append(value, creds.Password)
+	value = append(value, count)
+
+	for index := range env {
+		podSpec.Spec.Containers[0].Env[index].Name = env[index]
+		podSpec.Spec.Containers[0].Env[index].Value = value[index]
+	}
+
+	pod, err := k8sCore.CreatePod(podSpec)
+	if err != nil {
+		log.Errorf("An Error Occured while creating %v", err)
+		return nil, err
+	}
+
+	err = k8sCore.ValidatePod(pod, timeOut, timeInterval)
+	if err != nil {
+		log.Errorf("An Error Occured while validating the pod %v", err)
+		return nil, err
+	}
+
+	//TODO: Remove static sleep and verify the injected data
+	time.Sleep(1 * time.Minute)
+
+	return pod, nil
+
+}
+
+// CreateDeploymentWorkloads generate workloads as deployment pods
 func CreateDeploymentWorkloads(command, deploymentName, stressImage, namespace string) (*v1.Deployment, error) {
 
 	var replicas int32 = 1
@@ -1499,6 +1561,20 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 		dep, err = CreateDeploymentWorkloads(esCommand, deploymentName, esRallyImage, namespace)
 		if err != nil {
 			log.Errorf("An Error Occured while creating elasticSearch workload %v", err)
+			return nil, nil, err
+		}
+
+	case couchbase:
+		env := []string{"HOST", "PDS_USER", "PDS_PASS"}
+
+		var creds Creds
+		creds.Host = dnsEndpoint
+		creds.User = "pds"
+		creds.Password = pdsPassword
+
+		pod, err = CreatePodWorkloads(deploymentName, cbloadImage, creds, namespace, "1000", env)
+		if err != nil {
+			log.Errorf("An Error Occured while creating couchbase workload %v", err)
 			return nil, nil, err
 		}
 	}
