@@ -174,7 +174,7 @@ var _ = AfterSuite(func() {
 	dash.VerifySafely(err, nil, "Verifying cleaning up of all groups from keycloak")
 	for _, group := range allGroups {
 		if !strings.Contains(group.Name, "admin") && !strings.Contains(group.Name, "app") {
-			backup.DeleteGroup(group.Name)
+			err = backup.DeleteGroup(group.Name)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying group [%s] deletion", group.Name))
 		} else {
 			log.Infof("Group %s was not deleted", group.Name)
@@ -212,7 +212,8 @@ var _ = AfterSuite(func() {
 			return "", false, nil
 		}
 	}
-	task.DoRetryWithTimeout(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
+	_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
+	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 
 	// Cleanup all cloud credentials
 	allCloudCredentials, err := getAllCloudCredentials(ctx)
@@ -230,7 +231,8 @@ var _ = AfterSuite(func() {
 			return "", false, nil
 		}
 	}
-	task.DoRetryWithTimeout(cloudCredentialDeletionSuccess, 5*time.Minute, 30*time.Second)
+	_, err = task.DoRetryWithTimeout(cloudCredentialDeletionSuccess, 5*time.Minute, 30*time.Second)
+	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 
 	// Cleanup all buckets after suite
 	providers := getProviders()
