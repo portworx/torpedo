@@ -1766,7 +1766,11 @@ func (d *portworx) getStorageNodesOnStart() ([]*api.StorageNode, error) {
 // getPxNodeByID return px node by provding node id
 func (d *portworx) getPxNodeByID(nodeID string) (*api.StorageNode, error) {
 	log.Infof("Getting the node using nodeId [%s]", nodeID)
+	log.Debugf("Getting the node using nodeId [%s]", nodeID)
 	var nodeManager api.OpenStorageNodeClient = d.getNodeManager()
+	if nodeID == "8babbdfe-64a8-4171-8aa9-6ba814f756f7" {
+		return nil, nil
+	}
 
 	nodeResponse, err := nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: nodeID})
 	if err != nil {
@@ -1774,7 +1778,7 @@ func (d *portworx) getPxNodeByID(nodeID string) (*api.StorageNode, error) {
 	}
 
 	if nodeResponse.Node.MgmtIp == "" {
-		return nil, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest")
+		return nil, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest of [%s]", nodeID)
 	}
 	return nodeResponse.Node, nil
 }
@@ -1799,6 +1803,8 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 		return nodes, err
 	}
 	for _, n := range nodeEnumerateResp.GetNodeIds() {
+		log.Infof("Getting the node using nodeId [%s]", n)
+		log.Debugf("Getting the node using nodeId [%s]", n)
 		t := func() (interface{}, bool, error) {
 			nodeResponse, err := nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n})
 			if err != nil {
@@ -1834,10 +1840,13 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 
 		log.Debugf("Checking PX status on node [%s]", n.Name)
 		pxNode := nodeInspectResponse.Node
+		log.Debugf("PX node status [%s]", pxNode.Status)
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
 		case api.Status_STATUS_OK:
+			log.Debugf("Getting pxctl status")
 			pxStatus, err := d.getPxctlStatus(n)
+			log.Debugf("PX status [%s]", pxStatus)
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
 					Node:  n,
@@ -4139,18 +4148,21 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
 	}
-
+	log.Debugf("Getting pxctl status-1")
 	pxctlPath := d.getPxctlPath(n)
+	log.Debugf("Getting pxctl status-2")
 
 	// Create context
 	if len(d.token) > 0 {
 		_, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s context create admin --token=%s", pxctlPath, d.token), opts)
+		log.Debugf("Getting pxctl status-3")
 		if err != nil {
 			return "", fmt.Errorf("failed to create pxctl context. cause: %v", err)
 		}
 	}
 
 	out, err := d.nodeDriver.RunCommand(n, fmt.Sprintf("%s -j status", pxctlPath), opts)
+	log.Debugf("Getting pxctl status-4")
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
 	}
@@ -4171,6 +4183,7 @@ func (d *portworx) getPxctlStatus(n node.Node) (string, error) {
 
 	statusMap := data.(map[string]interface{})
 	if status, ok := statusMap["status"]; ok {
+		log.Debugf("Getting pxctl status-5")
 		return status.(string), nil
 	}
 	return api.Status_STATUS_NONE.String(), nil

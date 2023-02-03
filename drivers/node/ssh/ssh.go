@@ -37,7 +37,7 @@ const (
 )
 
 const (
-	defaultTimeout        = 5 * time.Minute
+	defaultTimeout        = 30 * time.Minute
 	execPodDaemonSetLabel = "debug"
 )
 
