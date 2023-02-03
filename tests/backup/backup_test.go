@@ -8373,7 +8373,7 @@ func GetAllBackupsAdmin() ([]string, error) {
 	return backupNames, err
 }
 
-// GetAllBackupsAdmin returns all the backups that px-central-admin has access to
+// GetAllRestoresAdmin returns all the backups that px-central-admin has access to
 func GetAllRestoresAdmin() ([]string, error) {
 	restoreNames := make([]string, 0)
 	backupDriver := Inst().Backup
