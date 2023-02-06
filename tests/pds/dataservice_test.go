@@ -564,7 +564,7 @@ func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild str
 			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
 		})
 		// Running Consul Bench
-		err = RunConsulBench(dataservice, namespace)
+		err = RunConsulBench(deploymentName, namespace)
 		log.FailOnError(err, "Failing the TC as Running Consul Bench has failed")
 		Step("Delete Deployments", func() {
 			log.InfoD("Deleting DataService")
@@ -577,7 +577,7 @@ func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild str
 	return true
 }
 
-func RunConsulBench(dataservice string, namespace string) error {
+func RunConsulBench(deploymentName string, namespace string) error {
 	result := false
 	Step("Compile and Start Consul Bench", func() {
 		log.InfoD("Trying to compile and execute Consul Bench on this host")
@@ -589,15 +589,15 @@ func RunConsulBench(dataservice string, namespace string) error {
 		consul_bench_path := append(torpedo_abs_path, "drivers", "pds", "third-party", "consul-bench")
 		consul_bench_abs_path := strings.Join(consul_bench_path, "/")
 		log.InfoD("Consul Bench Absolute Path : %v", consul_bench_abs_path)
-		args := []string{dataservice, namespace}
+		args := []string{deploymentName, namespace}
 		final_cmd := "./deploy.sh"
 		log.InfoD("Command to compile and run Consul Bench is : %s", final_cmd)
 		// Going to Execute Command to Compile and Run Consul Bench
 		stdoutput, err := pdslib.LocalExecuteWithinDir(final_cmd, args, consul_bench_abs_path)
 		log.FailOnError(err, "Error occured while running Consul bench")
-		// dataservice = "con-dhruv-test-9hn4v9"
+		// deploymentName = "con-dhruv-test-9hn4v9"
 		// namespace := "automation"
-		consul_bench_deployment_name := dataservice + "-bench"
+		consul_bench_deployment_name := deploymentName + "-bench"
 		dep_status, err := k8sApps.DescribeDeployment(consul_bench_deployment_name, namespace)
 		log.FailOnError(err, "Error while checking for deployment status")
 		log.InfoD("Dep status is : %v", *dep_status)
