@@ -135,7 +135,7 @@ func ExecShell(command string) (string, string, error) {
 // ExecShellWithEnv Function to execute local command with environment variable as param.
 func ExecShellWithEnv(command string, envVars ...string) (string, string, error) {
 	var stout, sterr []byte
-	cmd := exec.Command("bash", "-c", command)
+	cmd := exec.Command("sh", "-c", command)
 	log.Debugf("Command %s ", command)
 	cmd.Env = append(cmd.Env, envVars...)
 	stdout, _ := cmd.StdoutPipe()
