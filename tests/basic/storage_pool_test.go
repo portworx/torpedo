@@ -5099,7 +5099,7 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 			if isjournal {
 				expectedSizeWithJournal = expectedSizeWithJournal - 3
 			}
-			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)

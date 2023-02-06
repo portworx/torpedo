@@ -255,6 +255,16 @@ const (
 )
 
 const (
+	VSPHERE_MAX_CLOUD_DRIVES        = 12
+	FA_MAX_CLOUD_DRIVES             = 32
+	CLOUD_PROVIDER_MAX_CLOUD_DRIVES = 8
+	POOL_MAX_CLOUD_DRIVES           = 6
+
+	PX_VSPHERE_SCERET_NAME = "px-vsphere-secret"
+	PX_PURE_SECRET_NAME    = "px-pure-secret"
+)
+
+const (
 	pxctlCDListCmd = "pxctl cd list"
 )
 
@@ -5130,4 +5140,75 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 
 	}
 	return poolUuids, err
+}
+
+func TriggerPoolExpansion(poolUUID string, operation opsapi.SdkStoragePool_ResizeOperationType, size uint64) (string, error) {
+
+	var err error
+	if operation == opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK {
+		if err = Inst().V.ExpandPool(poolUUID, opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, size); err != nil {
+			return "", err
+		}
+		return poolUUID, nil
+
+	}
+
+	namespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return "", err
+	}
+
+	var maxCloudDrives int32
+
+	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+		maxCloudDrives = 12
+	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+		maxCloudDrives = 32
+	} else {
+		maxCloudDrives = 8
+	}
+
+	stNode, err := GetNodeWithGivenPoolID(poolUUID)
+	if err != nil {
+		return "", err
+	}
+	stPool, err := GetStoragePoolByUUID(poolUUID)
+	if err != nil {
+		return "", err
+	}
+
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
+	if err != nil {
+		fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+	}
+	var currentNodeDrives int32
+
+	driveCountMap := make(map[string]int32, 0)
+
+	for _, b := range drivesMap {
+		labels := b.Labels
+		for k, v := range labels {
+			if k == "pxpool" {
+				if c, ok := driveCountMap[v]; ok {
+					driveCountMap[v] += c
+				} else {
+					driveCountMap[v] = 1
+				}
+
+			}
+		}
+	}
+
+	for _, vals := range driveCountMap {
+		currentNodeDrives += vals
+	}
+
+	return poolUUID, nil
 }
