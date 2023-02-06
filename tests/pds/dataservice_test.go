@@ -594,7 +594,7 @@ func RunConsulBench(deploymentName string, namespace string) error {
 		final_cmd := "./deploy.sh"
 		log.InfoD("Command to compile and run Consul Bench is : %s", final_cmd)
 		// Going to Execute Command to Compile and Run Consul Bench
-		stdoutput, err := pdslib.LocalExecuteWithinDir(final_cmd, args, consul_bench_abs_path)
+		_, err := pdslib.LocalExecuteWithinDir(final_cmd, args, consul_bench_abs_path)
 		log.FailOnError(err, "Error occured while running Consul bench")
 		// deploymentName = "con-dhruv-test-9hn4v9"
 		// namespace := "automation"
