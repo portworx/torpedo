@@ -4345,11 +4345,11 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var backupLocationUID string
 	var cloudCredUID string
 	backupLocationMap := make(map[string]string)
-	var bkpNamespaces []string
 	var clusterUid string
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
-	bkpNamespaces = make([]string, 0)
+	bkpNamespaces := make([]string, 0)
+	var backupNames []string
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Strok when backups and restores in progress", nil, 0)
@@ -4439,9 +4439,10 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 				dash.VerifyFatal(err, nil, "Getting context")
 				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				CreateBackupWithoutCheck(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, ctx)
+				backupNames = append(backupNames, backupName)
 			}
 		})
 
@@ -4463,8 +4464,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			var bkpUid string
 			backupDriver := Inst().Backup
 			ctx, err := backup.GetAdminCtxFromSecret()
-			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+			for _, backupName := range backupNames {
 				backupSuccessCheck := func() (interface{}, bool, error) {
 					bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
 					log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
@@ -4499,11 +4499,11 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			ValidateApplications(contexts)
 		})
 		Step("Restoring the backups application", func() {
-			for _, namespace := range bkpNamespaces {
+			for _, backupName := range backupNames {
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
-				CreateRestoreWithoutCheck(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
+				err = CreateRestoreWithoutCheck(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
+				log.FailOnError(err, "Failed while trying to restore [%s] the backup [%s]", fmt.Sprintf("%s-restore", backupName), backupName)
 			}
 		})
 		Step("Kill stork when restore in-progress", func() {
@@ -4523,8 +4523,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			backupDriver := Inst().Backup
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, namespace := range bkpNamespaces {
-				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
+			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-restore", backupName)
 				restoreSuccessCheck := func() (interface{}, bool, error) {
 					restoreInspectRequest := &api.RestoreInspectRequest{
@@ -4566,6 +4565,15 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			err := Inst().S.Destroy(contexts[i], opts)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
+		}
+
+		backupDriver := Inst().Backup
+		for _, backupName := range backupNames {
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+			log.Infof("About to delete backup - %s", backupName)
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, "Deleting backup")
 		}
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")

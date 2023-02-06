@@ -4646,7 +4646,7 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 		kvdbMembers, err := Inst().V.GetKvdbMembers(stoageDriverNodes[0])
 		log.FailOnError(err, "Error getting KVDB members")
 
-		for k, _ := range kvdbMembers {
+		for k := range kvdbMembers {
 			kvdbNodesIDs = append(kvdbNodesIDs, k)
 		}
 		for _, n := range stoageDriverNodes {
