@@ -1,10 +1,8 @@
 package tests
 
 import (
-	"bytes"
+	"errors"
 	"net/http"
-	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -512,7 +510,7 @@ var _ = Describe("{RunConsulBench}", func() {
 	It("Deploy , Validate and start Consul Workload", func() {
 		for _, ds := range params.DataServiceToTest {
 			log.InfoD("Dataservice Name : %v", ds.Name)
-			if ds.Name == "Consul" {
+			if ds.Name == consul {
 				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
 				deployAndRunConsulBench(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
 			}
@@ -565,40 +563,53 @@ func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild str
 			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
 		})
+		// Running Consul Bench
+		err = RunConsulBench(dataservice, namespace)
+		log.FailOnError(err, "Failing the TC as Running Consul Bench has failed")
+		Step("Delete Deployments", func() {
+			log.InfoD("Deleting DataService")
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			isDeploymentsDeleted = true
+		})
 	})
-	// dataservice = "con-dhruv-consul-long-run-cjqxpm"
-	// namespace := "qa"
+	return true
+}
+
+func RunConsulBench(dataservice string, namespace string) error {
+	result := false
 	Step("Compile and Start Consul Bench", func() {
 		log.InfoD("Trying to compile and execute Consul Bench on this host")
 		pwd, err := os.Getwd() // Get Current Working Directory
 		log.FailOnError(err, "Something went wrong while checking for current working directory")
-		// Try to create absolute path till Consul Bench for compiling on this machine
+		// Create absolute path till Consul Bench for compiling on this machine
 		res1 := strings.Split(pwd, "/")
 		torpedo_abs_path := res1[:len(res1)-1]
 		consul_bench_path := append(torpedo_abs_path, "drivers", "pds", "third-party", "consul-bench")
 		consul_bench_abs_path := strings.Join(consul_bench_path, "/")
 		log.InfoD("Consul Bench Absolute Path : %v", consul_bench_abs_path)
-		var outb, errb bytes.Buffer
 		args := []string{dataservice, namespace}
 		final_cmd := "./deploy.sh"
 		log.InfoD("Command to compile and run Consul Bench is : %s", final_cmd)
 		// Going to Execute Command to Compile and Run Consul Bench
-		cmd := exec.Command(final_cmd, args...)
-		cmd.Dir = consul_bench_abs_path
-		cmd.Stdout = &outb
-		cmd.Stderr = &errb
-		run_err := cmd.Run()
-		log.InfoD("Error is : %v", run_err)
-		log.InfoD("Output is: %v", outb.String())
+		stdoutput, err := pdslib.LocalExecuteWithinDir(final_cmd, args, consul_bench_abs_path)
+		log.FailOnError(err, "Error occured while running Consul bench")
+		// dataservice = "con-dhruv-test-9hn4v9"
+		// namespace := "automation"
+		consul_bench_deployment_name := dataservice + "-bench"
+		dep_status, err := k8sApps.DescribeDeployment(consul_bench_deployment_name, namespace)
+		log.FailOnError(err, "Error while checking for deployment status")
+		log.InfoD("Dep status is : %v", *dep_status)
+		if dep_status != nil {
+			result = true
+		}
 	})
-	Step("Delete Deployments", func() {
-		log.InfoD("Deleting DataService")
-		resp, err := pdslib.DeleteDeployment(deployment.GetId())
-		log.FailOnError(err, "Error while deleting data services")
-		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-		isDeploymentsDeleted = true
-	})
-	return true
+	if result {
+		return nil
+	} else {
+		return errors.New("Running Consul Bench Failed")
+	}
 }
 
 var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {

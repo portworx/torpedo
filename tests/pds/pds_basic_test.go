@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -30,6 +31,7 @@ const (
 	mysql                   = "MySQL"
 	kafka                   = "Kafka"
 	zookeeper               = "ZooKeeper"
+	consul                  = "Consul"
 	pdsNamespaceLabel       = "pds.portworx.com/available"
 )
 
@@ -67,6 +69,7 @@ var (
 	dash                                    *aetosutil.Dashboard
 	deployment                              *pds.ModelsDeployment
 	k8sCore                                 = core.Instance()
+	k8sApps                                 = apps.Instance()
 )
 
 type PDSDataService struct {

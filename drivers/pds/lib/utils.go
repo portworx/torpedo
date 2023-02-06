@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"math/rand"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -842,6 +844,24 @@ func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 	}
 
 	return dnsEndpoint, nil
+}
+
+// Execute a Command locally in a specific directory
+func LocalExecuteWithinDir(command string, args []string, abs_path string) (string, error) {
+	var outb, errb bytes.Buffer
+	log.InfoD("Command to Run is : %s", command)
+	cmd := exec.Command(command, args...)
+	cmd.Dir = abs_path
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
+	run_err := cmd.Run()
+	log.InfoD("Error is : %v", run_err)
+	log.InfoD("Output is: %v", outb.String())
+	if run_err != nil {
+		return "", run_err
+	} else {
+		return outb.String(), nil
+	}
 }
 
 // GetDeploymentCredentials returns the password to connect to the dataservice
