@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
 	. "github.com/portworx/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
 )
