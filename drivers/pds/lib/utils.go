@@ -847,11 +847,11 @@ func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 }
 
 // Execute a Command locally in a specific directory
-func LocalExecuteWithinDir(command string, args []string, abs_path string) (string, error) {
+func LocalExecuteWithinDir(command string, args []string) (string, error) {
 	var outb, errb bytes.Buffer
 	log.InfoD("Command to Run is : %s", command)
 	cmd := exec.Command(command, args...)
-	cmd.Dir = abs_path
+	// cmd.Dir = abs_path
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
 	run_err := cmd.Run()
