@@ -535,7 +535,7 @@ github.com/hashicorp/vault/sdk/helper/strutil
 # github.com/heptio/ark v1.0.0 => github.com/heptio/ark v1.0.0
 ## explicit
 github.com/heptio/ark/pkg/discovery
-# github.com/heptio/velero v0.0.0-00010101000000-000000000000 => github.com/heptio/velero v1.0.0
+# github.com/heptio/velero v1.0.0 => github.com/heptio/velero v1.0.0
 ## explicit
 github.com/heptio/velero/third_party/kubernetes/pkg/kubectl/cmd/util
 # github.com/huandu/xstrings v1.3.1
