@@ -717,7 +717,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, "Deleting backup")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		err = backup.DeleteUser(userName)
 		dash.VerifySafely(err, nil, "Deleting user")
 		err = backup.DeleteGroup(groupName)
@@ -1171,7 +1171,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			log.Infof("About to delete backup - %s", backupName)
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, "Deleting backup")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
 
 		log.Infof("Cleaning up backup location - %s", customBackupLocationName)
@@ -1529,7 +1529,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			log.Infof("About to delete backup - %s", backupName)
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, "Deleting backup")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
 
 		log.Infof("Cleaning up backup location - %s", customBackupLocationName)
@@ -2025,7 +2025,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			log.Infof("About to delete backup - %s", backupName)
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifySafely(err, nil, "Deleting backup")
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
 		DeleteCloudAccounts(backupLocationMap, credName, cloudCredUID, ctx)
 	})
@@ -3005,7 +3005,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifySafely(err, nil, "Getting backup UID")
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, "Deleting backup")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		log.Infof("Deleting backup created by user")
 		userBackupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, userBackupName, orgID)
 		dash.VerifySafely(err, nil, "Getting backup UID of user")
@@ -4573,7 +4573,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			log.Infof("About to delete backup - %s", backupName)
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, "Deleting backup")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
@@ -4659,7 +4659,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 		backupUID := getBackupUID(orgID, backupName)
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, "Deleting backup")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		err = DeleteBackupLocation(backupLocationName, BackupLocationUID, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
 		DeleteCloudCredential(CredName, orgID, CloudCredUID)
@@ -5159,7 +5159,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		for _, backupName := range backupNames {
 			backupUID := getBackupUID(backupName, orgID)
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, "Deleting backup")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
 		err = DeleteBackupLocation(backupLocationNames[0], BackupLocationUID, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationNames[0]))
@@ -5905,7 +5905,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			log.Infof("About to delete backup - %s", backupName)
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, "Deleting backup")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
 
 		log.Infof("Cleaning cloud accounts")
@@ -7741,7 +7741,7 @@ func TearDownBackupRestoreSpecific(backups []string, restores []string) {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		_, err = DeleteBackup(backupName, backupUID, OrgID, ctx)
-		dash.VerifyFatal(err, nil, "Deleting backup")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 	}
 	for _, restoreName := range restores {
 		ctx, err := backup.GetAdminCtxFromSecret()
