@@ -400,6 +400,22 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 
 })
 
+var _ = Describe("{Dummy}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("Dummy: Doing dummy stuff", "Dummying dummy", nil, 0)
+	})
+
+	It("should do nothing", func() {
+		log.InfoD("doing nothing")
+		dash.VerifyFatal(true, true, "true is not true")
+		dash.VerifyFatal(false, true, "false is not true")
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
 	var (
