@@ -1097,7 +1097,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 	})
 })
 
-/*var _ = Describe("{AddDiskWhileRebalance}", func() {
+var _ = Describe("{AddDiskWhileRebalance}", func() {
 	//AddDiskWhileRebalance:
 	//
 	//step1: get a pool
@@ -1296,7 +1296,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			AfterEachTest(contexts, testrailID, runID)
 		})
 	})
-})*/
+})
 
 func roundUpValue(toRound uint64) uint64 {
 
