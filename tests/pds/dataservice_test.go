@@ -598,7 +598,8 @@ func RunConsulBench(deploymentName string, namespace string) (string, error) {
 		final_cmd := consul_bench_abs_path + "/deploy.sh"
 		log.InfoD("Command to compile and run Consul Bench is : %s", final_cmd)
 		// Going to Execute Command to Compile and Run Consul Bench
-		_, exec_err := pdslib.LocalExecuteWithinDir(final_cmd, args)
+		// _, exec_err := pdslib.LocalExecuteWithinDir(final_cmd, args)
+		_, _, exec_err := osutils.ExecShellWithEnv(final_cmd, args)
 		log.FailOnError(exec_err, "Error occured while running Consul bench")
 		consul_bench_deployment_name = deploymentName + "-bench"
 		dep_status, err := k8sApps.DescribeDeployment(consul_bench_deployment_name, namespace)
