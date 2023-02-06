@@ -3,11 +3,11 @@ package tests
 import (
 	"errors"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"os"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -565,9 +565,12 @@ func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild str
 			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
 		})
 		// Running Consul Bench
-		err = RunConsulBench(deploymentName, namespace)
+		consul_bench_deployment_name, err := RunConsulBench(deploymentName, namespace)
 		log.FailOnError(err, "Failing the TC as Running Consul Bench has failed")
 		Step("Delete Deployments", func() {
+			log.InfoD("Deleting Consul Bench Deployment")
+			err := k8sApps.DeleteDeployment(consul_bench_deployment_name, namespace)
+			log.FailOnError(err, "Error while trying to delete Consul Bench Deployment")
 			log.InfoD("Deleting DataService")
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
 			log.FailOnError(err, "Error while deleting data services")
@@ -578,8 +581,9 @@ func deployAndRunConsulBench(dataservice, Version, Image, dsVersion, dsBuild str
 	return true
 }
 
-func RunConsulBench(deploymentName string, namespace string) error {
+func RunConsulBench(deploymentName string, namespace string) (string, error) {
 	result := false
+	var consul_bench_deployment_name string
 	Step("Compile and Start Consul Bench", func() {
 		log.InfoD("Trying to compile and execute Consul Bench on this host")
 		pwd, err := os.Getwd() // Get Current Working Directory
@@ -594,11 +598,9 @@ func RunConsulBench(deploymentName string, namespace string) error {
 		final_cmd := "./deploy.sh"
 		log.InfoD("Command to compile and run Consul Bench is : %s", final_cmd)
 		// Going to Execute Command to Compile and Run Consul Bench
-		_, err := pdslib.LocalExecuteWithinDir(final_cmd, args, consul_bench_abs_path)
-		log.FailOnError(err, "Error occured while running Consul bench")
-		// deploymentName = "con-dhruv-test-9hn4v9"
-		// namespace := "automation"
-		consul_bench_deployment_name := deploymentName + "-bench"
+		_, exec_err := pdslib.LocalExecuteWithinDir(final_cmd, args, consul_bench_abs_path)
+		log.FailOnError(exec_err, "Error occured while running Consul bench")
+		consul_bench_deployment_name = deploymentName + "-bench"
 		dep_status, err := k8sApps.DescribeDeployment(consul_bench_deployment_name, namespace)
 		log.FailOnError(err, "Error while checking for deployment status")
 		log.InfoD("Dep status is : %v", *dep_status)
@@ -607,9 +609,9 @@ func RunConsulBench(deploymentName string, namespace string) error {
 		}
 	})
 	if result {
-		return nil
+		return consul_bench_deployment_name, nil
 	} else {
-		return errors.New("Running Consul Bench Failed")
+		return consul_bench_deployment_name, errors.New("Running Consul Bench Failed")
 	}
 }
 
