@@ -1137,7 +1137,15 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		var nodeSelected node.Node
 		//var pools map[string]*api.StoragePool
 		var volSelected *volume.Volume
-		volSelected, err = getVolumeWithMinimumSize(contexts, 10)
+		for _, ctx := range contexts {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				//return nil, true, err
+			}
+
+			//volSelected, err = getVolumeWithMinimumSize(contexts, 10)
+			volSelected = vols[0]
+		}
 		log.FailOnError(err, "error identifying volume")
 		log.Infof("%+v", volSelected)
 		rs, err := Inst().V.GetReplicaSets(volSelected)
