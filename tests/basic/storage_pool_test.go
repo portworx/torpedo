@@ -5188,3 +5188,116 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
+	var testrailID = 79487
+	// Testrail Description : Changed pool IO_priority should persist post pool expand
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/79487
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ChangedIOPriorityPersistPoolExpand",
+			"Changed pool IO_priority should persist post pool expand",
+			nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Changed pool IO_priority should persist post pool expand"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("changedioprioritypoolexpand-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		// Get the Pool UUID on which IO is running
+		poolUUID, err := GetPoolIDWithIOs()
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+
+		// Get IO Priority of Pool before running the test
+		ioPriorityBefore, err := GetPoolIOPriorityStatus(poolUUID)
+		log.FailOnError(err, "Failed to get IO Priority for Pool with UUID [%v]", poolUUID)
+		log.InfoD("IO Priority of Pool [%s] before Pool expand is [%s]", poolUUID, ioPriorityBefore)
+
+		// Change IO Priority of the Pool
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details using PoolUUID [%v]", poolUUID)
+
+		log.InfoD("Bring Node to Maintenance Mode")
+		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to Bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
+
+		// Set IO Priority on the Pool
+		var ioPriorities = []string{"Low", "Medium", "High"}
+		var setIOPriority string
+
+		// Selecting Pool IO Priority Value different that the one already set
+		for _, eachIOPriority := range ioPriorities {
+			if eachIOPriority != ioPriorityBefore {
+				setIOPriority = eachIOPriority
+				break
+			}
+		}
+
+		log.InfoD("Setting Pool [%s] with IO Priority [%s]", poolUUID, setIOPriority)
+		log.FailOnError(Inst().V.UpdatePoolIOPriority(*nodeDetail, poolUUID, setIOPriority), fmt.Sprintf("Failed to Set IO Priority of Pool [%s]", poolUUID))
+
+		log.InfoD("Bring Node out of Maintenance Mode")
+		t := func() (interface{}, bool, error) {
+			if err := Inst().V.ExitMaintenance(*nodeDetail); err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+
+		_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
+		log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode in node [%s]", nodeDetail.Name))
+
+		// Do Pool Expand on the Node
+		stepLog = fmt.Sprintf("Expanding pool on node [%s] and pool UUID: [%s] using auto", nodeDetail.Name, poolUUID)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			log.FailOnError(err, "Failed to get pool using UUID [%s]", poolUUID)
+			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
+
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			log.InfoD("Current Size of the pool [%s] is [%d]", poolUUID, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", poolUUID, nodeDetail.Name))
+		})
+
+		// Validate if PoolIO Priority is not changed after pool Expansion
+		ioPriorityAfter, err := GetPoolIOPriorityStatus(poolUUID)
+		log.FailOnError(err, "Failed to get IO Priority for Pool with UUID [%v]", poolUUID)
+
+		log.InfoD(fmt.Sprintf("Priority Before [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, ioPriorityAfter))
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+
+		stepLog = "destroy all the applications created before test runs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})

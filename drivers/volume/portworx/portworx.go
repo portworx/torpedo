@@ -983,6 +983,23 @@ func (d *portworx) ExitMaintenance(n node.Node) error {
 	return nil
 }
 
+func (d *portworx) UpdatePoolIOPriority(n node.Node, poolID string, IOPriority string) error {
+
+	cmd := fmt.Sprintf("pxctl sv pool update -u %s --io_priority %s", poolID, IOPriority)
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("error when exiting pool maintenance on node [%s], Err: %v", n.Name, err)
+	}
+	log.Infof("Exit pool maintenance %s", out)
+	return nil
+}
+
 func (d *portworx) EnterPoolMaintenance(n node.Node) error {
 	cmd := fmt.Sprintf("pxctl sv pool maintenance -e -y")
 	out, err := d.nodeDriver.RunCommand(
