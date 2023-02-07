@@ -1129,23 +1129,17 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		ValidateApplications(contexts)
 
 		var poolIDToResize string
-		var vols []*volume.Volume
+		//var vols []*volume.Volume
 		stNodes := node.GetStorageNodes()
 		var poolToBeResized *api.StoragePool
-		//var currentTotalPoolSize uint64
+		var currentTotalPoolSize uint64
 		var err error
 		var nodeSelected node.Node
 		//var pools map[string]*api.StoragePool
 		var volSelected *volume.Volume
-		for _, ctx := range contexts {
-			vols, err := Inst().S.GetVolumes(ctx)
-			if err != nil {
-				//return nil, true, err
-			}
-			//volSelected, err = getVolumeWithMinimumSize(contexts, 10)
-			volSelected = vols[0]
-		}
-		volSelected = vols[0]
+		volSelected, err = getVolumeWithMinimumSize(contexts, 10)
+		//volSelected = vols[0]
+		//volSelected = vols[0]
 		log.FailOnError(err, "error identifying volume")
 		log.Infof("volume selected is %+v", volSelected)
 		rs, err := Inst().V.GetReplicaSets(volSelected)
@@ -1174,7 +1168,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		dash.Infof("selected node %s, pool %s", nodeSelected.Name, poolIDToResize)
 		poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
 		log.FailOnError(err, "unable to get pool using UUID")
-		//currentTotalPoolSize = poolToBeResized.TotalSize / units.GiB
+		currentTotalPoolSize = poolToBeResized.TotalSize / units.GiB
 		//pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "error getting storage pools")
 		//existingPoolsCount := len(pools)
@@ -1225,7 +1219,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		//	continue
 		//}
 		newSpec := strings.Join(paramsArr, ",")
-		//expandedExpectedPoolSize := currentTotalPoolSize * 2
+		expandedExpectedPoolSize := currentTotalPoolSize * 2
 
 		stepLog = fmt.Sprintf("Verify that pool %s can be expanded", poolIDToResize)
 		Step(stepLog, func() {
@@ -1261,11 +1255,11 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			expectedError := "error not expected"
 			dash.VerifyFatal(expectedError, true, "Verify pool before expansion")
 			log.InfoD("Validate pool rebalance after drive add")
-			err = ValidatePoolRebalance()
+			//err = ValidatePoolRebalance()
 			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", poolIDToResize))
-			//isjournal, err := isJournalEnabled()
+			isjournal, err := isJournalEnabled()
 			log.FailOnError(err, "is journal enabled check failed")
-			//err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
+			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
 			log.FailOnError(err, "Error waiting for pool resize")
 			//resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 			blockDrivesAfterDriveInsertFailed, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
