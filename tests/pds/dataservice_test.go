@@ -595,11 +595,9 @@ func RunConsulBench(deploymentName string, namespace string) (string, error) {
 		consul_bench_path := append(torpedo_abs_path, "drivers", "pds", "third-party", "consul-bench")
 		consul_bench_abs_path := strings.Join(consul_bench_path, "/")
 		log.InfoD("Consul Bench Absolute Path : %v", consul_bench_abs_path)
-		// args := []string{deploymentName, namespace, consul_bench_abs_path}
 		final_cmd := consul_bench_abs_path + "/deploy.sh"
 		log.InfoD("Command to compile and run Consul Bench is : %s", final_cmd)
 		// Going to Execute Command to Compile and Run Consul Bench
-		// _, exec_err := pdslib.LocalExecuteWithinDir(final_cmd, args)
 		_, _, exec_err := osutils.ExecShellWithEnv(final_cmd, deploymentName, namespace, consul_bench_abs_path)
 		log.FailOnError(exec_err, "Error occured while running Consul bench")
 		consul_bench_deployment_name = deploymentName + "-bench"
