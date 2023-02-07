@@ -1129,7 +1129,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		ValidateApplications(contexts)
 
 		var poolIDToResize string
-
+		var vols []*volume.Volume
 		stNodes := node.GetStorageNodes()
 		var poolToBeResized *api.StoragePool
 		//var currentTotalPoolSize uint64
@@ -1142,11 +1142,10 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			if err != nil {
 				//return nil, true, err
 			}
-
 			//volSelected, err = getVolumeWithMinimumSize(contexts, 10)
 			volSelected = vols[0]
 		}
-
+		volSelected = vols[0]
 		log.FailOnError(err, "error identifying volume")
 		log.Infof("volume selected is %+v", volSelected)
 		rs, err := Inst().V.GetReplicaSets(volSelected)
