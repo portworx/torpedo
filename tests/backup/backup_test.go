@@ -5409,7 +5409,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 					restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
 					scName := fmt.Sprintf("replica-sc-%v", time.Now().Unix())
 					pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all PVCs from namespace - %v", pvcs))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all PVCs from namespace [%s]. Total PVCs - %d", namespace, len(pvcs.Items)))
 					singlePvc := pvcs.Items[0]
 					sourceScName, err := core.Instance().GetStorageClassForPVC(&singlePvc)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC from PVC - %s", singlePvc.GetName()))
