@@ -5409,15 +5409,15 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 					restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
 					scName := fmt.Sprintf("replica-sc-%v", time.Now().Unix())
 					pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, labelSelectors)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all PVCs from namespace - %v", pvcs))
 					singlePvc := pvcs.Items[0]
-					dash.VerifyFatal(err, nil, "Getting PVC from namespace")
 					sourceScName, err := core.Instance().GetStorageClassForPVC(&singlePvc)
-					dash.VerifyFatal(err, nil, "Getting SC from PVC")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting SC from PVC - %s", singlePvc.GetName()))
 					storageClassMapping[sourceScName.Name] = scName
 					restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
 					namespaceMapping[namespace] = restoredNameSpace
 					err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, storageClassMapping)
-					dash.VerifyFatal(err, nil, "Restoring with custom Storage Class Mapping")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring with custom Storage Class Mapping - %v", namespaceMapping))
 				}
 			}
 		})
