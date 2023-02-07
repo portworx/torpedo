@@ -1146,8 +1146,9 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			//volSelected, err = getVolumeWithMinimumSize(contexts, 10)
 			volSelected = vols[0]
 		}
+
 		log.FailOnError(err, "error identifying volume")
-		log.Infof("%+v", volSelected)
+		log.Infof("volume selected is %+v", volSelected)
 		rs, err := Inst().V.GetReplicaSets(volSelected)
 		log.FailOnError(err, fmt.Sprintf("error getting replica sets for vol %s", volSelected.Name))
 		attachedNodeID := rs[0].Nodes[0]
@@ -1157,10 +1158,10 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 				nodeSelected = stNode
 			}
 		}
-
 		if &nodeSelected == nil {
 			dash.VerifyFatal(false, true, "unable to identify the node for add new pool")
 		}
+
 	poolloop:
 		for _, volPool := range volumePools {
 			for _, nodePool := range nodeSelected.Pools {
