@@ -1123,7 +1123,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("addnewpoolrebal-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddiskwhilerebal-%d", i))...)
 		}
 
 		ValidateApplications(contexts)
@@ -1153,6 +1153,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		log.FailOnError(err, fmt.Sprintf("error getting replica sets for vol %s", volSelected.Name))
 		attachedNodeID := rs[0].Nodes[0]
 		volumePools := rs[0].PoolUuids
+
 		for _, stNode := range stNodes {
 			if stNode.Id == attachedNodeID {
 				nodeSelected = stNode
