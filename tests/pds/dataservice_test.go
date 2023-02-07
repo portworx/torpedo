@@ -1338,3 +1338,57 @@ var _ = Describe("{RollingRebootNodes}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{AddAndValidateUserRoles}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddAndValidateUser", "Add users with admin or non admin privileges and validate the same.", nil, 0)
+	})
+
+	It("add users with admin or non admin privileges and validate.", func() {
+		usersParam := params.Users
+
+		Step("Adding users having admin previledges and validating for same.", func() {
+			log.Info("Adding user with admin privileges.")
+			username := usersParam.AdminUsername
+			password := usersParam.AdminPassord
+			log.InfoD("Adding the user - %v", username)
+			err := pdslib.Components.AccountRoleBinding.AddUser(accountID, username, true)
+			log.FailOnError(err, "Error while adding the user")
+			os.Setenv("PDS_USERNAME", username)
+			os.Setenv("PDS_PASSWORD", password)
+			log.Info("Validating the admin role by listing users.")
+			_, err = pdslib.Components.AccountRoleBinding.ListAccountsRoleBindings(accountID)
+			if err == nil {
+				log.InfoD("User - %v is able to fetch all the users belong to this account as expected since it has the admin privileges.", usersParam.AdminUsername)
+			}
+		})
+
+		Step("Adding users having non-admin previledges and validating it.", func() {
+			log.InfoD("Adding user with non admin privileges.")
+			username := usersParam.NonAdminUsername
+			password := usersParam.NonAdminPassword
+			err := pdslib.Components.AccountRoleBinding.AddUser(accountID, username, false)
+			log.FailOnError(err, "Error while adding the user")
+			os.Setenv("PDS_USERNAME", username)
+			os.Setenv("PDS_PASSWORD", password)
+			log.InfoD("Validating the non-admin role by trying to list users belong to this account.")
+			_, err = pdslib.Components.AccountRoleBinding.ListAccountsRoleBindings(accountID)
+			if err != nil {
+				log.InfoD("User - %v is unable to fetch all the users belong to this account as expected since it doesn't have the admin privileges.", usersParam.NonAdminUsername)
+			}
+		})
+		log.InfoD("Resetting to default admin user and validating by listing users.")
+		defaultAdmin := os.Getenv("PDS_USERNAME")
+		defaultAdminPassword := os.Getenv("PDS_PASSWORD")
+		os.Setenv("PDS_USERNAME", defaultAdmin)
+		os.Setenv("PDS_PASSWORD", defaultAdminPassword)
+		_, err := pdslib.Components.AccountRoleBinding.ListAccountsRoleBindings(accountID)
+		if err == nil {
+			log.InfoD("User - %v is unable to fetch all the users belong to this account as expected since it doesn't have the admin privileges.", defaultAdmin)
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
