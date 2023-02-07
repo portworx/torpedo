@@ -8378,17 +8378,21 @@ func GetAllRestoresAdmin() ([]string, error) {
 	restoreNames := make([]string, 0)
 	backupDriver := Inst().Backup
 	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching ctx")
+	if err != nil {
+		return restoreNames, err
+	}
 
 	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
 		OrgId: orgID,
 	}
 	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
-	log.FailOnError(err, "Failed to enumerate on restore objects")
+	if err != nil {
+		return restoreNames, err
+	}
 	for _, restore := range restoreResponse.GetRestores() {
 		restoreNames = append(restoreNames, restore.Name)
 	}
-	return restoreNames, err
+	return restoreNames, nil
 }
 
 // TODO: There is no delete org API
@@ -8480,7 +8484,7 @@ func getAllBackupLocations(ctx context.Context) (map[string]string, error) {
 	}
 	response, err := backupDriver.EnumerateBackupLocation(ctx, backupLocationEnumerateRequest)
 	if err != nil {
-		return nil, nil
+		return backupLocationMap, err
 	}
 	if len(response.BackupLocations) > 0 {
 		log.Infof("Found backup locations - ")
@@ -8502,7 +8506,7 @@ func getAllCloudCredentials(ctx context.Context) (map[string]string, error) {
 	}
 	response, err := backupDriver.EnumerateCloudCredential(ctx, cloudCredentialEnumerateRequest)
 	if err != nil {
-		return nil, nil
+		return cloudCredentialMap, err
 	}
 	if len(response.CloudCredentials) > 0 {
 		log.Infof("Found cloud credentials - ")
