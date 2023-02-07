@@ -63,11 +63,18 @@ type ResourceSettingTemplate struct {
 	} `json:"resources"`
 }
 
-// Creds has data service creds
-type Creds struct {
-	Host     string
-	User     string
-	Password string
+// WorkloadGenerationParams has data service creds
+type WorkloadGenerationParams struct {
+	Host                         string
+	User                         string
+	Password                     string
+	DataServiceName              string
+	DeploymentName               string
+	DeploymentID                 string
+	ScaleFactor                  string
+	Iterations                   string
+	Namespace                    string
+	UseSSL, VerifyCerts, TimeOut string
 }
 
 // StorageOptions struct used to store template values
@@ -1193,7 +1200,7 @@ func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcNa
 }
 
 //CreatePodWorkloads generate workloads as standalone pods
-func CreatePodWorkloads(name string, image string, creds Creds, namespace string, count string, env []string) (*corev1.Pod, error) {
+func CreatePodWorkloads(name string, image string, creds WorkloadGenerationParams, namespace string, count string, env []string) (*corev1.Pod, error) {
 	var value []string
 	podSpec := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -1217,7 +1224,7 @@ func CreatePodWorkloads(name string, image string, creds Creds, namespace string
 	}
 
 	value = append(value, creds.Host)
-	value = append(value, "pds")
+	value = append(value, creds.User)
 	value = append(value, creds.Password)
 	value = append(value, count)
 
@@ -1505,27 +1512,27 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	return false, errors.New("TPCC run failed.")
 }
 
-// CreateDataServiceWorkloads func
-func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (*corev1.Pod, *v1.Deployment, error) {
+//CreateDataServiceWorkloads generates workloads for the given dataservices
+func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *v1.Deployment, error) {
 	var dep *v1.Deployment
 	var pod *corev1.Pod
 
-	dnsEndpoint, err := GetDeploymentConnectionInfo(deploymentID)
+	dnsEndpoint, err := GetDeploymentConnectionInfo(params.DeploymentID)
 	if err != nil {
 		log.Errorf("An Error Occured while getting connection info %v", err)
 		return nil, nil, err
 	}
 	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 
-	pdsPassword, err := GetDeploymentCredentials(deploymentID)
+	pdsPassword, err := GetDeploymentCredentials(params.DeploymentID)
 	if err != nil {
 		log.Errorf("An Error Occured while getting credentials info %v", err)
 		return nil, nil, err
 	}
 
-	switch dataServiceName {
+	switch params.DataServiceName {
 	case postgresql:
-		dep, err = CreatepostgresqlWorkload(dnsEndpoint, pdsPassword, scalefactor, iterations, deploymentName, namespace)
+		dep, err = CreatepostgresqlWorkload(dnsEndpoint, pdsPassword, params.ScaleFactor, params.Iterations, params.DeploymentName, params.Namespace)
 		if err != nil {
 			log.Errorf("An Error Occured while creating postgresql workload %v", err)
 			return nil, nil, err
@@ -1534,7 +1541,7 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 	case rabbitmq:
 		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
 		command := "while true; do java -jar perf-test.jar --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 100 --variable-rate 100:30 --producers 10 --consumers 50; done"
-		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, namespace, env, command)
+		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, command)
 		if err != nil {
 			log.Errorf("An Error Occured while creating rabbitmq workload %v", err)
 			return nil, nil, err
@@ -1543,22 +1550,22 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 	case redis:
 		env := []string{"REDIS_HOST", "PDS_USER", "PDS_PASS"}
 		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster --user ${PDS_USER}"
-		pod, err = CreateRedisWorkload(deploymentName, redisStressImage, dnsEndpoint, pdsPassword, namespace, env, command)
+		pod, err = CreateRedisWorkload(params.DeploymentName, redisStressImage, dnsEndpoint, pdsPassword, params.Namespace, env, command)
 		if err != nil {
 			log.Errorf("An Error Occured while creating redis workload %v", err)
 			return nil, nil, err
 		}
 
 	case cassandra:
-		cassCommand := deploymentName + " write no-warmup n=1000000 cl=ONE -mode user=pds password=" + pdsPassword + " native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node " + dnsEndpoint + " -port native=9042 -rate auto -log file=/tmp/" + deploymentName + ".load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/" + deploymentName + ".load.data"
-		dep, err = CreateDeploymentWorkloads(cassCommand, deploymentName, cassandraStresImage, namespace)
+		cassCommand := params.DeploymentName + " write no-warmup n=1000000 cl=ONE -mode user=pds password=" + pdsPassword + " native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node " + dnsEndpoint + " -port native=9042 -rate auto -log file=/tmp/" + params.DeploymentName + ".load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/" + params.DeploymentName + ".load.data"
+		dep, err = CreateDeploymentWorkloads(cassCommand, params.DeploymentName, cassandraStresImage, params.Namespace)
 		if err != nil {
 			log.Errorf("An Error Occured while creating cassandra workload %v", err)
 			return nil, nil, err
 		}
 	case elasticSearch:
-		esCommand := "while true; do esrally race --track=geonames --target-hosts=" + dnsEndpoint + " --pipeline=benchmark-only --test-mode --kill-running-processes --client-options=\"timeout:60,use_ssl:false,verify_certs:false,basic_auth_user:'elastic',basic_auth_password:" + pdsPassword + "\"; done"
-		dep, err = CreateDeploymentWorkloads(esCommand, deploymentName, esRallyImage, namespace)
+		esCommand := "while true; do esrally race --track=geonames --target-hosts=" + dnsEndpoint + " --pipeline=benchmark-only --test-mode --kill-running-processes --client-options=\"timeout:" + params.TimeOut + ",use_ssl:" + params.UseSSL + ",verify_certs:" + params.VerifyCerts + ",basic_auth_user:" + params.User + ",basic_auth_password:" + pdsPassword + "\"; done"
+		dep, err = CreateDeploymentWorkloads(esCommand, params.DeploymentName, esRallyImage, params.Namespace)
 		if err != nil {
 			log.Errorf("An Error Occured while creating elasticSearch workload %v", err)
 			return nil, nil, err
@@ -1567,12 +1574,11 @@ func CreateDataServiceWorkloads(dataServiceName string, deploymentID string, sca
 	case couchbase:
 		env := []string{"HOST", "PDS_USER", "PASSWORD", "COUNT"}
 
-		var creds Creds
-		creds.Host = dnsEndpoint
-		creds.User = "pds"
-		creds.Password = pdsPassword
+		params.Host = dnsEndpoint
+		params.User = "pds"
+		params.Password = pdsPassword
 
-		pod, err = CreatePodWorkloads(deploymentName, cbloadImage, creds, namespace, "1000", env)
+		pod, err = CreatePodWorkloads(params.DeploymentName, cbloadImage, params, params.Namespace, "1000", env)
 		if err != nil {
 			log.Errorf("An Error Occured while creating couchbase workload %v", err)
 			return nil, nil, err
