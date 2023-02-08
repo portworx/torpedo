@@ -1045,6 +1045,23 @@ func (d *portworx) RecoverPool(n node.Node) error {
 	return nil
 }
 
+func (d *portworx) DeletePool(n node.Node, poolID int) error {
+	cmd := fmt.Sprintf("pxctl sv pool delete %d -y", poolID)
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("error when deleting Pool with PoolID [%d] from node [%s], Err: [%v]", poolID, n.Name, err)
+	}
+	log.Infof("Pool Delete Successful %s", out)
+	return nil
+
+}
+
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)

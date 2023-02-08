@@ -5228,10 +5228,10 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		log.FailOnError(err, "Failed to get Node Details using PoolUUID [%v]", poolUUID)
 
 		log.InfoD("Bring Node to Maintenance Mode")
-		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to Bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
+		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
 
 		// Set IO Priority on the Pool
-		var ioPriorities = []string{"Low", "Medium", "High"}
+		var ioPriorities = []string{"low", "medium", "high"}
 		var setIOPriority string
 
 		// Selecting Pool IO Priority Value different that the one already set
@@ -5243,7 +5243,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		}
 
 		log.InfoD("Setting Pool [%s] with IO Priority [%s]", poolUUID, setIOPriority)
-		log.FailOnError(Inst().V.UpdatePoolIOPriority(*nodeDetail, poolUUID, setIOPriority), fmt.Sprintf("Failed to Set IO Priority of Pool [%s]", poolUUID))
+		log.FailOnError(Inst().V.UpdatePoolIOPriority(*nodeDetail, poolUUID, setIOPriority), fmt.Sprintf("Failed to set IO Priority of Pool [%s]", poolUUID))
 
 		log.InfoD("Bring Node out of Maintenance Mode")
 		t := func() (interface{}, bool, error) {
@@ -5254,7 +5254,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		}
 
 		_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
-		log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode in node [%s]", nodeDetail.Name))
+		log.FailOnError(err, fmt.Sprintf("Failed to exit maintenence mode on node [%s]", nodeDetail.Name))
 
 		// Do Pool Expand on the Node
 		stepLog = fmt.Sprintf("Expanding pool on node [%s] and pool UUID: [%s] using auto", nodeDetail.Name, poolUUID)
@@ -5297,7 +5297,87 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 	})
 
 	JustAfterEach(func() {
+		// Making sure that the nodes are not in Mainteinance mode
+		ExitNodesFromMaintenanceMode()
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
+	var testrailID = 79487
+	// Testrail Description : Verify deletion of invalid pool ids
+	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/55349
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("VerifyPoolDeleteInvalidPoolID",
+			"Verify deletion of invalid pool ids",
+			nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "Verify deletion of invalid pool ids"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("deleteinvalidpoolid-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		// Get the Pool UUID on which IO is running
+		poolUUID, err := GetPoolIDWithIOs()
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+		log.FailOnError(err, "Failed to get pool using UUID [%v]", poolUUID)
+
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+
+		PoolDetail := GetPoolsDetailsOnNode(*nodeDetail)
+		log.InfoD("Pool Details [%v] Picked for Delete", PoolDetail)
+
+		// invalidPoolID is total Pools present on the node + 1
+		invalidPoolID := len(PoolDetail) + 1
+
+		log.InfoD("Bring Node to Maintenance Mode")
+		log.FailOnError(Inst().V.EnterMaintenance(*nodeDetail), fmt.Sprintf("Failed to bring Pool [%s] to Mainteinance Mode on Node [%s]", poolUUID, nodeDetail.Name))
+
+		// Wait for some time before verifying Maintenance state
+		time.Sleep(5 * time.Minute)
+
+		log.InfoD("Wait for Node to Enter Maintenance Mode")
+		WaitTillEnterMaintenanceMode(*nodeDetail)
+
+		// Delete the Pool with Invalid Pool ID
+		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID)
+		dash.VerifyFatal(err != nil, true, fmt.Sprintf("Pool Delete Status is SUCCESS. Expected Failure! : Node Detail [%v]", nodeDetail))
+		log.InfoD("Deleting Pool with InvalidID Errored as expected [%v]", err)
+
+		log.InfoD("Bring Node out of Maintenance Mode")
+		ExitFromMaintenanceMode(*nodeDetail)
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+
+		stepLog = "DSestroy all the applications created before test runs"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+
+		JustAfterEach(func() {
+			log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
+			ExitNodesFromMaintenanceMode()
+			defer EndTorpedoTest()
+			AfterEachTest(contexts, testrailID, runID)
+		})
 	})
 })

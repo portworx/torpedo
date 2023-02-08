@@ -247,6 +247,14 @@ func (d *DefaultDriver) RecoverPool(n node.Node) error {
 	}
 }
 
+// DeletePool will delete the Pool using PoolID from specific Node
+func (d *DefaultDriver) DeletePool(n node.Node, poolID int) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeletePool()",
+	}
+}
+
 // EnterPoolMaintenance puts pools on the given node in maintenance mode
 func (d *DefaultDriver) EnterPoolMaintenance(n node.Node) error {
 	return &errors.ErrNotSupported{
