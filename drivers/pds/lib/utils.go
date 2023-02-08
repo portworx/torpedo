@@ -1799,7 +1799,7 @@ func UpdateDataServices(deploymentID string, appConfigID string, imageID string,
 		deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
 		if err != nil {
 			log.Errorf("An Error Occured while updating deployment %v", err)
-			return false, err
+			return false, nil
 		}
 		return true, nil
 	})
