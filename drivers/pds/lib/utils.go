@@ -58,6 +58,12 @@ type Parameter struct {
 		Namespace       string `json:"Namespace"`
 		PxNamespace     string `json:"PxNamespace"`
 	} `json:"InfraToTest"`
+	Users struct {
+		AdminUsername    string `json:"AdminUsername"`
+		AdminPassword    string `json:"AdminPassword"`
+		NonAdminUsername string `json:"NonAdminUsername"`
+		NonAdminPassword string `json:"NonAdminPassword"`
+	} `json:"Users"`
 }
 
 // ResourceSettingTemplate struct used to store template values

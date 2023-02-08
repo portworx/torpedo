@@ -1352,7 +1352,7 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 		Step("Adding users having admin privileges and validating for same.", func() {
 			log.Info("Adding user with admin privileges.")
 			username := usersParam.AdminUsername
-			password := usersParam.AdminPassord
+			password := usersParam.AdminPassword
 			log.InfoD("Adding the user - %v", username)
 			err := pdslib.Components.AccountRoleBinding.AddUser(accountID, username, true)
 			log.FailOnError(err, fmt.Sprintf("Error while adding the user %s", username))
