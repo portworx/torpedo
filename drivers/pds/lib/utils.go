@@ -1805,18 +1805,21 @@ func GetAllSupportedDataServices() map[string]string {
 func UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
 
 	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
-	deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
-	if err != nil {
-		log.Errorf("An Error Occured while updating deployment %v", err)
-		return nil, err
-	}
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
+		if err != nil {
+			log.Errorf("An Error Occured while updating deployment %v", err)
+			return false, err
+		}
+		return true, nil
+	})
 
 	err = ValidateDataServiceDeployment(deployment, namespace)
 	if err != nil {
 		return nil, err
 	}
 
-	return deployment, nil
+	return deployment, err
 }
 
 // ValidateDataServiceVolumes validates the volumes

@@ -73,6 +73,13 @@
       "Image": "bb4743b",
       "Replicas": 3,
       "ScaleReplicas": 5
+    },
+    {
+      "Name": "MongoDB Enterprise",
+      "Version": "6.0.3",
+      "Image": "b9b2afe",
+      "Replicas": 3,
+      "ScaleReplicas": 5
     }
   ],
   "InfraToTest": {
