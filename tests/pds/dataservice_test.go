@@ -1346,24 +1346,28 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 
 	It("add users with admin or non admin privileges and validate.", func() {
 		usersParam := params.Users
+		defaultAdmin := os.Getenv("PDS_USERNAME")
+		defaultAdminPassword := os.Getenv("PDS_PASSWORD")
 
-		Step("Adding users having admin previledges and validating for same.", func() {
+		Step("Adding users having admin privileges and validating for same.", func() {
 			log.Info("Adding user with admin privileges.")
 			username := usersParam.AdminUsername
 			password := usersParam.AdminPassord
 			log.InfoD("Adding the user - %v", username)
 			err := pdslib.Components.AccountRoleBinding.AddUser(accountID, username, true)
-			log.FailOnError(err, "Error while adding the user")
+			log.FailOnError(err, fmt.Sprintf("Error while adding the user %s", username))
 			os.Setenv("PDS_USERNAME", username)
 			os.Setenv("PDS_PASSWORD", password)
 			log.Info("Validating the admin role by listing users.")
 			_, err = pdslib.Components.AccountRoleBinding.ListAccountsRoleBindings(accountID)
-			if err == nil {
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("User - %v is unable to fetch all the users belong to this account which is unexpected since it has the admin privileges.", usersParam.AdminUsername))
+			} else {
 				log.InfoD("User - %v is able to fetch all the users belong to this account as expected since it has the admin privileges.", usersParam.AdminUsername)
 			}
 		})
 
-		Step("Adding users having non-admin previledges and validating it.", func() {
+		Step("Adding users having non-admin privileges and validating it.", func() {
 			log.InfoD("Adding user with non admin privileges.")
 			username := usersParam.NonAdminUsername
 			password := usersParam.NonAdminPassword
@@ -1373,22 +1377,17 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 			os.Setenv("PDS_PASSWORD", password)
 			log.InfoD("Validating the non-admin role by trying to list users belong to this account.")
 			_, err = pdslib.Components.AccountRoleBinding.ListAccountsRoleBindings(accountID)
-			if err != nil {
-				log.InfoD("User - %v is unable to fetch all the users belong to this account as expected since it doesn't have the admin privileges.", usersParam.NonAdminUsername)
-			}
+			log.FailOnError(err, fmt.Sprintf("User - %v is unable to fetch all the users belong to this account as expected since it doesn't have the admin privileges.", usersParam.NonAdminUsername))
+
 		})
 		log.InfoD("Resetting to default admin user and validating by listing users.")
-		defaultAdmin := os.Getenv("PDS_USERNAME")
-		defaultAdminPassword := os.Getenv("PDS_PASSWORD")
 		os.Setenv("PDS_USERNAME", defaultAdmin)
 		os.Setenv("PDS_PASSWORD", defaultAdminPassword)
 		_, err := pdslib.Components.AccountRoleBinding.ListAccountsRoleBindings(accountID)
-		if err == nil {
-			log.InfoD("User - %v is unable to fetch all the users belong to this account as expected since it doesn't have the admin privileges.", defaultAdmin)
-		}
+		log.FailOnError(err, fmt.Sprintf("User - %v is unable to fetch all the users belong to this account which is unexpected since it has the admin privileges.", defaultAdmin))
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		EndTorpedoTest()
 	})
 })

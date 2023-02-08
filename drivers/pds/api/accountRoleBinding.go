@@ -100,7 +100,7 @@ func (accountRoleBinding *AccountRoleBinding) RemoveUser(userID string) (*status
 		return nil, fmt.Errorf("error in getting context for api call: %v", err)
 	}
 	res, err := client.ApiAccountsIdRoleBindingsDelete(ctx, userID).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
+	if err != nil {
 		return nil, fmt.Errorf("error when calling `ApiBackupTargetsIdDelete``: %v", err)
 	}
 	return res, nil
