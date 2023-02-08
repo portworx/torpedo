@@ -416,6 +416,95 @@ var _ = Describe("{Dummy}", func() {
 	})
 })
 
+var _ = Describe("{BackupRestoreDifferentK8sVersion}", func() {
+	var (
+		clusterStatus api.ClusterInfo_StatusInfo_Status
+		srcMaj, srcMin, destMaj, destMin int64
+	)
+
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("BackupAndRestore", "restoring on different K8s version; same namespace", nil, 0)
+
+	})
+
+	It("Verify K8s version", func() {
+
+		Step("Register cluster for backup", func() {
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			CreateSourceAndDestClusters(orgID, "", "", ctx)
+			clusterStatus, _ = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+		})
+
+		Step("Switch Context (\"Source\")", func() {
+
+			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
+
+			err = Inst().S.SetConfig(sourceClusterConfigPath)
+			log.FailOnError(err, "Failed to switch to context to source cluster [%v]", sourceClusterConfigPath)
+
+			srcMaj, srcMin, err = k8s.ClusterVersion()
+			log.FailOnError(err, "Failed to get Source Cluster Version")
+		})
+
+		Step("Switch Context (\"destination\")", func() {
+			destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+
+			err = Inst().S.SetConfig(destinationClusterConfigPath)
+			log.FailOnError(err, "Failed to switch to context to destination cluster [%v]", destinationClusterConfigPath)
+
+			destMaj, destMin, err = k8s.ClusterVersion()
+			log.FailOnError(err, "Failed to get Destination Cluster Version")
+		})
+
+		Step("Compare Source and Destination cluster version numbers", func() {
+
+			if srcMaj != 0 && destMaj != 0 {
+
+				log.InfoD("Source Cluster version: %d.%d ; Destination Cluster version: %d.%d",
+					srcMaj, srcMin, destMaj, destMin)
+
+				const multiple = 100
+				isValid := (destMaj*multiple + destMin) >= (srcMaj*multiple + srcMin)
+
+				dash.VerifyFatal(isValid, true,
+					"This test is only meant for cases where the Source Cluster version is LESSER than the Destination Cluster version.")
+
+			} else {
+				err := fmt.Errorf("Cannot compare Source and Destination CLuster versions due to invalid data in Source Cluster version (%d.%d), Destination Cluster (%d.%d)", srcMaj, srcMin, destMaj, destMin)
+				log.FailOnError(err, "Failed to validate K8s versions")
+			}
+
+		})
+
+		Step("SetClusterContext \"\" (setting it back to default)", func() {
+			// Set cluster context to cluster where torpedo is running
+			var maj, min int64
+
+			err := SetClusterContext("")
+			log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+
+			maj, min, err = k8s.ClusterVersion()
+			if err != nil {
+				log.Errorf("Failed to get Default Cluster Version. Err: [%v]", err)
+			} else {
+				log.InfoD("The Px-backup's K8s cluster version is: %d.%d", maj, min)
+			}
+		})
+
+	})
+
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
 	var (

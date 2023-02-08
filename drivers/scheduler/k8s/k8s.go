@@ -249,6 +249,26 @@ func (k *K8s) String() string {
 	return SchedName
 }
 
+// String returns the version of the k8s cluster in the format (Maj, Min, Err)
+func ClusterVersion() (int64, int64, error) {
+	if ver, err := k8sCore.GetVersion(); err != nil {
+		return 0, 0, err
+	} else {
+		var err error
+		var maj, min int64
+
+		if maj, err = strconv.ParseInt(ver.Major, 10, 0); err != nil {
+			return 0, 0, err
+		}
+
+		if min, err = strconv.ParseInt(ver.Minor, 10, 0); err != nil {
+			return 0, 0, err
+		}
+
+		return maj, min, nil
+	}
+}
+
 // Init Initialize the driver
 func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.NodeDriverName = schedOpts.NodeDriverName
