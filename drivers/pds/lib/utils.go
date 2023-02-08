@@ -1235,14 +1235,12 @@ func CreatePodWorkloads(name string, image string, creds WorkloadGenerationParam
 
 	pod, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
-		log.Errorf("An Error Occured while creating %v", err)
-		return nil, err
+		return nil, fmt.Errorf("error occured while creating pod %v", err)
 	}
 
 	err = k8sCore.ValidatePod(pod, timeOut, timeInterval)
 	if err != nil {
-		log.Errorf("An Error Occured while validating the pod %v", err)
-		return nil, err
+		return nil, fmt.Errorf("error occured while validating pod %v", err)
 	}
 
 	//TODO: Remove static sleep and verify the injected data
@@ -1553,14 +1551,12 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 
 	case cassandra:
 		cassCommand := fmt.Sprintf("%s write no-warmup n=1000000 cl=ONE -mode user=pds password=%s native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node %s -port native=9042 -rate auto -log file=/tmp/%s.load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/%s.load.data", params.DeploymentName, pdsPassword, dnsEndpoint, params.DeploymentName, params.DeploymentName)
-		//cassCommand := params.DeploymentName + " write no-warmup n=1000000 cl=ONE -mode user=pds password=" + pdsPassword + " native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node " + dnsEndpoint + " -port native=9042 -rate auto -log file=/tmp/" + params.DeploymentName + ".load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/" + params.DeploymentName + ".load.data"
 		dep, err = CreateDeploymentWorkloads(cassCommand, params.DeploymentName, cassandraStresImage, params.Namespace)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating cassandra workload %v ", err)
 		}
 	case elasticSearch:
 		esCommand := fmt.Sprintf("while true; do esrally race --track=geonames --target-hosts=%s --pipeline=benchmark-only --test-mode --kill-running-processes --client-options=\"timeout:%s,use_ssl:%s,verify_certs:%s,basic_auth_user:%s,basic_auth_password:%s; done", dnsEndpoint, params.TimeOut, params.UseSSL, params.VerifyCerts, params.User, pdsPassword)
-		//esCommand := "while true; do esrally race --track=geonames --target-hosts=" + dnsEndpoint + " --pipeline=benchmark-only --test-mode --kill-running-processes --client-options=\"timeout:" + params.TimeOut + ",use_ssl:" + params.UseSSL + ",verify_certs:" + params.VerifyCerts + ",basic_auth_user:" + params.User + ",basic_auth_password:" + pdsPassword + "\"; done"
 		dep, err = CreateDeploymentWorkloads(esCommand, params.DeploymentName, esRallyImage, params.Namespace)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating elasticSearch workload %v ", err)
