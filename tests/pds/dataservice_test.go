@@ -245,7 +245,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 	})
 })
 
-var _ = Describe("{Enable/DisableNamespace}", func() {
+var _ = Describe("{EnableandDisableNamespace}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", pdsLabels, 0)
 	})
@@ -317,7 +317,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				Step("Running Workloads before scaling up of dataservices ", func() {
 					log.InfoD("Running Workloads on DataService %v ", ds.Name)
 					var params pdslib.WorkloadGenerationParams
-					RunWorkloads(params, ds)
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, "Error while genearating workloads")
 				})
 
 				Step("Validate Deployments before scale up", func() {
@@ -351,11 +352,11 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				})
 
 				Step("Delete the workload generating deployments", func() {
-					if ds.Name == cassandra || ds.Name == postgresql || ds.Name == redis || ds.Name == rabbitmq || ds.Name == elasticSearch {
-						if ds.Name == cassandra || ds.Name == postgresql || ds.Name == elasticSearch || ds.Name == couchbase {
+					if Contains(dataServiceDeploymentWorkloads, ds.Name) || Contains(dataServicePodWorkloads, ds.Name) {
+						if Contains(dataServiceDeploymentWorkloads, ds.Name) {
 							log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
 							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-						} else if ds.Name == redis || ds.Name == rabbitmq || ds.Name == couchbase {
+						} else if Contains(dataServicePodWorkloads, ds.Name) {
 							log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
 							err = pdslib.DeleteK8sPods(pod.Name, namespace)
 						}
@@ -748,56 +749,56 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService) {
-	params.DataServiceName = ds.Name
-	params.DeploymentID = deployment.GetId()
-	params.Namespace = namespace
+// func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService) {
+// 	params.DataServiceName = ds.Name
+// 	params.DeploymentID = deployment.GetId()
+// 	params.Namespace = namespace
 
-	if ds.Name == postgresql {
-		params.DeploymentName = "pgload"
-		params.ScaleFactor = "100"
-		params.Iterations = "1"
+// 	if ds.Name == postgresql {
+// 		params.DeploymentName = "pgload"
+// 		params.ScaleFactor = "100"
+// 		params.Iterations = "1"
 
-		log.Infof("Running Workloads on DataService %v ", ds.Name)
-		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-		log.FailOnError(err, "Error while genearating workloads")
-	}
-	if ds.Name == rabbitmq {
-		params.DeploymentName = "rmq"
-		log.Infof("Running Workloads on DataService %v ", ds.Name)
-		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-		log.FailOnError(err, "Error while genearating workloads")
-	}
-	if ds.Name == redis {
-		params.DeploymentName = "redisbench"
-		log.Infof("Running Workloads on DataService %v ", ds.Name)
-		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-		log.FailOnError(err, "Error while genearating workloads")
-	}
-	if ds.Name == cassandra {
-		params.DeploymentName = "cassandra-stress"
-		log.Infof("Running Workloads on DataService %v ", ds.Name)
-		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-		log.FailOnError(err, "Error while genearating workloads")
-	}
-	if ds.Name == elasticSearch {
-		params.DeploymentName = "es-rally"
-		params.User = "elastic"
-		params.UseSSL = "false"
-		params.VerifyCerts = "false"
-		params.TimeOut = "60"
-		log.Infof("Running Workloads on DataService %v ", ds.Name)
-		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-		log.FailOnError(err, "Error while genearating workloads")
-	}
-	if ds.Name == couchbase {
-		params.DeploymentName = "cb-load"
-		log.Infof("Running Workloads on DataService %v ", ds.Name)
-		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-		log.FailOnError(err, "Error while genearating workloads")
-	}
+// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
+// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+// 		log.FailOnError(err, "Error while genearating workloads")
+// 	}
+// 	if ds.Name == rabbitmq {
+// 		params.DeploymentName = "rmq"
+// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
+// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+// 		log.FailOnError(err, "Error while genearating workloads")
+// 	}
+// 	if ds.Name == redis {
+// 		params.DeploymentName = "redisbench"
+// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
+// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+// 		log.FailOnError(err, "Error while genearating workloads")
+// 	}
+// 	if ds.Name == cassandra {
+// 		params.DeploymentName = "cassandra-stress"
+// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
+// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+// 		log.FailOnError(err, "Error while genearating workloads")
+// 	}
+// 	if ds.Name == elasticSearch {
+// 		params.DeploymentName = "es-rally"
+// 		params.User = "elastic"
+// 		params.UseSSL = "false"
+// 		params.VerifyCerts = "false"
+// 		params.TimeOut = "60"
+// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
+// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+// 		log.FailOnError(err, "Error while genearating workloads")
+// 	}
+// 	if ds.Name == couchbase {
+// 		params.DeploymentName = "cb-load"
+// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
+// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+// 		log.FailOnError(err, "Error while genearating workloads")
+// 	}
 
-}
+// }
 
 func DeployandValidateDataServices(ds PDSDataService, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	Step("Deploy Data Services", func() {
@@ -873,7 +874,8 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 		Step("Running Workloads before scaling up of dataservices ", func() {
 			var params pdslib.WorkloadGenerationParams
-			RunWorkloads(params, ds)
+			pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+			log.FailOnError(err, "Error while genearating workloads")
 		})
 
 		Step("Update the data service patch versions", func() {
@@ -1077,7 +1079,8 @@ var _ = Describe("{RestartPXPods}", func() {
 
 				Step("Running Workloads before scaling up of dataservices ", func() {
 					var params pdslib.WorkloadGenerationParams
-					RunWorkloads(params, ds)
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, "Error while genearating workloads")
 				})
 
 				defer func() {
