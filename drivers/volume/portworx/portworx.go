@@ -983,6 +983,7 @@ func (d *portworx) ExitMaintenance(n node.Node) error {
 	return nil
 }
 
+// UpdatePoolIOPriority Updates IO Priority of the pool
 func (d *portworx) UpdatePoolIOPriority(n node.Node, poolID string, IOPriority string) error {
 
 	cmd := fmt.Sprintf("pxctl sv pool update -u %s --io_priority %s", poolID, IOPriority)
@@ -1045,6 +1046,7 @@ func (d *portworx) RecoverPool(n node.Node) error {
 	return nil
 }
 
+// DeletePool Deletes pool with the Pool ID Specified
 func (d *portworx) DeletePool(n node.Node, poolID int) error {
 	cmd := fmt.Sprintf("pxctl sv pool delete %d -y", poolID)
 	out, err := d.nodeDriver.RunCommand(
