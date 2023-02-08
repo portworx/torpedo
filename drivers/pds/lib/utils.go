@@ -1599,7 +1599,6 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 
 	currentReplicas = replicas
 
-	//for ds, id := range supportedDataServicesMap {
 	log.Infof("dataService: %v ", ds)
 	id := GetDataServiceID(ds)
 	if id == "" {

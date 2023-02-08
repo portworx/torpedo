@@ -749,57 +749,6 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-// func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService) {
-// 	params.DataServiceName = ds.Name
-// 	params.DeploymentID = deployment.GetId()
-// 	params.Namespace = namespace
-
-// 	if ds.Name == postgresql {
-// 		params.DeploymentName = "pgload"
-// 		params.ScaleFactor = "100"
-// 		params.Iterations = "1"
-
-// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
-// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-// 		log.FailOnError(err, "Error while genearating workloads")
-// 	}
-// 	if ds.Name == rabbitmq {
-// 		params.DeploymentName = "rmq"
-// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
-// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-// 		log.FailOnError(err, "Error while genearating workloads")
-// 	}
-// 	if ds.Name == redis {
-// 		params.DeploymentName = "redisbench"
-// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
-// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-// 		log.FailOnError(err, "Error while genearating workloads")
-// 	}
-// 	if ds.Name == cassandra {
-// 		params.DeploymentName = "cassandra-stress"
-// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
-// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-// 		log.FailOnError(err, "Error while genearating workloads")
-// 	}
-// 	if ds.Name == elasticSearch {
-// 		params.DeploymentName = "es-rally"
-// 		params.User = "elastic"
-// 		params.UseSSL = "false"
-// 		params.VerifyCerts = "false"
-// 		params.TimeOut = "60"
-// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
-// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-// 		log.FailOnError(err, "Error while genearating workloads")
-// 	}
-// 	if ds.Name == couchbase {
-// 		params.DeploymentName = "cb-load"
-// 		log.Infof("Running Workloads on DataService %v ", ds.Name)
-// 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
-// 		log.FailOnError(err, "Error while genearating workloads")
-// 	}
-
-// }
-
 func DeployandValidateDataServices(ds PDSDataService, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	Step("Deploy Data Services", func() {
 		log.InfoD("Deploying DataService %v ", ds.Name)
