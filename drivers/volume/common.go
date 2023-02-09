@@ -239,6 +239,14 @@ func (d *DefaultDriver) RecoverPool(n node.Node) error {
 	}
 }
 
+// UpdatePoolIOPriority Update IO Priority of the Pool
+func (d *DefaultDriver) UpdatePoolIOPriority(n node.Node, poolID string, IOPriority string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdatePoolIOPriority()",
+	}
+}
+
 // EnterPoolMaintenance puts pools on the given node in maintenance mode
 func (d *DefaultDriver) EnterPoolMaintenance(n node.Node) error {
 	return &errors.ErrNotSupported{

@@ -186,11 +186,17 @@ type Driver interface {
 	// failure.
 	RecoverPool(n node.Node) error
 
+	// UpdatePoolIOPriority updates IO priority of the pool
+	UpdatePoolIOPriority(n node.Node, poolID string, IOPriority string) error
+
 	// EnterPoolMaintenance puts pools in the given node in maintenance mode
 	EnterPoolMaintenance(n node.Node) error
 
 	// ExitPoolMaintenance exits pools in the given node from maintenance mode
 	ExitPoolMaintenance(n node.Node) error
+
+	//DeletePool deletes the pool with given poolID
+	DeletePool(n node.Node, poolID string) error
 
 	// GetDriverVersion will return the pxctl version from the node
 	GetDriverVersion() (string, error)
