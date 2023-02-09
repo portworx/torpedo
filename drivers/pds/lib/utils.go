@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -302,7 +304,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
 }
 
-//ValidateNamespaces validates the namespace is available for pds
+// ValidateNamespaces validates the namespace is available for pds
 func ValidateNamespaces(deploymentTargetID string, ns string, status string) error {
 	isavailable = false
 	waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
@@ -325,13 +327,13 @@ func ValidateNamespaces(deploymentTargetID string, ns string, status string) err
 	return waitErr
 }
 
-//DeletePDSNamespace deletes the given namespace
+// DeletePDSNamespace deletes the given namespace
 func DeletePDSNamespace(namespace string) error {
 	err := k8sCore.DeleteNamespace(namespace)
 	return err
 }
 
-//UpdatePDSNamespce updates the namespace
+// UpdatePDSNamespce updates the namespace
 func UpdatePDSNamespce(name string, nsLables map[string]string) (*corev1.Namespace, error) {
 	nsSpec := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
@@ -440,33 +442,43 @@ func GetPods(namespace string) (*corev1.PodList, error) {
 	return podList, err
 }
 
-// DeleteDeploymentPods deletes the given pods
-func DeleteDeploymentPods(podList *corev1.PodList) error {
-	var pods, newPods []corev1.Pod
-	k8sOps := k8sCore
+// ValidatePods returns err if pods are not up
+func ValidatePods(namespace string, podName string) error {
 
-	pods = append(pods, podList.Items...)
-	err := k8sOps.DeletePods(pods, true)
+	var newPods []corev1.Pod
+	newPodList, err := GetPods(namespace)
 	if err != nil {
 		return err
 	}
 
-	//get the newly created pods
-	time.Sleep(10 * time.Second)
-	newPodList, err := GetPods("pds-system")
-	if err != nil {
-		return err
+	if podName != "" {
+		for _, pod := range newPodList.Items {
+			if strings.Contains(pod.Name, podName) {
+				log.Infof("%v", pod.Name)
+				newPods = append(newPods, pod)
+			}
+		}
+	} else {
+		//reinitializing the pods
+		newPods = append(newPods, newPodList.Items...)
 	}
-	//reinitializing the pods
-	newPods = append(newPods, newPodList.Items...)
 
-	//validate deployment pods are up and running after deletion
+	//validate deployment pods are up and running
 	for _, pod := range newPods {
 		log.Infof("pds system pod name %v", pod.Name)
-		err = k8sOps.ValidatePod(&pod, timeOut, timeInterval)
+		err = k8sCore.ValidatePod(&pod, timeOut, timeInterval)
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// DeleteDeploymentPods deletes the given pods
+func DeletePods(podList []corev1.Pod) error {
+	err := k8sCore.DeletePods(podList, true)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -706,6 +718,30 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 		log.Infof("DS Verion id - %v,DS Image id - %v", key, dataServiceIDImagesMap[key])
 	}
 	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
+}
+
+func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus string, maxtimeInterval time.Duration, timeout time.Duration) error {
+	//validate the deployments in pds
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
+		log.Infof("Health status -  %v", status.GetHealth())
+		if err != nil {
+			log.Errorf("Error occured while getting deployment status %v", err)
+			return false, nil
+		}
+		if res.StatusCode != state.StatusOK {
+			log.Errorf("Full HTTP response: %v\n", res)
+			err = fmt.Errorf("unexpected status code")
+			return false, err
+		}
+		if !strings.Contains(status.GetHealth(), healthStatus) {
+			err = fmt.Errorf("status %v", status.GetHealth())
+			return false, err
+		}
+		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+		return true, nil
+	})
+	return err
 }
 
 // ValidateDataServiceDeployment checks if deployment is healthy and running
@@ -1022,6 +1058,127 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	log.InfoD("Will delete TPCC Worklaod Deployment now.....")
 	DeleteK8sDeployments(deployment.Name, namespace)
 	return flag
+}
+
+// Creates a temporary non PDS namespace of 6 letters length randomly chosen
+func CreateTempNS(length int32) (string, error) {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, length)
+	rand.Read(b)
+	namespace := fmt.Sprintf("%x", b)[:length]
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	ns, err = k8sCore.CreateNamespace(ns)
+	if err != nil {
+		log.Errorf("Error while creating namespace %v", err)
+		return "", err
+	}
+	return namespace, nil
+}
+
+// Create a Persistent Vol of 5G manual Storage Class
+func CreateIndependentPV(name string) (*corev1.PersistentVolume, error) {
+	pv := &corev1.PersistentVolume{
+
+		TypeMeta: metav1.TypeMeta{Kind: "PersistentVolume"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+
+		Spec: corev1.PersistentVolumeSpec{
+			StorageClassName: "manual",
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				"ReadWriteOnce",
+			},
+			Capacity: corev1.ResourceList{
+				corev1.ResourceName(corev1.ResourceStorage): resource.MustParse("5Gi"),
+			},
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/mnt/data",
+				},
+			},
+		},
+	}
+	pv, err := k8sCore.CreatePersistentVolume(pv)
+	if err != nil {
+		log.Errorf("PV Could not be created. Exiting")
+		return pv, err
+	}
+	return pv, nil
+}
+
+// Create a PV Claim of 5G Storage
+func CreateIndependentPVC(namespace string, name string) (*corev1.PersistentVolumeClaim, error) {
+	ns := namespace
+	storageClass := "manual"
+	createOpts := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			StorageClassName: &storageClass,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("5Gi"),
+				},
+			},
+		},
+	}
+	pvc, err := k8sCore.CreatePersistentVolumeClaim(createOpts)
+	if err != nil {
+		log.Errorf("PVC Could not be created. Exiting. %v", err)
+		return pvc, err
+	}
+	return pvc, nil
+}
+
+// Create an Independant MySQL non PDS App running in a namespace
+func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcName string) (*corev1.Pod, string, error) {
+	namespace := ns
+	podSpec := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  podName,
+					Image: appImage,
+					Env:   make([]corev1.EnvVar, 1),
+				},
+			},
+			RestartPolicy: corev1.RestartPolicyOnFailure,
+		},
+	}
+	volumename := "app-persistent-storage"
+	var volumes = make([]corev1.Volume, 1)
+	volumes[0] = corev1.Volume{Name: volumename, VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName, ReadOnly: false}}}
+	podSpec.Spec.Volumes = volumes
+	env := []string{"MYSQL_ROOT_PASSWORD"}
+	var value []string
+	value = append(value, "password")
+	for index := range env {
+		podSpec.Spec.Containers[0].Env[index].Name = env[index]
+		podSpec.Spec.Containers[0].Env[index].Value = value[index]
+	}
+
+	pod, err := k8sCore.CreatePod(podSpec)
+	if err != nil {
+		log.Errorf("An Error Occured while creating %v", err)
+		return pod, "", err
+	}
+	return pod, podName, nil
 }
 
 // CreatecassandraWorkload generate workloads on the cassandra db
@@ -1756,13 +1913,13 @@ func CreateK8sPDSNamespace(nname string) (*corev1.Namespace, error) {
 
 }
 
-//DeleteK8sPDSNamespace deletes the pdsnamespace
+// DeleteK8sPDSNamespace deletes the pdsnamespace
 func DeleteK8sPDSNamespace(nname string) error {
 	err := k8sCore.DeleteNamespace(nname)
 	return err
 }
 
-//GetPDSAgentPods returns the pds agent pod
+// GetPDSAgentPods returns the pds agent pod
 func GetPDSAgentPods(pdsNamespace string) corev1.Pod {
 	log.InfoD("Get agent pod from %v namespace", pdsNamespace)
 	podList, err := GetPods(pdsNamespace)

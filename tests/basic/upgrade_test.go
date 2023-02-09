@@ -28,6 +28,7 @@ var _ = Describe("{UpgradeStork}", func() {
 	JustBeforeEach(func() {
 		upgradeHopsList := make(map[string]string)
 		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
+		upgradeHopsList["upgradeStork"] = "true"
 		StartTorpedoTest("UpgradeStork", "Validating Stork upgrade", upgradeHopsList, 0)
 		log.InfoD("Stork upgrade hops list [%s]", upgradeHopsList)
 	})
@@ -96,6 +97,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	JustBeforeEach(func() {
 		upgradeHopsList := make(map[string]string)
 		upgradeHopsList["upgradeHops"] = Inst().UpgradeStorageDriverEndpointList
+		upgradeHopsList["upgradeVolumeDriver"] = "true"
 		StartTorpedoTest("UpgradeVolumeDriver", "Validating volume driver upgrade", upgradeHopsList, 0)
 		log.InfoD("Volume driver upgrade hops list [%s]", upgradeHopsList)
 	})
@@ -106,6 +108,8 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		storageNodes := node.GetStorageNodes()
+		numOfNodes := len(node.GetStorageDriverNodes())
+
 		//AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
 		log.FailOnError(err, "Cloud drive installation failed")
@@ -170,6 +174,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				}
 				majorVersion := strings.Split(currPXVersion, "-")[0]
 				statsData := make(map[string]string)
+				statsData["numOfNodes"] = fmt.Sprintf("%d", numOfNodes)
 				statsData["fromVersion"] = currPXVersion
 				statsData["toVersion"] = updatedPXVersion
 				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)

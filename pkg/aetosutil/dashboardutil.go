@@ -145,7 +145,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 		}
 
 		if testSet.Product == "" {
-			testSet.Product = "Portworx Enterprise"
+			testSet.Product = "px-enterprise"
 		}
 
 		if testSet.HostOs == "" {
@@ -164,6 +164,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 				logrus.Errorf("TestSetId creation failed. Cause : %v", err)
 			}
 			dashURL = fmt.Sprintf("Dashboard URL : %s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID)
+			os.Setenv("DASH_UID", fmt.Sprint(d.TestSetID))
 		}
 	}
 	logrus.Info(dashURL)
@@ -309,6 +310,7 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 		testCase.TestRailID = testRailID
 
 		// Check for common env variables and add as tags
+		testCase.Tags["torpedo"] = "true"
 		if os.Getenv("JOB_NAME") != "" {
 			testCase.Tags["JOB_NAME"] = os.Getenv("JOB_NAME")
 		}

@@ -227,9 +227,27 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 		}
 		return nil, false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, validateRebalanceJobsTimeout, validateRebalanceJobsInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validateStoragePoolSizeTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
+	return nil
+}
+
+// DeletePool deletes the pool with given poolID
+func (d *portworx) DeletePool(n node.Node, poolID string) error {
+	log.Infof("Initiating pool deletion for ID %s on node %s", poolID, n.Name)
+	cmd := fmt.Sprintf("pxctl sv pool delete %s -y", poolID)
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("error deleting pool on node [%s], Err: %v", n.Name, err)
+	}
+	log.Infof("poolID %s deletion: %s", poolID, out)
 	return nil
 }
 
@@ -916,6 +934,8 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 	if err := d.EnterMaintenance(n); err != nil {
 		return err
 	}
+	//wait for node to enter maintenance mode
+	time.Sleep(1 * time.Minute)
 
 	if err := d.ExitMaintenance(n); err != nil {
 		return err
@@ -1038,11 +1058,50 @@ func (d *portworx) RecoverPool(n node.Node) error {
 		return err
 	}
 
+	//wait for pool to enter maintenance mode
+	time.Sleep(1 * time.Minute)
+
 	if err := d.ExitPoolMaintenance(n); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
+	cmd := fmt.Sprintf("%s sv pool show | grep -e UUID -e Status", d.getPxctlPath(n))
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         validatePXStartTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("error getting pool status on node [%s], Err: %v", n.Name, err)
+	}
+	outLines := strings.Split(out, "\n")
+
+	poolsData := make(map[string]string)
+	var poolId string
+	var status string
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		if strings.Contains(line, "UUID") {
+			poolId = strings.Split(line, ":")[1]
+			poolId = strings.Trim(poolId, " ")
+		}
+		if strings.Contains(line, "Status") {
+			status = strings.Split(line, ":")[1]
+			status = strings.Trim(status, " ")
+		}
+		if poolId != "" && status != "" {
+			poolsData[poolId] = status
+			poolId = ""
+			status = ""
+		}
+	}
+	return poolsData, nil
 }
 
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
@@ -2623,7 +2682,7 @@ func configurePxReleaseManifestEnvVars(origEnvVarList []corev1.EnvVar, specGenUR
 	return newEnvVarList, nil
 }
 
-//getPxEndpointVersionFromUrl gets PX endpoint from the Spec Generator URL
+// getPxEndpointVersionFromUrl gets PX endpoint from the Spec Generator URL
 func getPxEndpointVersionFromUrl(specGenUrl string) (string, error) {
 	u, err := url.Parse(specGenUrl)
 	if err != nil {
@@ -3858,7 +3917,7 @@ func (d *portworx) SetClusterOpts(n node.Node, clusterOpts map[string]string) er
 	return nil
 }
 
-//GetClusterOpts get all cluster options
+// GetClusterOpts get all cluster options
 func (d *portworx) GetClusterOpts(n node.Node, options []string) (map[string]string, error) {
 	opts := node.ConnectionOpts{
 		IgnoreError:     false,
@@ -4525,6 +4584,31 @@ func (d *portworx) AddBlockDrives(n *node.Node, drivePath []string) error {
 	return nil
 }
 
+// GetPoolDrives returns the map of poolID and drive name
+func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         startDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	poolDrives := make(map[string][]string, 0)
+	log.Infof("Getting available block drives on node [%s]", n.Name)
+	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
+
+	if err != nil {
+		return poolDrives, err
+	}
+	for _, v := range blockDrives {
+		labelsMap := v.Labels
+		if pm, ok := labelsMap["pxpool"]; ok {
+			poolDrives[pm] = append(poolDrives[pm], v.Path)
+		}
+	}
+	return poolDrives, nil
+}
+
 // AddCloudDrive add cloud drives to the node using PXCTL
 func (d *portworx) AddCloudDrive(n *node.Node, deviceSpec string, poolID int32) error {
 	log.Infof("Adding Cloud drive on node [%s] with spec [%s]", n.Name, deviceSpec)
@@ -4562,7 +4646,7 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		return fmt.Errorf("failed to add drive [%s] on node [%s], AddDrive Status: %+v", drivePath, n.Name, addDriveStatus)
 
 	}
-	log.Infof("Added drive [%s] to node [%s] successfully", drivePath, n.Name)
+	log.InfoD("Added drive [%s] to node [%s] successfully", drivePath, n.Name)
 	return nil
 }
 
@@ -4609,7 +4693,7 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 	return fmt.Errorf("failed to  add drive for path [%s] on node [%s], Status: %+v, Err: %v", drivePath, n.Name, addDriveStatus, err)
 }
 
-//GetPoolsUsedSize returns map of pool id and current used size
+// GetPoolsUsedSize returns map of pool id and current used size
 func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 	cmd := fmt.Sprintf("%s sv pool show -j | grep -e uuid -e '\"Used\"'", d.getPxctlPath(*n))
 
@@ -4665,4 +4749,24 @@ func (d *portworx) GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobS
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &portworx{})
 	torpedovolume.Register(PureDriverName, csiProvisionerOnly, &pure{portworx: portworx{}})
+}
+
+// UpdatePoolLabels updates the pool label for a particular pool id
+func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[string]string) error {
+
+	labelsString := ""
+	for k, v := range labels {
+		labelsString += fmt.Sprintf("%s=%s,", k, v)
+	}
+	labelsString = strings.Trim(labelsString, ",")
+	cmd := fmt.Sprintf("%s sv pool update -u %s --labels=%s", d.getPxctlPath(n), poolID, labelsString)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+
 }

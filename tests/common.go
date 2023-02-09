@@ -131,6 +131,7 @@ const (
 	specDirCliFlag                       = "spec-dir"
 	appListCliFlag                       = "app-list"
 	secureAppsCliFlag                    = "secure-apps"
+	repl1AppsCliFlag                     = "repl1-apps"
 	logLocationCliFlag                   = "log-location"
 	logLevelCliFlag                      = "log-level"
 	scaleFactorCliFlag                   = "scale-factor"
@@ -206,6 +207,7 @@ const (
 // Backup constants
 const (
 	BackupNamePrefix                  = "tp-backup"
+	RestoreNamePrefix                 = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 20
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
@@ -245,7 +247,7 @@ const (
 const (
 	waitResourceCleanup       = 2 * time.Minute
 	defaultTimeout            = 5 * time.Minute
-	defaultVolScaleTimeout    = 2 * time.Minute
+	defaultVolScaleTimeout    = 4 * time.Minute
 	defaultRetryInterval      = 10 * time.Second
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
@@ -741,6 +743,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
 			if err != nil {
+				PrintDescribeContext(ctx)
 				processError(err, errChan...)
 			}
 		})
@@ -766,6 +769,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				if err != nil {
+					PrintDescribeContext(ctx)
 					processError(err, errChan...)
 				}
 			})
@@ -1827,11 +1831,11 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
-					log.Errorf("an error occurred, collecting bundle")
+					dash.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
+					// Collect Support Bundle only once
 					CollectSupport()
-					dash.VerifySafely(file == "", true, fmt.Sprintf("Core generated on node %s, Core Path: %s", n.Name, file))
+					log.Fatalf("Core generated, please check logs for more details")
 				}
-				log.FailOnError(err, "Error occurred while checking for core on node %s", n.Name)
 			}
 		})
 	})
@@ -2662,30 +2666,16 @@ func DeleteBackupAndDependencies(backupName string, backupUID string, orgID stri
 }
 
 // DeleteRestore creates restore
-func DeleteRestore(restoreName string, orgID string) {
-
-	Step(fmt.Sprintf("Delete restore [%s] in org [%s]",
-		restoreName, orgID), func() {
-
-		backupDriver := Inst().Backup
-		expect(backupDriver).NotTo(beNil(),
-			"Backup driver is not initialized")
-
-		deleteRestoreReq := &api.RestoreDeleteRequest{
-			OrgId: orgID,
-			Name:  restoreName,
-		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.DeleteRestore(ctx, deleteRestoreReq)
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to delete restore [%s] in org [%s]. Error: [%v]",
-				restoreName, orgID, err))
-		// TODO: validate createClusterResponse also
-	})
+func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	dash.VerifyFatal(backupDriver != nil, true, "Getting the backup driver")
+	deleteRestoreReq := &api.RestoreDeleteRequest{
+		OrgId: orgID,
+		Name:  restoreName,
+	}
+	_, err := backupDriver.DeleteRestore(ctx, deleteRestoreReq)
+	return err
+	// TODO: validate createClusterResponse also
 }
 
 // SetupBackup sets up backup location and source and destination clusters
@@ -2703,37 +2693,37 @@ func SetupBackup(testName string) {
 	CreateBucket(provider, BucketName)
 	CreateOrganization(OrgID)
 	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
-	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID)
-	CreateSourceAndDestClusters(OrgID, "", "")
+	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID, "")
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+	err = CreateSourceAndDestClusters(OrgID, "", "", ctx)
+	log.FailOnError(err, "Creating source and destination cluster")
 }
 
 // DeleteBackup deletes backup
-func DeleteBackup(backupName string, backupUID string, orgID string) {
+func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
+	var err error
+	var backupDeleteResponse *api.BackupDeleteResponse
 
 	Step(fmt.Sprintf("Delete backup [%s] in org [%s]",
 		backupName, orgID), func() {
-
 		backupDriver := Inst().Backup
 		bkpDeleteRequest := &api.BackupDeleteRequest{
 			Name:  backupName,
 			OrgId: orgID,
 			Uid:   backupUID,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
+		backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 		// Best effort cleanup, dont fail test, if deletion fails
 		//expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to delete backup [%s] in org [%s]", backupName, orgID))
 		// TODO: validate createClusterResponse also
 	})
+	return backupDeleteResponse, err
 }
 
 // DeleteCluster deletes/de-registers cluster from px-backup
-func DeleteCluster(name string, orgID string) {
+func DeleteCluster(name string, orgID string, ctx context1.Context) {
 
 	Step(fmt.Sprintf("Delete cluster [%s] in org [%s]", name, orgID), func() {
 		backupDriver := Inst().Backup
@@ -2752,114 +2742,168 @@ func DeleteCluster(name string, orgID string) {
 	})
 }
 
-// DeleteBackupLocation deletes backuplocation
-func DeleteBackupLocation(name string, orgID string) {
-	Step(fmt.Sprintf("Delete backup location [%s] in org [%s]", name, orgID), func() {
-		backupDriver := Inst().Backup
-		bLocationDeleteReq := &api.BackupLocationDeleteRequest{
-			Name:  name,
-			OrgId: orgID,
-		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
-		// Best effort cleanup, dont fail test, if deletion fails
-		//expect(err).NotTo(haveOccurred(),
-		//	fmt.Sprintf("Failed to delete backup location [%s] in org [%s]", name, orgID))
-		// TODO: validate createBackupLocationResponse also
-	})
+// DeleteBackupLocation deletes backup location
+func DeleteBackupLocation(name string, backupLocationUID string, orgID string) error {
+
+	backupDriver := Inst().Backup
+	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
+		Name:          name,
+		OrgId:         orgID,
+		DeleteBackups: true,
+		Uid:           backupLocationUID,
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
+	if err != nil {
+		return err
+	}
+	// TODO: validate createBackupLocationResponse also
+	return nil
+
+}
+
+// DeleteSchedule deletes backup schedule
+func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, schedulePolicyUID, OrgID string) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: OrgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupScheduleUID,
+	}
+	ctx, err := backup.GetPxCentralAdminCtx()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: OrgID, Name: SourceClusterName, IncludeSecrets: true}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+	namespace := "*"
+	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, OrgID,
+		clusterObj,
+		BackupRestoreCompletionTimeoutMin*time.Minute,
+		RetrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+	schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+		OrgId: OrgID,
+		Name:  schedulePolicyName,
+		Uid:   schedulePolicyUID,
+	}
+	ctx, err = backup.GetPxCentralAdminCtx()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteSchedulePolicy(ctx, schedulePolicyDeleteRequest)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateSourceAndDestClusters creates source and destination cluster
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
-func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string) {
+func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ctx context1.Context) error {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
-	dash.VerifyFatal(len(kubeconfigList) >= 2, true, "Getting the minimum number of kubeconfigs required")
+	if len(kubeconfigList) != 2 {
+		return fmt.Errorf("2 kubeconfigs are required for source and destination cluster")
+	}
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
-	dash.VerifyFatal(err, nil, "Getting the kubeconfigs from the configmap")
+	if err != nil {
+		return err
+	}
 	// Register source cluster with backup driver
-	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", SourceClusterName, orgID), func() {
-		srcClusterConfigPath, err := GetSourceClusterConfigPath()
-		dash.VerifyFatal(err, nil, "Getting kubeconfig path for source cluster")
-		log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
-		CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid)
-	})
+	log.InfoD("Create cluster [%s] in org [%s]", SourceClusterName, orgID)
+	srcClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
+	err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid, ctx)
+	if err != nil {
+		return err
+	}
 	// Register destination cluster with backup driver
-	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", destinationClusterName, orgID), func() {
-		dstClusterConfigPath, err := GetDestinationClusterConfigPath()
-		dash.VerifyFatal(err, nil, "Getting kubeconfig path for destination cluster")
-		log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
-		CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid)
-	})
+	log.InfoD("Create cluster [%s] in org [%s]", destinationClusterName, orgID)
+	dstClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
+	err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid, ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateBackupLocation creates backup location
-func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string) {
+func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string) error {
+	var err error
 	switch provider {
 	case drivers.ProviderAws:
-		createS3BackupLocation(name, uid, credName, credUID, bucketName, orgID)
+		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
 	case drivers.ProviderAzure:
-		createAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
 	}
+	return err
 }
 
 // CreateCluster creates/registers cluster with px-backup
-func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string) {
+func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string, ctx context1.Context) error {
 	var clusterCreateReq *api.ClusterCreateRequest
 
-	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", name, orgID), func() {
-		backupDriver := Inst().Backup
-		kubeconfigRaw, err := ioutil.ReadFile(kubeconfigPath)
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to read kubeconfig file from location [%s]. Error:[%v]",
-				kubeconfigPath, err))
-		if cloud_name != "" {
-			clusterCreateReq = &api.ClusterCreateRequest{
-				CreateMetadata: &api.CreateMetadata{
-					Name:  name,
-					OrgId: orgID,
-				},
-				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
-				CloudCredentialRef: &api.ObjectRef{
-					Name: cloud_name,
-					Uid:  uid,
-				},
-			}
-		} else {
-			clusterCreateReq = &api.ClusterCreateRequest{
-				CreateMetadata: &api.CreateMetadata{
-					Name:  name,
-					OrgId: orgID,
-				},
-				Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
-			}
+	log.InfoD("Create cluster [%s] in org [%s]", name, orgID)
+	backupDriver := Inst().Backup
+	kubeconfigRaw, err := ioutil.ReadFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	if cloud_name != "" {
+		clusterCreateReq = &api.ClusterCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				OrgId: orgID,
+			},
+			Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloud_name,
+				Uid:  uid,
+			},
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.CreateCluster(ctx, clusterCreateReq)
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to create cluster [%s] in org [%s]. Error : [%v]",
-				name, orgID, err))
-	})
-}
-
-// createS3BackupLocation creates backup location
-func createS3BackupLocation(name string, uid, cloudCred string, cloudCredUID, bucketName string, orgID string) {
-	Step(fmt.Sprintf("Create S3 backup location [%s] in org [%s]", name, orgID), func() {
-		CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID)
-	})
+	} else {
+		clusterCreateReq = &api.ClusterCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				OrgId: orgID,
+			},
+			Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+		}
+	}
+	_, err = backupDriver.CreateCluster(ctx, clusterCreateReq)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateCloudCredential creates cloud credetials
@@ -2894,11 +2938,10 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 					},
 				},
 			}
-			//ctx, err := backup.GetPxCentralAdminCtx()
+
 			ctx, err := backup.GetAdminCtxFromSecret()
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-					err))
+			log.FailOnError(err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+
 			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
 			if err != nil && strings.Contains(err.Error(), "already exists") {
 				return
@@ -2945,15 +2988,81 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 	})
 }
 
+// CreateCloudCredential creates cloud credetials
+func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string, ctx context1.Context) error {
+	log.Infof("Create credential name %s for org %s provider %s", name, orgID, provider)
+	backupDriver := Inst().Backup
+	switch provider {
+	case drivers.ProviderAws:
+		log.Infof("Create creds for aws")
+		id := os.Getenv("AWS_ACCESS_KEY_ID")
+		if id == "" {
+			return fmt.Errorf("AWS_ACCESS_KEY_ID Environment variable should not be empty")
+		}
+		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
+		if secret == "" {
+			return fmt.Errorf("AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+		}
+		credCreateRequest := &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_AWS,
+				Config: &api.CloudCredentialInfo_AwsConfig{
+					AwsConfig: &api.AWSConfig{
+						AccessKey: id,
+						SecretKey: secret,
+					},
+				},
+			},
+		}
+		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
+		if err != nil && strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		return err
+	// TODO: validate CreateCloudCredentialResponse also
+	case drivers.ProviderAzure:
+		log.Infof("Create creds for azure")
+		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
+		credCreateRequest := &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_Azure,
+				Config: &api.CloudCredentialInfo_AzureConfig{
+					AzureConfig: &api.AzureConfig{
+						TenantId:       tenantID,
+						ClientId:       clientID,
+						ClientSecret:   clientSecret,
+						AccountName:    accountName,
+						AccountKey:     accountKey,
+						SubscriptionId: subscriptionID,
+					},
+				},
+			},
+		}
+
+		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
+		if err != nil && strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 // CreateS3BackupLocation creates backuplocation for S3
-func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string) {
+func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
-	//inspReq := &api.CloudCredentialInspectRequest{Name: cloudCred, Uid: cloudCredUID, OrgId: orgID, IncludeSecrets: true}
-	//credCtx, err := backup.GetAdminCtxFromSecret()
-	//obj, err := backupDriver.InspectCloudCredential(credCtx, inspReq)
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -2963,8 +3072,6 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 		BackupLocation: &api.BackupLocationInfo{
 			Path:          bucketName,
 			EncryptionKey: encryptionKey,
-			// CloudCredential: "foo",
-			// CloudCredential: cloudCred,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -2979,21 +3086,57 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			},
 		},
 	}
+
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-			err))
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
-	if err != nil && strings.Contains(err.Error(), "already exists") {
-		return
+	if err != nil {
+		return err
 	}
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to create backuplocation [%s] in org [%s]", name, orgID))
+
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+// CreateS3BackupLocation creates backuplocation for S3
+func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+				},
+			},
+		},
+	}
+
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateAzureBackupLocation creates backuplocation for Azure
-func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) {
+func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -3014,15 +3157,14 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 	}
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-			err))
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
-	if err != nil && strings.Contains(err.Error(), "already exists") {
-		return
+	if err != nil {
+		return err
 	}
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to create backuplocation [%s] in org [%s]", name, orgID))
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
 }
 
 // GetProvider validates and return object store provider
@@ -3194,7 +3336,7 @@ func GetSourceClusterConfigPath() (string, error) {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	if len(kubeconfigList) < 2 {
 		return "", fmt.Errorf(`Failed to get source config path.
-				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
 	log.Infof("Source config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
@@ -3211,7 +3353,7 @@ func GetDestinationClusterConfigPath() (string, error) {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	if len(kubeconfigList) < 2 {
 		return "", fmt.Errorf(`Failed to get source config path.
-				       At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
 	log.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
@@ -3628,7 +3770,7 @@ func TearDownBackupRestoreAll() {
 	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
 	backups := enumBkpResponse.GetBackups()
 	for _, bkp := range backups {
-		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID)
+		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID, ctx)
 	}
 
 	log.Infof("Enumerating restores")
@@ -3639,7 +3781,8 @@ func TearDownBackupRestoreAll() {
 	enumRestoreResponse, _ := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
 	restores := enumRestoreResponse.GetRestores()
 	for _, restore := range restores {
-		DeleteRestore(restore.GetName(), OrgID)
+		err = DeleteRestore(restore.GetName(), OrgID, ctx)
+		dash.VerifyFatal(err, nil, "Deleting Restore")
 	}
 
 	for _, bkp := range backups {
@@ -3653,9 +3796,10 @@ func TearDownBackupRestoreAll() {
 			RetrySeconds*time.Second)
 	}
 	provider := GetProvider()
-	DeleteCluster(destinationClusterName, OrgID)
-	DeleteCluster(SourceClusterName, OrgID)
-	DeleteBackupLocation(backupLocationName, OrgID)
+	DeleteCluster(destinationClusterName, OrgID, ctx)
+	DeleteCluster(SourceClusterName, OrgID, ctx)
+	err = DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
 	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
 	DeleteBucket(provider, BucketName)
 }
@@ -3665,7 +3809,7 @@ func CreateBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Create bucket [%s]", bucketName), func() {
 		switch provider {
 		case drivers.ProviderAws:
-			CreateS3Bucket(bucketName)
+			CreateS3Bucket(bucketName, false, 0, "")
 		case drivers.ProviderAzure:
 			CreateAzureBucket(bucketName)
 		}
@@ -3673,7 +3817,7 @@ func CreateBucket(provider string, bucketName string) {
 }
 
 // CreateS3Bucket creates bucket in S3
-func CreateS3Bucket(bucketName string) {
+func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objectLockMode string) error {
 	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
@@ -3688,9 +3832,18 @@ func CreateS3Bucket(bucketName string) {
 
 	S3Client := s3.New(sess)
 
-	_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
-		Bucket: aws.String(bucketName),
-	})
+	if retainCount > 0 && objectLock == true {
+		// Create object locked bucket
+		_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
+			Bucket:                     aws.String(bucketName),
+			ObjectLockEnabledForBucket: aws.Bool(true),
+		})
+	} else {
+		// Create standard bucket
+		_, err = S3Client.CreateBucket(&s3.CreateBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+	}
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to create bucket [%v]. Error: [%v]", bucketName, err))
 
@@ -3699,6 +3852,23 @@ func CreateS3Bucket(bucketName string) {
 	})
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to wait for bucket [%v] to get created. Error: [%v]", bucketName, err))
+
+	if retainCount > 0 && objectLock == true {
+		// Update ObjectLockConfigureation to bucket
+		enabled := "Enabled"
+		_, err = S3Client.PutObjectLockConfiguration(&s3.PutObjectLockConfigurationInput{
+			Bucket: aws.String(bucketName),
+			ObjectLockConfiguration: &s3.ObjectLockConfiguration{
+				ObjectLockEnabled: aws.String(enabled),
+				Rule: &s3.ObjectLockRule{
+					DefaultRetention: &s3.DefaultRetention{
+						Days: aws.Int64(retainCount),
+						Mode: aws.String(objectLockMode)}}}})
+		if err != nil {
+			err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
+		}
+	}
+	return err
 }
 
 // CreateAzureBucket creates bucket in Azure
@@ -3721,13 +3891,6 @@ func CreateAzureBucket(bucketName string) {
 
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to create container. Error: [%v]", err))
-}
-
-// createAzureBackupLocation creates backup location
-func createAzureBackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID string) {
-	Step(fmt.Sprintf("Create Azure backup location [%s] in org [%s]", name, orgID), func() {
-		CreateAzureBackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID)
-	})
 }
 
 func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
@@ -3823,7 +3986,7 @@ type Torpedo struct {
 func ParseFlags() {
 	var err error
 
-	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -3890,6 +4053,7 @@ func ParseFlags() {
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
+	flag.StringVar(&repl1AppsCSV, repl1AppsCliFlag, "", "Comma-separated list of apps to deploy with repl 1 volumes. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
@@ -3946,13 +4110,26 @@ func ParseFlags() {
 
 	if secureAppsCSV == "all" {
 		secureAppList = append(secureAppList, appList...)
-	}
-
-	if len(secureAppsCSV) > 0 {
+	} else if len(secureAppsCSV) > 0 {
 		apl, err := splitCsv(secureAppsCSV)
 		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", secureAppsCSV))
 		secureAppList = append(secureAppList, apl...)
 		log.Infof("Secure apps : %+v", secureAppList)
+		//Adding secure apps as part of app list for deployment
+		appList = append(appList, secureAppList...)
+	}
+
+	repl1AppList := make([]string, 0)
+
+	if repl1AppsCSV == "all" {
+		repl1AppList = append(repl1AppList, appList...)
+	} else if len(repl1AppsCSV) > 0 {
+		apl, err := splitCsv(repl1AppsCSV)
+		log.FailOnError(err, fmt.Sprintf("failed to parse secure app list: %v", repl1AppsCSV))
+		repl1AppList = append(repl1AppList, apl...)
+		log.Infof("volume repl 1  apps : %+v", secureAppList)
+		//Adding repl 1 apps as part of app list for deployment
+		appList = append(appList, repl1AppList...)
 	}
 
 	sched.Init(time.Second)
@@ -3981,6 +4158,16 @@ func ParseFlags() {
 				log.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
 			}
 			log.Infof("Parsed custom app config file: %+v", customAppConfig)
+		}
+		if len(repl1AppList) > 0 {
+			for _, app := range repl1AppList {
+				if appConfig, ok := customAppConfig[app]; ok {
+					appConfig.Repl = "1"
+				} else {
+					var config = scheduler.AppConfig{Repl: "1"}
+					customAppConfig[app] = config
+				}
+			}
 		}
 		log.Infof("Backup driver name %s", backupDriverName)
 		if backupDriverName != "" {
@@ -4024,11 +4211,40 @@ func ParseFlags() {
 			}
 		}
 
+		/*
+			Get TestSetID based on below precedence
+			1. Check if user has passed in command line and use
+			2. Check if user has set it has an env variable and use
+			3. Check if build.properties available with TestSetID
+			4. If not present create a new one
+		*/
 		val, ok := os.LookupEnv("DASH_UID")
-		if ok {
+		if testsetID != 0 {
+			dash.TestSetID = testsetID
+		} else if ok && (val != "" && val != "0") {
 			testsetID, err = strconv.Atoi(val)
+			log.Infof(fmt.Sprintf("Using TestSetID: %s set as enviornment variable", val))
 			if err != nil {
 				log.Warnf("Failed to convert environment testset id  %v to int, err: %v", val, err)
+			}
+		} else {
+			fileName := "/build.properties"
+			readFile, err := os.Open(fileName)
+			if err == nil {
+				fileScanner := bufio.NewScanner(readFile)
+				fileScanner.Split(bufio.ScanLines)
+				for fileScanner.Scan() {
+					line := fileScanner.Text()
+					if strings.Contains(line, "DASH_UID") {
+						testsetToUse := strings.Split(line, "=")[1]
+						log.Infof("Using TestSetID: %s found in build.properties", testsetToUse)
+						dash.TestSetID, err = strconv.Atoi(testsetToUse)
+						if err != nil {
+							log.Errorf("Error in getting DASH_UID variable, %v", err)
+						}
+						break
+					}
+				}
 			}
 		}
 		if testsetID != 0 {
@@ -4463,8 +4679,11 @@ func RebootNodeAndWait(n node.Node) error {
 
 // GetNodeWithGivenPoolID returns node having pool id
 func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
-	pxNodes, err := GetStorageNodes()
+	if err := Inst().V.RefreshDriverEndpoints(); err != nil {
+		return nil, err
+	}
 
+	pxNodes, err := GetStorageNodes()
 	if err != nil {
 		return nil, err
 	}
@@ -4525,55 +4744,67 @@ func Contains(app_list []string, app string) bool {
 
 // ValidatePoolRebalance checks rebalnce state of pools if running
 func ValidatePoolRebalance() error {
-	rebalanceJobs, err := Inst().V.GetRebalanceJobs()
-	if err != nil {
-		return err
+
+	rebalanceFunc := func() (interface{}, bool, error) {
+
+		rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+		if err != nil {
+			return nil, true, err
+		}
+
+		for _, job := range rebalanceJobs {
+			jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
+
+			if err != nil {
+				return nil, true, err
+			}
+
+			previousDone := uint64(0)
+			jobState := jobResponse.GetJob().GetState()
+			if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
+				return nil, false, fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+			}
+
+			if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
+				return nil, true, fmt.Errorf("Job %v is in paused/pending state", job.GetId())
+			}
+
+			if jobState == opsapi.StorageRebalanceJobState_DONE {
+				log.InfoD("Job %v is in DONE state", job.GetId())
+				return nil, false, nil
+			}
+
+			if jobState == opsapi.StorageRebalanceJobState_RUNNING {
+				log.InfoD("Job %v is in Running state", job.GetId())
+
+				currentDone, total := getReblanceWorkSummary(jobResponse)
+				//checking for rebalance progress
+				for currentDone < total && previousDone < currentDone {
+					time.Sleep(2 * time.Minute)
+					log.InfoD("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
+					jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
+					if err != nil {
+						return nil, true, err
+					}
+					previousDone = currentDone
+					currentDone, total = getReblanceWorkSummary(jobResponse)
+				}
+
+				if previousDone == currentDone {
+					return nil, false, fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
+				}
+				if currentDone == total {
+					log.InfoD("Rebalance for job %v completed", job.GetId())
+					return nil, false, nil
+				}
+			}
+		}
+		return nil, false, nil
 	}
 
-	for _, job := range rebalanceJobs {
-		jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
-
-		if err != nil {
-			return err
-		}
-
-		previousDone := uint64(0)
-		jobState := jobResponse.GetJob().GetState()
-		if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
-			return fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
-		}
-
-		if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
-			log.InfoD("Job %v is in paused/pending state", job.GetId())
-		}
-
-		if jobState == opsapi.StorageRebalanceJobState_DONE {
-			log.InfoD("Job %v is in DONE state", job.GetId())
-		}
-
-		if jobState == opsapi.StorageRebalanceJobState_RUNNING {
-			log.InfoD("Job %v is in Running state", job.GetId())
-
-			currentDone, total := getReblanceWorkSummary(jobResponse)
-			//checking for rebalance progress
-			for currentDone < total && previousDone < currentDone {
-				time.Sleep(2 * time.Minute)
-				log.InfoD("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
-				jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
-				if err != nil {
-					return err
-				}
-				previousDone = currentDone
-				currentDone, total = getReblanceWorkSummary(jobResponse)
-			}
-
-			if previousDone == currentDone {
-				return fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
-			}
-			if currentDone == total {
-				log.InfoD("Rebalance for job %v completed,", job.GetId())
-			}
-		}
+	_, err := task.DoRetryWithTimeout(rebalanceFunc, time.Minute*60, time.Minute*2)
+	if err != nil {
+		return err
 	}
 
 	var pools map[string]*opsapi.StoragePool
@@ -4608,6 +4839,9 @@ func ValidatePoolRebalance() error {
 							currentLastMsg = expandedPool.LastOperation.Msg
 							return nil, true, fmt.Errorf("wait for pool rebalance to complete")
 						}
+					}
+					if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") {
+						return nil, false, nil
 					}
 				}
 			}
@@ -4782,11 +5016,15 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	return createdVolIDs, nil
 }
 
-//GetPoolIDWithIOs returns the pools with IOs happening
+// GetPoolIDWithIOs returns the pools with IOs happening
 func GetPoolIDWithIOs() (string, error) {
 	// pick a  pool doing some IOs from a pools list
-	var selectedPool *opsapi.StoragePool
 	var err error
+	err = Inst().V.RefreshDriverEndpoints()
+	if err != nil {
+		return "", err
+	}
+	var selectedPool *opsapi.StoragePool
 	stNodes := node.GetStorageNodes()
 	for _, stNode := range stNodes {
 		selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
@@ -4840,7 +5078,7 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 	return selectedPool, nil
 }
 
-//GetRandomNodeWithPoolIOs returns node with IOs running
+// GetRandomNodeWithPoolIOs returns node with IOs running
 func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
 	// pick a storage node with pool having IOs
 	var err error

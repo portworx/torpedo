@@ -115,6 +115,10 @@ if [ -z "${IS_HYPER_CONVERGED}" ]; then
     IS_HYPER_CONVERGED=true
 fi
 
+if [ -z "${PX_POD_RESTART_CHECK}" ]; then
+    PX_POD_RESTART_CHECK=false
+fi
+
 CONFIGMAP=""
 if [ -n "${CONFIG_MAP}" ]; then
     CONFIGMAP="${CONFIG_MAP}"
@@ -444,6 +448,7 @@ spec:
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
             "--secure-apps", "$SECURE_APP_LIST",
+            "--repl1-apps", "$REPL1_APP_LIST",
             "--scheduler", "$SCHEDULER",
             "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
             "--backup-driver", "$BACKUP_DRIVER",
@@ -451,6 +456,7 @@ spec:
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
             "--hyper-converged=$IS_HYPER_CONVERGED",
+            "--fail-on-px-pod-restartcount=$PX_POD_RESTART_CHECK",
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
             "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
             "--chaos-level", "$CHAOS_LEVEL",
@@ -544,6 +550,10 @@ spec:
       value: "${S3_AWS_SECRET_ACCESS_KEY}"
     - name: S3_REGION
       value: "${S3_REGION}"
+    - name: BUCKET_NAME
+      value: "${BUCKET_NAME}"
+    - name: LOCKED_BUCKET_NAME
+      value: "${LOCKED_BUCKET_NAME}"
     - name: S3_DISABLE_SSL
       value: "${S3_DISABLE_SSL}"
     - name: DIAGS_BUCKET
