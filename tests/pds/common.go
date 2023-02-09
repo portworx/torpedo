@@ -81,7 +81,7 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 	params.DataServiceName = ds.Name
 	params.DeploymentID = deployment.GetId()
 	params.Namespace = namespace
-	log.Infof("Dataservice Name :", ds.Name)
+	log.Infof("Dataservice Name : %s", ds.Name)
 
 	if ds.Name == postgresql {
 		params.DeploymentName = "pgload"
