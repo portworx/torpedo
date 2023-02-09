@@ -1052,24 +1052,6 @@ func (d *portworx) ExitPoolMaintenance(n node.Node) error {
 	return nil
 }
 
-// DeletePool Deletes pool with the Pool ID Specified
-func (d *portworx) DeletePool(n node.Node, poolID int) error {
-	cmd := fmt.Sprintf("%s sv pool delete %d -y", d.getPxctlPath(n), poolID)
-	out, err := d.nodeDriver.RunCommand(
-		n,
-		cmd,
-		node.ConnectionOpts{
-			Timeout:         maintenanceWaitTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
-		})
-	if err != nil {
-		return fmt.Errorf("error when deleting Pool with PoolID [%d] from node [%s], Err: [%v]", poolID, n.Name, err)
-	}
-	log.Infof("Pool Delete Successful %s", out)
-	return nil
-
-}
-
 func (d *portworx) RecoverPool(n node.Node) error {
 
 	if err := d.EnterPoolMaintenance(n); err != nil {
