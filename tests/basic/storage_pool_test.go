@@ -971,7 +971,8 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				log.FailOnError(err, "Error converting size to uint64")
 				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", specSize/2))
 			} else {
-				paramsArr = append(paramsArr, param)
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 300/2))
+				//paramsArr = append(paramsArr, param)
 			}
 		}
 		for _, param := range deviceSpecParams {
@@ -981,7 +982,9 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				log.FailOnError(err, "Error converting size to uint64")
 				paramsArr = append(paramsArr, fmt.Sprintf("gp3=%v,", specSize))
 			} else {
-				paramsArr = append(paramsArr, param)
+
+				paramsArr = append(paramsArr, fmt.Sprintf("type=%s,", "gp2"))
+				//paramsArr = append(paramsArr, param)
 			}
 		}
 		for _, param := range deviceSpecParams {
@@ -994,7 +997,8 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				}
 				paramsArr = append(paramsArr, fmt.Sprintf("iops=%v,", speed))
 			} else {
-				paramsArr = append(paramsArr, param)
+				paramsArr = append(paramsArr, fmt.Sprintf("iops=%v,", 3000))
+				//paramsArr = append(paramsArr, param)
 			}
 
 			// We need to consider non Zero number from the speeds returned,
