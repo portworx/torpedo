@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
@@ -74,6 +76,28 @@ var _ = AfterSuite(func() {
 		PerformSystemCheck()
 	}
 
+})
+
+var _ = Describe("{Demos}", func() {
+	var contexts []*scheduler.Context
+	fmt.Println("ayush-inside-demo")
+	log.Infof("ayush-inside-demos")
+	It("Has to do Demo test", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		contexts = ScheduleApplications(fmt.Sprintf("demo"))
+		ValidateApplications(contexts)
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 func TestMain(m *testing.M) {

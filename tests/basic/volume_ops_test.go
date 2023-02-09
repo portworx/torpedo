@@ -25,6 +25,20 @@ const (
 	fio = "fio-throttle-io"
 )
 
+var _ = Describe("{Volumemount}", func() {
+	var contexts []*scheduler.Context
+	It("creating volume", func() {
+		contexts = make([]*scheduler.Context, 0)
+		contexts = ScheduleApplications(fmt.Sprintf("mount"))
+		ValidateApplications(contexts)
+		//wg := new(sync.WaitGroup)
+		//CreateMultiVolumesAndAttach(wg,1,"smaanika-torpedo-ub-1")
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+	})
+})
+
 // Volume replication change
 var _ = Describe("{VolumeUpdate}", func() {
 	var testrailID = 35271
