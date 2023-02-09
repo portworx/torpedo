@@ -255,6 +255,10 @@ func (p *portworx) DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequ
 	return p.clusterManager.Delete(ctx, req)
 }
 
+func (p *portworx) ClusterUpdateBackupShare(ctx context.Context, req *api.ClusterBackupShareUpdateRequest) (*api.ClusterBackupShareUpdateResponse, error) {
+	return p.clusterManager.UpdateBackupShare(ctx, req)
+}
+
 // WaitForClusterDeletion waits for cluster to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) WaitForClusterDeletion(
@@ -383,6 +387,10 @@ func (p *portworx) InspectBackup(ctx context.Context, req *api.BackupInspectRequ
 
 func (p *portworx) DeleteBackup(ctx context.Context, req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error) {
 	return p.backupManager.Delete(ctx, req)
+}
+
+func (p *portworx) UpdateBackupShare(ctx context.Context, req *api.BackupShareUpdateRequest) (*api.BackupShareUpdateResponse, error) {
+	return p.backupManager.UpdateBackupShare(ctx, req)
 }
 
 // GetVolumeBackupIDs returns backup IDs of volumes
@@ -524,7 +532,7 @@ func (p *portworx) WaitForBackupDeletion(
 	timeout time.Duration,
 	timeBeforeRetry time.Duration,
 ) error {
-	backupUID, err := p.GetBackupUID(ctx, orgID, backupName)
+	backupUID, err := p.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
 		return err
 	}
@@ -1072,16 +1080,14 @@ func (p *portworx) UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnersh
 	return p.ruleManager.UpdateOwnership(ctx, req)
 }
 
-func (p *portworx) GetBackupUID(ctx context.Context, orgID, backupName string) (string, error) {
+func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error) {
 	var backupUID string
 	var totalBackups int
 	bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: orgID}
 	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
 	for {
 		enumerateRsp, err := p.EnumerateBackup(ctx, bkpEnumerateReq)
-		if err != nil {
-			return backupUID, fmt.Errorf("Failed to enumerate backups for org %s ctx: [%v]", orgID, err)
-		}
+		log.FailOnError(err, "Failed to enumerate backups for org %s ctx: [%v]\n Backup enumerate request: [%v]", orgID, err, bkpEnumerateReq)
 		for _, backup := range enumerateRsp.GetBackups() {
 			if backup.GetName() == backupName {
 				return backup.GetUid(), nil
@@ -1115,6 +1121,13 @@ var (
 			},
 		},
 		"postgres": {"pre": {"pre_action_list": {"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";"},
+			"background":        {"false"},
+			"runInSinglePod":    {"false"},
+			"pod_selector_list": {"app=postgres"},
+			"container":         {"", ""},
+		},
+		},
+		"postgres-backup": {"pre": {"pre_action_list": {"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";"},
 			"background":        {"false"},
 			"runInSinglePod":    {"false"},
 			"pod_selector_list": {"app=postgres"},
@@ -1304,9 +1317,35 @@ func (p *portworx) BackupSchedulePolicy(name string, uid string, orgId string, s
 	return nil
 }
 
+// GetSchedulePolicyUid gets the uid for the given schedule policy
+func (p *portworx) GetSchedulePolicyUid(orgID string, ctx context.Context, schPolicyName string) (string, error) {
+	SchedulePolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
+		OrgId: orgID,
+	}
+	schPolicyList, err := p.EnumerateSchedulePolicy(ctx, SchedulePolicyEnumerateReq)
+	if err != nil {
+		return "", fmt.Errorf("Failed to enumerate schedule policies with error: [%v]", err)
+	}
+	for i := 0; i < len(schPolicyList.SchedulePolicies); i++ {
+		if schPolicyList.SchedulePolicies[i].Metadata.Name == schPolicyName {
+			schPolicyUid := schPolicyList.SchedulePolicies[i].Metadata.Uid
+			return schPolicyUid, nil
+		}
+	}
+	return "", fmt.Errorf("Unable to find schedule policy Uid")
+}
+
 func (p *portworx) RegisterBackupCluster(orgID, clusterName, uid string) (api.ClusterInfo_StatusInfo_Status, string) {
 	ctx, err := backup.GetAdminCtxFromSecret()
 	log.FailOnError(err, "Failed to fetch px-central-admin ctx")
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
+	clusterResp, err := p.InspectCluster(ctx, clusterReq)
+	log.FailOnError(err, "Cluster Object for cluster %s and Org id %s is empty", clusterName, orgID)
+	clusterObj := clusterResp.GetCluster()
+	return clusterObj.Status.Status, clusterObj.Uid
+}
+
+func (p *portworx) RegisterBackupClusterNonAdminUser(orgID, clusterName, uid string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, string) {
 	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
 	clusterResp, err := p.InspectCluster(ctx, clusterReq)
 	log.FailOnError(err, "Cluster Object for cluster %s and Org id %s is empty", clusterName, orgID)

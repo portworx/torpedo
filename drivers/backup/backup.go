@@ -3,10 +3,11 @@ package backup
 import (
 	"context"
 	"fmt"
+	"time"
+
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
-	"time"
 )
 
 // Image Generic struct
@@ -110,6 +111,9 @@ type Cluster interface {
 	// DeleteCluster deletes a cluster object
 	DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error)
 
+	// ClusterUpdateBackupShare updates ownership details for backup share at cluster
+	ClusterUpdateBackupShare(ctx context.Context, req *api.ClusterBackupShareUpdateRequest) (*api.ClusterBackupShareUpdateResponse, error)
+
 	// WaitForClusterDeletion waits for cluster to be deleted successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
 	WaitForClusterDeletion(
@@ -122,6 +126,9 @@ type Cluster interface {
 
 	// RegisterBackupCluster registers backup cluster
 	RegisterBackupCluster(orgID, cloudName, uid string) (api.ClusterInfo_StatusInfo_Status, string)
+
+	// RegisterBackupClusterNonAdminUser registers backup cluster with non admin context
+	RegisterBackupClusterNonAdminUser(orgID, clusterName, uid string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, string)
 
 	// ValidateBackupCluster validates if backup pods are up or not
 	ValidateBackupCluster() error
@@ -198,6 +205,9 @@ type Backup interface {
 
 	// GetBackupUID returns uid of the given backup in an organization
 	GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error)
+
+	// UpdateBackupShare updates backupshare of existing backup object
+	UpdateBackupShare(ctx context.Context, req *api.BackupShareUpdateRequest) (*api.BackupShareUpdateResponse, error)
 }
 
 // Restore object interface
@@ -260,6 +270,9 @@ type SchedulePolicy interface {
 
 	// DeleteBackupSchedulePolicy deletes the list of schedule policies
 	DeleteBackupSchedulePolicy(orgID string, policyList []string) error
+
+	// GetSchedulePolicyUid gets the uid for the given schedule policy
+	GetSchedulePolicyUid(orgID string, tx context.Context, schPolicyName string) (string, error)
 }
 
 // ScheduleBackup interface

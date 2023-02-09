@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	k8s "github.com/portworx/sched-ops/k8s/core"
@@ -103,6 +105,34 @@ type KeycloakUserRepresentation struct {
 	Credentials   []KeycloakUserCredentials `json:"credentials"`
 }
 
+// KeycloakGroupMemberRepresentation user representation
+type KeycloakGroupMemberRepresentation struct {
+	ID                         string                                 `json:"id"`
+	CreatedTimestamp           int64                                  `json:"createdTimestamp"`
+	Name                       string                                 `json:"username"`
+	Totp                       bool                                   `json:"totp"`
+	FirstName                  string                                 `json:"firstName"`
+	LastName                   string                                 `json:"lastName"`
+	EmailVerified              bool                                   `json:"emailVerified"`
+	Enabled                    bool                                   `json:"enabled"`
+	Email                      string                                 `json:"email"`
+	Credentials                []KeycloakUserCredentials              `json:"credentials"`
+	DisableableCredentialTypes []string                               `json:"disableableCredentialTypes"`
+	RequiredActions            []RequiredActionProviderRepresentation `json:"requiredActions"`
+	NotBefore                  int32                                  `json:"notBefore"`
+}
+
+// RequiredActionProviderRepresentation
+type RequiredActionProviderRepresentation struct {
+	Alias         string            `json:"alias"`
+	Config        map[string]string `json:"config"`
+	DefaultAction bool              `json:"defaultAction"`
+	Enabled       bool              `json:"enabled"`
+	Name          string            `json:"name"`
+	Priority      int32             `json:"priority"`
+	ProviderId    string            `json:"providerId"`
+}
+
 // KeycloakUserCredentials user credentials
 type KeycloakUserCredentials struct {
 	// Type is "password"
@@ -184,8 +214,8 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 
 // GetPxBackupNamespace returns namespace of px-backup deployment.
 func GetPxBackupNamespace() string {
-	ns := os.Getenv(pxBackupNamespace)
-	if ns == "" {
+	ns, present := os.LookupEnv(pxBackupNamespace)
+	if !(present) {
 		return AdminTokenSecretNamespace
 	}
 	return ns
@@ -429,7 +459,7 @@ func FetchIDOfUser(userName string) (string, error) {
 			break
 		}
 	}
-
+	log.Infof("Fetching ID of user %s - %s", userName, clientID)
 	return clientID, nil
 }
 
@@ -660,12 +690,13 @@ func AddUser(userName, firstName, lastName, email, password string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	log.Infof("Response for user [%s] creation - %s", userName, string(response))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-
+	log.Infof("User [%s] created", userName)
 	return nil
 }
 
@@ -686,11 +717,12 @@ func DeleteUser(userName string) error {
 		return err
 	}
 
-	_, err = processHTTPRequest(method, reqURL, headers, nil)
+	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	log.Infof("Response for user [%s] deletion - %s", userName, string(response))
 	if err != nil {
 		return err
 	}
-
+	log.Infof("Deleted User - %s", userName)
 	return nil
 }
 
@@ -735,7 +767,7 @@ func UpdatePxBackupAdminSecret() error {
 		return err
 	}
 
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, AdminTokenSecretNamespace)
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return err
 	}
@@ -756,7 +788,7 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 		return nil, err
 	}
 
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, AdminTokenSecretNamespace)
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return nil, err
 	}
@@ -765,7 +797,7 @@ func GetAdminCtxFromSecret() (context.Context, error) {
 	if token == "" {
 		return nil, fmt.Errorf("admin token is empty")
 	}
-	log.Infof("Token from Admin secret: %v", token)
+	log.Debugf("Token from Admin secret: %v", token)
 	ctx := GetCtxWithToken(token)
 
 	return ctx, nil
@@ -778,7 +810,7 @@ func GetAdminTokenFromSecret() (string, error) {
 		return "", err
 	}
 
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, AdminTokenSecretNamespace)
+	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, GetPxBackupNamespace())
 	if err != nil {
 		return "", err
 	}
@@ -787,7 +819,7 @@ func GetAdminTokenFromSecret() (string, error) {
 	if token == "" {
 		return "", fmt.Errorf("admin token is empty")
 	}
-	log.Infof("Token from Admin secret: %v", token)
+	log.Debugf("Token from Admin secret: %v", token)
 
 	return token, nil
 }
@@ -817,8 +849,73 @@ func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
 		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
-	log.Debugf("list of groups : %v", groups)
 	return groups, nil
+}
+
+func GetAllUsers() ([]KeycloakUserRepresentation, error) {
+	fn := "GetAllGroups"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return nil, err
+	}
+	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
+	method := "GET"
+	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	var users []KeycloakUserRepresentation
+	err = json.Unmarshal(response, &users)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	return users, nil
+}
+
+// GetMembersOfGroup fetches all available members of the group
+func GetMembersOfGroup(group string) ([]string, error) {
+	fn := "GetMembersOfGroup"
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return nil, err
+	}
+	groupID, err := FetchIDOfGroup(group)
+	if err != nil {
+		return nil, err
+	}
+
+	reqURL := fmt.Sprintf("%s/groups/%s/members", keycloakEndPoint, groupID)
+	method := "GET"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+
+	response, err := processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	var members []string
+	var users []KeycloakGroupMemberRepresentation
+	err = json.Unmarshal(response, &users)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return nil, err
+	}
+	for _, userName := range users {
+		members = append(members, userName.Name)
+	}
+	log.Debugf("list of members : %v", members)
+	return members, nil
 }
 
 // AddGroup adds a new group
@@ -844,12 +941,13 @@ func AddGroup(group string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(userBytes)))
+	log.Infof("Creating group response - %s", string(response))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-
+	log.Infof("Group [%s] created", group)
 	return nil
 }
 
@@ -873,6 +971,45 @@ func DeleteGroup(group string) error {
 	if err != nil {
 		return err
 	}
+	log.Infof("Deleted Group - %s", group)
+	return nil
+}
+
+// Deletes Multiple groups
+func DeleteMultipleGroups(groups []string) error {
+
+	var wg sync.WaitGroup
+	for _, group := range groups {
+		wg.Add(1)
+		go func(group string) {
+			defer wg.Done()
+			err := DeleteGroup(group)
+			log.FailOnError(err, "Failed to create group - %v", group)
+
+		}(group)
+		log.Infof("Deleted Group - %s", group)
+	}
+	wg.Wait()
+
+	return nil
+}
+
+// Deletes Multiple users
+func DeleteMultipleUsers(users []string) error {
+
+	var wg sync.WaitGroup
+	for _, user := range users {
+		wg.Add(1)
+		go func(user string) {
+			defer wg.Done()
+			err := DeleteUser(user)
+			log.FailOnError(err, "Failed to create group - %v", user)
+
+		}(user)
+		log.Infof("Deleted User - %s", user)
+	}
+	wg.Wait()
+
 	return nil
 }
 
@@ -911,12 +1048,13 @@ func AddGroupToUser(user, group string) error {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(dataBytes)))
+	response, err := processHTTPRequest(method, reqURL, headers, strings.NewReader(string(dataBytes)))
+	log.Infof("Adding user to group response - %s", string(response))
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-
+	log.Infof("Added User [%s] to Group [%s]", user, group)
 	return nil
 }
 
@@ -934,7 +1072,7 @@ func FetchIDOfGroup(name string) (string, error) {
 			break
 		}
 	}
-
+	log.Infof("Fetching ID of group %s - %s", name, groupID)
 	return groupID, nil
 }
 
@@ -1018,4 +1156,25 @@ func processHTTPRequest(
 	}()
 
 	return ioutil.ReadAll(httpResponse.Body)
+}
+
+func GetNonAdminCtx(username, password string) (context.Context, error) {
+	token, err := GetToken(username, password)
+	if err != nil {
+		return nil, err
+	}
+	ctx := GetCtxWithToken(token)
+	return ctx, nil
+}
+
+func GetRandomUserFromGroup(groupName string) (string, error) {
+	fn := "GetRandomUserFromGroup"
+	users, err := GetMembersOfGroup(groupName)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return "", err
+	}
+	rand.Seed(time.Now().Unix())
+	userName := users[rand.Intn(len(users))]
+	return userName, nil
 }
