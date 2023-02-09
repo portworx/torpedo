@@ -236,7 +236,6 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	endpointURL, err := url.Parse(ControlPlaneURL)
 	if err != nil {
 		return "", "", "", "", "", err
-		//log.FailOnError(err, "An Error Occured while parsing the URL")
 	}
 	apiConf.Host = endpointURL.Host
 	apiConf.Scheme = endpointURL.Scheme
@@ -276,7 +275,6 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	dnsZone, err := controlplane.GetDNSZone(tenantID)
 	if err != nil {
 		return "", "", "", "", "", err
-		//log.FailOnError(err, "Error while getting DNS Zone")
 	}
 	log.InfoD("DNSZone: %s, tenantName: %s, accountName: %s", dnsZone, tenantName, AccountName)
 	projcts := components.Project
@@ -288,7 +286,6 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	ns, err = k8sCore.GetNamespace("kube-system")
 	if err != nil {
 		return "", "", "", "", "", err
-		//log.FailOnError(err, "Error while getting k8s namespace")
 	}
 	clusterID := string(ns.GetObjectMeta().GetUID())
 	if len(clusterID) > 0 {
@@ -301,7 +298,6 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 	if err != nil {
 		return "", "", "", "", "", err
-		//log.FailOnError(err, "Error while listing deployments")
 	}
 	if targetClusters == nil {
 		log.Fatalf("No Target cluster is available for the account/tenant %v", err)
@@ -317,7 +313,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 		}
 	}
 	if !istargetclusterAvailable {
-		log.Fatalf("Target cluster is not available for the account/tenant")
+		return "", "", "", "", "", fmt.Errorf("target cluster is not available for the account/tenant")
 	}
 	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
 }
