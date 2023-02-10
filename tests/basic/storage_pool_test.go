@@ -971,6 +971,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				log.FailOnError(err, "Error converting size to uint64")
 				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", specSize/2))
 			} else {
+				log.Infof("adding size to newspec")
 				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 300/2))
 				//paramsArr = append(paramsArr, param)
 			}
@@ -982,7 +983,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				log.FailOnError(err, "Error converting size to uint64")
 				paramsArr = append(paramsArr, fmt.Sprintf("gp3=%v,", specSize))
 			} else {
-
+				log.Infof("adding type to newspec")
 				paramsArr = append(paramsArr, fmt.Sprintf("type=%s,", "gp2"))
 				//paramsArr = append(paramsArr, param)
 			}
@@ -997,6 +998,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				}
 				paramsArr = append(paramsArr, fmt.Sprintf("iops=%v,", speed))
 			} else {
+				log.Infof("adding iops to newspec")
 				paramsArr = append(paramsArr, fmt.Sprintf("iops=%v,", 3000))
 				//paramsArr = append(paramsArr, param)
 			}
