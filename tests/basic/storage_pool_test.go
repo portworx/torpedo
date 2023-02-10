@@ -972,7 +972,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 				specSize, err = strconv.ParseUint(val, 10, 64)
 				log.FailOnError(err, "Error converting size to uint64")
 				log.Infof("adding size in if loop to newspec")
-				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", specSize/2))
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", specSize))
 			} else {
 				if !strings.Contains(param, "type") {
 					log.Infof("adding size to newspec")
