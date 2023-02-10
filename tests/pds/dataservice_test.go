@@ -353,16 +353,14 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				})
 
 				Step("Delete the workload generating deployments", func() {
-					if Contains(dataServiceDeploymentWorkloads, ds.Name) || Contains(dataServicePodWorkloads, ds.Name) {
-						if Contains(dataServiceDeploymentWorkloads, ds.Name) {
-							log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
-							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-						} else if Contains(dataServicePodWorkloads, ds.Name) {
-							log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
-							err = pdslib.DeleteK8sPods(pod.Name, namespace)
-						}
-						log.FailOnError(err, "error deleting workload generating pods")
+					if Contains(dataServiceDeploymentWorkloads, ds.Name) {
+						log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
+						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+					} else if Contains(dataServicePodWorkloads, ds.Name) {
+						log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
+						err = pdslib.DeleteK8sPods(pod.Name, namespace)
 					}
+					log.FailOnError(err, "error deleting workload generating pods")
 				})
 			}
 		})

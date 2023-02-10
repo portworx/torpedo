@@ -1272,10 +1272,6 @@ func CreateDeploymentWorkloads(command, deploymentName, stressImage, namespace s
 							Image:   stressImage,
 							Command: []string{"/bin/bash", "-c"},
 							Args:    []string{command},
-							SecurityContext: &corev1.SecurityContext{
-								RunAsNonRoot:             pds.PtrBool(false),
-								AllowPrivilegeEscalation: pds.PtrBool(true),
-							},
 						},
 					},
 					RestartPolicy: "Always",
@@ -1518,20 +1514,20 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 
 	dnsEndpoint, err := GetDeploymentConnectionInfo(params.DeploymentID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error occured while getting connection info %v", err)
+		return nil, nil, fmt.Errorf("error occured while getting connection info, Err: %v", err)
 	}
 	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 
 	pdsPassword, err := GetDeploymentCredentials(params.DeploymentID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error occured while getting credentials info %v", err)
+		return nil, nil, fmt.Errorf("error occured while getting credentials info, Err: %v", err)
 	}
 
 	switch params.DataServiceName {
 	case postgresql:
 		dep, err = CreatepostgresqlWorkload(dnsEndpoint, pdsPassword, params.ScaleFactor, params.Iterations, params.DeploymentName, params.Namespace)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error occured while creating postgresql workload %v", err)
+			return nil, nil, fmt.Errorf("error occured while creating postgresql workload, Err: %v", err)
 		}
 
 	case rabbitmq:
@@ -1539,7 +1535,7 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		command := "while true; do java -jar perf-test.jar --uri amqp://${PDS_USER}:${PDS_PASS}@${AMQP_HOST} -jb -s 10240 -z 100 --variable-rate 100:30 --producers 10 --consumers 50; done"
 		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, command)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error occured while creating rabbitmq workload %v", err)
+			return nil, nil, fmt.Errorf("error occured while creating rabbitmq workload, Err: %v", err)
 		}
 
 	case redis:
@@ -1547,20 +1543,20 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		command := "redis-benchmark -a ${PDS_PASS} -h ${REDIS_HOST} -r 10000 -c 1000 -l -q --cluster --user ${PDS_USER}"
 		pod, err = CreateRedisWorkload(params.DeploymentName, redisStressImage, dnsEndpoint, pdsPassword, params.Namespace, env, command)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error occured while creating redis workload %v", err)
+			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
 		}
 
 	case cassandra:
 		cassCommand := fmt.Sprintf("%s write no-warmup n=1000000 cl=ONE -mode user=pds password=%s native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node %s -port native=9042 -rate auto -log file=/tmp/%s.load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/%s.load.data", params.DeploymentName, pdsPassword, dnsEndpoint, params.DeploymentName, params.DeploymentName)
 		dep, err = CreateDeploymentWorkloads(cassCommand, params.DeploymentName, cassandraStresImage, params.Namespace)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error occured while creating cassandra workload %v", err)
+			return nil, nil, fmt.Errorf("error occured while creating cassandra workload, Err: %v", err)
 		}
 	case elasticSearch:
-		esCommand := fmt.Sprintf("while true; do esrally race --track=geonames --target-hosts=%s --pipeline=benchmark-only --test-mode --kill-running-processes --client-options=\"timeout:%s,use_ssl:%s,verify_certs:%s,basic_auth_user:%s,basic_auth_password:%s\"; done", dnsEndpoint, params.TimeOut, params.UseSSL, params.VerifyCerts, params.User, pdsPassword)
+		esCommand := fmt.Sprintf("while true; do esrally race --track=geonames --target-hosts=%s --pipeline=benchmark-only --test-mode --kill-running-processes --client-options=\"timeout:%s,use_ssl:%s,verify_certs:%s,basic_auth_user:%s,basic_auth_password:'%s'\"; done", dnsEndpoint, params.TimeOut, params.UseSSL, params.VerifyCerts, params.User, pdsPassword)
 		dep, err = CreateDeploymentWorkloads(esCommand, params.DeploymentName, esRallyImage, params.Namespace)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error occured while creating elasticSearch workload %v", err)
+			return nil, nil, fmt.Errorf("error occured while creating elasticSearch workload, Err: %v", err)
 		}
 
 	case couchbase:
@@ -1572,7 +1568,7 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 
 		pod, err = CreatePodWorkloads(params.DeploymentName, cbloadImage, params, params.Namespace, "1000", env)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error occured while creating couchbase workload %v", err)
+			return nil, nil, fmt.Errorf("error occured while creating couchbase workload, Err: %v", err)
 		}
 	}
 	return pod, dep, nil
