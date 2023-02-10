@@ -981,9 +981,9 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		}
 		for _, param := range deviceSpecParams {
 			if strings.Contains(param, "type") {
-				val := strings.Split(param, "=")[1]
-				specSize, err = strconv.ParseUint(val, 10, 64)
-				log.FailOnError(err, "Error converting size to uint64")
+				//val := strings.Split(param, "=")[1]
+				//specSize, err = strconv.ParseUint(val, 10, 64)
+				//log.FailOnError(err, "Error converting size to uint64")
 				log.Infof("adding type in if loop to newspec")
 				paramsArr = append(paramsArr, fmt.Sprintf("type=%s,", "gp2"))
 			} else {
