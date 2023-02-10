@@ -80,6 +80,13 @@
       "Image": "b9b2afe",
       "Replicas": 3,
       "ScaleReplicas": 5
+    },
+    {
+      "Name": "Redis",
+      "Version": "7.0.5",
+      "Image": "9181925",
+      "Replicas": 6,
+      "ScaleReplicas": 8
     }
   ],
   "InfraToTest": {

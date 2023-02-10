@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -318,7 +319,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					log.InfoD("Running Workloads on DataService %v ", ds.Name)
 					var params pdslib.WorkloadGenerationParams
 					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
-					log.FailOnError(err, "Error while genearating workloads")
+					log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
 				})
 
 				Step("Validate Deployments before scale up", func() {
