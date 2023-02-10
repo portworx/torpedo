@@ -1231,12 +1231,12 @@ func CreatePodWorkloads(name string, image string, creds WorkloadGenerationParam
 
 	pod, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
-		return nil, fmt.Errorf("error occured while creating pod %v", err)
+		return nil, fmt.Errorf("failed to create pod [%s], Err: %v", podSpec.Name, err)
 	}
 
 	err = k8sCore.ValidatePod(pod, timeOut, timeInterval)
 	if err != nil {
-		return nil, fmt.Errorf("error occured while validating pod %v", err)
+		return nil, fmt.Errorf("failed to validate pod [%s], Err: %v", pod.Name, err)
 	}
 
 	//TODO: Remove static sleep and verify the injected data
@@ -1793,7 +1793,6 @@ func GetAllSupportedDataServices() map[string]string {
 
 // UpdateDataServices modifies the existing deployment
 func UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
-
 	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
