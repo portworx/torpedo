@@ -976,7 +976,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			} else {
 				if !strings.Contains(param, "type") {
 					log.Infof("adding size to newspec")
-					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 300/2))
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d", 300/2))
 					//paramsArr = append(paramsArr, param)
 				}
 			}
@@ -985,11 +985,11 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 				//specSize, err = strconv.ParseUint(val, 10, 64)
 				//log.FailOnError(err, "Error converting size to uint64")
 				log.Infof("adding type in if loop to newspec")
-				paramsArr = append(paramsArr, fmt.Sprintf("type=%s,", "gp2"))
+				paramsArr = append(paramsArr, fmt.Sprintf("type=%s", "gp2"))
 			} else {
 				if !strings.Contains(param, "size") {
 					log.Infof("adding type to newspec")
-					paramsArr = append(paramsArr, fmt.Sprintf("type=%s,", "gp2"))
+					paramsArr = append(paramsArr, fmt.Sprintf("type=%s", "gp2"))
 					//paramsArr = append(paramsArr, param)
 				}
 			}
