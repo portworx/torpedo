@@ -992,7 +992,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 				//paramsArr = append(paramsArr, param)
 			}
 		}
-		for _, param := range deviceSpecParams {
+		/*for _, param := range deviceSpecParams {
 			if strings.Contains(param, "iops") {
 				re := regexp.MustCompile(`[0-9]+`)
 				speedBytes := string(re.FindAll([]byte(param), -1)[0])
@@ -1013,7 +1013,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			//if speed == 0 {
 			//continue
 			//}
-		}
+		}*/
 		newSpec := strings.Join(paramsArr, ",")
 		expandedExpectedPoolSize := currentTotalPoolSize * 2
 
