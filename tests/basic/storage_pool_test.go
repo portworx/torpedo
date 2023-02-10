@@ -961,6 +961,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 		log.FailOnError(err, "Error getting cloud drive specs")
 
 		deviceSpec := driveSpecs[0]
+		log.Infof("adding drive specs %v", deviceSpec)
 		deviceSpecParams := strings.Split(deviceSpec, ",")
 		var specSize uint64
 		paramsArr := make([]string, 0)
@@ -969,6 +970,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				val := strings.Split(param, "=")[1]
 				specSize, err = strconv.ParseUint(val, 10, 64)
 				log.FailOnError(err, "Error converting size to uint64")
+				log.Infof("adding size in if loop to newspec")
 				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", specSize/2))
 			} else {
 				log.Infof("adding size to newspec")
@@ -977,11 +979,12 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			}
 		}
 		for _, param := range deviceSpecParams {
-			if strings.Contains(param, "gp3") {
+			if strings.Contains(param, "type") {
 				val := strings.Split(param, "=")[1]
 				specSize, err = strconv.ParseUint(val, 10, 64)
 				log.FailOnError(err, "Error converting size to uint64")
-				paramsArr = append(paramsArr, fmt.Sprintf("gp3=%v,", specSize))
+				log.Infof("adding type in if loop to newspec")
+				paramsArr = append(paramsArr, fmt.Sprintf("type=%s,", "gp2"))
 			} else {
 				log.Infof("adding type to newspec")
 				paramsArr = append(paramsArr, fmt.Sprintf("type=%s,", "gp2"))
@@ -993,6 +996,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 				re := regexp.MustCompile(`[0-9]+`)
 				speedBytes := string(re.FindAll([]byte(param), -1)[0])
 				speed, err := strconv.Atoi(speedBytes)
+				log.Infof("adding in iops if loop to newspec")
 				if err != nil {
 					//return 0, fmt.Errorf("Error in getting the speed")
 				}
