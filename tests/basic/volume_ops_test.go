@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"math"
 	"reflect"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
@@ -25,17 +26,48 @@ const (
 	fio = "fio-throttle-io"
 )
 
+// Volume mount options and create options tests
 var _ = Describe("{Volumemount}", func() {
 	var contexts []*scheduler.Context
 	It("creating volume", func() {
+		var err error
 		contexts = make([]*scheduler.Context, 0)
 		contexts = ScheduleApplications(fmt.Sprintf("mount"))
 		ValidateApplications(contexts)
-		//wg := new(sync.WaitGroup)
-		//CreateMultiVolumesAndAttach(wg,1,"smaanika-torpedo-ub-1")
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		stepLog := "get volumes for mount app"
+		Step(stepLog, func() {
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist ?")
+				})
+				for _, v := range appVolumes {
+					stepLog = fmt.Sprintf("get node for app %s's volume: %v", ctx.App.Key, v)
+					Step(stepLog,
+						func() {
+							log.InfoD(stepLog)
+							attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
+							fmt.Println(err)
+							fmt.Println(attachedNode)
+							log.Infof("attachedNode is")
+							log.Infof(attachedNode)
+
+							Inst().V.ValidateMountOptions(v.Name, attachedNode)
+						})
+				}
+			}
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
 	})
 })
 

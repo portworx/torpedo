@@ -1429,6 +1429,24 @@ func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) erro
 	return nil
 }
 
+func (d *portworx) ValidateMountOptions(volumeName string, volumeNode *node.Node) error {
+	cmd := fmt.Sprintf("mount | grep %s", volumeName)
+	out, err := d.nodeDriver.RunCommandWithNoRetry(
+		*volumeNode,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("Failed to get mount options from mount command")
+	}
+	if strings.Contains("nosuid", out) {
+		fmt.Println("")
+	}
+	return nil
+}
+
 func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
 	nodes := node.GetStorageDriverNodes()
 	var strategyStr string

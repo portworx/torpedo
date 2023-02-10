@@ -1,7 +1,7 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: ex2-fb-pvc
+  name: mount-fb-pvc
 spec:
   accessModes:
     - ReadWriteOnce
