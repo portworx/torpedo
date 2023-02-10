@@ -974,12 +974,12 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 				log.Infof("adding size in if loop to newspec")
 				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", specSize/2))
 			} else {
-				log.Infof("adding size to newspec")
-				paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 300/2))
-				//paramsArr = append(paramsArr, param)
+				if !strings.Contains(param, "type") {
+					log.Infof("adding size to newspec")
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", 300/2))
+					//paramsArr = append(paramsArr, param)
+				}
 			}
-		}
-		for _, param := range deviceSpecParams {
 			if strings.Contains(param, "type") {
 				//val := strings.Split(param, "=")[1]
 				//specSize, err = strconv.ParseUint(val, 10, 64)
@@ -987,9 +987,11 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 				log.Infof("adding type in if loop to newspec")
 				paramsArr = append(paramsArr, fmt.Sprintf("type=%s,", "gp2"))
 			} else {
-				log.Infof("adding type to newspec")
-				paramsArr = append(paramsArr, fmt.Sprintf("type=%s,", "gp2"))
-				//paramsArr = append(paramsArr, param)
+				if !strings.Contains(param, "size") {
+					log.Infof("adding type to newspec")
+					paramsArr = append(paramsArr, fmt.Sprintf("type=%s,", "gp2"))
+					//paramsArr = append(paramsArr, param)
+				}
 			}
 		}
 		/*for _, param := range deviceSpecParams {
