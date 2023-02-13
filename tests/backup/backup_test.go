@@ -3421,7 +3421,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 	backupNamespaceMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 0)
+		StartTorpedoTest("BackupRestartPX", "Restart PX when backup in progress", nil, 55818)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -4354,7 +4354,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var backupNames []string
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Strok when backups and restores in progress", nil, 0)
+		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Stork when backups and restores in progress", nil, 55819)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -4695,7 +4695,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	backupNamespaceMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 0)
+		StartTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 58064)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
