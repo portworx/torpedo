@@ -3609,7 +3609,9 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 
 		Step("Setup backup", func() {
 			// Set cluster context to cluster where torpedo is running
-			SetClusterContext("")
+			err = SetClusterContext("")
+			log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+
 			SetupBackup(taskNamePrefix)
 		})
 
@@ -3617,7 +3619,9 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
 
-		SetClusterContext(sourceClusterConfigPath)
+		err = SetClusterContext(sourceClusterConfigPath)
+		log.FailOnError(err,
+			"Failed to SetClusterContext to source cluster [%v]", sourceClusterConfigPath)
 
 		Step("Deploy applications", func() {
 			contexts = make([]*scheduler.Context, 0)
@@ -3706,7 +3710,10 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
 
-		SetClusterContext(destClusterConfigPath)
+		err = SetClusterContext(destClusterConfigPath)
+		log.FailOnError(err,
+			"Failed to SetClusterContext to destination cluster [%v]", destClusterConfigPath)
+
 		for _, namespace := range bkpNamespaces {
 			restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, namespace)
 			error, ok := bkpNamespaceErrors[namespace]
@@ -3759,7 +3766,9 @@ var _ = Describe("{BackupRestoreSimultaneous}", func() {
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
 
-			SetClusterContext(destClusterConfigPath)
+			err = SetClusterContext(destClusterConfigPath)
+			log.FailOnError(err,
+				"Failed to SetClusterContext to destination cluster [%v]", destClusterConfigPath)
 
 			// Populate contexts
 			for _, ctx := range contexts {
@@ -3841,14 +3850,19 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 
 		Step("Setup backup", func() {
 			// Set cluster context to cluster where torpedo is running
-			SetClusterContext("")
+			err = SetClusterContext("")
+			log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+
 			SetupBackup(taskNamePrefix)
 		})
 		sourceClusterConfigPath, err := GetSourceClusterConfigPath()
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
 
-		SetClusterContext(sourceClusterConfigPath)
+		err = SetClusterContext(sourceClusterConfigPath)
+		log.FailOnError(err,
+			"Failed to SetClusterContext to source cluster [%v]", sourceClusterConfigPath)
+
 		Step("Deploy applications", func() {
 			successfulBackupNames = make([]string, 0)
 			successfulRestoreNames = make([]string, 0)
@@ -3896,7 +3910,10 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				continue
 			}
 
-			SetClusterContext(sourceClusterConfigPath)
+			err = SetClusterContext(sourceClusterConfigPath)
+			log.FailOnError(err,
+				"Failed to SetClusterContext to source cluster [%v]", sourceClusterConfigPath)
+
 			for _, namespace := range bkpNamespaces {
 				numBackups++
 				backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, counter)
@@ -3939,7 +3956,10 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
 
-			SetClusterContext(destClusterConfigPath)
+			err = SetClusterContext(destClusterConfigPath)
+			log.FailOnError(err,
+				"Failed to SetClusterContext to destination cluster [%v]", destClusterConfigPath)
+
 			for _, namespace := range bkpNamespaces {
 				if !aliveBackup[namespace] {
 					continue
@@ -4002,7 +4022,9 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				Expect(err).NotTo(HaveOccurred(),
 					fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
 
-				SetClusterContext(destClusterConfigPath)
+				err = SetClusterContext(destClusterConfigPath)
+				log.FailOnError(err,
+					"Failed to SetClusterContext to destination cluster [%v]", destClusterConfigPath)
 
 				// Populate contexts
 				for _, ctx := range remainingContexts {
@@ -4032,7 +4054,10 @@ var _ = Describe("{BackupRestoreOverPeriod}", func() {
 				if err != nil {
 					log.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
 				} else {
-					SetClusterContext(sourceClusterConfigPath)
+					err = SetClusterContext(sourceClusterConfigPath)
+					log.FailOnError(err,
+						"Failed to SetClusterContext to source cluster [%v]", sourceClusterConfigPath)
+
 					for _, ctx := range contexts {
 						TearDownContext(ctx, map[string]bool{
 							SkipClusterScopedObjects:                    true,
@@ -4085,14 +4110,19 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
 			// Set cluster context to cluster where torpedo is running
-			SetClusterContext("")
+			err := SetClusterContext("")
+			log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+
 			SetupBackup(taskNamePrefix)
 		})
 		sourceClusterConfigPath, err := GetSourceClusterConfigPath()
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
 
-		SetClusterContext(sourceClusterConfigPath)
+		err = SetClusterContext(sourceClusterConfigPath)
+		log.FailOnError(err,
+			"Failed to SetClusterContext to source cluster [%v]", sourceClusterConfigPath)
+
 		Step("Deploy applications", func() {
 			successfulBackupNames = make([]string, 0)
 			successfulRestoreNames = make([]string, 0)
@@ -4140,7 +4170,10 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 			}
 			/*Expect(err).NotTo(HaveOccurred(),
 			  fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))*/
-			SetClusterContext(sourceClusterConfigPath)
+			err = SetClusterContext(sourceClusterConfigPath)
+			log.FailOnError(err,
+				"Failed to SetClusterContext to source cluster [%v]", sourceClusterConfigPath)
+
 			for _, namespace := range bkpNamespaces {
 				go func(namespace string) {
 					atomic.AddInt32(&numBackups, 1)
@@ -4275,7 +4308,9 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 				Expect(err).NotTo(HaveOccurred(),
 					fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
 
-				SetClusterContext(destClusterConfigPath)
+				err = SetClusterContext(destClusterConfigPath)
+				log.FailOnError(err,
+					"Failed to SetClusterContext to destination cluster [%v]", destClusterConfigPath)
 
 				// Populate contexts
 				for _, ctx := range remainingContexts {
@@ -4299,7 +4334,10 @@ var _ = Describe("{BackupRestoreOverPeriodSimultaneous}", func() {
 			if err != nil {
 				log.Errorf("Failed to get kubeconfig path for source cluster. Error: [%v]", err)
 			} else {
-				SetClusterContext(sourceClusterConfigPath)
+				err = SetClusterContext(sourceClusterConfigPath)
+				log.FailOnError(err,
+					"Failed to SetClusterContext to source cluster [%v]", sourceClusterConfigPath)
+
 				for _, ctx := range contexts {
 					TearDownContext(ctx, map[string]bool{
 						SkipClusterScopedObjects:                    true,
