@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"os"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -13,7 +14,6 @@ import (
 )
 
 const (
-	logglyToken      = ""
 	logglyIterateUrl = "https://pxlite.loggly.com/apiv2/events/iterate"
 )
 
@@ -79,6 +79,8 @@ var _ = Describe("{PodMetricFunctional}", func() {
 })
 
 func getLogglyData(query string) ([]byte, int, error) {
+	logglyToken, ok := os.LookupEnv("LOGGLY_API_TOKEN")
+	Expect(ok).To(BeTrue())
 	headers := make(map[string]string)
 	headers["Authorization"] = fmt.Sprintf("Bearer %v", logglyToken)
 	return rest.Get(fmt.Sprintf("%v?%v", logglyIterateUrl, query), nil, headers)
