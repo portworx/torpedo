@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	logglyToken      = ""
 	logglyIterateUrl = "https://pxlite.loggly.com/apiv2/events/iterate"
 )
 
