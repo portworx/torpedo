@@ -122,12 +122,12 @@ const (
 	getNodeRetryInterval              = 5 * time.Second
 	stopDriverTimeout                 = 5 * time.Minute
 	crashDriverTimeout                = 2 * time.Minute
-	startDriverTimeout                = 2 * time.Minute
+	startDriverTimeout                = 3 * time.Minute
 	upgradeTimeout                    = 10 * time.Minute
 	upgradeRetryInterval              = 30 * time.Second
 	upgradePerNodeTimeout             = 15 * time.Minute
 	waitVolDriverToCrash              = 1 * time.Minute
-	waitDriverDownOnNodeRetryInterval = 2 * time.Second
+	waitDriverDownOnNodeRetryInterval = 5 * time.Second
 	asyncTimeout                      = 15 * time.Minute
 	timeToTryPreviousFolder           = 10 * time.Minute
 	validateStorageClusterTimeout     = 40 * time.Minute
