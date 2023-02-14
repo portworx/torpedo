@@ -54,7 +54,5 @@ func DoRequest(request HttpRequest) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read response: %+v", resp.Body)
 	}
-
-	//log.Debug(string(htmlData))
 	return htmlData, nil
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/netutil"
+	"github.com/portworx/torpedo/pkg/osutils"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -42,6 +43,8 @@ const (
 	defaultCmdRetry             = 15 * time.Second
 	defaultUpgradeTimeout       = 4 * time.Hour
 	defaultUpgradeRetryInterval = 5 * time.Minute
+	// ocPath                      = "/go/src/github.com/portworx/torpedo/bin/oc"
+	ocPath = " -c oc"
 )
 
 var (
@@ -309,7 +312,6 @@ func getClientVersion() (string, error) {
 func selectChannel(version string) error {
 	var output []byte
 	var err error
-
 	channel := ""
 	if channel, err = getChannel(version); err != nil {
 		return err
@@ -325,10 +327,12 @@ spec:
 		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
 			return nil, true, fmt.Errorf("failed to select channel due to %s. cause: %v", string(output), err)
 		}
-		log.Info(string(output))
+		log.Info(output)
+		log.Debugf("Wait 5 minutes to set to new channel")
+		time.Sleep(5 * time.Minute)
 		return nil, false, nil
 	}
-	_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
 	return err
 }
 
@@ -346,8 +350,7 @@ func getImageSha(ocpVersion string) (string, error) {
 	log.Infof("URL %s", downloadURL)
 	content, err := netutil.DoRequest(request)
 	if err != nil {
-		log.Errorf("Failed to get Get content from  %s, error %v", downloadURL, err)
-		return "", err
+		return "", fmt.Errorf("Failed to get Get content from %s, error %v", downloadURL, err)
 	}
 	//Convert the body to type string
 	contentInString := string(content)
@@ -366,38 +369,46 @@ func startUpgrade(upgradeVersion string) error {
 	var shaName string
 	args := []string{"adm", "upgrade", fmt.Sprintf("--to=%s", upgradeVersion)}
 	t := func() (interface{}, bool, error) {
-		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-			// If OC upgrade failed for reasons like not recommended upgrade or path does not exist.
+		output, stdErr, err := osutils.ExecTorpedo("oc", args...)
+		if err != nil {
 			forceUpgrade := "specify --to-image"
 			notRecommended := "is not one of the recommended updates, but is available"
-			if strings.Contains(string(output), notRecommended) {
+			if strings.Contains(string(stdErr), notRecommended) {
 				args = []string{"adm", "upgrade", fmt.Sprintf("--to=%s", upgradeVersion), "--allow-not-recommended"}
 				log.Infof("Retrying with not recommended options")
-				if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-					return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", string(output), err)
+				output, stdErr, err = osutils.ExecTorpedo("oc", args...)
+				if err != nil {
+					return output, true, fmt.Errorf("failed to start upgrade due to %s, cause: %v ", stdErr, err)
 				}
-				log.Infof("Upgrded successful with notRecommended")
-			} else if strings.Contains(string(output), forceUpgrade) {
+				log.Debugf("Upgrded called  with notRecommended %s", output)
+				log.Debugf("StdError %s", stdErr)
+			} else if strings.Contains(string(stdErr), forceUpgrade) {
 				log.Infof("Upgrade with force call ")
 				if shaName, err = getImageSha(upgradeVersion); err != nil {
 					return "", false, err
 				}
 				imagePath := fmt.Sprintf("--to-image=quay.io/openshift-release-dev/ocp-release@%s", shaName)
-				log.Infof("Full command: %s", imagePath)
+				log.Infof("Image full path : %s", imagePath)
 				args = []string{"adm", "upgrade", imagePath, "--force", "--allow-explicit-upgrade", "--allow-upgrade-with-warnings"}
 				log.Infof("Retrying with force upgrade options")
-				if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-					return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", string(output), err)
+				output, stdErr, err = osutils.ExecTorpedo("oc", args...)
+				if err != nil {
+					return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", stdErr, err)
 				}
+				log.Debugf("Upgrded called  with force %s", output)
+				log.Debugf("StdError %s", stdErr)
+
 			} else {
 				log.Infof("Upgrade not possible for unkown reason")
+				return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", stdErr, err)
 			}
-			return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", string(output), err)
+
 		}
+		log.Debugf("Upgrade command output %s", output)
 		return output, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, defaultCmdTimeout, defaultCmdRetry); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, defaultCmdRetry, defaultCmdRetry); err != nil {
 		return err
 	}
 
