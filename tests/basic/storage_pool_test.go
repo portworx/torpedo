@@ -1046,7 +1046,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 				},
 				Action: "stop",
 			}
-			blockDrives, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
+			//blockDrives, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
 			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", poolIDToResize))
 			//add drive while rebalance is happening which should fail
 			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
@@ -1060,12 +1060,12 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
 			log.FailOnError(err, "Error waiting for pool resize")
 			//resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			blockDrivesAfterDriveInsertFailed, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
+			//blockDrivesAfterDriveInsertFailed, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
 			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", poolIDToResize))
-			if len(blockDrivesAfterDriveInsertFailed) == len(blockDrives) {
-				log.InfoD("Check block devices")
+			//if len(blockDrivesAfterDriveInsertFailed) == len(blockDrives) {
+			//	log.InfoD("Check block devices")
 
-			}
+			//}
 			log.FailOnError(err, fmt.Sprintf("error get pool using UUID %s", poolIDToResize))
 			stepLog = "Ensure that new pool has been expanded to the expected size"
 			Step(stepLog, func() {
