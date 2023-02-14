@@ -1039,13 +1039,13 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", poolIDToResize))
 			//check number of drives before adding another drive
 			//map[string]*node.BlockDrive, err:=GetBlockDrives(n node.Node, options node.SystemctlOpts)
-			systemOpts := node.SystemctlOpts{
-				ConnectionOpts: node.ConnectionOpts{
-					Timeout:         0,
-					TimeBeforeRetry: 0,
-				},
-				Action: "stop",
-			}
+			//systemOpts := node.SystemctlOpts{
+			//	ConnectionOpts: node.ConnectionOpts{
+			//		Timeout:         0,
+			//		TimeBeforeRetry: 0,
+			//	},
+			//	Action: "stop",
+			//}
 			//blockDrives, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
 			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", poolIDToResize))
 			//add drive while rebalance is happening which should fail
