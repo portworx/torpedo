@@ -43,8 +43,7 @@ const (
 	defaultCmdRetry             = 15 * time.Second
 	defaultUpgradeTimeout       = 4 * time.Hour
 	defaultUpgradeRetryInterval = 5 * time.Minute
-	// ocPath                      = "/go/src/github.com/portworx/torpedo/bin/oc"
-	ocPath = " -c oc"
+	ocPath                      = " -c oc"
 )
 
 var (
@@ -347,7 +346,7 @@ func getImageSha(ocpVersion string) (string, error) {
 		Body:     nil,
 		Insecure: true,
 	}
-	log.Infof("URL %s", downloadURL)
+	log.Debugf("URL %s", downloadURL)
 	content, err := netutil.DoRequest(request)
 	if err != nil {
 		return "", fmt.Errorf("Failed to get Get content from %s, error %v", downloadURL, err)
