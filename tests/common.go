@@ -1983,7 +1983,6 @@ func DeleteCloudCredential(name string, orgID string, cloudCredUID string) error
 		OrgId: orgID,
 		Uid:   cloudCredUID,
 	}
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
@@ -2312,7 +2311,6 @@ func CreateBackupGetErr(backupName string, clusterName string, bLocation string,
 			Namespaces:     namespaces,
 			LabelSelectors: labelSelectors,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -2488,7 +2486,6 @@ func GetBackupCreateRequest(backupName string, clusterName string, bLocation str
 
 // CreateBackupFromRequest creates a backup using a provided request
 func CreateBackupFromRequest(backupName string, orgID string, request *api.BackupCreateRequest) (err error) {
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
@@ -2535,7 +2532,6 @@ func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Durati
 		log.Infof("Enumerating backups")
 		bkpEnumerateReq := &api.BackupEnumerateRequest{
 			OrgId: OrgID}
-		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return nil, true, err
@@ -2629,7 +2625,6 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 
 // DeleteBackupAndDependencies deletes backup and dependent backups
 func DeleteBackupAndDependencies(backupName string, backupUID string, orgID string, clusterName string) error {
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 
 	backupDeleteRequest := &api.BackupDeleteRequest{
@@ -2736,11 +2731,7 @@ func DeleteCluster(name string, orgID string, ctx context1.Context) error {
 		OrgId: orgID,
 		Name:  name,
 	}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	if err != nil {
-		return err
-	}
-	_, err = backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	return err
 }
 
@@ -2841,7 +2832,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
 	err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "already exists with status: Success") {
 		return err
 	}
 	// Register destination cluster with backup driver
@@ -2853,7 +2844,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
 
 	err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloudName, uid, ctx)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "already exists with status: Success") {
 		return err
 	}
 	return nil
@@ -2975,7 +2966,6 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 					},
 				},
 			}
-			//ctx, err := backup.GetPxCentralAdminCtx()
 			ctx, err := backup.GetAdminCtxFromSecret()
 			expect(err).NotTo(haveOccurred(),
 				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -3090,7 +3080,6 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 		},
 	}
 
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
@@ -3103,7 +3092,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
-// CreateS3BackupLocation creates backuplocation for S3
+// CreateS3BackupLocationNonAdminUser creates backuplocation for S3
 func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
@@ -3158,7 +3147,6 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 			Type: api.BackupLocationInfo_Azure,
 		},
 	}
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
@@ -3193,7 +3181,6 @@ func CreateOrganization(orgID string) {
 				Name: orgID,
 			},
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -3800,9 +3787,9 @@ func TearDownBackupRestoreAll() {
 	}
 	provider := GetProvider()
 	err = DeleteCluster(destinationClusterName, OrgID, ctx)
-	log.FailOnError(err, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 	err = DeleteCluster(SourceClusterName, OrgID, ctx)
-	log.FailOnError(err, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 	err = DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
 	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
 	err = DeleteCloudCredential(CredName, OrgID, CloudCredUID)

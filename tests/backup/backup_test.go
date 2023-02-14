@@ -95,9 +95,9 @@ var _ = Describe("{UserGroupManagement}", func() {
 		defer EndTorpedoTest()
 		log.Infof("Cleanup started")
 		err := backup.DeleteUser("testuser1")
-		log.FailOnError(err, "Failed to delete user(s)")
+		dash.VerifySafely(err, nil, "Delete user testuser1")
 		err = backup.DeleteGroup("testgroup1")
-		log.FailOnError(err, "Failed to delete group(s)")
+		dash.VerifySafely(err, nil, "Delete group testgroup1")
 		log.Infof("Cleanup done")
 	})
 })
@@ -208,13 +208,11 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 		defer EndTorpedoTest()
 		log.Infof("Cleanup started")
 		err := backup.DeleteMultipleGroups(groups)
-		log.FailOnError(err, "Failed to delete group(s)")
+		dash.VerifySafely(err, nil, fmt.Sprintf("Delete Groups %v", groups))
 		err = backup.DeleteMultipleUsers(users)
-		log.FailOnError(err, "Failed to delete user(s)")
+		dash.VerifySafely(err, nil, fmt.Sprintf("Delete users %v", users))
 		log.Infof("Cleanup done")
-
 	})
-
 })
 
 // Validate that user can't duplicate a shared backup without registering the cluster
@@ -1928,7 +1926,8 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				}
 				return "", false, nil
 			}
-			task.DoRetryWithTimeout(noAccessCheck, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(noAccessCheck, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Validate no groups or users have access to backups shared at cluster level")
 			dash.VerifyFatal(len(userBackups), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", chosenUser))
 
 			// Now validating with individual user who is not part of any group
@@ -1945,7 +1944,8 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 				}
 				return "", false, nil
 			}
-			task.DoRetryWithTimeout(noAccessCheck, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(noAccessCheck, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Validate no groups or users have access to backups shared at cluster level")
 			dash.VerifyFatal(len(userBackups1), 0, fmt.Sprintf("Validating that user [%s] has access to no backups", individualUser))
 		})
 
@@ -2225,16 +2225,16 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 
 		log.Infof("Deleting registered clusters for admin context")
 		err = DeleteCluster(SourceClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", SourceClusterName))
 		err = DeleteCluster(destinationClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", destinationClusterName))
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
 			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", SourceClusterName))
 			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", destinationClusterName))
 		}
 
 		log.Infof("Cleaning up backup location - %s", BackupLocationName)
@@ -2247,6 +2247,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 		err = DeleteCloudCredential(newCredName, orgID, newCloudCredUID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", newCredName))
+
 	})
 })
 
@@ -2430,6 +2431,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 		}
 		var wg sync.WaitGroup
 		defer EndTorpedoTest()
+
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
 			wg.Add(1)
@@ -2440,22 +2442,21 @@ var _ = Describe("{SharedBackupDelete}", func() {
 			}(userName)
 		}
 		wg.Wait()
-
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		log.Infof("Deleting registered clusters for admin context")
 		err = DeleteCluster(SourceClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", SourceClusterName))
 		err = DeleteCluster(destinationClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", destinationClusterName))
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
 			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", SourceClusterName))
 			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", destinationClusterName))
 		}
 
 		log.Infof("Cleaning up backup location - %s", BackupLocationName)
@@ -2893,7 +2894,6 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 
 		log.Infof("Deleting registered clusters for admin context")
 		DeleteCloudAccounts(newBackupLocationMap, credName, cloudCredUID, ctx)
-
 	})
 
 })
@@ -3267,7 +3267,8 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		})
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
-			CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster status")
 		})
@@ -3317,8 +3318,8 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context for user -%s", userName)
-			CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
-
+			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			// Validate that backups are shared with user
 			log.Infof("Validating that backups are shared with %s user", userName)
 			userBackups1, _ := GetAllBackupsForUser(userName, password)
@@ -3553,7 +3554,8 @@ var _ = Describe("{BackupRestartPX}", func() {
 					}
 					return "", false, nil
 				}
-				task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+				_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+				log.FailOnError(err, "Check if backup %s is successful post px restarts", backupName)
 				bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 				backupInspectRequest := &api.BackupInspectRequest{
@@ -4492,7 +4494,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 					}
 					return "", false, nil
 				}
-				task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+				_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+				log.FailOnError(err, "Check if backup %s is successful post stork restarts", backupName)
 				bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 				backupInspectRequest := &api.BackupInspectRequest{
@@ -4552,7 +4555,9 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 					}
 					return "", false, nil
 				}
-				task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+
+				_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+				log.FailOnError(err, "Check if restore is successful when the stork restart happened")
 				restoreInspectRequest := &api.RestoreInspectRequest{
 					Name:  restoreName,
 					OrgId: orgID,
@@ -4671,7 +4676,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
 		backupUID, err := getBackupUID(backupName, orgID)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
 		DeleteCloudAccounts(backupLocationMap, cloudCredName, CloudCredUID, ctx)
@@ -5173,7 +5178,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, backupName := range backupNames {
 			backupUID, err := getBackupUID(backupName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
 		}
@@ -5238,7 +5243,8 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 
 		Step("Register cluster for backup", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err := CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
@@ -5309,7 +5315,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 		}
 		for _, backupName := range backupNames {
 			backupUID, err := getBackupUID(backupName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - %s", backupName))
 		}
@@ -5373,7 +5379,8 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 
 		Step("Register cluster for backup", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err := CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
 		})
@@ -5458,7 +5465,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s", taskName))
 		}
 		backupUID, err := getBackupUID(backupName, orgID)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 		err = DeleteRestore(restoreName, orgID, ctx)
@@ -6150,9 +6157,9 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		log.InfoD("Deleting the backup created")
 		backupDriver := Inst().Backup
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		log.FailOnError(err, "Error getting backup UID for %v", backupName)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Getting the backup UID for %s", backupName))
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, "Deleting the backup created")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the %s", backupName))
 		log.InfoD("Deleting restore created by users")
 		for _, restoreName := range restoreList {
 			wg.Add(1)
@@ -6172,12 +6179,12 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting storage class %s from destination cluster", scName))
 		log.InfoD("Switching cluster context back to source cluster")
 		SetSourceKubeConfig()
-		//log.InfoD("Deleting user clusters")
-		//DeleteCloudAccounts(make(map[string]string), "", "", userCtx)
-		//log.InfoD("Cleaning up users")
-		//err = backup.DeleteUser(userName[0])
-		//log.FailOnError(err, "Error deleting user %v", userName[0])
-		//DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		log.InfoD("Deleting user clusters")
+		DeleteCloudAccounts(make(map[string]string), "", "", userCtx)
+		log.InfoD("Cleaning up users")
+		err = backup.DeleteUser(userName[0])
+		log.FailOnError(err, "Error deleting user %v", userName[0])
+		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
@@ -6637,7 +6644,8 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 							}
 							return "", false, nil
 						}
-						task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+						_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+						log.FailOnError(err, "Validate restores %s are successful", restoreNames)
 						restoreInspectRequest := &api.RestoreInspectRequest{
 							Name:  restore,
 							OrgId: orgID,

@@ -2,20 +2,19 @@ package tests
 
 import (
 	"fmt"
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
+	. "github.com/portworx/torpedo/tests"
 	"os"
 	"strings"
 	"testing"
 	"time"
-
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
 )
 
 func getBucketNameSuffix() string {
@@ -104,6 +103,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+
 	StartTorpedoTest("Environment cleanup", "Removing Px-Backup entities created during the test execution", nil, 0)
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
@@ -204,6 +204,7 @@ var _ = AfterSuite(func() {
 			log.Infof("Bucket deleted - %s", globalGCPBucketName)
 		}
 	}
+
 })
 
 func TestMain(m *testing.M) {

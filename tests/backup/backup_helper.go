@@ -3,17 +3,15 @@ package tests
 import (
 	"context"
 	"fmt"
+	. "github.com/onsi/ginkgo"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/task"
-	driverApi "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"math/rand"
 	"os"
 	"os/exec"
-	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,16 +20,13 @@ import (
 )
 
 const (
-	storkDeploymentName                       = "stork"
 	storkDeploymentNamespace                  = "kube-system"
 	clusterName                               = "tp-cluster"
 	restoreNamePrefix                         = "tp-restore"
-	configMapName                             = "kubeconfigs"
 	destinationClusterName                    = "destination-cluster"
 	backupLocationName                        = "tp-blocation"
 	appReadinessTimeout                       = 10 * time.Minute
 	defaultRetryInterval                      = 10 * time.Second
-	enumerateBatchSize                        = 100
 	taskNamePrefix                            = "backupcreaterestore"
 	orgID                                     = "default"
 	defaultTimeout                            = 5 * time.Minute
@@ -54,10 +49,10 @@ const (
 
 var (
 	// enable all the after suite actions
-	wantAllAfterSuiteActions bool = true
+	wantAllAfterSuiteActions = true
 	// selectively enable after suite actions by setting wantAllAfterSuiteActions to false and setting these to true
-	wantAfterSuiteSystemCheck     bool = false
-	wantAfterSuiteValidateCleanup bool = false
+	wantAfterSuiteSystemCheck     = false
+	wantAfterSuiteValidateCleanup = false
 	// User should keep updating preRuleApp, postRuleApp
 	preRuleApp                  = []string{"cassandra", "postgres"}
 	postRuleApp                 = []string{"cassandra"}
@@ -97,17 +92,6 @@ const (
 	FullAccess                  = 3
 )
 
-// CreateProviderClusterObject creates cluster for each cluster per each cloud provider
-func CreateProviderClusterObject(provider string, kubeconfigList []string, cloudCred, orgID string, ctx context.Context) error {
-	kubeconfigPath, err := getProviderClusterConfigPath(provider, kubeconfigList)
-	if err != nil {
-		return err
-	}
-	err = CreateCluster(fmt.Sprintf("%s-%s", clusterName, provider),
-		kubeconfigPath, orgID, "", "", ctx)
-	return err
-}
-
 // Set default provider as aws
 func getProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")
@@ -124,19 +108,6 @@ func getPXNamespace() string {
 		return namespace
 	}
 	return storkDeploymentNamespace
-}
-
-func getProviderClusterConfigPath(provider string, kubeconfigs []string) (string, error) {
-	log.Infof("Get kubeconfigPath from list %v and provider %s",
-		kubeconfigs, provider)
-	for _, kubeconfigPath := range kubeconfigs {
-		if strings.Contains(provider, kubeconfigPath) {
-			fullPath := path.Join(KubeconfigDirectory, kubeconfigPath)
-			return fullPath, nil
-		}
-	}
-	return "", fmt.Errorf("kubeconfigPath not found for provider %s in kubeconfigPath list %v",
-		provider, kubeconfigs)
 }
 
 // CreateBackup creates backup
@@ -197,8 +168,10 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 		return "", false, nil
 	}
 
-	task.DoRetryWithTimeout(backupSuccessCheck, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-
+	_, err = task.DoRetryWithTimeout(backupSuccessCheck, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
 	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
 		return err
@@ -292,8 +265,10 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 		return "", false, nil
 	}
 
-	task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
-
+	_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
 	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
 		return err
@@ -591,60 +566,6 @@ func GetAllBackupsForUser(username, password string) ([]string, error) {
 	return backupNames, err
 }
 
-func GetNodesForBackup(backupName string, bkpNamespace string,
-	orgID string, clusterName string, triggerOpts *driverApi.TriggerOptions) ([]node.Node, error) {
-
-	var nodes []node.Node
-	backupDriver := Inst().Backup
-	backupUID, err := getBackupUID(backupName, orgID)
-	if err != nil {
-		return nil, err
-	}
-	backupInspectReq := &api.BackupInspectRequest{
-		Name:  backupName,
-		OrgId: orgID,
-		Uid:   backupUID,
-	}
-	err = Inst().Backup.WaitForBackupRunning(context.Background(), backupInspectReq, defaultTimeout, defaultRetryInterval)
-	if err != nil {
-		return nodes, err
-	}
-
-	clusterInspectReq := &api.ClusterInspectRequest{
-		OrgId:          orgID,
-		Name:           clusterName,
-		IncludeSecrets: true,
-	}
-	//ctx, err := backup.GetPxCentralAdminCtx()
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return nodes, err
-	}
-	clusterInspectRes, err := backupDriver.InspectCluster(ctx, clusterInspectReq)
-	if err != nil {
-		return nodes, err
-	}
-
-	cluster := clusterInspectRes.GetCluster()
-	volumeBackupIDs, err := backupDriver.GetVolumeBackupIDs(context.Background(),
-		backupName, bkpNamespace, cluster, orgID)
-	if err != nil {
-		return nodes, err
-	}
-
-	for _, backupID := range volumeBackupIDs {
-		n, err := Inst().V.GetNodeForBackup(backupID)
-		if err != nil {
-			return nodes, err
-		}
-
-		log.Debugf("Volume backup [%s] is running on node [%s], node id: [%s]\n",
-			backupID, n.GetHostname(), n.GetId())
-		nodes = append(nodes, n)
-	}
-	return nodes, nil
-}
-
 // CreateRestore creates restore
 func CreateRestore(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context.Context, storageClassMapping map[string]string) error {
@@ -702,11 +623,14 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 		return "", true, fmt.Errorf("expected status of %s - [%s] or [%s], but got [%s]",
 			restoreName, api.RestoreInfo_StatusInfo_PartialSuccess.String(), api.RestoreInfo_StatusInfo_Success, restoreResponseStatus.GetStatus())
 	}
-	task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+	_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-// CreateRestore creates restore
+// CreateRestoreWithUID creates restore with UID
 func CreateRestoreWithUID(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context.Context, storageClassMapping map[string]string, backupUID string) error {
 
@@ -750,7 +674,10 @@ func CreateRestoreWithUID(restoreName string, backupName string, namespaceMappin
 		return "", true, fmt.Errorf("expected status of %s - [%s] or [%s], but got [%s]",
 			restoreName, api.RestoreInfo_StatusInfo_PartialSuccess.String(), api.RestoreInfo_StatusInfo_Success, restoreResponseStatus.GetStatus())
 	}
-	task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+	_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -927,17 +854,17 @@ func createUsers(numberOfUsers int) []string {
 		email := fmt.Sprintf("%v@cnbu.com", userName)
 		wg.Add(1)
 		go func(userName, firstName, lastName, email string) {
+			defer GinkgoRecover()
+			defer wg.Done()
 			err := backup.AddUser(userName, firstName, lastName, email, password)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Creating user - %s", userName))
 			users = append(users, userName)
-			wg.Done()
 		}(userName, firstName, lastName, email)
 	}
 	wg.Wait()
 	return users
 }
 
-/*
 func DeleteCloudAccounts(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
@@ -952,22 +879,6 @@ func DeleteCloudAccounts(backupLocationMap map[string]string, credName string, c
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 	err = DeleteCluster(destinationClusterName, orgID, ctx)
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
-
-}
-*/
-
-func DeleteCloudAccounts(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
-	if len(backupLocationMap) != 0 {
-		for backupLocationUID, bkpLocationName := range backupLocationMap {
-			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
-		}
-		time.Sleep(time.Minute * 3)
-		DeleteCloudCredential(credName, orgID, cloudCredUID)
-
-	}
-	DeleteCluster(SourceClusterName, orgID, ctx)
-	DeleteCluster(destinationClusterName, orgID, ctx)
 }
 
 // AddRoleAndAccessToUsers assigns role and access level to the users
@@ -1022,7 +933,7 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 		roleAccessUserBackupContext[userRoleAccessContext] = backupNames[i]
 		err = backup.AddRoleToUser(users[i], role, "Adding role to user")
 		if err != nil {
-			err = fmt.Errorf("Failed to add role %s to user %s with err %v", role, users[i], err)
+			err = fmt.Errorf("failed to add role %s to user %s with err %v", role, users[i], err)
 			return nil, err
 		}
 		err = ShareBackup(backupNames[i], nil, []string{users[i]}, access, ctx)
@@ -1039,7 +950,8 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 	userCtx, err := backup.GetNonAdminCtx(user, "Password1")
 	Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching %s user ctx", user))
 	log.InfoD("Registering Source and Destination clusters from user context")
-	CreateSourceAndDestClusters(orgID, "", "", userCtx)
+	err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
+	Inst().Dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 	log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup %s or not", user, backupAccessKeyValue[access], backupName)
 	backupDriver := Inst().Backup
 	switch access {
@@ -1278,10 +1190,10 @@ func getAllBackupLocations(ctx context.Context) (map[string]string, error) {
 		for _, backupLocation := range response.BackupLocations {
 			backupLocationMap[backupLocation.Uid] = backupLocation.Name
 		}
+		log.Infof("The backup locations and their UID are %v", backupLocationMap)
 	} else {
 		log.Info("No backup locations found")
 	}
-	log.Infof("The backup locations and their UID are %v", backupLocationMap)
 	return backupLocationMap, nil
 }
 
@@ -1299,10 +1211,10 @@ func getAllCloudCredentials(ctx context.Context) (map[string]string, error) {
 		for _, cloudCredential := range response.CloudCredentials {
 			cloudCredentialMap[cloudCredential.Uid] = cloudCredential.Name
 		}
+		log.Infof("The backup locations and their UID are %v", cloudCredentialMap)
 	} else {
 		log.Info("No cloud credentials found")
 	}
-	log.Infof("The backup locations and their UID are %v", cloudCredentialMap)
 	return cloudCredentialMap, nil
 }
 
