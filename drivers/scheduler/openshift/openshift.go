@@ -412,28 +412,27 @@ func startUpgrade(upgradeVersion string) error {
 			notRecommended := "is not one of the recommended updates, but is available"
 			if strings.Contains(string(stdErr), notRecommended) {
 				args = []string{"adm", "upgrade", fmt.Sprintf("--to=%s", upgradeVersion), "--allow-not-recommended"}
-				log.Infof("Retrying with not recommended options")
+				log.Infof("Retrying upgrade with --allow-not-recommended option")
 				output, stdErr, err = osutils.ExecTorpedoShell("oc", args...)
 				if err != nil {
 					return output, true, fmt.Errorf("failed to start upgrade due to %s, cause: %v ", stdErr, err)
 				}
-				log.Infof("Upgrade is called with --allow-not-recommended option %s", output)
-				log.Debugf("StdError %s", stdErr)
+				log.Infof(output)
+				log.Debugf(stdErr)
 			} else if strings.Contains(string(stdErr), forceUpgrade) {
-				log.Infof("Upgrade with force call ")
+				log.Infof("Retrying upgrade with --force option")
 				if shaName, err = getImageSha(upgradeVersion); err != nil {
 					return "", false, err
 				}
 				imagePath := fmt.Sprintf("--to-image=quay.io/openshift-release-dev/ocp-release@%s", shaName)
 				log.Infof("Image full path : %s", imagePath)
 				args = []string{"adm", "upgrade", imagePath, "--force", "--allow-explicit-upgrade", "--allow-upgrade-with-warnings"}
-				log.Infof("Retrying with force upgrade options")
 				output, stdErr, err = osutils.ExecTorpedoShell("oc", args...)
 				if err != nil {
 					return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", stdErr, err)
 				}
-				log.Infof("Upgrded called  with force %s", output)
-				log.Debugf("StdError %s", stdErr)
+				log.Infof(output)
+				log.Warnf(stdErr)
 			} else {
 				return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", stdErr, err)
 			}
