@@ -4696,7 +4696,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 				var fsTrimStatus string
 
 				if !ok {
-					fsTrimStatus = waitForFsTrimStatus(event, attachedNode, appVol.Id)
+					fsTrimStatus, _ = waitForFsTrimStatus(event, attachedNode, appVol.Id)
 				} else {
 					fsTrimStatus = val.String()
 				}
@@ -4725,7 +4725,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 
 }
 
-func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) string {
+func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) (string, error) {
 	doExit := false
 	exitCount := 50
 
@@ -4734,20 +4734,24 @@ func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) stri
 		time.Sleep(2 * time.Minute)
 		fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
 		if err != nil {
-			UpdateOutcome(event, err)
+			if event != nil {
+				UpdateOutcome(event, err)
+			} else {
+				return "", nil
+			}
 		}
 
 		fsTrimStatus, isValueExist := fsTrimStatuses[volumeID]
 
 		if isValueExist {
-			return fsTrimStatus.String()
+			return fsTrimStatus.String(), nil
 		}
 		if exitCount == 0 {
 			doExit = true
 		}
 		exitCount--
 	}
-	return ""
+	return "", nil
 }
 
 // TriggerTrashcan enables trashcan feature in the PX Cluster and validates it

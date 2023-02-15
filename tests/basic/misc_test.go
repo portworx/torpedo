@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -800,5 +801,114 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
+	/*
+				1. Enable autofstrim, wait until autofstrim is actively trimming.
+				2. Run back to back cmd `pxctl c options update --auto-fstrim off` , then  `pxctl c options update --auto-fstrim on`
+				3.`pxctl v af status` should report the trim status correctly
+			    4. All Nods have pool 0 and pool 1.
+			    5. Delete pool 0 in one of the node
+		        6. Create repl-2 volumes on nodes with pool 0 and pool 1.
+		        7. Check auto-fstrim is working
+		        8. Do a repl-add on all volumes on the node with only pool 1
+		        9. Check if auto-fstrim is working
+	*/
+	var testrailID = 84604
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/84604
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("AutoFSTrimReplAddWithNoPool0", "validate autofstrim with repl add with no pool 0", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "has to check the autofstrim status with fast switch and repl add"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		storageDriverNodes := node.GetStorageDriverNodes()
+		stepLog = "perform fas switch on the autofstrim option"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			stNode := storageDriverNodes[0]
+			clusterOpts, err := Inst().V.GetClusterOpts(stNode, []string{"AutoFstrim"})
+			log.FailOnError(err, fmt.Sprintf("error getting AutoFstrim status using node [%s]", stNode.Name))
+			if clusterOpts["AutoFstrim"] == "false" {
+				EnableAutoFSTrim()
+				//making sure autofstrim is actively running
+				time.Sleep(1 * time.Minute)
+			}
+
+			err = Inst().V.SetClusterOpts(stNode, map[string]string{
+				"--auto-fstrim": "off"})
+			log.FailOnError(err, "error disabling AutoFstrim status using node [%s]", stNode.Name)
+			err = Inst().V.SetClusterOpts(stNode, map[string]string{
+				"--auto-fstrim": "on"})
+			log.FailOnError(err, "error enabling AutoFstrim status using node [%s]", stNode.Name)
+			_, err = Inst().V.GetAutoFsTrimStatus(stNode.DataIp)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("verify autofstrim status with fast switch from node [%v]", stNode.Name))
+
+			//Check autofstrim using PXCTL
+			opts := node.ConnectionOpts{
+				IgnoreError:     false,
+				TimeBeforeRetry: defaultRetryInterval,
+				Timeout:         defaultTimeout,
+				Sudo:            true,
+			}
+
+			output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(stNode, "v af status", opts, false)
+			log.FailOnError(err, "error checking autofstrim status on node [%s]", stNode.Name)
+			log.Infof("autofstrim status:\n %s", output)
+			dash.VerifyFatal(strings.Contains(output, "Filesystem Trim Initializing"), false, "verify no autofstrim initialization error")
+
+		})
+
+		Inst().AppList = append(Inst().AppList, "fio-fstrim")
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("afrepladd-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		stepLog := "has to check the autofstrim status will volume update on node with no pool 0"
+		It(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+
+			//storageDriverNodes := node.GetStorageDriverNodes()
+			stepLog = "perform fas switch on the autofstrim option"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, ctx := range contexts {
+
+					if strings.Contains(ctx.App.Key, "fstrim") {
+						faStatus, err := GetAutoFsTrimStatus(ctx)
+						log.FailOnError(err, "error getting autofs status")
+						log.Infof("%v", faStatus)
+						fsUsage, err := GetAutoFstrinUsage(ctx)
+						log.FailOnError(err, "error getting autofs usage")
+						log.Infof("%v", fsUsage)
+
+					}
+				}
+			})
+
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })

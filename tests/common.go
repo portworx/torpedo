@@ -5314,3 +5314,103 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 	}
 	return randomItems, nil
 }
+func GetAutoFsTrimStatus(ctx *scheduler.Context) (map[string]string, error) {
+
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var ctxAutoFsTrimStatus map[string]string
+
+	for _, v := range appVolumes {
+		// Skip autofs trim status on Pure DA volumes
+		isPureVol, err := Inst().V.IsPureVolume(v)
+		if err != nil {
+			return nil, err
+		}
+		if isPureVol {
+			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
+		}
+		log.Infof("Getting info : %s", v.ID)
+		appVol, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting volume: %v", err)
+		}
+		attachedNode := appVol.AttachedOn
+		fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := fsTrimStatuses[appVol.Id]
+		var fsTrimStatus string
+
+		if !ok {
+			fsTrimStatus, err = waitForFsTrimStatus(nil, attachedNode, appVol.Id)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			fsTrimStatus = val.String()
+		}
+
+		if fsTrimStatus != "" {
+			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
+
+		} else {
+			return nil, fmt.Errorf("autofstrim for volume [%v] not started on node [%s]", v.ID, attachedNode)
+		}
+
+	}
+	return ctxAutoFsTrimStatus, nil
+}
+
+func GetAutoFstrinUsage(ctx *scheduler.Context) (map[string]string, error) {
+	appVolumes, err := Inst().S.GetVolumes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var ctxAutoFsTrimStatus map[string]string
+
+	for _, v := range appVolumes {
+		// Skip autofs trim status on Pure DA volumes
+		isPureVol, err := Inst().V.IsPureVolume(v)
+		if err != nil {
+			return nil, err
+		}
+		if isPureVol {
+			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
+		}
+		log.Infof("Getting info : %s", v.ID)
+		appVol, err := Inst().V.InspectVolume(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("error inspecting volume: %v", err)
+		}
+		attachedNode := appVol.AttachedOn
+		fsTrimUsages, err := Inst().V.GetAutoFsTrimUsage(attachedNode)
+		log.Infof("%v", fsTrimUsages)
+		if err != nil {
+			return nil, err
+		}
+
+		val, ok := fsTrimUsages[appVol.Id]
+		var fsTrimStatus string
+
+		if !ok {
+			log.Errorf("usage not found for %s", appVol.Id)
+		} else {
+			fsTrimStatus = val.String()
+		}
+
+		if fsTrimStatus != "" {
+			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
+
+		} else {
+			return nil, fmt.Errorf("autofstrim for volume [%v] has no usage on node [%s]", v.ID, attachedNode)
+		}
+
+	}
+	return ctxAutoFsTrimStatus, nil
+}
