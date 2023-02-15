@@ -4519,24 +4519,8 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 
 	if strings.Contains(drivePath, "size") {
 		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
-		if poolID != -1 {
-			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
-		}
 	}
 
-	if strings.Contains(drivePath, "type") {
-		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
-		if poolID != -1 {
-			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
-		}
-	}
-
-	if strings.Contains(drivePath, "speed") {
-		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
-		if poolID != -1 {
-			driveAddFlag = fmt.Sprintf("%s -p %d", driveAddFlag, poolID)
-		}
-	}
 	out, err := d.nodeDriver.RunCommandWithNoRetry(n, fmt.Sprintf(pxctlDriveAddStart, d.getPxctlPath(n), driveAddFlag), node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -4567,14 +4551,6 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 	var addDriveStatus statusJSON
 
 	if strings.Contains(drivePath, "size") {
-		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
-	}
-
-	if strings.Contains(drivePath, "type") {
-		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
-	}
-
-	if strings.Contains(drivePath, "speed") {
 		driveAddFlag = fmt.Sprintf("-s %s", drivePath)
 	}
 
