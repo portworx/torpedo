@@ -1032,7 +1032,8 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			dash.VerifyFatal(err, nil, "Validate is journal enabled check")
 			//_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 			log.FailOnError(err, "Error checking pool rebalance")
-			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
+			poolIDint, err := strconv.Atoi(poolIDToResize)
+			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, int32(poolIDint))
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
 			log.InfoD("Validate pool rebalance after drive add")
 			err = ValidatePoolRebalance()
@@ -1049,7 +1050,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			//blockDrives, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
 			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", poolIDToResize))
 			//add drive while rebalance is happening which should fail
-			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
+			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, int32(poolIDint))
 			//expectedError := "error not expected"
 			//dash.VerifyFatal(expectedError, true, "Verify pool before expansion")
 			log.InfoD("Validate pool rebalance after drive add")
