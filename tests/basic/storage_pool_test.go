@@ -913,7 +913,8 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		}
 
 		ValidateApplications(contexts)
-
+		// Select a Pool with IO Runing poolID returns UUID ( String )
+		var poolID int32
 		var poolIDToResize string
 		//var vols []*volume.Volume
 		stNodes := node.GetStorageNodes()
@@ -1032,8 +1033,21 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			dash.VerifyFatal(err, nil, "Validate is journal enabled check")
 			//_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 			log.FailOnError(err, "Error checking pool rebalance")
-			poolIDint, err := strconv.Atoi(poolIDToResize)
-			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, int32(poolIDint))
+			allPools, _ := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.InfoD("List of all the Pools present in the system [%s]", allPools)
+			poolUUID, err := GetPoolIDWithIOs()
+			log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+			//log.FailOnError(err, "Failed to get pool using UUID [%v]", poolID)
+			// Get Pool ID of pool selected for Resize
+			for uuid, each := range allPools {
+				if uuid == poolIDToResize {
+					poolID = each.ID
+					break
+				}
+			}
+			log.InfoD("Getting Pool with ID [%v] and UUID [%v] for Drive Addition", poolID, poolUUID)
+
+			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, int32(poolID))
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
 			log.InfoD("Validate pool rebalance after drive add")
 			err = ValidatePoolRebalance()
@@ -1050,7 +1064,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			//blockDrives, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
 			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", poolIDToResize))
 			//add drive while rebalance is happening which should fail
-			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, int32(poolIDint))
+			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, int32(poolID))
 			//expectedError := "error not expected"
 			//dash.VerifyFatal(expectedError, true, "Verify pool before expansion")
 			log.InfoD("Validate pool rebalance after drive add")
