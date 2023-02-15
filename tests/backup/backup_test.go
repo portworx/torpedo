@@ -416,7 +416,7 @@ var _ = Describe("{Dummy}", func() {
 	})
 })
 
-var _ = Describe("{BackupRestoreDifferentK8sVersion}", func() {
+var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 	var (
 		clusterStatus api.ClusterInfo_StatusInfo_Status
 		srcMaj, srcMin, destMaj, destMin int64
@@ -424,11 +424,13 @@ var _ = Describe("{BackupRestoreDifferentK8sVersion}", func() {
 
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupAndRestore", "restoring on different K8s version; same namespace", nil, 0)
+		StartTorpedoTest("BkpRstrDiffK8sVerSimultaneousDiffNS", "Backup on NS(=yy), K8-version(=x) ;; Restore on NS=yy, K8s-version=x+?(=z) [success]; Simultaneously, Restore on K8s-version=z, NS=abc [partial success]", nil, 0)
 
 	})
 
-	It("Verify K8s version", func() {
+	It("Backup on NS(=yy), K8-version(=x) ;; Restore on NS=yy, K8s-version=x+?(=z) [success]; Simultaneously, Restore on K8s-version=z, NS=abc [partial success]", func() {
+
+		Step("Verify K8s version of Src and Dest Cluster", func() {
 
 		Step("Register cluster for backup", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -499,6 +501,7 @@ var _ = Describe("{BackupRestoreDifferentK8sVersion}", func() {
 
 	})
 
+	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
