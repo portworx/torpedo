@@ -99,7 +99,6 @@ func Sh(arguments []string) error {
 	}
 	cmd := exec.Command("sh", arguments...)
 	output, err := cmd.Output()
-	log.Debugf("command output for '%s': %s", cmd.String(), string(output))
 	if err != nil {
 		return fmt.Errorf("error on executing sh command, Err: %+v", err)
 	}
