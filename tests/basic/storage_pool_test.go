@@ -1040,7 +1040,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			//log.FailOnError(err, "Failed to get pool using UUID [%v]", poolID)
 			// Get Pool ID of pool selected for Resize
 			for uuid, each := range allPools {
-				if uuid == poolIDToResize {
+				if uuid == poolUUID {
 					poolID = each.ID
 					break
 				}
@@ -1072,7 +1072,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			//log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", poolIDToResize))
 			isjournal, err := isJournalEnabled()
 			log.FailOnError(err, "is journal enabled check failed")
-			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
+			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolUUID, isjournal)
 			log.FailOnError(err, "Error waiting for pool resize")
 			//resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 			//blockDrivesAfterDriveInsertFailed, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
