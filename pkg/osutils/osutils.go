@@ -64,8 +64,7 @@ func FileEmpty(filename os.FileInfo) bool {
 	return false
 }
 
-func ExecTorpedo(command string, arguments ...string) (string, string, error) {
-
+func ExecTorpedoShell(command string, arguments ...string) (string, string, error) {
 	var stout, sterr []byte
 	for _, value := range arguments {
 		command += " " + value
@@ -90,9 +89,6 @@ func ExecTorpedo(command string, arguments ...string) (string, string, error) {
 	wg.Wait()
 
 	err := cmd.Wait()
-	log.Debugf("stdout %s ", string(stout))
-	log.Debugf("stderr %s ", string(sterr))
-	log.Debugf("err %v ", err)
 	return string(stout), string(sterr), err
 }
 
