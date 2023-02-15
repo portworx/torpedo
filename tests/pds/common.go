@@ -61,7 +61,6 @@ var (
 	dataServiceDefaultAppConfigID           string
 	dataServiceVersionBuildMap              map[string][]string
 	dataServiceImageMap                     map[string][]string
-	pdsPods                                 []corev1.Pod
 	dep                                     *v1.Deployment
 	pod                                     *corev1.Pod
 	params                                  *pdslib.Parameter

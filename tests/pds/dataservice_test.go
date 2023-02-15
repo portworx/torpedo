@@ -41,10 +41,10 @@ var _ = Describe("{DeletePDSPods}", func() {
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
+				pdsPods := make([]corev1.Pod, 0)
+
 				Step("get pods from pds-system namespace", func() {
-					if len(pdsPods) != 0 {
-						pdsPods = nil
-					}
+
 					podList, err = pdslib.GetPods(pdsNamespace)
 					log.FailOnError(err, "Error while getting pods")
 					log.Infof("PDS System Pods")
@@ -112,15 +112,15 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				log.FailOnError(err, "Error while deploying data services")
 			})
 
+			pdsPods := make([]corev1.Pod, 0)
+
 			Step("Delete dataservice pods and Check health of data service in PDS Controlplane", func() {
 				podList, err := pdslib.GetPods(namespace)
 				log.FailOnError(err, "Error while getting pods")
 
 				log.Infof("PDS DataService Pods")
 				log.Infof("deployment name %v", *deployment.ClusterResourceName)
-				if len(pdsPods) != 0 {
-					pdsPods = nil
-				}
+
 				for _, pod := range podList.Items {
 					if strings.Contains(pod.Name, *deployment.ClusterResourceName) {
 						log.Infof("%v", pod.Name)
