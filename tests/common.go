@@ -44,6 +44,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
+	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo"
@@ -247,11 +248,21 @@ const (
 const (
 	waitResourceCleanup       = 2 * time.Minute
 	defaultTimeout            = 5 * time.Minute
-	defaultVolScaleTimeout    = 2 * time.Minute
+	defaultVolScaleTimeout    = 4 * time.Minute
 	defaultRetryInterval      = 10 * time.Second
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
+)
+
+const (
+	VSPHERE_MAX_CLOUD_DRIVES        = 12
+	FA_MAX_CLOUD_DRIVES             = 32
+	CLOUD_PROVIDER_MAX_CLOUD_DRIVES = 8
+	POOL_MAX_CLOUD_DRIVES           = 6
+
+	PX_VSPHERE_SCERET_NAME = "px-vsphere-secret"
+	PX_PURE_SECRET_NAME    = "px-pure-secret"
 )
 
 const (
@@ -743,6 +754,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
 			if err != nil {
+				PrintDescribeContext(ctx)
 				processError(err, errChan...)
 			}
 		})
@@ -768,6 +780,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				if err != nil {
+					PrintDescribeContext(ctx)
 					processError(err, errChan...)
 				}
 			})
@@ -2083,7 +2096,7 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 		}
 	}
 
-	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "")
+	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksPxOperator())
 	if err != nil {
 		log.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -2664,24 +2677,16 @@ func DeleteBackupAndDependencies(backupName string, backupUID string, orgID stri
 }
 
 // DeleteRestore creates restore
-func DeleteRestore(restoreName string, orgID string, ctx context1.Context) {
-
-	Step(fmt.Sprintf("Delete restore [%s] in org [%s]",
-		restoreName, orgID), func() {
-
-		backupDriver := Inst().Backup
-		expect(backupDriver).NotTo(beNil(),
-			"Backup driver is not initialized")
-
-		deleteRestoreReq := &api.RestoreDeleteRequest{
-			OrgId: orgID,
-			Name:  restoreName,
-		}
-		_, err := backupDriver.DeleteRestore(ctx, deleteRestoreReq)
-		log.FailOnError(err, "Failed to delete restore [%s] in org [%s]",
-			restoreName, orgID)
-		// TODO: validate createClusterResponse also
-	})
+func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	dash.VerifyFatal(backupDriver != nil, true, "Getting the backup driver")
+	deleteRestoreReq := &api.RestoreDeleteRequest{
+		OrgId: orgID,
+		Name:  restoreName,
+	}
+	_, err := backupDriver.DeleteRestore(ctx, deleteRestoreReq)
+	return err
+	// TODO: validate createClusterResponse also
 }
 
 // SetupBackup sets up backup location and source and destination clusters
@@ -2769,6 +2774,55 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string) e
 	// TODO: validate createBackupLocationResponse also
 	return nil
 
+}
+
+// DeleteSchedule deletes backup schedule
+func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, schedulePolicyUID, OrgID string) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: OrgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupScheduleUID,
+	}
+	ctx, err := backup.GetPxCentralAdminCtx()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: OrgID, Name: SourceClusterName, IncludeSecrets: true}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+	namespace := "*"
+	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, OrgID,
+		clusterObj,
+		BackupRestoreCompletionTimeoutMin*time.Minute,
+		RetrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+	schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+		OrgId: OrgID,
+		Name:  schedulePolicyName,
+		Uid:   schedulePolicyUID,
+	}
+	ctx, err = backup.GetPxCentralAdminCtx()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteSchedulePolicy(ctx, schedulePolicyDeleteRequest)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateSourceAndDestClusters creates source and destination cluster
@@ -2895,11 +2949,10 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 					},
 				},
 			}
-			//ctx, err := backup.GetPxCentralAdminCtx()
+
 			ctx, err := backup.GetAdminCtxFromSecret()
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-					err))
+			log.FailOnError(err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
+
 			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
 			if err != nil && strings.Contains(err.Error(), "already exists") {
 				return
@@ -2946,6 +2999,76 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 	})
 }
 
+// CreateCloudCredential creates cloud credetials
+func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string, ctx context1.Context) error {
+	log.Infof("Create credential name %s for org %s provider %s", name, orgID, provider)
+	backupDriver := Inst().Backup
+	switch provider {
+	case drivers.ProviderAws:
+		log.Infof("Create creds for aws")
+		id := os.Getenv("AWS_ACCESS_KEY_ID")
+		if id == "" {
+			return fmt.Errorf("AWS_ACCESS_KEY_ID Environment variable should not be empty")
+		}
+		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
+		if secret == "" {
+			return fmt.Errorf("AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+		}
+		credCreateRequest := &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_AWS,
+				Config: &api.CloudCredentialInfo_AwsConfig{
+					AwsConfig: &api.AWSConfig{
+						AccessKey: id,
+						SecretKey: secret,
+					},
+				},
+			},
+		}
+		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
+		if err != nil && strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		return err
+	// TODO: validate CreateCloudCredentialResponse also
+	case drivers.ProviderAzure:
+		log.Infof("Create creds for azure")
+		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
+		credCreateRequest := &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  name,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_Azure,
+				Config: &api.CloudCredentialInfo_AzureConfig{
+					AzureConfig: &api.AzureConfig{
+						TenantId:       tenantID,
+						ClientId:       clientID,
+						ClientSecret:   clientSecret,
+						AccountName:    accountName,
+						AccountKey:     accountKey,
+						SubscriptionId: subscriptionID,
+					},
+				},
+			},
+		}
+
+		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
+		if err != nil && strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 // CreateS3BackupLocation creates backuplocation for S3
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
 	time.Sleep(60 * time.Second)
@@ -2974,14 +3097,51 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			},
 		},
 	}
+
 	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
 	}
+
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+// CreateS3BackupLocation creates backuplocation for S3
+func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+				},
+			},
+		},
+	}
+
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -3632,7 +3792,8 @@ func TearDownBackupRestoreAll() {
 	enumRestoreResponse, _ := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
 	restores := enumRestoreResponse.GetRestores()
 	for _, restore := range restores {
-		DeleteRestore(restore.GetName(), OrgID, ctx)
+		err = DeleteRestore(restore.GetName(), OrgID, ctx)
+		dash.VerifyFatal(err, nil, "Deleting Restore")
 	}
 
 	for _, bkp := range backups {
@@ -4472,10 +4633,14 @@ func WaitForExpansionToStart(poolID string) error {
 				return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
 			}
 
-			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS || expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
+				return nil, true, fmt.Errorf("PoolResize is in pending state [%s]", expandedPool.LastOperation)
+			}
+
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
 				// storage pool resize has been triggered
 				log.InfoD("Pool %s expansion started", poolID)
-				return nil, true, nil
+				return nil, false, nil
 			}
 		}
 		return nil, true, fmt.Errorf("pool %s resize not triggered ", poolID)
@@ -4529,8 +4694,11 @@ func RebootNodeAndWait(n node.Node) error {
 
 // GetNodeWithGivenPoolID returns node having pool id
 func GetNodeWithGivenPoolID(poolID string) (*node.Node, error) {
-	pxNodes, err := GetStorageNodes()
+	if err := Inst().V.RefreshDriverEndpoints(); err != nil {
+		return nil, err
+	}
 
+	pxNodes, err := GetStorageNodes()
 	if err != nil {
 		return nil, err
 	}
@@ -4591,55 +4759,67 @@ func Contains(app_list []string, app string) bool {
 
 // ValidatePoolRebalance checks rebalnce state of pools if running
 func ValidatePoolRebalance() error {
-	rebalanceJobs, err := Inst().V.GetRebalanceJobs()
-	if err != nil {
-		return err
+
+	rebalanceFunc := func() (interface{}, bool, error) {
+
+		rebalanceJobs, err := Inst().V.GetRebalanceJobs()
+		if err != nil {
+			return nil, true, err
+		}
+
+		for _, job := range rebalanceJobs {
+			jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
+
+			if err != nil {
+				return nil, true, err
+			}
+
+			previousDone := uint64(0)
+			jobState := jobResponse.GetJob().GetState()
+			if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
+				return nil, false, fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
+			}
+
+			if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
+				return nil, true, fmt.Errorf("Job %v is in paused/pending state", job.GetId())
+			}
+
+			if jobState == opsapi.StorageRebalanceJobState_DONE {
+				log.InfoD("Job %v is in DONE state", job.GetId())
+				return nil, false, nil
+			}
+
+			if jobState == opsapi.StorageRebalanceJobState_RUNNING {
+				log.InfoD("Job %v is in Running state", job.GetId())
+
+				currentDone, total := getReblanceWorkSummary(jobResponse)
+				//checking for rebalance progress
+				for currentDone < total && previousDone < currentDone {
+					time.Sleep(2 * time.Minute)
+					log.InfoD("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
+					jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
+					if err != nil {
+						return nil, true, err
+					}
+					previousDone = currentDone
+					currentDone, total = getReblanceWorkSummary(jobResponse)
+				}
+
+				if previousDone == currentDone {
+					return nil, false, fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
+				}
+				if currentDone == total {
+					log.InfoD("Rebalance for job %v completed", job.GetId())
+					return nil, false, nil
+				}
+			}
+		}
+		return nil, false, nil
 	}
 
-	for _, job := range rebalanceJobs {
-		jobResponse, err := Inst().V.GetRebalanceJobStatus(job.GetId())
-
-		if err != nil {
-			return err
-		}
-
-		previousDone := uint64(0)
-		jobState := jobResponse.GetJob().GetState()
-		if jobState == opsapi.StorageRebalanceJobState_CANCELLED {
-			return fmt.Errorf("job %v has cancelled, Summary: %+v", job.GetId(), jobResponse.GetSummary().GetWorkSummary())
-		}
-
-		if jobState == opsapi.StorageRebalanceJobState_PAUSED || jobState == opsapi.StorageRebalanceJobState_PENDING {
-			log.InfoD("Job %v is in paused/pending state", job.GetId())
-		}
-
-		if jobState == opsapi.StorageRebalanceJobState_DONE {
-			log.InfoD("Job %v is in DONE state", job.GetId())
-		}
-
-		if jobState == opsapi.StorageRebalanceJobState_RUNNING {
-			log.InfoD("Job %v is in Running state", job.GetId())
-
-			currentDone, total := getReblanceWorkSummary(jobResponse)
-			//checking for rebalance progress
-			for currentDone < total && previousDone < currentDone {
-				time.Sleep(2 * time.Minute)
-				log.InfoD("Waiting for job %v to complete current state: %v, checking again in 2 minutes", job.GetId(), jobState)
-				jobResponse, err = Inst().V.GetRebalanceJobStatus(job.GetId())
-				if err != nil {
-					return err
-				}
-				previousDone = currentDone
-				currentDone, total = getReblanceWorkSummary(jobResponse)
-			}
-
-			if previousDone == currentDone {
-				return fmt.Errorf("job %v is in running state but not progressing further", job.GetId())
-			}
-			if currentDone == total {
-				log.InfoD("Rebalance for job %v completed,", job.GetId())
-			}
-		}
+	_, err := task.DoRetryWithTimeout(rebalanceFunc, time.Minute*60, time.Minute*2)
+	if err != nil {
+		return err
 	}
 
 	var pools map[string]*opsapi.StoragePool
@@ -4674,6 +4854,9 @@ func ValidatePoolRebalance() error {
 							currentLastMsg = expandedPool.LastOperation.Msg
 							return nil, true, fmt.Errorf("wait for pool rebalance to complete")
 						}
+					}
+					if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") {
+						return nil, false, nil
 					}
 				}
 			}
@@ -4851,8 +5034,12 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 // GetPoolIDWithIOs returns the pools with IOs happening
 func GetPoolIDWithIOs() (string, error) {
 	// pick a  pool doing some IOs from a pools list
-	var selectedPool *opsapi.StoragePool
 	var err error
+	err = Inst().V.RefreshDriverEndpoints()
+	if err != nil {
+		return "", err
+	}
+	var selectedPool *opsapi.StoragePool
 	stNodes := node.GetStorageNodes()
 	for _, stNode := range stNodes {
 		selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
@@ -4866,6 +5053,15 @@ func GetPoolIDWithIOs() (string, error) {
 
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
 func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
+
+	eligibilityMap, err := GetPoolExpansionEligibility(&stNode)
+	if err != nil {
+		return nil, err
+	}
+
+	if !eligibilityMap[stNode.Id] {
+		return nil, fmt.Errorf("node [%s] is not eligible for expansion", stNode.Name)
+	}
 
 	var selectedPool *opsapi.StoragePool
 
@@ -4883,6 +5079,10 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 		}
 
 		for k, v := range poolsDataBfr {
+			//skipping if pool is not eligible for expansion
+			if !eligibilityMap[k] {
+				continue
+			}
 			if v2, ok := poolsDataAfr[k]; ok {
 				if v2 != v {
 					selectedPool, err = GetStoragePoolByUUID(k)
@@ -4893,13 +5093,13 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 			}
 		}
 		if selectedPool == nil {
-			return nil, true, fmt.Errorf("no pools have IOs running")
+			return nil, true, fmt.Errorf("no pools with IOs running in the node [%s]", stNode.Name)
 		}
 
 		return nil, false, nil
 	}
 
-	_, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultCmdTimeout)
+	_, err = task.DoRetryWithTimeout(t, defaultMeteringIntervalMins, defaultCmdTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -4958,4 +5158,175 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 
 	}
 	return poolUuids, err
+}
+
+// GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
+func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
+	var err error
+
+	namespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return nil, err
+	}
+
+	var maxCloudDrives int32
+
+	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
+	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+		maxCloudDrives = FA_MAX_CLOUD_DRIVES
+	} else {
+		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+	}
+	var currentNodeDrives int32
+
+	driveCountMap := make(map[string]int32, 0)
+
+	for _, b := range drivesMap {
+		labels := b.Labels
+		for k, v := range labels {
+			if k == "pxpool" {
+				if c, ok := driveCountMap[v]; ok {
+					driveCountMap[v] += c
+				} else {
+					driveCountMap[v] = 1
+				}
+			}
+		}
+	}
+
+	for _, vals := range driveCountMap {
+		currentNodeDrives += vals
+	}
+	eligibilityMap := make(map[string]bool)
+
+	log.Infof("Node %s has total drives %d", stNode.Name, currentNodeDrives)
+	eligibilityMap[stNode.Id] = true
+	if currentNodeDrives == maxCloudDrives {
+		eligibilityMap[stNode.Id] = false
+	}
+
+	for _, pool := range stNode.StoragePools {
+		eligibilityMap[pool.Uuid] = true
+
+		d := driveCountMap[fmt.Sprintf("%d", pool.ID)]
+		log.Infof("pool %s has %d drives", pool.Uuid, d)
+		if d == POOL_MAX_CLOUD_DRIVES {
+			eligibilityMap[pool.Uuid] = false
+		}
+	}
+
+	return eligibilityMap, nil
+}
+
+
+// WaitTillEnterMaintenanceMode wait until the node enters maintenance mode
+func WaitTillEnterMaintenanceMode(n node.Node) error {
+	t := func() (interface{}, bool, error) {
+		nodeState, err := Inst().V.IsNodeInMaintenance(n)
+		if err != nil {
+			return nil, false, err
+		}
+		if nodeState == true {
+			return nil, true, nil
+		}
+		return nil, false, fmt.Errorf("Not in Maintenance mode")
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 20*time.Minute, 2*time.Minute)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ExitFromMaintenanceMode wait until the node exits from maintenance mode
+func ExitFromMaintenanceMode(n node.Node) error {
+	log.InfoD("Exiting maintenence mode on Node %s", n.Name)
+	t := func() (interface{}, bool, error) {
+		if err := Inst().V.ExitMaintenance(n); err != nil {
+			nodeState, err := Inst().V.IsNodeInMaintenance(n)
+			if err != nil {
+				return nil, false, err
+			}
+			if nodeState == true {
+				return nil, true, nil
+			}
+			return nil, true, err
+		}
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ExitNodesFromMaintenanceMode waits till all nodes to exit from maintenance mode
+// Checks for all the storage nodes present in the cluster, in case if any node is in maintenance mode
+// Function will attempt bringing back the node out of maintenance
+func ExitNodesFromMaintenanceMode() error {
+	Nodes := node.GetStorageNodes()
+	for _, eachNode := range Nodes {
+		nodeState, err := Inst().V.IsNodeInMaintenance(eachNode)
+		if err == nil && nodeState == true {
+			errExit := ExitFromMaintenanceMode(eachNode)
+			if errExit != nil {
+				return errExit
+			}
+		}
+	}
+	return nil
+}
+
+// GetPoolsDetailsOnNode returns all pools present in the Nodes
+func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
+	var poolDetails []*opsapi.StoragePool
+
+	if node.IsStorageNode(n) == false {
+		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
+	}
+
+	nodes := node.GetStorageNodes()
+
+	for _, eachNode := range nodes {
+		if eachNode.Id == n.Id {
+			for _, eachPool := range eachNode.Pools {
+				poolInfo, err := GetStoragePoolByUUID(eachPool.Uuid)
+				if err != nil {
+					return nil, err
+				}
+				poolDetails = append(poolDetails, poolInfo)
+			}
+		}
+	}
+	return poolDetails, nil
+}
+
+// IsEksPxOperator returns true if current operator installation is on an EKS cluster
+func IsEksPxOperator() bool {
+	if stc, err := Inst().V.GetDriver(); err == nil {
+		if oputil.IsEKS(stc) {
+			logrus.Infof("EKS installation with PX operator detected.")
+			return true
+		}
+	}
+	return false
 }
