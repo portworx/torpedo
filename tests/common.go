@@ -344,6 +344,17 @@ const (
 	Sunday            = "Sun"
 )
 
+type ExecutionMode string
+
+const (
+	Sequential ExecutionMode = "sequential"
+	Parallel   ExecutionMode = "parallel"
+)
+
+var (
+	defaultExecutionMode = Sequential
+)
+
 // TpLogPath torpedo log path
 var tpLogPath string
 var suiteLogger *lumberjack.Logger
@@ -4116,6 +4127,7 @@ func ParseFlags() {
 	if err != nil {
 		log.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
 	}
+	appList = AddSuffixToRepeatedValues(appList, []string{}, "-")
 
 	secureAppList := make([]string, 0)
 
@@ -5244,4 +5256,126 @@ func IsEksPxOperator() bool {
 		}
 	}
 	return false
+}
+
+// ConcurrentExecute executes the given operation on each item in the collection, either sequentially
+// or in parallel, depending on the specified execution mode.
+//
+// Parameters:
+//
+//	items: The collection of items to operate on (slice, array, or map).
+//	operation: The function to execute on each item. If the function takes one argument,
+//	           it will be passed the item value. If it takes two arguments, the first
+//	           will be the item key or index, and the second will be the item value.
+//	executionMode: The mode to use for executing the operation, either "Sequential" or "Parallel".
+func ConcurrentExecute(items interface{}, operation interface{}, executionMode ExecutionMode) {
+	v := reflect.ValueOf(items)
+	var keys []reflect.Value
+	if v.Kind() == reflect.Map {
+		keys = v.MapKeys()
+	} else if v.Kind() == reflect.Slice || v.Kind() == reflect.Array {
+		keys = make([]reflect.Value, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			keys[i] = v.Index(i)
+		}
+	} else {
+		panic(fmt.Sprintf("Instead of %#v, items should be a slice, array, or map.", v.Kind().String()))
+	}
+
+	length := len(keys)
+	if length == 0 {
+		return
+	} else if length == 1 {
+		executionMode = Sequential
+	}
+
+	fnValue := reflect.ValueOf(operation)
+	numArgs := fnValue.Type().NumIn()
+
+	callOperation := func(key reflect.Value) {
+		in := make([]reflect.Value, numArgs)
+		in[0] = key
+		if numArgs == 2 {
+			in[1] = v.MapIndex(key)
+		}
+		fnValue.Call(in)
+	}
+
+	if executionMode == Sequential {
+		for i := 0; i < length; i++ {
+			callOperation(keys[i])
+		}
+	} else {
+		var wg sync.WaitGroup
+		for i := 0; i < length; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				callOperation(keys[i])
+			}(i)
+		}
+		wg.Wait()
+	}
+}
+
+func RandomUniqueStrings(strings []string, length int) ([]string, error) {
+	if length <= 0 {
+		return nil, fmt.Errorf("length must be greater than zero")
+	}
+	if length > len(strings) {
+		return nil, fmt.Errorf("length cannot be greater than the length of the input strings")
+	}
+	randomstrings := make([]string, length)
+	selected := make(map[int]bool)
+	for i := 0; i < length; i++ {
+		j := rand.Intn(len(strings))
+		for selected[j] {
+			j = rand.Intn(len(strings))
+		}
+		selected[j] = true
+		randomstrings[i] = strings[j]
+	}
+	return randomstrings, nil
+}
+
+func AddSuffixToRepeatedValues(values []string, forbidden []string, delimiter string) []string {
+	frequency := make(map[string]int)
+	for _, value := range values {
+		frequency[value]++
+	}
+	updatedValues := make([]string, 0, len(values))
+	randomAlphanumeric := func(length int) string {
+		const letters = "0123456789abcdefghijklmnopqrstuvwxyz"
+		b := make([]byte, length)
+		for i := range b {
+			b[i] = letters[rand.Intn(len(letters))]
+		}
+		return string(b)
+	}
+	for _, value := range values {
+		if frequency[value] > 1 {
+			suffix := ""
+			for {
+				suffix = randomAlphanumeric(6)
+				for _, s := range forbidden {
+					if strings.Contains(suffix, s) {
+						continue
+					}
+				}
+				break
+			}
+			value += delimiter + suffix
+			frequency[value]--
+		}
+		updatedValues = append(updatedValues, value)
+	}
+	return updatedValues
+}
+
+func RemoveSuffixUpToDelimiter(s string, delimiter string) string {
+	parts := strings.Split(s, delimiter)
+	if len(parts) > 2 {
+		return strings.Join(parts[:len(parts)-1], delimiter)
+	}
+	return parts[0]
 }

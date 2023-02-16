@@ -2,9 +2,11 @@ package spec
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"path"
+	"strings"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/torpedo/pkg/errors"
 )
@@ -30,11 +32,14 @@ func (f *Factory) register(id string, app *AppSpec) {
 
 // Get returns a registered application
 func (f *Factory) Get(id string) (*AppSpec, error) {
-	if d, ok := appSpecFactory[id]; ok && d.Enabled {
-		if copy := d.DeepCopy(); copy != nil {
-			return d.DeepCopy(), nil
+	for _, possibleID := range []string{id, removeSuffixUpToDelimiter(id, "-")} {
+		if d, ok := appSpecFactory[possibleID]; ok && d.Enabled {
+			if copy := d.DeepCopy(); copy != nil {
+				copy.Key = id
+				return copy, nil
+			}
+			return nil, fmt.Errorf("error creating copy of app: %v", d)
 		}
-		return nil, fmt.Errorf("error creating copy of app: %v", d)
 	}
 
 	return nil, &errors.ErrNotFound{
@@ -101,4 +106,12 @@ func NewFactory(specDir, storageProvisioner string, parser Parser) (*Factory, er
 	}
 
 	return f, nil
+}
+
+func removeSuffixUpToDelimiter(s string, delimiter string) string {
+	parts := strings.Split(s, delimiter)
+	if len(parts) > 2 {
+		return strings.Join(parts[:len(parts)-1], delimiter)
+	}
+	return parts[0]
 }
