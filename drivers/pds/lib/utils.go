@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/sirupsen/logrus"
 
 	state "net/http"
 
@@ -22,6 +24,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -172,6 +175,7 @@ var (
 	tenantID                              string
 	projectID                             string
 	resourceTemplateID                    string
+	serviceAccId                          string
 	appConfigTemplateID                   string
 	versionID                             string
 	imageID                               string
@@ -506,6 +510,58 @@ func GetStorageTemplate(tenantID string) (string, error) {
 		log.Fatalf("storage template %v is not available ", storageTemplateName)
 	}
 	return storageTemplateID, nil
+}
+
+func isReachbale(url string) (bool, error) {
+	timeout := time.Duration(15 * time.Second)
+	client := http.Client{
+		Timeout: timeout,
+	}
+	_, err := client.Get(url)
+	if err != nil {
+		logrus.Error(err.Error())
+		return false, err
+	}
+	return true, nil
+}
+
+func RegisterToControlPlane(controlPlaneUrl, tenantId, clusterType string) error {
+	log.Info("Test control plane url connectivity.")
+	_, err := isReachbale(controlPlaneUrl)
+	if err != nil {
+		return fmt.Errorf("unable to reach the control plane with following error - %v", err)
+	}
+
+	helmChartversion, err := components.APIVersion.GetHelmChartVersion()
+	if err != nil {
+		log.Errorf("Error while getting helm version %v", helmChartversion)
+		return err
+	}
+
+	log.Info("listing service account")
+	listServiceAccounts, err := components.ServiceAccount.ListServiceAccounts(tenantId)
+	if err != nil {
+		return err
+	}
+	for _, acc := range listServiceAccounts {
+		log.Infof(*acc.Name)
+		if *acc.Name == "Default-AgentWriter" {
+			serviceAccId = *acc.Id
+		}
+	}
+
+	log.Info("getting service account token")
+	serviceAccToken, err := components.ServiceAccount.GetServiceAccountToken(serviceAccId)
+	if err != nil {
+		return err
+	}
+	bearerToken := *serviceAccToken.Token
+
+	ctx := GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+	target := tc.NewTargetCluster(ctx)
+	err = target.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantID, clusterType)
+
+	return err
 }
 
 // GetResourceTemplate get the resource template id
