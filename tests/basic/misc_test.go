@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/volume"
 	"math/rand"
 	"strings"
 	"sync"
@@ -809,7 +810,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 				1. Enable autofstrim, wait until autofstrim is actively trimming.
 				2. Run back to back cmd `pxctl c options update --auto-fstrim off` , then  `pxctl c options update --auto-fstrim on`
 				3.`pxctl v af status` should report the trim status correctly
-			    4. All Nods have pool 0 and pool 1.
+			    4. All Nodes have pool 0 and pool 1.
 			    5. Delete pool 0 in one of the node
 		        6. Create repl-2 volumes on nodes with pool 0 and pool 1.
 		        7. Check auto-fstrim is working
@@ -831,7 +832,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		storageDriverNodes := node.GetStorageDriverNodes()
-		stepLog = "perform fas switch on the autofstrim option"
+		stepLog = "perform fast switch on the autofstrim option"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			stNode := storageDriverNodes[0]
@@ -862,53 +863,196 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 
 			output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(stNode, "v af status", opts, false)
 			log.FailOnError(err, "error checking autofstrim status on node [%s]", stNode.Name)
-			log.Infof("autofstrim status:\n %s", output)
-			dash.VerifyFatal(strings.Contains(output, "Filesystem Trim Initializing"), false, "verify no autofstrim initialization error")
+			log.Infof("autofstrim status: %s", output)
+			dash.VerifyFatal(strings.Contains(output, "Filesystem Trim Initializing"), false, "verify no autofstrim initialization issue")
 
 		})
 
-		Inst().AppList = append(Inst().AppList, "fio-fstrim")
+		if !Contains(Inst().AppList, "fio-fstrim") {
+			Inst().AppList = append(Inst().AppList, "fio-fstrim")
+		}
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("afrepladd-%d", i))...)
 		}
 		ValidateApplications(contexts)
 
-		stepLog := "has to check the autofstrim status will volume update on node with no pool 0"
-		It(stepLog, func() {
+		stepLog = "make volumes repl 2"
+		var appVolumes []*volume.Volume
+		var selectedCtx *scheduler.Context
+		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			contexts = make([]*scheduler.Context, 0)
-
-			//storageDriverNodes := node.GetStorageDriverNodes()
-			stepLog = "perform fas switch on the autofstrim option"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				for _, ctx := range contexts {
-
-					if strings.Contains(ctx.App.Key, "fstrim") {
-						faStatus, err := GetAutoFsTrimStatus(ctx)
-						log.FailOnError(err, "error getting autofs status")
-						log.Infof("%v", faStatus)
-						fsUsage, err := GetAutoFstrinUsage(ctx)
-						log.FailOnError(err, "error getting autofs usage")
-						log.Infof("%v", fsUsage)
-
-					}
-				}
-			})
-
-		})
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
+				if !strings.Contains(ctx.App.Key, "fio-fstrim") {
+					continue
+				}
+				selectedCtx = ctx
+
+				var err error
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes")
+					dash.VerifyFatal(len(appVolumes) > 0, true, fmt.Sprintf("Found %d app volmues", len(appVolumes)))
+				})
+
+				for _, v := range appVolumes {
+					// Check if volumes are Pure FA/FB DA volumes
+					isPureVol, err := Inst().V.IsPureVolume(v)
+					log.FailOnError(err, "Failed to check is PURE volume")
+					if isPureVol {
+						log.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+						continue
+					}
+
+					currRep, err := Inst().V.GetReplicationFactor(v)
+					log.FailOnError(err, "Failed to get Repl factor for vil %s", v.Name)
+
+					//Reduce replication factor
+					if currRep == 3 {
+						log.Infof("Current replication is 3, reducing before proceeding")
+						opts := volume.Options{
+							ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+						}
+						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to %d", currRep-1))
+					}
+
+				}
 			}
 		})
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts, testrailID, runID)
+
+		stepLog = "has to check the autofstrim status will volume update on node with no pool 0"
+		var fsTrimStatuses map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
+		var fsUsage map[string]*opsapi.FstrimVolumeUsageInfo
+		var err error
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			fsTrimStatuses, err = GetAutoFsTrimStatus(selectedCtx)
+			log.FailOnError(err, "error getting autofs status")
+
+			fsUsage, err = GetAutoFstrimUsage(selectedCtx)
+			log.FailOnError(err, "error getting autofs usage")
+
+			volReplNodes := make([]string, 0)
+			for k := range fsTrimStatuses {
+				selectedVol, err := Inst().V.InspectVolume(k)
+				log.FailOnError(err, "error inspecting vol [%s]", k)
+				volReplNodes = append(volReplNodes, selectedVol.ReplicaSets[0].Nodes...)
+			}
+
+			fmt.Printf("repl nodes : %v\n", volReplNodes)
+
+			//Selecting node not part of selected volume replica set and multiple pools
+			stNodes := node.GetStorageNodes()
+			var selectedNode node.Node
+			for _, n := range stNodes {
+				if !Contains(volReplNodes, n.Id) && len(n.Pools) > 1 {
+					//verifying if node has pool 0
+					var ispoolExist bool
+					for _, p := range n.Pools {
+						if p.ID == 0 {
+							ispoolExist = true
+						}
+					}
+					if ispoolExist {
+						selectedNode = n
+						break
+					}
+				}
+			}
+
+			if selectedNode.Id == "" {
+				log.FailOnError(fmt.Errorf("no node found"), "error identifying node for repl increase and pool deletion")
+			}
+
+			//stepLog = fmt.Sprintf("delete pool 0 from the node [%s]", selectedNode.Name)
+			//Step(stepLog, func() {
+			//	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			//	log.FailOnError(err, "Failed to list storage pools")
+			//
+			//	log.InfoD(stepLog)
+			//	log.InfoD("Setting pools in maintenance on node %s", selectedNode.Name)
+			//	err = Inst().V.EnterPoolMaintenance(selectedNode)
+			//	log.FailOnError(err, "failed to set pool maintenance mode on node %s", selectedNode.Name)
+			//
+			//	time.Sleep(1 * time.Minute)
+			//	expectedStatus := "In Maintenance"
+			//	err = waitForPoolStatusToUpdate(selectedNode, expectedStatus)
+			//	log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", selectedNode.Name, expectedStatus))
+			//
+			//	err = Inst().V.DeletePool(selectedNode, "0")
+			//	log.FailOnError(err, "failed to delete poolID 0 on node %s", selectedNode.Name)
+			//
+			//	err = Inst().V.ExitPoolMaintenance(selectedNode)
+			//	log.FailOnError(err, "failed to exit pool maintenance mode on node %s", selectedNode.Name)
+			//
+			//	err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+			//	log.FailOnError(err, "volume driver down on node %s", selectedNode.Name)
+			//
+			//	expectedStatus = "Online"
+			//	err = waitForPoolStatusToUpdate(selectedNode, expectedStatus)
+			//	log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", selectedNode.Name, expectedStatus))
+			//
+			//	poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			//	log.FailOnError(err, "Failed to list storage pools")
+			//
+			//	dash.VerifySafely(len(poolsBfr) > len(poolsAfr), true, "verify pools count is updated after pools deletion")
+			//})
+
+			stepLog = fmt.Sprintf("Repl increase of volumes to the node %s", selectedNode.Name)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				appVolumes, err = Inst().S.GetVolumes(selectedCtx)
+				log.FailOnError(err, "Failed to get volumes")
+				for _, v := range appVolumes {
+					if _, ok := fsTrimStatuses[v.ID]; ok {
+						opts := volume.Options{
+							ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+						}
+						err = Inst().V.SetReplicationFactor(v, 3, []string{selectedNode.Id}, nil, true, opts)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Validate set repl factor to 3 for volume [%s]", v.Name))
+					}
+				}
+
+			})
+
+			stepLog = fmt.Sprintf("validate autofstrim status for the volumes")
+			Step(stepLog, func() {
+				newFsTrimStatuses, err := GetAutoFsTrimStatus(selectedCtx)
+				log.FailOnError(err, "error getting autofs status")
+
+				for k := range fsTrimStatuses {
+					val, ok := newFsTrimStatuses[k]
+					dash.VerifySafely(ok, true, fmt.Sprintf("verify autofstrim started for volume %s", k))
+					dash.VerifySafely(val != opsapi.FilesystemTrim_FS_TRIM_FAILED, true, fmt.Sprintf("verify autofstrim for volume %s is not failed, current status %v", k, val))
+				}
+				newFsUsage, err := GetAutoFstrimUsage(selectedCtx)
+				log.FailOnError(err, "error getting autofs usage")
+
+				for k := range fsUsage {
+					val, ok := newFsUsage[k]
+					dash.VerifySafely(ok, true, fmt.Sprintf("verify autofstrim usage for volume %s", k))
+					dash.VerifySafely(val.PerformAutoFstrim, "Enabled", fmt.Sprintf("verify autofstrim for volume %s is not disabled, current status %v", k, val))
+				}
+
+			})
+
+			Step("destroy apps", func() {
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for _, ctx := range contexts {
+					TearDownContext(ctx, opts)
+				}
+
+			})
+		})
+
+		JustAfterEach(func() {
+			defer EndTorpedoTest()
+			AfterEachTest(contexts, testrailID, runID)
+		})
 	})
 })

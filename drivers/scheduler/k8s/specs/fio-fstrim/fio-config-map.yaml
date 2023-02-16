@@ -7,29 +7,27 @@ data:
         [global]
         name=fio-rand-RW
         directory=/scratch/
+        ioengine=falloc
         rw=randwrite
         randrepeat=1
-        rwmixread=0
-        bsrange=64k-512k
-        blocksize=32k
+        rwmixread=75
         direct=1
-        end_fsync=1
-        do_verify=1
-        verify=crc32c
-        verify_pattern=0xdeadbeef
-        disable_lat=0
-        time_based=1
-        runtime=1800
-        [file1]
-        filesize=10M-1G
-        nrfiles=15
-        ioengine=libaio
-        iodepth=64
-        [file2]
-        filesize=10M-1G
+        numjobs=1
+        filesize=1G
+        [bs-split]
+        stonewall
+        filename=frag_file
         nrfiles=10
-        ioengine=filedelete
-        iodepth=64
+        time_based=1
+        runtime=10
+        bssplit=4k/10:64k/50:32k/40     
+        [punch-hole-creator]
+        bs=4k
+        rw=randtrim
+        runtime=10
+        time_based=1
+        numjobs=2
+        filename=frag_file
 ---
 apiVersion: v1
 kind: ConfigMap

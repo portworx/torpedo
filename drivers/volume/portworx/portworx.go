@@ -2149,7 +2149,7 @@ func (d *portworx) GetAutoFsTrimUsage(endpoint string) (map[string]*api.FstrimVo
 		return nil, fmt.Errorf("failed to get auto fstrim usage stats, Err: %v", err)
 
 	}
-	log.Infof("Trim Status is [%v]", autoFstrimResp.GetUsage())
+	log.Infof("Trim Usage is [%v]", autoFstrimResp.GetUsage())
 	return autoFstrimResp.GetUsage(), nil
 }
 

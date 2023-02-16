@@ -5314,14 +5314,15 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 	}
 	return randomItems, nil
 }
-func GetAutoFsTrimStatus(ctx *scheduler.Context) (map[string]string, error) {
+
+func GetAutoFsTrimStatus(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
 
 	appVolumes, err := Inst().S.GetVolumes(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var ctxAutoFsTrimStatus map[string]string
+	ctxAutoFsTrimStatus := make(map[string]opsapi.FilesystemTrim_FilesystemTrimStatus)
 
 	for _, v := range appVolumes {
 		// Skip autofs trim status on Pure DA volumes
@@ -5332,7 +5333,11 @@ func GetAutoFsTrimStatus(ctx *scheduler.Context) (map[string]string, error) {
 		if isPureVol {
 			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
 		}
-		log.Infof("Getting info : %s", v.ID)
+		//skipping fstrim check for log PVCs
+		if strings.Contains(v.Name, "log") {
+			continue
+		}
+		log.Infof("inspecting volume [%s]", v.Name)
 		appVol, err := Inst().V.InspectVolume(v.ID)
 		if err != nil {
 			return nil, fmt.Errorf("error inspecting volume: %v", err)
@@ -5344,7 +5349,7 @@ func GetAutoFsTrimStatus(ctx *scheduler.Context) (map[string]string, error) {
 		}
 
 		val, ok := fsTrimStatuses[appVol.Id]
-		var fsTrimStatus string
+		var fsTrimStatus opsapi.FilesystemTrim_FilesystemTrimStatus
 
 		if !ok {
 			fsTrimStatus, err = waitForFsTrimStatus(nil, attachedNode, appVol.Id)
@@ -5352,10 +5357,10 @@ func GetAutoFsTrimStatus(ctx *scheduler.Context) (map[string]string, error) {
 				return nil, err
 			}
 		} else {
-			fsTrimStatus = val.String()
+			fsTrimStatus = val
 		}
 
-		if fsTrimStatus != "" {
+		if fsTrimStatus != -1 {
 			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
 
 		} else {
@@ -5366,13 +5371,13 @@ func GetAutoFsTrimStatus(ctx *scheduler.Context) (map[string]string, error) {
 	return ctxAutoFsTrimStatus, nil
 }
 
-func GetAutoFstrinUsage(ctx *scheduler.Context) (map[string]string, error) {
+func GetAutoFstrimUsage(ctx *scheduler.Context) (map[string]*opsapi.FstrimVolumeUsageInfo, error) {
 	appVolumes, err := Inst().S.GetVolumes(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var ctxAutoFsTrimStatus map[string]string
+	ctxAutoFsTrimStatus := make(map[string]*opsapi.FstrimVolumeUsageInfo)
 
 	for _, v := range appVolumes {
 		// Skip autofs trim status on Pure DA volumes
@@ -5396,15 +5401,15 @@ func GetAutoFstrinUsage(ctx *scheduler.Context) (map[string]string, error) {
 		}
 
 		val, ok := fsTrimUsages[appVol.Id]
-		var fsTrimStatus string
+		var fsTrimStatus *opsapi.FstrimVolumeUsageInfo
 
 		if !ok {
 			log.Errorf("usage not found for %s", appVol.Id)
 		} else {
-			fsTrimStatus = val.String()
+			fsTrimStatus = val
 		}
 
-		if fsTrimStatus != "" {
+		if fsTrimStatus != nil {
 			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
 
 		} else {
