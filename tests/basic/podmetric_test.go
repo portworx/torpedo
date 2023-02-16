@@ -5,7 +5,6 @@ import (
 	"os"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	rest "github.com/portworx/torpedo/pkg/restutil"
@@ -42,6 +41,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 		// shared test function for pod metric functional tests
 		sharedTestFunction := func() {
 			It("has to fetch the logs from loggly", func() {
+				log.InfoD("fetching logs from loggly")
 				resp, code, err := getLogglyData("q=tag:meteringData&from=-60m&until=now&size=1")
 
 				log.FailOnError(err, "Failed to make request to loggly")
@@ -62,8 +62,9 @@ var _ = Describe("{PodMetricFunctional}", func() {
 
 	AfterEach(func() {
 		Step("destroy apps", func() {
+			log.InfoD("destroying apps")
 			if CurrentGinkgoTestDescription().Failed {
-				log.Info("not destroying apps because the test failed\n")
+				log.InfoD("not destroying apps because the test failed\n")
 				return
 			}
 			for _, ctx := range contexts {
@@ -80,7 +81,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 
 func getLogglyData(query string) ([]byte, int, error) {
 	logglyToken, ok := os.LookupEnv("LOGGLY_API_TOKEN")
-	Expect(ok).To(BeTrue())
+	dash.VerifyFatal(ok, true, "failed to fetch loggly api token")
 	headers := make(map[string]string)
 	headers["Authorization"] = fmt.Sprintf("Bearer %v", logglyToken)
 	return rest.Get(fmt.Sprintf("%v?%v", logglyIterateUrl, query), nil, headers)
