@@ -30,36 +30,36 @@ const (
 var _ = Describe("{Volumemount}", func() {
 	var contexts []*scheduler.Context
 	It("creating volume", func() {
-		var err error
+		//var err error
 		contexts = make([]*scheduler.Context, 0)
 		contexts = ScheduleApplications(fmt.Sprintf("mount"))
 		ValidateApplications(contexts)
+		for _, ctx := range contexts {
+			//ValidateMount(ctx)
+			Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
+				vols, err := Inst().S.GetVolumes(ctx)
 
-		stepLog := "get volumes for mount app"
-		Step(stepLog, func() {
-			for _, ctx := range contexts {
-				var appVolumes []*volume.Volume
-				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
-					appVolumes, err = Inst().S.GetVolumes(ctx)
-					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
-					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist ?")
-				})
-				for _, v := range appVolumes {
-					stepLog = fmt.Sprintf("get node for app %s's volume: %v", ctx.App.Key, v)
-					Step(stepLog,
-						func() {
-							log.InfoD(stepLog)
-							attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
-							fmt.Println(err)
-							fmt.Println(attachedNode)
-							log.Infof("attachedNode is")
-							log.Infof(attachedNode)
-
-							Inst().V.ValidateMountOptions(v.Name, attachedNode)
-						})
+				if err != nil {
+					log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+					//ProcessError(err, errChan...)
 				}
-			}
-		})
+				log.Infof("vols0 of ayush is %s", vols)
+
+				for _, v := range vols {
+					//stepLog = fmt.Sprintf("get node for ayu app %s's volume: %v", ctx.App.Key, v)
+					//var vols2 *volume.Volume = mount4-pvc
+					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
+					log.Infof("attachedNode is %s", attachedNode)
+					fmt.Println("volume of attachednode is", v)
+					if err != nil {
+						log.Errorf("Failed to get app %s's attachednode", ctx.App.Key)
+						//processError(err, errChan...)
+					}
+					Inst().V.ValidateMountOptions(v.ID, attachedNode)
+				}
+			})
+
+		}
 
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)

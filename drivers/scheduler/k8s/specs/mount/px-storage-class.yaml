@@ -1,9 +1,9 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: mount-sc
+  name: mount-fa-sc
 parameters:
-  backend: "pure_file"
+  backend: "pure_block"
 provisioner: pxd.portworx.com 
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
