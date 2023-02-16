@@ -41,6 +41,7 @@ const (
 	mdFileName                  = "changelog.md"
 	defaultCmdTimeout           = 5 * time.Minute
 	driverUpTimeout             = 10 * time.Minute
+	generationNumberWaitTime    = 10 * time.Minute
 	defaultCmdRetry             = 15 * time.Second
 	defaultUpgradeTimeout       = 4 * time.Hour
 	defaultUpgradeRetryInterval = 5 * time.Minute
@@ -337,7 +338,7 @@ func waitForNewGenertionNumber(currentGenNumber int) error {
 		log.Debugf("Set channel spec has been updated: Generation number %d", newGenNumInt)
 		return nil, true, nil
 	}
-	_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 5*time.Second)
+	_, err = task.DoRetryWithTimeout(t, generationNumberWaitTime, 5*time.Second)
 	return err
 }
 
