@@ -42,16 +42,15 @@ var _ = Describe("{PodMetricFunctional}", func() {
 		// shared test function for pod metric functional tests
 		sharedTestFunction := func() {
 			It("has to fetch the logs from loggly", func() {
-				resp, code, err := getLogglyData("q=tag:meteringData&from=-60m&until=now&size=1")
+				_, code, err := getLogglyData("q=tag:meteringData&from=-60m&until=now&size=1")
 
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("error calling to loggly %v", err))
-				Expect(code).To(Equal(200), fmt.Sprintf("loggly return code %v not equal to 200", code))
-				Expect(resp).NotTo(BeEmpty())
+				log.FailOnError(err, "Failed to make request to loggly")
+				dash.VerifyFatal(code, 200, fmt.Sprintf("loggly return code %v not equal to 200", code))
 			})
 		}
 
 		// Sample pod metric tests
-		Context("{SamplePodMetricTest}", func() {
+		Describe("{SamplePodMetricTest}", func() {
 			JustBeforeEach(func() {
 				// testrailID =
 			})
