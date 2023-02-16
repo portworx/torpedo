@@ -42,10 +42,11 @@ var _ = Describe("{PodMetricFunctional}", func() {
 		// shared test function for pod metric functional tests
 		sharedTestFunction := func() {
 			It("has to fetch the logs from loggly", func() {
-				_, code, err := getLogglyData("q=tag:meteringData&from=-60m&until=now&size=1")
+				resp, code, err := getLogglyData("q=tag:meteringData&from=-60m&until=now&size=1")
 
 				log.FailOnError(err, "Failed to make request to loggly")
 				dash.VerifyFatal(code, 200, fmt.Sprintf("loggly return code %v not equal to 200", code))
+				dash.VerifyFatal(len(resp) == 0, false, "loggy return empty response")
 			})
 		}
 
