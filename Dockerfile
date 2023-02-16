@@ -7,10 +7,6 @@ WORKDIR /go/src/github.com/portworx/torpedo
 # Install setup dependencies
 RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client
 
-RUN curl -fLSOs "https://get.helm.sh/helm-v3.11.1-linux-amd64.tar.gz" \
-    && tar -xvf "helm-v3.11.1-linux-amd64.tar.gz" \
-    && mv linux-amd64/helm /usr/local/bin/helm
-
 RUN GOFLAGS= GO111MODULE=on go install github.com/onsi/ginkgo/ginkgo@v1.16.5
 
 # Install aws-iam-authenticator
@@ -47,6 +43,9 @@ RUN apk add --no-cache ca-certificates curl jq libc6-compat
 
 # Install kubectl from Docker Hub.
 COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl
+
+# Install helm from Docker Hub.
+COPY --from=alpine/helm:latest /usr/bin/helm /usr/local/bin/helm
 
 # Copy scripts into container
 WORKDIR /torpedo
