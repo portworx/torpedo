@@ -925,8 +925,6 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		//var pools map[string]*api.StoragePool
 		var volSelected *volume.Volume
 		volSelected, err = getVolumeWithMinimumSize(contexts, 10)
-		//volSelected = vols[0]
-		//volSelected = vols[0]
 		log.FailOnError(err, "error identifying volume")
 		log.Infof("volume selected is %+v", volSelected)
 		rs, err := Inst().V.GetReplicaSets(volSelected)
@@ -956,6 +954,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 		poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
 		log.FailOnError(err, "unable to get pool using UUID")
 		currentTotalPoolSize = poolToBeResized.TotalSize / units.GiB
+
 		//pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "error getting storage pools")
 		//existingPoolsCount := len(pools)
@@ -982,9 +981,6 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 				}
 			}
 			if strings.Contains(param, "type") {
-				//val := strings.Split(param, "=")[1]
-				//specSize, err = strconv.ParseUint(val, 10, 64)
-				//log.FailOnError(err, "Error converting size to uint64")
 				log.Infof("adding type in if loop to newspec")
 				paramsArr = append(paramsArr, fmt.Sprintf("type=%s", "gp2"))
 			} else {
@@ -995,30 +991,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 				}
 			}
 		}
-		/*for _, param := range deviceSpecParams {
-			if strings.Contains(param, "iops") {
-				re := regexp.MustCompile(`[0-9]+`)
-				speedBytes := string(re.FindAll([]byte(param), -1)[0])
-				speed, err := strconv.Atoi(speedBytes)
-				log.Infof("adding in iops if loop to newspec")
-				if err != nil {
-					//return 0, fmt.Errorf("Error in getting the speed")
-				}
-				paramsArr = append(paramsArr, fmt.Sprintf("iops=%v,", speed))
-			} else {
-				log.Infof("adding iops to newspec")
-				paramsArr = append(paramsArr, fmt.Sprintf("iops=%v,", 3000))
-				//paramsArr = append(paramsArr, param)
-			}
-
-			// We need to consider non Zero number from the speeds returned,
-			// since it will return read speed, trim speed and we are performing only write operation
-			//if speed == 0 {
-			//continue
-			//}
-		}*/
 		newSpec := strings.Join(paramsArr, ",")
-		expandedExpectedPoolSize := currentTotalPoolSize * 2
 
 		stepLog = fmt.Sprintf("Verify that pool %s can be expanded", poolIDToResize)
 		Step(stepLog, func() {
@@ -1046,7 +1019,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 				}
 			}
 			log.InfoD("Getting Pool with ID [%v] and UUID [%v] for Drive Addition", poolID, poolUUID)
-
+			expandedExpectedPoolSize := currentTotalPoolSize + 300
 			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, poolID)
 			log.InfoD("Pool ID on which IO is running [%+v]", poolID)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
@@ -1064,7 +1037,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			//}
 			//blockDrives, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
 			log.FailOnError(err, fmt.Sprintf("pool %s rebalance failed", poolIDToResize))
-			time.Sleep(15 * time.Second)
+			time.Sleep(1000 * time.Second)
 			//add drive while rebalance is happening which should fail
 			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, poolID)
 			//expectedError := "error not expected"
