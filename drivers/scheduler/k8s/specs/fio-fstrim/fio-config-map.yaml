@@ -6,26 +6,31 @@ data:
     fio.job: |
         [global]
         name=fio-rand-RW
-        directory=/scratch/
         ioengine=falloc
+        directory=/scratch/
+        iodepth=1
         rw=randwrite
-        randrepeat=1
-        rwmixread=75
-        direct=1
-        numjobs=1
+        direct=0
+        buffered=0
+        disable_lat=0
+        time_based=1
+        runtime=1800
+        nrfiles=15
+        size=1G
         filesize=1G
         [bs-split]
         stonewall
-        filename=frag_file
-        nrfiles=10
+        runtime=1800
         time_based=1
-        runtime=10
-        bssplit=4k/10:64k/50:32k/40     
+        bssplit=4k/10:64k/50:32k/40
+        rw=randwrite
+        numjobs=1
+        filename=frag_file
         [punch-hole-creator]
         bs=4k
-        rw=randtrim
-        runtime=10
+        runtime=1800
         time_based=1
+        rw=randtrim
         numjobs=2
         filename=frag_file
 ---

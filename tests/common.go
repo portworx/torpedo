@@ -5362,7 +5362,6 @@ func GetAutoFsTrimStatus(ctx *scheduler.Context) (map[string]opsapi.FilesystemTr
 
 		if fsTrimStatus != -1 {
 			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
-
 		} else {
 			return nil, fmt.Errorf("autofstrim for volume [%v] not started on node [%s]", v.ID, attachedNode)
 		}
@@ -5388,14 +5387,17 @@ func GetAutoFstrimUsage(ctx *scheduler.Context) (map[string]*opsapi.FstrimVolume
 		if isPureVol {
 			return nil, fmt.Errorf("autofstrim is not supported for Pure DA volume")
 		}
-		log.Infof("Getting info : %s", v.ID)
+		//skipping fstrim check for log PVCs
+		if strings.Contains(v.Name, "log") {
+			continue
+		}
+		log.Infof("Getting info: %s", v.ID)
 		appVol, err := Inst().V.InspectVolume(v.ID)
 		if err != nil {
 			return nil, fmt.Errorf("error inspecting volume: %v", err)
 		}
 		attachedNode := appVol.AttachedOn
 		fsTrimUsages, err := Inst().V.GetAutoFsTrimUsage(attachedNode)
-		log.Infof("%v", fsTrimUsages)
 		if err != nil {
 			return nil, err
 		}
@@ -5411,7 +5413,6 @@ func GetAutoFstrimUsage(ctx *scheduler.Context) (map[string]*opsapi.FstrimVolume
 
 		if fsTrimStatus != nil {
 			ctxAutoFsTrimStatus[appVol.Id] = fsTrimStatus
-
 		} else {
 			return nil, fmt.Errorf("autofstrim for volume [%v] has no usage on node [%s]", v.ID, attachedNode)
 		}

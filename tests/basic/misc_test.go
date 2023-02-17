@@ -807,15 +807,15 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 
 var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 	/*
-				1. Enable autofstrim, wait until autofstrim is actively trimming.
-				2. Run back to back cmd `pxctl c options update --auto-fstrim off` , then  `pxctl c options update --auto-fstrim on`
-				3.`pxctl v af status` should report the trim status correctly
-			    4. All Nodes have pool 0 and pool 1.
-			    5. Delete pool 0 in one of the node
-		        6. Create repl-2 volumes on nodes with pool 0 and pool 1.
-		        7. Check auto-fstrim is working
-		        8. Do a repl-add on all volumes on the node with only pool 1
-		        9. Check if auto-fstrim is working
+		1. Enable autofstrim, wait until autofstrim is actively trimming.
+		2. Run back to back cmd `pxctl c options update --auto-fstrim off` , then  `pxctl c options update --auto-fstrim on`
+		3.`pxctl v af status` should report the trim status correctly
+		4. All Nodes have pool 0 and pool 1.
+		5. Delete pool 0 in one of the node
+		6. Create repl-2 volumes on nodes with pool 0 and pool 1.
+		7. Check auto-fstrim is working
+		8. Do a repl-add on all volumes on the node with only pool 1
+		9. Check if auto-fstrim is working
 	*/
 	var testrailID = 84604
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/84604
@@ -844,6 +844,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 				time.Sleep(1 * time.Minute)
 			}
 
+			//switching autofstrim feature
 			err = Inst().V.SetClusterOpts(stNode, map[string]string{
 				"--auto-fstrim": "off"})
 			log.FailOnError(err, "error disabling AutoFstrim status using node [%s]", stNode.Name)
@@ -877,7 +878,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 		}
 		ValidateApplications(contexts)
 
-		stepLog = "make volumes repl 2"
+		stepLog = "setting volumes repl to 2"
 		var appVolumes []*volume.Volume
 		var selectedCtx *scheduler.Context
 		Step(stepLog, func() {
@@ -923,7 +924,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 			}
 		})
 
-		stepLog = "has to check the autofstrim status will volume update on node with no pool 0"
+		stepLog = "has to check the autofstrim status with volume update on node with no pool 0"
 		var fsTrimStatuses map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
 		var fsUsage map[string]*opsapi.FstrimVolumeUsageInfo
 		var err error
@@ -943,9 +944,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 				volReplNodes = append(volReplNodes, selectedVol.ReplicaSets[0].Nodes...)
 			}
 
-			fmt.Printf("repl nodes : %v\n", volReplNodes)
-
-			//Selecting node not part of selected volume replica set and multiple pools
+			//Selecting a node not part of selected volume replica set and multiple pools
 			stNodes := node.GetStorageNodes()
 			var selectedNode node.Node
 			for _, n := range stNodes {
@@ -968,39 +967,39 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 				log.FailOnError(fmt.Errorf("no node found"), "error identifying node for repl increase and pool deletion")
 			}
 
-			//stepLog = fmt.Sprintf("delete pool 0 from the node [%s]", selectedNode.Name)
-			//Step(stepLog, func() {
-			//	poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-			//	log.FailOnError(err, "Failed to list storage pools")
-			//
-			//	log.InfoD(stepLog)
-			//	log.InfoD("Setting pools in maintenance on node %s", selectedNode.Name)
-			//	err = Inst().V.EnterPoolMaintenance(selectedNode)
-			//	log.FailOnError(err, "failed to set pool maintenance mode on node %s", selectedNode.Name)
-			//
-			//	time.Sleep(1 * time.Minute)
-			//	expectedStatus := "In Maintenance"
-			//	err = waitForPoolStatusToUpdate(selectedNode, expectedStatus)
-			//	log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", selectedNode.Name, expectedStatus))
-			//
-			//	err = Inst().V.DeletePool(selectedNode, "0")
-			//	log.FailOnError(err, "failed to delete poolID 0 on node %s", selectedNode.Name)
-			//
-			//	err = Inst().V.ExitPoolMaintenance(selectedNode)
-			//	log.FailOnError(err, "failed to exit pool maintenance mode on node %s", selectedNode.Name)
-			//
-			//	err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
-			//	log.FailOnError(err, "volume driver down on node %s", selectedNode.Name)
-			//
-			//	expectedStatus = "Online"
-			//	err = waitForPoolStatusToUpdate(selectedNode, expectedStatus)
-			//	log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", selectedNode.Name, expectedStatus))
-			//
-			//	poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-			//	log.FailOnError(err, "Failed to list storage pools")
-			//
-			//	dash.VerifySafely(len(poolsBfr) > len(poolsAfr), true, "verify pools count is updated after pools deletion")
-			//})
+			stepLog = fmt.Sprintf("delete pool 0 from the node [%s]", selectedNode.Name)
+			Step(stepLog, func() {
+				poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+				log.FailOnError(err, "Failed to list storage pools")
+
+				log.InfoD(stepLog)
+				log.InfoD("Setting pools in maintenance on node %s", selectedNode.Name)
+				err = Inst().V.EnterPoolMaintenance(selectedNode)
+				log.FailOnError(err, "failed to set pool maintenance mode on node %s", selectedNode.Name)
+
+				time.Sleep(1 * time.Minute)
+				expectedStatus := "In Maintenance"
+				err = waitForPoolStatusToUpdate(selectedNode, expectedStatus)
+				log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", selectedNode.Name, expectedStatus))
+
+				err = Inst().V.DeletePool(selectedNode, "0")
+				log.FailOnError(err, "failed to delete poolID 0 on node %s", selectedNode.Name)
+
+				err = Inst().V.ExitPoolMaintenance(selectedNode)
+				log.FailOnError(err, "failed to exit pool maintenance mode on node %s", selectedNode.Name)
+
+				err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+				log.FailOnError(err, "volume driver down on node %s", selectedNode.Name)
+
+				expectedStatus = "Online"
+				err = waitForPoolStatusToUpdate(selectedNode, expectedStatus)
+				log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", selectedNode.Name, expectedStatus))
+
+				poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+				log.FailOnError(err, "Failed to list storage pools")
+
+				dash.VerifySafely(len(poolsBfr) > len(poolsAfr), true, "verify pools count is updated after pools deletion")
+			})
 
 			stepLog = fmt.Sprintf("Repl increase of volumes to the node %s", selectedNode.Name)
 			Step(stepLog, func() {
@@ -1008,7 +1007,10 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 				appVolumes, err = Inst().S.GetVolumes(selectedCtx)
 				log.FailOnError(err, "Failed to get volumes")
 				for _, v := range appVolumes {
-					if _, ok := fsTrimStatuses[v.ID]; ok {
+					appVol, err := Inst().V.InspectVolume(v.ID)
+					log.FailOnError(err, fmt.Sprintf("error inspecting volume [%s]", v.ID))
+
+					if _, ok := fsTrimStatuses[appVol.Id]; ok {
 						opts := volume.Options{
 							ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
 						}
@@ -1027,7 +1029,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 				for k := range fsTrimStatuses {
 					val, ok := newFsTrimStatuses[k]
 					dash.VerifySafely(ok, true, fmt.Sprintf("verify autofstrim started for volume %s", k))
-					dash.VerifySafely(val != opsapi.FilesystemTrim_FS_TRIM_FAILED, true, fmt.Sprintf("verify autofstrim for volume %s is not failed, current status %v", k, val))
+					dash.VerifySafely(val != opsapi.FilesystemTrim_FS_TRIM_FAILED, true, fmt.Sprintf("verify autofstrim for volume %s, current status %v", k, val))
 				}
 				newFsUsage, err := GetAutoFstrimUsage(selectedCtx)
 				log.FailOnError(err, "error getting autofs usage")
@@ -1050,9 +1052,9 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 			})
 		})
 
-		JustAfterEach(func() {
-			defer EndTorpedoTest()
-			AfterEachTest(contexts, testrailID, runID)
-		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
