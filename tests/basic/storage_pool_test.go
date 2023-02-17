@@ -1048,7 +1048,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			log.InfoD("Getting Pool with ID [%v] and UUID [%v] for Drive Addition", poolID, poolUUID)
 
 			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, poolID)
-			log.InfoD("Pool ID on which IO is running [%s]", poolID)
+			log.InfoD("Pool ID on which IO is running [%+v]", poolID)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
 			log.InfoD("Validate pool rebalance after drive add")
 			err = ValidatePoolRebalance()
@@ -1074,7 +1074,7 @@ var _ = Describe("{AddDiskWhileRebalance}", func() {
 			isjournal, err := isJournalEnabled()
 			log.FailOnError(err, "is journal enabled check failed")
 			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolUUID, isjournal)
-			log.InfoD("Pool ID on which IO is running [%s]", poolUUID)
+			log.InfoD("Pool ID on which IO is running [%+v]", poolUUID)
 			log.FailOnError(err, "Error waiting for pool resize")
 			//resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 			//blockDrivesAfterDriveInsertFailed, err := Inst().N.GetBlockDrives(nodeSelected, systemOpts)
