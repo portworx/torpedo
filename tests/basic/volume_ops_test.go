@@ -2,11 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"math"
 	"reflect"
 	"time"
-
-	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 

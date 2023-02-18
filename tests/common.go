@@ -1431,6 +1431,7 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	}()
 	var contexts []*scheduler.Context
 	var err error
+
 	Step("schedule applications", func() {
 		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
