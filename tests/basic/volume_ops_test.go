@@ -11,6 +11,7 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -26,39 +27,32 @@ const (
 	fio = "fio-throttle-io"
 )
 
-// Volume mount options and create options tests
+// Volume mount options test
 var _ = Describe("{Volumemount}", func() {
 	var contexts []*scheduler.Context
-	It("creating volume", func() {
-		//var err error
+	var mountoption = "nosuid"
+	It("Has to inspect FA/DA volumes and validate mountoption", func() {
 		contexts = make([]*scheduler.Context, 0)
 		contexts = ScheduleApplications(fmt.Sprintf("mount"))
 		ValidateApplications(contexts)
 		for _, ctx := range contexts {
-			//ValidateMount(ctx)
-			Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-				vols, err := Inst().S.GetVolumes(ctx)
+			vols, err := Inst().S.GetVolumes(ctx)
 
+			if err != nil {
+				log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+			}
+			log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
+
+			for _, v := range vols {
+				attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
 				if err != nil {
-					log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
-					//ProcessError(err, errChan...)
+					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
 				}
-				log.Infof("vols0 of ayush is %s", vols)
-
-				for _, v := range vols {
-					//stepLog = fmt.Sprintf("get node for ayu app %s's volume: %v", ctx.App.Key, v)
-					//var vols2 *volume.Volume = mount4-pvc
-					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
-					log.Infof("attachedNode is %s", attachedNode)
-					fmt.Println("volume of attachednode is", v)
-					if err != nil {
-						log.Errorf("Failed to get app %s's attachednode", ctx.App.Key)
-						//processError(err, errChan...)
-					}
-					Inst().V.ValidateMountOptions(v.ID, attachedNode)
-				}
-			})
-
+				Step("validating nosuid option", func() {
+					err = Inst().V.ValidateMountOptions(v.ID, mountoption, attachedNode)
+					Expect(err).To(BeNil(), "Failed to validate nosuid")
+				})
+			}
 		}
 
 		Step("destroy apps", func() {

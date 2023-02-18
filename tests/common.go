@@ -361,7 +361,6 @@ var pre_rule_uid string
 
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
-	log.Infof("Inside init of common")
 	var err error
 	var token string
 
@@ -470,7 +469,6 @@ func updateChannel(err error, errChan ...*chan error) {
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
-	log.Infof("Inside validatecontext of common ctx-", ctx)
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -1426,7 +1424,6 @@ func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
 
 // ScheduleApplications schedules but does not wait for applications
 func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.Context {
-	log.Infof("Inside scheduleapplication of common")
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -1439,7 +1436,6 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
 		}
-		log.Infof("Applist- ", Inst().AppList)
 		//if not hyper converged set up deploy apps only on storageless nodes
 		if !Inst().IsHyperConverged {
 			log.Infof("Scheduling apps only on storageless nodes")
@@ -1469,7 +1465,6 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			log.Infof("Scheduling Apps with hyper-converged")
 		}
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		log.Infof("TAsksname -", taskName)
 		contexts, err = Inst().S.Schedule(taskName, options)
 		// Need to check err != nil before calling processError
 		if err != nil {
@@ -1512,7 +1507,6 @@ func ScheduleAppsInTopologyEnabledCluster(
 
 // ValidateApplicationsPurePxctl validates applications
 func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
-	log.Infof("Inside validateapplication of common")
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
 			ValidateContextForPureVolumesPXCTL(ctx)
@@ -5015,8 +5009,6 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
-	log.Infof("Inside create volume")
-	fmt.Println("ayush volume")
 	createdVolIDs := make(map[string]string)
 	defer wg.Done()
 	for count > 0 {
@@ -5044,7 +5036,6 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		if err == nil {
 			volId = fmt.Sprintf("%v", out)
 			log.Infof("Volume %s created", volId)
-			log.Infof("Creating ayush volume")
 			t := func() (interface{}, bool, error) {
 				out, err := Inst().V.AttachVolume(volId)
 				return out, true, err

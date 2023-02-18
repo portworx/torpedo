@@ -814,7 +814,7 @@ func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string)
 }
 
 // ValidateMountOptions for pure volumes
-func (d *DefaultDriver) ValidateMountOptions(volumeName string, volumeNode *node.Node) error {
+func (d *DefaultDriver) ValidateMountOptions(volumeName string, mountoption string, volumeNode *node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateMountOptions",
