@@ -177,6 +177,7 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.organizationManager = api.NewOrganizationClient(conn)
 	p.licenseManager = api.NewLicenseClient(conn)
 	p.ruleManager = api.NewRulesClient(conn)
+	p.versionManager = api.NewVersionClient(conn)
 
 	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
