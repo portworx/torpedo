@@ -3733,10 +3733,10 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 
 var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 	/*
-			1. Trigger pool expansion using add-disk
-			2. Place node in maintenance mode once expansion starts
-			3. Exit maintenance mode
-		    4. Validate pool expansion
+		1. Trigger pool expansion using add-disk
+		2. Place node in maintenance mode once expansion starts
+		3. Exit maintenance mode
+		4. Validate pool expansion
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDiskMaintenanceMode", "pool expansion using add-disk then put node is in maintenance mode", nil, 0)
@@ -4384,7 +4384,7 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 	/*
 		step1: create volume repl=2, and get its pool P1 on n1 and p2 on n2, expand p2 by increasing P1's size
 		step2: feed p1 size GB I/O on the volume
-		step3: After I/O done p1 should be go offline and full, expand the pool p1 when p1 is rebalancing add a new drive with different size so that a new pool would be created
+		step3: After I/O done p1 should be offline and full, expand the pool p1 when p1 is rebalancing add a new drive with different size so that a new pool would be created
 		step4: validate the pool and the data
 	*/
 	var testrailID = 51443
@@ -4430,8 +4430,13 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 			log.FailOnError(err, fmt.Sprintf("Error waiting for poor %s resize", secondNodePool.Uuid))
 		}
 
-		defer Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
-		defer Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+		defer func() {
+			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", secondReplNode.Name)
+		}()
+
 		err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
 		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
 		err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
@@ -4589,7 +4594,7 @@ func adjustReplPools(firstNode, replNode node.Node, isjournal bool) error {
 var _ = Describe("{StorageFullPoolResize}", func() {
 
 	//step1: feed p1 size GB I/O on the volume
-	//step2: After I/O done p1 should be go offline and full, expand the pool p1 using resize-disk
+	//step2: After I/O done p1 should be offline and full, expand the pool p1 using resize-disk
 	//step4: validate the pool and the data
 
 	var testrailID = 51280
@@ -4618,8 +4623,12 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 			}
 		}
 
-		defer Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
-		defer Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+		defer func() {
+			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", secondReplNode.Name)
+		}()
 		err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
 		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
 		err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
@@ -4697,7 +4706,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 var _ = Describe("{StorageFullPoolAddDisk}", func() {
 
 	//step1: feed p1 size GB I/O on the volume
-	//step2: After I/O done p1 should be go offline and full, expand the pool p1 using add-disk
+	//step2: After I/O done p1 should be offline and full, expand the pool p1 using add-disk
 	//step4: validate the pool and the data
 
 	var testrailID = 50631
@@ -4725,8 +4734,12 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 			}
 		}
 
-		defer Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
-		defer Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+		defer func() {
+			err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			err = Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", secondReplNode.Name)
+		}()
 		err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
 		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
 		err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
@@ -5027,11 +5040,10 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 	})
 
 	var contexts []*scheduler.Context
-	var totalSnapshotsPerVol int = 60
+	totalSnapshotsPerVol := 60
 
 	snapshotList := make(map[string][]string)
 	var selectedNode node.Node
-	var pickNode string
 
 	// Try pool resize when ot of snapshots are created on the volume
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
@@ -5089,8 +5101,16 @@ var _ = Describe("{CreateSnapshotsPoolResize}", func() {
 				break
 			}
 		}
-		dash.VerifyFatal(selectedVol != nil, true, fmt.Sprintf("Identify volume for snapshots on the node", stNode.Name))
+		dash.VerifyFatal(selectedVol != nil, true, fmt.Sprintf("Identify volume for snapshots on the node [%v]", stNode.Name))
 
+		for snap := 0; snap < totalSnapshotsPerVol; snap++ {
+			uuidCreated := uuid.New()
+			snapshotName := fmt.Sprintf("snapshot_%s_%s", selectedVol.ID, uuidCreated.String())
+			snapshotResponse, err := Inst().V.CreateSnapshot(selectedVol.ID, snapshotName)
+			log.FailOnError(err, "error identifying volume [%s]", selectedVol.ID)
+			snapshotList[selectedVol.ID] = append(snapshotList[selectedVol.ID], snapshotName)
+			log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+		}
 		stepLog = fmt.Sprintf("Expanding pool on node [%s] and pool UUID: [%s] using auto", selectedNode.Name, selectedPool.Uuid)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -5163,7 +5183,7 @@ func WaitTillVolumeInResync(vol string) bool {
 
 var _ = Describe("{PoolResizeVolumesResync}", func() {
 	/*
-		Try pool resize when lot of volumes are in resync state
+		Try pool resize when a lot of volumes are in resync state
 	*/
 	var testrailID = 51301
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/51301
@@ -5175,7 +5195,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 	})
 
 	var contexts []*scheduler.Context
-	var vol_ids []string
+	var volIds []string
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 	It(stepLog, func() {
@@ -5196,12 +5216,12 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			// Appending all the volume IDs to array so that one random volume can be picked for resizeing
 			for _, vol := range Volumes {
-				vol_ids = append(vol_ids, vol.ID)
+				volIds = append(volIds, vol.ID)
 			}
 
 			// Select Random Volumes for pool Expand
-			randomIndex := rand.Intn(len(vol_ids))
-			randomVolIDs := vol_ids[randomIndex]
+			randomIndex := rand.Intn(len(volIds))
+			randomVolIDs := volIds[randomIndex]
 
 			// From each volume pick the random pool and restart pxdriver
 			poolUUIDs, err := GetPoolIDsFromVolName(randomVolIDs)
@@ -6223,7 +6243,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		compileText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*operation is not supported"
 		re := regexp.MustCompile(compileText)
 		if re.MatchString(fmt.Sprintf("%v", err)) == false {
-			err = fmt.Errorf("Failed to verify failure string on invalid Pool UUID")
+			err = fmt.Errorf("failed to verify failure string on invalid Pool UUID")
 		}
 
 		// invalidPoolID is total Pools present on the node + 1
@@ -6331,7 +6351,7 @@ var _ = Describe("{PoolResizeInvalidPoolID}", func() {
 			errMatch = nil
 			re := regexp.MustCompile(fmt.Sprintf(".*failed to find storage pool with UID.*%s.*", invalidPoolUUID))
 			if re.MatchString(fmt.Sprintf("%v", err)) == false {
-				errMatch = fmt.Errorf("Failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
+				errMatch = fmt.Errorf("failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
 			}
 			dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID completed?")
 
