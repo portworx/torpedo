@@ -59,6 +59,7 @@ type portworx struct {
 	licenseManager         api.LicenseClient
 	healthManager          api.HealthClient
 	ruleManager            api.RulesClient
+	versionManager         api.VersionClient
 
 	schedulerDriver scheduler.Driver
 	nodeDriver      node.Driver
@@ -1078,6 +1079,10 @@ func (p *portworx) DeleteRule(ctx context.Context, req *api.RuleDeleteRequest) (
 
 func (p *portworx) UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error) {
 	return p.ruleManager.UpdateOwnership(ctx, req)
+}
+
+func (p *portworx) GetPxBackupVersion(ctx context.Context, req *api.VersionGetRequest) (*api.VersionGetResponse, error) {
+	return p.versionManager.Get(ctx, req)
 }
 
 func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error) {

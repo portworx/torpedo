@@ -7407,3 +7407,39 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		DeleteCloudAccounts(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
 	})
 })
+
+var _ = Describe("{DummyTest}", func() {
+	JustBeforeEach(func() {
+		log.Infof("Just before each")
+	})
+	It("Dummy Test Verification", func() {
+		log.Infof("In It block")
+		By("Check the status of backup pods", func() {
+			//ctx, err := backup.GetAdminCtxFromSecret()
+			//log.FailOnError(err, "Fetching px-central-admin ctx")
+			////t := Inst().Dash.TestSet
+			//log.Infof("Version get request - %s", (&api.VersionGetRequest{}).String())
+			//log.Infof("Backup - %s", Inst().Backup.String())
+			//versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
+			//log.FailOnError(err, "Getting Px-Backup version")
+			//log.Infof("Version response - %s", versionResponse.String())
+
+			log.Infof("In Step")
+
+			log.Infof("Infof In Describe %s %d", "1234", 1234)
+			log.Info("Info In Describe")
+			log.Debugf("Debugf In Describe %s %d", "1234", 1234)
+			log.Debug("Debug In Describe")
+			log.Errorf("Errorf In Describe %s %d", "1234", 1234)
+			log.Error("Error In Describe")
+			log.Warnf("Warnf In Describe %s %d", "1234", 1234)
+			log.Warn("Warn In Describe")
+			log.Fatalf("Fatalf In Describe %s %d", "1234", 1234)
+			log.FailOnError(fmt.Errorf("FailOnError In Describe %s %d", "1234", 1234), "Fail on error desc")
+
+		})
+	})
+	JustAfterEach(func() {
+		log.Infof("In Just after each")
+	})
+})
