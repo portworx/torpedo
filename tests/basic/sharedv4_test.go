@@ -1,6 +1,5 @@
 package tests
 
-/*
 import (
 	"fmt"
 	"regexp"
@@ -232,4 +231,3 @@ func setPathToROMode(path string, node *node.Node) {
 
 	Expect(err).NotTo(HaveOccurred())
 }
-*/
