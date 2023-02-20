@@ -39,7 +39,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 # Build a fresh container with just the binaries
 FROM alpine
 
-RUN apk add --no-cache bash ca-certificates curl jq libc6-compat
+RUN apk add --no-cache bash ca-certificates make curl jq libc6-compat
 
 # Install kubectl from Docker Hub.
 COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl
