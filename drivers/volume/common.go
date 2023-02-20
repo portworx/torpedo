@@ -557,7 +557,7 @@ func (d *DefaultDriver) UpgradeStork(endpointVersion string) error {
 }
 
 // GetClusterPairingInfo returns cluster pair information
-func (d *DefaultDriver) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBService bool) (map[string]string, error) {
+func (d *DefaultDriver) GetClusterPairingInfo(kubeConfigPath, token string, isPxLBService, reversePair bool) (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	return pairInfo, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -1027,5 +1027,21 @@ func (d *DefaultDriver) IsNodeOutOfMaintenance(n node.Node) (bool, error) {
 	return true, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "IsNodeOutOfMaintenance()",
+	}
+}
+
+// GetAlertsUsingResourceTypeByTime returns all the alerts by resource type filtered by time
+func (d *DefaultDriver) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceType, startTime time.Time, endTime time.Time) (*api.SdkAlertsEnumerateWithFiltersResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAlertsUsingResourceTypeByTime()",
+	}
+}
+
+// GetAlertsUsingResourceTypeBySeverity returns all the alerts by resource type filtered by severity
+func (d *DefaultDriver) GetAlertsUsingResourceTypeBySeverity(resourceType api.ResourceType, severity api.SeverityType) (*api.SdkAlertsEnumerateWithFiltersResponse, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAlertsUsingResourceTypeBySeverity()",
 	}
 }

@@ -241,7 +241,7 @@ type Driver interface {
 	GetAggregationLevel(vol *Volume) (int64, error)
 
 	// GetClusterPairingInfo returns cluster pairing information from remote cluster
-	GetClusterPairingInfo(kubeConfigPath, token string, isPxLBService bool) (map[string]string, error)
+	GetClusterPairingInfo(kubeConfigPath, token string, isPxLBService, reversePair bool) (map[string]string, error)
 
 	// DecommissionNode decommissions the given node from the cluster
 	DecommissionNode(n *node.Node) error
@@ -411,6 +411,12 @@ type Driver interface {
 
 	// IsNodeOutOfMaintenance returns true if Node in out of Maintenance
 	IsNodeOutOfMaintenance(n node.Node) (bool, error)
+
+	// GetAlertsUsingResourceTypeByTime returns all the alerts by resource type filtered by time
+	GetAlertsUsingResourceTypeByTime(resourceType api.ResourceType, startTime time.Time, endTime time.Time) (*api.SdkAlertsEnumerateWithFiltersResponse, error)
+
+	// GetAlertsUsingResourceTypeBySeverity returns all the alerts by resource type filtered by severity
+	GetAlertsUsingResourceTypeBySeverity(resourceType api.ResourceType, severity api.SeverityType) (*api.SdkAlertsEnumerateWithFiltersResponse, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
