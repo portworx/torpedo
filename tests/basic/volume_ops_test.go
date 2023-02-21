@@ -29,8 +29,8 @@ const (
 // Volume mount options test
 var _ = Describe("{Volumemount}", func() {
 	var contexts []*scheduler.Context
-	var mountoption = "nosuid"
-	It("Has to inspect FA/DA volumes and validate mountoption", func() {
+	var mountoption = []string{"nosuid"}
+	It("Has to inspect FA/FB  DA volumes and validate mountoptions", func() {
 		contexts = make([]*scheduler.Context, 0)
 		contexts = ScheduleApplications(fmt.Sprintf("mount"))
 		ValidateApplications(contexts)
@@ -47,9 +47,9 @@ var _ = Describe("{Volumemount}", func() {
 				if err != nil {
 					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
 				}
-				Step("validating nosuid option", func() {
+				Step("validating mount options", func() {
 					err = Inst().V.ValidateMountOptions(v.ID, mountoption, attachedNode)
-					Expect(err).To(BeNil(), "Failed to validate nosuid")
+					Expect(err).To(BeNil(), "Failed to validate mount options")
 				})
 			}
 		}
