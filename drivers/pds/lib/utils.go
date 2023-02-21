@@ -1127,66 +1127,10 @@ func RegisterToControlPlane(controlPlaneUrl, tenantId, clusterType string) error
 	ctx := GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
 	target := tc.NewTargetCluster(ctx)
 	err = target.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantID, clusterType)
-
-	// var cmd string
-	// apiEndpoint := fmt.Sprintf(controlPlaneUrl + "api")
-	// log.Infof("Verify if the namespace %s already exits.", pdsSystemNamespace)
-	// isRegistered := false
-	// ns, err = k8sCore.GetNamespace(pdsSystemNamespace)
-	// if err != nil {
-	// 	log.Infof("Namespace %v doesnt exist ", pdsSystemNamespace)
-	// } else {
-	// 	pods, err := GetPods(pdsSystemNamespace)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	if len(pods.Items) > 0 {
-	// 		log.Warnf("Target cluster is already registered to control plane.")
-	// 		cmd = "helm list -A "
-	// 		if !isLatestHelm() {
-	// 			log.Infof("Upgrading PDS helm chart from to %v", helmChartversion)
-
-	// 			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
-	// 				"--set bearerToken=%s --set apiEndpoint=%s", pdsSystemNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
-	// 		}
-	// 		isRegistered = true
-	// 	}
-	// }
-	// if !isRegistered {
-	// 	log.Infof("Installing PDS ( helm version -  %v)", helmChartversion)
-	// 	if strings.EqualFold(clusterType, "ocp") {
-	// 		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set platform=ocp --set tenantId=%s "+
-	// 			"--set bearerToken=%s --set apiEndpoint=%s", pdsSystemNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
-	// 	} else {
-	// 		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
-	// 			"--set bearerToken=%s --set apiEndpoint=%s", pdsSystemNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
-	// 	}
-	// 	log.Infof("helm command %v ", cmd)
-	// }
-	// output, _, err := ExecShell(cmd)
-	// if err != nil {
-	// 	log.Warn("Kindly remove the PDS chart properly and retry. CMD>> helm uninstall  pds --namespace pds-system --kubeconfig $KUBECONFIG")
-	// 	log.Error(err)
-	// 	return err
-	// }
-	// log.Infof("Terminal output -> %v", output)
-
-	// log.Infof("Verify the health of all the pods in %s namespace", pdsSystemNamespace)
-	// err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
-	// 	pods, err := GetPods(pdsSystemNamespace)
-	// 	if err != nil {
-	// 		return false, nil
-	// 	}
-	// 	log.Infof("There are %d pods present in the namespace %s", len(pods.Items), pdsSystemNamespace)
-	// 	for _, pod := range pods.Items {
-	// 		err = k8sCore.ValidatePod(&pod, 10*time.Second, 5*time.Second)
-	// 		if err != nil {
-	// 			return false, nil
-	// 		}
-	// 	}
-	// 	return true, nil
-	// })
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func GetDataServiceID(ds string) string {

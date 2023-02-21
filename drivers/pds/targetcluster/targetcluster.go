@@ -130,34 +130,6 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 		return true, nil
 	})
 
-	// log.Info("Test control plane url connectivity.")
-	// _, err := isReachbale(controlPlaneURL)
-	// if err != nil {
-	// 	return fmt.Errorf("unable to reach the control plane with following error - %v", err)
-	// }
-	// var cmd string
-	// apiEndpoint := fmt.Sprintf(controlPlaneURL + "/api")
-	// log.Infof("Installing PDS ( helm version -  %v)", helmChartversion)
-	// if strings.EqualFold(clusterType, "ocp") {
-	// 	cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set platform=ocp --set tenantId=%s "+
-	// 		"--set bearerToken=%s --set apiEndpoint=%s --kubeconfig %s", PDSNamespace, helmChartversion, tenantID, bearerToken, apiEndpoint, targetCluster.kubeconfig)
-	// } else {
-	// 	cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
-	// 		"--set bearerToken=%s --set apiEndpoint=%s --kubeconfig %s", PDSNamespace, helmChartversion, tenantID, bearerToken, apiEndpoint, targetCluster.kubeconfig)
-	// }
-	// log.Info(cmd)
-	// output, _, err := osutils.ExecShell(cmd)
-	// if err != nil {
-	// 	log.Info("Kindly remove the PDS chart properly and retry if that helps. CMD>> helm uninstall  pds --namespace pds-system --kubeconfig $KUBECONFIG")
-	// 	return err
-	// }
-	// log.Infof("Terminal output -> %v", output)
-
-	// log.Info("Sleep for two minute.")
-	// time.Sleep(time.Minute * 2)
-	// err = targetCluster.ValidatePDSComponents()
-	// return err
-
 	return err
 
 }

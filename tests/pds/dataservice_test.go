@@ -24,88 +24,88 @@ const (
 	defaultRebootTimeRange       = 5 * time.Minute
 )
 
-// var _ = Describe("{RegisterTargetClusterToPDS}", func() {
-// 	JustBeforeEach(func() {
-// 		dash.TestCaseBegin("RegisterTargetClusterToPDS", "Register target cluster to the PDS Control Plane", "", nil)
-// 	})
+var _ = Describe("{RegisterTargetClusterToPDS}", func() {
+	JustBeforeEach(func() {
+		dash.TestCaseBegin("RegisterTargetClusterToPDS", "Register target cluster to the PDS Control Plane", "", nil)
+	})
 
-// 	It("register target cluster to the PDS Control Plane", func() {
-// 		Step("Register Target Cluster", func() {
-// 			log.Info("Regsitering target cluster to control plane")
+	It("register target cluster to the PDS Control Plane", func() {
+		Step("Register Target Cluster", func() {
+			log.Info("Regsitering target cluster to control plane")
 
-// 			err = pdslib.RegisterToControlPlane(params.InfraToTest.ControlPlaneURL, tenantID, params.InfraToTest.ClusterType)
-// 			Expect(err).ShouldNot(HaveOccurred())
-// 			dash.Info("Target Cluster registeration check is completed")
-// 		})
-// 		Step("Deploy Data Services", func() {
-// 			for _, ds := range params.DataServiceToTest {
-// 				dash.Infof("Deploying DataService %v ", ds.Name)
-// 				isDeploymentsDeleted = false
-// 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-// 				Expect(err).NotTo(HaveOccurred())
+			err = pdslib.RegisterToControlPlane(params.InfraToTest.ControlPlaneURL, tenantID, params.InfraToTest.ClusterType)
+			Expect(err).ShouldNot(HaveOccurred())
+			dash.Info("Target Cluster registeration check is completed")
+		})
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				dash.Infof("Deploying DataService %v ", ds.Name)
+				//isDeploymentsDeleted = false
+				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+				Expect(err).NotTo(HaveOccurred())
 
-// 				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.Infof("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
-// 				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-// 				Expect(err).NotTo(HaveOccurred())
-// 				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
+				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dataServiceDefaultAppConfigID).NotTo(BeEmpty())
 
-// 				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				log.Infof(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
-// 				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
-// 					deploymentTargetID,
-// 					dnsZone,
-// 					deploymentName,
-// 					namespaceID,
-// 					dataServiceDefaultAppConfigID,
-// 					int32(ds.Replicas),
-// 					serviceType,
-// 					dataServiceDefaultResourceTemplateID,
-// 					storageTemplateID,
-// 					ds.Version,
-// 					ds.Image,
-// 					namespace,
-// 				)
-// 				Expect(err).NotTo(HaveOccurred())
+				deployment, _, _, err := pdslib.DeployDataServices(ds.Name, projectID,
+					deploymentTargetID,
+					dnsZone,
+					deploymentName,
+					namespaceID,
+					dataServiceDefaultAppConfigID,
+					int32(ds.Replicas),
+					serviceType,
+					dataServiceDefaultResourceTemplateID,
+					storageTemplateID,
+					ds.Version,
+					ds.Image,
+					namespace,
+				)
+				Expect(err).NotTo(HaveOccurred())
 
-// 				defer func() {
-// 					Step("Delete created deployments")
-// 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-// 					Expect(err).NotTo(HaveOccurred())
-// 					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
-// 				}()
+				defer func() {
+					Step("Delete created deployments")
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					Expect(err).NotTo(HaveOccurred())
+					Expect(resp.StatusCode).Should(BeEquivalentTo(http.StatusAccepted))
+				}()
 
-// 				Step("Validate Storage Configurations", func() {
-// 					log.Infof("data service deployed %v ", ds.Name)
-// 					dash.Infof("Validating DataService %v ", ds.Name)
-// 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-// 					Expect(err).NotTo(HaveOccurred())
-// 					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-// 					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-// 					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-// 					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-// 					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-// 					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-// 					log.Infof("volume group %v ", storageOp.VolumeGroup)
+				Step("Validate Storage Configurations", func() {
+					log.Infof("data service deployed %v ", ds.Name)
+					dash.Infof("Validating DataService %v ", ds.Name)
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					Expect(err).NotTo(HaveOccurred())
+					log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
+					log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
+					log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
+					log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
+					log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
+					log.Infof("No of nodes requested %v ", config.Spec.Nodes)
+					log.Infof("volume group %v ", storageOp.VolumeGroup)
 
-// 					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-// 					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-// 					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-// 					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-// 					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-// 					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-// 					Expect(err).NotTo(HaveOccurred())
-// 					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-// 					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-// 					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
-// 				})
-// 			}
-// 		})
-// 	})
-// 	JustAfterEach(func() {
-// 		defer EndTorpedoTest()
-// 	})
-// })
+					Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
+					Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
+					Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
+					Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
+					Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
+					repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(storageOp.Replicas).Should(Equal(int32(repl)))
+					Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
+					Expect(config.Spec.Nodes).Should(Equal(int32(ds.Replicas)))
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
 
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
