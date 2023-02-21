@@ -68,6 +68,8 @@ import (
 
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
+	"github.com/portworx/torpedo/drivers/node/ssh"
+
 	// import backup driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
@@ -2056,6 +2058,12 @@ func SetClusterContext(clusterConfigPath string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
 	}
+
+	err = ssh.RefreshDriver(Inst().N.(*ssh.SSH))
+	if err != nil {
+		return fmt.Errorf("Failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+	}
+
 	return nil
 }
 
