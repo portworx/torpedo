@@ -384,6 +384,14 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
+
+	// namespace of portworx in switched context mmight've changed
+	namespace, err := d.GetVolumeDriverNamespace()
+	if err != nil {
+		return err
+	}
+	d.namespace = namespace
+
 	// Force update px endpoints
 	d.refreshEndpoint = true
 	storageNodes, err := d.getStorageNodesOnStart()
