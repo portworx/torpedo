@@ -4638,6 +4638,7 @@ func WaitForExpansionToStart(poolID string) error {
 				log.InfoD("Pool %s expansion started", poolID)
 				return nil, false, nil
 			}
+
 		}
 		return nil, true, fmt.Errorf("pool %s resize not triggered ", poolID)
 	}
@@ -4827,7 +4828,7 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 			}
 		}
 	} else {
-		//A  new pool might be created due to add drive,hence 2 min wait for pool to associate with node
+		//A new pool might be created due to add drive,hence 2 min wait for pool to associate with node
 		time.Sleep(2 * time.Minute)
 		err = Inst().V.RefreshDriverEndpoints()
 		log.FailOnError(err, "error refreshing end points")

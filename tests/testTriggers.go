@@ -3873,7 +3873,7 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 				}
 				stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
 				if err != nil {
-					return nil, true, fmt.Errorf("error getting node with pool uuid [%s]  err %v", poolToBeResized.Uuid, err)
+					return nil, true, fmt.Errorf("error getting node with pool uuid [%s]. err %v", poolToBeResized.Uuid, err)
 				}
 				var poolID int32
 				for _, p := range stNode.StoragePools {
@@ -3922,7 +3922,7 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 		newPoolSize := expandedPool.TotalSize / units.GiB
 		stNode, err := GetNodeWithGivenPoolID(expandedPool.Uuid)
 		if err != nil {
-			return nil, true, fmt.Errorf("error getting node with pool uuid [%s]  err %v", expandedPool.Uuid, err)
+			return nil, true, fmt.Errorf("error getting node with pool uuid [%s]. err %v", expandedPool.Uuid, err)
 		}
 		var poolID int32
 		for _, p := range stNode.StoragePools {

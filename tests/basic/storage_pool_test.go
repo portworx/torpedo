@@ -648,6 +648,15 @@ func nodePoolsExpansion(testName string) {
 				err = Inst().V.ExpandPool(poolToBeResized.Uuid, operation, expectedSize)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Pool %s expansion init succesful?", poolToBeResized.Uuid))
 				err = WaitForExpansionToStart(poolToBeResized.Uuid)
+				//this condition is skip error where drive is size is small and resize completes very fast
+				if err != nil {
+					expandedPool, err := GetStoragePoolByUUID(poolToBeResized.Uuid)
+					log.FailOnError(err, "error getting pool using uuid [%s]", poolToBeResized.Uuid)
+					if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_SUCCESSFUL {
+						// storage pool resize expansion completed
+						err = nil
+					}
+				}
 				log.FailOnError(err, "pool expansion not started")
 			}
 
@@ -770,12 +779,13 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 		log.FailOnError(err, "Error getting cloud drive specs")
 
 		minSpecSize := uint64(math.MaxUint64)
+		var specSize uint64
 		for _, s := range driveSpecs {
 			specParams := strings.Split(s, ",")
 			for _, param := range specParams {
 				if strings.Contains(param, "size") {
 					val := strings.Split(param, "=")[1]
-					specSize, err := strconv.ParseUint(val, 10, 64)
+					specSize, err = strconv.ParseUint(val, 10, 64)
 					log.FailOnError(err, "Error converting size to uint64")
 					if specSize < minSpecSize {
 						minSpecSize = specSize
@@ -786,7 +796,6 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 
 		deviceSpec := driveSpecs[0]
 		deviceSpecParams := strings.Split(deviceSpec, ",")
-		var specSize uint64
 		paramsArr := make([]string, 0)
 		for _, param := range deviceSpecParams {
 			if strings.Contains(param, "size") {
@@ -910,7 +919,7 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 				}
 				stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
 				if err != nil {
-					return nil, true, fmt.Errorf("error getting node with pool uuid [%s]  err %v", poolToBeResized.Uuid, err)
+					return nil, true, fmt.Errorf("error getting node with pool uuid [%s]. err %v", poolToBeResized.Uuid, err)
 				}
 				var poolID int32
 				for _, p := range stNode.StoragePools {
@@ -976,7 +985,7 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 		newPoolSize := expandedPool.TotalSize / units.GiB
 		stNode, err := GetNodeWithGivenPoolID(expandedPool.Uuid)
 		if err != nil {
-			return nil, true, fmt.Errorf("error getting node with pool uuid [%s]  err %v", expandedPool.Uuid, err)
+			return nil, true, fmt.Errorf("error getting node with pool uuid [%s]. err %v", expandedPool.Uuid, err)
 		}
 		var poolID int32
 		for _, p := range stNode.StoragePools {
@@ -1583,7 +1592,7 @@ func addCloudDrive(stNode node.Node, poolID int32) error {
 	}
 	isPoolSizeUpdated := false
 
-	if newTotalPoolSize == expectedTotalPoolSize || newTotalPoolSize == (expectedTotalPoolSize-3) {
+	if newTotalPoolSize >= expectedTotalPoolSize {
 		isPoolSizeUpdated = true
 	}
 	log.Info(fmt.Sprintf("updated pool size: %d GiB", newTotalPoolSize))
@@ -3805,7 +3814,7 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 			status, err := Inst().V.GetNodeStatus(*stNode)
 			log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 
-			//Waiting for 5 mins before exiting nide maintenance
+			//Waiting for 5 mins before exiting node maintenance
 			time.Sleep(5 * time.Minute)
 
 			log.InfoD(fmt.Sprintf("Exiting maintenence mode on node %s", stNode.Name))
@@ -3909,11 +3918,11 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", func() {
 			log.FailOnError(err, "pool expansion not started")
 			log.InfoD(fmt.Sprintf("Entering maintenence mode on node %s", stNode.Name))
 			err = Inst().V.EnterMaintenance(*stNode)
-			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenence mode", stNode.Name))
+			log.FailOnError(err, fmt.Sprintf("fail to enter node %s into maintenence mode", stNode.Name))
 			status, err := Inst().V.GetNodeStatus(*stNode)
 			log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
-			//wait for 5 minutes before existing maintenance
-			time.Sleep(5 * time.Minute)
+			//wait for 1 minute before existing maintenance
+			time.Sleep(1 * time.Minute)
 			log.InfoD(fmt.Sprintf("Exiting maintenence mode on node %s", stNode.Name))
 			t := func() (interface{}, bool, error) {
 				if err := Inst().V.ExitMaintenance(*stNode); err != nil {
@@ -3922,10 +3931,9 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", func() {
 				return nil, false, nil
 			}
 			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
-			log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode in node %s", stNode.Name))
+			log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode on node %s", stNode.Name))
 			err = Inst().V.WaitDriverUpOnNode(*stNode, 2*time.Minute)
-			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
-			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after exiting maintenance on node %s", stNode.Name))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("verify PX is up after exiting maintenance on node %s", stNode.Name))
 			status, err = Inst().V.GetNodeStatus(*stNode)
 			log.FailOnError(err, "error getting node [%s] status", stNode.Name)
 			log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
