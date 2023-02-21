@@ -418,93 +418,330 @@ var _ = Describe("{Dummy}", func() {
 
 var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 	var (
-		clusterStatus api.ClusterInfo_StatusInfo_Status
+		appList                          = Inst().AppList
+		backupName                       string
+		contexts                         []*scheduler.Context
+		preRuleNameList                  []string
+		postRuleNameList                 []string
+		appContexts                      []*scheduler.Context
+		bkpNamespaces                    []string
+		clusterUid                       string
+		clusterStatus                    api.ClusterInfo_StatusInfo_Status
+		cloudCredName                    string
+		cloudCredUID                     string
+		backupLocationUID                string
+		bkpLocationName                  string
 		srcMaj, srcMin, destMaj, destMin int64
 	)
 
+	backupLocationMap := make(map[string]string)
+	labelSelectors := make(map[string]string)
+	bkpNamespaces = make([]string, 0)
+	providers := getProviders()
 
 	JustBeforeEach(func() {
+
 		StartTorpedoTest("BkpRstrDiffK8sVerSimultaneousDiffNS", "Backup on NS(=yy), K8-version(=x) ;; Restore on NS=yy, K8s-version=x+?(=z) [success]; Simultaneously, Restore on K8s-version=z, NS=abc [partial success]", nil, 0)
+
+		log.InfoD("Verifying if the pre/post rules for the required apps are present in the AppParameters or not ")
+		for i := 0; i < len(appList); i++ {
+			if Contains(postRuleApp, appList[i]) {
+				if _, ok := portworx.AppParameters[appList[i]]["post"]; ok {
+					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
+				}
+			}
+			if Contains(preRuleApp, appList[i]) {
+				if _, ok := portworx.AppParameters[appList[i]]["pre"]; ok {
+					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
+				}
+			}
+		}
 
 	})
 
 	It("Backup on NS(=yy), K8-version(=x) ;; Restore on NS=yy, K8s-version=x+?(=z) [success]; Simultaneously, Restore on K8s-version=z, NS=abc [partial success]", func() {
 
 		Step("Verify K8s version of Src and Dest Cluster", func() {
+			log.InfoD("Verify K8s version of Src and Dest Cluster")
 
-		Step("Register cluster for backup", func() {
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			CreateSourceAndDestClusters(orgID, "", "", ctx)
-			clusterStatus, _ = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+			Step("Register cluster for backup", func() {
+				log.InfoD("Register cluster for backup")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+				clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+			})
+
+			Step("Switch Context (\"Source\")", func() {
+				sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+				Expect(err).NotTo(HaveOccurred(),
+					fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
+
+				err = Inst().S.SetConfig(sourceClusterConfigPath)
+				log.FailOnError(err, "Failed to switch to context to source cluster [%v]", sourceClusterConfigPath)
+
+				srcMaj, srcMin, err = k8s.ClusterVersion()
+				log.FailOnError(err, "Failed to get Source Cluster Version")
+			})
+
+			Step("Switch Context (\"destination\")", func() {
+				destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
+				Expect(err).NotTo(HaveOccurred(),
+					fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+
+				err = Inst().S.SetConfig(destinationClusterConfigPath)
+				log.FailOnError(err, "Failed to switch to context to destination cluster [%v]", destinationClusterConfigPath)
+
+				destMaj, destMin, err = k8s.ClusterVersion()
+				log.FailOnError(err, "Failed to get Destination Cluster Version")
+			})
+
+			Step("Compare Source and Destination cluster version numbers", func() {
+
+				if srcMaj != 0 && destMaj != 0 {
+
+					log.InfoD("Source Cluster version: %d.%d ; Destination Cluster version: %d.%d",
+						srcMaj, srcMin, destMaj, destMin)
+
+					const multiple = 100
+					isValid := (destMaj*multiple + destMin) >= (srcMaj*multiple + srcMin)
+
+					dash.VerifyFatal(isValid, true,
+						"This test is only meant for cases where the Source Cluster version is LESSER than the Destination Cluster version.")
+
+				} else {
+					err := fmt.Errorf("Cannot compare Source and Destination CLuster versions due to invalid data in Source Cluster version (%d.%d), Destination Cluster (%d.%d)", srcMaj, srcMin, destMaj, destMin)
+					log.FailOnError(err, "Failed to validate K8s versions")
+				}
+
+			})
+
+			// Step("SetClusterContext \"\" (setting it back to default)") is not needed
+			// since the next statement (in the next step) is anyway a sontect switch to source
+			// err := SetClusterContext("")
+			// log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+
 		})
 
-		Step("Switch Context (\"Source\")", func() {
+		Step("Deploy the applications on Src cluster", func() {
+			log.InfoD("Deploy the applications on Src cluster")
 
-			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
-			Expect(err).NotTo(HaveOccurred(),
-				fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
+			Step("Deploy applications", func() {
+				log.InfoD("Deploy applications")
 
-			err = Inst().S.SetConfig(sourceClusterConfigPath)
-			log.FailOnError(err, "Failed to switch to context to source cluster [%v]", sourceClusterConfigPath)
+				log.InfoD("Switching to source context")
+				err := SetSourceKubeConfig()
+				log.FailOnError(err, "Failed to switch to context to source cluster")
 
-			srcMaj, srcMin, err = k8s.ClusterVersion()
-			log.FailOnError(err, "Failed to get Source Cluster Version")
+				contexts = make([]*scheduler.Context, 0)
+				for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+					appContexts = ScheduleApplications(taskName)
+					contexts = append(contexts, appContexts...)
+					for _, ctx := range appContexts {
+						ctx.ReadinessTimeout = appReadinessTimeout
+						namespace := GetAppNamespace(ctx, taskName)
+						bkpNamespaces = append(bkpNamespaces, namespace)
+					}
+				}
+			})
+
+			Step("Validate applications", func() {
+				ValidateApplications(contexts)
+
+				log.InfoD("Switching to default context")
+				err := SetClusterContext("")
+				log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+			})
+
 		})
 
-		Step("Switch Context (\"destination\")", func() {
-			destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
-			Expect(err).NotTo(HaveOccurred(),
-				fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+		Step("Creating rules for backup", func() {
+			log.InfoD("Creating pre rule for deployed apps")
+			for i := 0; i < len(appList); i++ {
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+				log.FailOnError(err, "Creating pre rule for deployed apps failed")
+				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
 
-			err = Inst().S.SetConfig(destinationClusterConfigPath)
-			log.FailOnError(err, "Failed to switch to context to destination cluster [%v]", destinationClusterConfigPath)
-
-			destMaj, destMin, err = k8s.ClusterVersion()
-			log.FailOnError(err, "Failed to get Destination Cluster Version")
-		})
-
-		Step("Compare Source and Destination cluster version numbers", func() {
-
-			if srcMaj != 0 && destMaj != 0 {
-
-				log.InfoD("Source Cluster version: %d.%d ; Destination Cluster version: %d.%d",
-					srcMaj, srcMin, destMaj, destMin)
-
-				const multiple = 100
-				isValid := (destMaj*multiple + destMin) >= (srcMaj*multiple + srcMin)
-
-				dash.VerifyFatal(isValid, true,
-					"This test is only meant for cases where the Source Cluster version is LESSER than the Destination Cluster version.")
-
-			} else {
-				err := fmt.Errorf("Cannot compare Source and Destination CLuster versions due to invalid data in Source Cluster version (%d.%d), Destination Cluster (%d.%d)", srcMaj, srcMin, destMaj, destMin)
-				log.FailOnError(err, "Failed to validate K8s versions")
+				if ruleName != "" {
+					preRuleNameList = append(preRuleNameList, ruleName)
+				}
 			}
-
-		})
-
-		Step("SetClusterContext \"\" (setting it back to default)", func() {
-			// Set cluster context to cluster where torpedo is running
-			var maj, min int64
-
-			err := SetClusterContext("")
-			log.FailOnError(err, "Failed to SetClusterContext to default cluster")
-
-			maj, min, err = k8s.ClusterVersion()
-			if err != nil {
-				log.Errorf("Failed to get Default Cluster Version. Err: [%v]", err)
-			} else {
-				log.InfoD("The Px-backup's K8s cluster version is: %d.%d", maj, min)
+			log.InfoD("Creating post rule for deployed apps")
+			for i := 0; i < len(appList); i++ {
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+				log.FailOnError(err, "Creating post rule for deployed apps failed")
+				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
+				if ruleName != "" {
+					postRuleNameList = append(postRuleNameList, ruleName)
+				}
 			}
 		})
 
-	})
+		Step("Creating bucket,backup location and cloud setting", func() {
+			log.InfoD("Creating bucket,backup location and cloud setting")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		// Step("Register cluster for backup" is not needed as it has been executed as psrt of K8s version validation
+
+		Step("Taking backup of application fron source cluster", func() {
+			log.InfoD("Taking backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Getting context")
+			for _, namespace := range bkpNamespaces {
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
+					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+				dash.VerifyFatal(err, nil, "Verifying backup creation")
+			}
+		})
+
+		Step("Restoring the backed up applications on destination cluster", func() {
+			var initialRestoreName string
+			var laterRestoreName string
+
+			log.InfoD("Restoring the backed up applications on destination cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			for _, namespace := range bkpNamespaces {
+				Step("Restoring the backed up application to namespace of same name on destination cluster", func() {
+					log.InfoD("Restoring the backed up application to namespace of same name on destination cluster")
+
+					initialRestoreName = fmt.Sprintf("%s-%s-initial-%v", restoreNamePrefix, namespace, time.Now().Unix())
+					var namespaceMapping map[string]string = make(map[string]string)
+					namespaceMapping[namespace] = namespace
+					err = CreateRestoreWithoutCheck(initialRestoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Initiation of restore %s", initialRestoreName))
+
+					restoreInspectRequest := &api.RestoreInspectRequest{
+						Name:  initialRestoreName,
+						OrgId: orgID,
+					}
+					restoreInProgressCheck := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+						restoreResponseStatus := resp.GetRestore().GetStatus()
+						log.FailOnError(err, "Failed getting restore status for - %s", initialRestoreName)
+						// Status should be LATER than InProgress in order for next STEP to execute
+						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_InProgress || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
+							log.Infof("Restore status - %s", restoreResponseStatus)
+							log.InfoD("Status of %s - [%s]",
+								initialRestoreName, restoreResponseStatus.GetStatus())
+							return "", false, nil
+						}
+						return "", true, fmt.Errorf("waiting for restore status to be later than InProgress; got [%s]",
+							restoreResponseStatus.GetStatus())
+					}
+					_, err = task.DoRetryWithTimeout(restoreInProgressCheck, 10*time.Minute, 5*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", initialRestoreName))
+				})
+
+				Step("Restoring the backed up application to namespace with different name on destination cluster", func() {
+					log.InfoD("Restoring the backed up application to namespace with different name on destination cluster")
+
+					laterRestoreName = fmt.Sprintf("%s-%s-later-%v", restoreNamePrefix, namespace, time.Now().Unix())
+					var namespaceMapping map[string]string = make(map[string]string)
+					restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "later")
+					namespaceMapping[namespace] = restoredNameSpace
+					err = CreateRestoreWithoutCheck(laterRestoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Initiation of restore %s", laterRestoreName))
+
+					restoreInspectRequest := &api.RestoreInspectRequest{
+						Name:  laterRestoreName,
+						OrgId: orgID,
+					}
+					restorePartialSuccessCheck := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+						restoreResponseStatus := resp.GetRestore().GetStatus()
+						log.FailOnError(err, "Failed getting restore status for - %s", laterRestoreName)
+						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
+							log.Infof("Restore status - %s", restoreResponseStatus)
+							log.InfoD("Status of %s - [%s]",
+								laterRestoreName, restoreResponseStatus.GetStatus())
+							return "", false, nil
+						}
+						return "", true, fmt.Errorf("waiting for restore status to be PartialSuccess; got [%s]",
+							restoreResponseStatus.GetStatus())
+					}
+					_, err = task.DoRetryWithTimeout(restorePartialSuccessCheck, 10*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore with partial success %s", laterRestoreName))
+				})
+
+				Step("Verifying status of Initial Restore", func() {
+					log.InfoD("Step: Verifying status of Initial Restore")
+
+					restoreInspectRequest := &api.RestoreInspectRequest{
+						Name:  initialRestoreName,
+						OrgId: orgID,
+					}
+					restoreSuccessCheck := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+						restoreResponseStatus := resp.GetRestore().GetStatus()
+						log.FailOnError(err, "Failed getting restore status for - %s", initialRestoreName)
+						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
+							log.Infof("Restore status - %s", restoreResponseStatus)
+							log.InfoD("Status of %s - [%s]",
+								initialRestoreName, restoreResponseStatus.GetStatus())
+							return "", false, nil
+						}
+						return "", true, fmt.Errorf("waiting for restore status to be Success; got [%s]",
+							restoreResponseStatus.GetStatus())
+					}
+					_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Status of Initial Restore (%s) should be Success", initialRestoreName))
+				})
+
+			}
+		})
 
 	})
 
 	JustAfterEach(func() {
+
 		defer EndTorpedoTest()
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		// TODO: move this to AfterSuite
+		if len(preRuleNameList) > 0 {
+			for _, ruleName := range preRuleNameList {
+				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup pre rules %s", ruleName))
+			}
+		}
+
+		// TODO: move this to AfterSuite
+		if len(postRuleNameList) > 0 {
+			for _, ruleName := range postRuleNameList {
+				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules %s", ruleName))
+			}
+		}
+
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.Info("Deleting deployed applications")
+		ValidateAndDestroy(contexts, opts)
+
+		// TODO: move this to AfterSuite
+		DeleteCluster(SourceClusterName, orgID, ctx)
+		DeleteCluster(destinationClusterName, orgID, ctx)
+
+		// Backups and Restores are deleted by AfterSuite
+
 	})
 })
 
