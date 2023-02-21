@@ -94,6 +94,7 @@ var _ = BeforeSuite(func() {
 	Step("get prerequisite params to run the pds tests", func() {
 		//InitInstance()
 		dash = Inst().Dash
+		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
 		pdsLabels["pds"] = "true"
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
