@@ -3529,6 +3529,8 @@ var _ = Describe("{BackupRestartPX}", func() {
 			for index := range storageNodes {
 				// Just restart storage driver on one of the node where volume backup is in progress
 				Inst().V.RestartDriver(storageNodes[index], nil)
+				err := Inst().V.WaitDriverUpOnNode(storageNodes[index], time.Minute*5)
+				dash.VerifyFatal(err, nil, "Validate volume is driver up")
 			}
 		})
 
