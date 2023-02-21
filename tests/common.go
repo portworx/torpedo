@@ -2065,15 +2065,18 @@ func SetSourceKubeConfig() error {
 	if err != nil {
 		return err
 	}
-	SetClusterContext(sourceClusterConfigPath)
-	return nil
+	err = SetClusterContext(sourceClusterConfigPath)
+	return err
 }
 
 // SetDestinationKubeConfig sets current context to the kubeconfig passed as destination to the torpedo test
-func SetDestinationKubeConfig() {
+func SetDestinationKubeConfig() error {
 	destClusterConfigPath, err := GetDestinationClusterConfigPath()
-	expect(err).NotTo(haveOccurred())
-	SetClusterContext(destClusterConfigPath)
+	if err != nil {
+		return err
+	}
+	err = SetClusterContext(destClusterConfigPath)
+	return err
 }
 
 // ScheduleValidateClusterPair Schedule a clusterpair by creating a yaml file and validate it
