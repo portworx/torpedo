@@ -3337,6 +3337,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
