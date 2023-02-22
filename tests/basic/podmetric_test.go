@@ -7,7 +7,6 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
@@ -18,10 +17,6 @@ import (
 
 const (
 	logglyIterateUrl = "https://pxlite.loggly.com/apiv2/events/iterate"
-)
-
-var (
-	k8sApps = apps.Instance()
 )
 
 var _ = Describe("{PodMetricFunctional}", func() {
