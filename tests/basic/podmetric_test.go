@@ -61,7 +61,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 
 				// expectedPodHourInMinutes is a rough estimate for the pod hour for deployed application
 				expectedPodHourInMinutes := getExpectedPodHourInMinutes(contexts)
-				log.InfoD("Final pod hour is %v", expectedPodHourInMinutes)
+				log.InfoD("Estimated pod hour is %v", expectedPodHourInMinutes)
 				log.InfoD("Check metering data is accurate")
 				meteringData, err = getMeteringData(clusterUUID)
 				log.FailOnError(err, "Failed to get metering data")
