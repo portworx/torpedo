@@ -248,7 +248,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 
 var _ = Describe("{EnableandDisableNamespace}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", pdsLabels, 0)
+		StartTorpedoTest("EnableandDisableNamespace", "Enables and Disables pds on a namespace multiple times", pdsLabels, 0)
 	})
 
 	It("enable/disable namespace multiple times by giving labels to the namespace", func() {
