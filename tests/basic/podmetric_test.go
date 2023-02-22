@@ -7,6 +7,7 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
@@ -17,6 +18,10 @@ import (
 
 const (
 	logglyIterateUrl = "https://pxlite.loggly.com/apiv2/events/iterate"
+)
+
+var (
+	k8sApps = apps.Instance()
 )
 
 var _ = Describe("{PodMetricFunctional}", func() {
@@ -59,6 +64,9 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				log.InfoD("Wait for a loggly interval to go through")
 				time.Sleep(90 * time.Second)
 
+				// expectedPodHourInMinutes is a rough estimate for the pod hour for deployed application
+				expectedPodHourInMinutes := getExpectedPodHourInMinutes(contexts)
+				log.InfoD("Final pod hour is %v", expectedPodHourInMinutes)
 				log.InfoD("Check metering data is accurate")
 				meteringData, err = getMeteringData(clusterUUID)
 				log.FailOnError(err, "Failed to get metering data")
@@ -191,4 +199,25 @@ func getMeteringData(clusterUUID string) ([]*CallhomeData, error) {
 	}
 
 	return meteringData, nil
+}
+
+// getExpectedPodHourInMinutes returns the estimate pod hour given that the metering interval is
+// 1 min. it checks a list of volumes and the number of pods using it to esitimate the pod hour.
+func getExpectedPodHourInMinutes(contexts []*scheduler.Context) int {
+	var expectedPodHourInMinutes int
+	for _, ctx := range contexts {
+		log.InfoD("getting pod hour for context %v", ctx.App.Key)
+		vols, err := Inst().S.GetVolumes(ctx)
+		log.FailOnError(err, "Failed to get volumes to check pod hour")
+		for _, vol := range vols {
+			pods, err := Inst().S.GetPodsForPVC(vol.Name, vol.Namespace)
+			log.FailOnError(err, "Failed to get pods from PVC")
+			if vol.Shared {
+				expectedPodHourInMinutes += len(pods)
+				continue
+			}
+			expectedPodHourInMinutes += 1
+		}
+	}
+	return expectedPodHourInMinutes
 }
