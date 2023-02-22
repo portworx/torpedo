@@ -1354,7 +1354,7 @@ var _ = Describe("{AddDriveMaintenanceMode}", func() {
 		log.Infof(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 		defer func() {
 			err = ExitFromMaintenanceMode(stNode)
-			log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode in node %s", stNode.Name))
+			log.FailOnError(err, fmt.Sprintf("failed to exit maintenance mode in node %s", stNode.Name))
 			status, err = Inst().V.GetNodeStatus(stNode)
 			log.FailOnError(err, fmt.Sprintf("err getting node [%s] status", stNode.Name))
 			log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
@@ -3817,7 +3817,7 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 			//Waiting for 5 mins before exiting node maintenance
 			time.Sleep(5 * time.Minute)
 
-			log.InfoD(fmt.Sprintf("Exiting maintenence mode on node %s", stNode.Name))
+			log.InfoD(fmt.Sprintf("Exiting maintenance mode on node %s", stNode.Name))
 			t := func() (interface{}, bool, error) {
 				if err := Inst().V.ExitMaintenance(*stNode); err != nil {
 					return nil, true, err
@@ -3825,7 +3825,7 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 				return nil, false, nil
 			}
 			_, err = task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
-			log.FailOnError(err, fmt.Sprintf("fail to exit maintenence mode in node %s", stNode.Name))
+			log.FailOnError(err, fmt.Sprintf("fail to exit maintenance mode in node %s", stNode.Name))
 			err = Inst().V.WaitDriverUpOnNode(*stNode, 2*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
 			dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after exiting maintenance on node %s", stNode.Name))
