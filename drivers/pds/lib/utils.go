@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -193,6 +195,7 @@ var (
 	appConfigTemplateID                   string
 	versionID                             string
 	imageID                               string
+	serviceAccId                          string
 	istargetclusterAvailable              bool
 	isAccountAvailable                    bool
 	isStorageTemplateAvailable            bool
@@ -1091,6 +1094,59 @@ func CreateTempNS(length int32) (string, error) {
 		return "", err
 	}
 	return namespace, nil
+}
+
+func isReachbale(url string) (bool, error) {
+	timeout := time.Duration(15 * time.Second)
+	client := http.Client{
+		Timeout: timeout,
+	}
+	_, err := client.Get(url)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+//RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
+func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string) error {
+	log.Info("Test control plane url connectivity.")
+	_, err := isReachbale(controlPlaneUrl)
+	if err != nil {
+		return fmt.Errorf("unable to reach the control plane with following error - %v", err)
+	}
+
+	helmChartversion, err := components.APIVersion.GetHelmChartVersion()
+	if err != nil {
+		return fmt.Errorf("error while getting helm version - %v", helmChartversion)
+	}
+
+	log.Info("listing service account")
+	listServiceAccounts, err := components.ServiceAccount.ListServiceAccounts(tenantId)
+	if err != nil {
+		return err
+	}
+	for _, acc := range listServiceAccounts {
+		log.Infof(*acc.Name)
+		if *acc.Name == "Default-AgentWriter" {
+			serviceAccId = *acc.Id
+		}
+	}
+
+	log.Info("getting service account token")
+	serviceAccToken, err := components.ServiceAccount.GetServiceAccountToken(serviceAccId)
+	if err != nil {
+		return err
+	}
+	bearerToken := *serviceAccToken.Token
+
+	ctx := GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+	target := tc.NewTargetCluster(ctx)
+	err = target.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantID, clusterType)
+	if err != nil {
+		return fmt.Errorf("target cluster registeration failed with the error: %v", err)
+	}
+	return nil
 }
 
 // Create a Persistent Vol of 5G manual Storage Class

@@ -41,6 +41,12 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Failed on SetupPDSTest method")
 	})
 
+	Step("Check and Register Target Cluster to ControlPlane", func() {
+		infraParams := params.InfraToTest
+		err = pdslib.RegisterClusterToControlPlane(infraParams.ControlPlaneURL, tenantID, infraParams.ClusterType)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	Step("Get StorageTemplateID and Replicas", func() {
 		storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
 		log.FailOnError(err, "Failed while getting storage template ID")
