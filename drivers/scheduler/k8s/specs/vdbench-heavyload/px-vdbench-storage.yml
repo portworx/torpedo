@@ -9,7 +9,7 @@ parameters:
   repl: "{{ .Repl }}"
   {{ else }}
   repl: "3"{{ end }}
-  shared: "true"
+  sharedv4: "true"
   nodiscard: "true"
   mount_options: "nodiscard=true"
 allowVolumeExpansion: true

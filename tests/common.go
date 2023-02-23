@@ -4954,27 +4954,57 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
-func GetPoolIDWithIOs() (string, error) {
+func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var err error
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
 		return "", err
 	}
-	var selectedPool *opsapi.StoragePool
-	stNodes := node.GetStorageNodes()
-	for _, stNode := range stNodes {
-		selectedPool, err = GetPoolWithIOsInGivenNode(stNode)
-		if selectedPool != nil {
-			return selectedPool.Uuid, nil
+
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return "", err
 		}
+
+		appVol, err := getVolWithIOs(vols)
+
+		if err != nil && !strings.Contains(err.Error(), "no volumes have IOs running") {
+			return "", nil
+		}
+
+		poolUuids := appVol.ReplicaSets[0].PoolUuids
+		poolUuid := poolUuids[rand.Intn(len(poolUuids))]
+		return poolUuid, nil
+
 	}
 
 	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
 }
 
+func getVolWithIOs(vols []*volume.Volume) (*opsapi.Volume, error) {
+
+	node := node.GetStorageDriverNodes()[0]
+	for _, vol := range vols {
+		appvol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return nil, err
+		}
+		isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node, appvol.Id)
+		if err != nil {
+			return nil, err
+		}
+		if isIOsInProgress {
+			log.Infof("IOs are in progress for [%v]", vol.Name)
+			return appvol, nil
+		}
+	}
+	return nil, fmt.Errorf("no volumes have IOs running")
+}
+
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
-func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
+func GetPoolWithIOsInGivenNode(stNode node.Node, contexts []*scheduler.Context) (*opsapi.StoragePool, error) {
 
 	eligibilityMap, err := GetPoolExpansionEligibility(&stNode)
 	if err != nil {
@@ -4984,44 +5014,41 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 	if !eligibilityMap[stNode.Id] {
 		return nil, fmt.Errorf("node [%s] is not eligible for expansion", stNode.Name)
 	}
-
-	var selectedPool *opsapi.StoragePool
-
-	t := func() (interface{}, bool, error) {
-		poolsDataBfr, err := Inst().V.GetPoolsUsedSize(&stNode)
-		if err != nil {
-			return nil, false, err
-		}
-
-		time.Sleep(30 * time.Second)
-
-		poolsDataAfr, err := Inst().V.GetPoolsUsedSize(&stNode)
-		if err != nil {
-			return nil, false, err
-		}
-
-		for k, v := range poolsDataBfr {
-			//skipping if pool is not eligible for expansion
-			if !eligibilityMap[k] {
-				continue
-			}
-			if v2, ok := poolsDataAfr[k]; ok {
-				if v2 != v {
-					selectedPool, err = GetStoragePoolByUUID(k)
-					if err != nil {
-						return nil, false, err
-					}
-				}
-			}
-		}
-		if selectedPool == nil {
-			return nil, true, fmt.Errorf("no pools with IOs running in the node [%s]", stNode.Name)
-		}
-
-		return nil, false, nil
+	nodePools := make([]string, 0)
+	for _, np := range stNode.StoragePools {
+		nodePools = append(nodePools, np.Uuid)
 	}
 
-	_, err = task.DoRetryWithTimeout(t, defaultMeteringIntervalMins, defaultCmdTimeout)
+	var selectedNodePoolID string
+	var selectedPool *opsapi.StoragePool
+
+outer:
+	for _, ctx := range contexts {
+		vols, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		appVol, err := getVolWithIOs(vols)
+
+		if err != nil {
+			if strings.Contains(err.Error(), "no volumes have IOs running") {
+				continue
+			} else {
+				return nil, err
+			}
+		}
+
+		poolUuids := appVol.ReplicaSets[0].PoolUuids
+		for _, p := range poolUuids {
+			if Contains(nodePools, p) {
+				selectedNodePoolID = p
+				break outer
+			}
+		}
+	}
+
+	selectedPool, err = GetStoragePoolByUUID(selectedNodePoolID)
+
 	if err != nil {
 		return nil, err
 	}
@@ -5029,17 +5056,19 @@ func GetPoolWithIOsInGivenNode(stNode node.Node) (*opsapi.StoragePool, error) {
 }
 
 // GetRandomNodeWithPoolIOs returns node with IOs running
-func GetRandomNodeWithPoolIOs(stNodes []node.Node) (node.Node, error) {
+func GetRandomNodeWithPoolIOs(contexts []*scheduler.Context) (node.Node, error) {
 	// pick a storage node with pool having IOs
-	var err error
-	var pool *opsapi.StoragePool
-	for _, stNode := range stNodes {
-		pool, err = GetPoolWithIOsInGivenNode(stNode)
-		if pool != nil {
-			return stNode, nil
-		}
+
+	poolID, err := GetPoolIDWithIOs(contexts)
+	if err != nil {
+		return node.Node{}, err
 	}
-	return node.Node{}, fmt.Errorf("no node with IOs running identified,err: %v", err)
+
+	n, err := GetNodeWithGivenPoolID(poolID)
+	if err != nil {
+		return node.Node{}, err
+	}
+	return *n, nil
 }
 
 func GetRandomStorageLessNode(slNodes []node.Node) node.Node {
