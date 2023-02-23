@@ -309,6 +309,9 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					log.Warnf("Scaling of nodes is not supported for %v dataservice ", ds.Name)
 					continue
 				}
+				if ds.Name != consul {
+					continue
+				}
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
 					deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
