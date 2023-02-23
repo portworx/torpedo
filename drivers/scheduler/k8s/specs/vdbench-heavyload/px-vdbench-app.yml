@@ -4,7 +4,7 @@ kind: Deployment
 metadata:
   name: vdbench
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: vdbench

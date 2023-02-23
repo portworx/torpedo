@@ -2385,7 +2385,7 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 	//4) perform resize disk operation on the pool while volume update is in-progress
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("VolUpdateAddDisk", "expand volume to the pool and pool expansion using resize-disk", nil, 0)
+		StartTorpedoTest("VolUpdateAddDisk", "expand volume to the pool and pool expansion using add-disk", nil, 0)
 	})
 	var contexts []*scheduler.Context
 
@@ -2674,7 +2674,7 @@ var _ = Describe("{MulPoolsResize}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51291
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("MulPoolsResize", "Initiate multiple pool resize on same node in parallel ", nil, testrailID)
+		StartTorpedoTest("MulPoolsResize", "Initiate multiple pool resize on same node in parallel", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -2752,7 +2752,7 @@ var _ = Describe("{MulPoolsAddDisk}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50642
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("MulPoolsAddDisk", "Initiate multiple pool add-disk on same node in parallel ", nil, testrailID)
+		StartTorpedoTest("MulPoolsAddDisk", "Initiate multiple pool add-disk on same node in parallel", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -3148,7 +3148,7 @@ var _ = Describe("{ResizePoolMaintenanceCycle}", func() {
 	//5) Validate PX and applications
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizePoolMaintenanceCycle", "Initiate pool expansion using resize-disk and perform node maintenance cycle", nil, 0)
+		StartTorpedoTest("ResizePoolMaintenanceCycle", "Initiate pool expansion using resize-disk and perform pool maintenance cycle", nil, 0)
 
 	})
 	var contexts []*scheduler.Context
@@ -4187,7 +4187,7 @@ var _ = Describe("{PXRestartAddDisk}", func() {
 	//4)Expand pool by add-disk
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("PXRestartAddDisk", " restart PX and Initiate pool expansion using add-disk", nil, 0)
+		StartTorpedoTest("PXRestartAddDisk", "Restart PX and Initiate pool expansion using add-disk", nil, 0)
 
 	})
 	var contexts []*scheduler.Context
@@ -4813,7 +4813,7 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51300
 	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeClusterNoQuorum", "Initiate pool expansion by resize-disk when cluster is out quorum ", nil, testrailID)
+		StartTorpedoTest("ResizeClusterNoQuorum", "Initiate pool expansion by resize-disk when cluster is out quorum", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context

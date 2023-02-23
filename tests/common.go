@@ -4968,39 +4968,39 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 			return "", err
 		}
 
-		appVol, err := getVolWithIOs(vols)
+		node := node.GetStorageDriverNodes()[0]
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return "", err
+			}
+			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
+			if err != nil {
+				return "", err
+			}
+			if isIOsInProgress {
+				log.Infof("IOs are in progress for [%v]", vol.Name)
+				poolUuids := appVol.ReplicaSets[0].PoolUuids
+				for _, p := range poolUuids {
+					n, err := GetNodeWithGivenPoolID(p)
+					if err != nil {
+						return "", err
+					}
+					eligibilityMap, err := GetPoolExpansionEligibility(n)
+					if err != nil {
+						return "", err
+					}
+					if eligibilityMap[n.Id] && eligibilityMap[p] {
+						return p, nil
+					}
 
-		if err != nil && !strings.Contains(err.Error(), "no volumes have IOs running") {
-			return "", nil
+				}
+			}
 		}
-
-		poolUuids := appVol.ReplicaSets[0].PoolUuids
-		poolUuid := poolUuids[rand.Intn(len(poolUuids))]
-		return poolUuid, nil
 
 	}
 
 	return "", fmt.Errorf("no pools have IOs running,Err: %v", err)
-}
-
-func getVolWithIOs(vols []*volume.Volume) (*opsapi.Volume, error) {
-
-	node := node.GetStorageDriverNodes()[0]
-	for _, vol := range vols {
-		appvol, err := Inst().V.InspectVolume(vol.ID)
-		if err != nil {
-			return nil, err
-		}
-		isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node, appvol.Id)
-		if err != nil {
-			return nil, err
-		}
-		if isIOsInProgress {
-			log.Infof("IOs are in progress for [%v]", vol.Name)
-			return appvol, nil
-		}
-	}
-	return nil, fmt.Errorf("no volumes have IOs running")
 }
 
 // GetPoolWithIOsInGivenNode returns the poolID in the given node with IOs happening
@@ -5028,21 +5028,25 @@ outer:
 		if err != nil {
 			return nil, err
 		}
-		appVol, err := getVolWithIOs(vols)
 
-		if err != nil {
-			if strings.Contains(err.Error(), "no volumes have IOs running") {
-				continue
-			} else {
+		for _, vol := range vols {
+			appVol, err := Inst().V.InspectVolume(vol.ID)
+			if err != nil {
 				return nil, err
 			}
-		}
-
-		poolUuids := appVol.ReplicaSets[0].PoolUuids
-		for _, p := range poolUuids {
-			if Contains(nodePools, p) {
-				selectedNodePoolID = p
-				break outer
+			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&stNode, appVol.Id)
+			if err != nil {
+				return nil, err
+			}
+			if isIOsInProgress {
+				log.Infof("IOs are in progress for [%v]", vol.Name)
+				poolUuids := appVol.ReplicaSets[0].PoolUuids
+				for _, p := range poolUuids {
+					if Contains(nodePools, p) && eligibilityMap[p] {
+						selectedNodePoolID = p
+						break outer
+					}
+				}
 			}
 		}
 	}
