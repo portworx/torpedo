@@ -54,8 +54,7 @@ import (
 )
 
 const (
-	subject = "Torpedo Longevity Report"
-	from    = "wilkins@portworx.com"
+	from = "wilkins@portworx.com"
 
 	// EmailRecipientsConfigMapField is field in config map whose value is comma
 	// seperated list of email IDs which will receive email notifications about longevity
@@ -68,6 +67,8 @@ const (
 	SendGridEmailAPIKeyField = "sendGridAPIKey"
 	// EmailHostServerField is field in configmap which stores the server address
 	EmailHostServerField = "emailHostServer"
+	// EmailSubjectFiled is field in configmap which stores the subject(optional)
+	EmailSubjectField = "emailSubject"
 )
 
 const (
@@ -114,6 +115,9 @@ var EmailRecipients []string
 
 // EmailHostServer to use for sending email
 var EmailServer string
+
+// EmailSubject to use for sending email
+var EmailSubject string
 
 // RunningTriggers map of events and corresponding interval
 var RunningTriggers map[string]time.Duration
@@ -218,6 +222,7 @@ type emailData struct {
 	NodeInfo     []nodeInfo
 	EmailRecords emailRecords
 	TriggersInfo []triggerInfo
+	MailSubject  string
 }
 
 type nodeInfo struct {
@@ -2386,7 +2391,7 @@ func TriggerEmailReporter() {
 
 	var masterNodeList []string
 	var pxStatus string
-
+	emailData.MailSubject = EmailSubject
 	for _, n := range node.GetMasterNodes() {
 		masterNodeList = append(masterNodeList, n.Addresses...)
 	}
@@ -2451,7 +2456,7 @@ func TriggerEmailReporter() {
 	}
 
 	emailDetails := &email.Email{
-		Subject:         subject,
+		Subject:         EmailSubject,
 		Content:         content,
 		From:            from,
 		To:              EmailRecipients,
@@ -2503,7 +2508,7 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 				SourceClusterName, namespace, backupName), func() {
 				err = CreateBackupGetErr(backupName,
-					SourceClusterName, backupLocationName, BackupLocationUID,
+					SourceClusterName, backupLocationNameConst, BackupLocationUID,
 					[]string{namespace}, labelSelectors, OrgID)
 				if err != nil {
 					bkpNamespaceErrors[namespace] = err
@@ -2693,7 +2698,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 			backupName := fmt.Sprintf("%s-%s-%d", BackupNamePrefix, namespace, backupCounter)
 			bkpNames = append(bkpNames, namespace)
 			log.Infof("Create backup full name %s:%s:%s", SourceClusterName, namespace, backupName)
-			backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationName, BackupLocationUID,
+			backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				[]string{namespace}, labelSelectors, OrgID)
 			backupCreateRequest.Name = backupName
 			backupCreateRequest.ResourceTypes = []string{"ConfigMap"}
@@ -3039,7 +3044,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 			for _, ns := range nsList.Items {
 				namespaces = append(namespaces, ns.Name)
 			}
-			backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationName, BackupLocationUID,
+			backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				namespaces, labelSelectors, OrgID)
 			backupCreateRequest.Name = backupName
 			backupCreateRequest.ResourceTypes = []string{"PersistentVolumeClaim"}
@@ -3231,7 +3236,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 	})
 	Step(fmt.Sprintf("Backup using label [%s=%s]", labelKey, labelValue), func() {
 		labelSelectors[labelKey] = labelValue
-		backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationName, BackupLocationUID,
+		backupCreateRequest := GetBackupCreateRequest(backupName, SourceClusterName, backupLocationNameConst, BackupLocationUID,
 			namespaces, labelSelectors, OrgID)
 		backupCreateRequest.Name = backupName
 		err = CreateBackupFromRequest(backupName, OrgID, backupCreateRequest)
@@ -3473,7 +3478,7 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 			SourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				SourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				[]string{bkpNamespaces[nsIndex]}, labelSelectors, OrgID)
 			if err != nil {
 				bkpError = true
@@ -3561,7 +3566,7 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 			SourceClusterName, bkpNamespaces[nsIndex], backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				SourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				[]string{bkpNamespaces[nsIndex]}, labelSelectors, OrgID)
 			if err != nil {
 				bkpError = true
@@ -3696,7 +3701,7 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 			SourceClusterName, "all", backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				SourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				[]string{"*"}, labelSelectors, OrgID)
 			UpdateOutcome(event, err)
 		})
@@ -3779,7 +3784,7 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 		Step(fmt.Sprintf("Create backup full name %s:%s:%s",
 			SourceClusterName, "all", backupName), func() {
 			err = CreateBackupGetErr(backupName,
-				SourceClusterName, backupLocationName, BackupLocationUID,
+				SourceClusterName, backupLocationNameConst, BackupLocationUID,
 				[]string{"*"}, labelSelectors, OrgID)
 			UpdateOutcome(event, err)
 		})
@@ -3871,7 +3876,17 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 					return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", updatedPoolToBeResized.LastOperation)
 
 				}
-				err = ValidatePoolRebalance()
+				stNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
+				if err != nil {
+					return nil, true, fmt.Errorf("error getting node with pool uuid [%s]. err %v", poolToBeResized.Uuid, err)
+				}
+				var poolID int32
+				for _, p := range stNode.StoragePools {
+					if p.Uuid == poolToBeResized.Uuid {
+						poolID = p.ID
+					}
+				}
+				err = ValidatePoolRebalance(*stNode, poolID)
 				if err != nil {
 					return nil, true, err
 				}
@@ -3910,7 +3925,18 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 		}
 
 		newPoolSize := expandedPool.TotalSize / units.GiB
-		err = ValidatePoolRebalance()
+		stNode, err := GetNodeWithGivenPoolID(expandedPool.Uuid)
+		if err != nil {
+			return nil, true, fmt.Errorf("error getting node with pool uuid [%s]. err %v", expandedPool.Uuid, err)
+		}
+		var poolID int32
+		for _, p := range stNode.StoragePools {
+			if p.Uuid == expandedPool.Uuid {
+				poolID = p.ID
+			}
+		}
+
+		err = ValidatePoolRebalance(*stNode, poolID)
 		if err != nil {
 			return nil, true, fmt.Errorf("pool %s not been resized .Current size is %d,Error while pool rebalance: %v", poolIDToResize, newPoolSize, err)
 		}
@@ -4339,7 +4365,7 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 			err := Inst().V.WaitDriverUpOnNode(autoPilotLabelNode, 1*time.Minute)
 			UpdateOutcome(event, err)
 
-			err = ValidatePoolRebalance()
+			err = ValidatePoolRebalance(autoPilotLabelNode, -1)
 
 			UpdateOutcome(event, err)
 
@@ -5703,7 +5729,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: AsyncDR,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -5763,7 +5789,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 	log.Info("Start migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
-		migrationName := migrationKey + fmt.Sprintf("%d", i)
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
@@ -5793,7 +5819,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: AsyncDRVolumeOnly,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -5853,7 +5879,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 	log.InfoD("Start volume only migration")
 
 	for i, currMigNamespace := range migrationNamespaces {
-		migrationName := migrationKey + fmt.Sprintf("%d", i)
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
@@ -5891,7 +5917,7 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: StorkApplicationBackup,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -5968,7 +5994,7 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: StorkAppBkpVolResize,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -6068,7 +6094,7 @@ func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: StorkAppBkpHaUpdate,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -6208,7 +6234,7 @@ func TriggerStorkAppBkpPxRestart(contexts *[]*scheduler.Context, recordChan *cha
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: StorkAppBkpPxRestart,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -6299,7 +6325,7 @@ func TriggerStorkAppBkpPoolResize(contexts *[]*scheduler.Context, recordChan *ch
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: AppTasksDown,
+			Type: StorkAppBkpPoolResize,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -6568,7 +6594,7 @@ tbody tr:last-child {
 </style>
 </head>
 <body>
-<h1>Torpedo Longevity Report</h1>
+<h1> {{ .MailSubject }} </h1>
 <hr/>
 <h3>SetUp Details</h3>
 <p><b>Master IP:</b> {{.MasterIP}}</p>

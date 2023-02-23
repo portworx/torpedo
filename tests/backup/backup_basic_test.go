@@ -2,9 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers"
-	"github.com/portworx/torpedo/drivers/backup"
 	"os"
 	"strings"
 	"testing"
@@ -13,57 +10,15 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-)
-
-const (
-	storkDeploymentName                       = "stork"
-	storkDeploymentNamespace                  = "kube-system"
-	clusterName                               = "tp-cluster"
-	restoreNamePrefix                         = "tp-restore"
-	configMapName                             = "kubeconfigs"
-	destinationClusterName                    = "destination-cluster"
-	backupLocationName                        = "tp-blocation"
-	appReadinessTimeout                       = 10 * time.Minute
-	defaultRetryInterval                      = 10 * time.Second
-	enumerateBatchSize                        = 100
-	taskNamePrefix                            = "backupcreaterestore"
-	orgID                                     = "default"
-	defaultTimeout                            = 5 * time.Minute
-	usersToBeCreated                          = "USERS_TO_CREATE"
-	groupsToBeCreated                         = "GROUPS_TO_CREATE"
-	maxUsersInGroup                           = "MAX_USERS_IN_GROUP"
-	maxBackupsToBeCreated                     = "MAX_BACKUPS"
-	maxWaitPeriodForBackupCompletionInMinutes = 20
-	globalAWSBucketPrefix                     = "global-aws"
-	globalAzureBucketPrefix                   = "global-azure"
-	globalGCPBucketPrefix                     = "global-gcp"
-	globalAWSLockedBucketPrefix               = "global-aws-locked"
-	globalAzureLockedBucketPrefix             = "global-azure-locked"
-	globalGCPLockedBucketPrefix               = "global-gcp-locked"
-	userName                                  = "testuser"
-	firstName                                 = "firstName"
-	lastName                                  = "lastName"
-	password                                  = "Password1"
-)
-
-var (
-	// enable all the after suite actions
-	wantAllAfterSuiteActions bool = true
-	// selectively enable after suite actions by setting wantAllAfterSuiteActions to false and setting these to true
-	wantAfterSuiteSystemCheck     bool = false
-	wantAfterSuiteValidateCleanup bool = false
-	// User should keep updating preRuleApp, postRuleApp
-	preRuleApp                  = []string{"cassandra", "postgres"}
-	postRuleApp                 = []string{"cassandra"}
-	globalAWSBucketName         string
-	globalAzureBucketName       string
-	globalGCPBucketName         string
-	globalAWSLockedBucketName   string
-	globalAzureLockedBucketName string
-	globalGCPLockedBucketName   string
 )
 
 func getBucketNameSuffix() string {
@@ -107,11 +62,55 @@ func TestBasic(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
 }
 
+// BackupInitInstance initialises instances required for backup
+func BackupInitInstance() {
+	var err error
+	var token string
+	log.Info("Inside BackupInitInstance")
+	err = Inst().S.Init(scheduler.InitOptions{
+		SpecDir:            Inst().SpecDir,
+		VolDriverName:      Inst().V.String(),
+		StorageProvisioner: Inst().Provisioner,
+		NodeDriverName:     Inst().N.String(),
+	})
+
+	log.FailOnError(err, "Error occurred while Scheduler Driver Initialization")
+	err = Inst().N.Init(node.InitOptions{
+		SpecDir: Inst().SpecDir,
+	})
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
+	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
+
+	if Inst().Backup != nil {
+		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
+		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
+	}
+	// Getting Px version info
+	pxVersion, err := Inst().V.GetDriverVersion()
+	log.FailOnError(err, "Error occurred while getting PX version")
+	commitID := strings.Split(pxVersion, "-")[1]
+	t := Inst().Dash.TestSet
+	t.CommitID = commitID
+	if pxVersion != "" {
+		t.Tags["px-version"] = pxVersion
+	}
+
+	// Getting Px-Backup server version info and setting Aetos Dashboard tags
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
+	log.FailOnError(err, "Getting Px-Backup version")
+	version := versionResponse.GetVersion()
+	t.Tags["px-backup-version"] = fmt.Sprintf("%s.%s.%s-%s", version.GetMajor(), version.GetMinor(), version.GetPatch(), version.GetGitCommit())
+	t.Tags["px-backup-build-date"] = fmt.Sprintf("%s", version.GetBuildDate())
+
+}
+
 var dash *aetosutil.Dashboard
 var _ = BeforeSuite(func() {
 	dash = Inst().Dash
-	log.Infof("Init instance")
-	InitInstance()
+	log.Infof("Backup Init instance")
+	BackupInitInstance()
 	dash.TestSetBegin(dash.TestSet)
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
@@ -152,6 +151,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+
 	StartTorpedoTest("Environment cleanup", "Removing Px-Backup entities created during the test execution", nil, 0)
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
@@ -184,7 +184,9 @@ var _ = AfterSuite(func() {
 	// Cleanup all backups
 	allBackups, err := GetAllBackupsAdmin()
 	for _, backupName := range allBackups {
-		_, err = DeleteBackup(backupName, getBackupUID(backupName, orgID), orgID, ctx)
+		backupUID, err := getBackupUID(backupName, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
 	}
 
@@ -219,7 +221,8 @@ var _ = AfterSuite(func() {
 	allCloudCredentials, err := getAllCloudCredentials(ctx)
 	dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
 	for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
-		DeleteCloudCredential(cloudCredentialName, orgID, cloudCredentialUid)
+		err = DeleteCloudCredential(cloudCredentialName, orgID, cloudCredentialUid)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", cloudCredentialName))
 	}
 
 	cloudCredentialDeletionSuccess := func() (interface{}, bool, error) {
@@ -249,6 +252,7 @@ var _ = AfterSuite(func() {
 			log.Infof("Bucket deleted - %s", globalGCPBucketName)
 		}
 	}
+
 })
 
 func TestMain(m *testing.M) {

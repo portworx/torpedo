@@ -113,7 +113,6 @@ import (
 
 	context1 "context"
 
-	"github.com/pborman/uuid"
 	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -154,7 +153,7 @@ const (
 	meteringIntervalMinsFlag             = "metering_interval_mins"
 	SourceClusterName                    = "source-cluster"
 	destinationClusterName               = "destination-cluster"
-	backupLocationName                   = "tp-blocation"
+	backupLocationNameConst              = "tp-blocation"
 	backupScheduleNamePrefix             = "tp-bkp-schedule"
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
@@ -1977,26 +1976,20 @@ func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
 }
 
 // DeleteCloudCredential deletes cloud credentials
-func DeleteCloudCredential(name string, orgID string, cloudCredUID string) {
-	Step(fmt.Sprintf("Delete cloud credential [%s] in org [%s]", name, orgID), func() {
-		backupDriver := Inst().Backup
+func DeleteCloudCredential(name string, orgID string, cloudCredUID string) error {
 
-		credDeleteRequest := &api.CloudCredentialDeleteRequest{
-			Name:  name,
-			OrgId: orgID,
-			Uid:   cloudCredUID,
-		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
-		// Best effort cleanup, dont fail test, if deletion fails
-		// expect(err).NotTo(haveOccurred(),
-		//  fmt.Sprintf("Failed to delete cloud credential [%s] in org [%s]", name, orgID))
-		// TODO: validate CreateCloudCredentialResponse also
-	})
+	backupDriver := Inst().Backup
+	credDeleteRequest := &api.CloudCredentialDeleteRequest{
+		Name:  name,
+		OrgId: orgID,
+		Uid:   cloudCredUID,
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
+	return err
 }
 
 // ValidateVolumeParametersGetErr validates volume parameters using volume driver and returns err instead of failing
@@ -2107,7 +2100,7 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 		}
 	}
 
-	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksPxOperator())
+	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksPxOperator(), reverse)
 	if err != nil {
 		log.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -2328,7 +2321,6 @@ func CreateBackupGetErr(backupName string, clusterName string, bLocation string,
 			Namespaces:     namespaces,
 			LabelSelectors: labelSelectors,
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -2402,7 +2394,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				Uid:  schedulePolicyUID,
 			},
 			BackupLocationRef: &api.ObjectRef{
-				Name: backupLocationName,
+				Name: backupLocationNameConst,
 				Uid:  BackupLocationUID,
 			},
 		}
@@ -2504,7 +2496,6 @@ func GetBackupCreateRequest(backupName string, clusterName string, bLocation str
 
 // CreateBackupFromRequest creates a backup using a provided request
 func CreateBackupFromRequest(backupName string, orgID string, request *api.BackupCreateRequest) (err error) {
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
@@ -2551,7 +2542,6 @@ func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Durati
 		log.Infof("Enumerating backups")
 		bkpEnumerateReq := &api.BackupEnumerateRequest{
 			OrgId: OrgID}
-		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return nil, true, err
@@ -2645,7 +2635,6 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 
 // DeleteBackupAndDependencies deletes backup and dependent backups
 func DeleteBackupAndDependencies(backupName string, backupUID string, orgID string, clusterName string) error {
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 
 	backupDeleteRequest := &api.BackupDeleteRequest{
@@ -2700,28 +2689,6 @@ func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error
 	// TODO: validate createClusterResponse also
 }
 
-// SetupBackup sets up backup location and source and destination clusters
-func SetupBackup(testName string) {
-	log.Infof("Backup driver: %v", Inst().Backup)
-	provider := GetProvider()
-	log.Infof("Run Setup backup with object store provider: %s", provider)
-	OrgID = "default"
-	BucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
-	CloudCredUID = uuid.New()
-	//cloudCredUID = "5a48be84-4f63-40ae-b7f1-4e4039ab7477"
-	BackupLocationUID = uuid.New()
-	//backupLocationUID = "64d908e7-40cf-4c9e-a5cf-672e955fd0ca"
-
-	CreateBucket(provider, BucketName)
-	CreateOrganization(OrgID)
-	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
-	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID, "")
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
-	err = CreateSourceAndDestClusters(OrgID, "", "", ctx)
-	log.FailOnError(err, "Creating source and destination cluster")
-}
-
 // DeleteBackup deletes backup
 func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
 	var err error
@@ -2745,23 +2712,15 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 }
 
 // DeleteCluster deletes/de-registers cluster from px-backup
-func DeleteCluster(name string, orgID string, ctx context1.Context) {
+func DeleteCluster(name string, orgID string, ctx context1.Context) error {
 
-	Step(fmt.Sprintf("Delete cluster [%s] in org [%s]", name, orgID), func() {
-		backupDriver := Inst().Backup
-		clusterDeleteReq := &api.ClusterDeleteRequest{
-			OrgId: orgID,
-			Name:  name,
-		}
-		ctx, err := backup.GetPxCentralAdminCtx()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		backupDriver.DeleteCluster(ctx, clusterDeleteReq)
-		// Best effort cleanup, dont fail test, if deletion fails
-		//expect(err).NotTo(haveOccurred(),
-		//	fmt.Sprintf("Failed to delete cluster [%s] in org [%s]", name, orgID))
-	})
+	backupDriver := Inst().Backup
+	clusterDeleteReq := &api.ClusterDeleteRequest{
+		OrgId: orgID,
+		Name:  name,
+	}
+	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	return err
 }
 
 // DeleteBackupLocation deletes backup location
@@ -2839,7 +2798,7 @@ func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, s
 // CreateSourceAndDestClusters creates source and destination cluster
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
-func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ctx context1.Context) error {
+func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx context1.Context) error {
 	// TODO: Add support for adding multiple clusters from
 	// comma separated list of kubeconfig files
 	kubeconfigs := os.Getenv("KUBECONFIGS")
@@ -2860,7 +2819,15 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ct
 		return err
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
-	err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloud_name, uid, ctx)
+
+	sourceClusterStatus := func() (interface{}, bool, error) {
+		err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
+		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+			return "", true, err
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(sourceClusterStatus, 2*time.Minute, 10*time.Second)
 	if err != nil {
 		return err
 	}
@@ -2871,7 +2838,14 @@ func CreateSourceAndDestClusters(orgID string, cloud_name string, uid string, ct
 		return err
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
-	err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloud_name, uid, ctx)
+	destClusterStatus := func() (interface{}, bool, error) {
+		err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloudName, uid, ctx)
+		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+			return "", true, err
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(destClusterStatus, 2*time.Minute, 10*time.Second)
 	if err != nil {
 		return err
 	}
@@ -2994,7 +2968,6 @@ func CreateCloudCredential(provider, name string, uid, orgID string) {
 					},
 				},
 			}
-			//ctx, err := backup.GetPxCentralAdminCtx()
 			ctx, err := backup.GetAdminCtxFromSecret()
 			expect(err).NotTo(haveOccurred(),
 				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -3109,7 +3082,6 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 		},
 	}
 
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
@@ -3122,7 +3094,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
-// CreateS3BackupLocation creates backuplocation for S3
+// CreateS3BackupLocationNonAdminUser creates backuplocation for S3
 func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
@@ -3177,7 +3149,6 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 			Type: api.BackupLocationInfo_Azure,
 		},
 	}
-	//ctx, err := backup.GetPxCentralAdminCtx()
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
@@ -3212,7 +3183,6 @@ func CreateOrganization(orgID string) {
 				Name: orgID,
 			},
 		}
-		//ctx, err := backup.GetPxCentralAdminCtx()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
@@ -3761,69 +3731,6 @@ func ValidateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error
 		return fmt.Errorf("failed to set replication factor of the volume: %v due to err: %v", v.Name, err.Error())
 	}
 	return nil
-}
-
-// TearDownBackupRestoreAll enumerates backups and restores before deleting them
-func TearDownBackupRestoreAll() {
-	log.Infof("Enumerating scheduled backups")
-	bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
-		OrgId:  OrgID,
-		Labels: make(map[string]string),
-		BackupLocationRef: &api.ObjectRef{
-			Name: backupLocationName,
-			Uid:  BackupLocationUID,
-		},
-	}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumBkpScheduleResponse, _ := Inst().Backup.EnumerateBackupSchedule(ctx, bkpScheduleEnumerateReq)
-	bkpSchedules := enumBkpScheduleResponse.GetBackupSchedules()
-	for _, bkpSched := range bkpSchedules {
-		schedPol := bkpSched.GetSchedulePolicyRef()
-		DeleteScheduledBackup(bkpSched.GetName(), bkpSched.GetUid(), schedPol.GetName(), schedPol.GetUid())
-	}
-
-	log.Infof("Enumerating backups")
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: OrgID,
-	}
-	ctx, err = backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
-	backups := enumBkpResponse.GetBackups()
-	for _, bkp := range backups {
-		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID, ctx)
-	}
-
-	log.Infof("Enumerating restores")
-	restoreEnumerateReq := &api.RestoreEnumerateRequest{
-		OrgId: OrgID}
-	ctx, err = backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumRestoreResponse, _ := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
-	restores := enumRestoreResponse.GetRestores()
-	for _, restore := range restores {
-		err = DeleteRestore(restore.GetName(), OrgID, ctx)
-		dash.VerifyFatal(err, nil, "Deleting Restore")
-	}
-
-	for _, bkp := range backups {
-		Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), OrgID,
-			BackupRestoreCompletionTimeoutMin*time.Minute,
-			RetrySeconds*time.Second)
-	}
-	for _, restore := range restores {
-		Inst().Backup.WaitForRestoreDeletion(ctx, restore.GetName(), OrgID,
-			BackupRestoreCompletionTimeoutMin*time.Minute,
-			RetrySeconds*time.Second)
-	}
-	provider := GetProvider()
-	DeleteCluster(destinationClusterName, OrgID, ctx)
-	DeleteCluster(SourceClusterName, OrgID, ctx)
-	err = DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
-	DeleteCloudCredential(CredName, OrgID, CloudCredUID)
-	DeleteBucket(provider, BucketName)
 }
 
 // CreateBucket creates bucket on the appropriate cloud platform
@@ -4653,6 +4560,7 @@ func WaitForExpansionToStart(poolID string) error {
 				log.InfoD("Pool %s expansion started", poolID)
 				return nil, false, nil
 			}
+
 		}
 		return nil, true, fmt.Errorf("pool %s resize not triggered ", poolID)
 	}
@@ -4769,7 +4677,7 @@ func Contains(app_list []string, app string) bool {
 }
 
 // ValidatePoolRebalance checks rebalnce state of pools if running
-func ValidatePoolRebalance() error {
+func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 
 	rebalanceFunc := func() (interface{}, bool, error) {
 
@@ -4833,27 +4741,42 @@ func ValidatePoolRebalance() error {
 		return err
 	}
 
-	var pools map[string]*opsapi.StoragePool
-	pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
-	log.FailOnError(err, "error getting pools list")
-
-	for _, pool := range pools {
-
-		if pool == nil {
-			return fmt.Errorf("pool value is nil")
+	nodePoolsToValidate := make([]node.StoragePool, 0)
+	if poolID != -1 {
+		for _, p := range stNode.StoragePools {
+			if p.ID == poolID {
+				nodePoolsToValidate = append(nodePoolsToValidate, p)
+				break
+			}
 		}
+	} else {
+		//A new pool might be created due to add drive,hence 2 min wait for pool to associate with node
+		time.Sleep(2 * time.Minute)
+		err = Inst().V.RefreshDriverEndpoints()
+		log.FailOnError(err, "error refreshing end points")
+		for _, n := range node.GetStorageNodes() {
+			if n.Id == stNode.Id {
+				stNode = n
+				break
+			}
+		}
+		nodePoolsToValidate = append(nodePoolsToValidate, stNode.StoragePools...)
+
+	}
+
+	for _, nodePool := range nodePoolsToValidate {
 		currentLastMsg := ""
 		f := func() (interface{}, bool, error) {
-			expandedPool, err := GetStoragePoolByUUID(pool.Uuid)
+			expandedPool, err := GetStoragePoolByUUID(nodePool.Uuid)
 			if err != nil {
-				return nil, true, fmt.Errorf("error getting pool by using id %s", pool.Uuid)
+				return nil, true, fmt.Errorf("error getting pool by using id %s from node %s", nodePool.Uuid, stNode.Name)
 			}
 
 			if expandedPool == nil {
 				return nil, false, fmt.Errorf("expanded pool value is nil")
 			}
 			if expandedPool.LastOperation != nil {
-				log.Infof("Pool Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
+				log.Infof("Node [%s] Pool [%s] Status : %v, Message : %s", stNode.Name, nodePool.Uuid, expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
 				if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
 					return nil, false, fmt.Errorf("Pool is failed state. Error: %s", expandedPool.LastOperation)
 				}
@@ -4875,7 +4798,6 @@ func ValidatePoolRebalance() error {
 		}
 		_, err = task.DoRetryWithTimeout(f, time.Minute*180, time.Minute*2)
 	}
-
 	return err
 }
 
@@ -5246,6 +5168,90 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	return eligibilityMap, nil
 }
 
+// WaitTillEnterMaintenanceMode wait until the node enters maintenance mode
+func WaitTillEnterMaintenanceMode(n node.Node) error {
+	t := func() (interface{}, bool, error) {
+		nodeState, err := Inst().V.IsNodeInMaintenance(n)
+		if err != nil {
+			return nil, false, err
+		}
+		if nodeState == true {
+			return nil, true, nil
+		}
+		return nil, false, fmt.Errorf("Not in Maintenance mode")
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 20*time.Minute, 2*time.Minute)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ExitFromMaintenanceMode wait until the node exits from maintenance mode
+func ExitFromMaintenanceMode(n node.Node) error {
+	log.InfoD("Exiting maintenance mode on Node %s", n.Name)
+	t := func() (interface{}, bool, error) {
+		if err := Inst().V.ExitMaintenance(n); err != nil {
+			nodeState, err := Inst().V.IsNodeInMaintenance(n)
+			if err != nil {
+				return nil, false, err
+			}
+			if nodeState == true {
+				return nil, true, nil
+			}
+			return nil, true, err
+		}
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 15*time.Minute, 2*time.Minute)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ExitNodesFromMaintenanceMode waits till all nodes to exit from maintenance mode
+// Checks for all the storage nodes present in the cluster, in case if any node is in maintenance mode
+// Function will attempt bringing back the node out of maintenance
+func ExitNodesFromMaintenanceMode() error {
+	Nodes := node.GetStorageNodes()
+	for _, eachNode := range Nodes {
+		nodeState, err := Inst().V.IsNodeInMaintenance(eachNode)
+		if err == nil && nodeState == true {
+			errExit := ExitFromMaintenanceMode(eachNode)
+			if errExit != nil {
+				return errExit
+			}
+		}
+	}
+	return nil
+}
+
+// GetPoolsDetailsOnNode returns all pools present in the Nodes
+func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
+	var poolDetails []*opsapi.StoragePool
+
+	if node.IsStorageNode(n) == false {
+		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
+	}
+
+	nodes := node.GetStorageNodes()
+
+	for _, eachNode := range nodes {
+		if eachNode.Id == n.Id {
+			for _, eachPool := range eachNode.Pools {
+				poolInfo, err := GetStoragePoolByUUID(eachPool.Uuid)
+				if err != nil {
+					return nil, err
+				}
+				poolDetails = append(poolDetails, poolInfo)
+			}
+		}
+	}
+	return poolDetails, nil
+}
+
 // IsEksPxOperator returns true if current operator installation is on an EKS cluster
 func IsEksPxOperator() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
@@ -5255,4 +5261,37 @@ func IsEksPxOperator() bool {
 		}
 	}
 	return false
+}
+
+/*
+ * GetSubsetOfSlice selects a random subset of unique items from the input slice,
+ * with the given length. It returns a new slice with the selected items in random order.
+ * If length is zero or negative or greater than the length of the input slice, it also returns an error.
+ *
+ * Parameters:
+ * - items: a slice of any type to select from.
+ * - length: the number of items to select from the input slice.
+ *
+ * Returns:
+ * - a new slice of type T with the selected items in random order.
+ * - an error if the length parameter is zero or negative, or if it is greater than the length of the input slice.
+ */
+func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
+	if length <= 0 {
+		return nil, fmt.Errorf("length must be greater than zero")
+	}
+	if length > len(items) {
+		return nil, fmt.Errorf("length cannot be greater than the length of the input items")
+	}
+	randomItems := make([]T, length)
+	selected := make(map[int]bool)
+	for i := 0; i < length; i++ {
+		j := rand.Intn(len(items))
+		for selected[j] {
+			j = rand.Intn(len(items))
+		}
+		selected[j] = true
+		randomItems[i] = items[j]
+	}
+	return randomItems, nil
 }

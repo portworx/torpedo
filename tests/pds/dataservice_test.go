@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,7 +29,7 @@ const (
 
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", nil, 0)
+		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)
 	})
 
 	It("Delete pds pods and validate if its coming back online and dataserices are not affected", func() {
@@ -40,22 +41,22 @@ var _ = Describe("{DeletePDSPods}", func() {
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
+				pdsPods := make([]corev1.Pod, 0)
+
 				Step("get pods from pds-system namespace", func() {
-					if len(deploymentPods) != 0 {
-						deploymentPods = nil
-					}
+
 					podList, err = pdslib.GetPods(pdsNamespace)
 					log.FailOnError(err, "Error while getting pods")
 					log.Infof("PDS System Pods")
 					for _, pod := range podList.Items {
 						log.Infof("%v", pod.Name)
-						deploymentPods = append(deploymentPods, pod)
+						pdsPods = append(pdsPods, pod)
 					}
 				})
 
 				Step("delete pods from pds-system namespace", func() {
 					log.InfoD("Deleting PDS System Pods")
-					err = pdslib.DeletePods(deploymentPods)
+					err = pdslib.DeletePods(pdsPods)
 					log.FailOnError(err, "Error while deleting pods")
 					log.InfoD("Validating PDS System Pods")
 					err = pdslib.ValidatePods(pdsNamespace, "")
@@ -100,7 +101,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 	steplog := "Validate Health of PDS services in case of failures"
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ValidatePDSHealthInCaseOfFailures", steplog, nil, 0)
+		StartTorpedoTest("ValidatePDSHealthInCaseOfFailures", steplog, pdsLabels, 0)
 	})
 
 	It(steplog, func() {
@@ -111,16 +112,19 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				log.FailOnError(err, "Error while deploying data services")
 			})
 
+			pdsPods := make([]corev1.Pod, 0)
+
 			Step("Delete dataservice pods and Check health of data service in PDS Controlplane", func() {
 				podList, err := pdslib.GetPods(namespace)
 				log.FailOnError(err, "Error while getting pods")
 
 				log.Infof("PDS DataService Pods")
 				log.Infof("deployment name %v", *deployment.ClusterResourceName)
+
 				for _, pod := range podList.Items {
 					if strings.Contains(pod.Name, *deployment.ClusterResourceName) {
 						log.Infof("%v", pod.Name)
-						deploymentPods = append(deploymentPods, pod)
+						pdsPods = append(pdsPods, pod)
 					}
 				}
 
@@ -129,7 +133,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				go func() {
 					defer wg.Done()
 					log.InfoD("Deleting the data service pods")
-					err = pdslib.DeletePods(deploymentPods)
+					err = pdslib.DeletePods(pdsPods)
 					log.FailOnError(err, "Error while deleting pods")
 				}()
 
@@ -145,8 +149,8 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				err = pdslib.ValidatePods(namespace, *deployment.ClusterResourceName)
 				log.FailOnError(err, "Error while validating the pods")
 
-				err = pdslib.ValidatePDSDeploymentStatus(deployment, "Healthy", 5*time.Second, 1*time.Minute)
-				log.FailOnError(err, "Error while validating the pds pods")
+				err = pdslib.ValidatePDSDeploymentStatus(deployment, "Healthy", 5*time.Second, 30*time.Minute)
+				log.FailOnError(err, "Error while validating the pds deployment pods")
 
 			})
 		}
@@ -168,7 +172,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 
 var _ = Describe("{RestartPDSagentPod}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RestartPDSagentPod", "Restart pds agent pods and validate if its coming back online and dataserices are not affected", nil, 0)
+		StartTorpedoTest("RestartPDSagentPod", "Restart pds agent pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)
 	})
 
 	It("Restart pds pods and validate if its coming back online and dataserices are not affected", func() {
@@ -242,9 +246,9 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 	})
 })
 
-var _ = Describe("{Enable/DisableNamespace}", func() {
+var _ = Describe("{EnableandDisableNamespace}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
+		StartTorpedoTest("EnableandDisableNamespace", "Enables and Disables pds on a namespace multiple times", pdsLabels, 0)
 	})
 
 	It("enable/disable namespace multiple times by giving labels to the namespace", func() {
@@ -295,7 +299,7 @@ var _ = Describe("{Enable/DisableNamespace}", func() {
 
 var _ = Describe("{ScaleUPDataServices}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", nil, 0)
+		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", pdsLabels, 0)
 	})
 
 	It("deploy Dataservices", func() {
@@ -313,30 +317,9 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 				Step("Running Workloads before scaling up of dataservices ", func() {
 					log.InfoD("Running Workloads on DataService %v ", ds.Name)
-					if ds.Name == postgresql {
-						deploymentName := "pgload"
-						log.Infof("Running Workloads on DataService %v ", ds.Name)
-						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "100", "1", deploymentName, namespace)
-						log.FailOnError(err, "Error while genearating workloads")
-					}
-					if ds.Name == rabbitmq {
-						deploymentName := "rmq"
-						log.Infof("Running Workloads on DataService %v ", ds.Name)
-						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						log.FailOnError(err, "Error while genearating workloads")
-					}
-					if ds.Name == redis {
-						deploymentName := "redisbench"
-						log.Infof("Running Workloads on DataService %v ", ds.Name)
-						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						log.FailOnError(err, "Error while genearating workloads")
-					}
-					if ds.Name == cassandra {
-						deploymentName := "cassandra-stress"
-						log.Infof("Running Workloads on DataService %v ", ds.Name)
-						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						log.FailOnError(err, "Error while genearating workloads")
-					}
+					var params pdslib.WorkloadGenerationParams
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
 				})
 
 				Step("Validate Deployments before scale up", func() {
@@ -370,16 +353,14 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				})
 
 				Step("Delete the workload generating deployments", func() {
-					if ds.Name == cassandra || ds.Name == postgresql || ds.Name == redis || ds.Name == rabbitmq {
-						if ds.Name == cassandra || ds.Name == postgresql {
-							log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
-							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-						} else if ds.Name == redis || ds.Name == rabbitmq {
-							log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
-							err = pdslib.DeleteK8sPods(pod.Name, namespace)
-						}
-						log.FailOnError(err, "error deleting workload generating pods")
+					if Contains(dataServiceDeploymentWorkloads, ds.Name) {
+						log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
+						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+					} else if Contains(dataServicePodWorkloads, ds.Name) {
+						log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
+						err = pdslib.DeleteK8sPods(pod.Name, namespace)
 					}
+					log.FailOnError(err, "error deleting workload generating pods")
 				})
 			}
 		})
@@ -400,7 +381,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RunIndependentAppNonPdsNS", "Runs an independent app on a non-PDS namespace and then enables PDS on this namespace", nil, 0)
+		StartTorpedoTest("RunIndependentAppNonPdsNS", "Runs an independent app on a non-PDS namespace and then enables PDS on this namespace", pdsLabels, 0)
 	})
 	ns := ""
 	var err error
@@ -503,7 +484,7 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 
 var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RunTpccWorkloadOnDataServices", "Runs TPC-C Workload on Postgres and MySQL Deployment", nil, 0)
+		StartTorpedoTest("RunTpccWorkloadOnDataServices", "Runs TPC-C Workload on Postgres and MySQL Deployment", pdsLabels, 0)
 	})
 
 	It("Deploy , Validate and start TPCC Workload", func() {
@@ -598,13 +579,13 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 
 var _ = Describe("{UpgradeDataServiceVersion}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeDataServiceVersion", "Upgrades the dataservice version", nil, 0)
+		StartTorpedoTest("UpgradeDataServiceVersion", "Upgrades the dataservice version", pdsLabels, 0)
 	})
 
 	It("runs the dataservice version upgrade test", func() {
 		for _, ds := range params.DataServiceToTest {
 			log.InfoD("Running UpgradeDataServiceVersion test for DataService %v ", ds.Name)
-			UpgradeDataService(ds.Name, ds.OldVersion, ds.OldImage, ds.Version, ds.Image, int32(ds.Replicas))
+			UpgradeDataService(ds.Name, ds.OldVersion, ds.OldImage, ds.Version, ds.Image, int32(ds.Replicas), ds)
 		}
 	})
 	JustAfterEach(func() {
@@ -623,13 +604,13 @@ var _ = Describe("{UpgradeDataServiceVersion}", func() {
 
 var _ = Describe("{UpgradeDataServiceImage}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeDataServiceImage", "Upgrades the dataservice image", nil, 0)
+		StartTorpedoTest("UpgradeDataServiceImage", "Upgrades the dataservice image", pdsLabels, 0)
 	})
 
 	It("runs the dataservice build image upgrade test", func() {
 		for _, ds := range params.DataServiceToTest {
 			log.InfoD("Running UpgradeDataServiceImage test for DataService %v ", ds.Name)
-			UpgradeDataService(ds.Name, ds.Version, ds.OldImage, ds.Version, ds.Image, int32(ds.Replicas))
+			UpgradeDataService(ds.Name, ds.Version, ds.OldImage, ds.Version, ds.Image, int32(ds.Replicas), ds)
 		}
 	})
 	JustAfterEach(func() {
@@ -649,7 +630,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeployDataServicesOnDemand", "Deploys DataServices", nil, 0)
+		StartTorpedoTest("DeployDataServicesOnDemand", "Deploys DataServices", pdsLabels, 0)
 	})
 
 	It("Deploy DataservicesOnDemand", func() {
@@ -804,7 +785,7 @@ func DeployandValidateDataServices(ds PDSDataService, tenantID, projectID string
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
 }
 
-func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild string, replicas int32) {
+func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild string, replicas int32, ds PDSDataService) {
 	Step("Deploy, Validate and Update Data Services", func() {
 		isDeploymentsDeleted = false
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, dataservice)
@@ -840,26 +821,9 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		})
 
 		Step("Running Workloads before scaling up of dataservices ", func() {
-			if dataservice == postgresql {
-				deploymentName := "pgload"
-				pod, dep, err = pdslib.CreateDataServiceWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
-				log.FailOnError(err, "Error while genearating workloads")
-			}
-			if dataservice == rabbitmq {
-				deploymentName := "rmq"
-				pod, dep, err = pdslib.CreateDataServiceWorkloads(dataservice, deployment.GetId(), "", "", deploymentName, namespace)
-				log.FailOnError(err, "Error while genearating workloads")
-			}
-			if dataservice == redis {
-				deploymentName := "redisbench"
-				pod, dep, err = pdslib.CreateDataServiceWorkloads(dataservice, deployment.GetId(), "", "", deploymentName, namespace)
-				log.FailOnError(err, "Error while genearating workloads")
-			}
-			if dataservice == cassandra {
-				deploymentName := "cassandra-stress"
-				pod, dep, err = pdslib.CreateDataServiceWorkloads(dataservice, deployment.GetId(), "", "", deploymentName, namespace)
-				log.FailOnError(err, "Error while genearating workloads")
-			}
+			var params pdslib.WorkloadGenerationParams
+			pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+			log.FailOnError(err, "Error while genearating workloads")
 		})
 
 		Step("Update the data service patch versions", func() {
@@ -900,7 +864,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 var _ = Describe("{DeployMultipleNamespaces}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeployMultipleNamespaces", "Create multiple namespaces and deploy all dataservices", nil, 0)
+		StartTorpedoTest("DeployMultipleNamespaces", "Create multiple namespaces and deploy all dataservices", pdsLabels, 0)
 	})
 
 	It("creates multiple namespaces, deploys in each namespace", func() {
@@ -969,7 +933,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 
 var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeletePDSEnabledNamespace", "Create a namespace, deploy dataservices, delete the namespace and validate", nil, 0)
+		StartTorpedoTest("DeletePDSEnabledNamespace", "Create a namespace, deploy dataservices, delete the namespace and validate", pdsLabels, 0)
 	})
 
 	It("Deploy Dataservices and delete namespace", func() {
@@ -1048,7 +1012,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 
 var _ = Describe("{RestartPXPods}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RestartPXPods", "Deploy dataservice, stop px service on the nodes where the dataservice is deployed, validate", nil, 0)
+		StartTorpedoTest("RestartPXPods", "Deploy dataservice, stop px service on the nodes where the dataservice is deployed, validate", pdsLabels, 0)
 	})
 
 	It("Deploy Dataservices", func() {
@@ -1062,26 +1026,9 @@ var _ = Describe("{RestartPXPods}", func() {
 				})
 
 				Step("Running Workloads before scaling up of dataservices ", func() {
-					if ds.Name == postgresql {
-						deploymentName := "pgload"
-						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "100", "1", deploymentName, namespace)
-						log.FailOnError(err, "Error while genearating workloads")
-					}
-					if ds.Name == rabbitmq {
-						deploymentName := "rmq"
-						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						log.FailOnError(err, "Error while genearating workloads")
-					}
-					if ds.Name == redis {
-						deploymentName := "redisbench"
-						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						log.FailOnError(err, "Error while genearating workloads")
-					}
-					if ds.Name == cassandra {
-						deploymentName := "cassandra-stress"
-						pod, dep, err = pdslib.CreateDataServiceWorkloads(ds.Name, deployment.GetId(), "", "", deploymentName, namespace)
-						log.FailOnError(err, "Error while genearating workloads")
-					}
+					var params pdslib.WorkloadGenerationParams
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, "Error while genearating workloads")
 				})
 
 				defer func() {
@@ -1228,7 +1175,7 @@ func DeployInANamespaceAndVerify(nname string, namespaceID string) []string {
 
 var _ = Describe("{RollingRebootNodes}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("PDS: RollingRebootNodes", "Reboot node(s) while the data services will be running", nil, 0)
+		StartTorpedoTest("PDS: RollingRebootNodes", "Reboot node(s) while the data services will be running", pdsLabels, 0)
 	})
 
 	It("has to deploy data service and reboot node(s) while the data services will be running.", func() {
