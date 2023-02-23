@@ -38,14 +38,19 @@ var _ = Describe("{PodMetricFunctional}", func() {
 		// shared test function for pod metric functional tests
 		sharedTestFunction := func() {
 			It("has to fetch the logs from loggly", func() {
+				meteringInterval := 15 * time.Minute
+				log.InfoD("Testing with metering interval %v", meteringInterval)
+
 				log.InfoD("Getting cluster ID")
 				clusterUUID, err := getClusterID()
 				log.FailOnError(err, "Failed to get cluster id data")
 
 				log.InfoD("Fetching logs from loggly")
-				meteringData, err := getMeteringData(clusterUUID)
+				meteringData, err := getMeteringData(clusterUUID, meteringInterval)
 				log.FailOnError(err, "Failed to get metering data")
 
+				existsData := len(meteringData) > 0
+				dash.VerifyFatal(existsData, true, "there should be metering data originally in loggly")
 				initialPodHours := getLatestPodHours(meteringData)
 				log.InfoD("Latest pod hours before starting app: %v", initialPodHours)
 
@@ -58,21 +63,24 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				log.InfoD("Validate applications")
 				ValidateApplications(contexts)
 
-				waitDuration := 90 * time.Second
-				log.InfoD("Wait %v for a loggly interval to go through", waitDuration)
+				waitDuration := meteringInterval + 30*time.Second
+				log.InfoD("Wait %v for previous interval to go through", waitDuration)
+				time.Sleep(waitDuration)
+
+				log.InfoD("Wait %v for a new interval to go through", waitDuration)
 				time.Sleep(waitDuration)
 
 				log.InfoD("Check metering data is accurate")
-				meteringData, err = getMeteringData(clusterUUID)
+				meteringData, err = getMeteringData(clusterUUID, meteringInterval)
 				log.FailOnError(err, "Failed to get metering data")
-				existsData := len(meteringData) > 0
+				existsData = len(meteringData) > 0
 				dash.VerifyFatal(existsData, true, "there should be metering data in loggly")
 				for _, md := range meteringData {
 					dash.VerifyFatal(md.ClusterUUID, clusterUUID, "this cluster should have data now")
 				}
 
 				log.InfoD("Check pod hours is correct")
-				expectedAppPodHours := getExpectedPodHourInMinutes(contexts)
+				expectedAppPodHours := getExpectedPodHourInMinutes(contexts, meteringInterval)
 				expectedPodHours := (float64(expectedAppPodHours) / 60) + initialPodHours
 				log.InfoD("Estimated pod hours for this app is %v", expectedPodHours)
 				log.InfoD("Estimated total pod hours is %v", expectedPodHours)
@@ -170,10 +178,11 @@ func getClusterID() (string, error) {
 	return clusterID, nil
 }
 
-func getMeteringData(clusterUUID string) ([]*CallhomeData, error) {
+func getMeteringData(clusterUUID string, meteringInterval time.Duration) ([]*CallhomeData, error) {
 	log.InfoD("fetching logs from loggly")
 
-	data, code, err := getLogglyData(clusterUUID, "-2m")
+	lookbackInterval := meteringInterval + 1*time.Minute
+	data, code, err := getLogglyData(clusterUUID, fmt.Sprintf("-%vm", math.Round(lookbackInterval.Minutes())))
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +218,7 @@ func getMeteringData(clusterUUID string) ([]*CallhomeData, error) {
 
 // getExpectedPodHourInMinutes returns the estimate pod hour given that the metering interval is
 // 1 min. it checks a list of volumes and the number of pods using it to estimate the pod hour.
-func getExpectedPodHourInMinutes(contexts []*scheduler.Context) int {
+func getExpectedPodHourInMinutes(contexts []*scheduler.Context, meteringInterval time.Duration) int {
 	var totalPods []v1.Pod
 	for _, ctx := range contexts {
 		log.InfoD("getting pod hour for context %v", ctx.App.Key)
@@ -224,7 +233,7 @@ func getExpectedPodHourInMinutes(contexts []*scheduler.Context) int {
 	}
 
 	// Count one minute per pod using a PX volume
-	return len(totalPods)
+	return len(totalPods) * int(meteringInterval.Minutes())
 }
 
 func getLatestPodHours(meteringData []*CallhomeData) float64 {
