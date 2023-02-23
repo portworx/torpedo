@@ -2477,19 +2477,19 @@ func areRepSetsFinal(vol *api.Volume, replFactor int64) bool {
 }
 
 func (d *portworx) setDriver() error {
-	//if !d.skipPXSvcEndpoint {
-	//	// Try portworx-service first
-	//	endpoint, err := d.schedOps.GetServiceEndpoint()
-	//	if err == nil && endpoint != "" {
-	//		if err = d.testAndSetEndpointUsingService(endpoint); err == nil {
-	//			d.refreshEndpoint = false
-	//			return nil
-	//		}
-	//		log.Warnf("testAndSetEndpoint failed for %v: %v", endpoint, err)
-	//	} else if err != nil && len(node.GetWorkerNodes()) == 0 {
-	//		return err
-	//	}
-	//}
+	if !d.skipPXSvcEndpoint {
+		// Try portworx-service first
+		endpoint, err := d.schedOps.GetServiceEndpoint()
+		if err == nil && endpoint != "" {
+			if err = d.testAndSetEndpointUsingService(endpoint); err == nil {
+				d.refreshEndpoint = false
+				return nil
+			}
+			log.Warnf("testAndSetEndpoint failed for %v: %v", endpoint, err)
+		} else if err != nil && len(node.GetWorkerNodes()) == 0 {
+			return err
+		}
+	}
 
 	// Try direct address of cluster nodes
 	// Set refresh endpoint to true so that we try and get the new

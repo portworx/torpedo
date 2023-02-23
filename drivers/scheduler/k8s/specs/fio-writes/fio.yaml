@@ -7,7 +7,7 @@ spec:
   {{ if .Replicas }}
   replicas: {{ .Replicas }}
   {{ else }}
-  replicas: 2{{ end }}
+  replicas: 6{{ end }}
   selector:
     matchLabels:
       app: fio
