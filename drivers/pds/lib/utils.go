@@ -44,6 +44,8 @@ type Parameter struct {
 	InfraToTest struct {
 		ControlPlaneURL string `json:"ControlPlaneURL"`
 		AccountName     string `json:"AccountName"`
+		TenantName      string `json:"TenantName"`
+		ProjectName     string `json:"ProjectName"`
 		ClusterType     string `json:"ClusterType"`
 		Namespace       string `json:"Namespace"`
 		PxNamespace     string `json:"PxNamespace"`
@@ -233,7 +235,7 @@ func GetAndExpectBoolEnvVar(varName string) (bool, error) {
 }
 
 // SetupPDSTest returns few params required to run the test
-func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, string, string, string, string, error) {
+func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, error) {
 	var err error
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
@@ -272,19 +274,26 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName string) (string, str
 	log.InfoD("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
 	tnts := components.Tenant
 	tenants, _ := tnts.GetTenantsList(accountID)
-	tenantID = tenants[0].GetId()
-	tenantName := tenants[0].GetName()
-	log.InfoD("Tenant Details- Name: %s, UUID: %s ", tenantName, tenantID)
+	for _, tenant := range tenants {
+		if tenant.GetName() == TenantName {
+			tenantID = tenant.GetId()
+		}
+
+	}
+	log.InfoD("Tenant Details- Name: %s, UUID: %s ", TenantName, tenantID)
 	dnsZone, err := controlplane.GetDNSZone(tenantID)
 	if err != nil {
 		return "", "", "", "", "", err
 	}
-	log.InfoD("DNSZone: %s, tenantName: %s, accountName: %s", dnsZone, tenantName, AccountName)
+	log.InfoD("DNSZone: %s, tenantName: %s, accountName: %s", dnsZone, TenantName, AccountName)
 	projcts := components.Project
 	projects, _ := projcts.GetprojectsList(tenantID)
-	projectID = projects[0].GetId()
-	projectName := projects[0].GetName()
-	log.InfoD("Project Details- Name: %s, UUID: %s ", projectName, projectID)
+	for _, project := range projects {
+		if project.GetName() == ProjectName {
+			projectID = project.GetId()
+		}
+	}
+	log.InfoD("Project Details- Name: %s, UUID: %s ", ProjectName, projectID)
 
 	ns, err = k8sCore.GetNamespace("kube-system")
 	if err != nil {
