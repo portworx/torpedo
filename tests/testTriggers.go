@@ -5898,12 +5898,13 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 		if get_mig_err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to get migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, get_mig_err))
 		}
+		volumesMigrated := resp.Status.Summary.NumberOfMigratedVolumes
 		resourcesMigrated := resp.Status.Summary.NumberOfMigratedResources
-		if resourcesMigrated != 0 {
-			UpdateOutcome(event, fmt.Errorf("resources should not migrate in volumeonlymigration case, numberOfmigratedresources should %d, getting %d",
-				0, resourcesMigrated))
+		expectedresourcesMigrated := 2 * volumesMigrated
+		if resourcesMigrated != expectedresourcesMigrated {
+			UpdateOutcome(event, fmt.Errorf("resources migrated for should be %d, getting %d", expectedresourcesMigrated, resourcesMigrated))
 		} else {
-			log.InfoD("Number of resources migrated in Volume Only migration should be 0, Resources migrated: %d", resourcesMigrated)
+			log.InfoD("Number of resources migrated: %d", resourcesMigrated)
 		}
 	}
 	updateMetrics(*event)
