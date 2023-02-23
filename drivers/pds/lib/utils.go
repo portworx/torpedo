@@ -234,6 +234,26 @@ func GetAndExpectBoolEnvVar(varName string) (bool, error) {
 	return varBoolValue, err
 }
 
+func GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
+	log.Info("Get the Target cluster details")
+	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
+	if err != nil {
+		log.Errorf("Error while listing deployments %v", err)
+		return "", err
+	}
+	if targetClusters == nil {
+		log.Fatalf("Target cluster passed is not available to the account/tenant %v", err)
+	}
+	for i := 0; i < len(targetClusters); i++ {
+		if targetClusters[i].GetClusterId() == clusterID {
+			deploymentTargetID = targetClusters[i].GetId()
+			log.Infof("deploymentTargetID %v", deploymentTargetID)
+			log.Infof("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
+		}
+	}
+	return deploymentTargetID, nil
+}
+
 // SetupPDSTest returns few params required to run the test
 func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, error) {
 	var err error
@@ -303,31 +323,10 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	if len(clusterID) > 0 {
 		log.InfoD("clusterID %v", clusterID)
 	} else {
-		log.Fatalf("Cluster ID is empty")
+		log.InfoD("Cluster ID is empty")
 	}
 
-	log.InfoD("Get the Target cluster details")
-	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
-	if err != nil {
-		return "", "", "", "", "", err
-	}
-	if targetClusters == nil {
-		log.Fatalf("No Target cluster is available for the account/tenant %v", err)
-	}
-	istargetclusterAvailable = false
-	for i := 0; i < len(targetClusters); i++ {
-		if targetClusters[i].GetClusterId() == clusterID {
-			istargetclusterAvailable = true
-			deploymentTargetID = targetClusters[i].GetId()
-			log.InfoD("Deployment Target ID %v", deploymentTargetID)
-			log.InfoD("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
-			break
-		}
-	}
-	if !istargetclusterAvailable {
-		return "", "", "", "", "", fmt.Errorf("target cluster is not available for the account/tenant")
-	}
-	return tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err
+	return tenantID, dnsZone, projectID, serviceType, clusterID, err
 }
 
 // ValidateNamespaces validates the namespace is available for pds

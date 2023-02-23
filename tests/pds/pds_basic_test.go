@@ -36,7 +36,7 @@ var _ = BeforeSuite(func() {
 		infraParams := params.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
-		tenantID, dnsZone, projectID, serviceType, deploymentTargetID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
+		tenantID, dnsZone, projectID, serviceType, clusterID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
 		log.InfoD("DeploymentTargetID %v ", deploymentTargetID)
 		log.FailOnError(err, "Failed on SetupPDSTest method")
 	})
@@ -45,6 +45,12 @@ var _ = BeforeSuite(func() {
 		infraParams := params.InfraToTest
 		err = pdslib.RegisterClusterToControlPlane(infraParams.ControlPlaneURL, tenantID, infraParams.ClusterType)
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Step("Get Deployment TargetID", func() {
+		deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
+		Expect(err).NotTo(HaveOccurred())
+		dash.Infof("DeploymentTargetID %v ", deploymentTargetID)
 	})
 
 	Step("Get StorageTemplateID and Replicas", func() {

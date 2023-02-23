@@ -42,6 +42,7 @@ var (
 	pxnamespace                             string
 	tenantID                                string
 	dnsZone                                 string
+	clusterID                               string
 	projectID                               string
 	serviceType                             string
 	deploymentTargetID                      string
