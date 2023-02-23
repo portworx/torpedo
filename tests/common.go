@@ -5069,10 +5069,7 @@ func GetRandomNodeWithPoolIOs(contexts []*scheduler.Context) (node.Node, error) 
 	}
 
 	n, err := GetNodeWithGivenPoolID(poolID)
-	if err != nil {
-		return node.Node{}, err
-	}
-	return *n, nil
+	return *n, err
 }
 
 func GetRandomStorageLessNode(slNodes []node.Node) node.Node {

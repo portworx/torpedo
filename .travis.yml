@@ -9,9 +9,6 @@ cache:
   directories:
     - $GOPATH/pkg/mod
 before_install:
-  - sudo apt-get clean
-  - sudo rm -r /var/lib/apt/lists/*
-  - sudo apt-get clean
   - sudo apt-get update -yq
   - sudo apt-get install apt-transport-https ca-certificates -y
   - sudo update-ca-certificates
