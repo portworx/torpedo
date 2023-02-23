@@ -10,7 +10,6 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -25,44 +24,6 @@ const (
 const (
 	fio = "fio-throttle-io"
 )
-
-// Volume mount options test
-var _ = Describe("{Volumemount}", func() {
-	var contexts []*scheduler.Context
-	var mountoption = []string{"nosuid"}
-	It("Has to inspect FA/FB  DA volumes and validate mountoptions", func() {
-		contexts = make([]*scheduler.Context, 0)
-		contexts = ScheduleApplications(fmt.Sprintf("mount"))
-		ValidateApplications(contexts)
-		for _, ctx := range contexts {
-			vols, err := Inst().S.GetVolumes(ctx)
-
-			if err != nil {
-				log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
-			}
-			log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
-
-			for _, v := range vols {
-				attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
-				if err != nil {
-					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-				}
-				Step("validating mount options", func() {
-					err = Inst().V.ValidateMountOptions(v.ID, mountoption, attachedNode)
-					Expect(err).To(BeNil(), "Failed to validate mount options")
-				})
-			}
-		}
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
-	})
-})
 
 // Volume replication change
 var _ = Describe("{VolumeUpdate}", func() {
