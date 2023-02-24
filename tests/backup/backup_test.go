@@ -442,8 +442,7 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 
 			Step("Switch Context (\"Source\")", func() {
 				sourceClusterConfigPath, err := GetSourceClusterConfigPath()
-				Expect(err).NotTo(HaveOccurred(),
-					fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
+				log.FailOnError(err, "Failed to get kubeconfig path for source cluster. Error: [%v]", err)
 
 				err = Inst().S.SetConfig(sourceClusterConfigPath)
 				log.FailOnError(err, "Failed to switch to context to source cluster [%v]", sourceClusterConfigPath)
@@ -454,8 +453,7 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 
 			Step("Switch Context (\"destination\")", func() {
 				destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
-				Expect(err).NotTo(HaveOccurred(),
-					fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+				log.FailOnError(err, "Failed to get kubeconfig path for destination cluster. Error: [%v]", err)
 
 				err = Inst().S.SetConfig(destinationClusterConfigPath)
 				log.FailOnError(err, "Failed to switch to context to destination cluster [%v]", destinationClusterConfigPath)
