@@ -24,8 +24,10 @@ func TestDataService(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	Step("get prerequisite params to run the pds tests", func() {
+	steplog := "Get prerequisite params to run the pds tests"
+	Step(steplog, func() {
 		//InitInstance()
+		log.InfoD(steplog)
 		dash = Inst().Dash
 		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
@@ -36,30 +38,37 @@ var _ = BeforeSuite(func() {
 		infraParams := params.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
-		tenantID, dnsZone, projectID, serviceType, clusterID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
+		tenantID, dnsZone, projectID, serviceType, clusterID, err = SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
 		log.InfoD("DeploymentTargetID %v ", deploymentTargetID)
 		log.FailOnError(err, "Failed on SetupPDSTest method")
 	})
 
-	Step("Check and Register Target Cluster to ControlPlane", func() {
+	steplog = "Check and Register Target Cluster to ControlPlane"
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		infraParams := params.InfraToTest
 		err = pdslib.RegisterClusterToControlPlane(infraParams.ControlPlaneURL, tenantID, infraParams.ClusterType)
-		Expect(err).NotTo(HaveOccurred())
+		log.FailOnError(err, "Target Cluster Registeration failed")
 	})
 
-	Step("Get Deployment TargetID", func() {
+	steplog = "Get Deployment TargetID"
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
-		Expect(err).NotTo(HaveOccurred())
-		dash.Infof("DeploymentTargetID %v ", deploymentTargetID)
+		log.FailOnError(err, "Failed to get the deployment TargetID")
+		log.InfoD("DeploymentTargetID %v ", deploymentTargetID)
 	})
 
-	Step("Get StorageTemplateID and Replicas", func() {
+	steplog = "Get StorageTemplateID and Replicas"
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
 		log.FailOnError(err, "Failed while getting storage template ID")
 		log.InfoD("storageTemplateID %v", storageTemplateID)
 	})
 
-	Step("Create/Get Namespace and NamespaceID", func() {
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		namespace = params.InfraToTest.Namespace
 		_, isavailable, err := pdslib.CreatePDSNamespace(namespace)
 		log.FailOnError(err, "Error while Create/Get Namespaces")

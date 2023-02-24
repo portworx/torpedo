@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,7 +21,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
-	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -235,98 +233,22 @@ func GetAndExpectBoolEnvVar(varName string) (bool, error) {
 }
 
 func GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
-	log.Info("Get the Target cluster details")
+	log.InfoD("Get the Target cluster details")
 	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 	if err != nil {
-		log.Errorf("Error while listing deployments %v", err)
-		return "", err
+		return "", fmt.Errorf("error while listing deployments: %v", err)
 	}
 	if targetClusters == nil {
-		log.Fatalf("Target cluster passed is not available to the account/tenant %v", err)
+		return "", fmt.Errorf("target cluster passed is not available to the account/tenant %v", err)
 	}
 	for i := 0; i < len(targetClusters); i++ {
 		if targetClusters[i].GetClusterId() == clusterID {
 			deploymentTargetID = targetClusters[i].GetId()
 			log.Infof("deploymentTargetID %v", deploymentTargetID)
-			log.Infof("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
+			log.InfoD("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
 		}
 	}
 	return deploymentTargetID, nil
-}
-
-// SetupPDSTest returns few params required to run the test
-func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, error) {
-	var err error
-	apiConf := pds.NewConfiguration()
-	endpointURL, err := url.Parse(ControlPlaneURL)
-	if err != nil {
-		return "", "", "", "", "", err
-	}
-	apiConf.Host = endpointURL.Host
-	apiConf.Scheme = endpointURL.Scheme
-
-	apiClient = pds.NewAPIClient(apiConf)
-	components = pdsapi.NewComponents(apiClient)
-	controlplane := pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
-
-	if strings.EqualFold(ClusterType, "onprem") || strings.EqualFold(ClusterType, "ocp") {
-		serviceType = "ClusterIP"
-	}
-	log.InfoD("Deployment service type %s", serviceType)
-
-	acc := components.Account
-	accounts, err := acc.GetAccountsList()
-	if err != nil {
-		return "", "", "", "", "", err
-	}
-
-	isAccountAvailable = false
-	for i := 0; i < len(accounts); i++ {
-		log.InfoD("Account Name: %v", accounts[i].GetName())
-		if accounts[i].GetName() == AccountName {
-			isAccountAvailable = true
-			accountID = accounts[i].GetId()
-		}
-	}
-	if !isAccountAvailable {
-		log.Fatalf("Account %v is not available", AccountName)
-	}
-	log.InfoD("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
-	tnts := components.Tenant
-	tenants, _ := tnts.GetTenantsList(accountID)
-	for _, tenant := range tenants {
-		if tenant.GetName() == TenantName {
-			tenantID = tenant.GetId()
-		}
-
-	}
-	log.InfoD("Tenant Details- Name: %s, UUID: %s ", TenantName, tenantID)
-	dnsZone, err := controlplane.GetDNSZone(tenantID)
-	if err != nil {
-		return "", "", "", "", "", err
-	}
-	log.InfoD("DNSZone: %s, tenantName: %s, accountName: %s", dnsZone, TenantName, AccountName)
-	projcts := components.Project
-	projects, _ := projcts.GetprojectsList(tenantID)
-	for _, project := range projects {
-		if project.GetName() == ProjectName {
-			projectID = project.GetId()
-		}
-	}
-	log.InfoD("Project Details- Name: %s, UUID: %s ", ProjectName, projectID)
-
-	ns, err = k8sCore.GetNamespace("kube-system")
-	if err != nil {
-		return "", "", "", "", "", err
-	}
-	clusterID := string(ns.GetObjectMeta().GetUID())
-	if len(clusterID) > 0 {
-		log.InfoD("clusterID %v", clusterID)
-	} else {
-		log.InfoD("Cluster ID is empty")
-	}
-
-	return tenantID, dnsZone, projectID, serviceType, clusterID, err
 }
 
 // ValidateNamespaces validates the namespace is available for pds
@@ -1104,7 +1026,7 @@ func CreateTempNS(length int32) (string, error) {
 	return namespace, nil
 }
 
-func isReachbale(url string) (bool, error) {
+func IsReachable(url string) (bool, error) {
 	timeout := time.Duration(15 * time.Second)
 	client := http.Client{
 		Timeout: timeout,
@@ -1118,8 +1040,8 @@ func isReachbale(url string) (bool, error) {
 
 //RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
 func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string) error {
-	log.Info("Test control plane url connectivity.")
-	_, err := isReachbale(controlPlaneUrl)
+	log.InfoD("Test control plane url connectivity.")
+	_, err := IsReachable(controlPlaneUrl)
 	if err != nil {
 		return fmt.Errorf("unable to reach the control plane with following error - %v", err)
 	}
