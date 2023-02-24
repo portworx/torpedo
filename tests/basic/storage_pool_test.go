@@ -5488,10 +5488,10 @@ var _ = Describe("{PoolDelete}", func() {
 		if _, ok := poolsMap[poolIDToDelete]; !ok {
 			log.FailOnError(fmt.Errorf("error idetifying pool drive"), "poolID %s not found in the node %s", poolIDToDelete, nodeSelected.Name)
 		}
-
 		poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
 
+<<<<<<< HEAD
 		stepLog = fmt.Sprintf("Delete poolID %s on node %s", poolIDToDelete, nodeSelected.Name)
 
 		Step(stepLog, func() {
@@ -5529,6 +5529,9 @@ var _ = Describe("{PoolDelete}", func() {
 			dash.VerifyFatal(ok, false, "verify drive is deleted from the node")
 
 		})
+=======
+		deletePoolAndValidate(nodeSelected, poolIDToDelete)
+>>>>>>> 8b6b37829 (Adding test for all pools deletion)
 
 		contexts = make([]*scheduler.Context, 0)
 
@@ -7188,6 +7191,7 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
 			dash.VerifyFatal(errMatch, nil, "Pool expand to lower size than existing pool size completed?")
 
 		})
+
 	})
 
 	JustAfterEach(func() {
