@@ -1187,15 +1187,14 @@ func RunConsulBenchWorkload(deploymentName string, namespace string) (*v1.Deploy
 	log.InfoD("Going to Trigger Consul Bench Workload for the Deployment")
 	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
-		log.Errorf("An Error Occured while creating deployment %v", err)
 		return nil, err
 	}
 	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
 	if err != nil {
-		log.Errorf("An Error Occured while validating the pod %v", err)
 		return nil, err
 	}
 
+	// Sleeping for 1 minute to let the Workload run
 	time.Sleep(1 * time.Minute)
 
 	return deployment, nil
