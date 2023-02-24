@@ -111,7 +111,6 @@ import (
 
 	context1 "context"
 
-	"github.com/pborman/uuid"
 	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -152,7 +151,7 @@ const (
 	meteringIntervalMinsFlag             = "metering_interval_mins"
 	SourceClusterName                    = "source-cluster"
 	destinationClusterName               = "destination-cluster"
-	backupLocationName                   = "tp-blocation"
+	backupLocationNameConst              = "tp-blocation"
 	backupScheduleNamePrefix             = "tp-bkp-schedule"
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
@@ -2384,7 +2383,7 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				Uid:  schedulePolicyUID,
 			},
 			BackupLocationRef: &api.ObjectRef{
-				Name: backupLocationName,
+				Name: backupLocationNameConst,
 				Uid:  BackupLocationUID,
 			},
 		}
@@ -2677,28 +2676,6 @@ func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error
 	_, err := backupDriver.DeleteRestore(ctx, deleteRestoreReq)
 	return err
 	// TODO: validate createClusterResponse also
-}
-
-// SetupBackup sets up backup location and source and destination clusters
-func SetupBackup(testName string) {
-	log.Infof("Backup driver: %v", Inst().Backup)
-	provider := GetProvider()
-	log.Infof("Run Setup backup with object store provider: %s", provider)
-	OrgID = "default"
-	BucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
-	CloudCredUID = uuid.New()
-	//cloudCredUID = "5a48be84-4f63-40ae-b7f1-4e4039ab7477"
-	BackupLocationUID = uuid.New()
-	//backupLocationUID = "64d908e7-40cf-4c9e-a5cf-672e955fd0ca"
-
-	CreateBucket(provider, BucketName)
-	CreateOrganization(OrgID)
-	CreateCloudCredential(provider, CredName, CloudCredUID, OrgID)
-	CreateBackupLocation(provider, backupLocationName, BackupLocationUID, CredName, CloudCredUID, BucketName, OrgID, "")
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
-	err = CreateSourceAndDestClusters(OrgID, "", "", ctx)
-	log.FailOnError(err, "Creating source and destination cluster")
 }
 
 // DeleteBackup deletes backup
@@ -3745,72 +3722,6 @@ func ValidateReplFactorUpdate(v *volume.Volume, expaectedReplFactor int64) error
 	return nil
 }
 
-// TearDownBackupRestoreAll enumerates backups and restores before deleting them
-func TearDownBackupRestoreAll() {
-	log.Infof("Enumerating scheduled backups")
-	bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
-		OrgId:  OrgID,
-		Labels: make(map[string]string),
-		BackupLocationRef: &api.ObjectRef{
-			Name: backupLocationName,
-			Uid:  BackupLocationUID,
-		},
-	}
-	ctx, err := backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumBkpScheduleResponse, _ := Inst().Backup.EnumerateBackupSchedule(ctx, bkpScheduleEnumerateReq)
-	bkpSchedules := enumBkpScheduleResponse.GetBackupSchedules()
-	for _, bkpSched := range bkpSchedules {
-		schedPol := bkpSched.GetSchedulePolicyRef()
-		DeleteScheduledBackup(bkpSched.GetName(), bkpSched.GetUid(), schedPol.GetName(), schedPol.GetUid())
-	}
-
-	log.Infof("Enumerating backups")
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: OrgID,
-	}
-	ctx, err = backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumBkpResponse, _ := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
-	backups := enumBkpResponse.GetBackups()
-	for _, bkp := range backups {
-		DeleteBackup(bkp.GetName(), bkp.GetUid(), OrgID, ctx)
-	}
-
-	log.Infof("Enumerating restores")
-	restoreEnumerateReq := &api.RestoreEnumerateRequest{
-		OrgId: OrgID}
-	ctx, err = backup.GetPxCentralAdminCtx()
-	expect(err).NotTo(haveOccurred())
-	enumRestoreResponse, _ := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
-	restores := enumRestoreResponse.GetRestores()
-	for _, restore := range restores {
-		err = DeleteRestore(restore.GetName(), OrgID, ctx)
-		dash.VerifyFatal(err, nil, "Deleting Restore")
-	}
-
-	for _, bkp := range backups {
-		Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), OrgID,
-			BackupRestoreCompletionTimeoutMin*time.Minute,
-			RetrySeconds*time.Second)
-	}
-	for _, restore := range restores {
-		Inst().Backup.WaitForRestoreDeletion(ctx, restore.GetName(), OrgID,
-			BackupRestoreCompletionTimeoutMin*time.Minute,
-			RetrySeconds*time.Second)
-	}
-	provider := GetProvider()
-	err = DeleteCluster(destinationClusterName, OrgID, ctx)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
-	err = DeleteCluster(SourceClusterName, OrgID, ctx)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-	err = DeleteBackupLocation(backupLocationName, BackupLocationUID, OrgID)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
-	err = DeleteCloudCredential(CredName, OrgID, CloudCredUID)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", CredName))
-	DeleteBucket(provider, BucketName)
-}
-
 // CreateBucket creates bucket on the appropriate cloud platform
 func CreateBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Create bucket [%s]", bucketName), func() {
@@ -4638,6 +4549,7 @@ func WaitForExpansionToStart(poolID string) error {
 				log.InfoD("Pool %s expansion started", poolID)
 				return nil, false, nil
 			}
+
 		}
 		return nil, true, fmt.Errorf("pool %s resize not triggered ", poolID)
 	}
@@ -4754,7 +4666,7 @@ func Contains(app_list []string, app string) bool {
 }
 
 // ValidatePoolRebalance checks rebalnce state of pools if running
-func ValidatePoolRebalance() error {
+func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 
 	rebalanceFunc := func() (interface{}, bool, error) {
 
@@ -4818,27 +4730,42 @@ func ValidatePoolRebalance() error {
 		return err
 	}
 
-	var pools map[string]*opsapi.StoragePool
-	pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
-	log.FailOnError(err, "error getting pools list")
-
-	for _, pool := range pools {
-
-		if pool == nil {
-			return fmt.Errorf("pool value is nil")
+	nodePoolsToValidate := make([]node.StoragePool, 0)
+	if poolID != -1 {
+		for _, p := range stNode.StoragePools {
+			if p.ID == poolID {
+				nodePoolsToValidate = append(nodePoolsToValidate, p)
+				break
+			}
 		}
+	} else {
+		//A new pool might be created due to add drive,hence 2 min wait for pool to associate with node
+		time.Sleep(2 * time.Minute)
+		err = Inst().V.RefreshDriverEndpoints()
+		log.FailOnError(err, "error refreshing end points")
+		for _, n := range node.GetStorageNodes() {
+			if n.Id == stNode.Id {
+				stNode = n
+				break
+			}
+		}
+		nodePoolsToValidate = append(nodePoolsToValidate, stNode.StoragePools...)
+
+	}
+
+	for _, nodePool := range nodePoolsToValidate {
 		currentLastMsg := ""
 		f := func() (interface{}, bool, error) {
-			expandedPool, err := GetStoragePoolByUUID(pool.Uuid)
+			expandedPool, err := GetStoragePoolByUUID(nodePool.Uuid)
 			if err != nil {
-				return nil, true, fmt.Errorf("error getting pool by using id %s", pool.Uuid)
+				return nil, true, fmt.Errorf("error getting pool by using id %s from node %s", nodePool.Uuid, stNode.Name)
 			}
 
 			if expandedPool == nil {
 				return nil, false, fmt.Errorf("expanded pool value is nil")
 			}
 			if expandedPool.LastOperation != nil {
-				log.Infof("Pool Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
+				log.Infof("Node [%s] Pool [%s] Status : %v, Message : %s", stNode.Name, nodePool.Uuid, expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
 				if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
 					return nil, false, fmt.Errorf("Pool is failed state. Error: %s", expandedPool.LastOperation)
 				}
@@ -4860,7 +4787,6 @@ func ValidatePoolRebalance() error {
 		}
 		_, err = task.DoRetryWithTimeout(f, time.Minute*180, time.Minute*2)
 	}
-
 	return err
 }
 
@@ -5253,7 +5179,7 @@ func WaitTillEnterMaintenanceMode(n node.Node) error {
 
 // ExitFromMaintenanceMode wait until the node exits from maintenance mode
 func ExitFromMaintenanceMode(n node.Node) error {
-	log.InfoD("Exiting maintenence mode on Node %s", n.Name)
+	log.InfoD("Exiting maintenance mode on Node %s", n.Name)
 	t := func() (interface{}, bool, error) {
 		if err := Inst().V.ExitMaintenance(n); err != nil {
 			nodeState, err := Inst().V.IsNodeInMaintenance(n)
@@ -5324,4 +5250,37 @@ func IsEksPxOperator() bool {
 		}
 	}
 	return false
+}
+
+/*
+ * GetSubsetOfSlice selects a random subset of unique items from the input slice,
+ * with the given length. It returns a new slice with the selected items in random order.
+ * If length is zero or negative or greater than the length of the input slice, it also returns an error.
+ *
+ * Parameters:
+ * - items: a slice of any type to select from.
+ * - length: the number of items to select from the input slice.
+ *
+ * Returns:
+ * - a new slice of type T with the selected items in random order.
+ * - an error if the length parameter is zero or negative, or if it is greater than the length of the input slice.
+ */
+func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
+	if length <= 0 {
+		return nil, fmt.Errorf("length must be greater than zero")
+	}
+	if length > len(items) {
+		return nil, fmt.Errorf("length cannot be greater than the length of the input items")
+	}
+	randomItems := make([]T, length)
+	selected := make(map[int]bool)
+	for i := 0; i < length; i++ {
+		j := rand.Intn(len(items))
+		for selected[j] {
+			j = rand.Intn(len(items))
+		}
+		selected[j] = true
+		randomItems[i] = items[j]
+	}
+	return randomItems, nil
 }
