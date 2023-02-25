@@ -570,7 +570,7 @@ func nodePoolsExpansion(testName string) {
 		pools              map[string]*api.StoragePool
 		poolsToBeResized   []*api.StoragePool
 		nodePoolToExpanded node.Node
-		nodePools          []node.StoragePool
+		nodePools          []*api.StoragePool
 		eligibility        map[string]bool
 	)
 
@@ -593,7 +593,7 @@ func nodePoolsExpansion(testName string) {
 
 		//getting the eligible pools of the node to initiate expansion
 		for _, stNode := range stNodes {
-			nodePools = stNode.StoragePools
+			nodePools = stNode.Pools
 			nodePoolToExpanded = stNode
 			eligibility, err = GetPoolExpansionEligibility(&stNode)
 			log.FailOnError(err, "error checking node [%s] expansion criteria", stNode.Name)
@@ -922,7 +922,7 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) bool {
 					return nil, true, fmt.Errorf("error getting node with pool uuid [%s]. err %v", poolToBeResized.Uuid, err)
 				}
 				var poolID int32
-				for _, p := range stNode.StoragePools {
+				for _, p := range stNode.Pools {
 					if p.Uuid == poolToBeResized.Uuid {
 						poolID = p.ID
 					}
@@ -7149,6 +7149,7 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
 		StartTorpedoTest("ResizePoolReduceErrorcheck",
 			"Resize to lower size than existing pool size,should fail with proper error statement",
 			nil, 0)
+
 	})
 
 	var contexts []*scheduler.Context

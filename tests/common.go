@@ -2017,7 +2017,7 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
-		CollectSupport()
+		//CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
 	}
@@ -4732,9 +4732,9 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 		return err
 	}
 
-	nodePoolsToValidate := make([]node.StoragePool, 0)
+	nodePoolsToValidate := make([]*opsapi.StoragePool, 0)
 	if poolID != -1 {
-		for _, p := range stNode.StoragePools {
+		for _, p := range stNode.Pools {
 			if p.ID == poolID {
 				nodePoolsToValidate = append(nodePoolsToValidate, p)
 				break
@@ -4751,7 +4751,7 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 				break
 			}
 		}
-		nodePoolsToValidate = append(nodePoolsToValidate, stNode.StoragePools...)
+		nodePoolsToValidate = append(nodePoolsToValidate, stNode.Pools...)
 
 	}
 
@@ -5615,7 +5615,7 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) 
 	if err = Inst().V.EnterPoolMaintenance(stNode); err != nil {
 		return err
 	}
-	//Waiting for pool to change to maintenance mode completely
+	//Waiting for cli to work
 	time.Sleep(2 * time.Minute)
 
 	if status, err := Inst().V.GetNodeStatus(stNode); err != nil {
@@ -5637,6 +5637,27 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) 
 
 		if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
 			log.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+		//Adding wait as even PX is up it is taking some time for pool status to update
+		//when all pools are deleted
+		time.Sleep(1 * time.Minute)
+		cmd := "pxctl sv pool show"
+		var out string
+
+		// Execute the command and check if any pools exist
+		out, exitErr = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil {
+			log.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+		log.Infof("pool show: [%s]", out)
+
+		//skipping waitForPoolStatusToUpdate if there are no pools in the node
+		if strings.Contains(out, "No drives configured for this node") {
 			return
 		}
 
