@@ -52,20 +52,14 @@ type TargetCluster struct {
 func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL string, helmChartversion string, bearerToken string, tenantId string, clusterType string) error {
 	var cmd string
 	apiEndpoint := fmt.Sprintf(controlPlaneURL + "api")
-	log.Infof("Verify if the namespace %s already exits.", PDSNamespace)
 	isRegistered := false
-	_, err := k8sCore.GetNamespace(PDSNamespace)
+	pods, err := k8sCore.GetPods(PDSNamespace, nil)
 	if err != nil {
-		log.InfoD("Namespace %v doesnt exist ", PDSNamespace)
-	} else {
-		pods, err := k8sCore.GetPods(PDSNamespace, nil)
-		if err != nil {
-			return err
-		}
-		if len(pods.Items) > 0 {
-			log.InfoD("Target cluster is already registered to control plane.")
-			isRegistered = true
-		}
+		return err
+	}
+	if len(pods.Items) > 0 {
+		log.InfoD("Target cluster is already registered to control plane.")
+		isRegistered = true
 	}
 	if !isRegistered {
 		log.Infof("Installing PDS ( helm version -  %v)", helmChartversion)
