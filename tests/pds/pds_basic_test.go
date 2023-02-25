@@ -25,6 +25,7 @@ func TestDataService(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	steplog := "Get prerequisite params to run the pds tests"
+	log.InfoD(steplog)
 	Step(steplog, func() {
 		//InitInstance()
 		log.InfoD(steplog)
@@ -38,8 +39,7 @@ var _ = BeforeSuite(func() {
 		infraParams := params.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
-		tenantID, dnsZone, projectID, serviceType, clusterID, err = SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
-		log.InfoD("DeploymentTargetID %v ", deploymentTargetID)
+		tenantID, dnsZone, projectID, serviceType, clusterID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
 		log.FailOnError(err, "Failed on SetupPDSTest method")
 	})
 
@@ -54,9 +54,11 @@ var _ = BeforeSuite(func() {
 	steplog = "Get Deployment TargetID"
 	Step(steplog, func() {
 		log.InfoD(steplog)
+		log.Infof("cluster id %v and tenant id %v", clusterID, tenantID)
 		deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
 		log.FailOnError(err, "Failed to get the deployment TargetID")
-		log.InfoD("DeploymentTargetID %v ", deploymentTargetID)
+		dash.VerifyFatal(deploymentTargetID != "", true, "deploymentTarget is not registered to the controlPlane")
+		log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
 	})
 
 	steplog = "Get StorageTemplateID and Replicas"
