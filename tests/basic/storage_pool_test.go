@@ -7155,7 +7155,6 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
 	stepLog := "Resize to lower size than existing"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("reducesize-%d", i))...)
@@ -7189,9 +7188,7 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
 				errMatch = fmt.Errorf("Failed to verify failure to lower pool size PoolUUID [%v]", poolUUID)
 			}
 			dash.VerifyFatal(errMatch, nil, "Pool expand to lower size than existing pool size completed?")
-
 		})
-
 	})
 
 	JustAfterEach(func() {

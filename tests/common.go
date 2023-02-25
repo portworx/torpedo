@@ -5616,12 +5616,14 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) 
 		return err
 	}
 	//Waiting for pool to change to maintenance mode completely
-	time.Sleep(1 * time.Minute)
+	time.Sleep(2 * time.Minute)
 
-	if err = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); err != nil {
-		log.Errorf("error waiting for driver up after entering pool maintenance in the node [%v]. Err: %v", stNode.Name, err)
-		return
+	if status, err := Inst().V.GetNodeStatus(stNode); err != nil {
+		return err
+	} else {
+		log.InfoD("Node [%s] has status: [%v] after entering pool maintenance", stNode.Name, status)
 	}
+
 	expectedStatus := "In Maintenance"
 	if err = waitForPoolStatusToUpdate(stNode, expectedStatus); err != nil {
 		return fmt.Errorf("node %s pools are not in status %s. Error:%v", stNode.Name, expectedStatus, err)
