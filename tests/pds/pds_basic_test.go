@@ -27,7 +27,6 @@ var _ = BeforeSuite(func() {
 	steplog := "Get prerequisite params to run the pds tests"
 	log.InfoD(steplog)
 	Step(steplog, func() {
-		//InitInstance()
 		log.InfoD(steplog)
 		dash = Inst().Dash
 		dash.TestSet.Product = "pds"
@@ -57,7 +56,7 @@ var _ = BeforeSuite(func() {
 		log.Infof("cluster id %v and tenant id %v", clusterID, tenantID)
 		deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
 		log.FailOnError(err, "Failed to get the deployment TargetID")
-		dash.VerifyFatal(deploymentTargetID != "", true, "deploymentTarget is not registered to the controlPlane")
+		dash.VerifyFatal(deploymentTargetID != "", true, "Verifying deployment target is registerd to control plane")
 		log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
 	})
 
@@ -74,7 +73,7 @@ var _ = BeforeSuite(func() {
 		namespace = params.InfraToTest.Namespace
 		_, isavailable, err := pdslib.CreatePDSNamespace(namespace)
 		log.FailOnError(err, "Error while Create/Get Namespaces")
-		dash.VerifyFatal(bool(true), isavailable, "Namespace is not available for pds to deploy data services")
+		dash.VerifyFatal(bool(true), isavailable, "Verifying if Namespace not available for pds to deploy data services")
 		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
 		log.FailOnError(err, "Error while getting namespace id")
 		dash.VerifyFatal(namespaceID != "", true, "validating namespace ID")

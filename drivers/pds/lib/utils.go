@@ -1072,10 +1072,11 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 		if accounts[i].GetName() == AccountName {
 			isAccountAvailable = true
 			accountID = accounts[i].GetId()
+			break
 		}
 	}
 	if !isAccountAvailable {
-		log.Fatalf("Account %v is not available", AccountName)
+		return "", "", "", "", "", fmt.Errorf("account %v is not available", AccountName)
 	}
 	log.InfoD("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
 	tnts := components.Tenant
@@ -1083,6 +1084,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	for _, tenant := range tenants {
 		if tenant.GetName() == TenantName {
 			tenantID = tenant.GetId()
+			break
 		}
 
 	}
@@ -1097,6 +1099,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	for _, project := range projects {
 		if project.GetName() == ProjectName {
 			projectID = project.GetId()
+			break
 		}
 	}
 	log.InfoD("Project Details- Name: %s, UUID: %s ", ProjectName, projectID)
@@ -1137,6 +1140,7 @@ func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string
 		log.Infof(*acc.Name)
 		if *acc.Name == "Default-AgentWriter" {
 			serviceAccId = *acc.Id
+			break
 		}
 	}
 
