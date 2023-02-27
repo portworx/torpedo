@@ -15,6 +15,7 @@ require (
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/protobuf v1.5.2
+	github.com/google/gnostic v0.5.7-v3refs
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-version v1.6.0
 	github.com/hashicorp/vault/api v1.0.5-0.20200902155336-f9d5ce5a171a
@@ -33,7 +34,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20220901142946-b6ecf97f5e71
 	github.com/portworx/px-backup-api v1.2.2-0.20220822053657-49308ab319f1
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20230103234348-243afb3bb8aa
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20230227070742-0e0e882ec5d6
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
 	github.com/prometheus/client_golang v1.14.0
 	github.com/sirupsen/logrus v1.9.0
@@ -45,6 +46,7 @@ require (
 	golang.org/x/net v0.1.0
 	google.golang.org/genproto v0.0.0-20221205194025-8222ab48f5fc
 	google.golang.org/grpc v1.51.0
+	google.golang.org/protobuf v1.28.1
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -128,7 +130,6 @@ require (
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/btree v1.0.1 // indirect
-	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
@@ -231,7 +232,6 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/api v0.103.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
@@ -278,7 +278,7 @@ replace (
 
 	// Stork dependencies
 	github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230203025553-559698a3d09a
-	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496
+	github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230227070742-0e0e882ec5d6
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 
 	// Replacing k8s.io dependencies is required if a dependency or any dependency of a dependency

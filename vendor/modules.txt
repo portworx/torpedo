@@ -867,8 +867,9 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 # github.com/portworx/px-backup-api v1.2.2-0.20220822053657-49308ab319f1
 ## explicit; go 1.15
 github.com/portworx/px-backup-api/pkg/apis/v1
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20230103234348-243afb3bb8aa => github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20230227070742-0e0e882ec5d6 => github.com/portworx/sched-ops v1.20.4-rc1.0.20230227070742-0e0e882ec5d6
 ## explicit; go 1.12
+github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
 github.com/portworx/sched-ops/k8s/apps
 github.com/portworx/sched-ops/k8s/autopilot
@@ -1981,7 +1982,7 @@ sigs.k8s.io/yaml
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
 # github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230203025553-559698a3d09a
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230227070742-0e0e882ec5d6
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.1
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.1
