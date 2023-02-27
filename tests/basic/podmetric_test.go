@@ -38,7 +38,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 		// shared test function for pod metric functional tests
 		sharedTestFunction := func() {
 			It("has to fetch the logs from loggly", func() {
-				meteringInterval := 15 * time.Minute
+				meteringInterval := 1 * time.Minute
 				log.InfoD("Testing with metering interval %v", meteringInterval)
 
 				log.InfoD("Getting cluster ID")
@@ -80,14 +80,16 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				}
 
 				log.InfoD("Check pod hours is correct")
-				expectedAppPodHours := getExpectedPodHourInMinutes(contexts, meteringInterval)
+				expectedAppPodHours, err := getExpectedPodHours(contexts, meteringInterval)
+				log.FailOnError(err, "Failed to get expectedAppPodHours")
 				expectedPodHours := (float64(expectedAppPodHours) / 60) + initialPodHours
 				log.InfoD("Estimated pod hours for this app is %v", expectedPodHours)
 				log.InfoD("Estimated total pod hours is %v", expectedPodHours)
 
 				actualPodHours := getLatestPodHours(meteringData)
 				log.InfoD("Actual total pod hours is %v", actualPodHours)
-				verifyPodHourWithError(actualPodHours, expectedPodHours, 0.2)
+				err = verifyPodHourWithError(actualPodHours, expectedPodHours, 0.2)
+				log.FailOnError(err, "Failed to verify pod hours")
 			})
 		}
 
@@ -186,8 +188,12 @@ func getMeteringData(clusterUUID string, meteringInterval time.Duration) ([]*Cal
 	if err != nil {
 		return nil, err
 	}
-	dash.VerifyFatal(code, 200, fmt.Sprintf("loggly return code %v not equal to 200", code))
-	dash.VerifyFatal(len(data) == 0, false, "loggy return empty response")
+	if code != 200 {
+		return nil, fmt.Errorf("failed to get loggly data. status code: %v", code)
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("loggy return empty response")
+	}
 
 	log.InfoD("parsing logs from loggly")
 	var logglyPayload LogglyPayload
@@ -216,33 +222,40 @@ func getMeteringData(clusterUUID string, meteringInterval time.Duration) ([]*Cal
 	return meteringData, nil
 }
 
-// getExpectedPodHourInMinutes returns the estimate pod hour given that the metering interval is
-// 1 min. it checks a list of volumes and the number of pods using it to estimate the pod hour.
-func getExpectedPodHourInMinutes(contexts []*scheduler.Context, meteringInterval time.Duration) int {
+// getExpectedPodHours returns the estimate pod hour given that the metering interval
+func getExpectedPodHours(contexts []*scheduler.Context, meteringInterval time.Duration) (float64, error) {
 	var totalPods []v1.Pod
 	for _, ctx := range contexts {
 		log.InfoD("getting pod hour for context %v", ctx.App.Key)
 		vols, err := Inst().S.GetVolumes(ctx)
-		log.FailOnError(err, "Failed to get volumes to check pod hour")
+		if err != nil {
+			return 0, err
+		}
 
 		for _, vol := range vols {
 			pods, err := Inst().S.GetPodsForPVC(vol.Name, vol.Namespace)
-			log.FailOnError(err, "Failed to get pods from PVC")
+			if err != nil {
+				return 0, err
+			}
 			totalPods = append(totalPods, pods...)
 		}
 	}
 
 	// Count one minute per pod using a PX volume
-	return len(totalPods) * int(meteringInterval.Minutes())
+	return float64(len(totalPods)*int(meteringInterval.Minutes())) / 60, nil
 }
 
 func getLatestPodHours(meteringData []*CallhomeData) float64 {
 	return meteringData[0].PodHour
 }
 
-func verifyPodHourWithError(actualPodHours, expectedPodHours, reasonableErrorPercent float64) {
+func verifyPodHourWithError(actualPodHours, expectedPodHours, reasonableErrorPercent float64) error {
 	errorRate := math.Abs(expectedPodHours-actualPodHours) / actualPodHours
 
 	actualValueAcceptable := errorRate < reasonableErrorPercent
-	dash.VerifyFatal(actualValueAcceptable, true, fmt.Sprintf("error rate for pod hours should be within %v percentage. Actual: %v", reasonableErrorPercent, errorRate))
+	if !actualValueAcceptable {
+		return fmt.Errorf("error rate for pod hours should be within %v percentage. Actual: %v", reasonableErrorPercent, errorRate)
+	}
+
+	return nil
 }
