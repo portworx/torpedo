@@ -5315,7 +5315,7 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 	return randomItems, nil
 }
 
-func GetAutoFsTrimStatus(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
+func GetAutoFsTrimStatusForCtx(ctx *scheduler.Context) (map[string]opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
 
 	appVolumes, err := Inst().S.GetVolumes(ctx)
 	if err != nil {
@@ -5370,7 +5370,7 @@ func GetAutoFsTrimStatus(ctx *scheduler.Context) (map[string]opsapi.FilesystemTr
 	return ctxAutoFsTrimStatus, nil
 }
 
-func GetAutoFstrimUsage(ctx *scheduler.Context) (map[string]*opsapi.FstrimVolumeUsageInfo, error) {
+func GetAutoFstrimUsageForCtx(ctx *scheduler.Context) (map[string]*opsapi.FstrimVolumeUsageInfo, error) {
 	appVolumes, err := Inst().S.GetVolumes(ctx)
 	if err != nil {
 		return nil, err

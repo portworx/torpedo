@@ -903,7 +903,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 					isPureVol, err := Inst().V.IsPureVolume(v)
 					log.FailOnError(err, "Failed to check is PURE volume")
 					if isPureVol {
-						log.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+						log.Warnf("Repl increase on Pure DA Volume [%s] not supported. Skipping this operation", v.Name)
 						continue
 					}
 
@@ -931,10 +931,10 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 
-			fsTrimStatuses, err = GetAutoFsTrimStatus(selectedCtx)
+			fsTrimStatuses, err = GetAutoFsTrimStatusForCtx(selectedCtx)
 			log.FailOnError(err, "error getting autofs status")
 
-			fsUsage, err = GetAutoFstrimUsage(selectedCtx)
+			fsUsage, err = GetAutoFstrimUsageForCtx(selectedCtx)
 			log.FailOnError(err, "error getting autofs usage")
 
 			volReplNodes := make([]string, 0)
@@ -1023,7 +1023,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 
 			stepLog = fmt.Sprintf("validate autofstrim status for the volumes")
 			Step(stepLog, func() {
-				newFsTrimStatuses, err := GetAutoFsTrimStatus(selectedCtx)
+				newFsTrimStatuses, err := GetAutoFsTrimStatusForCtx(selectedCtx)
 				log.FailOnError(err, "error getting autofs status")
 
 				for k := range fsTrimStatuses {
@@ -1031,7 +1031,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 					dash.VerifySafely(ok, true, fmt.Sprintf("verify autofstrim started for volume %s", k))
 					dash.VerifySafely(val != opsapi.FilesystemTrim_FS_TRIM_FAILED, true, fmt.Sprintf("verify autofstrim for volume %s, current status %v", k, val))
 				}
-				newFsUsage, err := GetAutoFstrimUsage(selectedCtx)
+				newFsUsage, err := GetAutoFstrimUsageForCtx(selectedCtx)
 				log.FailOnError(err, "error getting autofs usage")
 
 				for k := range fsUsage {
