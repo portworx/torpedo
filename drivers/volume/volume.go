@@ -337,7 +337,7 @@ type Driver interface {
 	UpdateIOPriority(volumeName string, priorityType string) error
 
 	//validate mount options by executing mount command
-	ValidateMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error
+	ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error
 
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error

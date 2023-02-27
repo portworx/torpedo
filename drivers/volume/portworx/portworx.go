@@ -1429,7 +1429,7 @@ func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) erro
 	return nil
 }
 
-func (d *portworx) ValidateMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
+func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
 	cmd := fmt.Sprintf("mount | grep %s", volumeName)
 	out, err := d.nodeDriver.RunCommandWithNoRetry(
 		*volumeNode,
