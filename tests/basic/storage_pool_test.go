@@ -5491,47 +5491,7 @@ var _ = Describe("{PoolDelete}", func() {
 		poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
 
-<<<<<<< HEAD
-		stepLog = fmt.Sprintf("Delete poolID %s on node %s", poolIDToDelete, nodeSelected.Name)
-
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			log.InfoD("Setting pools in maintenance on node %s", nodeSelected.Name)
-			err = Inst().V.EnterPoolMaintenance(nodeSelected)
-			log.FailOnError(err, "failed to set pool maintenance mode on node %s", nodeSelected.Name)
-
-			time.Sleep(1 * time.Minute)
-			expectedStatus := "In Maintenance"
-			err = WaitForPoolStatusToUpdate(nodeSelected, expectedStatus)
-			log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeSelected.Name, expectedStatus))
-
-			err = Inst().V.DeletePool(nodeSelected, poolIDToDelete)
-			log.FailOnError(err, "failed to delete poolID %s on node %s", poolIDToDelete, nodeSelected.Name)
-
-			err = Inst().V.ExitPoolMaintenance(nodeSelected)
-			log.FailOnError(err, "failed to exit pool maintenance mode on node %s", nodeSelected.Name)
-
-			err = Inst().V.WaitDriverUpOnNode(nodeSelected, 5*time.Minute)
-			log.FailOnError(err, "volume driver down on node %s", nodeSelected.Name)
-
-			expectedStatus = "Online"
-			err = WaitForPoolStatusToUpdate(nodeSelected, expectedStatus)
-			log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeSelected.Name, expectedStatus))
-
-			poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-			log.FailOnError(err, "Failed to list storage pools")
-
-			dash.VerifySafely(len(poolsBfr) > len(poolsAfr), true, "verify pools count is updated after pools deletion")
-
-			poolsMap, err = Inst().V.GetPoolDrives(&nodeSelected)
-			log.FailOnError(err, "error getting pool drive from the node [%s]", nodeSelected.Name)
-			_, ok := poolsMap[poolIDToDelete]
-			dash.VerifyFatal(ok, false, "verify drive is deleted from the node")
-
-		})
-=======
 		deletePoolAndValidate(nodeSelected, poolIDToDelete)
->>>>>>> 8b6b37829 (Adding test for all pools deletion)
 
 		contexts = make([]*scheduler.Context, 0)
 

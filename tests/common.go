@@ -2017,7 +2017,7 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
-		//CollectSupport()
+		CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
 	}
@@ -5332,14 +5332,14 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 	// Enter pool maintenance mode before deleting the pools from the cluster
 	err = Inst().V.EnterPoolMaintenance(n)
 	if err != nil {
-		return fmt.Errorf("failed to set pool maintenance mode on node %s : Error [%v]", n.Name, err)
+		return fmt.Errorf("failed to set pool maintenance mode on node %s. Err: [%v]", n.Name, err)
 	}
 
 	time.Sleep(1 * time.Minute)
 	expectedStatus := "In Maintenance"
 	err = WaitForPoolStatusToUpdate(n, expectedStatus)
 	if err != nil {
-		return fmt.Errorf("node [%s] pools are not in status [%s] : Error [%v]", n.Name, expectedStatus, err)
+		return fmt.Errorf("node [%s] pools are not in status [%s]. Err: [%v]", n.Name, expectedStatus, err)
 	}
 
 	// Delete all the pools present on the Node
@@ -5362,7 +5362,7 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 	expectedStatus = "Online"
 	err = WaitForPoolStatusToUpdate(n, expectedStatus)
 	if err != nil {
-		return fmt.Errorf("node %s pools are not in status %s with Error: [%v]", n.Name, expectedStatus, err)
+		return fmt.Errorf("node %s pools are not in status %s. Err:[%v]", n.Name, expectedStatus, err)
 	}
 
 	storageLessNodeAfterPoolDelete := node.GetStorageLessNodes()
@@ -5589,7 +5589,7 @@ func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) er
 		for k, v := range poolsStatus {
 			if v != expectedStatus {
 				return nil, true,
-					fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
+					fmt.Errorf("pool %s is not %s, current status: %s", k, expectedStatus, v)
 			}
 		}
 		return nil, false, nil
@@ -5609,6 +5609,8 @@ func RandomString(length int) string {
 	randomString := string(randomBytes)
 	return randomString
 }
+
+// DeleteGivenPoolInNode deletes pool with given ID in the given node
 func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) {
 
 	log.InfoD("Setting pools in maintenance on node %s", stNode.Name)
@@ -5618,15 +5620,15 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) 
 	//Waiting for cli to work
 	time.Sleep(2 * time.Minute)
 
-	if status, err := Inst().V.GetNodeStatus(stNode); err != nil {
+	status, err := Inst().V.GetNodeStatus(stNode)
+	if err != nil {
 		return err
-	} else {
-		log.InfoD("Node [%s] has status: [%v] after entering pool maintenance", stNode.Name, status)
 	}
+	log.InfoD("Node [%s] has status: [%v] after entering pool maintenance", stNode.Name, status)
 
 	expectedStatus := "In Maintenance"
-	if err = waitForPoolStatusToUpdate(stNode, expectedStatus); err != nil {
-		return fmt.Errorf("node %s pools are not in status %s. Error:%v", stNode.Name, expectedStatus, err)
+	if err = WaitForPoolStatusToUpdate(stNode, expectedStatus); err != nil {
+		return fmt.Errorf("node %s pools are not in status %s. Err:%v", stNode.Name, expectedStatus, err)
 	}
 	defer func() {
 		var exitErr error
@@ -5650,7 +5652,7 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) 
 			Timeout:         2 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		})
-		if err != nil {
+		if exitErr != nil {
 			log.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
 			return
 		}
@@ -5662,34 +5664,11 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) 
 		}
 
 		expectedStatus := "Online"
-		if exitErr = waitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
+		if exitErr = WaitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
 			log.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
 		}
 
 	}()
 	err = Inst().V.DeletePool(stNode, poolIDToDelete)
-	return err
-}
-
-func waitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) error {
-	t := func() (interface{}, bool, error) {
-		poolsStatus, err := Inst().V.GetNodePoolsStatus(nodeSelected)
-		if err != nil {
-			return nil, true, fmt.Errorf("error getting pool status on node %s,err: %v", nodeSelected.Name, err)
-		}
-
-		if poolsStatus == nil {
-			return nil, false, fmt.Errorf("pools status is nil")
-		}
-
-		for k, v := range poolsStatus {
-			if v != expectedStatus {
-				return nil, true, fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
-			}
-		}
-
-		return nil, false, nil
-	}
-	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
 	return err
 }
