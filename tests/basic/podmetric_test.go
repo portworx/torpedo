@@ -14,7 +14,6 @@ import (
 	rest "github.com/portworx/torpedo/pkg/restutil"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
-	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -82,13 +81,14 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				log.InfoD("Check pod hours is correct")
 				expectedAppPodHours, err := getExpectedPodHours(contexts, meteringInterval)
 				log.FailOnError(err, "Failed to get expectedAppPodHours")
-				expectedPodHours := (float64(expectedAppPodHours) / 60) + initialPodHours
-				log.InfoD("Estimated pod hours for this app is %v", expectedPodHours)
+				log.InfoD("Estimated pod hours for this app is %v", expectedAppPodHours)
+
+				expectedPodHours := float64(expectedAppPodHours) + initialPodHours
 				log.InfoD("Estimated total pod hours is %v", expectedPodHours)
 
 				actualPodHours := getLatestPodHours(meteringData)
 				log.InfoD("Actual total pod hours is %v", actualPodHours)
-				err = verifyPodHourWithError(actualPodHours, expectedPodHours, 0.2)
+				err = verifyPodHourWithError(actualPodHours, expectedPodHours, 0.01)
 				log.FailOnError(err, "Failed to verify pod hours")
 			})
 		}
@@ -224,7 +224,7 @@ func getMeteringData(clusterUUID string, meteringInterval time.Duration) ([]*Cal
 
 // getExpectedPodHours returns the estimate pod hour given that the metering interval
 func getExpectedPodHours(contexts []*scheduler.Context, meteringInterval time.Duration) (float64, error) {
-	var totalPods []v1.Pod
+	totalPods := make(map[string]bool)
 	for _, ctx := range contexts {
 		log.InfoD("getting pod hour for context %v", ctx.App.Key)
 		vols, err := Inst().S.GetVolumes(ctx)
@@ -237,7 +237,10 @@ func getExpectedPodHours(contexts []*scheduler.Context, meteringInterval time.Du
 			if err != nil {
 				return 0, err
 			}
-			totalPods = append(totalPods, pods...)
+			for _, p := range pods {
+				uidStr := string(p.GetUID())
+				totalPods[uidStr] = true
+			}
 		}
 	}
 
@@ -251,6 +254,7 @@ func getLatestPodHours(meteringData []*CallhomeData) float64 {
 
 func verifyPodHourWithError(actualPodHours, expectedPodHours, reasonableErrorPercent float64) error {
 	errorRate := math.Abs(expectedPodHours-actualPodHours) / actualPodHours
+	log.InfoD("acceptable error rate for this app: %v. actual error rate: %v", reasonableErrorPercent, errorRate)
 
 	actualValueAcceptable := errorRate < reasonableErrorPercent
 	if !actualValueAcceptable {
