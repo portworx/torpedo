@@ -5672,3 +5672,45 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) 
 	err = Inst().V.DeletePool(stNode, poolIDToDelete)
 	return err
 }
+func GetPoolUUIDWithMetadataDisk(stNode node.Node) (string, error) {
+
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	drivesMap, err := Inst().N.GetBlockDrives(stNode, systemOpts)
+	if err != nil {
+		return "", fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+	}
+
+	var metadataPoolID string
+outer:
+	for _, drv := range drivesMap {
+		for k, v := range drv.Labels {
+			if k == "mdpoolid" {
+				metadataPoolID = v
+				break outer
+			}
+		}
+	}
+
+	if metadataPoolID != "" {
+		mpID, err := strconv.Atoi(metadataPoolID)
+		fmt.Printf("metadataPoolID: %d\n", metadataPoolID)
+		if err != nil {
+			return "", fmt.Errorf("error converting metadataPoolID [%v] to int. Error: %v", metadataPoolID, err)
+		}
+
+		for _, p := range stNode.Pools {
+			if p.ID == int32(mpID) {
+				fmt.Printf("metadataPoolUUID: %d\n", p.Uuid)
+				return p.Uuid, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no pool with metadata")
+}
