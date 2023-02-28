@@ -2515,6 +2515,21 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		}
 	}
 
+
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyRbacObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			} else {
+				return nil, false, nil
+			}
+		}
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyAdmissionRegistrationObjects(appSpec, ctx.App)
@@ -4665,6 +4680,10 @@ func (k *K8s) createRbacObjects(
 		return clusterrole, nil
 	} else if obj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
 		obj.Namespace = ns.Name
+		for i := range obj.Subjects {
+			// since everything in a spec is in the same namespace in cluster, we can set here:
+			obj.Subjects[i].Namespace = ns.Name
+		}
 		clusterrolebinding, err := k8sRbac.CreateClusterRoleBinding(obj)
 		if k8serrors.IsAlreadyExists(err) {
 			if clusterrolebinding, err = k8sRbac.GetClusterRoleBinding(obj.Name); err == nil {
@@ -4702,6 +4721,46 @@ func (k *K8s) createRbacObjects(
 	}
 
 	return nil, nil
+}
+
+func (k *K8s) destroyRbacObjects(spec interface{}, app *spec.AppSpec) error {
+
+	if obj, ok := spec.(*rbacv1.ClusterRole); ok {
+		err := k8sRbac.DeleteClusterRole(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy ClusterRole: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed ClusterRole: %v", app.Key, obj.Name)
+			return nil
+		}
+	} else if obj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
+		err := k8sRbac.DeleteClusterRoleBinding(obj.Name)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy ClusterRoleBinding: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed ClusterRoleBinding: %v", app.Key, obj.Name)
+			return nil
+		}
+	} else if obj, ok := spec.(*corev1.ServiceAccount); ok {
+		err := k8sCore.DeleteServiceAccount(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy ServiceAccount: %v. Err: %v", obj.Name, err),
+			}
+		} else {
+			log.Infof("[%v] Destroyed ServiceAccount: %v", app.Key, obj.Name)
+			return nil
+		}
+	}
+
+	return nil
 }
 
 func (k *K8s) createNetworkingObjects(
