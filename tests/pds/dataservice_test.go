@@ -636,6 +636,9 @@ var _ = Describe("{CordonNodeAndDeletePod}", func() {
 	It("Cordon a Node and Delete Pods from that node", func() {
 		Step("Deploy, Validate, Cordon Node and Delete Pods, Validate new Pod, Validate Storage, Run Workload on Data Service", func() {
 			for _, ds := range params.DataServiceToTest {
+				// Run this Test on Consul only. We can enable more Data Services later from here if needed.
+				// Consul is a random choice. We can choose any other Data service as well.
+				// This test case is pretty much Data service independent
 				if ds.Name != consul {
 					log.Warnf("Skipping %v dataservice ", ds.Name)
 					continue
