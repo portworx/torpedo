@@ -181,7 +181,7 @@ func getClusterID() (string, error) {
 }
 
 func getMeteringData(clusterUUID string, meteringInterval time.Duration) ([]*CallhomeData, error) {
-	log.InfoD("fetching logs from loggly")
+	log.InfoD("Fetching logs from loggly")
 
 	lookbackInterval := meteringInterval + 1*time.Minute
 	data, code, err := getLogglyData(clusterUUID, fmt.Sprintf("-%vm", math.Round(lookbackInterval.Minutes())))
@@ -195,7 +195,7 @@ func getMeteringData(clusterUUID string, meteringInterval time.Duration) ([]*Cal
 		return nil, fmt.Errorf("loggy return empty response")
 	}
 
-	log.InfoD("parsing logs from loggly")
+	log.InfoD("Parsing logs from loggly")
 	var logglyPayload LogglyPayload
 	err = json.Unmarshal(data, &logglyPayload)
 	if err != nil {
@@ -226,7 +226,7 @@ func getMeteringData(clusterUUID string, meteringInterval time.Duration) ([]*Cal
 func getExpectedPodHours(contexts []*scheduler.Context, meteringInterval time.Duration) (float64, error) {
 	totalPods := make(map[string]bool)
 	for _, ctx := range contexts {
-		log.InfoD("getting pod hour for context %v", ctx.App.Key)
+		log.InfoD("Getting pod hour for context %v", ctx.App.Key)
 		vols, err := Inst().S.GetVolumes(ctx)
 		if err != nil {
 			return 0, err
@@ -254,7 +254,7 @@ func getLatestPodHours(meteringData []*CallhomeData) float64 {
 
 func verifyPodHourWithError(actualPodHours, expectedPodHours, reasonableErrorPercent float64) error {
 	errorRate := math.Abs(expectedPodHours-actualPodHours) / actualPodHours
-	log.InfoD("acceptable error rate for this app: %v. actual error rate: %v", reasonableErrorPercent, errorRate)
+	log.InfoD("Acceptable error rate for this app: %v. actual error rate: %v", reasonableErrorPercent, errorRate)
 
 	actualValueAcceptable := errorRate < reasonableErrorPercent
 	if !actualValueAcceptable {
