@@ -56,10 +56,9 @@ var _ = Describe("{PodMetricFunctional}", func() {
 
 				var initialPodHours float64
 				if len(meteringData) > 0 {
-					// dash.VerifyFatal(existsData, true, "there should be metering data originally in loggly")
 					initialPodHours = getLatestPodHours(meteringData)
-					log.InfoD("Latest pod hours before starting app: %v", initialPodHours)
 				}
+				log.InfoD("Latest pod hours before starting app: %v", initialPodHours)
 
 				log.InfoD("Deploy applications")
 				contexts = make([]*scheduler.Context, 0)
@@ -263,7 +262,7 @@ func getLatestPodHours(meteringData []*CallhomeData) float64 {
 func verifyPodHourWithError(actualPodHours, expectedPodHours, reasonableErrorPercent float64) error {
 	diff := expectedPodHours - actualPodHours
 	if diff*60 < 1 {
-		log.InfoD("Error rate is less than one minute, expected: %v, actual %v", expectedPodHours, actualPodHours)
+		log.InfoD("Error difference is less than one minute, expected: %v, actual %v", expectedPodHours, actualPodHours)
 		return nil
 	}
 	errorRate := math.Abs(expectedPodHours-actualPodHours) / actualPodHours
