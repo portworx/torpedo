@@ -260,11 +260,6 @@ func getLatestPodHours(meteringData []*CallhomeData) float64 {
 }
 
 func verifyPodHourWithError(actualPodHours, expectedPodHours, reasonableErrorPercent float64) error {
-	diff := expectedPodHours - actualPodHours
-	if diff*60 < 1 {
-		log.InfoD("Error difference is less than one minute, expected: %v, actual %v", expectedPodHours, actualPodHours)
-		return nil
-	}
 	errorRate := math.Abs(expectedPodHours-actualPodHours) / actualPodHours
 	log.InfoD("Acceptable error rate for this app: %v. actual error rate: %v", reasonableErrorPercent, errorRate)
 
@@ -280,8 +275,8 @@ func verifyPodHourWithError(actualPodHours, expectedPodHours, reasonableErrorPer
 // metering interval. Finally, restarts all PX pods and checks its condition.
 func updateStorageSpecRuntimeOpts(callhomeInterval string, meteringInterval string) {
 	log.InfoD("Updating storage spec runtime Opts")
-	dash.VerifyFatal(len(callhomeInterval) > 0, false, "there should be callhome interval")
-	dash.VerifyFatal(len(meteringInterval) > 0, false, "there should be metering interval")
+	dash.VerifyFatal(len(callhomeInterval) > 0, true, "there should be callhome interval")
+	dash.VerifyFatal(len(meteringInterval) > 0, true, "there should be metering interval")
 	log.InfoD("Testing with loggly callhome interval %v minutes and metering interval %v minutes", callhomeInterval, meteringInterval)
 	storageSpec, err := Inst().V.GetDriver()
 	log.FailOnError(err, "Error geting storage cluster driver")
