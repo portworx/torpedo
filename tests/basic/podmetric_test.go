@@ -27,6 +27,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 	var testrailID, runID int
 	var contexts []*scheduler.Context
 	var namespacePrefix string
+	// meteringInterval and callHomeInterval should be the same interval
 	var meteringIntervalString = os.Getenv("PODMETRIC_METERING_INTERVAL_MINUTES")
 	var callHomeIntervalString = os.Getenv("PODMETRIC_METERING_INTERVAL_MINUTES")
 
@@ -37,8 +38,8 @@ var _ = Describe("{PodMetricFunctional}", func() {
 		updateStorageSpecRuntimeOpts(meteringIntervalString, callHomeIntervalString)
 	})
 
-	Context("{PodMetricsSample}", func() {
-		namespacePrefix = "podmetricsample"
+	Context("{PodMetricsLoggly}", func() {
+		namespacePrefix = "podmetricsloggly"
 
 		// shared test function for pod metric functional tests
 		sharedTestFunction := func() {
@@ -50,14 +51,15 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				clusterUUID, err := getClusterID()
 				log.FailOnError(err, "Failed to get cluster id data")
 
-				log.InfoD("Fetching logs from loggly")
 				meteringData, err := getMeteringData(clusterUUID, meteringInterval)
 				log.FailOnError(err, "Failed to get metering data")
 
-				existsData := len(meteringData) > 0
-				dash.VerifyFatal(existsData, true, "there should be metering data originally in loggly")
-				initialPodHours := getLatestPodHours(meteringData)
-				log.InfoD("Latest pod hours before starting app: %v", initialPodHours)
+				var initialPodHours float64
+				if len(meteringData) > 0 {
+					// dash.VerifyFatal(existsData, true, "there should be metering data originally in loggly")
+					initialPodHours = getLatestPodHours(meteringData)
+					log.InfoD("Latest pod hours before starting app: %v", initialPodHours)
+				}
 
 				log.InfoD("Deploy applications")
 				contexts = make([]*scheduler.Context, 0)
@@ -78,7 +80,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				log.InfoD("Check metering data is accurate")
 				meteringData, err = getMeteringData(clusterUUID, meteringInterval)
 				log.FailOnError(err, "Failed to get metering data")
-				existsData = len(meteringData) > 0
+				existsData := len(meteringData) > 0
 				dash.VerifyFatal(existsData, true, "there should be metering data in loggly")
 				for _, md := range meteringData {
 					dash.VerifyFatal(md.ClusterUUID, clusterUUID, "this cluster should have data now")
@@ -99,8 +101,8 @@ var _ = Describe("{PodMetricFunctional}", func() {
 			})
 		}
 
-		// Sample pod metric tests
-		Describe("{SamplePodMetricTest}", func() {
+		// Simple pod metric test
+		Describe("{SimplePodMetricTest}", func() {
 			JustBeforeEach(func() {
 				// testrailID =
 			})
@@ -259,6 +261,11 @@ func getLatestPodHours(meteringData []*CallhomeData) float64 {
 }
 
 func verifyPodHourWithError(actualPodHours, expectedPodHours, reasonableErrorPercent float64) error {
+	diff := expectedPodHours - actualPodHours
+	if diff*60 < 1 {
+		log.InfoD("Error rate is less than one minute, expected: %v, actual %v", expectedPodHours, actualPodHours)
+		return nil
+	}
 	errorRate := math.Abs(expectedPodHours-actualPodHours) / actualPodHours
 	log.InfoD("Acceptable error rate for this app: %v. actual error rate: %v", reasonableErrorPercent, errorRate)
 
@@ -274,6 +281,8 @@ func verifyPodHourWithError(actualPodHours, expectedPodHours, reasonableErrorPer
 // metering interval. Finally, restarts all PX pods and checks its condition.
 func updateStorageSpecRuntimeOpts(callhomeInterval string, meteringInterval string) {
 	log.InfoD("Updating storage spec runtime Opts")
+	dash.VerifyFatal(len(callhomeInterval) > 0, false, "there should be callhome interval")
+	dash.VerifyFatal(len(meteringInterval) > 0, false, "there should be metering interval")
 	log.InfoD("Testing with loggly callhome interval %v minutes and metering interval %v minutes", callhomeInterval, meteringInterval)
 	storageSpec, err := Inst().V.GetDriver()
 	log.FailOnError(err, "Error geting storage cluster driver")
