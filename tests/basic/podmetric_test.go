@@ -10,6 +10,7 @@ import (
 
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -77,8 +78,15 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				time.Sleep(waitDuration)
 
 				log.InfoD("Check metering data is accurate")
-				meteringData, err = getMeteringData(clusterUUID, meteringInterval)
-				log.FailOnError(err, "Failed to get metering data")
+
+				// try to get non-empty metering data for 3 minutes
+				Eventually(func() bool {
+					meteringData, err = getMeteringData(clusterUUID, meteringInterval)
+					log.FailOnError(err, "Failed to get metering data")
+					return (len(meteringData) > 0)
+				}, 3*time.Minute, 30*time.Second).Should(BeTrue(),
+					"number of metering data after deployed application is empty")
+
 				existsData := len(meteringData) > 0
 				dash.VerifyFatal(existsData, true, "there should be metering data in loggly")
 				for _, md := range meteringData {
@@ -281,17 +289,22 @@ func updateStorageSpecRuntimeOpts(callhomeInterval string, meteringInterval stri
 	storageSpec, err := Inst().V.GetDriver()
 	log.FailOnError(err, "Error geting storage cluster driver")
 	// set loggly callhome interval and metering interval
+	if storageSpec.Spec.RuntimeOpts == nil {
+		storageSpec.Spec.RuntimeOpts = make(map[string]string)
+	}
 	storageSpec.Spec.RuntimeOpts["loggly_callhome_interval_mins"] = callhomeInterval
 	storageSpec.Spec.RuntimeOpts["metering_interval_mins"] = meteringInterval
 	pxOperator := operator.Instance()
 	_, err = pxOperator.UpdateStorageCluster(storageSpec)
 	log.FailOnError(err, "Error updating storage cluster")
 
+	log.InfoD("Deleting PX pods for reloading the runtime Opts")
 	err = deletePXPods(storageSpec.Namespace)
 	log.FailOnError(err, "Error deleting px pods storage cluster is online")
 	_, err = optest.ValidateStorageClusterIsOnline(storageSpec, 10*time.Minute, 3*time.Minute)
 	log.FailOnError(err, "Error validating storage cluster is online")
 
+	log.InfoD("Waiting for PX Nodes to be up")
 	for _, n := range node.GetStorageDriverNodes() {
 		if err := Inst().V.WaitDriverUpOnNode(n, 5*time.Minute); err != nil {
 			log.FailOnError(err, "Error Waiting DriverUpONNode storage cluster is online")
