@@ -99,6 +99,7 @@ const (
 	clusterIDFile                             = "/etc/pwx/cluster_uuid"
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
+	mountGrepVolume                           = "mount | grep %s"
 )
 
 const (
@@ -1430,7 +1431,7 @@ func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) erro
 }
 
 func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
-	cmd := fmt.Sprintf("mount | grep %s", volumeName)
+	cmd := fmt.Sprintf(mountGrepVolume, volumeName)
 	out, err := d.nodeDriver.RunCommandWithNoRetry(
 		*volumeNode,
 		cmd,
