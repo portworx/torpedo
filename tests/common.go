@@ -4780,7 +4780,8 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 							return nil, true, fmt.Errorf("wait for pool rebalance to complete")
 						}
 					}
-					if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") {
+					if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") ||
+						strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance complete pool status: Maintenance") {
 						return nil, false, nil
 					}
 				}
@@ -5699,14 +5700,13 @@ outer:
 
 	if metadataPoolID != "" {
 		mpID, err := strconv.Atoi(metadataPoolID)
-		fmt.Printf("metadataPoolID: %d\n", metadataPoolID)
 		if err != nil {
 			return "", fmt.Errorf("error converting metadataPoolID [%v] to int. Error: %v", metadataPoolID, err)
 		}
 
 		for _, p := range stNode.Pools {
 			if p.ID == int32(mpID) {
-				fmt.Printf("metadataPoolUUID: %d\n", p.Uuid)
+				log.Infof("Identified metadata pool UUID: %s", p.Uuid)
 				return p.Uuid, nil
 			}
 		}

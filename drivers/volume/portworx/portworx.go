@@ -1340,11 +1340,12 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				}
 			}
 		case api.SpecIoProfile:
-			if vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE {
+			if requestedSpec.IoProfile != vol.DerivedIoProfile &&
+				vol.DerivedIoProfile != api.IoProfile_IO_PROFILE_DB_REMOTE {
 				//there is intermittent issue occurring for io profile , keeping this to check when the issue occurs again
 				log.Infof("requested Spec: %+v", requestedSpec)
 				log.Infof("actual Spec: %+v", vol)
-				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile, vol.DerivedIoProfile)
+				return errFailedToInspectVolume(volumeName, k, requestedSpec.IoProfile.String(), vol.DerivedIoProfile.String())
 			}
 		case api.SpecSize:
 			if requestedSpec.Size != vol.Spec.Size {
