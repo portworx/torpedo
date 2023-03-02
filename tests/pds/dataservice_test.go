@@ -637,7 +637,7 @@ var _ = Describe("{CordonNodeAndDeletePod}", func() {
 		Step("Deploy, Validate, Cordon Node and Delete Pods, Validate new Pod, Validate Storage, Run Workload on Data Service", func() {
 			for _, ds := range params.DataServiceToTest {
 				isDeploymentsDeleted = false
-				deployment, _, _, err = DeployandValidateDataServices(ds, tenantID, projectID)
+				deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 				log.FailOnError(err, fmt.Sprintf("Error while deploying data services %s", ds.Name))
 				log.InfoD("Running Check Node DataService Func %v ", ds.Name)
 				nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
