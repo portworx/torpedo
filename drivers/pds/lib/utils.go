@@ -2354,5 +2354,5 @@ func GetPodsOfSsByNode(SSName string, nodeName string, namespace string) ([]core
 	if podsList != nil && len(podsList) > 0 {
 		return podsList, nil
 	}
-	return nil, errors.New("There is no pod of the given statefulset running on the given node name")
+	return nil, errors.New(fmt.Sprintf("There is no pod of the given statefulset running on the given node name %s", nodeName))
 }
