@@ -787,6 +787,7 @@ func createUsers(numberOfUsers int) []string {
 }
 
 func DeleteCloudAccounts(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
+	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
 			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
