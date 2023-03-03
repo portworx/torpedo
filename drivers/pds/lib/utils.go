@@ -1301,7 +1301,7 @@ func CheckAndDeleteIndependentPV(name string) error {
 		}
 		return err
 	}
-	log.InfoD("Stranded PV Found. Going ahead to delete this PV and associated entities")
+	log.InfoD("Stranded PV Found by the name - %s. Going ahead to delete this PV and associated entities", name)
 	if pv_check.Status.Phase == corev1.VolumeBound {
 		if pv_check.Spec.ClaimRef != nil && pv_check.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
 			namespace := pv_check.Spec.ClaimRef.Namespace
@@ -1364,7 +1364,6 @@ func CreateIndependentPV(name string) (*corev1.PersistentVolume, error) {
 	}
 	pv, err = k8sCore.CreatePersistentVolume(pv)
 	if err != nil {
-		log.Errorf("PV Could not be created. Exiting")
 		return pv, err
 	}
 	return pv, nil
