@@ -21,16 +21,20 @@ import (
 )
 
 const (
-	logglyIterateUrl = "https://pxlite.loggly.com/apiv2/events/iterate"
+	logglyIterateUrl           = "https://pxlite.loggly.com/apiv2/events/iterate"
+	envLogglyAPIToken          = "LOGGLY_API_TOKEN"
+	envMeteringIntervalMinutes = "PODMETRIC_METERING_INTERVAL_MINUTES"
+	rtOptCallhomeInterval      = "loggly_callhome_interval_mins"
+	rtOptMeteringInterval      = "metering_interval_mins"
 )
 
 var _ = Describe("{PodMetricFunctional}", func() {
 	var testrailID, runID int
 	var contexts []*scheduler.Context
 	var namespacePrefix string
-	// meteringInterval and callHomeInterval should be the same interval
-	var meteringIntervalString = os.Getenv("PODMETRIC_METERING_INTERVAL_MINUTES")
-	var callHomeIntervalString = os.Getenv("PODMETRIC_METERING_INTERVAL_MINUTES")
+	// meteringInterval and callHomeInterval should be the same interval for testing
+	var meteringIntervalString = os.Getenv(envMeteringIntervalMinutes)
+	var callHomeIntervalString = os.Getenv(envMeteringIntervalMinutes)
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -174,7 +178,7 @@ type LogglyEvent struct {
 func getLogglyData(clusterUUID string, fromTime string) ([]byte, int, error) {
 	query := fmt.Sprintf("q=%s&from=%s&until=now", clusterUUID, fromTime)
 
-	logglyToken, ok := os.LookupEnv("LOGGLY_API_TOKEN")
+	logglyToken, ok := os.LookupEnv(envLogglyAPIToken)
 	if !ok {
 		return nil, 0, fmt.Errorf("failed to fetch loggly api token")
 	}
@@ -304,8 +308,8 @@ func updateStorageSpecRuntimeOpts(callhomeInterval string, meteringInterval stri
 	if storageSpec.Spec.RuntimeOpts == nil {
 		storageSpec.Spec.RuntimeOpts = make(map[string]string)
 	}
-	storageSpec.Spec.RuntimeOpts["loggly_callhome_interval_mins"] = callhomeInterval
-	storageSpec.Spec.RuntimeOpts["metering_interval_mins"] = meteringInterval
+	storageSpec.Spec.RuntimeOpts[rtOptCallhomeInterval] = callhomeInterval
+	storageSpec.Spec.RuntimeOpts[rtOptMeteringInterval] = meteringInterval
 	pxOperator := operator.Instance()
 	_, err = pxOperator.UpdateStorageCluster(storageSpec)
 	if err != nil {
