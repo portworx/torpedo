@@ -229,6 +229,7 @@ var (
 	namespaceNameIDMap                      = make(map[string]string)
 	dataServiceVersionBuildMap              = make(map[string][]string)
 	dataServiceImageMap                     = make(map[string][]string)
+	ApiComponents                           *pdsapi.Components
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable.

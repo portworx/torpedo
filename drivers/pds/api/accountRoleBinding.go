@@ -101,7 +101,7 @@ func (accountRoleBinding *AccountRoleBinding) RemoveUser(userID string) (*status
 	}
 	res, err := client.ApiAccountsIdRoleBindingsDelete(ctx, userID).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("error when calling `ApiBackupTargetsIdDelete``: %v", err)
+		return nil, fmt.Errorf("error while removing the user: %v", err)
 	}
 	return res, nil
 }
