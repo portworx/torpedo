@@ -36,7 +36,8 @@ var _ = Describe("{PodMetricFunctional}", func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 
 		StartTorpedoTest("PodMetricFunctional", "Functional Tests for Pod Metrics", nil, testrailID)
-		updateStorageSpecRuntimeOpts(meteringIntervalString, callHomeIntervalString)
+		err := updateStorageSpecRuntimeOpts(meteringIntervalString, callHomeIntervalString)
+		log.FailOnError(err, "Failed to update storage spec runtimeOpts")
 	})
 
 	Context("{PodMetricsLoggly}", func() {
@@ -174,7 +175,10 @@ func getLogglyData(clusterUUID string, fromTime string) ([]byte, int, error) {
 	query := fmt.Sprintf("q=%s&from=%s&until=now", clusterUUID, fromTime)
 
 	logglyToken, ok := os.LookupEnv("LOGGLY_API_TOKEN")
-	dash.VerifyFatal(ok, true, "failed to fetch loggly api token")
+	if !ok {
+		return nil, 0, fmt.Errorf("failed to fetch loggly api token")
+	}
+
 	headers := make(map[string]string)
 	headers["Authorization"] = fmt.Sprintf("Bearer %v", logglyToken)
 	return rest.Get(fmt.Sprintf("%v?%v", logglyIterateUrl, query), nil, headers)
@@ -281,13 +285,21 @@ func verifyPodHourWithError(actualPodHours, expectedPodHours, reasonableErrorPer
 
 // updateStorageSpecRuntimeOpts updates the storageSpec's loggly callhome interval and
 // metering interval. Finally, restarts all PX pods and checks its condition.
-func updateStorageSpecRuntimeOpts(callhomeInterval string, meteringInterval string) {
+func updateStorageSpecRuntimeOpts(callhomeInterval string, meteringInterval string) error {
 	log.InfoD("Updating storage spec runtime Opts")
-	dash.VerifyFatal(len(callhomeInterval) > 0, true, "there should be callhome interval")
-	dash.VerifyFatal(len(meteringInterval) > 0, true, "there should be metering interval")
+	if len(callhomeInterval) <= 0 {
+		return fmt.Errorf("there should be callhome interval")
+	}
+	if len(meteringInterval) <= 0 {
+		return fmt.Errorf("there should be metering interval")
+	}
+
 	log.InfoD("Testing with loggly callhome interval %v minutes and metering interval %v minutes", callhomeInterval, meteringInterval)
 	storageSpec, err := Inst().V.GetDriver()
-	log.FailOnError(err, "Error geting storage cluster driver")
+	if err != nil {
+		return err
+	}
+
 	// set loggly callhome interval and metering interval
 	if storageSpec.Spec.RuntimeOpts == nil {
 		storageSpec.Spec.RuntimeOpts = make(map[string]string)
@@ -296,18 +308,26 @@ func updateStorageSpecRuntimeOpts(callhomeInterval string, meteringInterval stri
 	storageSpec.Spec.RuntimeOpts["metering_interval_mins"] = meteringInterval
 	pxOperator := operator.Instance()
 	_, err = pxOperator.UpdateStorageCluster(storageSpec)
-	log.FailOnError(err, "Error updating storage cluster")
+	if err != nil {
+		return err
+	}
 
 	log.InfoD("Deleting PX pods for reloading the runtime Opts")
 	err = deletePXPods(storageSpec.Namespace)
-	log.FailOnError(err, "Error deleting px pods storage cluster is online")
+	if err != nil {
+		return err
+	}
 	_, err = optest.ValidateStorageClusterIsOnline(storageSpec, 10*time.Minute, 3*time.Minute)
-	log.FailOnError(err, "Error validating storage cluster is online")
+	if err != nil {
+		return err
+	}
 
 	log.InfoD("Waiting for PX Nodes to be up")
 	for _, n := range node.GetStorageDriverNodes() {
 		if err := Inst().V.WaitDriverUpOnNode(n, 5*time.Minute); err != nil {
-			log.FailOnError(err, "Error Waiting DriverUpONNode storage cluster is online")
+			return err
 		}
 	}
+
+	return nil
 }
