@@ -349,7 +349,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 		backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
 		log.FailOnError(err, "Backup [%s] could not be deleted with delete response %s", backupName, backupDeleteResponse)
 
-		DeleteCloudAccounts(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 
 })
@@ -557,7 +557,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
 		}
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
@@ -678,7 +678,7 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
@@ -821,7 +821,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		dash.VerifySafely(err, nil, "Deleting user")
 		err = backup.DeleteGroup(groupName)
 		dash.VerifySafely(err, nil, "Deleting group")
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
@@ -1231,10 +1231,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			err := DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 
 		var wg sync.WaitGroup
@@ -1271,7 +1268,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
 
-		DeleteCloudAccounts(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
 
@@ -2107,7 +2104,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		wg.Wait()
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			DeleteCloudAccounts(make(map[string]string), "", "", ctxNonAdmin)
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -2123,7 +2120,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
-		DeleteCloudAccounts(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
 
@@ -2333,10 +2330,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			err := DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", SourceClusterName))
-			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", destinationClusterName))
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 
 		var wg sync.WaitGroup
@@ -2353,7 +2347,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteCloudAccounts(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 		err = DeleteCloudCredential(newCredName, orgID, newCloudCredUID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", newCredName))
 
@@ -2543,10 +2537,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			err := DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", SourceClusterName))
-			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", destinationClusterName))
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 
 		var wg sync.WaitGroup
@@ -2562,7 +2553,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 		wg.Wait()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteCloudAccounts(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
 
@@ -2968,7 +2959,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
 		}
 
-		DeleteCloudAccounts(newBackupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(newBackupLocationMap, credName, cloudCredUID, ctx)
 	})
 
 })
@@ -3097,7 +3088,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 		err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
@@ -3252,7 +3243,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		}
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContextsList {
-			DeleteCloudAccounts(make(map[string]string), "", "", ctxNonAdmin)
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
@@ -3264,7 +3255,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 			}(userName)
 		}
 		wg.Wait()
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
@@ -3460,7 +3451,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteCloudAccounts(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 
 	})
 
@@ -3626,7 +3617,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 
 })
@@ -3819,7 +3810,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
 
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
@@ -3906,7 +3897,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, CloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, CloudCredUID, ctx)
 	})
 
 })
@@ -4090,7 +4081,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteCloudAccounts(BackupLocationMap, credName, CloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx)
 	})
 })
 
@@ -4299,7 +4290,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		DeleteCloudAccounts(BackupLocationMap, credName, CloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx)
 	})
 })
 
@@ -4416,7 +4407,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
 		}
-		DeleteCloudAccounts(backupLocationMap, CredName, CloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, CredName, CloudCredUID, ctx)
 		DeleteBucket(providers[0], encryptionBucketName)
 	})
 
@@ -4553,7 +4544,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - %s", backupName))
 		}
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
@@ -4704,7 +4695,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
@@ -4915,7 +4906,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 		}
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContextsList {
-			DeleteCloudAccounts(make(map[string]string), "", "", ctxNonAdmin)
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
@@ -4927,7 +4918,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 			}(userName)
 		}
 		wg.Wait()
-		DeleteCloudAccounts(newBackupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(newBackupLocationMap, cloudCredName, cloudCredUID, ctx)
 
 	})
 })
@@ -5149,7 +5140,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
 
-		DeleteCloudAccounts(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
 
@@ -5410,11 +5401,11 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Failed to set source kubeconfig")
 		log.InfoD("Deleting user clusters")
-		DeleteCloudAccounts(make(map[string]string), "", "", userCtx)
+		CleanupCloudSettingsAndClusters(make(map[string]string), "", "", userCtx)
 		log.InfoD("Cleaning up users")
 		err = backup.DeleteUser(userName[0])
 		log.FailOnError(err, "Error deleting user %v", userName[0])
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
@@ -5608,7 +5599,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			log.InfoD("Delete the backup location %s and cloud account %s", bkpLocationName, cloudCredName)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 		})
 	})
 	JustAfterEach(func() {
@@ -5887,10 +5878,10 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
-		DeleteCloudAccounts(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 
 		for _, ctxNonAdmin := range userContexts {
-			DeleteCloudAccounts(nil, credName, cloudCredUID, ctxNonAdmin)
+			CleanupCloudSettingsAndClusters(nil, credName, cloudCredUID, ctxNonAdmin)
 		}
 
 		var wg sync.WaitGroup
@@ -6345,7 +6336,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			_, err := DeleteBackup(backup, backupMap[backup], orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backup))
 		}
-		DeleteCloudAccounts(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
@@ -6489,7 +6480,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 			err := Inst().S.Destroy(contexts[i], opts)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying application %s", taskName))
 		}
-		DeleteCloudAccounts(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
 	})
 })
 
@@ -6619,6 +6610,6 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying application %s", taskName))
 		}
 		log.Info("Deleting backup location, cloud credentials and clusters")
-		DeleteCloudAccounts(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
 	})
 })
