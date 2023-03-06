@@ -7457,7 +7457,7 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", func() {
 
 var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", func() {
 	/*
-	   1.Add disk using resuze-disk option
+	   1.Add disk using resize-disk option
 	   2. Add disk again while initial expansion is in-progress
 	*/
 	var testrailID = 50939
@@ -8027,6 +8027,31 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 		}
 	})
 
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
+	/*
+	   1.Add disk using add-disk option
+	   2. Create a new pool
+	   3. Delete the instance
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDiskAddDriveAndDeleteInstance", "Ipool expand using add-disk and create new pool and delete instance", nil, 0)
+
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the existing pool, expand the pool by adding disk and create a new pool and then delete the instance"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
