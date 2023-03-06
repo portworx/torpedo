@@ -5734,3 +5734,26 @@ func SetupTestRail() {
 		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
 	}
 }
+
+func AsgKillANode(nodeToKill node.Node) {
+
+	stepLog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		err := Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Valdiate node %s deletion", nodeToKill.Name))
+	})
+
+	stepLog = "Wait for 10 min. to node get replaced by autoscaling group"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		time.Sleep(10 * time.Minute)
+	})
+
+	err := Inst().S.RefreshNodeRegistry()
+	log.FailOnError(err, "error while node registry refresh")
+
+	err = Inst().V.RefreshDriverEndpoints()
+	log.FailOnError(err, "error driver end points refresh")
+
+}

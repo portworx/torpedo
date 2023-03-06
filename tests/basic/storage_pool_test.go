@@ -8041,7 +8041,7 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 	*/
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("AddDiskAddDriveAndDeleteInstance", "Ipool expand using add-disk and create new pool and delete instance", nil, 0)
+		StartTorpedoTest("AddDiskAddDriveAndDeleteInstance", "Initiate pool expand using add-disk and create new pool and delete instance", nil, 0)
 
 	})
 	var contexts []*scheduler.Context
@@ -8050,8 +8050,147 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("plrszdskinp-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		poolUUIDToBeREsized, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "error finding pool with IOs")
+
+		stNode, err := GetNodeWithGivenPoolID(poolUUIDToBeREsized)
+		log.FailOnError(err, "error finding stNode with pool uuid [%s]", poolUUIDToBeREsized)
+
+		stepLog = fmt.Sprintf("add-disk to the pool [%s] in the stNode [%s]", poolUUIDToBeREsized, stNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "Failed to list storage pools")
+			dash.VerifyFatal(len(pools) > 0, true, "Storage pools exist ?")
+
+			poolToBeResized := pools[poolUUIDToBeREsized]
+			dash.VerifyFatal(poolToBeResized != nil, true, "Pool to be resized exist?")
+
+			// px will put a new request in a queue, but in this case we can't calculate the expected size,
+			// so need to wain until the ongoing operation is completed
+			stepLog = "Verify that pool resize is not in progress"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				if poolResizeIsInProgress(poolToBeResized) {
+					// wait until resize is completed and get the updated pool again
+					poolToBeResized, err = GetStoragePoolByUUID(poolUUIDToBeREsized)
+					log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolUUIDToBeREsized))
+				}
+			})
+
+			//var expectedSize uint64
+			//drvSize, err := getPoolDiskSize(poolToBeResized)
+			//log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			//isjournal, err := isJournalEnabled()
+			//log.FailOnError(err, "Failed to check is Journal enabled")
+			//
+			//stepLog = "Calculate expected pool size and trigger pool resize using add-disk"
+			//Step(stepLog, func() {
+			//	log.InfoD(stepLog)
+			//
+			//	expectedSize = (poolToBeResized.TotalSize / units.GiB) + drvSize
+			//
+			//	log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
+			//
+			//	err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
+			//	dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			//	resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
+			//	dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
+			//})
+
+		})
+		poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "Failed to list storage pools")
+		stepLog = fmt.Sprintf("create new pool in the stNode [%v]", stNode.Name)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			///creating a spec to perform add  drive
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			minSpecSize := uint64(math.MaxUint64)
+
+			for _, p := range stNode.Pools {
+
+				diskSize, err := getPoolDiskSize(p)
+				log.FailOnError(err, "error getting disk size from pool [%s] in the node [%s]", p.Uuid, stNode.Name)
+				if diskSize < minSpecSize {
+					minSpecSize = diskSize
+				}
+			}
+
+			deviceSpec := driveSpecs[0]
+			deviceSpecParams := strings.Split(deviceSpec, ",")
+			paramsArr := make([]string, 0)
+			for _, param := range deviceSpecParams {
+				if strings.Contains(param, "size") {
+					paramsArr = append(paramsArr, fmt.Sprintf("size=%d,", minSpecSize/2))
+				} else {
+					paramsArr = append(paramsArr, param)
+				}
+			}
+			newSpec := strings.Join(paramsArr, ",")
+
+			stepLog = fmt.Sprintf("Adding new pool to node [%s] with spec size [%s]", stNode.Name, newSpec)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err = Inst().V.AddCloudDrive(stNode, newSpec, -1)
+				log.FailOnError(err, "error adding new drive to node %s", stNode.Name)
+				log.InfoD("Validate pool rebalance after drive add to the node %s", stNode.Name)
+				err = ValidatePoolRebalance(*stNode, -1)
+				log.FailOnError(err, "pool re-balance failed on node %s", stNode.Name)
+				err = Inst().V.WaitDriverUpOnNode(*stNode, addDriveUpTimeOut)
+				log.FailOnError(err, "volume drive down on node %s", stNode.Name)
+
+				poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+				log.FailOnError(err, "Failed to list storage pools")
+				dash.VerifyFatal(len(poolsBfr)+1, len(poolsAfr), "verify new pool is created")
+
+			})
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error while driver end points refresh")
+		})
+
+		stepLog = fmt.Sprintf("killing node [%s]", stNode.Name)
+		Step(stepLog, func() {
+			slNodes := node.GetStorageLessNodes()
+			slNodesNames := make([]string, len(slNodes))
+			for _, sn := range slNodes {
+				slNodesNames = append(slNodesNames, sn.Name)
+			}
+			stNodes := node.GetStorageNodes()
+			stNodesNames := make([]string, len(stNodes))
+			for _, sn := range slNodes {
+				stNodesNames = append(stNodesNames, sn.Name)
+			}
+			storageDriverNodesCount := len(node.GetStorageDriverNodes())
+			AsgKillANode(*stNode)
+			ValidateClusterSize(int64(storageDriverNodesCount))
+			for _, ns := range node.GetStorageDriverNodes() {
+				if Contains(slNodesNames, ns.Name) && len(ns.Disks) > 0 {
+					log.InfoD("node [%s] converted t storage", ns.Name)
+					log.Infof("%+v", ns.Disks)
+					log.Infof("%+v", ns.Pools)
+				}
+
+				if !Contains(stNodesNames, ns.Name) && len(ns.Disks) > 0 {
+					log.InfoD("new node [%s] created as  storage", ns.Name)
+					log.Infof("%+v", ns.Disks)
+					log.Infof("%+v", ns.Pools)
+				}
+
+			}
+		})
 
 	})
+
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)

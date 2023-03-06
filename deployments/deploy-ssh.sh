@@ -350,6 +350,9 @@ if [ -n "${K8S_VENDOR}" ]; then
         oracle)
             NODE_DRIVER="oracle"
             ;;
+        eks)
+            NODE_DRIVER="aws"
+            ;;
     esac
 fi
 
