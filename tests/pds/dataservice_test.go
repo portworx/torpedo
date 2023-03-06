@@ -99,6 +99,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 })
 
 var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
+	var pdsHealth pdslib.PDSHealthStatus
 	steplog := "Validate Health of PDS services in case of failures"
 
 	JustBeforeEach(func() {
@@ -133,24 +134,28 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				wg.Add(2)
 				go func() {
 					defer wg.Done()
-					log.InfoD("Deleting the data service pods")
-					err = pdslib.DeletePods(pdsPods)
-					log.FailOnError(err, "Error while deleting pods")
+					log.InfoD("Deleting the first data service pod %s", pdsPods[0].GetName())
+					err = k8sCore.DeletePod(pdsPods[0].GetName(), params.InfraToTest.Namespace, true)
+					log.FailOnError(err, "Error while deleting pod")
 				}()
 
 				go func() {
 					defer wg.Done()
 					log.InfoD("Validating the data service pod status in PDS Control Plane")
-					err = pdslib.ValidatePDSDeploymentStatus(deployment, "Down", 5*time.Second, 30*time.Minute)
+					pdsHealth.Degraded = "Degraded"
+					pdsHealth.Down = "Down"
+					err = pdslib.ValidatePDSDeploymentDowntime(deployment, pdsHealth, 5*time.Second, 30*time.Minute)
 					log.FailOnError(err, "Error while validating the pds pods")
 				}()
 				wg.Wait()
 
-				log.InfoD("Validating the data service pods are back to healthy state")
+				log.InfoD("Validate dataservice statefulset pods are up")
 				err = pdslib.ValidatePods(namespace, *deployment.ClusterResourceName)
 				log.FailOnError(err, "Error while validating the pods")
 
-				err = pdslib.ValidatePDSDeploymentStatus(deployment, "Healthy", 5*time.Second, 30*time.Minute)
+				log.InfoD("Validating if the data service pods are back to healthy state")
+				pdsHealth.HealthStatus = "Healthy"
+				err = pdslib.ValidatePDSDeploymentHealthStatus(deployment, pdsHealth, 5*time.Second, 30*time.Minute)
 				log.FailOnError(err, "Error while validating the pds deployment pods")
 
 			})

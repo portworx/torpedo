@@ -31,6 +31,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+type PDSHealthStatus struct {
+	Down         string
+	Degraded     string
+	Healthy      string
+	HealthStatus string
+}
+
 type Parameter struct {
 	DataServiceToTest []struct {
 		Name          string `json:"Name"`
@@ -671,7 +678,8 @@ func GetAllVersionsImages(dataServiceID string) (map[string][]string, map[string
 	return dataServiceNameVersionMap, dataServiceIDImagesMap, nil
 }
 
-func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus string, maxtimeInterval time.Duration, timeout time.Duration) error {
+//ValidatePDSDeploymentDowntime Checks for the deployment health status(Down/Degraded)
+func ValidatePDSDeploymentDowntime(deployment *pds.ModelsDeployment, healthStatus PDSHealthStatus, maxtimeInterval time.Duration, timeout time.Duration) error {
 	//validate the deployments in pds
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
@@ -685,11 +693,37 @@ func ValidatePDSDeploymentStatus(deployment *pds.ModelsDeployment, healthStatus 
 			err = fmt.Errorf("unexpected status code")
 			return false, err
 		}
-		if !strings.Contains(status.GetHealth(), healthStatus) {
+		if strings.Contains(status.GetHealth(), healthStatus.Degraded) || strings.Contains(status.GetHealth(), healthStatus.Down) {
+			log.InfoD("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+			return true, nil
+		} else {
 			log.Infof("status: %v", status.GetHealth())
 			return false, nil
 		}
-		log.Infof("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
+	})
+	return err
+}
+
+//ValidatePDSDeploymentDowntime Checks for the any given deployment health status
+func ValidatePDSDeploymentHealthStatus(deployment *pds.ModelsDeployment, healthStatus PDSHealthStatus, maxtimeInterval time.Duration, timeout time.Duration) error {
+	//validate the deployments in pds
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
+		log.Infof("Health status -  %v", status.GetHealth())
+		if err != nil {
+			log.Infof("Deployment status %v", err)
+			return false, nil
+		}
+		if res.StatusCode != state.StatusOK {
+			log.Infof("Full HTTP response: %v\n", res)
+			err = fmt.Errorf("unexpected status code")
+			return false, err
+		}
+		if !strings.Contains(status.GetHealth(), healthStatus.HealthStatus) {
+			log.Infof("status: %v", status.GetHealth())
+			return false, nil
+		}
+		log.InfoD("Deployment details: Health status -  %v,Replicas - %v, Ready replicas - %v", status.GetHealth(), status.GetReplicas(), status.GetReadyReplicas())
 		return true, nil
 	})
 	return err
