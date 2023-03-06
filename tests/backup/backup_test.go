@@ -911,14 +911,14 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		Step("Add users to group", func() {
 			log.InfoD("Adding users to groups")
 			var wg sync.WaitGroup
-			for i, user := range users {
+			for i, userName := range users {
 				groupIndex := i / groupSize
 				wg.Add(1)
 				go func(userName string, groupIndex int) {
 					defer wg.Done()
 					err := backup.AddGroupToUser(userName, groups[groupIndex])
 					log.FailOnError(err, "Failed to assign group to user")
-				}(user, groupIndex)
+				}(userName, groupIndex)
 			}
 			wg.Wait()
 
