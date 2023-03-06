@@ -40,6 +40,7 @@ const (
 	pdsNamespaceLabel       = "pds.portworx.com/available"
 	timeOut                 = 30 * time.Minute
 	maxtimeInterval         = 30 * time.Second
+	timeInterval            = 5 * time.Second
 )
 
 var (
