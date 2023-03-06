@@ -4542,11 +4542,8 @@ func WaitForExpansionToStart(poolID string) error {
 				return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
 			}
 
-			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
-				return nil, true, fmt.Errorf("PoolResize is in pending state [%s]", expandedPool.LastOperation)
-			}
-
-			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS ||
+				expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
 				// storage pool resize has been triggered
 				log.InfoD("Pool %s expansion started", poolID)
 				return nil, false, nil
@@ -5712,5 +5709,5 @@ outer:
 		}
 	}
 
-	return "", fmt.Errorf("no pool with metadata")
+	return "", fmt.Errorf("no pool with metadata in node [%s]", stNode.Name)
 }
