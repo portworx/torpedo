@@ -117,7 +117,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 			pdsPods := make([]corev1.Pod, 0)
 
 			Step("Delete dataservice pods and Check health of data service in PDS Controlplane", func() {
-				podList, err := pdslib.GetPods(namespace)
+				podList, err := pdslib.GetPods(params.InfraToTest.Namespace)
 				log.FailOnError(err, "Error while getting pods")
 
 				log.Infof("PDS DataService Pods")
@@ -150,7 +150,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				wg.Wait()
 
 				log.InfoD("Validate dataservice statefulset pods are up")
-				err = pdslib.ValidatePods(namespace, *deployment.ClusterResourceName)
+				err = pdslib.ValidatePods(params.InfraToTest.Namespace, *deployment.ClusterResourceName)
 				log.FailOnError(err, "Error while validating the pods")
 
 				log.InfoD("Validating if the data service pods are back to healthy state")
