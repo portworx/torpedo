@@ -2379,6 +2379,7 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
+			log.FailOnError(err, fmt.Sprintf("error getting pool using UUID [%s]", selectedPool.Uuid))
 
 			drvSize, err := getPoolDiskSize(poolToBeResized)
 			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
