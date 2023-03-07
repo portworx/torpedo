@@ -76,10 +76,13 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				ValidateApplications(contexts)
 
 				waitDuration := meteringInterval + 30*time.Second
-				log.InfoD("Wait %v for previous interval to go through", waitDuration)
+				log.InfoD("Wait %v for initial interval to go through in case the metering interval is after the callhome interval", waitDuration)
 				time.Sleep(waitDuration)
 
-				log.InfoD("Wait %v for a new interval to go through", waitDuration)
+				log.InfoD("Wait %v for previous pro-rated interval to go through", waitDuration)
+				time.Sleep(waitDuration)
+
+				log.InfoD("Wait %v for a latest interval to go through", waitDuration)
 				time.Sleep(waitDuration)
 
 				log.InfoD("Check metering data is accurate")
@@ -267,8 +270,15 @@ func getExpectedPodHours(contexts []*scheduler.Context, meteringInterval time.Du
 		}
 	}
 
+	// Each pod hour metric will be skewed by ~2s
+	networkBufferHours := (2 * time.Second).Hours()
+	numPxPods := len(totalPods)
+
+	// Pod hours will be the
+	podHours := float64(numPxPods) * (meteringInterval.Hours() + networkBufferHours)
+
 	// Count one minute per pod using a PX volume
-	return float64(len(totalPods)*int(meteringInterval.Minutes())) / 60, nil
+	return podHours, nil
 }
 
 func getLatestPodHours(meteringData []*CallhomeData) float64 {
