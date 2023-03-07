@@ -7,6 +7,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -113,5 +114,85 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{PureFaValidateCreateoptionxfs}", func() {
+	var contexts []*scheduler.Context
+	var createoption = "xfs"
+
+	It("Has to validate createoptions", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		contexts = ScheduleApplications(fmt.Sprintf("nginx-fa-fb-davol"))
+		ValidateApplications(contexts)
+		for _, ctx := range contexts {
+			vols, err := Inst().S.GetVolumes(ctx)
+			fmt.Println("volume is", vols)
+			if err != nil {
+				log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+			}
+			for _, v := range vols {
+				fmt.Println("volume name is ", v.Name)
+				if v.Name == "mount-fa-xfs-pvc" {
+					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
+					if err != nil {
+						log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+					}
+					Step("validating create options", func() {
+						err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption, attachedNode)
+						Expect(err).To(BeNil(), "Failed to validate create option xfs")
+					})
+				}
+			}
+		}
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+})
+
+var _ = Describe("{PureFaValidateCreateoptionext4}", func() {
+	var contexts []*scheduler.Context
+	var createoption = "ext4"
+
+	It("Has to validate createoptions", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		contexts = ScheduleApplications(fmt.Sprintf("nginx-fa-fb-davol"))
+		ValidateApplications(contexts)
+		for _, ctx := range contexts {
+			vols, err := Inst().S.GetVolumes(ctx)
+			fmt.Println("volume is", vols)
+			if err != nil {
+				log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+			}
+			for _, v := range vols {
+				fmt.Println("volume name is ", v.Name)
+				if v.Name == "createoption-fa-ext4-pvc" {
+					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
+					if err != nil {
+						log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+					}
+					Step("validating create options", func() {
+						err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption, attachedNode)
+						Expect(err).To(BeNil(), "Failed to validate create option ext4")
+					})
+				}
+			}
+		}
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
 	})
 })

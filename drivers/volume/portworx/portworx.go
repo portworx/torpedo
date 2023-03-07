@@ -1409,6 +1409,79 @@ func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
 	return nil
 }
 
+func (d *portworx) ValidatePureFaCreateOptions(volumeName string, createoption string, volumeNode *node.Node) error {
+	cmd := fmt.Sprintf("mount | grep %s", volumeName)
+	out, err := d.nodeDriver.RunCommandWithNoRetry(
+		*volumeNode,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("Failed to get create option response for volume %s", volumeName)
+	}
+	if strings.Contains(out, createoption) {
+		log.Infof("%s option is available in the create options of volume %s", createoption, volumeName)
+	} else {
+		return fmt.Errorf("Failed to get %s option in the create options", createoption)
+	}
+
+	//validating Implementation
+	cmd2 := fmt.Sprintf("mount | grep %s | awk '{print $1}'", volumeName)
+	out2, err := d.nodeDriver.RunCommandWithNoRetry(
+		*volumeNode,
+		cmd2,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("Failed to get attached volume for create option for pvc  %s", volumeName)
+	}
+
+	out2 = strings.ReplaceAll(out2, "\n", "")
+	if createoption == "xfs" {
+		cmd3 := fmt.Sprintf("xfs_info %s ", out2)
+		out3, err := d.nodeDriver.RunCommandWithNoRetry(
+			*volumeNode,
+			cmd3,
+			node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("Failed to get bsize for create option for pvc  %s", volumeName)
+		}
+		if strings.Contains(out3, "bsize=2048") {
+			log.Infof("Blocksize 2048 is correctly configured in the create options of volume %s", volumeName)
+		} else {
+			return fmt.Errorf("Failed to get %s proper block size in the %s create options", out3, createoption)
+		}
+	} else if createoption == "ext4" {
+		cmd3 := fmt.Sprintf("tune2fs -l %s ", out2)
+		out3, err := d.nodeDriver.RunCommandWithNoRetry(
+			*volumeNode,
+			cmd3,
+			node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("Failed to get bsize for create option for pvc  %s", volumeName)
+		}
+		if strings.Contains(out3, "Block size:               2048") {
+			log.Infof("Blocksize 2048 is correctly configured in the create options of volume %s", volumeName)
+		} else {
+			return fmt.Errorf("Failed to get %s proper block size in the %s create options", out3, createoption)
+		}
+
+	}
+
+	return nil
+
+}
+
 func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) error {
 	nodes := node.GetWorkerNodes()
 	cmd := fmt.Sprintf("%s --io_priority %s  %s", pxctlVolumeUpdate, priorityType, volumeName)

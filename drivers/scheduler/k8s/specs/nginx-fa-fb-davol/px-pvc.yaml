@@ -1,0 +1,35 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mount-fa-xfs-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: mount-fa-xfs-sc
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mount-fb-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: mount-fb-sc
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: createoption-fa-ext4-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: createoption-fa-ext4-sc

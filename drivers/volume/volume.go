@@ -310,6 +310,9 @@ type Driver interface {
 	//ToggleCallHome toggles Call-home
 	ToggleCallHome(n node.Node, enabled bool) error
 
+	//validate create options
+	ValidatePureFaCreateOptions(volumeName string, createoption string, volumeNode *node.Node) error
+
 	//UpdateIOPriority IO priority using pxctl command
 	UpdateIOPriority(volumeName string, priorityType string) error
 

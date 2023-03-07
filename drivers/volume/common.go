@@ -797,6 +797,13 @@ func (d *DefaultDriver) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName stri
 	}
 }
 
+func (d *DefaultDriver) ValidatePureFaCreateOptions(volumeName string, createoption string, volumeNode *node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateCreateOptions",
+	}
+}
+
 // UpdateIOPriority update IO priority on volume
 func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string) error {
 	return &errors.ErrNotSupported{
