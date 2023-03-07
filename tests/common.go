@@ -2004,7 +2004,6 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	log.Debugf("contexts: %v", &contexts)
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
@@ -2084,7 +2083,7 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 		}
 	}
 
-	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksPxOperator(), reverse)
+	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksCluster(), reverse)
 	if err != nil {
 		log.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -5277,8 +5276,8 @@ func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
 	return poolDetails, nil
 }
 
-// IsEksPxOperator returns true if current operator installation is on an EKS cluster
-func IsEksPxOperator() bool {
+// IsEksCluster returns true if current operator installation is on an EKS cluster
+func IsEksCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsEKS(stc) {
 			logrus.Infof("EKS installation with PX operator detected.")
@@ -5735,25 +5734,60 @@ func SetupTestRail() {
 	}
 }
 
-func AsgKillANode(nodeToKill node.Node) {
+func AsgKillNode(nodeToKill node.Node) error {
 
+	initNodes := node.GetStorageDriverNodes()
+	initNodeNames := make([]string, len(initNodes))
+	var err error
+	for _, iNode := range initNodes {
+		initNodeNames = append(initNodeNames, iNode.Name)
+	}
 	stepLog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		err := Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Valdiate node %s deletion", nodeToKill.Name))
+		//workaround for eks until EKS sdk is implemented
+		if IsEksCluster() {
+			Inst().N.RunCommandWithNoRetry(nodeToKill, "ifconfig eth0 down  < /dev/null &", node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+
+		} else {
+			err = Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Valdiate node %s deletion", nodeToKill.Name))
+		}
+
 	})
 
-	stepLog = "Wait for 10 min. to node get replaced by autoscaling group"
+	stepLog = "Wait for  node get replaced by autoscaling group"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		time.Sleep(10 * time.Minute)
+		t := func() (interface{}, bool, error) {
+
+			err = Inst().S.RefreshNodeRegistry()
+			if err != nil {
+				return "", true, err
+			}
+
+			err = Inst().V.RefreshDriverEndpoints()
+			if err != nil {
+				return "", true, err
+			}
+
+			newNodesList := node.GetStorageDriverNodes()
+
+			for _, nNode := range newNodesList {
+				if !Contains(initNodeNames, nNode.Name) {
+					return "", false, nil
+				}
+			}
+
+			return "", true, fmt.Errorf("no new node scaled up")
+		}
+
+		_, err = task.DoRetryWithTimeout(t, defaultAutoStorageNodeRecoveryTimeout, waitResourceCleanup)
+
 	})
-
-	err := Inst().S.RefreshNodeRegistry()
-	log.FailOnError(err, "error while node registry refresh")
-
-	err = Inst().V.RefreshDriverEndpoints()
-	log.FailOnError(err, "error driver end points refresh")
+	return err
 
 }

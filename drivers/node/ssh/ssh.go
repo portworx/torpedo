@@ -767,7 +767,9 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 						kv := strings.Split(label, "=")
 						driveLabels[kv[0]] = kv[1]
 					} else {
-						driveLabels[label] = ""
+						if label != "" {
+							driveLabels[label] = "true"
+						}
 					}
 				}
 				drive.Labels = driveLabels

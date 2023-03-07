@@ -4901,18 +4901,6 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 			}
 		})
 
-		defer func() {
-			Step("set cluster to running", func() {
-				log.InfoD("set cluster to running")
-				for _, n := range driverDownNodes {
-					err := Inst().V.StartDriver(n)
-					log.FailOnError(err, "error starting driver on node %s", n.Name)
-					err = Inst().V.WaitDriverUpOnNode(n, 5*time.Minute)
-					log.FailOnError(err, "error while waiting for driver up on node %s", n.Name)
-				}
-			})
-		}()
-
 		stepLog = fmt.Sprintf("Expanding pool on kvdb node using resize-disk")
 		Step(stepLog, func() {
 
@@ -4922,6 +4910,15 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 			log.InfoD("Current Size of the pool %s is %d", selPool.Uuid, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			Step("set cluster to running", func() {
+				log.InfoD("set cluster to running")
+				for _, n := range driverDownNodes {
+					err := Inst().V.StartDriver(n)
+					log.FailOnError(err, "error starting driver on node %s", n.Name)
+					err = Inst().V.WaitDriverUpOnNode(n, 5*time.Minute)
+					log.FailOnError(err, "error while waiting for driver up on node %s", n.Name)
+				}
+			})
 
 			isjournal, err := isJournalEnabled()
 			log.FailOnError(err, "Failed to check if Journal enabled")
@@ -6422,7 +6419,7 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		if IsEksPxOperator() != true {
+		if IsEksCluster() != true {
 			log.FailOnError(fmt.Errorf("DeletePool is currently supported for EKS and LocalDrives"), "Pool deletion supported?")
 		}
 
@@ -6623,7 +6620,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 		// Get random storage less node present in the cluster
 		var pickNode node.Node
 		if len(storageLessNode) == 0 {
-			if IsEksPxOperator() != true {
+			if IsEksCluster() != true {
 				log.FailOnError(fmt.Errorf("DeletePool is currently supported for EKS and LocalDrives"), "Pool deletion supported?")
 			}
 			err := MakeStoragetoStoragelessNode(*nodeDetail)
@@ -8073,8 +8070,6 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 			poolToBeResized := pools[poolUUIDToBeREsized]
 			dash.VerifyFatal(poolToBeResized != nil, true, "Pool to be resized exist?")
 
-			// px will put a new request in a queue, but in this case we can't calculate the expected size,
-			// so need to wain until the ongoing operation is completed
 			stepLog = "Verify that pool resize is not in progress"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
@@ -8085,25 +8080,25 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 				}
 			})
 
-			//var expectedSize uint64
-			//drvSize, err := getPoolDiskSize(poolToBeResized)
-			//log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
-			//isjournal, err := isJournalEnabled()
-			//log.FailOnError(err, "Failed to check is Journal enabled")
-			//
-			//stepLog = "Calculate expected pool size and trigger pool resize using add-disk"
-			//Step(stepLog, func() {
-			//	log.InfoD(stepLog)
-			//
-			//	expectedSize = (poolToBeResized.TotalSize / units.GiB) + drvSize
-			//
-			//	log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
-			//
-			//	err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
-			//	dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-			//	resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
-			//	dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
-			//})
+			var expectedSize uint64
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check is Journal enabled")
+
+			stepLog = "Calculate expected pool size and trigger pool resize using add-disk"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				expectedSize = (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+				log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
+
+				err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
+				dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+				resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
+				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
+			})
 
 		})
 		poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
@@ -8154,12 +8149,33 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 				dash.VerifyFatal(len(poolsBfr)+1, len(poolsAfr), "verify new pool is created")
 
 			})
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "error while driver end points refresh")
+
 		})
+
+		stNode, err = GetNodeWithGivenPoolID(poolUUIDToBeREsized)
+		log.FailOnError(err, "error finding stNode with pool uuid [%s]", poolUUIDToBeREsized)
+
+		initDisks := stNode.Disks
+		initPools := stNode.Pools
+
+		systemOpts := node.SystemctlOpts{
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: defaultRetryInterval,
+			},
+			Action: "start",
+		}
+		drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
+		log.FailOnError(err, "error getting block drives from node [%s]", stNode.Name)
 
 		stepLog = fmt.Sprintf("killing node [%s]", stNode.Name)
 		Step(stepLog, func() {
+			//Storing existing node details before terminating an instance
+			storageDriverNodes := node.GetStorageDriverNodes()
+			stDrvNodesNames := make([]string, len(storageDriverNodes))
+			for _, sn := range storageDriverNodes {
+				stDrvNodesNames = append(stDrvNodesNames, sn.Name)
+			}
 			slNodes := node.GetStorageLessNodes()
 			slNodesNames := make([]string, len(slNodes))
 			for _, sn := range slNodes {
@@ -8167,28 +8183,98 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 			}
 			stNodes := node.GetStorageNodes()
 			stNodesNames := make([]string, len(stNodes))
-			for _, sn := range slNodes {
+			for _, sn := range stNodes {
 				stNodesNames = append(stNodesNames, sn.Name)
 			}
-			storageDriverNodesCount := len(node.GetStorageDriverNodes())
-			AsgKillANode(*stNode)
-			ValidateClusterSize(int64(storageDriverNodesCount))
-			for _, ns := range node.GetStorageDriverNodes() {
-				if Contains(slNodesNames, ns.Name) && len(ns.Disks) > 0 {
-					log.InfoD("node [%s] converted t storage", ns.Name)
-					log.Infof("%+v", ns.Disks)
-					log.Infof("%+v", ns.Pools)
-				}
 
-				if !Contains(stNodesNames, ns.Name) && len(ns.Disks) > 0 {
-					log.InfoD("new node [%s] created as  storage", ns.Name)
-					log.Infof("%+v", ns.Disks)
-					log.Infof("%+v", ns.Pools)
+			err = AsgKillNode(*stNode)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("verify terminating node [%s]", stNode.Name))
+			newStorageDriverNodes := node.GetStorageDriverNodes()
+			dash.VerifyFatal(len(storageDriverNodes), len(newStorageDriverNodes), "verify new storage driver node is created")
+			dash.VerifyFatal(len(slNodes), len(node.GetStorageLessNodes()), "verify storageless nodes count is same")
+
+			var newNode node.Node
+			var nodeToValidate node.Node
+			for _, ns := range newStorageDriverNodes {
+				if !Contains(stDrvNodesNames, ns.Name) {
+					newNode = ns
+					break
 				}
+			}
+			if len(newNode.Pools) > 0 {
+				log.InfoD("new node [%s] created as storage node", newNode.Name)
+				nodeToValidate = newNode
+			} else {
+				log.InfoD("new node [%s] created as storageless node", newNode.Name)
+				for _, n := range node.GetStorageNodes() {
+					if Contains(slNodesNames, n.Name) {
+						log.InfoD("node [%s] is converted to storage node", n.Name)
+						nodeToValidate = n
+						break
+					}
+				}
+			}
+
+			//validating if in-build metadata disk exists
+			isInitMetadataDiskExist := false
+			var initTotalDiskSize uint64
+			for _, n := range initDisks {
+				if n.Metadata {
+					isInitMetadataDiskExist = true
+				}
+				initTotalDiskSize = initTotalDiskSize + (n.Size / units.GiB)
 
 			}
-		})
 
+			isnewMetadataDiskExist := false
+			var newTotalDiskSize uint64
+			nNodeDisks := nodeToValidate.Disks
+			for k, n := range nNodeDisks {
+				dash.VerifySafely(n.Online, true, fmt.Sprintf("verify disk [%s] is online", k))
+				if n.Metadata {
+					isnewMetadataDiskExist = true
+				}
+				newTotalDiskSize = newTotalDiskSize + (n.Size / units.GiB)
+
+			}
+			dash.VerifySafely(isInitMetadataDiskExist, isnewMetadataDiskExist, "Verify metadata disk status")
+
+			dash.VerifySafely(len(nodeToValidate.Pools), len(initPools), fmt.Sprintf("verify node [%s] pools count matching with deleted node", nodeToValidate.Name))
+			var initTotalSize uint64
+			for _, p := range initPools {
+				initTotalSize = initTotalSize + (p.TotalSize / units.GiB)
+			}
+
+			var newTotalSize uint64
+			for _, p := range nodeToValidate.Pools {
+				newTotalSize = newTotalSize + (p.TotalSize / units.GiB)
+			}
+			dash.VerifySafely(initTotalSize, newTotalSize, fmt.Sprintf("verify node [%s] total size matching with deleted node", nodeToValidate.Name))
+
+			//validating if dedicated metadat disk exists
+			newDrivesMap, err := Inst().N.GetBlockDrives(nodeToValidate, systemOpts)
+			log.FailOnError(err, "error getting block drives from node [%s]", nodeToValidate.Name)
+
+			isInitDedicatedMetadataDiskExist := false
+			isNewDedicatedMetadataDiskExist := false
+			for _, v := range drivesMap {
+				for lk, _ := range v.Labels {
+					if lk == "mdvol" {
+						isInitDedicatedMetadataDiskExist = true
+					}
+				}
+			}
+
+			for _, v := range newDrivesMap {
+				for lk, _ := range v.Labels {
+					if lk == "mdvol" {
+						isNewDedicatedMetadataDiskExist = true
+					}
+				}
+			}
+
+			dash.VerifySafely(isInitDedicatedMetadataDiskExist, isNewDedicatedMetadataDiskExist, "Verify dedicated metadisk status")
+		})
 	})
 
 	JustAfterEach(func() {
