@@ -147,10 +147,6 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				}()
 				wg.Wait()
 
-				log.InfoD("Validate dataservice %s statefulset pods are up", ds.Name)
-				err = pdslib.ValidatePods(params.InfraToTest.Namespace, *deployment.ClusterResourceName)
-				log.FailOnError(err, "Error while validating the dataservice %s pods", ds.Name)
-
 				log.InfoD("Validating if the data service pods are back to healthy state")
 				err = pdslib.WaitForPDSDeploymentToBeUp(deployment, timeInterval, timeOut)
 				log.FailOnError(err, "Error while validating the pds deployment pods")
