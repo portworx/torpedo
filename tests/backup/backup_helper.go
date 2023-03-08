@@ -194,6 +194,62 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	log.Infof("Backup [%s] created successfully", backupName)
 	return nil
 }
+
+// CreateBackupAndGetBackupObjects returns a BackupContext
+func CreateBackupAndGetBackupCtx(backupName string, clusterName string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context, clusterAppsContexts []*scheduler.Context) (*BackupRestoreContext, error) {
+
+	backupDriver := Inst().Backup
+	bkpCreateRequest := &api.BackupCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  backupName,
+			OrgId: orgID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  uid,
+		},
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+	}
+	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	ok, bkpInspectResp, err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes, 30, ctx)
+	if !ok {
+		if err != nil {
+			return nil, err
+		} else {
+			return nil, fmt.Errorf("backupSuccessCheck error")
+		}
+	}
+
+	log.InfoD("Validating Backup Creation")
+	bkpCtx, err := ValidateBackup(bkpInspectResp, clusterAppsContexts)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("Backup [%s] created successfully", backupName)
+	return bkpCtx, nil
+}
+
 func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred string, cloudCredUID string, ctx context.Context) (*api.BackupUpdateResponse, error) {
 	backupDriver := Inst().Backup
 	bkpUpdateRequest := &api.BackupUpdateRequest{
@@ -1358,7 +1414,7 @@ func ValidateRestore(restoreInspectResponse *api.RestoreInspectResponse, backupC
 	} else {
 		return &rstCtx, nil
 	}
-	}
+}
 
 // Call this function AFTER switching kubeconfig to the "restore" cluster
 func GetRestoreCtxsFromBackupCtxs(backupContext BackupRestoreContext, namespaceMapping map[string]string) (BackupRestoreContext, error) {
@@ -1381,9 +1437,9 @@ func GetRestoreCtxsFromBackupCtxs(backupContext BackupRestoreContext, namespaceM
 			if err != nil {
 				log.Errorf("Failed to Update the namespace for %v, with ns map %s. Err: %v", appSpec, namespaceMapping, err)
 				continue
-					}
+			}
 			specObjects = append(specObjects, appSpec)
-				}
+		}
 		app := *schedCtx.App
 		app.SpecList = specObjects
 		rstSchedCtx.App = &app
@@ -1394,6 +1450,6 @@ func GetRestoreCtxsFromBackupCtxs(backupContext BackupRestoreContext, namespaceM
 
 	var restoreContext = BackupRestoreContext{
 		schedCtxs: rstSchedCtxs,
-}
+	}
 	return restoreContext, nil
 }
