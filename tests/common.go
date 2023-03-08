@@ -2054,6 +2054,96 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
 }
 
+func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error) {
+	if obj, ok := specObj.(*appsapi.Deployment); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*appsapi.DaemonSet); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.Service); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storageapi.StorageClass); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+		// } else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
+		//	return nil, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.GroupVolumeSnapshot); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.Secret); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.ConfigMap); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.Rule); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.Pod); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.ClusterPair); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.Migration); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.MigrationSchedule); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.BackupLocation); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.ApplicationBackup); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.SchedulePolicy); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.ApplicationRestore); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.ApplicationClone); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.VolumeSnapshotRestore); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*apapi.AutopilotRule); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.ServiceAccount); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*rbacv1.ClusterRole); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*rbacv1.ClusterRoleBinding); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*rbacv1.Role); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*rbacv1.RoleBinding); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*batchv1beta1.CronJob); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*batchv1.Job); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.LimitRange); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*networkingv1beta1.Ingress); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*monitoringv1.Prometheus); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*monitoringv1.PrometheusRule); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*monitoringv1.ServiceMonitor); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.Namespace); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*apiextensionsv1.CustomResourceDefinition); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*policyv1beta1.PodDisruptionBudget); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*netv1.NetworkPolicy); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*corev1.Endpoints); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
+		return obj.Name, obj.Kind, obj.Namespace, nil
+	} else if obj, ok := specObj.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		return obj.Name, obj.Kind, "", nil
+	}
+
+	return "", "", "", fmt.Errorf("unsupported object: %v", reflect.TypeOf(specObj))
+}
+
 // DeleteCloudCredential deletes cloud credentials
 func DeleteCloudCredential(name string, orgID string, cloudCredUID string) error {
 
