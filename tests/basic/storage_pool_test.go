@@ -6073,7 +6073,7 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 
 		// Selecting Pool IO Priority Value different that the one already set
 		for _, eachIOPriority := range ioPriorities {
-			if eachIOPriority != ioPriorityBefore {
+			if eachIOPriority != strings.ToLower(ioPriorityBefore) {
 				setIOPriority = eachIOPriority
 				break
 			}
@@ -6111,8 +6111,8 @@ var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
 		ioPriorityAfter, err := Inst().V.GetPoolLabelValue(poolUUID, "iopriority")
 		log.FailOnError(err, "Failed to get IO Priority for Pool with UUID [%v]", poolUUID)
 
-		log.InfoD(fmt.Sprintf("Priority Before [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, ioPriorityAfter))
-		dash.VerifyFatal(ioPriorityAfter == setIOPriority, true, "IO Priority mismatch after pool expansion")
+		log.InfoD(fmt.Sprintf("Priority Before [%s] was set to [%s] and Priority after Pool Expansion [%s]", ioPriorityBefore, setIOPriority, ioPriorityAfter))
+		dash.VerifyFatal(strings.ToLower(setIOPriority) == strings.ToLower(ioPriorityAfter), true, "IO Priority mismatch after pool expansion")
 
 	})
 
@@ -6650,7 +6650,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 
 		// Add multiple Drives to Storage less node
 		maxDrivesToAdd := 6
-		for i := 0; i < maxDrivesToAdd; i++ {
+		for i := 1; i < maxDrivesToAdd+1; i++ {
 			log.InfoD("Adding [%d/%d] disks to the Node [%v]", i, maxDrivesToAdd, pickNode.Name)
 			log.FailOnError(addCloudDrive(pickNode, -1), "error adding cloud drive on Node [%v]", pickNode.Name)
 		}
@@ -7188,6 +7188,97 @@ var _ = Describe("{ResizePoolReduceErrorcheck}", func() {
 			dash.VerifyFatal(errMatch, nil, "Pool expand to lower size than existing pool size completed?")
 
 		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
+	// Testrail Description : Resync failed for a volume after pool came out of rebalance PTX-15696 -> PWX-26967
+	/*
+		Deployed systemtest sysbench spec with 1TB volume
+		Pod come up and started writing
+		Added the drive in node 10.13.166.216
+		Observed the volume status to be degraded
+		Waited for pool to come online
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResyncFailedPoolOutOfRebalance",
+			"Resync failed for a volume after pool came out of rebalance",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Resync volume after rebalance"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("reducesize-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		// Resize the Pool few times expanding drives
+
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		for count := 0; count < 1; count++ {
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + 50
+
+			// Resize the Pool with either one of the allowed resize type
+
+			log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+			log.InfoD("Expanding Pool [%v] using resize type [%v]", poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+			err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil,
+				fmt.Sprintf("Verify pool %s on expansion using auto option", poolUUID))
+		}
+		log.InfoD("Validate pool rebalance after drive add")
+		err = ValidatePoolRebalance(*nodeDetail, poolToBeResized.ID)
+
+		// Validate Volume resync if any volume got in to resync mode
+		for _, eachContext := range contexts {
+			vols, err := Inst().S.GetVolumes(eachContext)
+			log.FailOnError(err, "Failed to get volumes from context")
+			for _, eachVol := range vols {
+				// Change Replica sets of each volumes created to 3
+				var maxReplicaFactor int64
+				var nodesToBeUpdated []string
+				var poolsToBeUpdated []string
+				maxReplicaFactor = 3
+				nodesToBeUpdated = nil
+				poolsToBeUpdated = nil
+				log.FailOnError(Inst().V.SetReplicationFactor(eachVol, maxReplicaFactor,
+					nodesToBeUpdated, poolsToBeUpdated, true),
+					"Failed to set Replicaiton factor")
+
+				// Sleep for some time before checking if any resync to start
+				time.Sleep(2 * time.Minute)
+				if inResync(eachVol.Name) {
+					WaitTillVolumeInResync(eachVol.Name)
+				}
+			}
+		}
 	})
 
 	JustAfterEach(func() {
