@@ -91,7 +91,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				Eventually(func() bool {
 					meteringData, err = getMeteringData(clusterUUID, meteringInterval)
 					if err != nil {
-						log.Errorf("Failed to get metering data. Retrying...")
+						log.Errorf("Failed to get metering data: %v. Retrying...", err)
 						return false
 					}
 
@@ -110,7 +110,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 					log.InfoD("Check pod hours is correct")
 					expectedAppPodHours, err := getExpectedPodHours(contexts, meteringInterval)
 					if err != nil {
-						log.Errorf("failed to get expectedAppPodHours: %v. Retrying... %v", err)
+						log.Errorf("failed to get expectedAppPodHours: %v. Retrying... %v", expectedAppPodHours, err)
 						return false
 					}
 					log.InfoD("Estimated pod hours for this app is %v", expectedAppPodHours)
