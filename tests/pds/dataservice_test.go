@@ -73,12 +73,12 @@ var _ = Describe("{DeletePDSPods}", func() {
 				})
 
 				Step("Delete Deployments", func() {
-					log.InfoD("Deleting Deployment %v ", *deployment.Name)
+					log.InfoD("Deleting Deployment %v ", *deployment.ClusterResourceName)
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 					isDeploymentsDeleted = true
-					log.InfoD("Deployment %v Deleted Successfully", *deployment.Name)
+					log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 				})
 			}
 
@@ -93,6 +93,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
 				log.FailOnError(err, "Error while deleting data services")
 				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 			}
 		}()
 	})
