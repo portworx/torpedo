@@ -1238,7 +1238,8 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration int, retr
 		retryInterval = 30
 	}
 	backupSuccessCheck := func() (interface{}, bool, error) {
-		bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		var err error
+		bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
 		if err != nil {
 			return "", false, err
 		}
