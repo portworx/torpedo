@@ -427,6 +427,16 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 
 	It("Backup on NS(=yy), K8-version(=x) ;; Restore on NS=yy, K8s-version=x+?(=z) [success]; Simultaneously, Restore on K8s-version=z, NS=abc [partial success]", func() {
 
+		Step("Verify if 'test app spec'", func() {
+
+			log.InfoD("Allowed apps are %v", appsWithCRDsAndWebhooks)
+			for i := 0; i < len(appList); i++ {
+				contains := Contains(appsWithCRDsAndWebhooks, appList[i])
+				dash.VerifyFatal(contains, true,
+					fmt.Sprintf("check if app [%s] can be used as a dummy spec for *this* test", appList[i]))
+			}
+		})
+
 		Step("Verify K8s version of Src and Dest Cluster", func() {
 			log.InfoD("Verify K8s version of Src and Dest Cluster")
 

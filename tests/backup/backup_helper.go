@@ -52,6 +52,7 @@ var (
 	// User should keep updating preRuleApp, postRuleApp
 	preRuleApp                  = []string{"cassandra", "postgres"}
 	postRuleApp                 = []string{"cassandra"}
+	appsWithCRDsAndWebhooks     = []string{"elasticsearch-crd-webhook"}
 	globalAWSBucketName         string
 	globalAzureBucketName       string
 	globalGCPBucketName         string
