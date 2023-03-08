@@ -1868,7 +1868,7 @@ func ChangeNamespaces(contexts []*scheduler.Context,
 
 	for _, ctx := range contexts {
 		for _, spec := range ctx.App.SpecList {
-			err := updateNamespace(spec, namespaceMapping)
+			err := UpdateNamespace(spec, namespaceMapping)
 			if err != nil {
 				return err
 			}
