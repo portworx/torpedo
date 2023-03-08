@@ -3270,7 +3270,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				dash.VerifyFatal(len(fetchedUserBackups), len(userBackups)+1, "Verifying the new schedule backup is up or not")
 
 				//Now get the status of new backup -
-				backupStatus, err := backupSuccessCheck(recentBackupName, orgID, retryDuration, retryInterval, ctx)
+				backupStatus, _, err := backupSuccessCheck(recentBackupName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Backup with name %s was not successful", recentBackupName)
 				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+recentBackupName)
 				log.InfoD("New backup - %s is successful from schedule backup ", recentBackupName)
@@ -3984,7 +3984,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
 
-				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+				backupStatus, _, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
 				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
 
@@ -4141,7 +4141,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+				backupStatus, _, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
 				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
 			}
@@ -4168,7 +4168,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-restore", backupName)
-				restoreStatus, err := restoreSuccessCheck(restoreName, orgID, retryDuration, retryInterval, ctx)
+				restoreStatus, _, err := restoreSuccessCheck(restoreName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Failed while restoring Backup for - %s", backupName)
 				dash.VerifyFatal(restoreStatus, true, "Inspecting the Restore success for - "+restoreName)
 			}
@@ -6237,7 +6237,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 				for _, restore := range restoreNames {
 					log.Infof("Validating Restore %s for user %s", restore, user)
 					if strings.Contains(restore, user) {
-						restoreStatus, err := restoreSuccessCheck(restore, orgID, retryDuration, retryInterval, ctxNonAdmin)
+						restoreStatus, _, err := restoreSuccessCheck(restore, orgID, retryDuration, retryInterval, ctxNonAdmin)
 						log.FailOnError(err, "Failed while restoring Backup for - %s", restore)
 						dash.VerifyFatal(restoreStatus, true, "Inspecting the Restore success for - "+restore)
 					}

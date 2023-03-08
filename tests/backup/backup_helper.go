@@ -17,6 +17,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -1142,7 +1143,7 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string) er
 }
 
 // backupSuccessCheck inspects backup task
-func backupSuccessCheck(backupName string, orgID string, retryDuration int, retryInterval int, ctx context.Context) (bool, error) {
+func backupSuccessCheck(backupName string, orgID string, retryDuration int, retryInterval int, ctx context.Context) (bool, *api.BackupInspectResponse, error) {
 	var bkpUid string
 	backupDriver := Inst().Backup
 	if retryDuration == 0 {
@@ -1176,7 +1177,7 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration int, retr
 	task.DoRetryWithTimeout(backupSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
 	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
@@ -1185,15 +1186,17 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration int, retr
 	}
 	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	backupStatus := (resp.GetBackup().GetStatus().Status == api.BackupInfo_StatusInfo_Success)
 	log.Infof("Backup [%s] created successfully", backupName)
-	return backupStatus, nil
+	return backupStatus, resp, nil
+}
+
 }
 
 // restoreSuccessCheck inspects restore task
-func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, retryInterval int, ctx context.Context) (bool, error) {
+func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, retryInterval int, ctx context.Context) (bool, *api.RestoreInspectResponse, error) {
 	if retryDuration == 0 {
 		retryDuration = maxWaitPeriodForRestoreCompletionInMinute
 	}
@@ -1227,11 +1230,11 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 
 	resp, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	restoreStatus := (resp.GetRestore().GetStatus().Status == api.RestoreInfo_StatusInfo_PartialSuccess) || (resp.GetRestore().GetStatus().Status == api.RestoreInfo_StatusInfo_Success)
 	log.Infof("[%s] restored successfully", restoreName)
-	return restoreStatus, nil
+	return restoreStatus, resp, nil
 }
 
 func EnumerateBackupObjects(backupName string, labelSelectors map[string]string, clusterName string, clusterUid string, orgID string, ctx context.Context) ([]*api.ResourceInfo, error) {
