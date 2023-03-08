@@ -182,7 +182,7 @@ var _ = AfterSuite(func() {
 	}
 
 	// Cleanup all backups
-	allBackups, err := GetAllBackupsAdmin()
+	allBackups, err := GetAllAdminBackups()
 	for _, backupName := range allBackups {
 		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
@@ -191,7 +191,7 @@ var _ = AfterSuite(func() {
 	}
 
 	// Cleanup all restores
-	allRestores, err := GetAllRestoresAdmin()
+	allRestores, err := GetAllAdminRestores()
 	for _, restoreName := range allRestores {
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))

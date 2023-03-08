@@ -529,7 +529,10 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 	backupDriver := Inst().Backup
 	groupIDs := make([]string, 0)
 	userIDs := make([]string, 0)
-	_, clusterUID := backupDriver.RegisterBackupCluster(orgID, SourceClusterName, "")
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
 
 	for _, groupName := range groupNames {
 		groupID, err := backup.FetchIDOfGroup(groupName)
@@ -549,9 +552,9 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 
 	groupBackupShareAccessConfigs := make([]*api.BackupShare_AccessConfig, 0)
 
-	for _, groupName := range groupNames {
+	for _, groupID := range groupIDs {
 		groupBackupShareAccessConfig := &api.BackupShare_AccessConfig{
-			Id:     groupName,
+			Id:     groupID,
 			Access: api.BackupShare_AccessType(accessLevel),
 		}
 		groupBackupShareAccessConfigs = append(groupBackupShareAccessConfigs, groupBackupShareAccessConfig)
@@ -592,29 +595,32 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 		}
 	}
 
-	_, err := backupDriver.ClusterUpdateBackupShare(ctx, clusterBackupShareUpdateRequest)
-	return err
+	_, err = backupDriver.ClusterUpdateBackupShare(ctx, clusterBackupShareUpdateRequest)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func GetAllBackupsForUser(username, password string) ([]string, error) {
-	var bkp *api.BackupObject
+func GetAllUserBackups(username, password string) ([]string, error) {
 	backupNames := make([]string, 0)
 	backupDriver := Inst().Backup
 	ctx, err := backup.GetNonAdminCtx(username, password)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
-	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+	}
+	currentBackups, err := backupDriver.EnumerateBackup(ctx, backupEnumerateReq)
 	if err != nil {
 		return nil, err
 	}
-	for _, bkp = range curBackups.GetBackups() {
-		backupNames = append(backupNames, bkp.GetName())
+	for _, backup := range currentBackups.GetBackups() {
+		backupNames = append(backupNames, backup.GetName())
 	}
-	return backupNames, err
+	return backupNames, nil
 }
 
 // CreateRestore creates restore
@@ -1023,8 +1029,8 @@ func ShareBackupWithUsersAndAccessAssignment(backupNames []string, users []strin
 	return accessUserBackupContext, nil
 }
 
-// GetAllBackupsAdmin returns all the backups that px-central-admin has access to
-func GetAllBackupsAdmin() ([]string, error) {
+// GetAllAdminBackups returns all the backups that px-central-admin has access to
+func GetAllAdminBackups() ([]string, error) {
 	var bkp *api.BackupObject
 	backupNames := make([]string, 0)
 	backupDriver := Inst().Backup
@@ -1044,8 +1050,8 @@ func GetAllBackupsAdmin() ([]string, error) {
 	return backupNames, nil
 }
 
-// GetAllRestoresAdmin returns all the backups that px-central-admin has access to
-func GetAllRestoresAdmin() ([]string, error) {
+// GetAllAdminRestores returns all the backups that px-central-admin has access to
+func GetAllAdminRestores() ([]string, error) {
 	restoreNames := make([]string, 0)
 	backupDriver := Inst().Backup
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -1169,7 +1175,7 @@ func getAllCloudCredentials(ctx context.Context) (map[string]string, error) {
 	return cloudCredentialMap, nil
 }
 
-func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
+func GetAllNonAdminRestores(ctx context.Context) ([]string, error) {
 	restoreNames := make([]string, 0)
 	backupDriver := Inst().Backup
 	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
