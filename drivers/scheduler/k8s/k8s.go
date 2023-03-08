@@ -379,6 +379,11 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k8sRbac.SetConfig(config)
 	k8sMonitoring.SetConfig(config)
 	k8sPolicy.SetConfig(config)
+	k8sBatch.SetConfig(config)
+	k8sMonitoring.SetConfig(config)
+	k8sApiExtensions.SetConfig(config)
+	k8sAdmissionRegistration.SetConfig(config)
+	k8sExternalsnap.SetConfig(config)
 
 	return nil
 }
