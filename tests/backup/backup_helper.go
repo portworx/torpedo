@@ -23,6 +23,8 @@ import (
 )
 
 const (
+	cloudAccountDeleteTimeout                 = 10 * time.Minute
+	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentNamespace                  = "kube-system"
 	clusterName                               = "tp-cluster"
 	restoreNamePrefix                         = "tp-restore"
@@ -852,9 +854,27 @@ func DeleteCloudAccounts(backupLocationMap map[string]string, credName string, c
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
 			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
+			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+				if err != nil {
+					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+				}
+				if status == true {
+					return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
-		time.Sleep(time.Minute * 3)
-		err := DeleteCloudCredential(credName, orgID, cloudCredUID)
+		cloudCredDeleteStatus := func() (interface{}, bool, error) {
+			err := DeleteCloudCredential(credName, orgID, cloudCredUID)
+			if err != nil {
+				return "", true, fmt.Errorf("deleting cloud cred %s", credName)
+			}
+			return "", false, nil
+		}
+		_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 	}
 	err := DeleteCluster(SourceClusterName, orgID, ctx)
@@ -940,12 +960,14 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 	case ViewOnlyAccess:
 		// Try restore with user having ViewOnlyAccess and it should fail
 		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
+		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
 		// Try to delete the backup with user having ViewOnlyAccess, and it should not pass
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has ViewOnlyAccess and cannot delete backup
 		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
+		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 	case RestoreAccess:
@@ -957,6 +979,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has Restore Access and delete backup should fail
 		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
+		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 	case FullAccess:
@@ -1236,8 +1259,7 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration int, retr
 		return "", false, nil
 	}
 
-	task.DoRetryWithTimeout(backupSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
-	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	_, err := task.DoRetryWithTimeout(backupSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
 	if err != nil {
 		return false, nil, err
 	}
@@ -1385,8 +1407,10 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 		return "", true, fmt.Errorf("expected status of %s - [%s] or [%s], but got [%s]",
 			restoreName, api.RestoreInfo_StatusInfo_PartialSuccess.String(), api.RestoreInfo_StatusInfo_Success, restoreResponseStatus.GetStatus())
 	}
-	task.DoRetryWithTimeout(restoreSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
-
+	_, err := task.DoRetryWithTimeout(restoreSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
+	if err != nil {
+		return false, nil, err
+	}
 	restoreInspectRequest = &api.RestoreInspectRequest{
 		Name:  restoreName,
 		OrgId: orgID,
@@ -1452,4 +1476,22 @@ func GetRestoreCtxsFromBackupCtxs(backupContext BackupRestoreContext, namespaceM
 		schedCtxs: rstSchedCtxs,
 	}
 	return restoreContext, nil
+}
+
+// IsBackupLocationPresent checks whether the backup location is present or not
+func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID string) (bool, error) {
+	backupLocationEnumerateRequest := &api.BackupLocationEnumerateRequest{
+		OrgId: orgID,
+	}
+	response, err := Inst().Backup.EnumerateBackupLocation(ctx, backupLocationEnumerateRequest)
+	if err != nil {
+		return false, err
+	}
+	log.Infof("Backup locations present are %v", response.BackupLocations)
+	for _, bkpLoc := range response.GetBackupLocations() {
+		if bkpLoc.GetName() == bkpLocation {
+			return true, nil
+		}
+	}
+	return false, nil
 }

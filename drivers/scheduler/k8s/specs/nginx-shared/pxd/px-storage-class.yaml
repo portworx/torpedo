@@ -1,0 +1,13 @@
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: nginx-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  {{ if .Repl }}
+  repl: "{{ .Repl }}"
+  {{ else }}
+  repl: "3"{{ end }}
+  shared: "true"
+allowVolumeExpansion: true

@@ -28,7 +28,6 @@ parameters:
   aggregation_level: "2"
   io_profile: "random"
   priority_io: "high"
-  shared: "false"
   labels: "type=aggregated"
   group: "mysql-data"
 allowVolumeExpansion: true
