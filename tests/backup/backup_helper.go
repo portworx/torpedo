@@ -1345,100 +1345,55 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 	return restoreStatus, resp, nil
 }
 
-func EnumerateBackupObjects(backupName string, labelSelectors map[string]string, clusterName string, clusterUid string, orgID string, ctx context.Context) ([]*api.ResourceInfo, error) {
-	backupDriver := Inst().Backup
-	bkpEnumRequest := &api.BackupEnumerateRequest{
-		OrgId: orgID,
-		EnumerateOptions: &api.EnumerateOptions{
-			IncludeDetailedResources: true,
-			ClusterNameFilter:        clusterName,
-			ClusterUidFilter:         clusterUid,
-			NameFilter:               backupName,
-			Labels:                   labelSelectors,
-		},
-	}
-	bkpEnumResp, err := backupDriver.EnumerateBackup(ctx, bkpEnumRequest)
+// returns the restoreContext
+func ValidateRestore(restoreInspectResponse *api.RestoreInspectResponse, backupContext *BackupRestoreContext, namespaceMapping map[string]string) (*BackupRestoreContext, error) {
+	//rstObjs := restoreInspectResponse.Restore.Resources
+	//TODO1 do the comparison of bkpObj and rstObj over here
+
+	rstCtx, err := GetRestoreCtxsFromBackupCtxs(*backupContext, namespaceMapping)
+	ValidateApplications(rstCtx.schedCtxs)
+
 	if err != nil {
-		return nil, fmt.Errorf("EnumerateBackupError: %v", err)
+		return nil, fmt.Errorf("GetRestoreCtxsFromBackupCtxs Err: %v", err)
+	} else {
+		return &rstCtx, nil
 	}
-	if bkpEnumResp.TotalCount > 1 {
-		log.Warnf("The total number of backups found with %s in cluster (%s,%s) are more than 1. Using the first entry.", backupName, clusterName, clusterUid)
-	} else if bkpEnumResp.TotalCount < 1 {
-		return nil, fmt.Errorf("The total number of backups found with %s in cluster (%s,%s) is less than 1.", backupName, clusterName, clusterUid)
 	}
 
-	return bkpEnumResp.Backups[0].Resources, nil
-}
-
-// Filters the source namespaces' contexts to only include backup objects
-// MAKE SURE to include Contexts of ALL namespaces which contain the backup objects
-func GetBackupSpecObjectsContexts(resourceInfos []*api.ResourceInfo, clusterAppsContexts []*scheduler.Context) ([]*scheduler.Context, error) {
-
-	type BkpObj struct {
-		Name string
-		Kind string
-	}
-
-	var backupAppContexts []*scheduler.Context = make([]*scheduler.Context, 0)
-
-	//for each clusterAppsContext (namespace), we return the corresponding BackupS[ecObject]
-	for _, clusterAppsContext := range clusterAppsContexts {
-		var specObjects []interface{} = make([]interface{}, 0)
-		var bkpObjs []BkpObj = make([]BkpObj, 0)
-
-		for _, bkpObj := range resourceInfos {
-			if bkpObj.Namespace == clusterAppsContext.ScheduleOptions.Namespace {
-				bkpObjs = append(bkpObjs, BkpObj{Name: bkpObj.Name, Kind: bkpObj.Kind})
-			} else {
-				log.Info("bkpObj: %s not part of %s namespace", bkpObj.Name, clusterAppsContext.ScheduleOptions.Namespace) //TODO1 remove later
-			}
-		}
-
-	specloop:
-		for _, spec := range clusterAppsContext.App.SpecList {
-			//TODO1 check type conversion
-			name, kind, _, err := Inst().S.(*k8s.K8s).GetSpecNameKindNamepace(spec)
-			if err != nil {
-				log.Error(err)
-			}
-			if name != "" /*&& kind != ""*/ /*kind is empty for certain objects :(*/ {
-				for _, bkpObj := range bkpObjs {
-					if name == bkpObj.Name /*&& kind == bkpObj.Kind*/ {
-						clone := spec
-						specObjects = append(specObjects, clone)
-						continue specloop
-					}
-				}
-			} else {
-				log.Warnf("some error with getting GetSpecNameKindNamepace with %v, Spec Name: %s, Kind: %s", spec, name, kind)
-				continue specloop
-			}
-			// executes if specObj is not in backup
-			log.InfoD("Backup does not have: %s, %s", name, kind)
-		}
-
-		backupAppContext := *clusterAppsContext
-		app := *clusterAppsContext.App
-		app.SpecList = specObjects
-		backupAppContext.App = &app
-		backupAppContexts = append(backupAppContexts, &backupAppContext)
-	}
-
-	return backupAppContexts, nil
-}
-
-func GetRestoreCtxsFromBackupCtxs(sourceClusterAppsContexts []*scheduler.Context, destinationNamespaces []string) ([]*scheduler.Context, error) {
-	var destinationClusterAppsContexts []*scheduler.Context
-	destinationClusterAppsContexts = make([]*scheduler.Context, 0)
+// Call this function AFTER switching kubeconfig to the "restore" cluster
+func GetRestoreCtxsFromBackupCtxs(backupContext BackupRestoreContext, namespaceMapping map[string]string) (BackupRestoreContext, error) {
+	log.InfoD("Getting Restore Context from Backup Context")
+	var rstSchedCtxs []*scheduler.Context = make([]*scheduler.Context, 0)
 
 	options := CreateScheduleOptions()
-	for j, ctx := range sourceClusterAppsContexts {
-		appCtx, err := Inst().S.GetClonedNamespaceContextFromOriginalContext(ctx, destinationNamespaces[j], options)
-		if err != nil {
-			return nil, fmt.Errorf("GetClonedNamespaceContextFromOriginalContext failed; Err: %v", err)
-		}
-		appCtx.ReadinessTimeout = appReadinessTimeout
-		destinationClusterAppsContexts = append(destinationClusterAppsContexts, appCtx)
+	for _, schedCtx := range backupContext.schedCtxs {
+		rstSchedCtx := *schedCtx
+		var specObjects []interface{}
+		specObjects = make([]interface{}, 0)
+
+		for _, appSpecOrig := range schedCtx.App.SpecList {
+			appSpec, err := CloneSpec(appSpecOrig) //clone spec to create "restore" specs
+			if err != nil {
+				log.Errorf("Failed to clone spec: '%v'. Err: %v", appSpecOrig, err)
+				continue
+			}
+			err = UpdateNamespace(appSpec, namespaceMapping)
+			if err != nil {
+				log.Errorf("Failed to Update the namespace for %v, with ns map %s. Err: %v", appSpec, namespaceMapping, err)
+				continue
+					}
+			specObjects = append(specObjects, appSpec)
+				}
+		app := *schedCtx.App
+		app.SpecList = specObjects
+		rstSchedCtx.App = &app
+		options.Namespace = namespaceMapping[schedCtx.ScheduleOptions.Namespace]
+		rstSchedCtx.ScheduleOptions = options
+		rstSchedCtxs = append(rstSchedCtxs, &rstSchedCtx)
 	}
-	return destinationClusterAppsContexts, nil
+
+	var restoreContext = BackupRestoreContext{
+		schedCtxs: rstSchedCtxs,
+}
+	return restoreContext, nil
 }
