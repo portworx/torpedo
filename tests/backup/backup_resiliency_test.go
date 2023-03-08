@@ -3,6 +3,10 @@ package tests
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -13,9 +17,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"strings"
-	"sync"
-	"time"
 )
 
 // This test restarts volume driver (PX) while backup is in progress
@@ -157,7 +158,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
 
-				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+				backupStatus, _, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
 				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
 
@@ -314,7 +315,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+				backupStatus, _, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
 				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
 			}
@@ -341,7 +342,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-restore", backupName)
-				restoreStatus, err := restoreSuccessCheck(restoreName, orgID, retryDuration, retryInterval, ctx)
+				restoreStatus, _, err := restoreSuccessCheck(restoreName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Failed while restoring Backup for - %s", backupName)
 				dash.VerifyFatal(restoreStatus, true, "Inspecting the Restore success for - "+restoreName)
 			}

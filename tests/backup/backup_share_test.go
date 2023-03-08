@@ -3,6 +3,12 @@ package tests
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -17,11 +23,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math/rand"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 // This is to create multiple users and groups
@@ -2318,7 +2319,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 				dash.VerifyFatal(len(fetchedUserBackups), len(userBackups)+1, fmt.Sprintf("Verifying the new schedule backup %s is up or not", recentBackupName))
 
 				//Now get the status of new backup -
-				backupStatus, err := backupSuccessCheck(recentBackupName, orgID, retryDuration, retryInterval, ctx)
+				backupStatus, _, err := backupSuccessCheck(recentBackupName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Backup with name %s was not successful", recentBackupName)
 				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+recentBackupName)
 				log.InfoD("New backup - %s is successful from schedule backup ", recentBackupName)
@@ -3829,7 +3830,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 				for _, restore := range restoreNames {
 					log.Infof("Validating Restore %s for user %s", restore, user)
 					if strings.Contains(restore, user) {
-						restoreStatus, err := restoreSuccessCheck(restore, orgID, retryDuration, retryInterval, ctxNonAdmin)
+						restoreStatus, _, err := restoreSuccessCheck(restore, orgID, retryDuration, retryInterval, ctxNonAdmin)
 						log.FailOnError(err, "Failed while restoring Backup for - %s", restore)
 						dash.VerifyFatal(restoreStatus, true, "Inspecting the Restore success for - "+restore)
 					}

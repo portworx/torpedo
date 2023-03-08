@@ -3,8 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/apps"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -13,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/apps"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -1561,7 +1562,7 @@ func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespac
 	if err != nil {
 		return "", fmt.Errorf("fail to create restore with createrestore req %v and error %v", createRestoreReq, err)
 	}
-	status, err := restoreSuccessCheck(restoreName, orgID, 10, 30, ctx)
+	status, _, err := restoreSuccessCheck(restoreName, orgID, 10, 30, ctx)
 	if err != nil {
 		return "", fmt.Errorf("fail to create restore %v with error %v", restoreName, err)
 	}
