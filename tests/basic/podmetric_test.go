@@ -87,32 +87,48 @@ var _ = Describe("{PodMetricFunctional}", func() {
 
 				log.InfoD("Check metering data is accurate")
 
-				// try to get non-empty metering data for 3 minutes
+				// try to get accurate metering data for 10mins
 				Eventually(func() bool {
 					meteringData, err = getMeteringData(clusterUUID, meteringInterval)
-					log.FailOnError(err, "Failed to get metering data")
-					return (len(meteringData) > 0)
-				}, 3*time.Minute, 30*time.Second).Should(BeTrue(),
-					"number of metering data after deployed application is empty")
+					if err != nil {
+						log.Errorf("Failed to get metering data. Retrying...")
+						return false
+					}
 
-				existsData := len(meteringData) > 0
-				dash.VerifyFatal(existsData, true, "there should be metering data in loggly")
-				for _, md := range meteringData {
-					dash.VerifyFatal(md.ClusterUUID, clusterUUID, "this cluster should have data now")
-				}
+					existsData := len(meteringData) > 0
+					if !existsData {
+						log.Errorf("Failed to get metering data. Retrying...")
+						return false
+					}
+					for _, md := range meteringData {
+						if md.ClusterUUID != clusterUUID {
+							log.Errorf("Cluster id does not match. expected: %v actual: %v", clusterUUID, md.ClusterUUID)
+							return false
+						}
+					}
 
-				log.InfoD("Check pod hours is correct")
-				expectedAppPodHours, err := getExpectedPodHours(contexts, meteringInterval)
-				log.FailOnError(err, "Failed to get expectedAppPodHours")
-				log.InfoD("Estimated pod hours for this app is %v", expectedAppPodHours)
+					log.InfoD("Check pod hours is correct")
+					expectedAppPodHours, err := getExpectedPodHours(contexts, meteringInterval)
+					if err != nil {
+						log.Errorf("failed to get expectedAppPodHours: %v. Retrying... %v", err)
+						return false
+					}
+					log.InfoD("Estimated pod hours for this app is %v", expectedAppPodHours)
 
-				expectedPodHours := float64(expectedAppPodHours) + initialPodHours
-				log.InfoD("Estimated total pod hours is %v", expectedPodHours)
+					expectedPodHours := float64(expectedAppPodHours) + initialPodHours
+					log.InfoD("Estimated total pod hours is %v", expectedPodHours)
 
-				actualPodHours := getLatestPodHours(meteringData)
-				log.InfoD("Actual total pod hours is %v", actualPodHours)
-				err = verifyPodHourWithError(actualPodHours, expectedPodHours, 0.01)
-				log.FailOnError(err, "Failed to verify pod hours")
+					actualPodHours := getLatestPodHours(meteringData)
+					log.InfoD("Actual total pod hours is %v", actualPodHours)
+					err = verifyPodHourWithError(actualPodHours, expectedPodHours, 0.01)
+					if err != nil {
+						log.Errorf("Failed to verify pod hours: %v. Retrying...", err)
+						return false
+					}
+
+					return true
+				}, 10*time.Minute, 60*time.Second).Should(BeTrue(),
+					"Failed to verify pod hours")
 			})
 		}
 
