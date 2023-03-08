@@ -1877,6 +1877,145 @@ func ChangeNamespaces(contexts []*scheduler.Context,
 	return nil
 }
 
+func CloneSpec(spec interface{}) (interface{}, error) {
+	if specObj, ok := spec.(*appsapi.Deployment); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*appsapi.StatefulSet); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*appsapi.DaemonSet); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.Service); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storageapi.StorageClass); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*snapv1.VolumeSnapshot); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.GroupVolumeSnapshot); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.Secret); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.ConfigMap); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.Rule); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.Pod); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.ClusterPair); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.Migration); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.MigrationSchedule); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.BackupLocation); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.ApplicationBackup); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.SchedulePolicy); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.ApplicationRestore); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.ApplicationClone); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.VolumeSnapshotRestore); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*apapi.AutopilotRule); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.ServiceAccount); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*rbacv1.Role); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*rbacv1.RoleBinding); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*rbacv1.ClusterRole); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*batchv1beta1.CronJob); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*batchv1.Job); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.LimitRange); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*networkingv1beta1.Ingress); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*monitoringv1.Prometheus); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*monitoringv1.PrometheusRule); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*monitoringv1.ServiceMonitor); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.Namespace); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*netv1.NetworkPolicy); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*corev1.Endpoints); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*storkapi.ResourceTransformation); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		clone := *specObj
+		webhooks := make([]admissionregistrationv1.ValidatingWebhook, 0)
+		for i := range specObj.Webhooks {
+			webhook := specObj.Webhooks[i]
+			serviceClone := *specObj.Webhooks[i].ClientConfig.Service
+			webhook.ClientConfig.Service = &serviceClone
+			webhooks = append(webhooks, webhook)
+		}
+		clone.Webhooks = webhooks
+		return &clone, nil
+	}
+
+	return nil, fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(spec))
+}
 
 func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 	if specObj, ok := in.(*appsapi.Deployment); ok {
