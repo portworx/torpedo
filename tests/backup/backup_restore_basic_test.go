@@ -576,7 +576,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 			}
 		})
 		Step("Restore application namespaces from their second schedule backup", func() {
-			log.InfoD("Restoring application namespace their from second schedule backup")
+			log.InfoD("Restoring application namespace from their second schedule backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			for index, namespace := range appNamespaces {
