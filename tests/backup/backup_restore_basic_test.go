@@ -483,19 +483,19 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 
 var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 	var (
-		contexts                   []*scheduler.Context
-		cloudCredUID               string
-		cloudCredName              string
-		backupLocationName         string
-		backupLocationUID          string
-		backupLocationMap          map[string]string
-		periodicSchedulePolicyName string
-		periodicSchedulePolicyUid  string
-		appNamespaces              []string
-		backupClusterName          string
-		secondScheduleBackupName   interface{}
-		scheduleNames              []string
-		restoreNames               []string
+		contexts                    []*scheduler.Context
+		cloudCredUID                string
+		cloudCredName               string
+		backupLocationName          string
+		backupLocationUID           string
+		backupLocationMap           map[string]string
+		periodicSchedulePolicyNames []string
+		periodicSchedulePolicyUids  []string
+		appNamespaces               []string
+		backupClusterName           string
+		secondScheduleBackupName    interface{}
+		scheduleNames               []string
+		restoreNames                []string
 	)
 
 	JustBeforeEach(func() {
@@ -554,14 +554,16 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 			log.InfoD("Creating a schedule backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
-			periodicSchedulePolicyUid = uuid.New()
-			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 5, 5)
-			err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 5 minutes named [%s]", periodicSchedulePolicyName))
-			periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
 			for _, namespace := range appNamespaces {
+				periodicSchedulePolicyName := fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
+				periodicSchedulePolicyUid := uuid.New()
+				periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 5, 5)
+				err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 5 minutes named [%s]", periodicSchedulePolicyName))
+				periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
+				periodicSchedulePolicyNames = append(periodicSchedulePolicyNames, periodicSchedulePolicyName)
+				periodicSchedulePolicyUids = append(periodicSchedulePolicyUids, periodicSchedulePolicyUid)
 				scheduleName := fmt.Sprintf("%s-%s-schedule-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				namespaces := []string{namespace}
 				labelSelectors := make(map[string]string)
@@ -614,8 +616,8 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleNames[index]))
 			allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleNames[index], orgID)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all schedule backup names of schedule named [%s] for the namespace [%s]", scheduleNames[index], namespace))
-			log.InfoD("Deleting schedule named [%s] along with its backups [%v] and schedule policies [%v] for the namespace [%s]", scheduleNames[index], allScheduleBackupNames, []string{periodicSchedulePolicyName}, namespace)
-			err = DeleteSchedule(scheduleNames[index], scheduleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID)
+			log.InfoD("Deleting schedule named [%s] along with its backups [%v] and schedule policies [%v] for the namespace [%s]", scheduleNames[index], allScheduleBackupNames, []string{periodicSchedulePolicyNames[index]}, namespace)
+			err = DeleteSchedule(scheduleNames[index], scheduleUid, periodicSchedulePolicyNames[index], periodicSchedulePolicyUids[index], orgID)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule named - %s", scheduleNames[index]))
 		}
 		for index, namespace := range appNamespaces {
