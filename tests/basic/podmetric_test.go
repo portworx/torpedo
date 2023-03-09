@@ -141,38 +141,24 @@ var _ = Describe("{PodMetricFunctional}", func() {
 
 				validatePodMetrics()
 
-				Step("has to scale application up to 6", func() {
-					log.InfoD("Scale applications")
-					scaleApps(contexts, 6)
-					log.InfoD("Validate applications")
-					ValidateApplications(contexts)
+				scaledPods := []int{6, 2}
+				for _, scale := range scaledPods {
+					Step(fmt.Sprintf("has to scale application up to %v", scale), func() {
+						log.InfoD("Scale applications")
+						scaleApps(contexts, scale)
+						log.InfoD("Validate applications")
+						ValidateApplications(contexts)
 
-					// wait until each app has 2 pods (some pods may be still terminating)
-					for _, ctx := range contexts {
-						Step(fmt.Sprintf("wait for app %s to have 6 pods", ctx.App.Key), func() {
-							waitForNumPodsToEqual(ctx, 6)
-						})
-					}
-				})
+						// wait until each app has scaled number of pods (some pods may be still terminating)
+						for _, ctx := range contexts {
+							Step(fmt.Sprintf("wait for app %s to have %v pods", ctx.App.Key, scale), func() {
+								waitForNumPodsToEqual(ctx, scale)
+							})
+						}
+					})
 
-				validatePodMetrics()
-
-				Step("has to scale application down to 2", func() {
-					log.InfoD("Scale applications")
-					scaleApps(contexts, 2)
-					log.InfoD("Validate applications")
-					ValidateApplications(contexts)
-
-					// wait until each app has 2 pods (some pods may be still terminating)
-					for _, ctx := range contexts {
-						Step(fmt.Sprintf("wait for app %s to have 6 pods", ctx.App.Key), func() {
-							waitForNumPodsToEqual(ctx, 2)
-						})
-					}
-				})
-
-				validatePodMetrics()
-
+					validatePodMetrics()
+				}
 			})
 		})
 
