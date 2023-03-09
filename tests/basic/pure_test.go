@@ -120,28 +120,24 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 var _ = Describe("{PureFaValidateCreateoptionxfs}", func() {
 	var contexts []*scheduler.Context
 	var createoption = "xfs"
+	JustBeforeEach(func() {
+		StartTorpedoTest("PureFaValidateCreateoptionxfs", "Test create options on pure volumes on applications", nil, 0)
+	})
 
 	It("Has to validate createoptions", func() {
 		contexts = make([]*scheduler.Context, 0)
-
 		contexts = ScheduleApplications(fmt.Sprintf("nginx-fa-fb-davol"))
 		ValidateApplications(contexts)
 		for _, ctx := range contexts {
 			vols, err := Inst().S.GetVolumes(ctx)
-			fmt.Println("volume is", vols)
-			if err != nil {
-				log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
-			}
+			log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
 			for _, v := range vols {
-				fmt.Println("volume name is ", v.Name)
 				if v.Name == "mount-fa-xfs-pvc" {
 					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
-					if err != nil {
-						log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-					}
+					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
 					Step("validating create options", func() {
 						err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption, attachedNode)
-						Expect(err).To(BeNil(), "Failed to validate create option xfs")
+						dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
 					})
 				}
 			}
@@ -155,11 +151,18 @@ var _ = Describe("{PureFaValidateCreateoptionxfs}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = Describe("{PureFaValidateCreateoptionext4}", func() {
 	var contexts []*scheduler.Context
 	var createoption = "ext4"
+	JustBeforeEach(func() {
+		StartTorpedoTest("PureFaValidateCreateoptionext4", "Test create options on pure volumes on applications", nil, 0)
+	})
 
 	It("Has to validate createoptions", func() {
 		contexts = make([]*scheduler.Context, 0)
@@ -168,20 +171,14 @@ var _ = Describe("{PureFaValidateCreateoptionext4}", func() {
 		ValidateApplications(contexts)
 		for _, ctx := range contexts {
 			vols, err := Inst().S.GetVolumes(ctx)
-			fmt.Println("volume is", vols)
-			if err != nil {
-				log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
-			}
+			log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
 			for _, v := range vols {
-				fmt.Println("volume name is ", v.Name)
 				if v.Name == "createoption-fa-ext4-pvc" {
 					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
-					if err != nil {
-						log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-					}
+					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
 					Step("validating create options", func() {
 						err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption, attachedNode)
-						Expect(err).To(BeNil(), "Failed to validate create option ext4")
+						dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
 					})
 				}
 			}
@@ -194,5 +191,9 @@ var _ = Describe("{PureFaValidateCreateoptionext4}", func() {
 				TearDownContext(ctx, opts)
 			}
 		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
