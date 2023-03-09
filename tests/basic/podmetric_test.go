@@ -32,6 +32,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 	var testrailID, runID int
 	var contexts []*scheduler.Context
 	var namespacePrefix string
+	var initialPodHours float64
 	// meteringInterval and callHomeInterval should be the same interval for testing
 	var meteringIntervalString = os.Getenv(envMeteringIntervalMinutes)
 	var callHomeIntervalString = os.Getenv(envMeteringIntervalMinutes)
@@ -44,52 +45,21 @@ var _ = Describe("{PodMetricFunctional}", func() {
 		log.FailOnError(err, "Failed to update storage spec runtimeOpts")
 	})
 
-	Context("{PodMetricsLoggly}", func() {
+	Context("Sending PodMetrics to Loggly", func() {
 		namespacePrefix = "podmetricsloggly"
+		var meteringInterval time.Duration
+		var clusterUUID string
 
-		// shared test function for pod metric functional tests
-		sharedTestFunction := func() {
-			It("has to fetch the logs from loggly", func() {
-				interval, err := strconv.Atoi(meteringIntervalString)
-				log.FailOnError(err, "Failed to convert metering interval to integer")
-				meteringInterval := time.Duration(interval) * time.Minute
-				log.InfoD("Getting cluster ID")
-				clusterUUID, err := getClusterID()
-				log.FailOnError(err, "Failed to get cluster id data")
+		validatePodMetrics := func() {
+			Step("Wait for data to be consistent on loggly", func() {
+				waitForLoggly(meteringInterval)
+			})
 
-				meteringData, err := getMeteringData(clusterUUID, meteringInterval)
-				log.FailOnError(err, "Failed to get metering data")
-
-				var initialPodHours float64
-				if len(meteringData) > 0 {
-					initialPodHours = getLatestPodHours(meteringData)
-				}
-				log.InfoD("Latest pod hours before starting app: %v", initialPodHours)
-
-				log.InfoD("Deploy applications")
-				contexts = make([]*scheduler.Context, 0)
-				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
-				}
-
-				log.InfoD("Validate applications")
-				ValidateApplications(contexts)
-
-				waitDuration := meteringInterval + 30*time.Second
-				log.InfoD("Wait %v for initial interval to go through in case the metering interval is after the callhome interval", waitDuration)
-				time.Sleep(waitDuration)
-
-				log.InfoD("Wait %v for previous pro-rated interval to go through", waitDuration)
-				time.Sleep(waitDuration)
-
-				log.InfoD("Wait %v for a latest interval to go through", waitDuration)
-				time.Sleep(waitDuration)
-
+			Step("Check metering data is accurate", func() {
 				log.InfoD("Check metering data is accurate")
 
-				// try to get accurate metering data for 10mins
 				Eventually(func() bool {
-					meteringData, err = getMeteringData(clusterUUID, meteringInterval)
+					meteringData, err := getMeteringData(clusterUUID, meteringInterval)
 					if err != nil {
 						log.Errorf("Failed to get metering data: %v. Retrying...", err)
 						return false
@@ -133,11 +103,77 @@ var _ = Describe("{PodMetricFunctional}", func() {
 		}
 
 		// Simple pod metric test
-		Describe("{SimplePodMetricTest}", func() {
+		Describe("{PodMetricScaleTest}", func() {
 			JustBeforeEach(func() {
 				// testrailID =
 			})
-			sharedTestFunction()
+
+			It("has to scale applications up and down to validate pod hours", func() {
+				Step("has to configure", func() {
+					interval, err := strconv.Atoi(meteringIntervalString)
+					log.FailOnError(err, "Failed to convert metering interval to integer")
+					meteringInterval = time.Duration(interval) * time.Minute
+					log.InfoD("Getting cluster ID")
+					clusterUUID, err = getClusterID()
+					log.FailOnError(err, "Failed to get cluster id data")
+				})
+
+				Step("has to get the inital pod hours", func() {
+					meteringData, err := getMeteringData(clusterUUID, meteringInterval)
+					log.FailOnError(err, "Failed to get metering data")
+
+					if len(meteringData) > 0 {
+						initialPodHours = getLatestPodHours(meteringData)
+					}
+					log.InfoD("Latest pod hours before starting app: %v", initialPodHours)
+				})
+
+				Step("has to deploy application", func() {
+					log.InfoD("Deploy applications")
+					contexts = make([]*scheduler.Context, 0)
+					for i := 0; i < Inst().GlobalScaleFactor; i++ {
+						contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
+					}
+
+					log.InfoD("Validate applications")
+					ValidateApplications(contexts)
+				})
+
+				validatePodMetrics()
+
+				Step("has to scale application up to 6", func() {
+					log.InfoD("Scale applications")
+					scaleApps(contexts, 6)
+					log.InfoD("Validate applications")
+					ValidateApplications(contexts)
+
+					// wait until each app has 2 pods (some pods may be still terminating)
+					for _, ctx := range contexts {
+						Step(fmt.Sprintf("wait for app %s to have 6 pods", ctx.App.Key), func() {
+							waitForNumPodsToEqual(ctx, 6)
+						})
+					}
+				})
+
+				validatePodMetrics()
+
+				Step("has to scale application down to 2", func() {
+					log.InfoD("Scale applications")
+					scaleApps(contexts, 2)
+					log.InfoD("Validate applications")
+					ValidateApplications(contexts)
+
+					// wait until each app has 2 pods (some pods may be still terminating)
+					for _, ctx := range contexts {
+						Step(fmt.Sprintf("wait for app %s to have 6 pods", ctx.App.Key), func() {
+							waitForNumPodsToEqual(ctx, 2)
+						})
+					}
+				})
+
+				validatePodMetrics()
+
+			})
 		})
 
 	})
@@ -360,4 +396,16 @@ func updateStorageSpecRuntimeOpts(callhomeInterval string, meteringInterval stri
 	}
 
 	return nil
+}
+
+func waitForLoggly(meteringInterval time.Duration) {
+	waitDuration := meteringInterval + 30*time.Second
+	log.InfoD("Wait %v for initial interval to go through in case the metering interval is after the callhome interval", waitDuration)
+	time.Sleep(waitDuration)
+
+	log.InfoD("Wait %v for previous pro-rated interval to go through", waitDuration)
+	time.Sleep(waitDuration)
+
+	log.InfoD("Wait %v for a latest interval to go through", waitDuration)
+	time.Sleep(waitDuration)
 }
