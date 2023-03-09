@@ -1823,7 +1823,8 @@ func PerformSystemCheck() {
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
 			nodes := node.GetNodes()
-			expect(nodes).NotTo(beEmpty())
+			dash.VerifyFatal(len(nodes) > 0, true, "verify nodes list is not empty")
+			coreNodes := make([]string, 0)
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
 					continue
@@ -1834,12 +1835,17 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
+					log.FailOnError(err, "error checking for cores in node %s", n.Name)
 					dash.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
-					// Collect Support Bundle only once
-					CollectSupport()
-					log.Fatalf("Core generated, please check logs for more details")
+					coreNodes = append(coreNodes, n.Name)
 				}
 			}
+			if len(coreNodes) > 0 {
+				// Collect Support Bundle only once
+				CollectSupport()
+				log.Warn("Cores are generated. Please check logs for more details")
+			}
+			dash.VerifyFatal(len(coreNodes), 0, "verify if cores are generated in one or more nodes")
 		})
 	})
 }
