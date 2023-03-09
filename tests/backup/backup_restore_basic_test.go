@@ -735,7 +735,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			log.InfoD("Second schedule backup name [%s]", secondScheduleBackupName.(string))
 			_, err = backupSuccessCheck(secondScheduleBackupName.(string), orgID, 0, 0, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying success of second schedule backup named [%s] of schedule named [%s]", secondScheduleBackupName.(string), scheduleName))
-			restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(4))
+			restoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(4))
 			log.InfoD("Restoring [%s] backup with restore name [%s]", secondScheduleBackupName, restoreName)
 			namespaceMapping := make(map[string]string, 0)
 			err = CreateRestore(restoreName, secondScheduleBackupName.(string), namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
