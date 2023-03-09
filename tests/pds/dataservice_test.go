@@ -298,6 +298,42 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 })
 
+var _ = Describe("{ResiliencyScenario}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResiliencyScenario", "Deploys and Scales Up the dataservices", pdsLabels, 0)
+	})
+
+	It("deploy Dataservices", func() {
+		Step("Deploy Data Services", func() {
+			// for _, ds := range params.DataServiceToTest {
+			// 	if ds.Name != postgresql {
+			// 		continue
+			// 	}
+			// 	Step("Deploy and validate data service", func() {
+			// 		isDeploymentsDeleted = false
+			// 		pdslib.MarkResiliencyTC(true)
+			// 		deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+			// 		log.FailOnError(err, "Error while deploying data services")
+			// 	})
+			// }
+			err := CheckResiliencySuite("pds-ocp411-q58jv-worker-zlkqz")
+			log.InfoD("=========== Error: %v ===========", err)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		// defer func() {
+		// 	if !isDeploymentsDeleted {
+		// 		Step("Delete created deployments")
+		// 		resp, err := pdslib.DeleteDeployment(deployment.GetId())
+		// 		log.FailOnError(err, "Error while deleting data services")
+		// 		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		// 	}
+		// }()
+	})
+})
+
 var _ = Describe("{ScaleUPDataServices}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", pdsLabels, 0)
@@ -312,6 +348,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				}
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
+					pdslib.MarkResiliencyTC(true)
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
