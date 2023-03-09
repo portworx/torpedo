@@ -2322,8 +2322,8 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching the uid of the backup named [%s]", backupName))
 			log.InfoD("About to delete backup - %s", backupName)
-			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
-			log.InfoD("DeleteBackup response for backup named [%s] - %v", backupName, backupDeleteResponse)
+			resp, err := DeleteBackup(backupName, backupUID, orgID, ctx)
+			log.InfoD("DeleteBackup response for backup named [%s] - %v", backupName, resp)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the backup named [%s] in admin ctx", backupName))
 		}
 		ctxNonAdmin, err := backup.GetNonAdminCtx(username, password)
