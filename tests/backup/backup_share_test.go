@@ -2173,7 +2173,6 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		restoreNames               []string
 		backupLocationMap          map[string]string
 		username                   string
-		password                   string
 		periodicSchedulePolicyName string
 		periodicSchedulePolicyUid  string
 		scheduleName               string
@@ -2209,8 +2208,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			log.InfoD("Creating a user")
 			numberOfUsers := 1
 			username = createUsers(numberOfUsers)[0]
-			password = "Password1"
-			log.InfoD("Created a user with username [%s] and password [%s]", username, password)
+			log.InfoD("Created a user with username [%s]", username)
 		})
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
