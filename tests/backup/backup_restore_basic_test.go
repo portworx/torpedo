@@ -492,7 +492,6 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		periodicSchedulePolicyUids  []string
 		appNamespaces               []string
 		backupClusterName           string
-		secondScheduleBackupName    interface{}
 		scheduleNames               []string
 		restoreNames                []string
 	)
@@ -580,7 +579,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			for index, namespace := range appNamespaces {
 				secondScheduleBackupOrdinal := 2
-				log.InfoD("Ordinal of the second schedule backup for the namespace [%s] is [%v]", namespace, secondScheduleBackupOrdinal)
+				log.InfoD("Ordinal of the second schedule backup of the namespace [%s] is [%v]", namespace, secondScheduleBackupOrdinal)
 				checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
 					ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleNames[index], secondScheduleBackupOrdinal, orgID)
 					if err != nil {
@@ -588,7 +587,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 					}
 					return ordinalScheduleBackupName, false, nil
 				}
-				secondScheduleBackupName, err = task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				secondScheduleBackupName, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching second schedule backup name of ordinal [%v] of schedule named [%s] of the namespace [%s]", secondScheduleBackupName, scheduleNames[index], namespace))
 				log.InfoD("Second schedule backup name [%s]", secondScheduleBackupName.(string))
 				_, err = backupSuccessCheck(secondScheduleBackupName.(string), orgID, 0, 0, ctx)
@@ -614,8 +613,8 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 			scheduleUid, err := GetScheduleUID(scheduleNames[index], orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleNames[index]))
 			allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleNames[index], orgID)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all schedule backup names of schedule named [%s] for the namespace [%s]", scheduleNames[index], namespace))
-			log.InfoD("Deleting schedule named [%s] along with its backups [%v] and schedule policies [%v] for the namespace [%s]", scheduleNames[index], allScheduleBackupNames, []string{periodicSchedulePolicyNames[index]}, namespace)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all schedule backup names of schedule named [%s] of the namespace [%s]", scheduleNames[index], namespace))
+			log.InfoD("Deleting schedule named [%s] along with its backups [%v] and schedule policies [%v] of the namespace [%s]", scheduleNames[index], allScheduleBackupNames, []string{periodicSchedulePolicyNames[index]}, namespace)
 			err = DeleteSchedule(scheduleNames[index], scheduleUid, periodicSchedulePolicyNames[index], periodicSchedulePolicyUids[index], orgID)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule named - %s", scheduleNames[index]))
 		}
