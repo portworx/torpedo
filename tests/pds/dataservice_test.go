@@ -316,7 +316,7 @@ var _ = Describe("{ResiliencyScenario}", func() {
 			// 		log.FailOnError(err, "Error while deploying data services")
 			// 	})
 			// }
-			err := CheckResiliencySuite("pds-ocp411-q58jv-worker-zlkqz")
+			err := CheckResiliencySuite("pds-k8s-pxc-438f-0")
 			log.InfoD("=========== Error: %v ===========", err)
 		})
 	})
