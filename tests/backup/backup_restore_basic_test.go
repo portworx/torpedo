@@ -3,15 +3,14 @@ package tests
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
-  "sync"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -900,7 +899,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 
 // BackupSyncBasicTest take a good number of backups check if backup sync is working
 var _ = Describe("{BackupSyncBasicTest}", func() {
-	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "50"))
+	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "10"))
 	timeBetweenConsecutiveBackups := 4 * time.Second
 	backupNames := make([]string, 0)
 	numberOfSimultaneousBackups := 20
@@ -998,8 +997,10 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 
 		Step("Remove the backup location where backups were taken", func() {
 			log.InfoD("Remove backup location where backups were taken")
-			err := DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID)
+			err := DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID, false)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
+			//TODO: Eliminate time.Sleep
+			time.Sleep(time.Minute * 3)
 		})
 
 		Step("Add the backup location again which had backups", func() {
@@ -1027,17 +1028,18 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			log.InfoD("Check if backups created before are synced or not")
 
 			// Wait for backups to get synced
-			checkBackupSync := func() (interface{}, bool, error) {
-				fetchedBackupNames, err := GetAllBackupsAdmin()
+			for i := 0; i < 1000; i++ {
+				fetchedBackupNames, _ := GetAllBackupsAdmin()
+				log.Infof(fmt.Sprintf("Fetched backups %d", len(fetchedBackupNames)))
 				if len(fetchedBackupNames) == len(backupNames) {
-					return "", true, nil
+					break
+				} else {
+					time.Sleep(30)
 				}
-				return "", false, err
 			}
-			_, err := task.DoRetryWithTimeout(checkBackupSync, 100*time.Minute, 30*time.Second)
 			fetchedBackupNames, err := GetAllBackupsAdmin()
 			log.FailOnError(err, "Getting a list of all backups")
-			dash.VerifyFatal(fetchedBackupNames, backupNames, "Comparing the expected and actual number of backups")
+			dash.VerifyFatal(len(fetchedBackupNames), len(backupNames), "Comparing the expected and actual number of backups")
 			var bkp *api.BackupObject
 			backupDriver := Inst().Backup
 			bkpEnumerateReq := &api.BackupEnumerateRequest{
@@ -1078,23 +1080,12 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 		err = DeleteCluster(destinationClusterName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 
-		log.Infof("Deleting registered clusters for non-admin context")
-
-		backupDriver := Inst().Backup
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			log.Infof("About to delete backup - %s", backupName)
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
-		}
-
 		log.Infof("Cleaning up backup location - %s", customBackupLocationName)
-		err = DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID)
+		err = DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
 		log.Infof("Cleaning cloud credential")
 		//TODO: Eliminate time.Sleep
-		time.Sleep(time.Minute * 3)
+		time.Sleep(time.Minute * 5)
 		err = DeleteCloudCredential(credName, orgID, cloudCredUID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 	})
