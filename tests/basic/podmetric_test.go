@@ -10,8 +10,8 @@ import (
 
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
@@ -52,28 +52,29 @@ var _ = Describe("{PodMetricFunctional}", func() {
 
 		validatePodMetrics := func() {
 			Step("Wait for data to be consistent on loggly", func() {
+				log.InfoD("Wait for data to be consistent on loggly")
 				waitForLoggly(meteringInterval)
 			})
 
 			Step("Check metering data is accurate", func() {
 				log.InfoD("Check metering data is accurate")
 
-				Eventually(func() bool {
+				_, err := task.DoRetryWithTimeout(func() (interface{}, bool, error) {
 					meteringData, err := getMeteringData(clusterUUID, meteringInterval)
 					if err != nil {
 						log.Errorf("Failed to get metering data: %v. Retrying...", err)
-						return false
+						return nil, true, err
 					}
 
 					existsData := len(meteringData) > 0
 					if !existsData {
 						log.Errorf("Failed to get metering data. Retrying...")
-						return false
+						return nil, true, err
 					}
 					for _, md := range meteringData {
 						if md.ClusterUUID != clusterUUID {
 							log.Errorf("Cluster id does not match. expected: %v actual: %v", clusterUUID, md.ClusterUUID)
-							return false
+							return nil, true, err
 						}
 					}
 
@@ -81,7 +82,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 					expectedAppPodHours, err := getExpectedPodHours(contexts, meteringInterval)
 					if err != nil {
 						log.Errorf("failed to get expectedAppPodHours: %v. Retrying... %v", expectedAppPodHours, err)
-						return false
+						return nil, true, err
 					}
 					log.InfoD("Estimated pod hours for this app is %v", expectedAppPodHours)
 
@@ -93,12 +94,13 @@ var _ = Describe("{PodMetricFunctional}", func() {
 					err = verifyPodHourWithError(actualPodHours, expectedPodHours, 0.01)
 					if err != nil {
 						log.Errorf("Failed to verify pod hours: %v. Retrying...", err)
-						return false
+						return nil, true, err
 					}
 
-					return true
-				}, 10*time.Minute, 60*time.Second).Should(BeTrue(),
-					"Failed to verify pod hours")
+					return nil, false, nil
+				}, 10*time.Minute, 60*time.Second)
+
+				log.FailOnError(err, "Failed to verify meterintg data")
 			})
 		}
 
@@ -110,6 +112,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 
 			It("has to scale applications up and down to validate pod hours", func() {
 				Step("has to configure", func() {
+					log.InfoD("Configuring metering interval and cluster ID")
 					interval, err := strconv.Atoi(meteringIntervalString)
 					log.FailOnError(err, "Failed to convert metering interval to integer")
 					meteringInterval = time.Duration(interval) * time.Minute
@@ -119,6 +122,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				})
 
 				Step("has to get the inital pod hours", func() {
+					log.InfoD("Getting initial pod hours")
 					meteringData, err := getMeteringData(clusterUUID, meteringInterval)
 					log.FailOnError(err, "Failed to get metering data")
 
@@ -129,7 +133,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				})
 
 				Step("has to deploy application", func() {
-					log.InfoD("Deploy applications")
+					log.InfoD("Deploy applications with global scale factor")
 					contexts = make([]*scheduler.Context, 0)
 					for i := 0; i < Inst().GlobalScaleFactor; i++ {
 						contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
@@ -144,7 +148,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 				scaledPods := []int{6, 2}
 				for _, scale := range scaledPods {
 					Step(fmt.Sprintf("has to scale application up to %v", scale), func() {
-						log.InfoD("Scale applications")
+						log.InfoD("Scale applications to %v pods", scale)
 						scaleApps(contexts, scale)
 						log.InfoD("Validate applications")
 						ValidateApplications(contexts)
@@ -152,6 +156,7 @@ var _ = Describe("{PodMetricFunctional}", func() {
 						// wait until each app has scaled number of pods (some pods may be still terminating)
 						for _, ctx := range contexts {
 							Step(fmt.Sprintf("wait for app %s to have %v pods", ctx.App.Key, scale), func() {
+								log.InfoD("wait for app %s to have %v pods", ctx.App.Key, scale)
 								waitForNumPodsToEqual(ctx, scale)
 							})
 						}
