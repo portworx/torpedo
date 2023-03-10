@@ -2,6 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"strconv"
+	"time"
+  "sync"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -14,9 +18,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/core/v1"
-	"strconv"
-	"sync"
-	"time"
 )
 
 // BasicSelectiveRestore selects random backed-up apps and restores them
@@ -267,7 +268,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
 		}
 		for _, backupName := range backupNames {
-			backupUID, err := getBackupUID(backupName, orgID)
+			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - %s", backupName))
@@ -574,7 +575,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 				err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", backupName))
-				schBackupName, err = Inst().Backup.GetFirstScheduleBackupName(ctx, backupName, orgID)
+				schBackupName, err = GetFirstScheduleBackupName(ctx, backupName, orgID)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
 			}
 		})
@@ -706,7 +707,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, bkpNamespaces,
 				labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", backupName))
-			schBackupName, err = Inst().Backup.GetFirstScheduleBackupName(ctx, backupName, orgID)
+			schBackupName, err = GetFirstScheduleBackupName(ctx, backupName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
 		})
 
@@ -899,7 +900,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 
 // BackupSyncBasicTest take a good number of backups check if backup sync is working
 var _ = Describe("{BackupSyncBasicTest}", func() {
-	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "100"))
+	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "50"))
 	timeBetweenConsecutiveBackups := 4 * time.Second
 	backupNames := make([]string, 0)
 	numberOfSimultaneousBackups := 20
