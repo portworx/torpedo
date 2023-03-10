@@ -920,7 +920,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 					log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
 					err = pdslib.DeleteK8sPods(pod.Name, namespace)
 				}
-				log.FailOnError(err, "error deleting workload generating pods")
+				log.FailOnError(err, "error deleting workload generating pods for ds %s", dataservice)
 			})
 		}()
 
