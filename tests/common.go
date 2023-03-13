@@ -5740,8 +5740,8 @@ func SetupTestRail() {
 	}
 }
 
+// AsgKillNode terminates the given node
 func AsgKillNode(nodeToKill node.Node) error {
-
 	initNodes := node.GetStorageDriverNodes()
 	initNodeNames := make([]string, len(initNodes))
 	var err error
@@ -5749,21 +5749,24 @@ func AsgKillNode(nodeToKill node.Node) error {
 		initNodeNames = append(initNodeNames, iNode.Name)
 	}
 	stepLog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
+
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		//workaround for eks until EKS sdk is implemented
+		// workaround for eks until EKS sdk is implemented
 		if IsEksCluster() {
-			Inst().N.RunCommandWithNoRetry(nodeToKill, "ifconfig eth0 down  < /dev/null &", node.ConnectionOpts{
+			_, err = Inst().N.RunCommandWithNoRetry(nodeToKill, "ifconfig eth0 down  < /dev/null &", node.ConnectionOpts{
 				Timeout:         2 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
 			})
 
 		} else {
 			err = Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Valdiate node %s deletion", nodeToKill.Name))
 		}
 
 	})
+	if err != nil {
+		return err
+	}
 
 	stepLog = "Wait for  node get replaced by autoscaling group"
 	Step(stepLog, func() {

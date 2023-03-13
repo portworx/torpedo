@@ -61,7 +61,7 @@ var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
 	defer CloseLogger(TestLogger)
 	defer dash.TestCaseEnd()
-	//making sure validate clean up executed even if systemcheck failed
+	// making sure validate clean up executed even if systemcheck failed
 	defer func() {
 		if wantAllAfterSuiteActions || wantAfterSuiteValidateCleanup {
 			ValidateCleanup()
