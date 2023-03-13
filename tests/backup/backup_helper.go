@@ -1411,19 +1411,74 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 	return restoreStatus, resp, nil
 }
 
-// returns the restoreContext
-func ValidateRestore(restoreInspectResponse *api.RestoreInspectResponse, backupContext *BackupRestoreContext, namespaceMapping map[string]string) (*BackupRestoreContext, error) {
-	//rstObjs := restoreInspectResponse.Restore.Resources
-	//TODO1 do the comparison of bkpObj and rstObj over here
+// ValidateRestoreWithBackupCtx returns a clone of the backupContext (i.e. contexts with backup objects) *after* converting it to a BackupRestoreContext after converting the contexts to point to restored objects (and after validating those objects)
+func ValidateRestoreWithBackupCtx(restoreName string, orgID string, ctx context.Context, backupContext *BackupRestoreContext, namespaceMapping map[string]string) (*BackupRestoreContext, error) {
+	backupDriver := Inst().Backup
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
 
-	rstCtx, err := GetRestoreCtxsFromBackupCtxs(*backupContext, namespaceMapping)
-	ValidateApplications(rstCtx.schedCtxs)
+	_, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
+	if err != nil {
+		return nil, err
+	}
 
+	rstCtx, err := GetRestoreCtxsFromBackupCtxs(backupContext, namespaceMapping)
 	if err != nil {
 		return nil, fmt.Errorf("GetRestoreCtxsFromBackupCtxs Err: %v", err)
-	} else {
-		return &rstCtx, nil
 	}
+	ValidateApplications(rstCtx.schedCtxs)
+
+	return rstCtx, nil
+}
+
+// ValidateRestore returns a clone of the provided `context`s (and each of their `spec`s) *after* filtering the `spec`s to only include the resources that are in the backup and converting the contexts to point to restored objects (and after validating those objects)
+func ValidateRestore(restoreName string, backupName string, orgID string, ctx context.Context, clusterAppsContexts []*scheduler.Context, namespaceMapping map[string]string) (*BackupRestoreContext, error) {
+	backupDriver := Inst().Backup
+
+	// Getting Backup contexts
+	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("GetBackupUID Err: %v", err)
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return nil, fmt.Errorf("InspectBackup Err: %v", err)
+	}
+
+	bkpObjs := resp.Backup.Resources
+	backupSpecContext, err := GetBackupSpecObjectsContexts(bkpObjs, clusterAppsContexts)
+	if err != nil {
+		return nil, fmt.Errorf("GetBackupSpecObjectsContexts Err: %v", err)
+	}
+	backupContext := &BackupRestoreContext{
+		schedCtxs: backupSpecContext,
+	}
+
+	// Validating restores
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+
+	_, err = backupDriver.InspectRestore(ctx, restoreInspectRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	rstCtx, err := GetRestoreCtxsFromBackupCtxs(backupContext, namespaceMapping)
+	if err != nil {
+		return nil, fmt.Errorf("GetRestoreCtxsFromBackupCtxs Err: %v", err)
+	}
+	ValidateApplications(rstCtx.schedCtxs)
+
+	return rstCtx, nil
 }
 
 // Call this function AFTER switching kubeconfig to the "restore" cluster
