@@ -1062,7 +1062,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
