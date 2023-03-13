@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -118,7 +119,6 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) error {
 
-	var bkpUid string
 	backupDriver := Inst().Backup
 	bkpCreateRequest := &api.BackupCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -149,42 +149,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	if err != nil {
 		return err
 	}
-	backupSuccessCheck := func() (interface{}, bool, error) {
-		bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
-		if err != nil {
-			return "", true, err
-		}
-		backupInspectRequest := &api.BackupInspectRequest{
-			Name:  backupName,
-			Uid:   bkpUid,
-			OrgId: orgID,
-		}
-		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-		if err != nil {
-			return "", true, err
-		}
-		actual := resp.GetBackup().GetStatus().Status
-		expected := api.BackupInfo_StatusInfo_Success
-		if actual != expected {
-			return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s]", backupName, expected, actual)
-		}
-		return "", false, nil
-	}
-
-	_, err = task.DoRetryWithTimeout(backupSuccessCheck, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-	if err != nil {
-		return err
-	}
-	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
-	if err != nil {
-		return err
-	}
-	backupInspectRequest := &api.BackupInspectRequest{
-		Name:  backupName,
-		Uid:   bkpUid,
-		OrgId: orgID,
-	}
-	_, err = backupDriver.InspectBackup(ctx, backupInspectRequest)
+	err = newBackupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
@@ -1476,4 +1441,202 @@ func GetLatestScheduleBackupUID(ctx context.Context, scheduleName string, orgID 
 		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
 	}
 	return allScheduleBackupUids[len(allScheduleBackupUids)-1], nil
+}
+
+// backupSuccessCheck inspects backup task
+func newBackupSuccessCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context) error {
+	if retryDuration == 0 {
+		retryDuration = maxWaitPeriodForBackupCompletionInMinutes * time.Minute
+	}
+	if retryInterval == 0 {
+		retryInterval = 30 * time.Second
+	}
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	_backupSuccessCheck := func() interface{} {
+		resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return struct {
+				Status api.BackupInfo_StatusInfo_Status
+				Error  error
+			}{
+				Status: api.BackupInfo_StatusInfo_Failed,
+				Error:  err,
+			}
+		}
+		return struct {
+			Status api.BackupInfo_StatusInfo_Status
+			Error  error
+		}{
+			Status: resp.GetBackup().GetStatus().Status,
+			Error:  nil,
+		}
+	}
+	_until := func(result interface{}) bool {
+		res, ok := result.(struct {
+			Status api.BackupInfo_StatusInfo_Status
+			Error  error
+		})
+		if !ok || res.Error != nil {
+			return false
+		}
+		statusesUnexpected := [...]api.BackupInfo_StatusInfo_Status{
+			api.BackupInfo_StatusInfo_Invalid,
+			api.BackupInfo_StatusInfo_Aborted,
+			api.BackupInfo_StatusInfo_Failed,
+		}
+		statusesExpected := [...]api.BackupInfo_StatusInfo_Status{
+			api.BackupInfo_StatusInfo_Success,
+		}
+		log.Infof("backup status for [%s] expected was %s but got [%s]", backupName, statusesExpected, res.Status)
+		for _, status := range statusesUnexpected {
+			if res.Status == status {
+				return false
+			}
+		}
+		for _, status := range statusesExpected {
+			if res.Status == status {
+				return false
+			}
+		}
+		return true
+	}
+	_, err = newDoRetryWithTimeout(_backupSuccessCheck, retryDuration, retryInterval, _until)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// restoreSuccessCheck inspects restore task
+func newRestoreSuccessCheck(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context) error {
+	if retryDuration == 0 {
+		retryDuration = maxWaitPeriodForBackupCompletionInMinutes * time.Minute
+	}
+	if retryInterval == 0 {
+		retryInterval = 30 * time.Second
+	}
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+	_restoreSuccessCheck := func() interface{} {
+		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+		if err != nil {
+			return struct {
+				Status api.RestoreInfo_StatusInfo_Status
+				Error  error
+			}{
+				Status: api.RestoreInfo_StatusInfo_Failed,
+				Error:  err,
+			}
+		}
+		return struct {
+			Status api.RestoreInfo_StatusInfo_Status
+			Error  error
+		}{
+			Status: resp.GetRestore().GetStatus().Status,
+			Error:  nil,
+		}
+	}
+	_until := func(result interface{}) bool {
+		res, ok := result.(struct {
+			Status api.RestoreInfo_StatusInfo_Status
+			Error  error
+		})
+		if !ok || res.Error != nil {
+			return false
+		}
+		statusesUnexpected := [...]api.RestoreInfo_StatusInfo_Status{
+			api.RestoreInfo_StatusInfo_Invalid,
+			api.RestoreInfo_StatusInfo_Aborted,
+			api.RestoreInfo_StatusInfo_Failed,
+		}
+		statusesExpected := [...]api.RestoreInfo_StatusInfo_Status{
+			api.RestoreInfo_StatusInfo_Success,
+			api.RestoreInfo_StatusInfo_PartialSuccess,
+		}
+		log.Infof("restore status for [%s] expected was %s but got [%s]", restoreName, statusesExpected, res.Status)
+		for _, status := range statusesUnexpected {
+			if res.Status == status {
+				return false
+			}
+		}
+		for _, status := range statusesExpected {
+			if res.Status == status {
+				return false
+			}
+		}
+		return true
+	}
+	_, err := newDoRetryWithTimeout(_restoreSuccessCheck, retryDuration, retryInterval, _until)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func newDoRetryWithTimeout(fn interface{}, retryDuration, retryInterval time.Duration, shouldRetry func(interface{}) bool) (interface{}, error) {
+	fnValue := reflect.ValueOf(fn)
+	if fnValue.Kind() != reflect.Func {
+		return nil, fmt.Errorf("%v is not a function", fn)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), retryDuration)
+	defer cancel()
+
+	resultChan := make(chan interface{})
+	errChan := make(chan error)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				if ctx.Err() != nil {
+					errChan <- ctx.Err()
+				}
+				return
+			default:
+				resultValues := fnValue.Call(nil)
+				if len(resultValues) == 0 {
+					errChan <- fmt.Errorf("function returned no values")
+					return
+				}
+
+				result := resultValues[0].Interface()
+				var err error
+				if len(resultValues) > 1 {
+					err, _ = resultValues[1].Interface().(error)
+				}
+
+				if err == nil && !shouldRetry(result) {
+					resultChan <- result
+					return
+				}
+				if err != nil && !shouldRetry(err) {
+					errChan <- err
+					return
+				}
+				log.Infof("Next retry in: %v", retryInterval)
+				time.Sleep(retryInterval)
+			}
+		}
+	}()
+
+	select {
+	case result := <-resultChan:
+		return result, nil
+	case err := <-errChan:
+		if err == context.DeadlineExceeded {
+			return nil, fmt.Errorf("operation timed out after %v", retryDuration)
+		}
+		return nil, err
+	}
 }
