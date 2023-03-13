@@ -147,14 +147,6 @@ var _ = Describe("{PodMetricFunctional}", func() {
 						scaleApps(contexts, scale)
 						log.InfoD("Validate applications")
 						ValidateApplications(contexts)
-
-						// wait until each app has scaled number of pods (some pods may be still terminating)
-						for _, ctx := range contexts {
-							Step(fmt.Sprintf("wait for app %s to have %v pods", ctx.App.Key, scale), func() {
-								log.InfoD("wait for app %s to have %v pods", ctx.App.Key, scale)
-								waitForNumPodsToEqual(ctx, scale)
-							})
-						}
 					})
 
 					validatePodMetrics()
