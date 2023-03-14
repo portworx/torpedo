@@ -4,19 +4,14 @@ import (
 	"sync"
 	"time"
 
+	// import scheduler drivers to invoke it's init
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
 
-	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
-
-	// import scheduler drivers to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	_ "github.com/portworx/torpedo/drivers/scheduler/rke"
+	v1 "k8s.io/api/apps/v1"
 
 	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
-	v1 "k8s.io/api/apps/v1"
+	"github.com/portworx/torpedo/tests"
 )
 
 const (
@@ -51,6 +46,9 @@ func ExecuteInParallel(functions ...func()) {
 // Function to enable Resiliency Test
 func MarkResiliencyTC(resiliency bool) {
 	ResiliencyFlag = resiliency
+	if resiliency {
+		tests.InitInstance()
+	}
 }
 
 // Function to wait for event to induce failure
@@ -90,16 +88,6 @@ func RebootActiveNode(ns string) error {
 			continue
 		} else {
 			log.InfoD(" ================ Node Selected is : %v =================", pod.Spec.NodeName)
-			err = Inst().S.Init(scheduler.InitOptions{
-				NodeDriverName: Inst().N.String(),
-			})
-
-			log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
-
-			err = Inst().N.Init(node.InitOptions{
-				SpecDir: Inst().SpecDir,
-			})
-			log.FailOnError(err, "Error occured while Node Driver Initialization")
 
 			nodes := node.GetWorkerNodes()
 			var nodeToReboot node.Node
@@ -112,7 +100,7 @@ func RebootActiveNode(ns string) error {
 			}
 
 			log.InfoD(" ================ Rebooting the above node %v ===================", nodeToReboot.Name)
-			err = Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+			err = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
 				Force: true,
 				ConnectionOpts: node.ConnectionOpts{
 					Timeout:         defaultCommandTimeout,
@@ -121,5 +109,12 @@ func RebootActiveNode(ns string) error {
 			})
 		}
 	}
+	return nil
+}
+func RebootNodeDhruv(nodename string) error {
+	n, _ := k8sCore.GetNodeByName(nodename)
+	annotations := n.GetAnnotations()
+	log.InfoD("================= %v ================", annotations)
+
 	return nil
 }

@@ -305,32 +305,32 @@ var _ = Describe("{ResiliencyScenario}", func() {
 
 	It("deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
-			// for _, ds := range params.DataServiceToTest {
-			// 	if ds.Name != postgresql {
-			// 		continue
-			// 	}
-			// 	Step("Deploy and validate data service", func() {
-			// 		isDeploymentsDeleted = false
-			// 		pdslib.MarkResiliencyTC(true)
-			// 		deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-			// 		log.FailOnError(err, "Error while deploying data services")
-			// 	})
-			// }
-			err := CheckResiliencySuite("pds-k8s-pxc-438f-0")
-			log.InfoD("=========== Error: %v ===========", err)
+			for _, ds := range params.DataServiceToTest {
+				if ds.Name != postgresql {
+					continue
+				}
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					pdslib.MarkResiliencyTC(true)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+				})
+			}
+			// err := CheckResiliencySuite("pds-k8s-pxc-438f-0")
+			log.InfoD("=========== Last Msg in the test scenario ===========")
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 
-		// defer func() {
-		// 	if !isDeploymentsDeleted {
-		// 		Step("Delete created deployments")
-		// 		resp, err := pdslib.DeleteDeployment(deployment.GetId())
-		// 		log.FailOnError(err, "Error while deleting data services")
-		// 		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-		// 	}
-		// }()
+		defer func() {
+			if !isDeploymentsDeleted {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(deployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			}
+		}()
 	})
 })
 
