@@ -31,6 +31,7 @@ const (
 	// formattingPxctlDeleteFBBackupCredential is the command template used to
 	// delete the S3 credentials object in Portworx
 	formattingPxctlDeleteFBBackupCredential = "pxctl credentials delete %s"
+	mountTestApp                            = "nginx-fa-fb-davol"
 )
 
 func createCloudsnapCredential() {
@@ -62,6 +63,8 @@ func deleteCloudsnapCredential() {
 // This test performs basic tests making sure Pure direct access are running as expected
 var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 	var contexts []*scheduler.Context
+	var createoption1 = "xfs"
+	var createoption2 = "ext4"
 	JustBeforeEach(func() {
 		StartTorpedoTest("PureVolumeCRUDWithSDK", "Test pure volumes on applications, run CRUD", nil, 0)
 	})
@@ -73,7 +76,33 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
 		}
-		ValidateApplicationsPureSDK(contexts)
+		for _, ctx := range contexts {
+			// context for pure volume mount tests
+			if ctx.App.Key == mountTestApp {
+				ValidateContext(ctx)
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+				log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
+				for _, v := range vols {
+					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
+					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+					// This step performs a basic test making sure Volume create options are working as expected.
+					Step("validating create options", func() {
+						if v.Name == "mount-fa-pvc" {
+							err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption1, attachedNode)
+							dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
+						} else if v.Name == "createoption-fa-ext4-pvc" {
+							err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption2, attachedNode)
+							dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
+						}
+					})
+				}
+			} else {
+				// context for pure volume sdk
+				ValidateContextForPureVolumesSDK(ctx)
+			}
+		}
+
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
@@ -102,7 +131,12 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
 		}
-		ValidateApplicationsPurePxctl(contexts)
+		for _, ctx := range contexts {
+			if ctx.App.Key != mountTestApp {
+				// context for pure volume pxctl
+				ValidateContextForPureVolumesPXCTL(ctx)
+			}
+		}
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
@@ -110,87 +144,6 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 			TearDownContext(ctx, opts)
 		}
 		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts)
-	})
-})
-
-var _ = Describe("{PureFaValidateCreateoptionxfs}", func() {
-	var contexts []*scheduler.Context
-	var createoption = "xfs"
-	JustBeforeEach(func() {
-		StartTorpedoTest("PureFaValidateCreateoptionxfs", "Test create options on pure volumes on applications", nil, 0)
-	})
-
-	It("Has to validate createoptions", func() {
-		contexts = make([]*scheduler.Context, 0)
-		contexts = ScheduleApplications(fmt.Sprintf("nginx-fa-fb-davol"))
-		ValidateApplications(contexts)
-		for _, ctx := range contexts {
-			vols, err := Inst().S.GetVolumes(ctx)
-			log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
-			for _, v := range vols {
-				if v.Name == "mount-fa-xfs-pvc" {
-					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
-					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-					Step("validating create options", func() {
-						err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption, attachedNode)
-						dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
-					})
-				}
-			}
-		}
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts)
-	})
-})
-
-var _ = Describe("{PureFaValidateCreateoptionext4}", func() {
-	var contexts []*scheduler.Context
-	var createoption = "ext4"
-	JustBeforeEach(func() {
-		StartTorpedoTest("PureFaValidateCreateoptionext4", "Test create options on pure volumes on applications", nil, 0)
-	})
-
-	It("Has to validate createoptions", func() {
-		contexts = make([]*scheduler.Context, 0)
-
-		contexts = ScheduleApplications(fmt.Sprintf("nginx-fa-fb-davol"))
-		ValidateApplications(contexts)
-		for _, ctx := range contexts {
-			vols, err := Inst().S.GetVolumes(ctx)
-			log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
-			for _, v := range vols {
-				if v.Name == "createoption-fa-ext4-pvc" {
-					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
-					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-					Step("validating create options", func() {
-						err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption, attachedNode)
-						dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
-					})
-				}
-			}
-		}
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()

@@ -1,14 +1,14 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: mount-fa-xfs-pvc
+  name: mount-fa-pvc
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 2Gi
-  storageClassName: mount-fa-xfs-sc
+  storageClassName: mount-fa-sc
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1

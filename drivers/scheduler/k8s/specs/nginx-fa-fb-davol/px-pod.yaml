@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: mount-fa-xfs-pod
+  name: mount-fa-pod
 spec:
   # Specify a volume that uses the claim defined in pvc.yaml
   volumes:
   - name: nginx-vol
     persistentVolumeClaim:
-        claimName: mount-fa-xfs-pvc
+        claimName: mount-fa-pvc
   containers:
   - name: nginx
     image: nginx
