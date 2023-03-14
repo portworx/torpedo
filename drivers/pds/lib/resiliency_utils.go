@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	// import scheduler drivers to invoke it's init
 	"github.com/portworx/torpedo/drivers/node"
 
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
@@ -15,12 +14,13 @@ import (
 )
 
 const (
-	defaultWaitRebootTimeout     = 5 * time.Minute
-	defaultWaitRebootRetry       = 10 * time.Second
-	defaultCommandRetry          = 5 * time.Second
-	defaultCommandTimeout        = 1 * time.Minute
-	defaultTestConnectionTimeout = 15 * time.Minute
-	defaultRebootTimeRange       = 5 * time.Minute
+	defaultWaitRebootTimeout             = 5 * time.Minute
+	defaultWaitRebootRetry               = 10 * time.Second
+	defaultCommandRetry                  = 5 * time.Second
+	defaultCommandTimeout                = 1 * time.Minute
+	defaultTestConnectionTimeout         = 15 * time.Minute
+	defaultRebootTimeRange               = 5 * time.Minute
+	active_node_reboot_during_deployment = "active-node-reboot-during-deployment"
 )
 
 // PDS vars
@@ -29,13 +29,16 @@ var (
 	ResiliencyFlag            = false
 	hasResiliencyConditionMet = false
 	FailureType               ResiliencyFailure
+	testError                 error
 )
 
+// Struct Definition for kind of Failure the framework needs to trigger
 type ResiliencyFailure struct {
 	Type   string
 	Method func() error
 }
 
+// Wrapper to Define failure type from Test Case
 func DefineFailureType(failure ResiliencyFailure) {
 	FailureType = failure
 }
@@ -65,30 +68,29 @@ func InduceFailure(failure string, ns string) {
 	for !hasResiliencyConditionMet {
 		continue
 	}
-	log.InfoD("================ SS is now at 2 replica active pods ==============")
+	// Triggering Resiliency Failure now
 	ResiliencyDriver(failure, ns)
-	log.InfoD("================ Came out of Resiliency Driver ===================")
 }
 
 // Resiliency Driver Module
 func ResiliencyDriver(failure string, ns string) {
-	if failure == "active-node-reboot" {
+	if failure == active_node_reboot_during_deployment {
 		FailureType.Method()
 	}
 }
 
-// Reboot Any one Active Node
-func RebootActiveNode(ns string) error {
+// Reboot the Active Node onto which the application pod is coming up
+func RebootActiveNodeDuringDeployment(ns string) error {
 	// Get StatefulSet Object
 	var ss *v1.StatefulSet
-	ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
-	if err != nil {
-		return err
+	ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+	if testError != nil {
+		return testError
 	}
 	// Get Pods of this StatefulSet
-	pods, err := k8sApps.GetStatefulSetPods(ss)
-	if err != nil {
-		return err
+	pods, testError := k8sApps.GetStatefulSetPods(ss)
+	if testError != nil {
+		return testError
 	}
 	// Check which Pod is still not up. Try to reboot the node on which this Pod is hosted.
 	for _, pod := range pods {
@@ -96,34 +98,27 @@ func RebootActiveNode(ns string) error {
 			log.InfoD("Pod running on Node %v is Ready so skipping this pod......", pod.Spec.NodeName)
 			continue
 		} else {
-			log.InfoD(" ================ Node Selected is : %v =================", pod.Spec.NodeName)
-
 			nodes := node.GetWorkerNodes()
 			var nodeToReboot node.Node
 			for _, n := range nodes {
-				log.Info("============= Checking Node ============ : %s", n.Name)
 				if n.Name != pod.Spec.NodeName {
 					continue
 				}
 				nodeToReboot = n
 			}
-
-			log.InfoD(" ================ Rebooting the above node %v ===================", nodeToReboot.Name)
-			err = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
+			log.Infof("Going ahead and rebooting the node %v as there is an application pod thats coming up on this node", pod.Spec.NodeName)
+			testError = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
 				Force: true,
 				ConnectionOpts: node.ConnectionOpts{
 					Timeout:         defaultCommandTimeout,
 					TimeBeforeRetry: defaultCommandRetry,
 				},
 			})
+			if testError != nil {
+				return testError
+			}
+			log.Infof("Node %v rebooted successfully", pod.Spec.NodeName)
 		}
 	}
-	return nil
-}
-func RebootNodeDhruv(nodename string) error {
-	n, _ := k8sCore.GetNodeByName(nodename)
-	annotations := n.GetAnnotations()
-	log.InfoD("================= %v ================", annotations)
-
-	return nil
+	return testError
 }

@@ -4,8 +4,6 @@ import (
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/tests"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
@@ -27,23 +25,24 @@ type PDSDataService struct {
 }
 
 const (
-	pdsNamespace            = "pds-system"
-	deploymentName          = "qa"
-	envDeployAllDataService = "DEPLOY_ALL_DATASERVICE"
-	postgresql              = "PostgreSQL"
-	cassandra               = "Cassandra"
-	elasticSearch           = "Elasticsearch"
-	couchbase               = "Couchbase"
-	redis                   = "Redis"
-	rabbitmq                = "RabbitMQ"
-	mongodb                 = "MongoDB"
-	mysql                   = "MySQL"
-	kafka                   = "Kafka"
-	zookeeper               = "ZooKeeper"
-	consul                  = "Consul"
-	pdsNamespaceLabel       = "pds.portworx.com/available"
-	timeOut                 = 30 * time.Minute
-	maxtimeInterval         = 30 * time.Second
+	pdsNamespace                         = "pds-system"
+	deploymentName                       = "qa"
+	envDeployAllDataService              = "DEPLOY_ALL_DATASERVICE"
+	postgresql                           = "PostgreSQL"
+	cassandra                            = "Cassandra"
+	elasticSearch                        = "Elasticsearch"
+	couchbase                            = "Couchbase"
+	redis                                = "Redis"
+	rabbitmq                             = "RabbitMQ"
+	mongodb                              = "MongoDB"
+	mysql                                = "MySQL"
+	kafka                                = "Kafka"
+	zookeeper                            = "ZooKeeper"
+	consul                               = "Consul"
+	active_node_reboot_during_deployment = "active-node-reboot-during-deployment"
+	pdsNamespaceLabel                    = "pds.portworx.com/available"
+	timeOut                              = 30 * time.Minute
+	maxtimeInterval                      = 30 * time.Second
 )
 
 var (
@@ -148,27 +147,4 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 
 	return pod, dep, err
 
-}
-
-func CheckResiliencySuite(givenNodeName string) error {
-	tests.InitInstance()
-	nodes := node.GetWorkerNodes()
-	var nodeToReboot node.Node
-	for _, n := range nodes {
-		log.Info("============= Checking Node ============ : %s", n.Name)
-		if n.Name != givenNodeName {
-			continue
-		}
-		nodeToReboot = n
-	}
-
-	log.InfoD(" ================ Rebooting the above node %v ===================", nodeToReboot.Name)
-	err = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
-		Force: true,
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         defaultCommandTimeout,
-			TimeBeforeRetry: defaultCommandRetry,
-		},
-	})
-	return nil
 }

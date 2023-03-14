@@ -298,9 +298,9 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 })
 
-var _ = Describe("{ResiliencyScenario}", func() {
+var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResiliencyScenario", "Deploys and Scales Up the dataservices", pdsLabels, 0)
+		StartTorpedoTest("RebootActiveNodeDuringDeployment", "Reboots a Node onto which a pod is coming up", pdsLabels, 0)
 	})
 
 	It("deploy Dataservices", func() {
@@ -309,35 +309,33 @@ var _ = Describe("{ResiliencyScenario}", func() {
 				if ds.Name != postgresql {
 					continue
 				}
-				Step("Deploy and validate data service", func() {
+				Step("Start deployment, Reboot a node on which deployment is coming up and validate data service", func() {
 					isDeploymentsDeleted = false
+					// Global Resiliency TC marker
 					pdslib.MarkResiliencyTC(true)
+					// Type of failure that this TC needs to cover
 					failure := pdslib.ResiliencyFailure{
-						Type: "active-node-reboot",
+						Type: active_node_reboot_during_deployment,
 						Method: func() error {
-							return pdslib.RebootActiveNode(params.InfraToTest.Namespace)
+							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace)
 						},
 					}
 					pdslib.DefineFailureType(failure)
+					// Deploy and Validate this Data service after injecting the type of failure we want to catch
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
 			}
-			// err := CheckResiliencySuite("pds-k8s-pxc-438f-0")
-			log.InfoD("=========== Last Msg in the test scenario ===========")
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
+		if !isDeploymentsDeleted {
+			Step("Delete created deployments")
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		}
 	})
 })
 

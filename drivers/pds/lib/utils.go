@@ -715,16 +715,23 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 		return err
 	}
 	if ResiliencyFlag {
-		log.InfoD("Entering to check if Data service has 2 active pods. Once it does, we will reboot the node it is hosted upon...........")
-		var check_till_replica int32
-		check_till_replica = 1
-		func1 := func() {
-			GetPdsSs(deployment.GetClusterResourceName(), namespace, check_till_replica)
+		if FailureType.Type == active_node_reboot_during_deployment {
+			log.InfoD("Entering to check if Data service has 2 active pods. Once it does, we will reboot the node it is hosted upon...........")
+			var check_till_replica int32
+			check_till_replica = 1
+			func1 := func() {
+				GetPdsSs(deployment.GetClusterResourceName(), namespace, check_till_replica)
+			}
+			func2 := func() {
+				InduceFailure(FailureType.Type, namespace)
+			}
+			ExecuteInParallel(func1, func2)
+			if testError != nil {
+				return testError
+			}
+		} else {
+			// Need to put in check for further failure type scenarios
 		}
-		func2 := func() {
-			InduceFailure(FailureType.Type, namespace)
-		}
-		ExecuteInParallel(func1, func2)
 	}
 	//validate the statefulset deployed in the k8s namespace
 	err = k8sApps.ValidateStatefulSet(ss, timeOut)
