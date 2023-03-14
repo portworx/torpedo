@@ -1249,7 +1249,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 				log.FailOnError(err, "Inspect each backup from list")
 				actual := resp.GetBackup().GetStatus().Status
 				expected := api.BackupInfo_StatusInfo_Success
-				dash.VerifyFatal(actual, expected, "Check each backup for success status")
+				dash.VerifyFatal(actual, expected, fmt.Sprintf("Check each backup for success status %s", bkp.Name))
 			}
 		})
 	})
