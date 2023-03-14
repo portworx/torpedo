@@ -312,6 +312,13 @@ var _ = Describe("{ResiliencyScenario}", func() {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
 					pdslib.MarkResiliencyTC(true)
+					failure := pdslib.ResiliencyFailure{
+						Type: "active-node-reboot",
+						Method: func() error {
+							return pdslib.RebootActiveNode(params.InfraToTest.Namespace)
+						},
+					}
+					pdslib.DefineFailureType(failure)
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})

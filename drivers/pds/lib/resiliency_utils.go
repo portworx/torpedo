@@ -28,8 +28,17 @@ var (
 	wg                        sync.WaitGroup
 	ResiliencyFlag            = false
 	hasResiliencyConditionMet = false
-	FailureType               = "node-reboot"
+	FailureType               ResiliencyFailure
 )
+
+type ResiliencyFailure struct {
+	Type   string
+	Method func() error
+}
+
+func DefineFailureType(failure ResiliencyFailure) {
+	FailureType = failure
+}
 
 // Executes all methods in parallel
 func ExecuteInParallel(functions ...func()) {
@@ -63,8 +72,8 @@ func InduceFailure(failure string, ns string) {
 
 // Resiliency Driver Module
 func ResiliencyDriver(failure string, ns string) {
-	if failure == "node-reboot" {
-		RebootActiveNode(ns)
+	if failure == "active-node-reboot" {
+		FailureType.Method()
 	}
 }
 

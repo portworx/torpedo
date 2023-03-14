@@ -722,7 +722,7 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 			GetPdsSs(deployment.GetClusterResourceName(), namespace, check_till_replica)
 		}
 		func2 := func() {
-			InduceFailure(FailureType, namespace)
+			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
 	}
