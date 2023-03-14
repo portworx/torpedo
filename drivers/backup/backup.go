@@ -211,8 +211,11 @@ type Backup interface {
 	GetVolumeBackupIDs(ctx context.Context, backupName string, namespace string,
 		clusterObj *api.ClusterObject, orgID string) ([]string, error)
 
-	// GetBackupUID returns uid of the given backup in an organization
+	// GetBackupUID returns uid of the given backup name in an organization
 	GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error)
+
+	// GetBackupName returns name of the given backup uid in an organization
+	GetBackupName(ctx context.Context, backupUid string, orgID string) (string, error)
 
 	// UpdateBackupShare updates backupshare of existing backup object
 	UpdateBackupShare(ctx context.Context, req *api.BackupShareUpdateRequest) (*api.BackupShareUpdateResponse, error)
@@ -280,7 +283,7 @@ type SchedulePolicy interface {
 	DeleteBackupSchedulePolicy(orgID string, policyList []string) error
 
 	// GetSchedulePolicyUid gets the uid for the given schedule policy
-	GetSchedulePolicyUid(orgID string, tx context.Context, schPolicyName string) (string, error)
+	GetSchedulePolicyUid(orgID string, ctx context.Context, schedulePolicyName string) (string, error)
 }
 
 // ScheduleBackup interface
@@ -309,6 +312,12 @@ type ScheduleBackup interface {
 	// This wait function is for the backupschedule deletion with delete-backup option set.
 	WaitForBackupScheduleDeletion(ctx context.Context, backupScheduleName, namespace, orgID string,
 		clusterObj *api.ClusterObject, timeout time.Duration, timeBeforeRetry time.Duration) error
+
+	// GetAllScheduleBackupNames returns names of all scheduled backups for the given schedule
+	GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error)
+
+	// GetAllScheduleBackupUIDs returns uids of all scheduled backups for the given schedule
+	GetAllScheduleBackupUIDs(ctx context.Context, scheduleName string, orgID string) ([]string, error)
 }
 
 // License interface

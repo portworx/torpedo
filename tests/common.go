@@ -271,10 +271,12 @@ const (
 )
 
 var pxRuntimeOpts string
+var PxBackupVersion string
 
-const (
-	taskNamePrefix = "backupcreaterestore"
-	orgID          = "default"
+var (
+	RunIdForSuite             int
+	TestRailSetupSuccessful   bool
+	CurrentTestRailTestCaseId int
 )
 
 var (
@@ -404,18 +406,7 @@ func InitInstance() {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		log.FailOnError(err, "Error occured while Backup Driver Initialization")
 	}
-	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
-		err = testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
-		if err == nil {
-			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
-				err = fmt.Errorf("not all details provided to update testrail")
-				log.FailOnError(err, "Error occured while testrail initialization")
-			}
-			testrailuttils.CreateMilestone()
-		}
-	} else {
-		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
-	}
+	SetupTestRail()
 
 	if jiraUserName != "" && jiraToken != "" {
 		log.Infof("Initializing JIRA connection")
@@ -1832,7 +1823,8 @@ func PerformSystemCheck() {
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
 			nodes := node.GetNodes()
-			expect(nodes).NotTo(beEmpty())
+			dash.VerifyFatal(len(nodes) > 0, true, "verify nodes list is not empty")
+			coreNodes := make([]string, 0)
 			for _, n := range nodes {
 				if !n.IsStorageDriverInstalled {
 					continue
@@ -1843,12 +1835,17 @@ func PerformSystemCheck() {
 					TimeBeforeRetry: 10 * time.Second,
 				})
 				if len(file) != 0 || err != nil {
+					log.FailOnError(err, "error checking for cores in node %s", n.Name)
 					dash.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
-					// Collect Support Bundle only once
-					CollectSupport()
-					log.Fatalf("Core generated, please check logs for more details")
+					coreNodes = append(coreNodes, n.Name)
 				}
 			}
+			if len(coreNodes) > 0 {
+				// Collect Support Bundle only once
+				CollectSupport()
+				log.Warn("Cores are generated. Please check logs for more details")
+			}
+			dash.VerifyFatal(len(coreNodes), 0, "verify if cores are generated in one or more nodes")
 		})
 	})
 }
@@ -2013,7 +2010,6 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	log.Debugf("contexts: %v", &contexts)
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
@@ -2027,12 +2023,14 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 			log.Errorf("Error in getting driver version")
 		}
 		testrailObject := testrailuttils.Testrail{
-			Status:        testStatus,
-			TestID:        ids[0],
-			RunID:         ids[1],
-			DriverVersion: driverVersion,
+			Status:          testStatus,
+			TestID:          ids[0],
+			RunID:           ids[1],
+			DriverVersion:   driverVersion,
+			PxBackupVersion: PxBackupVersion,
 		}
 		testrailuttils.AddTestEntry(testrailObject)
+		log.Infof("Testrail testrun url: %s/index.php?/runs/view/%d&group_by=cases:custom_automated&group_order=asc&group_id=%d", testRailHostname, ids[1], testrailuttils.PwxProjectID)
 	}
 }
 
@@ -2091,7 +2089,7 @@ func ScheduleValidateClusterPair(ctx *scheduler.Context, skipStorage, resetConfi
 		}
 	}
 
-	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksPxOperator(), reverse)
+	pairInfo, err := Inst().V.GetClusterPairingInfo(kubeConfigPath, "", IsEksCluster(), reverse)
 	if err != nil {
 		log.Errorf("Error writing to clusterpair.yml: %v", err)
 		return err
@@ -2715,13 +2713,13 @@ func DeleteCluster(name string, orgID string, ctx context1.Context) error {
 }
 
 // DeleteBackupLocation deletes backup location
-func DeleteBackupLocation(name string, backupLocationUID string, orgID string) error {
+func DeleteBackupLocation(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool) error {
 
 	backupDriver := Inst().Backup
 	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
 		Name:          name,
 		OrgId:         orgID,
-		DeleteBackups: true,
+		DeleteBackups: DeleteExistingBackups,
 		Uid:           backupLocationUID,
 	}
 	ctx, err := backup.GetAdminCtxFromSecret()
@@ -4542,11 +4540,8 @@ func WaitForExpansionToStart(poolID string) error {
 				return nil, false, fmt.Errorf("PoolResize has failed. Error: %s", expandedPool.LastOperation)
 			}
 
-			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
-				return nil, true, fmt.Errorf("PoolResize is in pending state [%s]", expandedPool.LastOperation)
-			}
-
-			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS ||
+				expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
 				// storage pool resize has been triggered
 				log.InfoD("Pool %s expansion started", poolID)
 				return nil, false, nil
@@ -4732,9 +4727,9 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 		return err
 	}
 
-	nodePoolsToValidate := make([]node.StoragePool, 0)
+	nodePoolsToValidate := make([]*opsapi.StoragePool, 0)
 	if poolID != -1 {
-		for _, p := range stNode.StoragePools {
+		for _, p := range stNode.Pools {
 			if p.ID == poolID {
 				nodePoolsToValidate = append(nodePoolsToValidate, p)
 				break
@@ -4751,7 +4746,7 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 				break
 			}
 		}
-		nodePoolsToValidate = append(nodePoolsToValidate, stNode.StoragePools...)
+		nodePoolsToValidate = append(nodePoolsToValidate, stNode.Pools...)
 
 	}
 
@@ -4780,7 +4775,8 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 							return nil, true, fmt.Errorf("wait for pool rebalance to complete")
 						}
 					}
-					if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") {
+					if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") ||
+						strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance complete pool status: Maintenance") {
 						return nil, false, nil
 					}
 				}
@@ -4869,6 +4865,10 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
+	if TestRailSetupSuccessful && testRepoID != 0 {
+		RunIdForSuite = testrailuttils.AddRunsToMilestone(testRepoID)
+		CurrentTestRailTestCaseId = testRepoID
+	}
 }
 
 // enableAutoFSTrim on supported PX version.
@@ -4908,6 +4908,15 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+}
+
+// EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
+func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
+	CloseLogger(TestLogger)
+	dash.TestCaseEnd()
+	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
+		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
+	}
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
@@ -5273,8 +5282,8 @@ func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
 	return poolDetails, nil
 }
 
-// IsEksPxOperator returns true if current operator installation is on an EKS cluster
-func IsEksPxOperator() bool {
+// IsEksCluster returns true if current operator installation is on an EKS cluster
+func IsEksCluster() bool {
 	if stc, err := Inst().V.GetDriver(); err == nil {
 		if oputil.IsEKS(stc) {
 			logrus.Infof("EKS installation with PX operator detected.")
@@ -5332,14 +5341,14 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 	// Enter pool maintenance mode before deleting the pools from the cluster
 	err = Inst().V.EnterPoolMaintenance(n)
 	if err != nil {
-		return fmt.Errorf("failed to set pool maintenance mode on node %s : Error [%v]", n.Name, err)
+		return fmt.Errorf("failed to set pool maintenance mode on node %s. Err: [%v]", n.Name, err)
 	}
 
 	time.Sleep(1 * time.Minute)
 	expectedStatus := "In Maintenance"
 	err = WaitForPoolStatusToUpdate(n, expectedStatus)
 	if err != nil {
-		return fmt.Errorf("node [%s] pools are not in status [%s] : Error [%v]", n.Name, expectedStatus, err)
+		return fmt.Errorf("node [%s] pools are not in status [%s]. Err: [%v]", n.Name, expectedStatus, err)
 	}
 
 	// Delete all the pools present on the Node
@@ -5362,7 +5371,7 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 	expectedStatus = "Online"
 	err = WaitForPoolStatusToUpdate(n, expectedStatus)
 	if err != nil {
-		return fmt.Errorf("node %s pools are not in status %s with Error: [%v]", n.Name, expectedStatus, err)
+		return fmt.Errorf("node %s pools are not in status %s. Err:[%v]", n.Name, expectedStatus, err)
 	}
 
 	storageLessNodeAfterPoolDelete := node.GetStorageLessNodes()
@@ -5589,7 +5598,7 @@ func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) er
 		for k, v := range poolsStatus {
 			if v != expectedStatus {
 				return nil, true,
-					fmt.Errorf("pool %s is not %s, current status : %s", k, expectedStatus, v)
+					fmt.Errorf("pool %s is not %s, current status: %s", k, expectedStatus, v)
 			}
 		}
 		return nil, false, nil
@@ -5608,4 +5617,186 @@ func RandomString(length int) string {
 	}
 	randomString := string(randomBytes)
 	return randomString
+}
+
+// DeleteGivenPoolInNode deletes pool with given ID in the given node
+func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) {
+
+	log.InfoD("Setting pools in maintenance on node %s", stNode.Name)
+	if err = Inst().V.EnterPoolMaintenance(stNode); err != nil {
+		return err
+	}
+	//Waiting for cli to work
+	time.Sleep(2 * time.Minute)
+
+	status, err := Inst().V.GetNodeStatus(stNode)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Node [%s] has status: [%v] after entering pool maintenance", stNode.Name, status)
+
+	expectedStatus := "In Maintenance"
+	if err = WaitForPoolStatusToUpdate(stNode, expectedStatus); err != nil {
+		return fmt.Errorf("node %s pools are not in status %s. Err:%v", stNode.Name, expectedStatus, err)
+	}
+	defer func() {
+		var exitErr error
+		if exitErr = Inst().V.ExitPoolMaintenance(stNode); exitErr != nil {
+			log.Errorf("error exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+
+		if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
+			log.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+		//Adding wait as even PX is up it is taking some time for pool status to update
+		//when all pools are deleted
+		time.Sleep(1 * time.Minute)
+		cmd := "pxctl sv pool show"
+		var out string
+
+		// Execute the command and check if any pools exist
+		out, exitErr = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if exitErr != nil {
+			log.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
+			return
+		}
+		log.Infof("pool show: [%s]", out)
+
+		//skipping waitForPoolStatusToUpdate if there are no pools in the node
+		if strings.Contains(out, "No drives configured for this node") {
+			return
+		}
+
+		expectedStatus := "Online"
+		if exitErr = WaitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
+			log.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
+		}
+
+	}()
+	err = Inst().V.DeletePool(stNode, poolIDToDelete)
+	return err
+}
+func GetPoolUUIDWithMetadataDisk(stNode node.Node) (string, error) {
+
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	drivesMap, err := Inst().N.GetBlockDrives(stNode, systemOpts)
+	if err != nil {
+		return "", fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+	}
+
+	var metadataPoolID string
+outer:
+	for _, drv := range drivesMap {
+		for k, v := range drv.Labels {
+			if k == "mdpoolid" {
+				metadataPoolID = v
+				break outer
+			}
+		}
+	}
+
+	if metadataPoolID != "" {
+		mpID, err := strconv.Atoi(metadataPoolID)
+		if err != nil {
+			return "", fmt.Errorf("error converting metadataPoolID [%v] to int. Error: %v", metadataPoolID, err)
+		}
+
+		for _, p := range stNode.Pools {
+			if p.ID == int32(mpID) {
+				log.Infof("Identified metadata pool UUID: %s", p.Uuid)
+				return p.Uuid, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no pool with metadata in node [%s]", stNode.Name)
+}
+
+// SetupTestRail checks if the required parameters for testrail are passed, verifies connectivity and creates milestone if it does not exist
+func SetupTestRail() {
+	if testRailHostname != "" && testRailUsername != "" && testRailPassword != "" {
+		err := testrailuttils.Init(testRailHostname, testRailUsername, testRailPassword)
+		if err == nil {
+			if testrailuttils.MilestoneName == "" || testrailuttils.RunName == "" || testrailuttils.JobRunID == "" {
+				err = fmt.Errorf("not all details provided to update testrail")
+				log.FailOnError(err, "Error occurred while testrail initialization")
+			}
+			testrailuttils.CreateMilestone()
+			TestRailSetupSuccessful = true
+		}
+	} else {
+		log.Debugf("Not all information to connect to testrail is provided, skipping updates to testrail")
+	}
+}
+
+// AsgKillNode terminates the given node
+func AsgKillNode(nodeToKill node.Node) error {
+	initNodes := node.GetStorageDriverNodes()
+	initNodeNames := make([]string, len(initNodes))
+	var err error
+	for _, iNode := range initNodes {
+		initNodeNames = append(initNodeNames, iNode.Name)
+	}
+	stepLog := fmt.Sprintf("Deleting node [%v]", nodeToKill.Name)
+
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		// workaround for eks until EKS sdk is implemented
+		if IsEksCluster() {
+			_, err = Inst().N.RunCommandWithNoRetry(nodeToKill, "ifconfig eth0 down  < /dev/null &", node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+
+		} else {
+			err = Inst().N.DeleteNode(nodeToKill, 5*time.Minute)
+		}
+
+	})
+	if err != nil {
+		return err
+	}
+
+	stepLog = "Wait for  node get replaced by autoscaling group"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		t := func() (interface{}, bool, error) {
+
+			err = Inst().S.RefreshNodeRegistry()
+			if err != nil {
+				return "", true, err
+			}
+
+			err = Inst().V.RefreshDriverEndpoints()
+			if err != nil {
+				return "", true, err
+			}
+
+			newNodesList := node.GetStorageDriverNodes()
+
+			for _, nNode := range newNodesList {
+				if !Contains(initNodeNames, nNode.Name) {
+					return "", false, nil
+				}
+			}
+
+			return "", true, fmt.Errorf("no new node scaled up")
+		}
+
+		_, err = task.DoRetryWithTimeout(t, defaultAutoStorageNodeRecoveryTimeout, waitResourceCleanup)
+
+	})
+	return err
+
 }

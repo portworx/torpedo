@@ -1096,7 +1096,10 @@ func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID st
 	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
 	for {
 		enumerateRsp, err := p.EnumerateBackup(ctx, bkpEnumerateReq)
-		log.FailOnError(err, "Failed to enumerate backups for org %s ctx: [%v]\n Backup enumerate request: [%v]", orgID, err, bkpEnumerateReq)
+		if err != nil {
+			log.InfoD("Backup enumeration for the ctx [%v] within org [%s] failed with error [%v]. Backup enumerate request: [%v].", ctx, orgID, err, bkpEnumerateReq)
+			return "", err
+		}
 		for _, backup := range enumerateRsp.GetBackups() {
 			if backup.GetName() == backupName {
 				return backup.GetUid(), nil
@@ -1111,6 +1114,66 @@ func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID st
 	}
 
 	return "", fmt.Errorf("backup with name '%s' not found for org '%s'", backupName, orgID)
+}
+
+func (p *portworx) GetBackupName(ctx context.Context, backupUid string, orgID string) (string, error) {
+	var totalBackups int
+	bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: orgID}
+	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
+	for {
+		enumerateRsp, err := p.EnumerateBackup(ctx, bkpEnumerateReq)
+		if err != nil {
+			log.InfoD("Backup enumeration for the ctx [%v] within org [%s] failed with error [%v]. Backup enumerate request: [%v].", ctx, orgID, err, bkpEnumerateReq)
+			return "", err
+		}
+		for _, backup := range enumerateRsp.GetBackups() {
+			if backup.GetUid() == backupUid {
+				return backup.GetName(), nil
+			}
+			totalBackups++
+		}
+		if uint64(totalBackups) >= enumerateRsp.GetTotalCount() {
+			break
+		} else {
+			bkpEnumerateReq.EnumerateOptions.ObjectIndex += uint64(len(enumerateRsp.GetBackups()))
+		}
+	}
+
+	return "", fmt.Errorf("backup with uid '%s' not found for org '%s'", backupUid, orgID)
+}
+
+func (p *portworx) GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
+	var scheduleBackupNames []string
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		OrgId: orgID,
+		Name:  scheduleName,
+		Uid:   "",
+	}
+	resp, err := p.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+	if err != nil {
+		return scheduleBackupNames, err
+	}
+	scheduleBackups := resp.GetBackupSchedule().GetBackupStatus()["interval"].GetStatus()
+	for _, scheduleBackup := range scheduleBackups {
+		scheduleBackupNames = append(scheduleBackupNames, scheduleBackup.GetBackupName())
+	}
+	return scheduleBackupNames, nil
+}
+
+func (p *portworx) GetAllScheduleBackupUIDs(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
+	var scheduleBackupUIDs []string
+	scheduleBackupNames, err := p.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return scheduleBackupUIDs, err
+	}
+	for _, scheduleBackupName := range scheduleBackupNames {
+		scheduleBackupUID, err := p.GetBackupUID(ctx, scheduleBackupName, orgID)
+		if err != nil {
+			return scheduleBackupUIDs, err
+		}
+		scheduleBackupUIDs = append(scheduleBackupUIDs, scheduleBackupUID)
+	}
+	return scheduleBackupUIDs, nil
 }
 
 var (
