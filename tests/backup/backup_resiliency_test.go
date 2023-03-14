@@ -600,7 +600,6 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	})
 })
 
-
 // CancelAllRunningBackupJobs cancels all the running backup jobs while backups are in progress
 var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 	var (
@@ -636,7 +635,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 			}
 		}
 	})
-  
+
 	It("Cancel All Running Backup Jobs and validate", func() {
 		var sem = make(chan struct{}, numberOfBackups)
 		var wg sync.WaitGroup
@@ -760,6 +759,8 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 	})
 })
 
+// DeleteIncrementalBackupsAndRecreateNew Delete Incremental Backups and Recreate
+// new ones
 var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 	backupNames := make([]string, 0)
 	incrementalBackupNames := make([]string, 0)
@@ -777,6 +778,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 	var incrementalBackupName string
 	var bkpNamespaces = make([]string, 0)
 	backupLocationMap := make(map[string]string)
+	incrementalBackupNamesMap := make(map[string]string)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteIncrementalBackupsAndRecreateNew",
@@ -796,7 +798,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		}
 	})
 
-	It("Full backup view only and incremental backup restore access", func() {
+	It("Delete incremental Backups and re-create them", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
@@ -837,29 +839,31 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			// Full backup
 			for _, namespace := range bkpNamespaces {
-				fullBackupName = fmt.Sprintf("%s-%v", "full-backup", time.Now().Unix())
+				fullBackupName = fmt.Sprintf("%s-%s-%v", "full-backup", namespace, time.Now().Unix())
 				backupNames = append(backupNames, fullBackupName)
 				err = CreateBackup(fullBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", fullBackupName))
 			}
 
-			//Incremental backup
+			// Incremental backup
 			for _, namespace := range bkpNamespaces {
-				incrementalBackupName = fmt.Sprintf("%s-%v", "incremental-backup", time.Now().Unix())
+				incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
 				incrementalBackupNames = append(incrementalBackupNames, incrementalBackupName)
 				err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", incrementalBackupName))
 			}
 			log.Infof("List of backups - %v", backupNames)
+			log.Infof("List of Incremental backups - %v", incrementalBackupNames)
+
 		})
-		Step("Taking incremental backups and deleting them", func() {
-			log.InfoD("Taking incremental backup and deleting them")
+		Step("Deleting incremental backup", func() {
+			log.InfoD("Deleting incremental backups")
 			backupDriver := Inst().Backup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range incrementalBackupNames {
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Fetching px-central-admin ctx")
 				log.Infof("About to delete backup - %s", backupName)
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
@@ -871,32 +875,47 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 			log.InfoD("Taking incremental backups of applications again")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			//Incremental backup
+			// Incremental backup
 			for _, namespace := range bkpNamespaces {
-				incrementalBackupName = fmt.Sprintf("%s-%v", "incremental-backup", time.Now().Unix())
+				incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
 				incrementalBackupNames = append(incrementalBackupNames, incrementalBackupName)
+				incrementalBackupNamesMap[incrementalBackupName] = incrementalBackupName
 				err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", incrementalBackupName))
 			}
-			log.Infof("List of backups - %v", backupNames)
+			log.Infof("List of New Incremental backups - %v", incrementalBackupNames)
 		})
 		Step("Check if backups are incremental backups or not", func() {
 			log.InfoD("Check if backups are incremental backups or not")
-
+			var bkp *api.BackupObject
+			backupDriver := Inst().Backup
+			bkpEnumerateReq := &api.BackupEnumerateRequest{
+				OrgId: orgID}
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx failed")
+			curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+			for _, bkp = range curBackups.GetBackups() {
+				for _, vol := range bkp.GetVolumes() {
+					if incrementalBackupNamesMap[bkp.GetName()] == bkp.GetName() {
+						backupId := vol.GetBackupId()
+						dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
+							fmt.Sprintf("Check if the backup %s is incremental or not ", bkp.GetName()))
+					}
+				}
+			}
 		})
 	})
 
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		// Cleaning up applications created
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+
+		// Cleaning up px-backup cluster
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
