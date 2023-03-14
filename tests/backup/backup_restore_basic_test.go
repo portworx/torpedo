@@ -2,11 +2,10 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/task"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
-  "sync"
-  "strings"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
@@ -986,7 +985,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 					ctx.ReadinessTimeout = appReadinessTimeout
 					namespace := GetAppNamespace(ctx, taskName)
 					log.InfoD("Scheduled application with namespace [%s]", namespace)
-					// appNamespaces in this scenario is a of newly created namespaces
+					// appNamespaces in this scenario is of newly created namespaces
 					appNamespaces = append(appNamespaces, namespace)
 				}
 			}
@@ -1177,7 +1176,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			err := DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID, false)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
 
-			// Wait until backup location is remove or not
+			// Wait until backup location is removed
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
 				ctx, err := backup.GetAdminCtxFromSecret()
 				status, err := IsBackupLocationPresent(customBackupLocationName, ctx, orgID)
@@ -1221,7 +1220,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			checkBackupSync := func() (interface{}, bool, error) {
 				fetchedBackupNames, err := GetAllBackupsAdmin()
 				if err != nil {
-					return "", true, fmt.Errorf("unable to fetch backups")
+					return "", true, fmt.Errorf("unable to fetch backups. Error: %s", err.Error())
 				}
 				if len(fetchedBackupNames) == len(backupNames) {
 					return "", false, nil
@@ -1268,11 +1267,6 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		log.Infof("Deleting registered clusters for admin context")
-		err = DeleteCluster(SourceClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-		err = DeleteCluster(destinationClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
-
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
