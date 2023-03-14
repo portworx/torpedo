@@ -1045,24 +1045,18 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			log.InfoD("Check if backups created before are synced or not")
 
 			// Wait for backups to get synced
-			// for i := 0; i < 1000; i++ {
-			//	fetchedBackupNames, _ := GetAllBackupsAdmin()
-			//	log.Infof(fmt.Sprintf("Fetched backups %d", len(fetchedBackupNames)))
-			//	if len(fetchedBackupNames) == len(backupNames) {
-			//		break
-			//	} else {
-			//		time.Sleep(30)
-			//	}
-			// }
 			checkBackupSync := func() (interface{}, bool, error) {
 				fetchedBackupNames, err := GetAllBackupsAdmin()
-				if len(fetchedBackupNames) == len(backupNames) {
-					return "", true, nil
+				if err != nil {
+					return "", true, fmt.Errorf("unable to fetch backups")
 				}
-				return "", false, err
+				if len(fetchedBackupNames) == len(backupNames) {
+					return "", false, nil
+				}
+				return "", true, fmt.Errorf("expected: %d and actual: %d", len(backupNames), len(fetchedBackupNames))
 			}
 			_, err := task.DoRetryWithTimeout(checkBackupSync, 100*time.Minute, 30*time.Second)
-
+			log.FailOnError(err, "Wait for BackupSync to complete")
 			fetchedBackupNames, err := GetAllBackupsAdmin()
 			log.FailOnError(err, "Getting a list of all backups")
 			dash.VerifyFatal(len(fetchedBackupNames), len(backupNames), "Comparing the expected and actual number of backups")
