@@ -858,6 +858,8 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 			log.InfoD("Taking incremental backup and deleting them")
 			backupDriver := Inst().Backup
 			for _, backupName := range incrementalBackupNames {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
 				log.Infof("About to delete backup - %s", backupName)
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
