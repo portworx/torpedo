@@ -268,7 +268,7 @@ func ClusterVersion() (string, error) {
 	ver, err := k8sCore.GetVersion()
 	if err != nil {
 		return "", err
-		}
+	}
 	return strings.TrimLeft(ver.String(), "v"), nil
 }
 
@@ -904,7 +904,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createApiExtensionsObjects(appSpec, ns, app)
+			obj, err := k.createCRDObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -2188,6 +2188,7 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 }
 
 // destroyCRDObjects is used to destroy Resources in the group `apiextensions` (like CRDs)
+func (k *K8s) destroyCRDObjects(spec interface{}, app *spec.AppSpec) error {
 
 	if obj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
 		err := k8sApiExtensions.DeleteCRD(obj.Name)
@@ -2727,7 +2728,7 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
-			err := k.destroyApiExtensionsObjects(appSpec, ctx.App)
+			err := k.destroyCRDObjects(appSpec, ctx.App)
 			if err != nil {
 				return nil, true, err
 			} else {
@@ -4339,13 +4340,11 @@ func (k *K8s) destroyCustomResourceObjects(spec interface{}, app *spec.AppSpec) 
 }
 
 // createCRDObjects is used to create Resources in the group `apiextensions` group (like CRDs)
+func (k *K8s) createCRDObjects(
 	specObj interface{},
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
 ) (interface{}, error) {
-	k8sOps := k8sApiExtensions
-
-	// CustomResourceDefinitions
 
 	// Add security annotations if running with auth-enabled
 	configMapName := k.secretConfigMapName
@@ -4366,11 +4365,11 @@ func (k *K8s) destroyCustomResourceObjects(spec interface{}, app *spec.AppSpec) 
 
 	if obj, ok := specObj.(*apiextensionsv1.CustomResourceDefinition); ok {
 		obj.Namespace = ns.Name
-		err := k8sOps.RegisterCRD(obj)
+		err := k8sApiExtensions.RegisterCRD(obj)
 
 		if k8serrors.IsAlreadyExists(err) {
 			options := metav1.GetOptions{}
-			if crd, err := k8sOps.GetCRD(obj.Name, options); err == nil {
+			if crd, err := k8sApiExtensions.GetCRD(obj.Name, options); err == nil {
 				log.Infof("[%v] Found existing CRD: %v", app.Key, crd.Name)
 				return crd, nil
 			}
@@ -4383,7 +4382,7 @@ func (k *K8s) destroyCustomResourceObjects(spec interface{}, app *spec.AppSpec) 
 			}
 		} else {
 			options := metav1.GetOptions{}
-			if crd, err := k8sOps.GetCRD(obj.Name, options); err == nil {
+			if crd, err := k8sApiExtensions.GetCRD(obj.Name, options); err == nil {
 				log.Infof("[%v] Registered CRD: %v", app.Key, crd.Name)
 				return crd, nil
 			} else {
@@ -4396,11 +4395,11 @@ func (k *K8s) destroyCustomResourceObjects(spec interface{}, app *spec.AppSpec) 
 		}
 	} else if obj, ok := specObj.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
 		obj.Namespace = ns.Name
-		err := k8sOps.RegisterCRDV1beta1(obj)
+		err := k8sApiExtensions.RegisterCRDV1beta1(obj)
 
 		if k8serrors.IsAlreadyExists(err) {
 			options := metav1.GetOptions{}
-			if crd, err := k8sOps.GetCRDV1beta1(obj.Name, options); err == nil {
+			if crd, err := k8sApiExtensions.GetCRDV1beta1(obj.Name, options); err == nil {
 				log.Infof("[%v] Found existing CRDV1beta1: %v", app.Key, crd.Name)
 				return crd, nil
 			}
@@ -4413,7 +4412,7 @@ func (k *K8s) destroyCustomResourceObjects(spec interface{}, app *spec.AppSpec) 
 			}
 		} else {
 			options := metav1.GetOptions{}
-			if crd, err := k8sOps.GetCRDV1beta1(obj.Name, options); err == nil {
+			if crd, err := k8sApiExtensions.GetCRDV1beta1(obj.Name, options); err == nil {
 				log.Infof("[%v] Registered CRDV1beta1: %v", app.Key, crd.Name)
 				return crd, nil
 			} else {
