@@ -30,6 +30,7 @@ var (
 	hasResiliencyConditionMet = false
 	FailureType               ResiliencyFailure
 	testError                 error
+	check_till_replica        int32
 )
 
 // Struct Definition for kind of Failure the framework needs to trigger

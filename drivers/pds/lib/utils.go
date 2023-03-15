@@ -715,10 +715,11 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 		return err
 	}
 	if ResiliencyFlag {
-		if FailureType.Type == active_node_reboot_during_deployment {
-			log.InfoD("Entering to check if Data service has 2 active pods. Once it does, we will reboot the node it is hosted upon...........")
-			var check_till_replica int32
+		switch FailureType.Type {
+		// Case when we want to reboot a node onto which a deployment pod is coming up
+		case active_node_reboot_during_deployment:
 			check_till_replica = 1
+			log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will reboot the node it is hosted upon.", check_till_replica)
 			func1 := func() {
 				GetPdsSs(deployment.GetClusterResourceName(), namespace, check_till_replica)
 			}
@@ -729,8 +730,6 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 			if testError != nil {
 				return testError
 			}
-		} else {
-			// Need to put in check for further failure type scenarios
 		}
 	}
 	//validate the statefulset deployed in the k8s namespace
