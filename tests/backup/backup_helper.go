@@ -1367,8 +1367,8 @@ func GetBackupSpecObjectsContexts(resourceInfos []*api.ResourceInfo, clusterApps
 	return backupAppContexts, nil
 }
 
-// restoreSuccessCheck inspects restore task
-func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, retryInterval int, ctx context.Context) (bool, *api.RestoreInspectResponse, error) {
+// restoreSuccessCheck inspects restore task to check for status being "success". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
+func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, retryInterval int, ctx context.Context) (bool, error) {
 	if retryDuration == 0 {
 		retryDuration = maxWaitPeriodForRestoreCompletionInMinute
 	}
@@ -1395,7 +1395,7 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 	}
 	_, err := task.DoRetryWithTimeout(restoreSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
 	if err != nil {
-		return false, nil, err
+		return false, err
 	}
 	restoreInspectRequest = &api.RestoreInspectRequest{
 		Name:  restoreName,
@@ -1404,64 +1404,19 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 
 	resp, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
 	if err != nil {
-		return false, nil, err
+		return false, err
 	}
 	restoreStatus := (resp.GetRestore().GetStatus().Status == api.RestoreInfo_StatusInfo_PartialSuccess) || (resp.GetRestore().GetStatus().Status == api.RestoreInfo_StatusInfo_Success)
 	log.Infof("[%s] restored successfully", restoreName)
-	return restoreStatus, resp, nil
-}
+	return restoreStatus, nil
+	}
 
-// ValidateRestoreWithBackupCtx returns a clone of the backupContext (i.e. contexts with backup objects) *after* converting it to a BackupRestoreContext after converting the contexts to point to restored objects (and after validating those objects)
-func ValidateRestoreWithBackupCtx(restoreName string, orgID string, ctx context.Context, backupContext *BackupRestoreContext, namespaceMapping map[string]string) (*BackupRestoreContext, error) {
+// ValidateRestore returns a clone of the backupContext (i.e. contexts with backup objects) *after* converting it to a BackupRestoreContext after converting the contexts to point to restored objects (and after validating those objects)
+func ValidateRestore(restoreName string, restoreClusterConfigPath string, orgID string, ctx context.Context, backupContext *BackupRestoreContext, namespaceMapping map[string]string) (*BackupRestoreContext, error) {
+	err := SetClusterContext(restoreClusterConfigPath)
+	log.FailOnError(err, "failed to SetClusterContext to %s cluster", restoreClusterConfigPath)
+
 	backupDriver := Inst().Backup
-	restoreInspectRequest := &api.RestoreInspectRequest{
-		Name:  restoreName,
-		OrgId: orgID,
-	}
-
-	_, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
-	if err != nil {
-		return nil, err
-	}
-
-	rstCtx, err := GetRestoreCtxsFromBackupCtxs(backupContext, namespaceMapping)
-	if err != nil {
-		return nil, fmt.Errorf("GetRestoreCtxsFromBackupCtxs Err: %v", err)
-	}
-	ValidateApplications(rstCtx.schedCtxs)
-
-	return rstCtx, nil
-}
-
-// ValidateRestore returns a clone of the provided `context`s (and each of their `spec`s) *after* filtering the `spec`s to only include the resources that are in the backup and converting the contexts to point to restored objects (and after validating those objects)
-func ValidateRestore(restoreName string, backupName string, orgID string, ctx context.Context, clusterAppsContexts []*scheduler.Context, namespaceMapping map[string]string) (*BackupRestoreContext, error) {
-	backupDriver := Inst().Backup
-
-	// Getting Backup contexts
-	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-	if err != nil {
-		return nil, fmt.Errorf("GetBackupUID Err: %v", err)
-	}
-	backupInspectRequest := &api.BackupInspectRequest{
-		Name:  backupName,
-		Uid:   bkpUid,
-		OrgId: orgID,
-	}
-	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-	if err != nil {
-		return nil, fmt.Errorf("InspectBackup Err: %v", err)
-	}
-
-	bkpObjs := resp.Backup.Resources
-	backupSpecContext, err := GetBackupSpecObjectsContexts(bkpObjs, clusterAppsContexts)
-	if err != nil {
-		return nil, fmt.Errorf("GetBackupSpecObjectsContexts Err: %v", err)
-	}
-	backupContext := &BackupRestoreContext{
-		schedCtxs: backupSpecContext,
-	}
-
-	// Validating restores
 	restoreInspectRequest := &api.RestoreInspectRequest{
 		Name:  restoreName,
 		OrgId: orgID,
@@ -1472,13 +1427,17 @@ func ValidateRestore(restoreName string, backupName string, orgID string, ctx co
 		return nil, err
 	}
 
-	rstCtx, err := GetRestoreCtxsFromBackupCtxs(backupContext, namespaceMapping)
+	restoreCtx, err := GetRestoreCtxsFromBackupCtxs(backupContext, namespaceMapping)
 	if err != nil {
 		return nil, fmt.Errorf("GetRestoreCtxsFromBackupCtxs Err: %v", err)
 	}
-	ValidateApplications(rstCtx.schedCtxs)
+	ValidateApplications(restoreCtx.schedulerCtxs)
 
-	return rstCtx, nil
+	log.InfoD("switching to default context")
+	err1 := SetClusterContext("")
+	log.FailOnError(err1, "failed to SetClusterContext to default cluster")
+
+	return restoreCtx, nil
 }
 
 // GetRestoreCtxsFromBackupCtxs uses the backupContexts to create and return restoreContexts (along with conversion of their specs)
