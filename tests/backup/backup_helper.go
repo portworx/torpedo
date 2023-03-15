@@ -1617,7 +1617,7 @@ func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespac
 	if err != nil {
 		return "", fmt.Errorf("fail to create restore with createrestore req %v and error %v", createRestoreReq, err)
 	}
-	status, _, err := restoreSuccessCheck(restoreName, orgID, 10, 30, ctx)
+	status, err := restoreSuccessCheck(restoreName, orgID, 10, 30, ctx)
 	if err != nil {
 		return "", fmt.Errorf("fail to create restore %v with error %v", restoreName, err)
 	}

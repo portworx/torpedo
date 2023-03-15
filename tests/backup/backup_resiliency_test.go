@@ -158,7 +158,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
 
-				backupStatus, _, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
 				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
 
@@ -315,7 +315,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				backupStatus, _, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
 				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
 			}
@@ -342,7 +342,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-restore", backupName)
-				restoreStatus, _, err := restoreSuccessCheck(restoreName, orgID, retryDuration, retryInterval, ctx)
+				restoreStatus, err := restoreSuccessCheck(restoreName, orgID, retryDuration, retryInterval, ctx)
 				log.FailOnError(err, "Failed while restoring Backup for - %s", backupName)
 				dash.VerifyFatal(restoreStatus, true, "Inspecting the Restore success for - "+restoreName)
 			}
