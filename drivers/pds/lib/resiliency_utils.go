@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"errors"
 	"sync"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -61,12 +62,15 @@ func MarkResiliencyTC(resiliency bool) {
 
 // Function to wait for event to induce failure
 func InduceFailure(failure string, ns string) {
-	for !hasResiliencyConditionMet {
-		continue
-	}
+	// for !hasResiliencyConditionMet {
+	// 	continue
+	// }
 	isResiliencyConditionset := <-ResiliencyCondition
 	if isResiliencyConditionset {
 		FailureType.Method()
+	} else {
+		testError = errors.New("Resiliency Condition did not meet. Failing this test case.")
+		return
 	}
 	// Triggering Resiliency Failure now
 	// ResiliencyDriver(failure, ns)
