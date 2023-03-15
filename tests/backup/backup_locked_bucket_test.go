@@ -166,7 +166,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -178,7 +178,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 
 		log.InfoD("Deleting backup location and cloud setting")
 		for backupLocationUID, backupLocationName := range BackupLocationMap {
-			err := DeleteBackupLocation(backupLocationName, backupLocationUID, orgID)
+			err := DeleteBackupLocation(backupLocationName, backupLocationUID, orgID, false)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
 		}
 		// Need sleep as it takes some time for
@@ -391,7 +391,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)

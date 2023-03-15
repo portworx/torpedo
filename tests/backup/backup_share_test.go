@@ -127,7 +127,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("Cleanup started")
 		err := backup.DeleteMultipleGroups(groups)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Delete Groups %v", groups))
@@ -251,7 +251,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -409,7 +409,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 
 	JustAfterEach(func() {
 		// For all the delete methods we need to add return and handle the error here
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
@@ -820,7 +820,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -1168,7 +1168,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -1227,7 +1227,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		}
 
 		log.Infof("Cleaning up backup location - %s", customBackupLocationName)
-		err = DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID)
+		err = DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
 		log.Infof("Cleaning cloud credential")
 		//TODO: Eliminate time.Sleep
@@ -1672,7 +1672,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -1922,7 +1922,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -2130,7 +2130,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -2330,7 +2330,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
@@ -2485,7 +2485,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
@@ -2636,7 +2636,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 	})
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		dash.VerifyFatal(err, nil, "Getting px-central-admin context")
 		opts := make(map[string]bool)
@@ -2853,7 +2853,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -2995,7 +2995,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 
 		Step("Removing backup location after sharing backup with all the users", func() {
 			log.InfoD("Removing backup location after sharing backup with all the users")
-			err = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID)
+			err = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", bkpLocationName))
 		})
 
@@ -3058,7 +3058,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 	})
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
@@ -3291,7 +3291,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -3554,7 +3554,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 	})
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
@@ -3675,7 +3675,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 	})
 })
 
@@ -3794,7 +3794,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 				restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, user)
 				restoreNames = append(restoreNames, restoreName)
 				log.Infof("Creating restore %s for user %s", restoreName, user)
-				err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctxNonAdmin)
+				_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctxNonAdmin)
 				log.FailOnError(err, "Failed to create restore %s for user %s", restoreName, user)
 			}
 		})
@@ -3839,7 +3839,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -4042,7 +4042,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -4080,7 +4080,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 			for backupLocationUid, backupLocationName := range allBackupLocations {
 				if userBackupLocationMapping[userName] == backupLocationName {
-					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID)
+					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
 					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
 				}
 			}
