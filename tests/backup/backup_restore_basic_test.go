@@ -131,20 +131,16 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed applications")
 		ValidateAndDestroy(contexts, opts)
-
 		backupDriver := Inst().Backup
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
-
 		log.InfoD("Deleting backup")
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
-
 		log.InfoD("Deleting restore")
 		log.InfoD(fmt.Sprintf("Backup name [%s]", restoreName))
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
-
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -631,7 +627,6 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		policyList := []string{periodicPolicyName}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
-
 		log.Infof("Deleting restores")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restores - %s", restoreName))
@@ -909,7 +904,6 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-
 		//Delete Backup
 		log.InfoD("Deleting backup")
 		backupDriver := Inst().Backup
@@ -920,14 +914,12 @@ var _ = Describe("{CustomResourceRestore}", func() {
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup %s deletion is successful", backupName))
 		}
-
 		//Delete Restore
 		log.InfoD("Deleting restore")
 		for _, restoreName := range restoreNames {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user restore %s", restoreName))
 		}
-
 		log.Infof("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true

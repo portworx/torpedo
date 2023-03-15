@@ -272,7 +272,6 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
 		log.FailOnError(err, "Backup [%s] could not be deleted with delete response %s", backupName, backupDeleteResponse)
-
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 
@@ -870,7 +869,6 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
-
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
@@ -2492,9 +2490,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
-
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
-
 		log.Infof("Cleaning up users")
 		for _, user := range userNames {
 			err = backup.DeleteUser(user)
@@ -3334,7 +3330,6 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
 		}
-
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
