@@ -1481,18 +1481,19 @@ func ValidateRestore(restoreName string, backupName string, orgID string, ctx co
 	return rstCtx, nil
 }
 
-// Call this function AFTER switching kubeconfig to the "restore" cluster
-func GetRestoreCtxsFromBackupCtxs(backupContext BackupRestoreContext, namespaceMapping map[string]string) (BackupRestoreContext, error) {
+// GetRestoreCtxsFromBackupCtxs uses the backupContexts to create and return restoreContexts (along with conversion of their specs)
+// To be used after switching context to the required destination cluster where restore was performed
+func GetRestoreCtxsFromBackupCtxs(backupContext *BackupRestoreContext, namespaceMapping map[string]string) (*BackupRestoreContext, error) {
 	log.InfoD("Getting Restore Context from Backup Context")
-	var rstSchedCtxs []*scheduler.Context = make([]*scheduler.Context, 0)
+	var restoreSchedulerCtxs []*scheduler.Context = make([]*scheduler.Context, 0)
 
 	options := CreateScheduleOptions()
-	for _, schedCtx := range backupContext.schedCtxs {
-		rstSchedCtx := *schedCtx
+	for _, backupSchedulerCtx := range backupContext.schedulerCtxs {
+		restoreSchedulerCtx := *backupSchedulerCtx
 		var specObjects []interface{}
 		specObjects = make([]interface{}, 0)
 
-		for _, appSpecOrig := range schedCtx.App.SpecList {
+		for _, appSpecOrig := range backupSchedulerCtx.App.SpecList {
 			appSpec, err := CloneSpec(appSpecOrig) //clone spec to create "restore" specs
 			if err != nil {
 				log.Errorf("Failed to clone spec: '%v'. Err: %v", appSpecOrig, err)
@@ -1505,18 +1506,18 @@ func GetRestoreCtxsFromBackupCtxs(backupContext BackupRestoreContext, namespaceM
 			}
 			specObjects = append(specObjects, appSpec)
 		}
-		app := *schedCtx.App
+		app := *backupSchedulerCtx.App
 		app.SpecList = specObjects
-		rstSchedCtx.App = &app
-		options.Namespace = namespaceMapping[schedCtx.ScheduleOptions.Namespace]
-		rstSchedCtx.ScheduleOptions = options
-		rstSchedCtxs = append(rstSchedCtxs, &rstSchedCtx)
+		restoreSchedulerCtx.App = &app
+		options.Namespace = namespaceMapping[backupSchedulerCtx.ScheduleOptions.Namespace]
+		restoreSchedulerCtx.ScheduleOptions = options
+		restoreSchedulerCtxs = append(restoreSchedulerCtxs, &restoreSchedulerCtx)
 	}
 
 	var restoreContext = BackupRestoreContext{
-		schedCtxs: rstSchedCtxs,
+		schedulerCtxs: restoreSchedulerCtxs,
 	}
-	return restoreContext, nil
+	return &restoreContext, nil
 }
 
 // IsBackupLocationPresent checks whether the backup location is present or not
