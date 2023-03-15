@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 
+	semver "github.com/blang/semver"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -88,146 +89,144 @@ var _ = Describe("{UserGroupManagement}", func() {
 	})
 })
 
-var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
+var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 
 	var (
-		appList                          = Inst().AppList
-		backupNames                      []string
-		sourceClusterAppsContexts        []*scheduler.Context    // Each Context is for one Namespace which corresponds to one App
-		destinationClusterAppsContexts   []*scheduler.Context    // Each Context is for one Namespace which corresponds to one App
-		backupContexts                   []*BackupRestoreContext // Each Context is for one backup
-		restoreContexts                  []*BackupRestoreContext // Each Context is for one restore
-		restoreLaterContexts             []*BackupRestoreContext // Each Context is for one restore-later
-		preRuleNameList                  []string
-		postRuleNameList                 []string
-		appContexts                      []*scheduler.Context // All app contexts (namespaces) in this loop of the scaling
-		sourceNamespaces                 []string
-		destinationNamespaces            []string
-		namespaceMapping                 map[string]string
-		clusterUid                       string
-		clusterStatus                    api.ClusterInfo_StatusInfo_Status
-		cloudCredName                    string
-		cloudCredUID                     string
-		backupLocationUID                string
-		bkpLocationName                  string
-		srcMaj, srcMin, destMaj, destMin int64
+		backupNames                    []string                // backups in px-backup
+		restoreNames                   []string                // restores in px-backup
+		restoreLaterNames              []string                // restore-laters in px-backup
+		sourceClusterAppsContexts      []*scheduler.Context    // Each Context is for one Namespace which corresponds to one App
+		destinationClusterAppsContexts []*scheduler.Context    // Each Context is for one Namespace which corresponds to one App
+		backupContexts                 []*BackupRestoreContext // Each Context is for one backup in px-backup
+		restoreContexts                []*BackupRestoreContext // Each Context is for one restore in px-backup
+		restoreLaterContexts           []*BackupRestoreContext // Each Context is for one restore-later in px-backup
+		preRuleNameList                []string
+		postRuleNameList               []string
+		clusterUid                     string
+		cloudCredName                  string
+		cloudCredUID                   string
+		backupLocationUID              string
+		backupLocationName             string
 	)
 
-	backupLocationMap := make(map[string]string)
-	labelSelectors := make(map[string]string)
-	sourceNamespaces = make([]string, 0)
-	destinationNamespaces = make([]string, 0)
-	namespaceMapping = make(map[string]string)
+	var (
+		appList               = Inst().AppList
+		sourceNamespaces      = make([]string, 0)
+		destinationNamespaces = make([]string, 0)
+		namespaceMapping      = make(map[string]string)
+		backupLocationMap     = make(map[string]string)
+		labelSelectors        = make(map[string]string)
+	)
+
 	providers := getProviders()
 
 	JustBeforeEach(func() {
 
-		StartTorpedoTest("BkpRstrDiffK8sVerSimultaneousDiffNS", "Backup on NS(=yy), K8-version(=x) ;; Restore on NS=yy, K8s-version=x+?(=z) [success]; Simultaneously, Restore on K8s-version=z, NS=abc [partial success]", nil, 0)
+		StartTorpedoTest("BackupRestoreCRsOnDifferentK8sVersions", "Deploy CRs (CRD + webhook); Backup; two simulatanous Restores with one Success and other PartialSuccess. (Backup and Restore on different K8s version)", nil, 83716)
 
-		log.InfoD("Verifying if the pre/post rules for the required apps are present in the AppParameters or not ")
+		log.InfoD("verifying if the pre/post rules for the required apps are present in the AppParameters or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
 				if _, ok := portworx.AppParameters[appList[i]]["post"]; ok {
-					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
+					dash.VerifyFatal(ok, true, "post rule details mentioned for the apps")
 				}
 			}
 			if Contains(preRuleApp, appList[i]) {
 				if _, ok := portworx.AppParameters[appList[i]]["pre"]; ok {
-					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
+					dash.VerifyFatal(ok, true, "pre rule details mentioned for the apps")
 				}
 			}
 		}
 
 	})
 
-	It("Backup on NS(=yy), K8-version(=x) ;; Restore on NS=yy, K8s-version=x+?(=z) [success]; Simultaneously, Restore on K8s-version=z, NS=abc [partial success]", func() {
+	It("Deploy CRs (CRD + webhook); Backup; two simulatanous Restores with one Success and other PartialSuccess. (Backup and Restore on different K8s version)", func() {
 
-		Step("Verify if 'test app spec'", func() {
+		defer func() {
+			log.InfoD("switching to default context")
+			err1 := SetClusterContext("")
+			log.FailOnError(err1, "failed to SetClusterContext to default cluster")
+		}()
 
-			log.InfoD("Allowed apps are %v", appsWithCRDsAndWebhooks)
+		Step("Verify if app used to execute test is a valid/allowed spec (apps) for *this* test", func() {
+			log.InfoD("specs (apps) allowed in execution of test: %v", appsWithCRDsAndWebhooks)
 			for i := 0; i < len(appList); i++ {
 				contains := Contains(appsWithCRDsAndWebhooks, appList[i])
 				dash.VerifyFatal(contains, true,
-					fmt.Sprintf("check if app [%s] can be used as a dummy spec for *this* test", appList[i]))
+					fmt.Sprintf("app [%s] allowed in execution of this test", appList[i]))
 			}
 		})
 
-		Step("Verify K8s version of Src and Dest Cluster", func() {
-			log.InfoD("Verify K8s version of Src and Dest Cluster")
+		Step("verify kubernetes version of source and destination cluster", func() {
+			var srcVer, destVer semver.Version
+			log.InfoD("begin verification kubernetes version of source and destination cluster")
 
-			Step("Register cluster for backup", func() {
-				log.InfoD("Register cluster for backup")
+			Step("register cluster for backup", func() {
+				log.InfoD("register cluster for backup")
 				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Fetching px-central-admin ctx")
+				log.FailOnError(err, "fetching px-central-admin ctx")
 				err = CreateSourceAndDestClusters(orgID, "", "", ctx)
-				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-				clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+				dash.VerifyFatal(err, nil, "creating source and destination cluster")
+				_, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
 			})
 
-			Step("Switch Context (\"Source\")", func() {
+			Step("Get kubernetes source cluster version", func() {
+				log.InfoD("switched context to source")
+
 				sourceClusterConfigPath, err := GetSourceClusterConfigPath()
-				log.FailOnError(err, "Failed to get kubeconfig path for source cluster. Error: [%v]", err)
+				log.FailOnError(err, "failed to get kubeconfig path for source cluster. Error: [%v]", err)
 
 				err = Inst().S.SetConfig(sourceClusterConfigPath)
-				log.FailOnError(err, "Failed to switch to context to source cluster [%v]", sourceClusterConfigPath)
+				log.FailOnError(err, "failed to switch to context to source cluster [%v]", sourceClusterConfigPath)
 
-				srcMaj, srcMin, err = k8s.ClusterVersion()
-				log.FailOnError(err, "Failed to get Source Cluster Version")
+				ver, err := k8s.ClusterVersion()
+				log.FailOnError(err, "failed to get source cluster version")
+				srcVer, err = semver.Make(ver)
+				log.FailOnError(err, "failed to get source cluster version")
 			})
 
-			Step("Switch Context (\"destination\")", func() {
+			Step("Get kubernetes destination cluster version", func() {
+				log.InfoD("switched context to destination")
+
 				destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
-				log.FailOnError(err, "Failed to get kubeconfig path for destination cluster. Error: [%v]", err)
+				log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
 
 				err = Inst().S.SetConfig(destinationClusterConfigPath)
-				log.FailOnError(err, "Failed to switch to context to destination cluster [%v]", destinationClusterConfigPath)
+				log.FailOnError(err, "failed to switch to context to destination cluster [%v]", destinationClusterConfigPath)
 
-				destMaj, destMin, err = k8s.ClusterVersion()
-				log.FailOnError(err, "Failed to get Destination Cluster Version")
+				ver, err := k8s.ClusterVersion()
+				log.FailOnError(err, "failed to get destination cluster version")
+				destVer, err = semver.Make(ver)
+				log.FailOnError(err, "failed to get destination cluster version")
 			})
 
 			Step("Compare Source and Destination cluster version numbers", func() {
-
-				if srcMaj != 0 && destMaj != 0 {
-
-					log.InfoD("Source Cluster version: %d.%d ; Destination Cluster version: %d.%d",
-						srcMaj, srcMin, destMaj, destMin)
-
-					const multiple = 100
-					isValid := (destMaj*multiple + destMin) >= (srcMaj*multiple + srcMin)
-
-					dash.VerifyFatal(isValid, true,
-						"This test is only meant for cases where the Source Cluster version is LESSER than the Destination Cluster version.")
-
-				} else {
-					err := fmt.Errorf("Cannot compare Source and Destination CLuster versions due to invalid data in Source Cluster version (%d.%d), Destination Cluster (%d.%d)", srcMaj, srcMin, destMaj, destMin)
-					log.FailOnError(err, "Failed to validate K8s versions")
-				}
-
+				log.InfoD("source cluster version: %s ; destination cluster version: %s", srcVer.String(), destVer.String())
+				isValid := srcVer.LT(destVer)
+				dash.VerifyFatal(isValid, true,
+					"source cluster kubernetes version must be lesser than the destination cluster kubernetes version.")
 			})
 
-			// Step("SetClusterContext \"\" (setting it back to default)") is not needed
-			// since the next statement (in the next step) is anyway a sontect switch to source
-			// err := SetClusterContext("")
-			// log.FailOnError(err, "Failed to SetClusterContext to default cluster")
-
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		})
 
-		Step("Deploy the applications on Src cluster", func() {
-			log.InfoD("Deploy the applications on Src cluster")
+		Step("deploy the applications on Src cluster", func() {
+			log.InfoD("deploy the applications on Src cluster")
 
-			Step("Deploy applications", func() {
-				log.InfoD("Deploy applications")
+			Step("deploy applications", func() {
+				log.InfoD("deploy applications")
 
-				log.InfoD("Switching to source context")
+				log.InfoD("switching to source context")
 				err := SetSourceKubeConfig()
-				log.FailOnError(err, "Failed to switch to context to source cluster")
+				log.FailOnError(err, "failed to switch to context to source cluster")
 
+				log.InfoD("ccheduling applications")
 				sourceClusterAppsContexts = make([]*scheduler.Context, 0)
 				for i := 0; i < Inst().GlobalScaleFactor; i++ {
 					taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-					appContexts = ScheduleApplications(taskName)
+					appContexts := ScheduleApplications(taskName)
 					for _, appCtx := range appContexts {
 						appCtx.ReadinessTimeout = appReadinessTimeout
 						namespace := GetAppNamespace(appCtx, taskName)
@@ -241,22 +240,22 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 			Step("Validate applications", func() {
 				ValidateApplications(sourceClusterAppsContexts)
 
-				log.InfoD("Switching to default context")
+				log.InfoD("switching to default context")
 				err := SetClusterContext("")
-				log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+				log.FailOnError(err, "failed to SetClusterContext to default cluster")
 			})
 
-			log.Warn("Waiting for 2 minutes, hoping for any Custom Resources to finish starting up.\nThis logic will have to be changed to polling in the future, as just randomly waiting, without verification can easily lead to errors. Make sure that any errors you're seeing is not due to this.")
+			log.InfoD("waiting (for 2 minutes) for any CRs to finish starting up.")
 			time.Sleep(time.Minute * 2)
-
+			log.Warnf("no verification is done; it might lead to undetectable errors.")
 		})
 
 		Step("Creating rules for backup", func() {
-			log.InfoD("Creating pre rule for deployed apps")
+			log.InfoD("creating pre rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
 				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
-				log.FailOnError(err, "Creating pre rule for deployed apps failed")
-				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
+				log.FailOnError(err, "creating pre rule for deployed apps failed")
+				dash.VerifyFatal(preRuleStatus, true, "verifying pre rule for backup")
 
 				if ruleName != "" {
 					preRuleNameList = append(preRuleNameList, ruleName)
@@ -265,41 +264,42 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 			log.InfoD("Creating post rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
 				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
-				log.FailOnError(err, "Creating post rule for deployed apps failed")
-				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
+				log.FailOnError(err, "creating post rule for deployed apps failed")
+				dash.VerifyFatal(postRuleStatus, true, "verifying Post rule for backup")
 				if ruleName != "" {
 					postRuleNameList = append(postRuleNameList, ruleName)
 				}
 			}
 		})
 
-		Step("Creating bucket,backup location and cloud setting", func() {
-			log.InfoD("Creating bucket,backup location and cloud setting")
+		Step("Creating bucket, backup location and cloud credentials", func() {
+			log.InfoD("Creating bucket, backup location and cloud credentials")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
-				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
-				backupLocationMap[backupLocationUID] = bkpLocationName
+				backupLocationMap[backupLocationUID] = backupLocationName
 				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
-				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
-				dash.VerifyFatal(err, nil, "Creating backup location")
+				log.InfoD("creating backup location [%s] with cloud cred [%s]", backupLocationName, cloudCredName)
+				err := CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, "creating backup location")
 			}
 		})
 
-		// Step("Register cluster for backup" is not needed as it has been executed as psrt of K8s version validation
-
-		Step("Taking backup of application fron source cluster", func() {
-			log.InfoD("Taking backup of applications")
+		Step("Taking backup of application from source cluster", func() {
+			log.InfoD("taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting context")
+			dash.VerifyFatal(err, nil, "getting context")
 			backupNames = make([]string, len(sourceNamespaces))
 			backupContexts = make([]*BackupRestoreContext, len(sourceNamespaces))
 			for i, namespace := range sourceNamespaces {
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, clusterUid, orgID, namespace, backupLocationName)
+				backupCtx, err := CreateBackupAndGetBackupCtx(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx, []*scheduler.Context{sourceClusterAppsContexts[i]})
+
+				dash.VerifyFatal(err, nil, "verifying backup creation")
 				backupNames[i] = backupName
-				backupCtx, err := CreateBackupAndGetBackupCtx(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx, []*scheduler.Context{sourceClusterAppsContexts[i]})
-				dash.VerifyFatal(err, nil, "Verifying backup creation")
 				backupContexts[i] = backupCtx
 			}
 		})
@@ -311,15 +311,18 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			for i, sourceNamespace := range sourceNamespaces {
-				var initialRestoreName string
+				var initialRestoreName, laterRestoreName string
 
 				Step("Restoring the backed up application to namespace of same name on destination cluster", func() {
-					log.InfoD("Restoring the backed up application to namespace of same name on destination cluster")
+					log.InfoD("restoring the backed up application to namespace of same name on destination cluster")
 
 					initialRestoreName = fmt.Sprintf("%s-%s-initial-%v", restoreNamePrefix, sourceNamespace, time.Now().Unix())
+					restoreNames = append(restoreNames, initialRestoreName)
 					destinationNameSpace := sourceNamespace
 					destinationNamespaces = append(destinationNamespaces, destinationNameSpace)
 					namespaceMapping[sourceNamespace] = destinationNameSpace
+
+					log.InfoD("creating initial-restore [%s] in destination cluster [%s], organization [%s], in namespace [%s]", initialRestoreName, destinationClusterName, orgID, destinationNameSpace)
 					err = CreateRestoreWithoutCheck(initialRestoreName, backupNames[i], namespaceMapping, destinationClusterName, orgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Initiation of restore %s", initialRestoreName))
 
@@ -330,57 +333,48 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 					restoreInProgressCheck := func() (interface{}, bool, error) {
 						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
 						restoreResponseStatus := resp.GetRestore().GetStatus()
-						log.FailOnError(err, "Failed getting restore status for - %s", initialRestoreName)
+						if err != nil {
+							err := fmt.Errorf("failed getting restore status for - %s; Err: %s", initialRestoreName, err)
+							return "", false, err
+						}
+
 						// Status should be LATER than InProgress in order for next STEP to execute
 						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_InProgress {
-							log.Infof("Restore status - %s", restoreResponseStatus)
-							log.InfoD("Status of %s - [%s]",
-								initialRestoreName, restoreResponseStatus.GetStatus())
-							log.InfoD("Condition fulfilled. Proceeding towrds Restore 2")
+							log.InfoD("sestore status of [%s] is [%s]; expected [InProgress].\ncondition fulfilled.", initialRestoreName, restoreResponseStatus.GetStatus())
 							return "", false, nil
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
-							log.Infof("Restore status - %s", restoreResponseStatus)
-							log.InfoD("Status of %s - [%s]",
-								initialRestoreName, restoreResponseStatus.GetStatus())
-
-							err := fmt.Errorf("Status of Restore 1 (%s) is PartialSuccess. This should not happen. This MAY have happened if the destination cluster hadn't been cleaned completely (remanant cluster-level resources). Also, you may need to check more frequently for InProgress State as we cannot continue with the test EVEN if PartialSuccess was a valid state.", initialRestoreName)
-							log.FailOnError(err, "Unexpected Status")
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress].\nhelp: check for remnant cluster-level resources on destination cluster.", initialRestoreName, restoreResponseStatus.GetStatus())
 							return "", false, err
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
-							log.Infof("Restore status - %s", restoreResponseStatus)
-							log.InfoD("Status of %s - [%s]",
-								initialRestoreName, restoreResponseStatus.GetStatus())
-
-							err := fmt.Errorf("Oops! The restore seems to have progressed to Success. We cannot proceed with this test. Maybe check more frequently for Inprogress so that you don't miss the state")
-							log.FailOnError(err, "Unexpected Status")
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress].\nhelp: check for status frequently", initialRestoreName, restoreResponseStatus.GetStatus())
 							return "", false, err
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
-							log.Infof("Restore status - %s", restoreResponseStatus)
-							log.InfoD("Status of %s - [%s]",
-								initialRestoreName, restoreResponseStatus.GetStatus())
-
-							err := fmt.Errorf("Something must have gone wrong. You can try restarting the test")
-							log.FailOnError(err, "Unexpected Status")
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress].", initialRestoreName, restoreResponseStatus.GetStatus())
 							return "", false, err
 						}
 
-						return "", true, fmt.Errorf("waiting for restore status to be InProgress; got [%s]",
-							restoreResponseStatus.GetStatus())
+						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for [InProgress]...", initialRestoreName, restoreResponseStatus.GetStatus())
+						return "", true, err
 					}
-					_, err = task.DoRetryWithTimeout(restoreInProgressCheck, 10*time.Minute, 2*time.Second)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s is InProgress", initialRestoreName))
+					_, err = task.DoRetryWithTimeout(restoreInProgressCheck, 10*time.Minute, 5*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("restore %s is [InProgress]", initialRestoreName))
 				})
+
+				var restoreLaterStatuserr error
 
 				Step("Restoring the backed up application to namespace with different name on destination cluster", func() {
 					log.InfoD("Restoring the backed up application to namespace with different name on destination cluster")
 
-					laterRestoreName := fmt.Sprintf("%s-%s-later-%v", restoreNamePrefix, sourceNamespace, time.Now().Unix())
+					laterRestoreName = fmt.Sprintf("%s-%s-later-%v", restoreNamePrefix, sourceNamespace, time.Now().Unix())
+					restoreLaterNames = append(restoreLaterNames, laterRestoreName)
 					destinationNameSpace := fmt.Sprintf("%s-%s", sourceNamespace, "later")
 					destinationNamespaces = append(destinationNamespaces, destinationNameSpace)
 					namespaceMapping := make(map[string]string) //using local version in order to not change mapping as the key is the same
 					namespaceMapping[sourceNamespace] = destinationNameSpace
+
+					log.InfoD("creating later-restore [%s] in destination cluster [%s], organization [%s], in namespace [%s]", laterRestoreName, destinationClusterName, orgID, destinationNameSpace)
 					err = CreateRestoreWithoutCheck(laterRestoreName, backupNames[i], namespaceMapping, destinationClusterName, orgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Initiation of restore %s", laterRestoreName))
 
@@ -391,63 +385,42 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 					restorePartialSuccessCheck := func() (interface{}, bool, error) {
 						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
 						restoreResponseStatus := resp.GetRestore().GetStatus()
-						log.FailOnError(err, "Failed getting restore status for - %s", laterRestoreName)
+						if err != nil {
+							err := fmt.Errorf("failed getting restore status for - %s; Err: %s", laterRestoreName, err)
+							return "", false, err
+						}
 
 						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
-							log.Infof("Restore status - %s", restoreResponseStatus)
-							log.InfoD("Status of %s - [%s]",
-								laterRestoreName, restoreResponseStatus.GetStatus())
-							log.InfoD("Condition fulfilled. Proceeding to confirm Restore 1")
+							log.InfoD("restore status of [%s] is [%s]; expected [PartialSuccess].\ncondition fulfilled. proceeding to confirm restore [%s].", laterRestoreName, restoreResponseStatus.GetStatus(), initialRestoreName)
 							return "", false, nil
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
-							log.Infof("Restore status - %s", restoreResponseStatus)
-							log.InfoD("Status of %s - [%s]",
-								laterRestoreName, restoreResponseStatus.GetStatus())
-
-							err := fmt.Errorf("This is not supposed to happen. This indicates that Restore 2 didn't face conflicts with 'Cluster-level resources' from Restore 1")
-							log.FailOnError(err, "Unexpected Status")
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [PartialSuccess].\nhelp: 1. app must have cluster-level resources.\n2. issue with restore [%s]: was not [Success]\n3. refer jira ticket PA-614", laterRestoreName, restoreResponseStatus.GetStatus(), initialRestoreName)
 							return "", false, err
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
-							log.Infof("Restore status - %s", restoreResponseStatus)
-							log.InfoD("Status of %s - [%s]",
-								laterRestoreName, restoreResponseStatus.GetStatus())
-
-							err := fmt.Errorf("Something must have gone wrong. You can try restarting the test")
-							log.FailOnError(err, "Unexpected Status")
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [PartialSuccess].", laterRestoreName, restoreResponseStatus.GetStatus())
 							return "", false, err
 						}
 
-						return "", true, fmt.Errorf("waiting for restore status to be PartialSuccess; got [%s]",
-							restoreResponseStatus.GetStatus())
+						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for [PartialSuccess]...", initialRestoreName, restoreResponseStatus.GetStatus())
+						return "", true, err
 					}
-					_, err = task.DoRetryWithTimeout(restorePartialSuccessCheck, 10*time.Minute, 30*time.Second)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore 2 (%s) is PartialSuccess", laterRestoreName))
+					_, restoreLaterStatuserr = task.DoRetryWithTimeout(restorePartialSuccessCheck, 10*time.Minute, 30*time.Second)
+					// we don't end the test if there is an error here, as we also want to ensure that we look into the status of the following `step`, so that we have the full details of what went wrong.
+					dash.VerifySafely(restoreLaterStatuserr, nil, fmt.Sprintf("restore [%s] is [PartialSuccess]", laterRestoreName))
+					if restoreLaterStatuserr != nil {
+						log.Warnf("due to error in restore status check, skipping validation of restore. proceeding to next step, after which the test will be failed")
+						return
+					}
 
 					// Validation of Restore
-					restoreInspectRequest = &api.RestoreInspectRequest{
-						Name:  laterRestoreName,
-						OrgId: orgID,
-					}
+					destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
+					log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
 
-					backupDriver := Inst().Backup
-					resp, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
-					log.FailOnError(err, "Failed to inspect restore: %s", laterRestoreName)
-
-					log.InfoD("Switching to destination context")
-					err = SetDestinationKubeConfig()
-					log.FailOnError(err, "Failed to switch to context to destination cluster")
-
-					rstCtx, err := ValidateRestore(resp, backupContexts[i], namespaceMapping)
-
-					log.InfoD("Switching to default context")
-					err1 := SetClusterContext("")
-					log.FailOnError(err1, "Failed to SetClusterContext to default cluster")
-
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore 2 (%s) Validation", laterRestoreName))
-
-					restoreLaterContexts = append(restoreLaterContexts, rstCtx)
+					restoreLaterCtx, err := ValidateRestore(laterRestoreName, destinationClusterConfigPath, orgID, ctx, backupContexts[i], namespaceMapping)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("restore (%s) validation", laterRestoreName))
+					restoreLaterContexts = append(restoreLaterContexts, restoreLaterCtx)
 				})
 
 				Step("Verifying status of Initial Restore", func() {
@@ -460,59 +433,40 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 					restoreSuccessCheck := func() (interface{}, bool, error) {
 						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
 						restoreResponseStatus := resp.GetRestore().GetStatus()
-						log.FailOnError(err, "Failed getting restore status for - %s", initialRestoreName)
+						if err != nil {
+							err := fmt.Errorf("failed getting restore status for - %s; Err: %s", initialRestoreName, err)
+							return "", false, err
+						}
 
 						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
-							log.Infof("Restore status - %s", restoreResponseStatus)
-							log.InfoD("Status of %s - [%s]",
-								initialRestoreName, restoreResponseStatus.GetStatus())
-							log.InfoD("Condition fulfilled. Proceeding to end test")
+							log.InfoD("restore status of [%s] is [%s]; expected [InProgress].\ncondition fulfilled.", initialRestoreName, restoreResponseStatus.GetStatus())
 							return "", false, nil
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
-							log.Infof("Restore status - %s", restoreResponseStatus)
-							log.InfoD("Status of %s - [%s]",
-								initialRestoreName, restoreResponseStatus.GetStatus())
-
-							err := fmt.Errorf("Status of Restore 1 (%s) is PartialSuccess. This should not happen. This MAY have happened if the destination cluster hadn't been cleaned completely (remanant cluster-level resources). The OTHER situation which may have caused this is explained in the comment of JIRA ticket PA-614", initialRestoreName)
-							log.FailOnError(err, "Unexpected Status")
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [Success].\nhelp: 1. check for remnant cluster-level resources on destination cluster.\n2. refer jira ticket PA-614", initialRestoreName, restoreResponseStatus.GetStatus())
 							return "", false, err
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
-							log.Infof("Restore status - %s", restoreResponseStatus)
-							log.InfoD("Status of %s - [%s]",
-								initialRestoreName, restoreResponseStatus.GetStatus())
-
-							err := fmt.Errorf("Something must have gone wrong. You can try restarting the test")
-							log.FailOnError(err, "Unexpected Status")
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress].", initialRestoreName, restoreResponseStatus.GetStatus())
 							return "", false, err
 						}
 
-						return "", true, fmt.Errorf("waiting for restore status to be Success; got [%s]",
-							restoreResponseStatus.GetStatus())
+						err = fmt.Errorf("sestore status of [%s] is [%s]; waiting for [Success]...", initialRestoreName, restoreResponseStatus.GetStatus())
+						return "", true, err
 					}
 					_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Status of Initial Restore (%s) is Success", initialRestoreName))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("status of initial restore [%s] is success", initialRestoreName))
 
 					// Validation of Restore
+					destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
+					log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
 
-					backupDriver := Inst().Backup
-					resp, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
-					log.FailOnError(err, "Failed to inspect restore: %s", initialRestoreName)
+					restoreCtx, err := ValidateRestore(initialRestoreName, destinationClusterConfigPath, orgID, ctx, backupContexts[i], namespaceMapping)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("restore (%s) validation", initialRestoreName))
+					restoreContexts = append(restoreContexts, restoreCtx)
 
-					log.InfoD("Switching to destination context")
-					err = SetDestinationKubeConfig()
-					log.FailOnError(err, "Failed to switch to context to destination cluster")
-
-					rstCtx, err := ValidateRestore(resp, backupContexts[i], namespaceMapping)
-
-					log.InfoD("Switching to default context")
-					err1 := SetClusterContext("")
-					log.FailOnError(err1, "Failed to SetClusterContext to default cluster")
-
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore 1 (%s) Validation", initialRestoreName))
-
-					restoreContexts = append(restoreContexts, rstCtx)
+					// If this was an error before, we have to fail the test at this point, having processed the other stage
+					dash.VerifyFatal(restoreLaterStatuserr, nil, fmt.Sprintf("restore [%s] is [PartialSuccess]", laterRestoreName))
 				})
 
 			}
@@ -525,13 +479,13 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 		defer EndTorpedoTest()
 
 		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.FailOnError(err, "fetching px-central-admin ctx")
 
 		// TODO: move this to AfterSuite
 		if len(preRuleNameList) > 0 {
 			for _, ruleName := range preRuleNameList {
 				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup pre rules %s", ruleName))
+				dash.VerifySafely(err, nil, fmt.Sprintf("deleting backup pre rules %s", ruleName))
 			}
 		}
 
@@ -539,54 +493,72 @@ var _ = Describe("{BkpRstrDiffK8sVerSimultaneousDiffNS}", func() {
 		if len(postRuleNameList) > 0 {
 			for _, ruleName := range postRuleNameList {
 				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules %s", ruleName))
+				dash.VerifySafely(err, nil, fmt.Sprintf("deleting backup post rules %s", ruleName))
 			}
 		}
 
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = false
-		log.InfoD("Deleting deployed applications for source and destintion clusters")
+		log.InfoD("deleting deployed applications for source and destination clusters")
 
-		log.InfoD("Switching to source context")
+		log.InfoD("switching to source context")
 		err = SetSourceKubeConfig()
-		log.FailOnError(err, "Failed to switch to context to source cluster")
+		log.FailOnError(err, "failed to switch to context to source cluster")
 
-		log.Info("Deleting deployed applications on source clusters")
+		log.InfoD("deleting deployed applications on source clusters")
 		ValidateAndDestroy(sourceClusterAppsContexts, opts)
 
-		log.Warn("Waiting for 1 minute, hoping for any Resources created by Operator of Custom Resources to finish being destroyed.\nThis logic will have to be changed to polling in the future, as just randomly waiting, without verification can easily lead to errors. Make sure that any errors you're seeing is not due to this.")
+		log.InfoD("waiting (for 1 minute) for any Resources created by Operator of Custom Resources to finish being destroyed.")
 		time.Sleep(time.Minute * 1)
+		log.Warn("no verification of destruction is done; it might lead to undetectable errors.")
 
-		log.InfoD("Switching to destination context")
+		log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()
-		log.FailOnError(err, "Failed to switch to context to destination cluster")
+		log.FailOnError(err, "failed to switch to context to destination cluster")
 
 		destinationClusterAppsContexts = make([]*scheduler.Context, 0)
 		// only adding restoreContexts, not restoreLaterContexts
-		for _, rstCtx := range restoreContexts {
-			destinationClusterAppsContexts = append(destinationClusterAppsContexts, rstCtx.schedCtxs...)
+		for _, restoreCtx := range restoreContexts {
+			destinationClusterAppsContexts = append(destinationClusterAppsContexts, restoreCtx.schedulerCtxs...)
 		}
-		log.Info("Deleting deployed applications (Restore 1) on destintion clusters")
+		log.InfoD("deleting deployed applications (initial restore) on destination clusters")
 		ValidateAndDestroy(destinationClusterAppsContexts, opts)
 
-		//TODO: this can be added in the future
-		//log.Warn("Not waiting here since we're destroying two namespaces, so we can wait 'at once'")
-		//log.Info("Deleting deployed applications (Restore 2) on destintion clusters")
-		//here!
+		//TODO: delete restore-later apps
+		log.Warn("not deleting deployed applications (restore-later) on destination clusters")
 
-		log.Warn("Waiting for 1 minute, hoping for any Resources created by Operator of Custom Resources to finish being destroyed.\nThis logic will have to be changed to polling in the future, as just randomly waiting, without verification can easily lead to errors. Make sure that any errors you're seeing is not due to this.")
+		log.InfoD("waiting (for 1 minute) for any Resources created by Operator of Custom Resources to finish being destroyed.")
 		time.Sleep(time.Minute * 1)
+		log.Warn("no verification of destruction is done; it might lead to undetectable errors.")
 
-		log.InfoD("Switching to default context")
+		log.InfoD("switching to default context")
 		err = SetClusterContext("")
-		log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+		log.FailOnError(err, "failed to SetClusterContext to default cluster")
 
-		// TODO: move this to AfterSuite
-		DeleteCluster(SourceClusterName, orgID, ctx)
-		DeleteCluster(destinationClusterName, orgID, ctx)
+		backupDriver := Inst().Backup
 
-		// Backups and Restores are deleted by AfterSuite
+		log.InfoD("deleting backed up namespaces")
+		for _, backupName := range backupNames {
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "failed while trying to get backup UID for - %s", backupName)
+			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
+			log.FailOnError(err, "backup [%s] could not be deleted", backupName)
+			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("verifying [%s] backup deletion is successful", backupName))
+		}
 
+		log.InfoD("deleting restores")
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
+		}
+
+		log.InfoD("deleting restore-laters")
+		for _, restoreLaterName := range restoreLaterNames {
+			err = DeleteRestore(restoreLaterName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("deleting Restore [%s]", restoreLaterName))
+		}
+
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 

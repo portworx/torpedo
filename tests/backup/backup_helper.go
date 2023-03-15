@@ -53,10 +53,10 @@ const (
 )
 
 var (
-	// User should keep updating preRuleApp, postRuleApp
+	// User should keep updating preRuleApp, postRuleApp, appsWithCRDsAndWebhooks
 	preRuleApp                  = []string{"cassandra", "postgres"}
 	postRuleApp                 = []string{"cassandra"}
-	appsWithCRDsAndWebhooks     = []string{"elasticsearch-crd-webhook"}
+	appsWithCRDsAndWebhooks     = []string{"elasticsearch-crd-webhook"} // The apps which have CRDs and webhooks
 	globalAWSBucketName         string
 	globalAzureBucketName       string
 	globalGCPBucketName         string
@@ -237,9 +237,9 @@ func CreateBackupAndGetBackupCtx(backupName string, clusterName string, bLocatio
 	}
 
 	ok, err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes, 30, ctx)
-		if err != nil {
+	if err != nil {
 		return nil, fmt.Errorf("error occurred while checking if backup [%s] was successful", backupName)
-		}
+	}
 	if !ok {
 		return nil, fmt.Errorf("backupSuccessCheck: the backup [%s] was not successful", backupName)
 	}
@@ -1425,7 +1425,7 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration int, re
 	restoreStatus := (resp.GetRestore().GetStatus().Status == api.RestoreInfo_StatusInfo_PartialSuccess) || (resp.GetRestore().GetStatus().Status == api.RestoreInfo_StatusInfo_Success)
 	log.Infof("[%s] restored successfully", restoreName)
 	return restoreStatus, nil
-	}
+}
 
 // ValidateRestore returns a clone of the backupContext (i.e. contexts with backup objects) *after* converting it to a BackupRestoreContext after converting the contexts to point to restored objects (and after validating those objects)
 func ValidateRestore(restoreName string, restoreClusterConfigPath string, orgID string, ctx context.Context, backupContext *BackupRestoreContext, namespaceMapping map[string]string) (*BackupRestoreContext, error) {
