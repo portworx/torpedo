@@ -1322,6 +1322,7 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration int, retr
 
 // ValidateBackup validates a backup and returns a clone of the provided `context`s (and each of their `spec`s) *after* filtering the `spec`s to only include the resources that are in the backup
 func ValidateBackup(backupName string, orgID string, ctx context.Context, clusterAppsContexts []*scheduler.Context) (*BackupRestoreContext, error) {
+	log.InfoD("Validating backup [%s] in org [%s]", backupName, orgID)
 	backupDriver := Inst().Backup
 	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
@@ -1337,8 +1338,7 @@ func ValidateBackup(backupName string, orgID string, ctx context.Context, cluste
 		return nil, fmt.Errorf("InspectBackup Err: %v", err)
 	}
 
-	backupObjs := resp.Backup.Resources
-	if backupSpecContext, err := GetBackupSpecObjectsContexts(backupObjs, clusterAppsContexts); err != nil {
+	if backupSpecContext, err := GetBackupSpecObjectsContexts(resp, clusterAppsContexts); err != nil {
 		return nil, fmt.Errorf("GetBackupSpecObjectsContexts Err: %v", err)
 	} else {
 		return &BackupRestoreContext{
@@ -1349,8 +1349,10 @@ func ValidateBackup(backupName string, orgID string, ctx context.Context, cluste
 
 // GetBackupSpecObjectsContexts clones and returns the provided `context`s (and each of their `spec`s) *after* filtering the `spec`s to only include the resources that are in the backup.
 // NOTE: make sure to include Contexts of *all* namespaces which are supposed to contain the backup objects
-func GetBackupSpecObjectsContexts(resourceInfos []*api.ResourceInfo, clusterAppsContexts []*scheduler.Context) ([]*scheduler.Context, error) {
+func GetBackupSpecObjectsContexts(backupInspectResponse *api.BackupInspectResponse, clusterAppsContexts []*scheduler.Context) ([]*scheduler.Context, error) {
 	log.InfoD("Validation: Getting the backup objects (specs) from the Context")
+	backupName := backupInspectResponse.Backup.Name
+	resourceInfos := backupInspectResponse.Backup.Resources
 
 	backupAppContexts := make([]*scheduler.Context, 0)
 	// all the backup objects for which specs are found
@@ -1395,7 +1397,7 @@ func GetBackupSpecObjectsContexts(resourceInfos []*api.ResourceInfo, clusterApps
 				continue specloop
 			}
 			// The spec in the context (namespace) was NOT found in the created Backup. (this is not anticipated when an entire namespace is backed up)
-			log.Warnf("this Backup does not include the spec (name: [%s], kind: [%s], namespace: [%s]) found in the context (namespace) '%s'", name, kind, ns, clusterAppsContext.ScheduleOptions.Namespace)
+			log.Warnf("backup [%s] does not include the spec (name: [%s], kind: [%s], namespace: [%s]) found in the context (namespace) '%s'", backupName, name, kind, ns, clusterAppsContext.ScheduleOptions.Namespace)
 		}
 
 		// Duplicate the object
@@ -1433,7 +1435,7 @@ func GetBackupSpecObjectsContexts(resourceInfos []*api.ResourceInfo, clusterApps
 		}
 		if !found {
 			getNS()
-			log.Warnf("the backed up resource (name: [%s], kind: [%s], namespace: [%s]), is not part of any of the contexts (namespaces) [%v]", resInfo.Name, resInfo.Kind, resInfo.Namespace, namespaces)
+			log.Warnf("resource(name: [%s], kind: [%s], namespace: [%s]) in backup [%s], is not part of any of the contexts (namespaces) [%v]", resInfo.Name, resInfo.Kind, resInfo.Namespace, backupName, namespaces)
 		}
 	}
 
