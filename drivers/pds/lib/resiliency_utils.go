@@ -125,17 +125,26 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 	}
 	// Check which Pod is still not up. Try to reboot the node on which this Pod is hosted.
 	for _, pod := range pods {
+		log.Infof("Checking Pod %v running on Node: %v", pod.Name, pod.Spec.NodeName)
 		if k8sCore.IsPodReady(pod) {
-			log.InfoD("Pod running on Node %v is Ready so skipping this pod......", pod.Spec.NodeName)
+			log.InfoD("This Pod running on Node %v is Ready so skipping this pod......", pod.Spec.NodeName)
 			continue
 		} else {
-			nodes := node.GetWorkerNodes()
+			// nodes := node.GetWorkerNodes()
 			var nodeToReboot node.Node
-			for _, n := range nodes {
-				if n.Name != pod.Spec.NodeName {
-					continue
-				}
-				nodeToReboot = n
+			// for _, n := range nodes {
+			// 	if n.Name != pod.Spec.NodeName {
+			// 		continue
+			// 	}
+			// 	nodeToReboot = n
+			// }
+			nodeToReboot, testError = node.GetNodeByName(pod.Spec.NodeName)
+			if testError != nil {
+				return testError
+			}
+			if nodeToReboot.Name == "" {
+				testError = errors.New("Something happened and node is coming out to be empty from Node registry")
+				return testError
 			}
 			log.Infof("Going ahead and rebooting the node %v as there is an application pod thats coming up on this node", pod.Spec.NodeName)
 			testError = tests.Inst().N.RebootNode(nodeToReboot, node.RebootNodeOpts{
