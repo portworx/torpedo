@@ -216,7 +216,7 @@ var (
 // CustomResourceObjectYAML	Used as spec object for all CRs
 type CustomResourceObjectYAML struct {
 	Path string
-	//Namespace will only be assigned DURING creation
+	// Namespace will only be assigned DURING creation
 	Namespace string
 	Name      string
 }
@@ -2187,7 +2187,7 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 
 }
 
-func (k *K8s) destroyApiExtensionsObjects(spec interface{}, app *spec.AppSpec) error {
+// destroyCRDObjects is used to destroy Resources in the group `apiextensions` (like CRDs)
 
 	if obj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
 		err := k8sApiExtensions.DeleteCRD(obj.Name)
@@ -2216,6 +2216,7 @@ func (k *K8s) destroyApiExtensionsObjects(spec interface{}, app *spec.AppSpec) e
 	return nil
 }
 
+// destroyAdmissionRegistrationObjects destroys objects in the `AdmissionRegistration` group (like ValidatingWebhookConfiguration)
 func (k *K8s) destroyAdmissionRegistrationObjects(spec interface{}, app *spec.AppSpec) error {
 
 	if obj, ok := spec.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
@@ -4283,6 +4284,7 @@ func (k *K8s) GetTokenFromConfigMap(configMapName string) (string, error) {
 	return token, err
 }
 
+// createCustomResourceObjects is used to create objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl apply -f` command instead of the conventional method of using an api library
 func (k *K8s) createCustomResourceObjects(
 	spec interface{},
 	ns *corev1.Namespace,
@@ -4308,6 +4310,7 @@ func (k *K8s) createCustomResourceObjects(
 	return nil, nil
 }
 
+// destroyCustomResourceObjects is used to delete objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl delete -f` command instead of the conventional method of using an api library
 func (k *K8s) destroyCustomResourceObjects(spec interface{}, app *spec.AppSpec) error {
 
 	if obj, ok := spec.(*CustomResourceObjectYAML); ok {
@@ -4335,7 +4338,7 @@ func (k *K8s) destroyCustomResourceObjects(spec interface{}, app *spec.AppSpec) 
 	return nil
 }
 
-func (k *K8s) createApiExtensionsObjects(
+// createCRDObjects is used to create Resources in the group `apiextensions` group (like CRDs)
 	specObj interface{},
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
@@ -4426,7 +4429,7 @@ func (k *K8s) createApiExtensionsObjects(
 	return nil, nil
 }
 
-// createAdmissionRegistrationObjects
+// createAdmissionRegistrationObjects creates objects in the `AdmissionRegistration` group (like ValidatingWebhookConfiguration)
 func (k *K8s) createAdmissionRegistrationObjects(
 	specObj interface{},
 	ns *corev1.Namespace,
@@ -4967,6 +4970,7 @@ func (k *K8s) createRbacObjects(
 	return nil, nil
 }
 
+// destroyRbacObjects destroys objects in the `Rbac.authorization` group (like ClusterRole, ClusterRoleBinding, ServiceAccount)
 func (k *K8s) destroyRbacObjects(spec interface{}, app *spec.AppSpec) error {
 
 	if obj, ok := spec.(*rbacv1.ClusterRole); ok {
