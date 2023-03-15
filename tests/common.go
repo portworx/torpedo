@@ -1407,8 +1407,8 @@ func CreateScheduleOptions(errChan ...*chan error) scheduler.ScheduleOptions {
 			StorageProvisioner: Inst().Provisioner,
 		}
 		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged")
-	return options
-}
+		return options
+	}
 }
 
 // ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
@@ -2392,9 +2392,11 @@ func SetClusterContext(clusterConfigPath string) error {
 		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
 	}
 
-	err = ssh.RefreshDriver(Inst().N.(*ssh.SSH))
-	if err != nil {
-		return fmt.Errorf("Failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
+		err = ssh.RefreshDriver(sshNodeDriver)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+		}
 	}
 
 	CurrentClusterConfigPath = clusterConfigPath
