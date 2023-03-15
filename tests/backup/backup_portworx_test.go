@@ -101,10 +101,6 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
-		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, CloudCredUID, ctx)
 	})
 
@@ -251,11 +247,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 			err := Inst().S.Destroy(contexts[i], opts)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s", taskName))
 		}
-		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
-		err = DeleteRestore(restoreName, orgID, ctx)
+		err := DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
@@ -551,12 +543,6 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		}
 		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		for _, backupName := range backupNames {
-			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
-		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, CredName, CloudCredUID, ctx)
 		DeleteBucket(providers[0], encryptionBucketName)
 	})

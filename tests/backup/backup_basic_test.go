@@ -201,26 +201,73 @@ var _ = AfterSuite(func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 	}
 
-	// Cleanup all backup locations
-	allBackupLocations, err := getAllBackupLocations(ctx)
-	dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-	for backupLocationUid, backupLocationName := range allBackupLocations {
-		err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
-	}
-
-	backupLocationDeletionSuccess := func() (interface{}, bool, error) {
-		allBackupLocations, err := getAllBackupLocations(ctx)
-		dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-		if len(allBackupLocations) > 0 {
-			return "", true, fmt.Errorf("found %d backup locations", len(allBackupLocations))
-		} else {
-			return "", false, nil
+	var testSuiteFailed bool = false
+	for _, testFailed := range testSuiteResults {
+		if testFailed == true {
+			testSuiteFailed = true
+			break
 		}
 	}
-	_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
-	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 
+	log.Infof("Inside after suite")
+	// Get all backup locations
+	allBackupLocations, err := getAllBackupLocations(ctx)
+	dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+
+	if testSuiteFailed {
+		// Clean up all backup locations keeping existing backup
+		for backupLocationUid, backupLocationName := range allBackupLocations {
+			err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, false)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
+		}
+
+		backupLocationDeletionSuccess := func() (interface{}, bool, error) {
+			allBackupLocations, err := getAllBackupLocations(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+			if len(allBackupLocations) > 0 {
+				return "", true, fmt.Errorf("found %d backup locations", len(allBackupLocations))
+			} else {
+				return "", false, nil
+			}
+		}
+		_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
+		dash.VerifySafely(err, nil, "Verifying backup location deletion success")
+	} else {
+		// Clean up all backup locations and existing backup
+		for backupLocationUid, backupLocationName := range allBackupLocations {
+			err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
+		}
+
+		backupLocationDeletionSuccess := func() (interface{}, bool, error) {
+			allBackupLocations, err := getAllBackupLocations(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+			if len(allBackupLocations) > 0 {
+				return "", true, fmt.Errorf("found %d backup locations", len(allBackupLocations))
+			} else {
+				return "", false, nil
+			}
+		}
+		_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
+		dash.VerifySafely(err, nil, "Verifying backup location deletion success")
+
+		// Cleanup all buckets
+		providers := getProviders()
+		for _, provider := range providers {
+			switch provider {
+			case drivers.ProviderAws:
+				DeleteBucket(provider, globalAWSBucketName)
+				log.Infof("Bucket deleted - %s", globalAWSBucketName)
+			case drivers.ProviderAzure:
+				DeleteBucket(provider, globalAzureBucketName)
+				log.Infof("Bucket deleted - %s", globalAzureBucketName)
+			case drivers.ProviderGke:
+				DeleteBucket(provider, globalGCPBucketName)
+				log.Infof("Bucket deleted - %s", globalGCPBucketName)
+			}
+		}
+
+	}
 	// Cleanup all cloud credentials
 	allCloudCredentials, err := getAllCloudCredentials(ctx)
 	dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
@@ -240,22 +287,6 @@ var _ = AfterSuite(func() {
 	}
 	_, err = task.DoRetryWithTimeout(cloudCredentialDeletionSuccess, 5*time.Minute, 30*time.Second)
 	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
-
-	// Cleanup all buckets after suite
-	providers := getProviders()
-	for _, provider := range providers {
-		switch provider {
-		case drivers.ProviderAws:
-			DeleteBucket(provider, globalAWSBucketName)
-			log.Infof("Bucket deleted - %s", globalAWSBucketName)
-		case drivers.ProviderAzure:
-			DeleteBucket(provider, globalAzureBucketName)
-			log.Infof("Bucket deleted - %s", globalAzureBucketName)
-		case drivers.ProviderGke:
-			DeleteBucket(provider, globalGCPBucketName)
-			log.Infof("Bucket deleted - %s", globalGCPBucketName)
-		}
-	}
 
 })
 

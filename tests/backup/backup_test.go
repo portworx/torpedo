@@ -276,15 +276,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		opts[SkipClusterScopedObjects] = true
 		log.Info("Deleting deployed namespaces")
 		ValidateAndDestroy(contexts, opts)
-		backupDriver := Inst().Backup
-		log.Info("Deleting backed up namespaces")
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
-			log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
-			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
-		}
 		log.Info("Deleting restored namespaces")
 		for _, restoreName := range restoreNames {
 			err = DeleteRestore(restoreName, orgID, ctx)

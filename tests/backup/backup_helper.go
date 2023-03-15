@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	cloudAccountDeleteTimeout                 = 20 * time.Minute
+	cloudAccountDeleteTimeout                 = 10 * time.Minute
 	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentNamespace                  = "kube-system"
 	restoreNamePrefix                         = "tp-restore"
@@ -50,7 +50,6 @@ const (
 	firstName                                 = "firstName"
 	lastName                                  = "lastName"
 	password                                  = "Password1"
-	mongodbStatefulset                        = "pxc-backup-mongodb"
 )
 
 var (
@@ -64,6 +63,7 @@ var (
 	globalAzureLockedBucketName string
 	globalGCPLockedBucketName   string
 	cloudProviders              = []string{"aws"}
+	testSuiteResults            []bool
 )
 
 type userRoleAccess struct {
@@ -836,21 +836,41 @@ func createUsers(numberOfUsers int) []string {
 // CleanupCloudSettingsAndClusters removes the backup location(s), cloud accounts and source/destination clusters for the given context
 func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
 	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
+	currentTestFailed := CurrentGinkgoTestDescription().Failed
 	if len(backupLocationMap) != 0 {
-		for backupLocationUID, bkpLocationName := range backupLocationMap {
-			_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
-			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
-				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
-				if err != nil {
-					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+		if !currentTestFailed {
+			for backupLocationUID, bkpLocationName := range backupLocationMap {
+				_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+				backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+					status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+					if err != nil {
+						return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+					}
+					if status == true {
+						return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+					}
+					return "", false, nil
 				}
-				if status == true {
-					return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
-				}
-				return "", false, nil
+				_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 			}
-			_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
+		} else {
+			for backupLocationUID, bkpLocationName := range backupLocationMap {
+				_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, false)
+				backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+					status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+					if err != nil {
+						return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+					}
+					if status == true {
+						return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+					}
+					return "", false, nil
+				}
+				_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
+			}
+			testSuiteResults = append(testSuiteResults, currentTestFailed)
 		}
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
 			err := DeleteCloudCredential(credName, orgID, cloudCredUID)
