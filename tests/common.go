@@ -1411,7 +1411,7 @@ func CreateScheduleOptions(errChan ...*chan error) scheduler.ScheduleOptions {
 }
 }
 
-// ScheduleApplications schedules but does not wait for applications
+// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
 func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
@@ -1893,6 +1893,7 @@ func ChangeNamespaces(contexts []*scheduler.Context,
 	return nil
 }
 
+// CloneSpec clones a given spec and returns it. It returns an error if the object (spec) provided is not supported by this function
 func CloneSpec(spec interface{}) (interface{}, error) {
 	if specObj, ok := spec.(*appsapi.Deployment); ok {
 		clone := *specObj
@@ -2030,9 +2031,10 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 		return &clone, nil
 	}
 
-	return nil, fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(spec))
+	return nil, fmt.Errorf("unsupported object while cloning spec: %v", reflect.TypeOf(spec))
 }
 
+// UpdateNamespace updates the namespace for a given `spec` based on the `namespaceMapping` (which is a map of the map[old]new namespace). It returns an error if the object (spec) provided is not supported by this function
 func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 	if specObj, ok := in.(*appsapi.Deployment); ok {
 		namespace := namespaceMapping[specObj.GetNamespace()]
@@ -2209,6 +2211,7 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
 }
 
+// GetSpecNameKindNamepace returns the (name, kind, namespace) for a given `spec`. It returns an error if the object (spec) provided is not supported by this function
 func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error) {
 	if obj, ok := specObj.(*appsapi.Deployment); ok {
 		return obj.Name, obj.Kind, obj.Namespace, nil
@@ -2296,7 +2299,7 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 		return obj.Name, obj.Kind, "", nil
 	}
 
-	return "", "", "", fmt.Errorf("unsupported object: %v", reflect.TypeOf(specObj))
+	return "", "", "", fmt.Errorf("unsupported object while obtaining spec details: %v", reflect.TypeOf(specObj))
 }
 
 // DeleteCloudCredential deletes cloud credentials
@@ -2376,16 +2379,17 @@ func SetClusterContext(clusterConfigPath string) error {
 
 	err := Inst().S.SetConfig(clusterConfigPath)
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. Set Config Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
+
 	err = Inst().S.RefreshNodeRegistry()
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
 	}
 
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
 	}
 
 	err = ssh.RefreshDriver(Inst().N.(*ssh.SSH))
