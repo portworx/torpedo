@@ -142,6 +142,8 @@ type StorageClassConfig struct {
 
 // PDS const
 const (
+	defaultCommandRetry   = 5 * time.Second
+	defaultCommandTimeout = 1 * time.Minute
 	storageTemplateName   = "QaDefault"
 	resourceTemplateName  = "Small"
 	appConfigTemplateName = "QaDefault"
@@ -714,24 +716,7 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 		log.Errorf("An Error Occured while getting statefulsets %v", err)
 		return err
 	}
-	if ResiliencyFlag {
-		switch FailureType.Type {
-		// Case when we want to reboot a node onto which a deployment pod is coming up
-		case active_node_reboot_during_deployment:
-			check_till_replica = 1
-			log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will reboot the node it is hosted upon.", check_till_replica)
-			func1 := func() {
-				GetPdsSs(deployment.GetClusterResourceName(), namespace, check_till_replica)
-			}
-			func2 := func() {
-				InduceFailure(FailureType.Type, namespace)
-			}
-			ExecuteInParallel(func1, func2)
-			if testError != nil {
-				return testError
-			}
-		}
-	}
+
 	//validate the statefulset deployed in the k8s namespace
 	err = k8sApps.ValidateStatefulSet(ss, timeOut)
 	if err != nil {
@@ -764,23 +749,21 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 // Function to check for set amount of Replica Pods
 func GetPdsSs(depName string, ns string, check_till_replica int32) {
 	var ss *v1.StatefulSet
-	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+	testError = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
 		if err != nil {
 			log.Warnf("An Error Occured while getting statefulsets %v", err)
-			return false, nil
+			return false, err
 		}
 		if ss.Status.Replicas >= check_till_replica {
 			hasResiliencyConditionMet = true
+			ResiliencyCondition <- true
 			log.Infof("Resiliency Condition Met. Will go ahead and try to induce failure now")
 			return true, nil
 		}
 		log.Infof("Resiliency Condition still not met. Will retry to see if it has met now.....")
 		return false, nil
 	})
-	if err != nil {
-		log.Errorf("An Error Occured while getting statefulsets %v", err)
-	}
 }
 
 // DeleteK8sPods deletes the pods in given namespace
@@ -1944,10 +1927,7 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 		log.Warnf("An Error Occured while creating deployment %v", err)
 		return nil, nil, nil, err
 	}
-	err = ValidateDataServiceDeployment(deployment, namespace)
-	if err != nil {
-		return deployment, nil, nil, err
-	}
+
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, nil
 }
 

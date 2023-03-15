@@ -2,8 +2,8 @@ package lib
 
 import (
 	"sync"
-	"time"
 
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
 
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
@@ -14,12 +14,6 @@ import (
 )
 
 const (
-	defaultWaitRebootTimeout             = 5 * time.Minute
-	defaultWaitRebootRetry               = 10 * time.Second
-	defaultCommandRetry                  = 5 * time.Second
-	defaultCommandTimeout                = 1 * time.Minute
-	defaultTestConnectionTimeout         = 15 * time.Minute
-	defaultRebootTimeRange               = 5 * time.Minute
 	active_node_reboot_during_deployment = "active-node-reboot-during-deployment"
 )
 
@@ -28,20 +22,21 @@ var (
 	wg                        sync.WaitGroup
 	ResiliencyFlag            = false
 	hasResiliencyConditionMet = false
-	FailureType               ResiliencyFailure
+	FailureType               TypeOfFailure
 	testError                 error
 	check_till_replica        int32
+	ResiliencyCondition       = make(chan bool)
 )
 
 // Struct Definition for kind of Failure the framework needs to trigger
-type ResiliencyFailure struct {
+type TypeOfFailure struct {
 	Type   string
 	Method func() error
 }
 
 // Wrapper to Define failure type from Test Case
-func DefineFailureType(failure ResiliencyFailure) {
-	FailureType = failure
+func DefineFailureType(failuretype TypeOfFailure) {
+	FailureType = failuretype
 }
 
 // Executes all methods in parallel
@@ -49,9 +44,9 @@ func ExecuteInParallel(functions ...func()) {
 	wg.Add(len(functions))
 	defer wg.Wait()
 	for _, fn := range functions {
-		go func(copy func()) {
+		go func(FuncToRun func()) {
 			defer wg.Done()
-			copy()
+			FuncToRun()
 		}(fn)
 	}
 }
@@ -69,8 +64,12 @@ func InduceFailure(failure string, ns string) {
 	for !hasResiliencyConditionMet {
 		continue
 	}
+	isResiliencyConditionset := <-ResiliencyCondition
+	if isResiliencyConditionset {
+		FailureType.Method()
+	}
 	// Triggering Resiliency Failure now
-	ResiliencyDriver(failure, ns)
+	// ResiliencyDriver(failure, ns)
 }
 
 // Resiliency Driver Module
@@ -78,6 +77,33 @@ func ResiliencyDriver(failure string, ns string) {
 	if failure == active_node_reboot_during_deployment {
 		FailureType.Method()
 	}
+}
+
+// Close all open Resiliency channels here
+func CloseResiliencyChannel() {
+	close(ResiliencyCondition)
+}
+
+//
+func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, namespace string) error {
+	switch FailureType.Type {
+	// Case when we want to reboot a node onto which a deployment pod is coming up
+	case active_node_reboot_during_deployment:
+		check_till_replica = 1
+		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will reboot the node it is hosted upon.", check_till_replica)
+		func1 := func() {
+			GetPdsSs(deployment.GetClusterResourceName(), namespace, check_till_replica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+		if testError != nil {
+			return testError
+		}
+	}
+	err := ValidateDataServiceDeployment(deployment, namespace)
+	return err
 }
 
 // Reboot the Active Node onto which the application pod is coming up

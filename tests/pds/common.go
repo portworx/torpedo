@@ -39,10 +39,10 @@ const (
 	kafka                                = "Kafka"
 	zookeeper                            = "ZooKeeper"
 	consul                               = "Consul"
-	active_node_reboot_during_deployment = "active-node-reboot-during-deployment"
 	pdsNamespaceLabel                    = "pds.portworx.com/available"
 	timeOut                              = 30 * time.Minute
 	maxtimeInterval                      = 30 * time.Second
+	active_node_reboot_during_deployment = "active-node-reboot-during-deployment"
 )
 
 var (
