@@ -1212,9 +1212,9 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string) er
 	return nil
 }
 
-// backupSuccessCheck inspects backup task
-func backupSuccessCheck(backupName string, orgID string, retryDuration int, retryInterval int, ctx context.Context) (bool, *api.BackupInspectResponse, error) {
-	var bkpUid string
+// backupSuccessCheck inspects backup task to check for status being "success". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
+func backupSuccessCheck(backupName string, orgID string, retryDuration int, retryInterval int, ctx context.Context) (bool, error) {
+	var backupUid string
 	backupDriver := Inst().Backup
 	if retryDuration == 0 {
 		retryDuration = maxWaitPeriodForBackupCompletionInMinutes
@@ -1224,13 +1224,13 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration int, retr
 	}
 	backupSuccessCheck := func() (interface{}, bool, error) {
 		var err error
-		bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+		backupUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
 		if err != nil {
 			return "", false, err
 		}
 		backupInspectRequest := &api.BackupInspectRequest{
 			Name:  backupName,
-			Uid:   bkpUid,
+			Uid:   backupUid,
 			OrgId: orgID,
 		}
 		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
@@ -1247,20 +1247,20 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration int, retr
 
 	_, err := task.DoRetryWithTimeout(backupSuccessCheck, time.Duration(retryDuration)*time.Minute, time.Duration(retryInterval)*time.Second)
 	if err != nil {
-		return false, nil, err
+		return false, err
 	}
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
-		Uid:   bkpUid,
+		Uid:   backupUid,
 		OrgId: orgID,
 	}
 	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
 	if err != nil {
-		return false, nil, err
+		return false, err
 	}
 	backupStatus := (resp.GetBackup().GetStatus().Status == api.BackupInfo_StatusInfo_Success)
 	log.Infof("Backup [%s] created successfully", backupName)
-	return backupStatus, resp, nil
+	return backupStatus, nil
 }
 
 // ValidateBackup validates a backup and returns a clone of the provided `context`s (and each of their `spec`s) *after* filtering the `spec`s to only include the resources that are in the backup
