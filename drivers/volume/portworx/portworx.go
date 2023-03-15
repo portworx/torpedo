@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc/credentials/insecure"
 	"math"
 	"net"
 	"net/url"
@@ -16,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/portworx/torpedo/pkg/log"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
@@ -420,12 +421,13 @@ func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 
 func (d *portworx) RefreshDriverEndpoints() error {
 
-	// namespace of portworx in switched context mmight've changed
+	// getting namespace again (refreshing it) as namespace of portworx in switched context might have changed
 	namespace, err := d.GetVolumeDriverNamespace()
 	if err != nil {
 		return err
 	}
 	d.namespace = namespace
+	log.InfoD("RefreshDriverEndpoints: volume driver's namespace (portworx namespace) is updated to [%s]", namespace)
 
 	// Force update px endpoints
 	d.refreshEndpoint = true
