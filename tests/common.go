@@ -325,6 +325,7 @@ var (
 	SchedulePolicyScaleUID               string
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
+	CurrentClusterConfigPath             = ""
 )
 
 var (
@@ -2361,6 +2362,18 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 
 // SetClusterContext sets context to clusterConfigPath
 func SetClusterContext(clusterConfigPath string) error {
+	// an empty string indicates the default kubeconfig.
+	// This variable is used to clearly indicate that in logs
+	var clusterConfigPathOrDefault = clusterConfigPath
+	if clusterConfigPathOrDefault == "" {
+		clusterConfigPathOrDefault = "default"
+	}
+	log.InfoD("Switching context to [%s]", clusterConfigPathOrDefault)
+	if clusterConfigPath == CurrentClusterConfigPath {
+		log.InfoD("Switching context: The context is already [%s]", clusterConfigPathOrDefault)
+		return nil
+	}
+
 	err := Inst().S.SetConfig(clusterConfigPath)
 	if err != nil {
 		return fmt.Errorf("Failed to switch to context. Set Config Error: [%v]", err)
@@ -2379,6 +2392,9 @@ func SetClusterContext(clusterConfigPath string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 	}
+
+	CurrentClusterConfigPath = clusterConfigPath
+	log.InfoD("Switched context to [%s]", clusterConfigPath)
 
 	return nil
 }
