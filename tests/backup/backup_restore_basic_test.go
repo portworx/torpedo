@@ -1389,7 +1389,7 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 				log.InfoD("source cluster version: %s ; destination cluster version: %s", srcVer.String(), destVer.String())
 				isValid := srcVer.LT(destVer)
 				dash.VerifyFatal(isValid, true,
-					"source cluster kubernetes version must be lesser than the destination cluster kubernetes version.")
+					"source cluster kubernetes version should be lesser than the destination cluster kubernetes version.")
 			})
 
 			log.InfoD("switching to default context")
@@ -1525,7 +1525,7 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 
 						// Status should be LATER than InProgress in order for next STEP to execute
 						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_InProgress {
-							log.InfoD("sestore status of [%s] is [%s]; expected [InProgress].\ncondition fulfilled.", initialRestoreName, restoreResponseStatus.GetStatus())
+							log.InfoD("restore status of [%s] is [%s]; expected [InProgress].\ncondition fulfilled.", initialRestoreName, restoreResponseStatus.GetStatus())
 							return "", false, nil
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
 							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress].\nhelp: check for remnant cluster-level resources on destination cluster.", initialRestoreName, restoreResponseStatus.GetStatus())
@@ -1548,6 +1548,7 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 				})
 
 				var restoreLaterStatuserr error
+				var laterRestoreStatus interface{}
 
 				Step("Restoring the backed up application to namespace with different name on destination cluster", func() {
 					log.InfoD("Restoring the backed up application to namespace with different name on destination cluster")
@@ -1575,42 +1576,42 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 							return "", false, err
 						}
 
-						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
-							log.InfoD("restore status of [%s] is [%s]; expected [PartialSuccess].\ncondition fulfilled. proceeding to confirm restore [%s].", laterRestoreName, restoreResponseStatus.GetStatus(), initialRestoreName)
-							return "", false, nil
-						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
-							err := fmt.Errorf("restore status of [%s] is [%s]; expected [PartialSuccess].\nhelp: 1. app must have cluster-level resources.\n2. issue with restore [%s]: was not [Success]\n3. refer jira ticket PA-614", laterRestoreName, restoreResponseStatus.GetStatus(), initialRestoreName)
-							return "", false, err
+						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
+							log.InfoD("restore status of [%s] is [%s]; expected [PartialSuccess] or [Success].\ncondition fulfilled.", laterRestoreName, restoreResponseStatus.GetStatus())
+							return restoreResponseStatus.GetStatus(), false, nil
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
-							err := fmt.Errorf("restore status of [%s] is [%s]; expected [PartialSuccess].", laterRestoreName, restoreResponseStatus.GetStatus())
-							return "", false, err
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [PartialSuccess] or [Success].", laterRestoreName, restoreResponseStatus.GetStatus())
+							return restoreResponseStatus.GetStatus(), false, err
 						}
 
-						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for [PartialSuccess]...", initialRestoreName, restoreResponseStatus.GetStatus())
+						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for [PartialSuccess] or [Success]...", laterRestoreName, restoreResponseStatus.GetStatus())
 						return "", true, err
 					}
-					_, restoreLaterStatuserr = task.DoRetryWithTimeout(restorePartialSuccessCheck, 10*time.Minute, 30*time.Second)
-					// we don't end the test if there is an error here, as we also want to ensure that we look into the status of the following `step`, so that we have the full details of what went wrong.
-					dash.VerifySafely(restoreLaterStatuserr, nil, fmt.Sprintf("restore [%s] is [PartialSuccess]", laterRestoreName))
-					if restoreLaterStatuserr != nil {
-						log.Warnf("due to error in restore status check, skipping validation of restore. proceeding to next step, after which the test will be failed")
-						return
+					laterRestoreStatus, restoreLaterStatuserr = task.DoRetryWithTimeout(restorePartialSuccessCheck, 10*time.Minute, 30*time.Second)
+
+					// we don't end the test if there is an error here, as we also want to ensure that we look into the status of the following `Step`, so that we have the full details of what went wrong.
+					dash.VerifySafely(restoreLaterStatuserr, nil, fmt.Sprintf("status of later restore [%s] is [PartialSuccess] or [Success]", laterRestoreName))
+
+					// We can consider validation and cleanup for [PartialSuccess] and [Success]
+					if restoreLaterStatuserr == nil {
+						// Validation of Later Restore
+						destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
+						log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
+
+						restoreLaterCtx, err := ValidateRestore(laterRestoreName, destinationClusterConfigPath, orgID, ctx, backupContexts[i], namespaceMapping)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("validation of restore [%s] is success", laterRestoreName))
+						restoreLaterContexts = append(restoreLaterContexts, restoreLaterCtx)
+					} else {
+						log.Warnf("proceeding to next step, after which the test will be failed.")
 					}
-
-					// Validation of Restore
-					destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
-					log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
-
-					restoreLaterCtx, err := ValidateRestore(laterRestoreName, destinationClusterConfigPath, orgID, ctx, backupContexts[i], namespaceMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("restore (%s) validation", laterRestoreName))
-					restoreLaterContexts = append(restoreLaterContexts, restoreLaterCtx)
 				})
 
-				Step("Verifying status of Initial Restore", func() {
-					log.InfoD("Step: Verifying status of Initial Restore")
+				Step("Verifying status of Initial and Later Restore", func() {
+					log.InfoD("Step: Verifying status of Initial and Later Restore")
 
+					// getting the status of initial restore
 					restoreInspectRequest := &api.RestoreInspectRequest{
 						Name:  initialRestoreName,
 						OrgId: orgID,
@@ -1623,35 +1624,49 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 							return "", false, err
 						}
 
-						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
-							log.InfoD("restore status of [%s] is [%s]; expected [InProgress].\ncondition fulfilled.", initialRestoreName, restoreResponseStatus.GetStatus())
-							return "", false, nil
-						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
-							err := fmt.Errorf("restore status of [%s] is [%s]; expected [Success].\nhelp: 1. check for remnant cluster-level resources on destination cluster.\n2. refer jira ticket PA-614", initialRestoreName, restoreResponseStatus.GetStatus())
-							return "", false, err
+						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
+							log.InfoD("restore status of [%s] is [%s]; expected [PartialSuccess] or [Success].\ncondition fulfilled.", initialRestoreName, restoreResponseStatus.GetStatus())
+							return restoreResponseStatus.GetStatus(), false, nil
 						} else if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Aborted ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Failed ||
 							restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Deleting {
-							err := fmt.Errorf("restore status of [%s] is [%s]; expected [InProgress].", initialRestoreName, restoreResponseStatus.GetStatus())
-							return "", false, err
+							err := fmt.Errorf("restore status of [%s] is [%s]; expected [PartialSuccess] or [Success].", initialRestoreName, restoreResponseStatus.GetStatus())
+							return restoreResponseStatus.GetStatus(), false, err
 						}
 
-						err = fmt.Errorf("sestore status of [%s] is [%s]; waiting for [Success]...", initialRestoreName, restoreResponseStatus.GetStatus())
+						err = fmt.Errorf("restore status of [%s] is [%s]; waiting for [PartialSuccess] or [Success]...", initialRestoreName, restoreResponseStatus.GetStatus())
 						return "", true, err
 					}
-					_, err = task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("status of initial restore [%s] is success", initialRestoreName))
+					initialRestoreStatus, initialRestoreError := task.DoRetryWithTimeout(restoreSuccessCheck, 10*time.Minute, 30*time.Second)
 
-					// Validation of Restore
+					dash.VerifyFatal(initialRestoreError, nil, fmt.Sprintf("status of initial restore [%s] is [PartialSuccess] or [Success]", initialRestoreName))
+
+					// Validation of Inital Restore
 					destinationClusterConfigPath, err := GetDestinationClusterConfigPath()
 					log.FailOnError(err, "failed to get kubeconfig path for destination cluster. Error: [%v]", err)
 
 					restoreCtx, err := ValidateRestore(initialRestoreName, destinationClusterConfigPath, orgID, ctx, backupContexts[i], namespaceMapping)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("restore (%s) validation", initialRestoreName))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("validation of restore [%s] is success", initialRestoreName))
 					restoreContexts = append(restoreContexts, restoreCtx)
 
-					// If this was an error before, we have to fail the test at this point, having processed the other stage
-					dash.VerifyFatal(restoreLaterStatuserr, nil, fmt.Sprintf("restore [%s] is [PartialSuccess]", laterRestoreName))
+					// If Later Restore was an error before, we have to fail the test at this point, having processed the other stage
+					dash.VerifyFatal(restoreLaterStatuserr, nil, fmt.Sprintf("status of later restore [%s] is [PartialSuccess] or [Success]", laterRestoreName))
+
+					// Checking actual validity of restore status
+					validity := false
+					errHelpStr := ""
+					log.InfoD("states of (initial,later) restore are [%s,%s]", initialRestoreStatus, laterRestoreStatus)
+					if (initialRestoreStatus == api.RestoreInfo_StatusInfo_Success && laterRestoreStatus == api.RestoreInfo_StatusInfo_PartialSuccess) ||
+						(initialRestoreStatus == api.RestoreInfo_StatusInfo_PartialSuccess && laterRestoreStatus == api.RestoreInfo_StatusInfo_Success) {
+						validity = true
+					} else if initialRestoreStatus == api.RestoreInfo_StatusInfo_PartialSuccess && laterRestoreStatus == api.RestoreInfo_StatusInfo_PartialSuccess {
+						validity = false
+						errHelpStr = "error help: ensure no remnant cluster-level resources on destination cluster."
+					} else if initialRestoreStatus == api.RestoreInfo_StatusInfo_Success && laterRestoreStatus == api.RestoreInfo_StatusInfo_Success {
+						validity = false
+						errHelpStr = "error help: ensure app has cluster-level resources."
+					}
+					dash.VerifyFatal(validity, true, fmt.Sprintf("states of (initial,later) restore are [Success,PartialSuccess] or [PartialSuccess,Success]. %s", errHelpStr))
 				})
 
 			}
