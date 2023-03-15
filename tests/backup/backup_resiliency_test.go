@@ -763,7 +763,6 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 	})
 })
 
-
 // ScaleMongoDBWhileBackupAndRestore scales down MongoDB to repl=0 and backup to original replica when backups and restores are in progress
 var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 	var (
@@ -1027,6 +1026,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 	backupNames := make([]string, 0)
 	incrementalBackupNames := make([]string, 0)
+	incrementalBackupNamesRecreated := make([]string, 0)
 	var contexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	var backupLocationUID string
@@ -1140,7 +1140,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 			// Incremental backup
 			for _, namespace := range bkpNamespaces {
 				incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
-				incrementalBackupNames = append(incrementalBackupNames, incrementalBackupName)
+				incrementalBackupNamesRecreated = append(incrementalBackupNamesRecreated, incrementalBackupName)
 				err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", incrementalBackupName))
@@ -1152,10 +1152,13 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 			backupDriver := Inst().Backup
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx failed")
-			for _, incrementalBackupName := range incrementalBackupNames {
+			for _, incrementalBackupName := range incrementalBackupNamesRecreated {
+				bkpUid, err := backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
+				log.FailOnError(err, "Unable to fetch backup UID - %s", incrementalBackupName)
 				bkpInspectReq := &api.BackupInspectRequest{
 					Name:  incrementalBackupName,
 					OrgId: orgID,
+					Uid:   bkpUid,
 				}
 				bkpInspectResponse, _ := backupDriver.InspectBackup(ctx, bkpInspectReq)
 				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
