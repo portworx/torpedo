@@ -1367,20 +1367,16 @@ func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
 	return ctx.App.GetID(fmt.Sprintf("%s-%s", taskname, Inst().InstanceID))
 }
 
-// Using the cuurent Context (kubeconfig) to generate schedule options
+// CreateScheduleOptions uses the current Context (kubeconfig) to generate schedule options
 // NOTE: When using a ScheduleOption that was created during a context (kubeconfig)
 // that is different from the current context, make sure to re-generate ScheduleOptions
 func CreateScheduleOptions(errChan ...*chan error) scheduler.ScheduleOptions {
-	var err error
-	options := scheduler.ScheduleOptions{
-		AppKeys:            Inst().AppList,
-		StorageProvisioner: Inst().Provisioner,
-	}
-
 	log.Infof("Creating ScheduleOptions")
 
 	//if not hyper converged set up deploy apps only on storageless nodes
 	if !Inst().IsHyperConverged {
+		var err error
+
 		log.Infof("ScheduleOptions: Scheduling apps only on storageless nodes")
 		storagelessNodes := node.GetStorageLessNodes()
 		if len(storagelessNodes) == 0 {
@@ -1397,18 +1393,22 @@ func CreateScheduleOptions(errChan ...*chan error) scheduler.ScheduleOptions {
 		storageLessNodeLabels := make(map[string]string)
 		storageLessNodeLabels["storage"] = "NO"
 
-		options = scheduler.ScheduleOptions{
+		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
 			Nodes:              storagelessNodes,
 			Labels:             storageLessNodeLabels,
 		}
+		return options
 
 	} else {
+		options := scheduler.ScheduleOptions{
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
+		}
 		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged")
-	}
-
 	return options
+}
 }
 
 // ScheduleApplications schedules but does not wait for applications
