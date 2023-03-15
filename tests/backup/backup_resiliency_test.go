@@ -1041,7 +1041,6 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 	var incrementalBackupName string
 	var bkpNamespaces = make([]string, 0)
 	backupLocationMap := make(map[string]string)
-	incrementalBackupNamesMap := make(map[string]string)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteIncrementalBackupsAndRecreateNew",
@@ -1142,7 +1141,6 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 			for _, namespace := range bkpNamespaces {
 				incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
 				incrementalBackupNames = append(incrementalBackupNames, incrementalBackupName)
-				incrementalBackupNamesMap[incrementalBackupName] = incrementalBackupName
 				err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", incrementalBackupName))
@@ -1151,20 +1149,19 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		})
 		Step("Check if backups are incremental backups or not", func() {
 			log.InfoD("Check if backups are incremental backups or not")
-			var bkp *api.BackupObject
 			backupDriver := Inst().Backup
-			bkpEnumerateReq := &api.BackupEnumerateRequest{
-				OrgId: orgID}
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx failed")
-			curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-			for _, bkp = range curBackups.GetBackups() {
-				for _, vol := range bkp.GetVolumes() {
-					if incrementalBackupNamesMap[bkp.GetName()] == bkp.GetName() {
-						backupId := vol.GetBackupId()
-						dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
-							fmt.Sprintf("Check if the backup %s is incremental or not ", bkp.GetName()))
-					}
+			for _, incrementalBackupName := range incrementalBackupNames {
+				bkpInspectReq := &api.BackupInspectRequest{
+					Name:  incrementalBackupName,
+					OrgId: orgID,
+				}
+				bkpInspectResponse, _ := backupDriver.InspectBackup(ctx, bkpInspectReq)
+				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
+					backupId := vol.GetBackupId()
+					dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
+						fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
 				}
 			}
 		})
