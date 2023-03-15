@@ -1263,40 +1263,56 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration int, retr
 	return backupStatus, resp, nil
 }
 
-func ValidateBackup(backupInspectResponse *api.BackupInspectResponse, clusterAppsContexts []*scheduler.Context) (*BackupRestoreContext, error) {
-	bkpObjs := backupInspectResponse.Backup.Resources
-	if backupSpecContext, err := GetBackupSpecObjectsContexts(bkpObjs, clusterAppsContexts); err != nil {
-		return nil, fmt.Errorf("GetBackupSpecObjects Err: %v", err)
+// ValidateBackup validates a backup and returns a clone of the provided `context`s (and each of their `spec`s) *after* filtering the `spec`s to only include the resources that are in the backup
+func ValidateBackup(backupName string, orgID string, ctx context.Context, clusterAppsContexts []*scheduler.Context) (*BackupRestoreContext, error) {
+	backupDriver := Inst().Backup
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("GetBackupUID Err: %v", err)
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return nil, fmt.Errorf("InspectBackup Err: %v", err)
+	}
+
+	backupObjs := resp.Backup.Resources
+	if backupSpecContext, err := GetBackupSpecObjectsContexts(backupObjs, clusterAppsContexts); err != nil {
+		return nil, fmt.Errorf("GetBackupSpecObjectsContexts Err: %v", err)
 	} else {
 		return &BackupRestoreContext{
-			schedCtxs: backupSpecContext,
+			schedulerCtxs: backupSpecContext,
 		}, nil
 	}
 }
 
-// Filters the source namespaces' contexts to only include backup objects
-// MAKE SURE to include Contexts of ALL namespaces which contain the backup objects
+// GetBackupSpecObjectsContexts clones and returns the provided `context`s (and each of their `spec`s) *after* filtering the `spec`s to only include the resources that are in the backup.
+// NOTE: make sure to include Contexts of *all* namespaces which are supposed to contain the backup objects
 func GetBackupSpecObjectsContexts(resourceInfos []*api.ResourceInfo, clusterAppsContexts []*scheduler.Context) ([]*scheduler.Context, error) {
 	log.InfoD("Validation: Getting the backup objects (specs) from the Context")
 
-	var backupAppContexts []*scheduler.Context = make([]*scheduler.Context, 0)
-	var allBkpObjs []*api.ResourceInfo = make([]*api.ResourceInfo, 0)
+	backupAppContexts := make([]*scheduler.Context, 0)
+	// all the backup objects for which specs are found
+	allBackupObjs := make([]*api.ResourceInfo, 0)
 
-	//for each clusterAppsContext (namespace), we return the corresponding BackupSpecObject
+	// filter stage: for each clusterAppsContext (namespace), we create the corresponding BackupSpecObject
 	for _, clusterAppsContext := range clusterAppsContexts {
-		var specObjects []interface{} = make([]interface{}, 0)
-		// the Backup objects which were found in this namespace
-		var resInfoObjs []*api.ResourceInfo = make([]*api.ResourceInfo, 0)
 
+		// collect the backup resources whose specs might be present in this context (namespace)
+		var resourceInfoObjs []*api.ResourceInfo = make([]*api.ResourceInfo, 0)
 		for _, resource := range resourceInfos {
-			if resource.Namespace == clusterAppsContext.ScheduleOptions.Namespace {
-				resInfoObjs = append(resInfoObjs, resource)
-			} else if resource.Namespace == "" {
-				// IF it is therein this context, we'll work with it
-				resInfoObjs = append(resInfoObjs, resource)
+			if resource.Namespace == clusterAppsContext.ScheduleOptions.Namespace ||
+				resource.Namespace == "" /* IF it is therein this context, we'll work with it */ {
+				resourceInfoObjs = append(resourceInfoObjs, resource)
 			}
 		}
 
+		// collect the specs corresponding to the backup resources, in this namespace
+		var specObjects []interface{} = make([]interface{}, 0)
 	specloop:
 		for _, spec := range clusterAppsContext.App.SpecList {
 			name, kind, ns, err := GetSpecNameKindNamepace(spec)
@@ -1304,24 +1320,25 @@ func GetBackupSpecObjectsContexts(resourceInfos []*api.ResourceInfo, clusterApps
 				log.Error(err)
 				continue specloop
 			}
-			if name != "" /*&& kind != ""*/ /*kind is empty for certain objects :(*/ {
-				for _, bkpObj := range resInfoObjs {
-					if name == bkpObj.Name /*&& kind == bkpObj.Kind*/ {
+			if name != "" /*&& kind != ""*/ /*BUG: kind is empty for certain objects :(*/ {
+				// if the spec has been backed up, we'll collect it here
+				for _, backupObj := range resourceInfoObjs {
+					if name == backupObj.Name /*&& kind == backupObj.Kind*/ {
 						clone := spec
-						// The spec for the object/resource was found in the Context (namespace). Appending it.
 						if ns == "" {
-							log.InfoD("The resource(name: %s, kind: %s, with NO NAMESPACE value) was found in the context '%s'", name, kind, clusterAppsContext.ScheduleOptions.Namespace)
+							log.InfoD("the backup resource (name: [%s], kind: [%s], with no namespace value) was found in the context [%s]", name, kind, clusterAppsContext.ScheduleOptions.Namespace)
 						}
 						specObjects = append(specObjects, clone)
+						allBackupObjs = append(allBackupObjs, backupObj)
 						continue specloop
 					}
 				}
 			} else {
-				log.Warnf("some error with getting GetSpecNameKindNamepace with Spec Name: %s, Kind: %s, Namespace: %s, in local Context (NS): %s", name, kind, ns, clusterAppsContext.ScheduleOptions.Namespace)
+				log.Warnf("error: GetSpecNameKindNamepace returned values with Spec Name: [%s], Kind: [%s], Namespace: [%s], in local Context (NS): [%s], where some of the values are empty, so this spec will be ignored", name, kind, ns, clusterAppsContext.ScheduleOptions.Namespace)
 				continue specloop
 			}
-			// executes if specObj is not in backup
-			log.Warnf("This Backup does not include the resource(name: %s, kind:%s, namespace:%s) found in the local context (NS) '%s'", name, kind, ns, clusterAppsContext.ScheduleOptions.Namespace)
+			// The spec in the context (namespace) was NOT found in the created Backup. (this is not anticipated when an entire namespace is backed up)
+			log.Warnf("this Backup does not include the spec (name: [%s], kind: [%s], namespace: [%s]) found in the context (namespace) '%s'", name, kind, ns, clusterAppsContext.ScheduleOptions.Namespace)
 		}
 
 		// Duplicate the object
@@ -1331,11 +1348,9 @@ func GetBackupSpecObjectsContexts(resourceInfos []*api.ResourceInfo, clusterApps
 		app.SpecList = specObjects
 		backupAppContext.App = &app
 		backupAppContexts = append(backupAppContexts, &backupAppContext)
-		allBkpObjs = append(allBkpObjs, resInfoObjs...)
 	}
 
-	// Error Checking: if the contexts for all backed up resources were found in SOME namespace
-
+	// Error Checking: if all backed up resources have corresponding specs in _some_ contexts (namespace)
 	var namespaces []string = nil
 	getNS := func() {
 		if namespaces == nil {
@@ -1344,15 +1359,16 @@ func GetBackupSpecObjectsContexts(resourceInfos []*api.ResourceInfo, clusterApps
 			}
 		}
 	}
-
+	// iterate over each backed up resource and check if the corresponding spec was found
 	for _, resInfo := range resourceInfos {
 		found := false
-		for _, bkpObj := range allBkpObjs {
-			if bkpObj.Name == resInfo.Name {
+		// iterate over each filtered spec (from filter stage) to see if the resource is matching any of them
+		for _, backupObj := range allBackupObjs {
+			if backupObj.Name == resInfo.Name {
 				// the resInfo object was found in one of the namespaces
 				if resInfo.Namespace == "" {
 					getNS()
-					log.Warnf("The backed up resource: '%s', MAY not have been part of any of the contexts (namespaces); But they WERE checked for in ALL contexts (namespaces): %v. Check previous log entries to verify.", resInfo.Name, namespaces)
+					log.Warnf("spec corresponding to backed up resource (name: [%s], kind: [%s], namespace: [%s]) was checked for in all contexts (namespaces) [%v], as it didn't belong to any namespace. It may or may not not have been part of any of them; verify using previous log entries.", resInfo.Name, resInfo.Kind, resInfo.Namespace, namespaces)
 				}
 				found = true
 				break
@@ -1360,7 +1376,7 @@ func GetBackupSpecObjectsContexts(resourceInfos []*api.ResourceInfo, clusterApps
 		}
 		if !found {
 			getNS()
-			log.Warnf("The resource (which was backed up): '%s', is not part of any of the contexts (namespaces): %v", resInfo.Name, namespaces)
+			log.Warnf("the backed up resource (name: [%s], kind: [%s], namespace: [%s]), is not part of any of the contexts (namespaces) [%v]", resInfo.Name, resInfo.Kind, resInfo.Namespace, namespaces)
 		}
 	}
 
