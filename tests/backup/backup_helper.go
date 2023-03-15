@@ -80,8 +80,8 @@ type userAccessContext struct {
 }
 
 type BackupRestoreContext struct {
-	// schedCtxs is an array of `*scheduler.Context`s (which correspond to namespaces), each of which contain various K8s objects (speclist), that together make up the backup.
-	schedCtxs []*scheduler.Context
+	// schedulerCtxs is an array of `*scheduler.Context`s (which correspond to namespaces), each of which contain various K8s objects (speclist), that together make up the backup.
+	schedulerCtxs []*scheduler.Context
 }
 
 var backupAccessKeyValue = map[BackupAccess]string{
@@ -199,13 +199,13 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	return nil
 }
 
-// CreateBackupAndGetBackupObjects returns a BackupContext
+// CreateBackupAndGetBackupObjects creates a backup and returns a BackupContext (from the validation) that can be used to validate restores
 func CreateBackupAndGetBackupCtx(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context, clusterAppsContexts []*scheduler.Context) (*BackupRestoreContext, error) {
 
 	backupDriver := Inst().Backup
-	bkpCreateRequest := &api.BackupCreateRequest{
+	backupCreateRequest := &api.BackupCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  backupName,
 			OrgId: orgID,
@@ -230,28 +230,28 @@ func CreateBackupAndGetBackupCtx(backupName string, clusterName string, bLocatio
 			Uid:  postRuleUid,
 		},
 	}
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	log.InfoD("Creating backup [%s]", backupName)
+	_, err := backupDriver.CreateBackup(ctx, backupCreateRequest)
 	if err != nil {
 		return nil, err
 	}
 
-	ok, bkpInspectResp, err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes, 30, ctx)
-	if !ok {
+	ok, err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes, 30, ctx)
 		if err != nil {
-			return nil, err
-		} else {
-			return nil, fmt.Errorf("backupSuccessCheck error")
+		return nil, fmt.Errorf("error occurred while checking if backup [%s] was successful", backupName)
 		}
+	if !ok {
+		return nil, fmt.Errorf("backupSuccessCheck: the backup [%s] was not successful", backupName)
 	}
 
 	log.InfoD("Validating Backup Creation")
-	bkpCtx, err := ValidateBackup(bkpInspectResp, clusterAppsContexts)
+	backupCtx, err := ValidateBackup(backupName, orgID, ctx, clusterAppsContexts)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Infof("Backup [%s] created successfully", backupName)
-	return bkpCtx, nil
+	return backupCtx, nil
 }
 
 func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred string, cloudCredUID string, ctx context.Context) (*api.BackupUpdateResponse, error) {
