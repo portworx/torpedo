@@ -493,7 +493,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		log.Info(" Deleting deployed applications")
+		log.Infof(" Deleting deployed applications")
 		ValidateAndDestroy(contexts, opts)
 	})
 })
@@ -507,6 +507,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		backupLocationUID  string
 		cloudCredUID       string
 		bkpNamespaces      []string
+		scheduleNames      []string
 		cloudAccountName   string
 		backupName         string
 		schBackupName      string
@@ -525,7 +526,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ScheduleBackupCreationSingleNS", "Create schedule backup creation with a single namespace", nil, testrailID)
-		log.Info("Application installation")
+		log.Infof("Application installation")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
@@ -600,6 +601,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", backupName))
 				schBackupName, err = GetFirstScheduleBackupName(ctx, backupName, orgID)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
+				scheduleNames = append(scheduleNames, backupName)
 			}
 		})
 
@@ -618,16 +620,22 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Clean up objects after test execution")
-		log.Info("Deleting backup schedules")
-		scheduleUid, err := GetScheduleUID(backupName, orgID, ctx)
-		log.FailOnError(err, "Error while getting schedule uid %v", backupName)
-		err = DeleteSchedule(backupName, scheduleUid, periodicPolicyName, schPolicyUid, orgID)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting backup schedules - %s", backupName))
-		log.Info("Deleting restores")
+		log.Infof("Deleting backup schedules")
+		for _, scheduleName := range scheduleNames {
+			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+			log.FailOnError(err, "Error while getting schedule uid %v", scheduleName)
+			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		}
+		log.Infof("Deleting backup schedule policy")
+		policyList := []string{periodicPolicyName}
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
+
+		log.Infof("Deleting restores")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restores - %s", restoreName))
-
-		log.Info("Deleting the deployed apps after test execution")
+		log.Infof("Deleting the deployed apps after test execution")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
@@ -645,6 +653,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		backupLocationUID  string
 		cloudCredUID       string
 		bkpNamespaces      []string
+		scheduleNames      []string
 		cloudAccountName   string
 		backupName         string
 		schBackupName      string
@@ -663,7 +672,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ScheduleBackupCreationAllNS", "Create schedule backup creation with all namespaces", nil, testrailID)
-		log.Info("Application installation")
+		log.Infof("Application installation")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
@@ -736,6 +745,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", backupName))
 			schBackupName, err = GetFirstScheduleBackupName(ctx, backupName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
+			scheduleNames = append(scheduleNames, backupName)
 		})
 
 		Step("Restoring scheduled backups", func() {
@@ -753,21 +763,24 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Clean up objects after test execution")
-		log.Info("Deleting backup schedules")
-		scheduleUid, err := GetScheduleUID(backupName, orgID, ctx)
-		log.FailOnError(err, "Error while getting schedule uid %v", backupName)
-		err = DeleteSchedule(backupName, scheduleUid, periodicPolicyName, schPolicyUid, orgID)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting backup schedules - %s", backupName))
-		log.Info("Deleting restores")
+		log.Infof("Deleting backup schedules")
+		for _, scheduleName := range scheduleNames {
+			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+			log.FailOnError(err, "Error while getting schedule uid %v", scheduleName)
+			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		}
+		log.Infof("Deleting backup schedule policy")
+		policyList := []string{periodicPolicyName}
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
+		log.Infof("Deleting restores")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restores - %s", restoreName))
-
-		log.Info("Deleting the deployed applications after test execution")
+		log.Infof("Deleting the deployed applications after test execution")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-
-		log.Info("Deleting backup location, cloud credentials and clusters")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
 	})
 })
@@ -919,8 +932,6 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-
-		log.Infof("Deleting backup location, cloud credentials and clusters")
 		CleanupCloudSettingsAndClusters(newBackupLocationMap, credName, cloudCredUID, ctx)
 
 	})
@@ -938,6 +949,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		periodicSchedulePolicyUid  string
 		scheduleName               string
 		appNamespaces              []string
+		scheduleNames              []string
 		appClusterName             string
 		restoreName                string
 		nextScheduleBackupName     interface{}
@@ -1006,6 +1018,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+			scheduleNames = append(scheduleNames, scheduleName)
 		})
 		// To ensure applications are deployed after a schedule backup is created
 		Step("Schedule applications to create new namespaces", func() {
@@ -1087,13 +1100,16 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleName))
-		allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all schedule backup names of schedule named [%s]", scheduleName))
-		log.InfoD("Deleting schedule named [%s] along with its backups [%v] and schedule policies [%v]", scheduleName, allScheduleBackupNames, []string{periodicSchedulePolicyName})
-		err = DeleteSchedule(scheduleName, scheduleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule named [%s]", scheduleName))
+		for _, scheduleName := range scheduleNames {
+			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+			log.FailOnError(err, "Error while getting schedule uid %v", scheduleName)
+			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		}
+		log.Infof("Deleting backup schedule policy")
+		policyList := []string{periodicSchedulePolicyName}
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 
@@ -1307,8 +1323,6 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-
-		log.Infof("Deleting registered clusters for admin context")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })

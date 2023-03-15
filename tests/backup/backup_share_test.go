@@ -2190,6 +2190,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		periodicSchedulePolicyUid  string
 		scheduleName               string
 		backupClusterName          string
+		scheduleNames              []string
 	)
 
 	JustBeforeEach(func() {
@@ -2281,6 +2282,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+			scheduleNames = append(scheduleNames, scheduleName)
 		})
 		Step("Validate the Access toggle", func() {
 			log.InfoD("Validating the access toggle")
@@ -2332,12 +2334,18 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleName))
-		allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all schedule backup names of schedule named [%s]", scheduleName))
-		err = DeleteSchedule(scheduleName, scheduleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] along with its backups %v and schedule policies [%v]", scheduleName, allScheduleBackupNames, []string{periodicSchedulePolicyName}))
+		//Delete Schedule Backup-
+		log.Infof("Deleting backup schedule")
+		for _, scheduleName := range scheduleNames {
+			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+			log.FailOnError(err, "Error while getting schedule uid %v", scheduleName)
+			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		}
+		log.Infof("Deleting backup schedule policy")
+		policyList := []string{periodicSchedulePolicyName}
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
 		ctxNonAdmin, err := backup.GetNonAdminCtx(username, commonPassword)
 		log.FailOnError(err, "Fetching non admin ctx")
 		for _, restoreName := range restoreNames {
@@ -3467,7 +3475,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			err = ShareBackup(backupName, nil, userName, FullAccess, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Share backup %s with  user %s having FullAccess", backupName, userName))
 			userBackups1, _ := GetAllBackupsForUser(userName[0], commonPassword)
-			log.Info(" the backup are", userBackups1)
+			log.Infof(" the backup are", userBackups1)
 			err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster for user")
 		})
@@ -3639,7 +3647,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		})
 		Step("Delete roles from the users", func() {
 			for userName, role := range userRoleMapping {
-				log.Info(fmt.Sprintf("Deleting [%s] from the user : [%s]", role, userName))
+				log.Infof(fmt.Sprintf("Deleting [%s] from the user : [%s]", role, userName))
 				err := backup.DeleteRoleFromUser(userName, role, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing role [%s] from the user [%s]", role, userName))
 			}
@@ -3660,7 +3668,7 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		})
 		Step("Delete users", func() {
 			for userName := range userRoleMapping {
-				log.Info("This is the user : ", userName)
+				log.Infof("This is the user : ", userName)
 				err := backup.DeleteUser(userName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
 			}
