@@ -2,8 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"github.com/blang/semver"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -1061,6 +1064,166 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule named [%s]", scheduleName))
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
+		ValidateAndDestroy(contexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
+	var (
+		contexts           []*scheduler.Context
+		cloudCredUID       string
+		cloudCredName      string
+		backupLocationUID  string
+		backupLocationName string
+		appNamespaces      []string
+		restoreNames       []string
+		backupLocationMap  map[string]string
+		backupClusterName  string
+		srcVersion         semver.Version
+		destVersion        semver.Version
+		clusterUid         string
+	)
+	namespaceMapping := make(map[string]string)
+	duplicateBackupNameMap := make(map[string]string)
+	backupNameMap := make(map[string]string)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("BackupRestoreOnDifferentK8sVersions", "Verification of restore from duplicate backup on cluster with different kubernetes version", nil, 83721)
+		log.InfoD("Scheduling applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				log.Infof("Scheduled application with namespace [%s]", namespace)
+				appNamespaces = append(appNamespaces, namespace)
+			}
+		}
+	})
+	It("Validate restore from duplicate backup on cluster with different kubernetes version", func() {
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(contexts)
+		})
+		Step("Verify kubernetes version of source and destination cluster", func() {
+
+			Step("Configure source and destination clusters with px-central-admin", func() {
+				log.InfoD("Configuring source and destination clusters with px-central-admin")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+				err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
+				backupClusterName = SourceClusterName
+				clusterStatus, clusterUid := Inst().Backup.RegisterBackupCluster(orgID, backupClusterName, "")
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying registration of cluster named [%s] with uid [%s] as backup cluster", backupClusterName, clusterUid))
+			})
+			Step("Fetching source cluster kubernetes version", func() {
+				log.InfoD("Switched context to source")
+				err := SetSourceKubeConfig()
+				dash.VerifyFatal(err, nil, "Switching context to source cluster")
+				version, err := k8s.ClusterVersion()
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching source clutser version %v", version))
+				srcVersion, err = semver.Make(version)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching source clutser version %v", srcVersion))
+			})
+			Step("Fetching destination cluster kubernetes version", func() {
+				log.InfoD("Switched context to destination")
+				SetDestinationKubeConfig()
+				version, err := k8s.ClusterVersion()
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching destination clutser version %v", version))
+				destVersion, err = semver.Make(version)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching destination clutser version %v", destVersion))
+			})
+			Step("Compare source and destination cluster version", func() {
+				log.InfoD("source cluster version: %s ; destination cluster version: %s", srcVersion.String(), destVersion.String())
+				isValid := srcVersion.LT(destVersion)
+				dash.VerifyFatal(isValid, true, "Verifying if source cluster's kubernetes version is lesser than the destination cluster's kubernetes version.")
+			})
+			log.InfoD("Switching to source cluster")
+			err := SetSourceKubeConfig()
+			dash.VerifyFatal(err, nil, "Switching context to source cluster")
+		})
+
+		Step("Create cloud credentials and backup locations", func() {
+			log.InfoD("Creating cloud credentials and backup locations")
+			providers := getProviders()
+			backupLocationMap = make(map[string]string)
+			for _, provider := range providers {
+				cloudCredUID = uuid.New()
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				log.InfoD("Creating cloud credential named [%s] and uid [%s] using [%s] as provider", cloudCredUID, cloudCredName, provider)
+				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				bucketName := getGlobalBucketName(provider)
+				err := CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, bucketName, orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location named [%s] with uid [%s] of [%s] as provider", backupLocationName, backupLocationUID, provider))
+			}
+		})
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			var sem = make(chan struct{}, 10)
+			var wg sync.WaitGroup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				sem <- struct{}{}
+				time.Sleep(3 * time.Second)
+				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+				backupNameMap[backupName] = namespace
+				duplicateBackupName := fmt.Sprintf("%s-duplicate-%v", BackupNamePrefix, time.Now().Unix())
+				duplicateBackupNameMap[duplicateBackupName] = namespace
+				wg.Add(2)
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					defer func() { <-sem }()
+					err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
+						nil, orgID, clusterUid, "", "", "", "", ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation: %s", backupName))
+				}(backupName)
+				go func(duplicateBackupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					defer func() { <-sem }()
+					err = CreateBackup(duplicateBackupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
+						nil, orgID, clusterUid, "", "", "", "", ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying duplicate backup creation: %s", duplicateBackupName))
+				}(duplicateBackupName)
+			}
+			wg.Wait()
+		})
+		Step("Restoring duplicate backups on destination cluster with different kubernetes version", func() {
+			log.InfoD("Restoring duplicate backups on destination cluster with different kubernetes version")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			log.InfoD("Switched context to destination")
+			SetDestinationKubeConfig()
+			for duplicateBackupName, namespace := range duplicateBackupNameMap {
+				restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, duplicateBackupName, time.Now().Unix())
+				restoreNames = append(restoreNames, restoreName)
+				namespaceMapping[namespace] = namespace
+				err := CreateRestore(restoreName, duplicateBackupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
+		for _, restoreName := range restoreNames {
+			err := DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s] in ctx", restoreName))
+		}
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
