@@ -1049,7 +1049,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, nname, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 					cleanup = append(cleanup, deployment)
 				})
