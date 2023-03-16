@@ -1359,11 +1359,9 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 			os.Setenv("PDS_PASSWORD", password)
 			log.Info("Validating the admin role by listing users.")
 			_, err = pdslib.ApiComponents.AccountRoleBinding.ListAccountsRoleBindings(accountID)
-			if err != nil {
-				log.FailOnError(err, fmt.Sprintf("User - %v is unable to fetch all the users belong to this account which is unexpected since it has the admin privileges.", usersParam.AdminUsername))
-			} else {
-				log.InfoD("User - %v is able to fetch all the users belong to this account as expected since it has the admin privileges.", usersParam.AdminUsername)
-			}
+			log.FailOnError(err, fmt.Sprintf("User - %v is unable to fetch all the users belong to this account which is unexpected since it has the admin privileges.", usersParam.AdminUsername))
+			log.InfoD("User - %v is able to fetch all the users belong to this account as expected since it has the admin privileges.", usersParam.AdminUsername)
+
 		})
 
 		Step("Adding users having non-admin privileges and validating it.", func() {
@@ -1371,7 +1369,7 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 			username := usersParam.NonAdminUsername
 			password := usersParam.NonAdminPassword
 			err := pdslib.ApiComponents.AccountRoleBinding.AddUser(accountID, username, false)
-			log.FailOnError(err, "Error while adding the user")
+			log.FailOnError(err, fmt.Sprintf("Error while adding the user %s", username))
 			os.Setenv("PDS_USERNAME", username)
 			os.Setenv("PDS_PASSWORD", password)
 			log.InfoD("Validating the non-admin role by trying to list users belong to this account.")
