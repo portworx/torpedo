@@ -64,28 +64,14 @@ func MarkResiliencyTC(resiliency bool) {
 
 // Function to wait for event to induce failure
 func InduceFailure(failure string, ns string) {
-	// for !hasResiliencyConditionMet {
-	// 	continue
-	// }
 	isResiliencyConditionset := <-ResiliencyCondition
 	if isResiliencyConditionset {
 		FailureType.Method()
-		log.Infof("=====In If condition but outside method call======")
 	} else {
 		testError = errors.New("Resiliency Condition did not meet. Failing this test case.")
 		return
 	}
-	log.Infof("======Exited Induce Failure Method======")
-	// Triggering Resiliency Failure now
-	// ResiliencyDriver(failure, ns)
 	return
-}
-
-// Resiliency Driver Module
-func ResiliencyDriver(failure string, ns string) {
-	if failure == active_node_reboot_during_deployment {
-		FailureType.Method()
-	}
 }
 
 // Close all open Resiliency channels here
@@ -119,10 +105,7 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 func RebootActiveNodeDuringDeployment(ns string) error {
 	// Get StatefulSet Object
 	var ss *v1.StatefulSet
-	// ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
-	// if testError != nil {
-	// 	return testError
-	// }
+
 	// Waiting till atleast first pod have a node assigned
 	var pods []corev1.Pod
 	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
@@ -147,11 +130,7 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 		}
 		return true, nil
 	})
-	// Get Pods of this StatefulSet
-	// pods, testError := k8sApps.GetStatefulSetPods(ss)
-	// if testError != nil {
-	// 	return testError
-	// }
+
 	// Check which Pod is still not up. Try to reboot the node on which this Pod is hosted.
 	for _, pod := range pods {
 		log.Infof("Checking Pod %v running on Node: %v", pod.Name, pod.Spec.NodeName)
@@ -159,14 +138,7 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 			log.InfoD("This Pod running on Node %v is Ready so skipping this pod......", pod.Spec.NodeName)
 			continue
 		} else {
-			// nodes := node.GetWorkerNodes()
 			var nodeToReboot node.Node
-			// for _, n := range nodes {
-			// 	if n.Name != pod.Spec.NodeName {
-			// 		continue
-			// 	}
-			// 	nodeToReboot = n
-			// }
 			nodeToReboot, testError = node.GetNodeByName(pod.Spec.NodeName)
 			if testError != nil {
 				return testError
