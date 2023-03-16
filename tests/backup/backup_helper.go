@@ -860,9 +860,10 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
+		_ = DeleteCloudCredential(credName, orgID, cloudCredUID)
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
-			err := DeleteCloudCredential(credName, orgID, cloudCredUID)
-			if err != nil {
+			_, err := IsCloudCredPresent(credName, cloudCredUID, ctx, orgID)
+			if err == nil {
 				return "", true, fmt.Errorf("deleting cloud cred %s", credName)
 			}
 			return "", false, nil
@@ -1316,6 +1317,21 @@ func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID stri
 	}
 	log.Infof("Backup locations fetched - %s", backupLocationNames)
 	return false, nil
+}
+
+// IsCloudCredPresent checks whether the Cloud Cred is present or not
+func IsCloudCredPresent(cloudCredName string, cloudCredUID string, ctx context.Context, orgID string) (bool, error) {
+	cloudCredInspectRequest := &api.CloudCredentialInspectRequest{
+		OrgId:          orgID,
+		Name:           cloudCredName,
+		IncludeSecrets: false,
+		Uid:            cloudCredUID,
+	}
+	_, err := Inst().Backup.InspectCloudCredential(ctx, cloudCredInspectRequest)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // CreateCustomRestoreWithPVCs function can be used to deploy custom deployment with it's PVCs. It cannot be used for any other resource type.

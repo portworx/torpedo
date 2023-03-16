@@ -157,7 +157,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
 					backupId := vol.GetBackupId()
 					dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
-						fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
+						fmt.Sprintf("Check if the backup %s is incremental or not", incrementalBackupName))
 				}
 			}
 		})
