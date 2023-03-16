@@ -70,12 +70,15 @@ func InduceFailure(failure string, ns string) {
 	isResiliencyConditionset := <-ResiliencyCondition
 	if isResiliencyConditionset {
 		FailureType.Method()
+		log.Infof("=====In If condition but outside method call======")
 	} else {
 		testError = errors.New("Resiliency Condition did not meet. Failing this test case.")
 		return
 	}
+	log.Infof("======Exited Induce Failure Method======")
 	// Triggering Resiliency Failure now
 	// ResiliencyDriver(failure, ns)
+	return
 }
 
 // Resiliency Driver Module

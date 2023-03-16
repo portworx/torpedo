@@ -763,7 +763,6 @@ func GetPdsSs(depName string, ns string, check_till_replica int32) {
 		log.Infof("Resiliency Condition still not met. Will retry to see if it has met now.....")
 		return false, nil
 	})
-	ResiliencyCondition <- false
 }
 
 // DeleteK8sPods deletes the pods in given namespace
