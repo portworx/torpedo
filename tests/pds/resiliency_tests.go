@@ -44,7 +44,7 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		defer pdslib.CloseResiliencyChannel()
+		pdslib.CloseResiliencyChannel()
 		if !isDeploymentsDeleted {
 			Step("Delete created deployments")
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
