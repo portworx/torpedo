@@ -2222,8 +2222,6 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 		return obj.Name, obj.Kind, obj.Namespace, nil
 	} else if obj, ok := specObj.(*storageapi.StorageClass); ok {
 		return obj.Name, obj.Kind, obj.Namespace, nil
-		// } else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
-		//	return nil, obj.Kind, obj.Namespace, nil
 	} else if obj, ok := specObj.(*storkapi.GroupVolumeSnapshot); ok {
 		return obj.Name, obj.Kind, obj.Namespace, nil
 	} else if obj, ok := specObj.(*corev1.Secret); ok {
@@ -2293,6 +2291,8 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 	} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
 		return obj.Name, obj.Kind, obj.Namespace, nil
 	} else if obj, ok := specObj.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		return obj.Name, obj.Kind, "", nil
+	} else {
 		return obj.Name, obj.Kind, "", nil
 	}
 
