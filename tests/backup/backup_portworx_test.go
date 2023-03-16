@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -16,7 +18,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 
 	. "github.com/portworx/torpedo/tests"
 )
@@ -94,13 +95,13 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.Infof("Deleting backup, restore and backup location, cloud account")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
-		backupUID, err := getBackupUID(backupName, orgID)
+		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
@@ -240,7 +241,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		ctx, _ := backup.GetAdminCtxFromSecret()
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
@@ -250,7 +251,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 			err := Inst().S.Destroy(contexts[i], opts)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s", taskName))
 		}
-		backupUID, err := getBackupUID(backupName, orgID)
+		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
@@ -427,7 +428,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
 		for i := 0; i < len(contexts); i++ {
 			opts := make(map[string]bool)
@@ -540,7 +541,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting Restores, Backups and Backup locations, cloud account")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -551,7 +552,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, backupName := range backupNames {
-			backupUID, err := getBackupUID(backupName, orgID)
+			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
 			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))

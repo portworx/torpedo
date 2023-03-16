@@ -133,13 +133,19 @@ type Cluster interface {
 	) error
 
 	// RegisterBackupCluster registers backup cluster
-	RegisterBackupCluster(orgID, cloudName, uid string) (api.ClusterInfo_StatusInfo_Status, string)
+	RegisterBackupCluster(orgID, clusterName, uid string) (api.ClusterInfo_StatusInfo_Status, string)
 
 	// RegisterBackupClusterNonAdminUser registers backup cluster with non admin context
 	RegisterBackupClusterNonAdminUser(orgID, clusterName, uid string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, string)
 
 	// ValidateBackupCluster validates if backup pods are up or not
 	ValidateBackupCluster() error
+
+	// GetClusterUID returns uid of the given cluster name in an organization
+	GetClusterUID(ctx context.Context, orgID string, clusterName string) (string, error)
+
+	// GetClusterName returns name of the given cluster uid in an organization
+	GetClusterName(ctx context.Context, orgID string, clusterUid string) (string, error)
 }
 
 // BLocation obj interface
@@ -211,8 +217,11 @@ type Backup interface {
 	GetVolumeBackupIDs(ctx context.Context, backupName string, namespace string,
 		clusterObj *api.ClusterObject, orgID string) ([]string, error)
 
-	// GetBackupUID returns uid of the given backup in an organization
+	// GetBackupUID returns uid of the given backup name in an organization
 	GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error)
+
+	// GetBackupName returns name of the given backup uid in an organization
+	GetBackupName(ctx context.Context, backupUid string, orgID string) (string, error)
 
 	// UpdateBackupShare updates backupshare of existing backup object
 	UpdateBackupShare(ctx context.Context, req *api.BackupShareUpdateRequest) (*api.BackupShareUpdateResponse, error)
@@ -313,26 +322,8 @@ type ScheduleBackup interface {
 	// GetAllScheduleBackupNames returns names of all scheduled backups for the given schedule
 	GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error)
 
-	// GetOrdinalScheduleBackupName returns the name of the backup at the specified ordinal position for the given schedule
-	GetOrdinalScheduleBackupName(ctx context.Context, scheduleName string, ordinal int, orgID string) (string, error)
-
-	// GetFirstScheduleBackupName returns the name of the first scheduled backup for the given schedule
-	GetFirstScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error)
-
-	// GetLatestScheduleBackupName returns the name of the latest scheduled backup for the given schedule
-	GetLatestScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error)
-
 	// GetAllScheduleBackupUIDs returns uids of all scheduled backups for the given schedule
 	GetAllScheduleBackupUIDs(ctx context.Context, scheduleName string, orgID string) ([]string, error)
-
-	// GetOrdinalScheduleBackupUID returns the uid of the backup at the specified ordinal position for the given schedule
-	GetOrdinalScheduleBackupUID(ctx context.Context, scheduleName string, ordinal int, orgID string) (string, error)
-
-	// GetFirstScheduleBackupUID returns the uid of the first scheduled backup for the given schedule
-	GetFirstScheduleBackupUID(ctx context.Context, scheduleName string, orgID string) (string, error)
-
-	// GetLatestScheduleBackupUID returns the uid of the latest scheduled backup for the given schedule
-	GetLatestScheduleBackupUID(ctx context.Context, scheduleName string, orgID string) (string, error)
 }
 
 // License interface
