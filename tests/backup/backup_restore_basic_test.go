@@ -1086,6 +1086,7 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 		srcVersion         semver.Version
 		destVersion        semver.Version
 		clusterUid         string
+		clusterStatus      api.ClusterInfo_StatusInfo_Status
 	)
 	namespaceMapping := make(map[string]string)
 	duplicateBackupNameMap := make(map[string]string)
@@ -1121,7 +1122,7 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 				err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
 				backupClusterName = SourceClusterName
-				clusterStatus, clusterUid := Inst().Backup.RegisterBackupCluster(orgID, backupClusterName, "")
+				clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, backupClusterName, "")
 				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying registration of cluster named [%s] with uid [%s] as backup cluster", backupClusterName, clusterUid))
 			})
 			Step("Fetching source cluster kubernetes version", func() {
