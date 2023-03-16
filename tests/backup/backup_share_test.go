@@ -802,6 +802,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			backupName := backupNames[2]
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctxNonAdmin, make(map[string]string))
+			log.Infof("Error after CreateRestore - %s", err.Error())
 			// Restore validation to make sure that the user with View Access cannot restore
 			dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
 
@@ -828,11 +829,6 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			err := Inst().S.Destroy(contexts[i], opts)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
-
-		log.Infof("Deleting registered clusters for non-admin context")
-		for _, ctxNonAdmin := range userContexts {
-			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 
 		var wg sync.WaitGroup
