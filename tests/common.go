@@ -327,7 +327,6 @@ var (
 	SchedulePolicyScaleUID               string
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
-	CurrentClusterConfigPath             = ""
 )
 
 var (
@@ -2370,10 +2369,6 @@ func SetClusterContext(clusterConfigPath string) error {
 		clusterConfigPathOrDefault = "default"
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathOrDefault)
-	if clusterConfigPath == CurrentClusterConfigPath {
-		log.InfoD("Switching context: The context is already [%s]", clusterConfigPathOrDefault)
-		return nil
-	}
 
 	err := Inst().S.SetConfig(clusterConfigPath)
 	if err != nil {
@@ -2396,10 +2391,7 @@ func SetClusterContext(clusterConfigPath string) error {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
 	}
-
-	CurrentClusterConfigPath = clusterConfigPath
 	log.InfoD("Switched context to [%s]", clusterConfigPath)
-
 	return nil
 }
 
