@@ -3,6 +3,10 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/go-version"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/torpedo/pkg/osutils"
+	batchv1 "k8s.io/api/batch/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -59,6 +63,11 @@ const (
 	backupLocationDeleteRetryTime             = 30 * time.Second
 	rebootNodeTimeout                         = 1 * time.Minute
 	rebootNodeTimeBeforeRetry                 = 5 * time.Second
+	latestPxBackupVersion                     = "2.4.0"
+	latestPxBackupHelmBranch                  = "2.4.0-dev"
+	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
+	jobDeleteTimeout                          = 5 * time.Minute
+	jobDeleteRetryTime                        = 10 * time.Second
 )
 
 var (
@@ -1442,4 +1451,138 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	}
 	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 	return err
+}
+
+// GetPxBackupVersion returns the version of Px Backup like 2.4.0-e85b680
+func GetPxBackupVersion() (string, error) {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return "", err
+	}
+	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
+	if err != nil {
+		return "", err
+	}
+	version := versionResponse.GetVersion()
+	return fmt.Sprintf("%s.%s.%s-%s", version.GetMajor(), version.GetMinor(), version.GetPatch(), version.GetGitCommit()), nil
+}
+
+// GetPxBackupVersionSemVer returns the version of Px Backup in semver format like 2.4.0
+func GetPxBackupVersionSemVer() (string, error) {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return "", err
+	}
+	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
+	if err != nil {
+		return "", err
+	}
+	version := versionResponse.GetVersion()
+	return fmt.Sprintf("%s.%s.%s", version.GetMajor(), version.GetMinor(), version.GetPatch()), nil
+}
+
+// GetPxBackupBuildDate returns the Px Backup build date
+func GetPxBackupBuildDate() (string, error) {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return "", err
+	}
+	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
+	if err != nil {
+		return "", err
+	}
+	version := versionResponse.GetVersion()
+	return version.GetBuildDate(), nil
+}
+
+func upgradePxBackup(versionToUpgrade string) error {
+	// Compare and validate the upgrade path
+	currentBackupVersionString, err := GetPxBackupVersion()
+	if err != nil {
+		return err
+	}
+	currentBackupVersion, err := version.NewSemver(currentBackupVersionString)
+	if err != nil {
+		return err
+	}
+	versionToUpgradeSemVer, err := version.NewSemver(versionToUpgrade)
+
+	if currentBackupVersion.GreaterThanOrEqual(versionToUpgradeSemVer) {
+		return fmt.Errorf("px backup cannot be upgraded from version [%s] to version [%s]", currentBackupVersion.String(), versionToUpgradeSemVer.String())
+	}
+
+	var cmd string
+	currentVersion, err := GetPxBackupVersionSemVer()
+	if err != nil {
+		return err
+	}
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+
+	// Delete the pxcentral-post-install-hook job
+	job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
+	err = deleteJobAndWait(job)
+	log.FailOnError(err, "Failed to delete job %s", job.Name)
+
+	// Get storage class using for px-backup deployment
+	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNamespace)
+	if err != nil {
+		return err
+	}
+	pvcs, err := apps.Instance().GetPVCsForStatefulSet(statefulSet)
+	if err != nil {
+		return err
+	}
+	storageClassName := pvcs.Items[0].Spec.StorageClassName
+
+	// Get the tarball required for helm upgrade
+
+	cmd = fmt.Sprintf("curl -O  https://raw.githubusercontent.com/portworx/helm/%s/stable/px-central-%s.tgz", latestPxBackupHelmBranch, versionToUpgrade)
+	log.Infof("curl command to get tarball: %v ", cmd)
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("downloading of tarball with error: %v", err)
+	}
+	log.Infof("Terminal output: %s", output)
+
+	// Execute helm upgrade using cmd
+
+	log.Infof("Upgrading Px-Backup version from %s to %s", currentVersion, versionToUpgrade)
+	cmd = fmt.Sprintf("helm install px-central px-central-%s.tgz --namespace %s --create-namespace --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+		versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
+	log.Infof("helm command: %v ", cmd)
+	output, _, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("upgrade failed with error: %v", err)
+	}
+	log.Infof("Terminal output: %s", output)
+
+	// Wait for pods to be ready and post install hook job to be completed
+
+	return nil
+}
+
+// deleteJobAndWait waiting for resources to be deleted
+func deleteJobAndWait(resource interface{}) error {
+	if obj, ok := resource.(*batchv1.Job); ok {
+		t := func() (interface{}, bool, error) {
+			err := batch.Instance().DeleteJob(obj.Name, obj.Namespace)
+
+			if err != nil && strings.Contains(err.Error(), "not found") {
+				return nil, false, err
+			}
+			return nil, true, fmt.Errorf("job %s not deleted", obj.Name)
+		}
+
+		_, err := task.DoRetryWithTimeout(t, jobDeleteTimeout, jobDeleteRetryTime)
+		if err != nil {
+			return err
+		}
+		log.Infof("job %s deleted", obj.Name)
+	} else {
+		return fmt.Errorf("provided resource is of type %T", resource)
+	}
+	return nil
 }
