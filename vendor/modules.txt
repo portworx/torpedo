@@ -866,7 +866,7 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 # github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba
 ## explicit; go 1.19
 github.com/portworx/px-backup-api/pkg/apis/v1
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd => github.com/portworx/sched-ops v1.20.4-rc1.0.20220824221759-f21d3c3b4496
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20230316053641-8a5ed90d5c70 => github.com/portworx/sched-ops v1.20.4-rc1.0.20230227070742-0e0e882ec5d6
 ## explicit; go 1.12
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
