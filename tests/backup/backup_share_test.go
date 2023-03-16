@@ -2432,33 +2432,39 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
-		//ctx, err := backup.GetAdminCtxFromSecret()
-		//log.FailOnError(err, "Fetching px-central-admin ctx")
-		//opts := make(map[string]bool)
-		//opts[SkipClusterScopedObjects] = true
-		//ValidateAndDestroy(contexts, opts)
-		//log.Infof("Deleting backup created by px-central-admin")
-		//backupDriver := Inst().Backup
-		//backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		//dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-		//_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		//dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
-		//log.Infof("Deleting backup created by user")
-		//userBackupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, userBackupName, orgID)
-		//dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID of user for backup %s", userBackupName))
-		//_, err = DeleteBackup(userBackupName, userBackupUID, orgID, ctxNonAdmin)
-		//dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s created by user", userBackupName))
-		//log.Infof("Cleaning up users")
-		//for _, user := range userName {
-		//	err = backup.DeleteUser(user)
-		//}
-		//log.FailOnError(err, "Error in deleting user")
-		//log.Infof("Deleting registered clusters for non-admin context")
-		//err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
-		//dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-		//err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
-		//dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
-		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+		log.Infof("Deleting backup created by px-central-admin")
+
+		log.Infof("Deleting registered clusters for non-admin context")
+		err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+		err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+
+		backupDriver := Inst().Backup
+
+		log.Infof("Deleting backup created by user - %s", userName[0])
+		userBackupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, userBackupName, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID of user for backup %s", userBackupName))
+		_, err = DeleteBackup(userBackupName, userBackupUID, orgID, ctxNonAdmin)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s created by user", userBackupName))
+
+		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
+
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
+		log.Infof("Cleaning up users")
+		for _, user := range userName {
+			err = backup.DeleteUser(user)
+		}
+		log.FailOnError(err, "Error in deleting user")
 	})
 })
 

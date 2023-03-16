@@ -846,7 +846,8 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
-			_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Error while deleting backup location - %s", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
 				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
 				if err != nil {
@@ -857,7 +858,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 				}
 				return "", false, nil
 			}
-			_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
