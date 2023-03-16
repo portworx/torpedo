@@ -1522,9 +1522,14 @@ func upgradePxBackup(versionToUpgrade string) error {
 	}
 
 	// Delete the pxcentral-post-install-hook job
-	job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
-	err = deleteJobAndWait(job)
-	log.FailOnError(err, "Failed to delete job %s", job.Name)
+	//job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
+	//if err != nil {
+	//	return err
+	//}
+	//err = deleteJobAndWait(job)
+	//if err != nil {
+	//	return err
+	//}
 
 	// Get storage class using for px-backup deployment
 	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNamespace)
@@ -1550,7 +1555,7 @@ func upgradePxBackup(versionToUpgrade string) error {
 	// Execute helm upgrade using cmd
 
 	log.Infof("Upgrading Px-Backup version from %s to %s", currentVersion, versionToUpgrade)
-	cmd = fmt.Sprintf("helm install px-central px-central-%s.tgz --namespace %s --create-namespace --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+	cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --create-namespace --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
 		versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
 	log.Infof("helm command: %v ", cmd)
 	output, _, err = osutils.ExecShell(cmd)
