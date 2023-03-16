@@ -53,6 +53,8 @@ const (
 	lastName                                  = "lastName"
 	password                                  = "Password1"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
+	backupDeleteTimeout                       = 10 * time.Minute
+	backupDeleteRetryTime                     = 30 * time.Second
 )
 
 var (
@@ -1499,4 +1501,26 @@ func IsPresent(dataSlice interface{}, data interface{}) bool {
 	}
 	return false
 
+}
+
+func DeleteBackupAndWait(backupName string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+	}
+
+	backupDeletionSuccessCheck := func() (interface{}, bool, error) {
+		currentBackups, err := backupDriver.EnumerateBackup(ctx, backupEnumerateReq)
+		if err != nil {
+			return "", true, err
+		}
+		for _, backup := range currentBackups.GetBackups() {
+			if backup.Name == backupName {
+				return "", true, fmt.Errorf("backup [%s] is not yet deleted", backup.Name)
+			}
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
+	return err
 }

@@ -2452,6 +2452,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID of user for backup %s", userBackupName))
 		_, err = DeleteBackup(userBackupName, userBackupUID, orgID, ctxNonAdmin)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s created by user", userBackupName))
+		DeleteBackupAndWait(userBackupName, ctxNonAdmin)
 
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
