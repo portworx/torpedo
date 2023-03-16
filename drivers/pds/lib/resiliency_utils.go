@@ -80,11 +80,11 @@ func CloseResiliencyChannel() {
 }
 
 //
-func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, namespace string) error {
+func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, namespace string, CheckTillReplica int32) error {
 	switch FailureType.Type {
 	// Case when we want to reboot a node onto which a deployment pod is coming up
 	case active_node_reboot_during_deployment:
-		check_till_replica = 1
+		check_till_replica = CheckTillReplica
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will reboot the node it is hosted upon.", check_till_replica)
 		func1 := func() {
 			GetPdsSs(deployment.GetClusterResourceName(), namespace, check_till_replica)

@@ -36,7 +36,7 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
 					deployment, _, _, err = TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
-					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace)
+					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot test for data service %v", *deployment.ClusterResourceName))
 				})
 			}

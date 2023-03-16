@@ -50,6 +50,9 @@ type Parameter struct {
 		Namespace       string `json:"Namespace"`
 		PxNamespace     string `json:"PxNamespace"`
 	} `json:"InfraToTest"`
+	ResiliencyTest struct {
+		CheckTillReplica int32 `json:"CheckTillReplica"`
+	} `json:"ResiliencyTest"`
 }
 
 // ResourceSettingTemplate struct used to store template values
