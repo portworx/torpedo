@@ -9,6 +9,8 @@ import (
 
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
@@ -114,15 +116,39 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 func RebootActiveNodeDuringDeployment(ns string) error {
 	// Get StatefulSet Object
 	var ss *v1.StatefulSet
-	ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
-	if testError != nil {
-		return testError
-	}
+	// ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+	// if testError != nil {
+	// 	return testError
+	// }
+	// Waiting till atleast first pod have a node assigned
+	var pods []corev1.Pod
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+		if testError != nil {
+			return false, testError
+		}
+		// Get Pods of this StatefulSet
+		pods, testError = k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			return false, testError
+		}
+		// Check if Pods have a node assigned or it's in a window where it's just coming up
+		for _, pod := range pods {
+			log.Infof("======= Nodename of pod %v is :%v:========== ", pod.Name, pod.Spec.NodeName)
+			if pod.Spec.NodeName == "" || pod.Spec.NodeName == " " {
+				log.Infof("Pod %v still does not have a node assigned. Retrying in 5 seconds", pod.Name)
+				return false, nil
+			} else {
+				return true, nil
+			}
+		}
+		return true, nil
+	})
 	// Get Pods of this StatefulSet
-	pods, testError := k8sApps.GetStatefulSetPods(ss)
-	if testError != nil {
-		return testError
-	}
+	// pods, testError := k8sApps.GetStatefulSetPods(ss)
+	// if testError != nil {
+	// 	return testError
+	// }
 	// Check which Pod is still not up. Try to reboot the node on which this Pod is hosted.
 	for _, pod := range pods {
 		log.Infof("Checking Pod %v running on Node: %v", pod.Name, pod.Spec.NodeName)
