@@ -41,6 +41,7 @@ const (
 	pdsNamespaceLabel                    = "pds.portworx.com/available"
 	timeOut                              = 30 * time.Minute
 	maxtimeInterval                      = 30 * time.Second
+	timeInterval                         = 1 * time.Second
 	active_node_reboot_during_deployment = "active-node-reboot-during-deployment"
 )
 
