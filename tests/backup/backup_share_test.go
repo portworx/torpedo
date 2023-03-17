@@ -425,9 +425,9 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 
 // ShareBackupWithUsersAndGroups shares backup with multiple users and groups with different access
 var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
-	numberOfUsers := 6
+	numberOfUsers := 30
 	numberOfGroups := 3
-	groupSize := 2
+	groupSize := 10
 	numberOfBackups := 9
 	users := make([]string, 0)
 	groups := make([]string, 0)
