@@ -350,6 +350,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 				log.FailOnError(err, "Unable to fetch backup - %s", incrementalBackupName)
 				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
 					backupId := vol.GetBackupId()
+					log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
 					dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
 						fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
 				}
