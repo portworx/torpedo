@@ -38,9 +38,9 @@ const (
 	groupsToBeCreated                         = "GROUPS_TO_CREATE"
 	maxUsersInGroup                           = "MAX_USERS_IN_GROUP"
 	maxBackupsToBeCreated                     = "MAX_BACKUPS"
-	maxWaitPeriodForBackupCompletionInMinutes = 20
-	maxWaitPeriodForRestoreCompletionInMinute = 20
-	maxWaitPeriodForBackupJobCancellation     = 10
+	maxWaitPeriodForBackupCompletionInMinutes = 40
+	maxWaitPeriodForRestoreCompletionInMinute = 40
+	maxWaitPeriodForBackupJobCancellation     = 20
 	backupJobCancellationRetryTime            = 30
 	globalAWSBucketPrefix                     = "global-aws"
 	globalAzureBucketPrefix                   = "global-azure"
@@ -52,7 +52,7 @@ const (
 	firstName                                 = "firstName"
 	lastName                                  = "lastName"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
-	backupDeleteTimeout                       = 10 * time.Minute
+	backupDeleteTimeout                       = 20 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
 	mongodbPodStatusTimeout                   = 20 * time.Minute
 	mongodbPodStatusRetryTime                 = 30 * time.Second

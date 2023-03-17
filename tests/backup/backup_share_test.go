@@ -2555,7 +2555,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 					defer func() { <-sem }()
 					err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{bkpNamespaces[0]},
 						labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-					log.FailOnError(err, "Failed while trying to take backup of application- %s", bkpNamespaces[0])
+					log.FailOnError(err, "Failed while trying to take backup of application - %s with backup name - [%s]", bkpNamespaces[0], backupName)
 				}(backupName)
 			}
 			wg.Wait()
