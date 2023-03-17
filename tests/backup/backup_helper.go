@@ -1516,9 +1516,9 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 		if err != nil {
 			return "", true, err
 		}
-		for _, backup := range currentBackups.GetBackups() {
-			if backup.Name == backupName {
-				return "", true, fmt.Errorf("backup [%s] is not yet deleted", backup.Name)
+		for _, backupObject := range currentBackups.GetBackups() {
+			if backupObject.Name == backupName {
+				return "", true, fmt.Errorf("backupObject [%s] is not yet deleted", backupObject.Name)
 			}
 		}
 		return "", false, nil
