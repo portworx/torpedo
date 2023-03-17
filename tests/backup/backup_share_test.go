@@ -2257,7 +2257,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			labelSelectors := make(map[string]string)
 			err = CreateScheduleBackup(scheduleName, backupClusterName, backupLocationName, backupLocationUID, appNamespaces,
-				labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
+				labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))

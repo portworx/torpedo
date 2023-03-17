@@ -298,7 +298,7 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 // CreateScheduleBackup creates a schedule backup
 func CreateScheduleBackup(scheduleName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) error {
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, nsLabelSelectors string, ctx context.Context) error {
 	var firstScheduleBackupName string
 	var firstScheduleBackupUid string
 	backupDriver := Inst().Backup
@@ -327,6 +327,7 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
+		NsLabelSelectors: nsLabelSelectors,
 	}
 	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
 	if err != nil {
@@ -420,7 +421,7 @@ func CreateBackupWithoutCheck(backupName string, clusterName string, bLocation s
 // CreateScheduleBackupWithoutCheck creates a schedule backup without waiting for success
 func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context) (*api.BackupScheduleInspectResponse, error) {
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, nsLabelSelectors string, ctx context.Context) (*api.BackupScheduleInspectResponse, error) {
 	backupDriver := Inst().Backup
 	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -447,6 +448,7 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
+		NsLabelSelectors: nsLabelSelectors,
 	}
 	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
 	if err != nil {

@@ -574,7 +574,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
 				err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
+					labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", backupName))
 				schBackupName, err = GetFirstScheduleBackupName(ctx, backupName, orgID)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
@@ -706,7 +706,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicPolicyName)
 			backupName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, timeStamp)
 			err = CreateScheduleBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, bkpNamespaces,
-				labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
+				labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", backupName))
 			schBackupName, err = GetFirstScheduleBackupName(ctx, backupName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
@@ -968,7 +968,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			namespaces := []string{"*"}
 			labelSelectors := make(map[string]string)
 			err = CreateScheduleBackup(scheduleName, appClusterName, backupLocationName, backupLocationUID, namespaces,
-				labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
+				labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
