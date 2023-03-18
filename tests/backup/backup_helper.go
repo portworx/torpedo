@@ -874,16 +874,19 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		}
 	}
 
-	cloudCredDeleteStatus := func() (interface{}, bool, error) {
-		err := DeleteCloudCredential(credName, orgID, cloudCredUID)
-		if err != nil {
-			return "", true, fmt.Errorf("deleting cloud cred %s", credName)
+	if credName != "" && cloudCredUID != "" {
+		cloudCredDeleteStatus := func() (interface{}, bool, error) {
+			err := DeleteCloudCredential(credName, orgID, cloudCredUID)
+			if err != nil {
+				return "", true, fmt.Errorf("deleting cloud cred %s", credName)
+			}
+			return "", false, nil
 		}
-		return "", false, nil
+		_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 	}
-	_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
-	err = DeleteCluster(SourceClusterName, orgID, ctx)
+
+	err := DeleteCluster(SourceClusterName, orgID, ctx)
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 	err = DeleteCluster(destinationClusterName, orgID, ctx)
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))

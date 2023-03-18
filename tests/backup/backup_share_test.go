@@ -3972,21 +3972,32 @@ var _ = Describe("{SwapShareBackup}", func() {
 			}
 		}
 
-		log.InfoD("Delete all backups")
-		for i := 0; i <= numberOfUsers-1; i++ {
-			ctx, err := backup.GetNonAdminCtx(users[i], "Password1")
-			log.FailOnError(err, "Fetching nonAdminCtx ")
-			_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+		currentTestFailed := CurrentGinkgoTestDescription().Failed
+		if !currentTestFailed {
+			log.InfoD("Delete all backups")
+			for i := 0; i <= numberOfUsers-1; i++ {
+				ctx, err := backup.GetNonAdminCtx(users[i], "Password1")
+				log.FailOnError(err, "Fetching nonAdminCtx ")
+				_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+			}
 		}
 
 		for _, userName := range users {
 			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
 			log.FailOnError(err, "Fetching nonAdminCtx ")
 			allBackupLocations, err := getAllBackupLocations(ctx)
+			log.FailOnError(err, "Fetching backup locations ")
+			CleanupCloudSettingsAndClusters(allBackupLocations, "", "", ctx)
+		}
+
+		for _, userName := range users {
+			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
+			log.FailOnError(err, "Fetching nonAdminCtx ")
 			allCloudCredentials, err := getAllCloudCredentials(ctx)
+			log.FailOnError(err, "Fetching cloud credentials ")
 			for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
-				CleanupCloudSettingsAndClusters(allBackupLocations, cloudCredentialName, cloudCredentialUid, ctx)
+				CleanupCloudSettingsAndClusters(nil, cloudCredentialName, cloudCredentialUid, ctx)
 			}
 		}
 		var wg sync.WaitGroup
