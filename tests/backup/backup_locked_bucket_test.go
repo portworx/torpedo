@@ -409,6 +409,6 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx, true)
 	})
 })

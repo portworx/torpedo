@@ -135,17 +135,11 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed applications")
 		ValidateAndDestroy(contexts, opts)
-		backupDriver := Inst().Backup
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
-		log.InfoD("Deleting backup")
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 		log.InfoD("Deleting restore")
 		log.InfoD(fmt.Sprintf("Backup name [%s]", restoreName))
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -279,13 +273,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 			err := DeleteRestore(restore, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
 		}
-		for _, backupName := range backupNames {
-			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - %s", backupName))
-		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -449,17 +437,6 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s deletion", restoreName))
 		})
-		Step("Delete the backups", func() {
-			log.Infof("Delete the backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s deletion", backupName))
-
-		})
 		Step("Delete backup schedule policy", func() {
 			log.InfoD("Delete backup schedule policy")
 			policyList := []string{intervalName}
@@ -486,7 +463,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			log.InfoD("Delete the backup location %s and cloud account %s", bkpLocationName, cloudCredName)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 		})
 	})
 	JustAfterEach(func() {
@@ -638,8 +615,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -780,7 +756,8 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
+		log.Info("Deleting backup location, cloud credentials and clusters")
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -908,16 +885,6 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		//Delete Backup
-		log.InfoD("Deleting backup")
-		backupDriver := Inst().Backup
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			dash.VerifySafely(err, nil, fmt.Sprintf("trying to get backup UID for backup %s", backupName))
-			log.Infof("About to delete backup - %s", backupName)
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup %s deletion is successful", backupName))
-		}
 		//Delete Restore
 		log.InfoD("Deleting restore")
 		for _, restoreName := range restoreNames {
@@ -928,8 +895,8 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-		CleanupCloudSettingsAndClusters(newBackupLocationMap, credName, cloudCredUID, ctx)
-
+		log.Infof("Deleting backup location, cloud credentials and clusters")
+		CleanupCloudSettingsAndClusters(newBackupLocationMap, credName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -1113,8 +1080,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
 		ValidateAndDestroy(contexts, opts)
-
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -1319,7 +1285,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -1443,7 +1409,8 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
 		ValidateAndDestroy(contexts, opts)
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		log.Infof("Deleting registered clusters for admin context")
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -1600,7 +1567,7 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 			err = k8sStorage.DeleteStorageClass(scName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting storage class %s from source cluster", scName))
 		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -2072,7 +2039,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
 		ValidateAndDestroy(contexts, opts)
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -2226,6 +2193,6 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 			}(restoreName)
 		}
 		wg.Wait()
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })

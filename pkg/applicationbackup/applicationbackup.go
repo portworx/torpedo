@@ -2,6 +2,9 @@ package applicationbackup
 
 import (
 	"fmt"
+	"github.com/onsi/gomega"
+	"os"
+	"strconv"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -19,6 +22,11 @@ const (
 	s3SecretName                           = "s3secret"
 	applicationBackupScheduleRetryInterval = 10 * time.Second
 	applicationBackupScheduleRetryTimeout  = 5 * time.Minute
+)
+
+var (
+	expect       = gomega.Expect
+	haveOccurred = gomega.HaveOccurred
 )
 
 func CreateBackupLocation(
@@ -120,4 +128,21 @@ func WaitForAppBackupToStart(name, namespace string, timeout time.Duration) erro
 	}
 	_, err := task.DoRetryWithTimeout(getAppBackup, timeout, applicationBackupScheduleRetryInterval)
 	return err
+}
+
+func IsDebugEnv() bool {
+	debugEnv := os.Getenv("DEBUG_ENVIRONMENT")
+
+	//If DEBUG_ENVIRONMENT is not present return false indicating it is not a debug run
+	if debugEnv == "" {
+		return false
+	}
+	debugEnvBool, err := strconv.ParseBool(debugEnv)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("IS_DEBUG_ENV=%s is not a valid boolean value", debugEnv))
+	if debugEnvBool {
+		return true
+	} else {
+		return false
+	}
 }

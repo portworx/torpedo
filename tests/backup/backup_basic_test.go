@@ -2,21 +2,22 @@ package tests
 
 import (
 	"fmt"
-	"os"
-	"strings"
-	"testing"
-	"time"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/applicationbackup"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"os"
+	"strings"
+	"testing"
+	"time"
 )
 
 func getBucketNameSuffix() string {
@@ -190,15 +191,6 @@ var _ = AfterSuite(func() {
 		}
 	}
 
-	// Cleanup all backups
-	allBackups, err := GetAllBackupsAdmin()
-	for _, backupName := range allBackups {
-		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
-	}
-
 	// Cleanup all restores
 	allRestores, err := GetAllRestoresAdmin()
 	for _, restoreName := range allRestores {
@@ -206,26 +198,76 @@ var _ = AfterSuite(func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 	}
 
-	// Cleanup all backup locations
-	allBackupLocations, err := getAllBackupLocations(ctx)
-	dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-	for backupLocationUid, backupLocationName := range allBackupLocations {
-		err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
-	}
-
-	backupLocationDeletionSuccess := func() (interface{}, bool, error) {
-		allBackupLocations, err := getAllBackupLocations(ctx)
-		dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-		if len(allBackupLocations) > 0 {
-			return "", true, fmt.Errorf("found %d backup locations", len(allBackupLocations))
-		} else {
-			return "", false, nil
+	testSuiteFailed := false
+	for _, testFailed := range testSuiteResults {
+		if testFailed == true {
+			testSuiteFailed = true
+			break
 		}
 	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
-	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 
+	// Get all backup locations
+	allBackupLocations, err := getAllBackupLocations(ctx)
+	dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+
+	debugEnv := applicationbackup.IsDebugEnv()
+
+	if testSuiteFailed && debugEnv {
+		log.Infof("Not cleaning up backups and buckets since testsuite failed and it is debug run DEBUG_ENVIRONMENT is set to true")
+		// Clean up all backup locations keeping existing backup
+		for backupLocationUid, backupLocationName := range allBackupLocations {
+			err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, false)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
+		}
+
+		backupLocationDeletionSuccess := func() (interface{}, bool, error) {
+			allBackupLocations, err := getAllBackupLocations(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+			if len(allBackupLocations) > 0 {
+				return "", true, fmt.Errorf("found %d backup locations", len(allBackupLocations))
+			} else {
+				return "", false, nil
+			}
+		}
+		_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
+		dash.VerifySafely(err, nil, "Verifying backup location deletion success")
+	} else {
+		log.Infof("Cleaning up backup,backup location and buckets")
+		// Clean up all backup locations and existing backup
+		for backupLocationUid, backupLocationName := range allBackupLocations {
+			err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
+		}
+
+		backupLocationDeletionSuccess := func() (interface{}, bool, error) {
+			allBackupLocations, err := getAllBackupLocations(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+			if len(allBackupLocations) > 0 {
+				return "", true, fmt.Errorf("found %d backup locations", len(allBackupLocations))
+			} else {
+				return "", false, nil
+			}
+		}
+		_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
+		dash.VerifySafely(err, nil, "Verifying backup location deletion success")
+
+		// Cleanup all buckets
+		providers := getProviders()
+		for _, provider := range providers {
+			switch provider {
+			case drivers.ProviderAws:
+				DeleteBucket(provider, globalAWSBucketName)
+				log.Infof("Bucket deleted - %s", globalAWSBucketName)
+			case drivers.ProviderAzure:
+				DeleteBucket(provider, globalAzureBucketName)
+				log.Infof("Bucket deleted - %s", globalAzureBucketName)
+			case drivers.ProviderGke:
+				DeleteBucket(provider, globalGCPBucketName)
+				log.Infof("Bucket deleted - %s", globalGCPBucketName)
+			}
+		}
+
+	}
 	// Cleanup all cloud credentials
 	allCloudCredentials, err := getAllCloudCredentials(ctx)
 	dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
@@ -245,22 +287,6 @@ var _ = AfterSuite(func() {
 	}
 	_, err = DoRetryWithTimeoutWithGinkgoRecover(cloudCredentialDeletionSuccess, 5*time.Minute, 30*time.Second)
 	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
-
-	// Cleanup all buckets after suite
-	providers := getProviders()
-	for _, provider := range providers {
-		switch provider {
-		case drivers.ProviderAws:
-			DeleteBucket(provider, globalAWSBucketName)
-			log.Infof("Bucket deleted - %s", globalAWSBucketName)
-		case drivers.ProviderAzure:
-			DeleteBucket(provider, globalAzureBucketName)
-			log.Infof("Bucket deleted - %s", globalAzureBucketName)
-		case drivers.ProviderGke:
-			DeleteBucket(provider, globalGCPBucketName)
-			log.Infof("Bucket deleted - %s", globalGCPBucketName)
-		}
-	}
 
 })
 

@@ -182,7 +182,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 
 })
@@ -365,17 +365,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-
-		backupDriver := Inst().Backup
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			log.Infof("About to delete backup - %s", backupName)
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
-		}
-
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -586,13 +576,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-
-		log.InfoD("Deleting the backups")
-		for _, backup := range backupNames {
-			_, err := DeleteBackup(backup, backupMap[backup], orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backup))
-		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
 		for _, userName := range users {
@@ -790,7 +774,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -1055,7 +1039,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			}(restoreName)
 		}
 		wg.Wait()
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -1317,7 +1301,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		log.FailOnError(err, "Switching context to source cluster")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -1583,7 +1567,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 			}(restoreName)
 		}
 		wg.Wait()
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -1796,6 +1780,9 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user restore %s", restoreName))
 		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
+		// Cleaning up px-backup cluster
+		ctx, err = backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx, true)
 	})
 })

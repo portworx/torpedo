@@ -240,7 +240,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		// Cleaning up px-backup cluster
 		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -464,6 +464,6 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		// Cleaning up px-backup cluster
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx, true)
 	})
 })
