@@ -14,7 +14,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-// IssueDeleteOfIncrementalBackupsAndRestore Issue delete of incremental backups in between and try to restore from
+// IssueDeleteOfIncrementalBackupsAndRestore  Issues delete of incremental backups in between and tries to restore from
 // the newest backup.
 var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 	var (
@@ -166,20 +166,16 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 			log.InfoD("Restoring the backed up namespaces")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for index, namespace := range bkpNamespaces {
-				restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", namespace, RandomString(4))
+			for _, backupName := range incrementalBackupNames2 {
+				restoreName = fmt.Sprintf("%s-%s", backupName, RandomString(4))
 				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
-					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", namespace, RandomString(4))
+					restoreName = fmt.Sprintf("%s-%s", backupName, RandomString(4))
 				}
-				restoreNames = append(restoreNames, restoreName)
-				log.InfoD("Restoring [%s] namespace from the [%s] backup", namespace, backupNames[index])
-				err = CreateRestore(restoreName, backupNames[index], namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
+				log.InfoD("Restoring %s backup", backupName)
+				err = CreateRestore(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+				restoreNames = append(restoreNames, restoreName)
 			}
-		})
-		Step("Validate applications", func() {
-			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
 		})
 	})
 

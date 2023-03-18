@@ -867,9 +867,12 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		}
 		_ = DeleteCloudCredential(credName, orgID, cloudCredUID)
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
-			_, err := IsCloudCredPresent(credName, cloudCredUID, ctx, orgID)
+			status, err := IsCloudCredPresent(credName, cloudCredUID, ctx, orgID)
 			if err == nil {
-				return "", true, fmt.Errorf("deleting cloud cred %s", credName)
+				return "", true, fmt.Errorf("deleting cloud cred %s still present with error %v", credName, err)
+			}
+			if status == true {
+				return "", true, fmt.Errorf("cloud cred %s is not deleted yet", credName)
 			}
 			return "", false, nil
 		}
@@ -1326,17 +1329,24 @@ func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID stri
 
 // IsCloudCredPresent checks whether the Cloud Cred is present or not
 func IsCloudCredPresent(cloudCredName string, cloudCredUID string, ctx context.Context, orgID string) (bool, error) {
-	cloudCredInspectRequest := &api.CloudCredentialInspectRequest{
+	cloudCredNames := make([]string, 0)
+	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
 		OrgId:          orgID,
-		Name:           cloudCredName,
 		IncludeSecrets: false,
-		Uid:            cloudCredUID,
 	}
-	_, err := Inst().Backup.InspectCloudCredential(ctx, cloudCredInspectRequest)
+	cloudCredObjs, err := Inst().Backup.EnumerateCloudCredential(ctx, cloudCredEnumerateRequest)
 	if err != nil {
 		return false, err
 	}
-	return true, nil
+	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
+		cloudCredNames = append(cloudCredNames, cloudCredObj.GetName())
+		if cloudCredObj.GetName() == cloudCredName && cloudCredObj.GetUid() == cloudCredUID {
+			log.Infof("Cloud Credential [%s] is present", cloudCredName)
+			return true, nil
+		}
+	}
+	log.Infof("Cloud Credentials fetched - %s", cloudCredNames)
+	return false, nil
 }
 
 // CreateCustomRestoreWithPVCs function can be used to deploy custom deployment with it's PVCs. It cannot be used for any other resource type.
