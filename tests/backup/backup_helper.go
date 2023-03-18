@@ -892,6 +892,66 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 }
 
+func CleanupCloudSettingsAndClusters1(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context, clusterCleanup bool) {
+	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
+	currentTestFailed := CurrentGinkgoTestDescription().Failed
+	if len(backupLocationMap) != 0 {
+		if !currentTestFailed {
+			for backupLocationUID, bkpLocationName := range backupLocationMap {
+				_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+				backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+					status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+					if err != nil {
+						return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+					}
+					if status == true {
+						return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+					}
+					return "", false, nil
+				}
+				_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
+			}
+		} else {
+			for backupLocationUID, bkpLocationName := range backupLocationMap {
+				_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, false)
+				backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+					status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+					if err != nil {
+						return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+					}
+					if status == true {
+						return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
+					}
+					return "", false, nil
+				}
+				_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
+			}
+			testSuiteResults = append(testSuiteResults, currentTestFailed)
+		}
+	}
+
+	if credName != "" && cloudCredUID != "" {
+		cloudCredDeleteStatus := func() (interface{}, bool, error) {
+			err := DeleteCloudCredential(credName, orgID, cloudCredUID)
+			if err != nil {
+				return "", true, fmt.Errorf("deleting cloud cred %s", credName)
+			}
+			return "", false, nil
+		}
+		_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
+	}
+
+	if clusterCleanup {
+		err := DeleteCluster(SourceClusterName, orgID, ctx)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+		err = DeleteCluster(destinationClusterName, orgID, ctx)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+	}
+}
+
 // AddRoleAndAccessToUsers assigns role and access level to the users
 // AddRoleAndAccessToUsers return map whose key is userRoleAccess and value is backup for each user
 func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRoleAccess]string, error) {

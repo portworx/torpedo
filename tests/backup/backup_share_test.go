@@ -3977,7 +3977,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			log.FailOnError(err, "Fetching nonAdminCtx ")
 			allBackupLocations, err := getAllBackupLocations(ctx)
 			log.FailOnError(err, "Fetching backup locations ")
-			CleanupCloudSettingsAndClusters(allBackupLocations, "", "", ctx)
+			CleanupCloudSettingsAndClusters1(allBackupLocations, "", "", ctx, true)
 			log.InfoD("Completed deleting backup location")
 		}
 
@@ -3987,7 +3987,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			allCloudCredentials, err := getAllCloudCredentials(ctx)
 			log.FailOnError(err, "Fetching cloud credentials ")
 			for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
-				CleanupCloudSettingsAndClusters(nil, cloudCredentialName, cloudCredentialUid, ctx)
+				CleanupCloudSettingsAndClusters1(nil, cloudCredentialName, cloudCredentialUid, ctx, false)
 			}
 			log.InfoD("Completed deleting cloud cred")
 		}
