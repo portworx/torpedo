@@ -3972,39 +3972,14 @@ var _ = Describe("{SwapShareBackup}", func() {
 			}
 		}
 
-		log.InfoD("Delete all backups")
-		for i := 0; i <= numberOfUsers-1; i++ {
-			ctx, err := backup.GetNonAdminCtx(users[i], "Password1")
-			log.FailOnError(err, "Fetching nonAdminCtx ")
-			_, err = DeleteBackup(backupName, backupUIDList[i], orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
-		}
-
-		// Cleanup all backup locations
 		for _, userName := range users {
 			ctx, err := backup.GetNonAdminCtx(userName, "Password1")
 			log.FailOnError(err, "Fetching nonAdminCtx ")
 			allBackupLocations, err := getAllBackupLocations(ctx)
-			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-			for backupLocationUid, backupLocationName := range allBackupLocations {
-				if userBackupLocationMapping[userName] == backupLocationName {
-					err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
-					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
-				}
+			allCloudCredentials, err := getAllCloudCredentials(ctx)
+			for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
+				CleanupCloudSettingsAndClusters(allBackupLocations, cloudCredentialName, cloudCredentialUid, ctx)
 			}
-
-			backupLocationDeletionSuccess := func() (interface{}, bool, error) {
-				allBackupLocations, err := getAllBackupLocations(ctx)
-				dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-				for _, backupLocationName := range allBackupLocations {
-					if userBackupLocationMapping[userName] == backupLocationName {
-						return "", true, fmt.Errorf("found %s backup locations", backupLocationName)
-					}
-				}
-				return "", false, nil
-			}
-			_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 10*time.Minute, 30*time.Second)
-			dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 		}
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
