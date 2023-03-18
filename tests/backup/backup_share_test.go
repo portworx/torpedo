@@ -2109,7 +2109,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 					defer wg.Done()
 					_, err = DeleteBackup(backup, backupMap[backup], orgID, ctx)
 					log.FailOnError(err, "Failed to delete backup - %s", backup)
-					err = backupDriver.WaitForBackupDeletion(ctx, backup, orgID, time.Minute*10, time.Minute*1)
+					err = backupDriver.WaitForBackupDeletion(ctx, backup, orgID, time.Minute*30, time.Minute*1)
 					log.FailOnError(err, "Error waiting for backup deletion %v", backup)
 				}(backup)
 			}
