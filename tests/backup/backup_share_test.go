@@ -3975,6 +3975,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		currentTestFailed := CurrentGinkgoTestDescription().Failed
 		if !currentTestFailed {
 			log.InfoD("Delete all backups")
+			log.InfoD("Current test passed")
 			for i := 0; i <= numberOfUsers-1; i++ {
 				ctx, err := backup.GetNonAdminCtx(users[i], "Password1")
 				log.FailOnError(err, "Fetching nonAdminCtx ")
@@ -3989,6 +3990,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			allBackupLocations, err := getAllBackupLocations(ctx)
 			log.FailOnError(err, "Fetching backup locations ")
 			CleanupCloudSettingsAndClusters(allBackupLocations, "", "", ctx)
+			log.InfoD("Completed deleting backup location")
 		}
 
 		for _, userName := range users {
@@ -3999,6 +4001,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 			for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
 				CleanupCloudSettingsAndClusters(nil, cloudCredentialName, cloudCredentialUid, ctx)
 			}
+			log.InfoD("Completed deleting cloud cred")
 		}
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
