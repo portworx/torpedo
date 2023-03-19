@@ -3841,7 +3841,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx, true)
 
 		for _, ctxNonAdmin := range userContexts {
-			CleanupCloudSettingsAndClusters(nil, credName, cloudCredUID, ctxNonAdmin, false)
+			CleanupCloudSettingsAndClusters(nil, "", "", ctxNonAdmin, true)
 		}
 
 		var wg sync.WaitGroup
