@@ -143,7 +143,6 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 	firstName := "firstName"
 	lastName := "lastName"
 	email := "testuser10@cnbu.com"
-	password := commonPassword
 	numberOfBackups := 1
 	var backupName string
 	userContexts := make([]context.Context, 0)
@@ -186,7 +185,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 			ValidateApplications(contexts)
 		})
 		Step("Create User", func() {
-			err = backup.AddUser(userName, firstName, lastName, email, password)
+			err = backup.AddUser(userName, firstName, lastName, email, commonPassword)
 			log.FailOnError(err, "Failed to create user - %s", userName)
 
 		})
@@ -230,13 +229,13 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 		Step("Duplicate shared backup", func() {
 			log.InfoD("Validating to duplicate share backup without adding cluster")
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, password)
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
 			log.FailOnError(err, "Fetching non px-central-admin user ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
 
 			// Validate that backups are shared with user
 			log.Infof("Validating that backups are shared with %s user", userName)
-			userBackups1, err := GetAllBackupsForUser(userName, password)
+			userBackups1, err := GetAllBackupsForUser(userName, commonPassword)
 			log.FailOnError(err, "Not able to fetch backup for user %s", userName)
 			dash.VerifyFatal(len(userBackups1), numberOfBackups, fmt.Sprintf("Validating that user [%s] has access to all shared backups [%v]", userName, userBackups1))
 
@@ -2639,7 +2638,6 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 	firstName := "firstName"
 	lastName := "lastName"
 	email := "testuser1@cnbu.com"
-	password := commonPassword
 	numberOfBackups := 20
 	backupNames := make([]string, 0)
 	userContexts := make([]context.Context, 0)
@@ -2682,7 +2680,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 			ValidateApplications(contexts)
 		})
 		Step("Create Users", func() {
-			err = backup.AddUser(userName, firstName, lastName, email, password)
+			err = backup.AddUser(userName, firstName, lastName, email, commonPassword)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying user %s creation", userName))
 
 		})
@@ -2750,7 +2748,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 			log.InfoD("register the Source and destination cluster of non-px Admin")
 
 			// Get user context
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, password)
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
 			log.FailOnError(err, "Fetching non px-central-admin user ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
 
@@ -2760,7 +2758,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			// Validate that backups are shared with user
 			log.Infof("Validating that backups are shared with %s user", userName)
-			userBackups1, _ := GetAllBackupsForUser(userName, password)
+			userBackups1, _ := GetAllBackupsForUser(userName, commonPassword)
 			dash.VerifyFatal(len(userBackups1), numberOfBackups, fmt.Sprintf("Validating that user [%s] has access to all shared backups", userName))
 
 			//Start deleting from user with whom the backups are shared
