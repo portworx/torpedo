@@ -1516,6 +1516,8 @@ func UpgradePxBackup(versionToUpgrade string) error {
 
 	if currentBackupVersion.GreaterThanOrEqual(versionToUpgradeSemVer) {
 		return fmt.Errorf("px backup cannot be upgraded from version [%s] to version [%s]", currentBackupVersion.String(), versionToUpgradeSemVer.String())
+	} else {
+		log.Infof("Upgrade path (%s) ---> (%s)", currentBackupVersion, versionToUpgrade)
 	}
 
 	// Getting Px Backup Namespace
@@ -1529,16 +1531,18 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("All the jobs in Px Backup Namespace [%s] - ", pxBackupNamespace)
-	for _, job := range allJobs.Items {
-		log.Infof(job.Name)
-	}
+	if len(allJobs.Items) > 0 {
+		log.Infof("All the jobs in Px Backup Namespace [%s] - ", pxBackupNamespace)
+		for _, job := range allJobs.Items {
+			log.Infof(job.Name)
+		}
 
-	for _, job := range allJobs.Items {
-		if strings.Contains(job.Name, pxCentralPostInstallHookJobName) {
-			err = deleteJobAndWait(job)
-			if err != nil {
-				return err
+		for _, job := range allJobs.Items {
+			if strings.Contains(job.Name, pxCentralPostInstallHookJobName) {
+				err = deleteJobAndWait(job)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -1612,24 +1616,20 @@ func UpgradePxBackup(versionToUpgrade string) error {
 }
 
 // deleteJobAndWait waiting for resources to be deleted
-func deleteJobAndWait(resource interface{}) error {
-	if obj, ok := resource.(*batchv1.Job); ok {
-		t := func() (interface{}, bool, error) {
-			err := batch.Instance().DeleteJob(obj.Name, obj.Namespace)
+func deleteJobAndWait(job batchv1.Job) error {
+	t := func() (interface{}, bool, error) {
+		err := batch.Instance().DeleteJob(job.Name, job.Namespace)
 
-			if err != nil && strings.Contains(err.Error(), "not found") {
-				return nil, false, err
-			}
-			return nil, true, fmt.Errorf("job %s not deleted", obj.Name)
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			return nil, false, err
 		}
-
-		_, err := task.DoRetryWithTimeout(t, jobDeleteTimeout, jobDeleteRetryTime)
-		if err != nil {
-			return err
-		}
-		log.Infof("job %s deleted", obj.Name)
-	} else {
-		return fmt.Errorf("provided resource is of type %T", resource)
+		return nil, true, fmt.Errorf("job %s not deleted", job.Name)
 	}
+
+	_, err := task.DoRetryWithTimeout(t, jobDeleteTimeout, jobDeleteRetryTime)
+	if err != nil {
+		return err
+	}
+	log.Infof("job %s deleted", job.Name)
 	return nil
 }
