@@ -1581,7 +1581,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 	log.Infof("Terminal output: %s", output)
 
-	// Wait for post install hook job to be completed and pods to be ready
+	// Wait for post install hook job to be completed
 	postInstallHookJobCompletedCheck := func() (interface{}, bool, error) {
 		job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
 		if err != nil {
@@ -1599,6 +1599,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 		return err
 	}
 
+	// Checking if all pods are running
 	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
 	log.Infof("All pods - ")
 	for _, pod := range allPods.Items {
@@ -1619,7 +1620,6 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	if !strings.EqualFold(postUpgradeVersion, versionToUpgrade) {
 		return fmt.Errorf("expected version after upgrade was %s but got %s", versionToUpgrade, postUpgradeVersion)
 	}
-
 	return nil
 }
 
