@@ -1501,7 +1501,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	var cmd string
 
 	// Compare and validate the upgrade path
-	currentBackupVersionString, err := GetPxBackupVersion()
+	currentBackupVersionString, err := GetPxBackupVersionSemVer()
 	if err != nil {
 		return err
 	}
@@ -1584,12 +1584,10 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
 	postInstallHookJobCompletedCheck := func() (interface{}, bool, error) {
 		log.Infof("*** Job Status***\n%v", job.Status)
-		for _, jobCondition := range job.Status.Conditions {
-			if jobCondition.Type != "Complete" {
-				return "", true, fmt.Errorf("expected job status condition to be %s, but got %s", "Complete", jobCondition.Type)
-			}
+		if job.Status.Succeeded > 0 {
+			return "", false, nil
 		}
-		return "", false, nil
+		return "", true, fmt.Errorf("job status not yet in desired state - %v", job.Status)
 	}
 	_, err = task.DoRetryWithTimeout(postInstallHookJobCompletedCheck, 10*time.Minute, 30*time.Second)
 	if err != nil {
@@ -1597,6 +1595,10 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 
 	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
+	log.Infof("All pods - ")
+	for _, pod := range allPods.Items {
+		log.Infof(pod.GetName())
+	}
 	if err != nil {
 		return err
 	}
