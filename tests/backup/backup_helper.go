@@ -1582,8 +1582,11 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	log.Infof("Terminal output: %s", output)
 
 	// Wait for post install hook job to be completed and pods to be ready
-	job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
 	postInstallHookJobCompletedCheck := func() (interface{}, bool, error) {
+		job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
+		if err != nil {
+			return "", true, err
+		}
 		log.Infof("*** Job Status***\n%v", job.Status)
 		if job.Status.Succeeded > 0 {
 			return "", false, nil
