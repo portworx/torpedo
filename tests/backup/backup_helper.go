@@ -877,7 +877,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			}
 			return "", false, nil
 		}
-		_, err := task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+		_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 	}
 	err := DeleteCluster(SourceClusterName, orgID, ctx)
