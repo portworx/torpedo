@@ -853,9 +853,9 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
-				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
-				if err != nil {
-					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
+				status, err2 := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+				if err2 != nil {
+					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err2)
 				}
 				if status == true {
 					return "", true, fmt.Errorf("backup location %s is not deleted yet", bkpLocationName)
@@ -869,7 +869,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", credName))
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
 			status, err2 := IsCloudCredPresent(credName, ctx, orgID)
-			if err2 == nil {
+			if err2 != nil {
 				return "", true, fmt.Errorf("deleting cloud cred %s still present with error %v", credName, err2)
 			}
 			if status == true {
@@ -1331,20 +1331,20 @@ func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID stri
 // IsCloudCredPresent checks whether the Cloud Cred is present or not
 func IsCloudCredPresent(cloudCredName string, ctx context.Context, orgID string) (bool, error) {
 	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
-		OrgId:          orgID
+		OrgId:          orgID,
+		IncludeSecrets: false,
 	}
 	cloudCredObjs, err := Inst().Backup.EnumerateCloudCredential(ctx, cloudCredEnumerateRequest)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", cloudCredName))
 	if err != nil {
 		return false, err
 	}
 	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
-		log.InfoD("Cloud Cred Object %s", cloudCredObj.GetName())
 		if cloudCredObj.GetName() == cloudCredName {
 			log.Infof("Cloud Credential [%s] is present", cloudCredName)
 			return true, nil
 		}
 	}
+	log.Infof("Cloud Cred Object %s", cloudCredName)
 	return false, nil
 }
 
