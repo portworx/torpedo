@@ -1515,7 +1515,8 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 
 	if currentBackupVersion.GreaterThanOrEqual(versionToUpgradeSemVer) {
-		return fmt.Errorf("px backup cannot be upgraded from version [%s] to version [%s]", currentBackupVersion.String(), versionToUpgradeSemVer.String())
+		log.Infof("Allowing upgrading for now")
+		//return fmt.Errorf("px backup cannot be upgraded from version [%s] to version [%s]", currentBackupVersion.String(), versionToUpgradeSemVer.String())
 	} else {
 		log.Infof("Upgrade path (%s) ---> (%s)", currentBackupVersionString, versionToUpgrade)
 	}
