@@ -954,7 +954,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchedulePolicyUid = uuid.New()
-			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 5, 5)
 			err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
 			periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
@@ -1012,7 +1012,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 				return ordinalScheduleBackupName, false, nil
 			}
 			log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
-			time.Sleep(15 * time.Minute)
+			time.Sleep(5 * time.Minute)
 			nextScheduleBackupName, err = task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of ordinal [%v] of schedule named [%s]", nextScheduleBackupOrdinal, scheduleName))
 			log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName.(string))

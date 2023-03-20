@@ -327,8 +327,9 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
-		NsLabelSelectors: nsLabelSelectors,
+		// NsLabelSelectors: nsLabelSelectors,
 	}
+	log.InfoD(bkpSchCreateRequest.String())
 	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
 	if err != nil {
 		return err
