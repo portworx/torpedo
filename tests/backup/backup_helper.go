@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	cloudAccountDeleteTimeout                 = 20 * time.Minute
+	cloudAccountDeleteTimeout                 = 30 * time.Minute
 	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentNamespace                  = "kube-system"
 	restoreNamePrefix                         = "tp-restore"
@@ -868,7 +868,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		err := DeleteCloudCredential(credName, orgID, cloudCredUID)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", credName))
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
-			status, err := IsCloudCredPresent(credName, cloudCredUID, ctx, orgID)
+			status, err := IsCloudCredPresent(credName, ctx, orgID)
 			if err == nil {
 				return "", true, fmt.Errorf("deleting cloud cred %s still present with error %v", credName, err)
 			}
@@ -1329,8 +1329,7 @@ func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID stri
 }
 
 // IsCloudCredPresent checks whether the Cloud Cred is present or not
-func IsCloudCredPresent(cloudCredName string, cloudCredUID string, ctx context.Context, orgID string) (bool, error) {
-	cloudCredNames := make([]string, 0)
+func IsCloudCredPresent(cloudCredName string, ctx context.Context, orgID string) (bool, error) {
 	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
 		OrgId:          orgID,
 		IncludeSecrets: false,
@@ -1340,13 +1339,11 @@ func IsCloudCredPresent(cloudCredName string, cloudCredUID string, ctx context.C
 		return false, err
 	}
 	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
-		cloudCredNames = append(cloudCredNames, cloudCredObj.GetName())
-		if cloudCredObj.GetName() == cloudCredName && cloudCredObj.GetUid() == cloudCredUID {
+		if cloudCredObj.GetName() == cloudCredName {
 			log.Infof("Cloud Credential [%s] is present", cloudCredName)
 			return true, nil
 		}
 	}
-	log.Infof("Cloud Credentials fetched - %s", cloudCredNames)
 	return false, nil
 }
 
