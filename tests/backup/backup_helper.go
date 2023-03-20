@@ -1517,7 +1517,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	if currentBackupVersion.GreaterThanOrEqual(versionToUpgradeSemVer) {
 		return fmt.Errorf("px backup cannot be upgraded from version [%s] to version [%s]", currentBackupVersion.String(), versionToUpgradeSemVer.String())
 	} else {
-		log.Infof("Upgrade path (%s) ---> (%s)", currentBackupVersion, versionToUpgrade)
+		log.Infof("Upgrade path (%s) ---> (%s)", currentBackupVersionString, versionToUpgrade)
 	}
 
 	// Getting Px Backup Namespace
@@ -1620,10 +1620,13 @@ func deleteJobAndWait(job batchv1.Job) error {
 	t := func() (interface{}, bool, error) {
 		err := batch.Instance().DeleteJob(job.Name, job.Namespace)
 
-		if err != nil && strings.Contains(err.Error(), "not found") {
-			return nil, false, err
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				return "", false, nil
+			}
+			return "", false, err
 		}
-		return nil, true, fmt.Errorf("job %s not deleted", job.Name)
+		return "", true, fmt.Errorf("job %s not deleted", job.Name)
 	}
 
 	_, err := task.DoRetryWithTimeout(t, jobDeleteTimeout, jobDeleteRetryTime)
