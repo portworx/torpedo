@@ -64,7 +64,7 @@ const (
 	rebootNodeTimeout                         = 1 * time.Minute
 	rebootNodeTimeBeforeRetry                 = 5 * time.Second
 	latestPxBackupVersion                     = "2.4.0"
-	latestPxBackupHelmBranch                  = "2.4.0-dev"
+	latestPxBackupHelmBranch                  = "master"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
 	jobDeleteTimeout                          = 5 * time.Minute
 	jobDeleteRetryTime                        = 10 * time.Second
@@ -1495,7 +1495,11 @@ func GetPxBackupBuildDate() (string, error) {
 	return version.GetBuildDate(), nil
 }
 
-func upgradePxBackup(versionToUpgrade string) error {
+// UpgradePxBackup will perform the upgrade tasks for Px Backup to the version passed as string
+// Eg: versionToUpgrade := "2.4.0"
+func UpgradePxBackup(versionToUpgrade string) error {
+	var cmd string
+
 	// Compare and validate the upgrade path
 	currentBackupVersionString, err := GetPxBackupVersion()
 	if err != nil {
@@ -1506,30 +1510,38 @@ func upgradePxBackup(versionToUpgrade string) error {
 		return err
 	}
 	versionToUpgradeSemVer, err := version.NewSemver(versionToUpgrade)
+	if err != nil {
+		return err
+	}
 
 	if currentBackupVersion.GreaterThanOrEqual(versionToUpgradeSemVer) {
 		return fmt.Errorf("px backup cannot be upgraded from version [%s] to version [%s]", currentBackupVersion.String(), versionToUpgradeSemVer.String())
 	}
 
-	var cmd string
-	currentVersion, err := GetPxBackupVersionSemVer()
-	if err != nil {
-		return err
-	}
+	// Getting Px Backup Namespace
 	pxBackupNamespace, err := backup.GetPxBackupNamespace()
 	if err != nil {
 		return err
 	}
 
-	// Delete the pxcentral-post-install-hook job
-	//job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
-	//if err != nil {
-	//	return err
-	//}
-	//err = deleteJobAndWait(job)
-	//if err != nil {
-	//	return err
-	//}
+	// Delete the pxcentral-post-install-hook job is it exists
+	allJobs, err := batch.Instance().ListAllJobs(pxBackupNamespace, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	log.Infof("All the jobs in Px Backup Namespace [%s] - ", pxBackupNamespace)
+	for _, job := range allJobs.Items {
+		log.Infof(job.Name)
+	}
+
+	for _, job := range allJobs.Items {
+		if strings.Contains(job.Name, pxCentralPostInstallHookJobName) {
+			err = deleteJobAndWait(job)
+			if err != nil {
+				return err
+			}
+		}
+	}
 
 	// Get storage class using for px-backup deployment
 	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNamespace)
@@ -1554,7 +1566,7 @@ func upgradePxBackup(versionToUpgrade string) error {
 
 	// Execute helm upgrade using cmd
 
-	log.Infof("Upgrading Px-Backup version from %s to %s", currentVersion, versionToUpgrade)
+	log.Infof("Upgrading Px-Backup version from %s to %s", currentBackupVersionString, versionToUpgrade)
 	cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --create-namespace --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
 		versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
 	log.Infof("helm command: %v ", cmd)
@@ -1564,7 +1576,37 @@ func upgradePxBackup(versionToUpgrade string) error {
 	}
 	log.Infof("Terminal output: %s", output)
 
-	// Wait for pods to be ready and post install hook job to be completed
+	// Wait for post install hook job to be completed and pods to be ready
+	job, err := batch.Instance().GetJob(pxCentralPostInstallHookJobName, pxBackupNamespace)
+	postInstallHookJobCompletedCheck := func() (interface{}, bool, error) {
+		log.Infof("*** Job Status***\n%v", job.Status)
+		for _, jobCondition := range job.Status.Conditions {
+			if jobCondition.Type != "Complete" {
+				return "", true, fmt.Errorf("expected job status condition to be %s, but got %s", "Complete", jobCondition.Type)
+			}
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(postInstallHookJobCompletedCheck, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
+	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
+	if err != nil {
+		return err
+	}
+	for _, pod := range allPods.Items {
+		core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+	}
+
+	postUpgradeVersion, err := GetPxBackupVersionSemVer()
+	if err != nil {
+		return err
+	}
+	if !strings.EqualFold(postUpgradeVersion, versionToUpgrade) {
+		return fmt.Errorf("expected version after upgrade was %s but got %s", versionToUpgrade, postUpgradeVersion)
+	}
 
 	return nil
 }

@@ -16,10 +16,8 @@ var _ = Describe("{UpgradePxBackup}", func() {
 	})
 	It("Basic Backup Creation", func() {
 		Step("Upgrade Px Backup", func() {
-			err := upgradePxBackup(latestPxBackupVersion)
+			err := UpgradePxBackup(latestPxBackupVersion)
 			log.FailOnError(err, "Failed during upgrade")
-
-			log.Infof("Upgrading Px Backup from version %s to %s")
 
 		})
 	})
