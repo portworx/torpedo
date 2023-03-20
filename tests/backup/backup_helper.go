@@ -821,6 +821,7 @@ func createUsers(numberOfUsers int) []string {
 func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context, cleanupCluster bool) {
 	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
 	currentTestFailed := CurrentGinkgoTestDescription().Failed
+	testSuiteResults = append(testSuiteResults, currentTestFailed)
 	if len(backupLocationMap) != 0 {
 		if !currentTestFailed {
 			for backupLocationUID, bkpLocationName := range backupLocationMap {
@@ -854,10 +855,8 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 				_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 			}
-			testSuiteResults = append(testSuiteResults, currentTestFailed)
 		}
 	}
-
 	if credName != "" && cloudCredUID != "" {
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
 			err := DeleteCloudCredential(credName, orgID, cloudCredUID)
