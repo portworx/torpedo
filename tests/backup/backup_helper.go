@@ -1589,6 +1589,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 		}
 		log.Infof("*** Job Status***\n%v", job.Status)
 		if job.Status.Succeeded > 0 {
+			log.Infof("Job Succeeded - %v", job.Status)
 			return "", false, nil
 		}
 		return "", true, fmt.Errorf("job status not yet in desired state - %v", job.Status)
@@ -1611,6 +1612,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 
 	postUpgradeVersion, err := GetPxBackupVersionSemVer()
+	log.Infof("postUpgradeVersion --- %s", postUpgradeVersion)
 	if err != nil {
 		return err
 	}
