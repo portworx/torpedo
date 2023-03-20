@@ -199,6 +199,8 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		// Cleaning up px-backup cluster
 		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("CloudCredUiD: %s", cloudCredUID)
+		log.InfoD("CredName: %s", credName)
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
