@@ -527,7 +527,10 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(clusterBackupShareStatusCheck, 1*time.Minute, 10*time.Second)
-
+	if err != nil {
+		return err
+	}
+	log.Infof("Cluster backup share check complete")
 	return nil
 }
 
