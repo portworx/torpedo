@@ -1659,8 +1659,9 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 			err = DeleteScheduleBackup(scheduleName, scheduleUid, orgID)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] along with its backups %v", scheduleName, allScheduleBackupNames))
 		}
-		err = DeleteSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule policy %v", periodicSchedulePolicyName))
+		policyList := []string{periodicSchedulePolicyName}
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
 		for _, restoreName := range restoreNames {
 			err := DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
