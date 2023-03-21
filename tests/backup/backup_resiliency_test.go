@@ -1025,3 +1025,57 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// AddMultipleNamespaceLabel adds labels to namespace in range of 1000
+var _ = Describe("{AddMultipleNamespaceLabel}", func() {
+	var (
+		err            error
+		contexts       []*scheduler.Context
+		appContexts    []*scheduler.Context
+		bkpNamespaces  []string
+		nsLabelsGroup0 map[string]string
+		nsLabelsGroup1 map[string]string
+	)
+	bkpNamespaces = make([]string, 0)
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddMultipleNamespaceLabel", "Add multiple namespace label in range of 1000", nil, 58041)
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < 2; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+	})
+	It("Add multiple namespace label in range of 1000", func() {
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
+			ValidateApplications(contexts)
+		})
+		Step("Adding labels to namespaces in multiple of 10 until 1000", func() {
+			log.InfoD("Adding labels to namespaces %v in multiple of 10 until 1000", []string{bkpNamespaces[0]})
+			for i := 0; i < 100; i++ {
+				nsLabelsGroup0, err = AddMultipleLabelsToNS(10, []string{bkpNamespaces[0]}, "nsGroup0")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsGroup0, []string{bkpNamespaces[0]}))
+			}
+		})
+		Step("Adding 1000 labels to namespace", func() {
+			log.InfoD("Adding 1000 labels to namespace %v", []string{bkpNamespaces[1]})
+			nsLabelsGroup1, err = AddMultipleLabelsToNS(1000, []string{bkpNamespaces[1]}, "nsGroup1")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsGroup1, []string{bkpNamespaces[1]}))
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
+		ValidateAndDestroy(contexts, opts)
+	})
+})

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/apps"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -1425,4 +1426,19 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	}
 	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 	return err
+}
+func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (map[string]string, error) {
+	labelMap := make(map[string]string)
+	for _, namespace := range namespaces {
+		for i := 0; i < number; i++ {
+			key := fmt.Sprintf("app-backup-by-label-%v", groupName)
+			value := uuid.New()
+			labelMap[key] = value
+			err := Inst().S.AddNamespaceLabel(namespace, labelMap)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return labelMap, nil
 }
