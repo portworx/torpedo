@@ -14,7 +14,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-// IssueDeleteOfIncrementalBackupsAndRestore  Issues delete of incremental backups in between and tries to restore from
+// IssueDeleteOfIncrementalBackupsAndRestore Issues delete of incremental backups in between and tries to restore from
 // the newest backup.
 var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 	var (

@@ -870,7 +870,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
 			status, err2 := IsCloudCredPresent(credName, ctx, orgID)
 			if err2 != nil {
-				return "", true, fmt.Errorf("deleting cloud cred %s still present with error %v", credName, err2)
+				return "", true, fmt.Errorf("cloud cred %s still present with error %v", credName, err2)
 			}
 			if status == true {
 				return "", true, fmt.Errorf("cloud cred %s is not deleted yet", credName)
