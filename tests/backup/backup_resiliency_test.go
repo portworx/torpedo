@@ -1029,19 +1029,21 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 // AddMultipleNamespaceLabel adds labels to namespace in range of 1000
 var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 	var (
-		err            error
-		contexts       []*scheduler.Context
-		appContexts    []*scheduler.Context
-		bkpNamespaces  []string
-		batchLabelMap  map[string]string
-		labelMap       map[string]string
-		nsLabelsGroup0 map[string]string
-		nsLabelsGroup1 map[string]string
+		err              error
+		contexts         []*scheduler.Context
+		appContexts      []*scheduler.Context
+		bkpNamespaces    []string
+		nsLabelsGroup0   map[string]string
+		nsLabelsGroup1   map[string]string
+		batchSize        int
+		desiredNumLabels int
 	)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddMultipleNamespaceLabels", "Add multiple namespace labels in range of 1000", nil, 58041)
 		log.InfoD("Deploy applications")
+		batchSize = 10
+		desiredNumLabels = 1000
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 2; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
@@ -1061,22 +1063,23 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		})
 		Step("Adding labels to namespaces in multiple of 10 until 1000", func() {
 			log.InfoD("Adding labels to namespaces %v in multiple of 10 until 1000", []string{bkpNamespaces[0]})
-			for i := 0; i < 100; i++ {
+			for i := 0; i < desiredNumLabels/batchSize; i++ {
 				nsLabelsGroup0, err = AddMultipleLabelsToNS(10, []string{bkpNamespaces[0]}, "nsGroup0")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsGroup0, []string{bkpNamespaces[0]}))
 			}
 		})
 		Step("Adding 1000 labels to namespace", func() {
 			log.InfoD("Adding 1000 labels to namespace %v", []string{bkpNamespaces[1]})
-			nsLabelsGroup1, err = AddMultipleLabelsToNS(1000, []string{bkpNamespaces[1]}, "nsGroup1")
+			nsLabelsGroup1, err = AddMultipleLabelsToNS(desiredNumLabels, []string{bkpNamespaces[1]}, "nsGroup1")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsGroup1, []string{bkpNamespaces[1]}))
 		})
 		Step("Verifying number of labels added to namespace", func() {
 			log.InfoD("Verifying number of labels added to namespace")
-			batchLabelMap, err = Inst().S.GetNamespaceLabel(bkpNamespaces[0])
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching labels %v for namespace %v", batchLabelMap, bkpNamespaces[0]))
-			labelMap, err = Inst().S.GetNamespaceLabel(bkpNamespaces[1])
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching labels %v for namespace %v", labelMap, bkpNamespaces[1]))
+			for _, namespace := range bkpNamespaces {
+				labelMap, err := Inst().S.GetNamespaceLabel(namespace)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching labels %v for namespace %v", labelMap, namespace))
+				dash.VerifyFatal(len(labelMap), desiredNumLabels, fmt.Sprintf("Verifying number of added labels to desired labels for namespace %v", namespace))
+			}
 		})
 	})
 	JustAfterEach(func() {
