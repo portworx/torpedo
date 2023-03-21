@@ -1439,6 +1439,7 @@ func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (m
 				value := uuid.New()
 				labels[key] = value
 			}
+			log.InfoD("LABELS APPLYING %v", labels)
 			err := Inst().S.AddNamespaceLabel(ns, labels)
 			if err != nil {
 				log.Errorf("unable to add label %v to namespace %v", labels, ns)
@@ -1450,5 +1451,6 @@ func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (m
 		}(namespace)
 	}
 	wg.Wait()
+	log.InfoD("LABELMAP %v", labelMap)
 	return labelMap, nil
 }
