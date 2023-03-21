@@ -123,9 +123,9 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying incremental backup [%s] creation", incrementalBackupName))
 			}
-			log.Infof("List of backups - %v", backupNames)
-			log.Infof("List of Incremental backups Set 1 - %v", incrementalBackupNames)
-			log.Infof("List of Incremental backups Set 2 - %v", incrementalBackupNames2)
+			log.InfoD("List of backups - %v", backupNames)
+			log.InfoD("List of Incremental backups Set 1 - %v", incrementalBackupNames)
+			log.InfoD("List of Incremental backups Set 2 - %v", incrementalBackupNames2)
 		})
 		Step("Deleting incremental backup", func() {
 			log.InfoD("Deleting incremental backups")
