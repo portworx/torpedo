@@ -1515,10 +1515,9 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 
 	if currentBackupVersion.GreaterThanOrEqual(versionToUpgradeSemVer) {
-		log.Infof("Allowing upgrading for now")
-		//return fmt.Errorf("px backup cannot be upgraded from version [%s] to version [%s]", currentBackupVersion.String(), versionToUpgradeSemVer.String())
+		return fmt.Errorf("px backup cannot be upgraded from version [%s] to version [%s]", currentBackupVersion.String(), versionToUpgradeSemVer.String())
 	} else {
-		log.Infof("Upgrade path (%s) ---> (%s)", currentBackupVersionString, versionToUpgrade)
+		log.InfoD("Upgrade path chosen (%s) ---> (%s)", currentBackupVersionString, versionToUpgrade)
 	}
 
 	// Getting Px Backup Namespace
@@ -1533,7 +1532,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 		return err
 	}
 	if len(allJobs.Items) > 0 {
-		log.Infof("All the jobs in Px Backup Namespace [%s] - ", pxBackupNamespace)
+		log.Infof("List of all the jobs in Px Backup Namespace [%s] - ", pxBackupNamespace)
 		for _, job := range allJobs.Items {
 			log.Infof(job.Name)
 		}
@@ -1565,7 +1564,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	log.Infof("curl command to get tarball: %v ", cmd)
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
-		return fmt.Errorf("downloading of tarball with error: %v", err)
+		return fmt.Errorf("error downloading of tarball: %v", err)
 	}
 	log.Infof("Terminal output: %s", output)
 
@@ -1587,12 +1586,17 @@ func UpgradePxBackup(versionToUpgrade string) error {
 		if err != nil {
 			return "", true, err
 		}
-		log.Infof("*** Job Status***\n%v", job.Status)
 		if job.Status.Succeeded > 0 {
-			log.Infof("Job Succeeded - %v", job.Status)
+			log.Infof("Status of job %s after completion - "+
+				"\nactive count - %d"+
+				"\nsucceeded count - %d"+
+				"\nactive count - %d", job.Name, job.Status.Active, job.Status.Succeeded, job.Status.Failed)
 			return "", false, nil
 		}
-		return "", true, fmt.Errorf("job status not yet in desired state - %v", job.Status)
+		return "", true, fmt.Errorf("status of job %s not yet in desired state - "+
+			"\nactive count - %d"+
+			"\nsucceeded count - %d"+
+			"\nactive count - %d", job.Name, job.Status.Active, job.Status.Succeeded, job.Status.Failed)
 	}
 	_, err = task.DoRetryWithTimeout(postInstallHookJobCompletedCheck, 10*time.Minute, 30*time.Second)
 	if err != nil {
@@ -1601,7 +1605,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 
 	// Checking if all pods are running
 	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
-	log.Infof("All pods - ")
+	log.Infof("Listing all the pods in Px Backup Namespace [%s] - ", pxBackupNamespace)
 	for _, pod := range allPods.Items {
 		log.Infof(pod.GetName())
 	}
@@ -1609,17 +1613,18 @@ func UpgradePxBackup(versionToUpgrade string) error {
 		return err
 	}
 	for _, pod := range allPods.Items {
+		log.Infof("Checking status for pod - %s", pod.GetName())
 		core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
 	}
 
 	postUpgradeVersion, err := GetPxBackupVersionSemVer()
-	log.Infof("postUpgradeVersion --- %s", postUpgradeVersion)
 	if err != nil {
 		return err
 	}
 	if !strings.EqualFold(postUpgradeVersion, versionToUpgrade) {
 		return fmt.Errorf("expected version after upgrade was %s but got %s", versionToUpgrade, postUpgradeVersion)
 	}
+	log.InfoD("Upgrade from %s to %s is complete", versionToUpgrade, postUpgradeVersion)
 	return nil
 }
 
