@@ -1527,7 +1527,7 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 	return err
 }
-func CreateBackupUsingLabels(backupName string, clusterName string, bLocation string, bLocationUID string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
+func CreateBackupUsingNamespaceLabels(backupName string, clusterName string, bLocation string, bLocationUID string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context, labelSelector string) error {
 
 	var bkpUid string
@@ -1618,17 +1618,10 @@ func addLabelsToResources(namespace string) (map[string]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		err = AddLabelToResource(pvcPointer, labelKey, labelValue)
 		if err == nil {
-			// Randomly choose some pvcs to add labels to for backup
-			dice := rand.Intn(4)
-			if dice == 1 {
-				err = AddLabelToResource(pvcPointer, labelKey, labelValue)
-				if err == nil {
-					//resourceName := fmt.Sprintf("%s/%s/PersistentVolumeClaim", namespace, pvc.Name)
-					labeledSelector[labelKey] = labelValue
-					log.Infof("selected resource %v", pvcPointer)
-				}
-			}
+			labeledSelector[labelKey] = labelValue
+			log.Infof("selected resource %v", pvcPointer)
 		}
 	}
 	return labeledSelector, nil
@@ -1650,7 +1643,7 @@ func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (m
 	return labelMap, nil
 }
 
-func CreateScheduleBackupUsingLabel(scheduleName string, clusterName string, bLocation string, bLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string,
+func CreateScheduleBackupUsingNamespaceLabel(scheduleName string, clusterName string, bLocation string, bLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context, nsLabel string) error {
 	var firstScheduleBackupName string
 	var firstScheduleBackupUid string
