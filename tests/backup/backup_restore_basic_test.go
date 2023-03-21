@@ -1562,7 +1562,7 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 			dash.VerifyFatal(err, nil, "Fetching px-admin context")
 			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
 			err = CreateRestore(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, nil)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backups [%s] restore", restoreName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] restore", restoreName))
 			restoreNames = append(restoreNames, restoreName)
 		})
 		Step("Taking a backup of multiple applications", func() {
@@ -1579,7 +1579,7 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 			log.InfoD("Restoring multiple applications backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Fetching px-admin context")
-			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+			restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
 			err = CreateRestore(restoreName, multipleNamespaceBackupName, namespaceMapping, SourceClusterName, orgID, ctx, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backups [%s] restore", restoreName))
 			restoreNames = append(restoreNames, restoreName)
@@ -1612,7 +1612,7 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 			log.InfoD("Restoring scheduled backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, scheduleName)
+			restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, scheduleName, time.Now().Unix())
 			err = CreateRestore(restoreName, firstScheduleBackupName, namespaceMapping, destinationClusterName, orgID, ctx, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of restoring scheduled backups - %s", restoreName))
 			restoreNames = append(restoreNames, restoreName)
@@ -1633,7 +1633,7 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 			log.InfoD("Restoring scheduled backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, scheduleBackupMultipleNamespace)
+			restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, scheduleBackupMultipleNamespace, time.Now().Unix())
 			err = CreateRestore(restoreName, firstScheduleBackupForMultipleNs, namespaceMapping, destinationClusterName, orgID, ctx, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of restoring scheduled backups - %s", restoreName))
 			restoreNames = append(restoreNames, restoreName)
@@ -1644,11 +1644,13 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting backup created")
-		backupDriver := Inst().Backup
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Getting the backup UID for %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backupName))
+		for _, backupName := range backupNames {
+			backupDriver := Inst().Backup
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Getting the backup UID for %s", backupName))
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backupName))
+		}
 		for _, scheduleName := range scheduleNames {
 			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleName))

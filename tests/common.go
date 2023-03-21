@@ -2826,7 +2826,7 @@ func DeleteSchedulePolicy(schedulePolicyName, schedulePolicyUID string) error {
 		Name:  schedulePolicyName,
 		Uid:   schedulePolicyUID,
 	}
-	ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
 	}
