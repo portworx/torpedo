@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"regexp"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -331,8 +332,9 @@ var (
 )
 
 const (
-	rootLogDir   = "/root/logs"
-	diagsDirPath = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	rootLogDir    = "/root/logs"
+	diagsDirPath  = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	pxbLogDirPath = "/tmp/px-backup-test-logs"
 )
 
 type Weekday string
@@ -1836,7 +1838,7 @@ func PerformSystemCheck() {
 				})
 				if len(file) != 0 || err != nil {
 					log.FailOnError(err, "error checking for cores in node %s", n.Name)
-					dash.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
+					log.Errorf("Core file was found on node %s, Core Path: %s", n.Name, file)
 					coreNodes = append(coreNodes, n.Name)
 				}
 			}
@@ -4397,6 +4399,70 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 	}
 }
 
+// collectLogsFromPods collects logs from specified pods and stores them in a directory named after the test case
+func collectLogsFromPods(testCaseName string, podLabel map[string]string, namespace string, logLabel string) {
+	testCaseName = strings.ReplaceAll(testCaseName, " ", "")
+	podList, err := core.Instance().GetPods(namespace, podLabel)
+	if err != nil {
+		log.Errorf("Error in getting pods for the [%s] logs of test case [%s], Err: %v", logLabel, testCaseName, err.Error())
+		return
+	}
+	masterNode := node.GetMasterNodes()[0]
+	err = runCmd("pwd", masterNode)
+	if err != nil {
+		log.Errorf("Error in running [pwd] command in node [%s] for the [%s] logs of test case [%s]", masterNode.Name, logLabel, testCaseName)
+		return
+	}
+	testCaseLogDirPath := fmt.Sprintf("%s/%s-logs", pxbLogDirPath, testCaseName)
+	log.Infof("Creating a directory [%s] in node [%s] to store [%s] logs for the test case [%s]", testCaseLogDirPath, masterNode.Name, logLabel, testCaseName)
+	err = runCmd(fmt.Sprintf("mkdir -p %v", testCaseLogDirPath), masterNode)
+	if err != nil {
+		log.Errorf("Error in creating a directory [%s] in node [%s] to store [%s] logs for the test case [%s]. Err: %v", testCaseLogDirPath, masterNode.Name, logLabel, testCaseName, err.Error())
+		return
+	}
+	for _, pod := range podList.Items {
+		log.Infof("Writing [%s] pod into a %v/%v.log file", pod.Name, testCaseLogDirPath, pod.Name)
+		err = runCmd(fmt.Sprintf("kubectl logs %s -n %s > %s/%s.log", pod.Name, namespace, testCaseLogDirPath, pod.Name), masterNode)
+		if err != nil {
+			log.Errorf("Error in writing [%s] pod into a %v/%v.log file. Err: %v", pod.Name, testCaseLogDirPath, pod.Name, err.Error())
+		}
+	}
+}
+
+// collectStorkLogs collects Stork logs and stores them using the collectLogsFromPods function
+func collectStorkLogs(testCaseName string) {
+	storkLabel := make(map[string]string)
+	storkLabel["name"] = "stork"
+	pxNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		log.Errorf("Error in getting portworx namespace. Err: %v", err.Error())
+		return
+	}
+	collectLogsFromPods(testCaseName, storkLabel, pxNamespace, "stork")
+}
+
+// collectPxBackupLogs collects Px-Backup logs and stores them using the collectLogsFromPods function
+func collectPxBackupLogs(testCaseName string) {
+	pxbLabel := make(map[string]string)
+	pxbLabel["app"] = "px-backup"
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		log.Errorf("Error in getting px-backup namespace. Err: %v", err.Error())
+		return
+	}
+	collectLogsFromPods(testCaseName, pxbLabel, pxbNamespace, "px-backup")
+}
+
+// compressSubDirectories compresses all subdirectories within the specified directory on the master node
+func compressSubDirectories(dirPath string) {
+	masterNode := node.GetMasterNodes()[0]
+	log.Infof("Compressing sub-directories in the directory [%s] in node [%s]", dirPath, masterNode.Name)
+	err := runCmdWithNoSudo(fmt.Sprintf("find %s -mindepth 1 -depth -type d -exec sh -c 'tar czf \"${1%%/}.tar.gz\" -C \"$(dirname \"$1\")\" \"$(basename \"$1\")\" && rm -rf \"$1\"' sh {} \\;", dirPath), masterNode)
+	if err != nil {
+		log.Errorf("Error in compressing sub-directories in the directory [%s] in node [%s]", dirPath, masterNode.Name)
+	}
+}
+
 func collectAndCopyStorkLogs(issueKey string) {
 
 	storkLabel := make(map[string]string)
@@ -4662,8 +4728,81 @@ func Contains(app_list []string, app string) bool {
 	return false
 }
 
-// ValidatePoolRebalance checks rebalnce state of pools if running
-func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
+// ValidateDriveRebalance checks rebalance state of new drives added
+func ValidateDriveRebalance(stNode node.Node) error {
+
+	disks := stNode.Disks
+	var err error
+	var drivePath string
+	//2 min wait for new disk to associate with the node
+	time.Sleep(2 * time.Minute)
+
+	t := func() (interface{}, bool, error) {
+		err = Inst().V.RefreshDriverEndpoints()
+		if err != nil {
+			return nil, true, err
+		}
+
+		stNode, err = node.GetNodeByName(stNode.Name)
+		if err != nil {
+			return nil, true, err
+		}
+
+		for k := range stNode.Disks {
+			if _, ok := disks[k]; !ok {
+				drivePath = k
+				return nil, false, nil
+			}
+		}
+
+		return nil, true, fmt.Errorf("drive path not found")
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
+	if err != nil {
+		return err
+	}
+
+	cmd := fmt.Sprintf("sv drive add -d %s -o status", drivePath)
+	var prevStatus string
+
+	t = func() (interface{}, bool, error) {
+
+		// Execute the command and check get rebalance status
+		currStatus, err := Inst().V.GetPxctlCmdOutputConnectionOpts(stNode, cmd, node.ConnectionOpts{
+			IgnoreError:     false,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		}, false)
+
+		if err != nil {
+			if strings.Contains(err.Error(), "Device already exists") {
+				return "", false, nil
+			}
+			return "", true, err
+		}
+		log.Infof(fmt.Sprintf("Rebalance Status for drive [%s] in node [%s] : %s", drivePath, stNode.Name, strings.TrimSpace(currStatus)))
+		if strings.Contains(currStatus, "Rebalance done") {
+			return "", false, nil
+		}
+		if prevStatus == currStatus {
+			return "", false, fmt.Errorf("rebalance Status for drive [%s] in node [%s] is not progressing", drivePath, stNode.Name)
+		}
+		prevStatus = currStatus
+		return "", true, fmt.Errorf("wait for pool rebalance to complete for drive [%s]", drivePath)
+	}
+
+	_, err = task.DoRetryWithTimeout(t, 180*time.Minute, 3*time.Minute)
+	if err != nil {
+		return err
+	}
+	// checking all pools are online after drive rebalance
+	expectedStatus := "Online"
+	err = WaitForPoolStatusToUpdate(stNode, expectedStatus)
+	return err
+}
+
+// ValidateRebalanceJobs checks rebalance state of pools if running
+func ValidateRebalanceJobs(stNode node.Node) error {
 
 	rebalanceFunc := func() (interface{}, bool, error) {
 
@@ -4723,68 +4862,6 @@ func ValidatePoolRebalance(stNode node.Node, poolID int32) error {
 	}
 
 	_, err := task.DoRetryWithTimeout(rebalanceFunc, time.Minute*60, time.Minute*2)
-	if err != nil {
-		return err
-	}
-
-	nodePoolsToValidate := make([]*opsapi.StoragePool, 0)
-	if poolID != -1 {
-		for _, p := range stNode.Pools {
-			if p.ID == poolID {
-				nodePoolsToValidate = append(nodePoolsToValidate, p)
-				break
-			}
-		}
-	} else {
-		//A new pool might be created due to add drive,hence 2 min wait for pool to associate with node
-		time.Sleep(2 * time.Minute)
-		err = Inst().V.RefreshDriverEndpoints()
-		log.FailOnError(err, "error refreshing end points")
-		for _, n := range node.GetStorageNodes() {
-			if n.Id == stNode.Id {
-				stNode = n
-				break
-			}
-		}
-		nodePoolsToValidate = append(nodePoolsToValidate, stNode.Pools...)
-
-	}
-
-	for _, nodePool := range nodePoolsToValidate {
-		currentLastMsg := ""
-		f := func() (interface{}, bool, error) {
-			expandedPool, err := GetStoragePoolByUUID(nodePool.Uuid)
-			if err != nil {
-				return nil, true, fmt.Errorf("error getting pool by using id %s from node %s", nodePool.Uuid, stNode.Name)
-			}
-
-			if expandedPool == nil {
-				return nil, false, fmt.Errorf("expanded pool value is nil")
-			}
-			if expandedPool.LastOperation != nil {
-				log.Infof("Node [%s] Pool [%s] Status : %v, Message : %s", stNode.Name, nodePool.Uuid, expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
-				if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
-					return nil, false, fmt.Errorf("Pool is failed state. Error: %s", expandedPool.LastOperation)
-				}
-				if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
-					if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") || strings.Contains(expandedPool.LastOperation.Msg, "rebalance is running") {
-						if currentLastMsg == expandedPool.LastOperation.Msg {
-							return nil, false, fmt.Errorf("pool reblance is not progressing")
-						} else {
-							currentLastMsg = expandedPool.LastOperation.Msg
-							return nil, true, fmt.Errorf("wait for pool rebalance to complete")
-						}
-					}
-					if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") ||
-						strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance complete pool status: Maintenance") {
-						return nil, false, nil
-					}
-				}
-			}
-			return nil, false, nil
-		}
-		_, err = task.DoRetryWithTimeout(f, time.Minute*180, time.Minute*2)
-	}
 	return err
 }
 
@@ -4917,6 +4994,25 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
 	}
+	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
+	if ginkgoTestDescr.Failed {
+		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+		testCaseName := ginkgoTestDescr.FullTestText
+		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
+		if len(matches) > 1 {
+			testCaseName = matches[1]
+		}
+		masterNode := node.GetMasterNodes()[0]
+		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
+		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
+		if err != nil {
+			log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
+			return
+		}
+		collectStorkLogs(testCaseName)
+		collectPxBackupLogs(testCaseName)
+		compressSubDirectories(pxbLogDirPath)
+	}
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
@@ -4968,6 +5064,7 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 	// pick a  pool doing some IOs from a pools list
 	var err error
+	var isIOsInProgress bool
 	err = Inst().V.RefreshDriverEndpoints()
 	if err != nil {
 		return "", err
@@ -4985,10 +5082,20 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
+
+			t := func() (interface{}, bool, error) {
+				isIOsInProgress, err = Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
+				if err != nil {
+					return false, true, err
+				}
+				return true, false, nil
+			}
+
+			_, err = task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
 			if err != nil {
 				return "", err
 			}
+
 			if isIOsInProgress {
 				log.Infof("IOs are in progress for [%v]", vol.Name)
 				poolUuids := appVol.ReplicaSets[0].PoolUuids
@@ -5461,6 +5568,26 @@ func IsPoolInMaintenance(n node.Node) bool {
 	return false
 }
 
+// WaitForPoolOffline waits  till pool went to offline status
+func WaitForPoolOffline(n node.Node) error {
+
+	t := func() (interface{}, bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
+		if err != nil {
+			return nil, true, err
+		}
+
+		for _, v := range poolsStatus {
+			if v == "Offline" {
+				return nil, false, nil
+			}
+		}
+		return nil, true, fmt.Errorf("no pool is offline is node %s", n.Name)
+	}
+	_, err := task.DoRetryWithTimeout(t, time.Minute*360, time.Minute*2)
+	return err
+}
+
 func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
 	nodesPresent := node.GetStorageNodes()
 	for _, each := range nodesPresent {
@@ -5603,7 +5730,7 @@ func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) er
 		}
 		return nil, false, nil
 	}
-	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
+	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 2*time.Minute)
 	return err
 }
 

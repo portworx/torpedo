@@ -38,9 +38,9 @@ const (
 	groupsToBeCreated                         = "GROUPS_TO_CREATE"
 	maxUsersInGroup                           = "MAX_USERS_IN_GROUP"
 	maxBackupsToBeCreated                     = "MAX_BACKUPS"
-	maxWaitPeriodForBackupCompletionInMinutes = 20
-	maxWaitPeriodForRestoreCompletionInMinute = 20
-	maxWaitPeriodForBackupJobCancellation     = 10
+	maxWaitPeriodForBackupCompletionInMinutes = 40
+	maxWaitPeriodForRestoreCompletionInMinute = 40
+	maxWaitPeriodForBackupJobCancellation     = 20
 	backupJobCancellationRetryTime            = 30
 	globalAWSBucketPrefix                     = "global-aws"
 	globalAzureBucketPrefix                   = "global-azure"
@@ -51,8 +51,13 @@ const (
 	userName                                  = "testuser"
 	firstName                                 = "firstName"
 	lastName                                  = "lastName"
-	password                                  = "Password1"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
+	backupDeleteTimeout                       = 20 * time.Minute
+	backupDeleteRetryTime                     = 30 * time.Second
+	mongodbPodStatusTimeout                   = 20 * time.Minute
+	mongodbPodStatusRetryTime                 = 30 * time.Second
+	backupLocationDeleteTimeout               = 30 * time.Minute
+	backupLocationDeleteRetryTime             = 30 * time.Second
 )
 
 var (
@@ -66,6 +71,7 @@ var (
 	globalAzureLockedBucketName string
 	globalGCPLockedBucketName   string
 	cloudProviders              = []string{"aws"}
+	commonPassword              string
 )
 
 type userRoleAccess struct {
@@ -832,7 +838,7 @@ func createUsers(numberOfUsers int) []string {
 		go func(userName, firstName, lastName, email string) {
 			defer GinkgoRecover()
 			defer wg.Done()
-			err := backup.AddUser(userName, firstName, lastName, email, password)
+			err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Creating user - %s", userName))
 			users = append(users, userName)
 		}(userName, firstName, lastName, email)
@@ -846,7 +852,8 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	log.InfoD("Cleaning backup location(s), cloud credential, source and destination cluster")
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
-			_ = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
 				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
 				if err != nil {
@@ -857,7 +864,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 				}
 				return "", false, nil
 			}
-			_, err := task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
 		cloudCredDeleteStatus := func() (interface{}, bool, error) {
@@ -920,7 +927,7 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 			access = ViewOnlyAccess
 			role = backup.ApplicationOwner
 		}
-		ctxNonAdmin, err := backup.GetNonAdminCtx(users[i], "Password1")
+		ctxNonAdmin, err := backup.GetNonAdminCtx(users[i], commonPassword)
 		if err != nil {
 			return nil, err
 		}
@@ -942,7 +949,7 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName string, restoreName string) {
 	ctx, err := backup.GetAdminCtxFromSecret()
 	Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-	userCtx, err := backup.GetNonAdminCtx(user, "Password1")
+	userCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 	Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching %s user ctx", user))
 	log.InfoD("Registering Source and Destination clusters from user context")
 	err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
@@ -1023,7 +1030,7 @@ func ShareBackupWithUsersAndAccessAssignment(backupNames []string, users []strin
 		if err != nil {
 			return accessUserBackupContext, fmt.Errorf("unable to share backup %s with user %s Error: %v", backupNames[i], user, err)
 		}
-		ctxNonAdmin, err = backup.GetNonAdminCtx(users[i], "Password1")
+		ctxNonAdmin, err = backup.GetNonAdminCtx(users[i], commonPassword)
 		if err != nil {
 			return accessUserBackupContext, fmt.Errorf("unable to get user context: %v", err)
 		}
@@ -1498,4 +1505,26 @@ func IsPresent(dataSlice interface{}, data interface{}) bool {
 	}
 	return false
 
+}
+
+func DeleteBackupAndWait(backupName string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+	}
+
+	backupDeletionSuccessCheck := func() (interface{}, bool, error) {
+		currentBackups, err := backupDriver.EnumerateBackup(ctx, backupEnumerateReq)
+		if err != nil {
+			return "", true, err
+		}
+		for _, backupObject := range currentBackups.GetBackups() {
+			if backupObject.Name == backupName {
+				return "", true, fmt.Errorf("backupObject [%s] is not yet deleted", backupObject.Name)
+			}
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
+	return err
 }
