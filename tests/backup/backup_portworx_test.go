@@ -582,6 +582,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		scheduleName                string
 		scheduleNames               []string
 		cloudCredUID                string
+		firstScheduleBackupName     string
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -732,7 +733,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					err = CreateScheduleBackup(scheduleName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
 						labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
-					firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+					firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 				})
 				Step("Checking size of volume after resize", func() {
@@ -766,6 +767,14 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching recent backup %v", recentBackupName))
 					_, err = backupSuccessCheck(recentBackupName, orgID, 0, 0, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", recentBackupName))
+				})
+				Step("Restoring the backed up application", func() {
+					log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", firstScheduleBackupName))
+					ctx, err := backup.GetAdminCtxFromSecret()
+					log.FailOnError(err, "Fetching px-central-admin ctx")
+					restoreName := fmt.Sprintf("%s-%s", "test-restore", namespace)
+					err = CreateRestore(restoreName, firstScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+					dash.VerifyFatal(err, nil, "Restore failed")
 				})
 			}
 		}
