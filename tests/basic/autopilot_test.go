@@ -125,7 +125,6 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 	var testrailID = 85443
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85443
 	var runID int
-
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), "Perform basic scenarios with Autopilot and restart volume driver ", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -133,9 +132,7 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 	var contexts []*scheduler.Context
 	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
 		var err error
-		//var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sVolumeDriverDown", testSuiteName))
-
 		Step("schedule applications", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				for id, apRule := range autopilotruleBasicTestCases {
@@ -419,7 +416,6 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 	var testrailID = 85448
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85448
 	var runID int
-
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sPoolExpand}", testSuiteName), "Pool expansion test on autopilot", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -607,7 +603,6 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 	var testrailID = 85449
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85449
 	var runID int
-
 	JustBeforeEach(func() {
 		StartTorpedoTest(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), "PVC and Pool expand test on autopilot", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -702,7 +697,6 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
-
 	})
 })
 
