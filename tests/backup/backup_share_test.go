@@ -4068,6 +4068,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		// Cleanup all backup locations
 		for _, userName := range users {
 			ctx, err := backup.GetNonAdminCtx(userName, commonPassword)
+<<<<<<< HEAD
 			log.FailOnError(err, "Fetching non admin ctx")
 			allBackupLocations, err := getAllBackupLocations(ctx)
 			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
@@ -4091,13 +4092,26 @@ var _ = Describe("{SwapShareBackup}", func() {
 				_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", backupLocationName))
 			}
+=======
+			log.FailOnError(err, "Fetching nonAdminCtx")
+			allBackupLocations, err := getAllBackupLocations(ctx)
+			log.FailOnError(err, "Fetching backup locations")
+			CleanupCloudSettingsAndClusters(allBackupLocations, "", "", ctx, true)
+			log.InfoD("Completed deleting backup location")
+>>>>>>> 06e50bba0 (Hold the cleanup of s3 bucket in case of any test failure in the Entire suite)
 		}
 
 		for _, userName := range users {
 			ctx, err := backup.GetNonAdminCtx(userName, commonPassword)
+<<<<<<< HEAD
 			log.FailOnError(err, "Fetching non admin ctx")
 			allCloudCredentials, err := getAllCloudCredentials(ctx)
 			dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
+=======
+			log.FailOnError(err, "Fetching nonAdminCtx")
+			allCloudCredentials, err := getAllCloudCredentials(ctx)
+			log.FailOnError(err, "Fetching cloud credentials")
+>>>>>>> 06e50bba0 (Hold the cleanup of s3 bucket in case of any test failure in the Entire suite)
 			for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
 				cloudCredDeleteStatus := func() (interface{}, bool, error) {
 					err := DeleteCloudCredential(cloudCredentialName, orgID, cloudCredentialUid)
