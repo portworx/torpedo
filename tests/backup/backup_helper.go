@@ -13,17 +13,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pborman/uuid"
-	"github.com/portworx/sched-ops/k8s/apps"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	. "github.com/onsi/ginkgo"
+	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -1429,16 +1428,27 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 }
 func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (map[string]string, error) {
 	labelMap := make(map[string]string)
+	var wg sync.WaitGroup
 	for _, namespace := range namespaces {
-		for i := 0; i < number; i++ {
-			key := fmt.Sprintf("app-backup-by-label-%v", groupName)
-			value := uuid.New()
-			labelMap[key] = value
-			err := Inst().S.AddNamespaceLabel(namespace, labelMap)
-			if err != nil {
-				return nil, err
+		wg.Add(1)
+		go func(ns string) {
+			defer wg.Done()
+			labels := make(map[string]string)
+			for i := 0; i < number; i++ {
+				key := fmt.Sprintf("app-backup-by-label-%v", groupName)
+				value := uuid.New()
+				labels[key] = value
 			}
-		}
+			err := Inst().S.AddNamespaceLabel(ns, labels)
+			if err != nil {
+				log.Errorf("unable to add label %v to namespace %v", labels, ns)
+				return
+			}
+			for k, v := range labels {
+				labelMap[k] = v
+			}
+		}(namespace)
 	}
+	wg.Wait()
 	return labelMap, nil
 }
