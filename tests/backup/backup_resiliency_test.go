@@ -1027,7 +1027,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 })
 
 // AddMultipleNamespaceLabel adds labels to namespace in range of 1000
-var _ = Describe("{AddMultipleNamespaceLabel}", func() {
+var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 	var (
 		err            error
 		contexts       []*scheduler.Context
@@ -1038,7 +1038,7 @@ var _ = Describe("{AddMultipleNamespaceLabel}", func() {
 	)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("AddMultipleNamespaceLabel", "Add multiple namespace label in range of 1000", nil, 58041)
+		StartTorpedoTest("AddMultipleNamespaceLabels", "Add multiple namespace labels in range of 1000", nil, 58041)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 2; i++ {
@@ -1052,7 +1052,7 @@ var _ = Describe("{AddMultipleNamespaceLabel}", func() {
 			}
 		}
 	})
-	It("Add multiple namespace label in range of 1000", func() {
+	It("Add multiple namespace labels in range of 1000", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(contexts)
