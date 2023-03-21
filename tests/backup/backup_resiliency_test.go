@@ -1033,6 +1033,8 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		contexts       []*scheduler.Context
 		appContexts    []*scheduler.Context
 		bkpNamespaces  []string
+		batchLabelMap  map[string]string
+		labelMap       map[string]string
 		nsLabelsGroup0 map[string]string
 		nsLabelsGroup1 map[string]string
 	)
@@ -1068,6 +1070,13 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 			log.InfoD("Adding 1000 labels to namespace %v", []string{bkpNamespaces[1]})
 			nsLabelsGroup1, err = AddMultipleLabelsToNS(1000, []string{bkpNamespaces[1]}, "nsGroup1")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsGroup1, []string{bkpNamespaces[1]}))
+		})
+		Step("Verifying number of labels added to namespace", func() {
+			log.InfoD("Verifying number of labels added to namespace")
+			batchLabelMap, err = Inst().S.GetNamespaceLabel(bkpNamespaces[0])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching labels %v for namespace %v", batchLabelMap, bkpNamespaces[0]))
+			labelMap, err = Inst().S.GetNamespaceLabel(bkpNamespaces[1])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching labels %v for namespace %v", labelMap, bkpNamespaces[1]))
 		})
 	})
 	JustAfterEach(func() {
