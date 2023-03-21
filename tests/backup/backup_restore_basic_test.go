@@ -1477,6 +1477,7 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 		uniqueLabel                      string
 		scheduleBackupMultipleNamespace  string
 		firstScheduleBackupForMultipleNs string
+		scheduleNames                    []string
 	)
 	labelSelectors := make(map[string]string)
 	backupLocationMap := make(map[string]string)
@@ -1496,6 +1497,7 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 				bkpNamespaces = append(bkpNamespaces, namespace)
 			}
 		}
+		log.InfoD("Created namespaces %v", bkpNamespaces)
 	})
 	It("Filter using namespace label and take backups in multiple manner", func() {
 		providers := getProviders()
@@ -1567,10 +1569,11 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 			log.InfoD("Taking a backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Fetching px-admin context")
-			multipleNamespaceBackupName = fmt.Sprintf("%s-%v", "multipleNamespaceBackup", time.Now().Unix())
-			err = CreateBackupUsingNamespaceLabels(backupName, SourceClusterName, backupLocationName, backupLocationUID,
+			multipleNamespaceBackupName = fmt.Sprintf("%s-%v", "multiple-namespace-backup", time.Now().Unix())
+			err = CreateBackupUsingNamespaceLabels(multipleNamespaceBackupName, SourceClusterName, backupLocationName, backupLocationUID,
 				labelSelectors, orgID, clusterUid, "", "", "", "", ctx, randomLabel)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", backupName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", multipleNamespaceBackupName))
+			backupNames = append(backupNames, multipleNamespaceBackupName)
 		})
 		Step("Restoring multiple applications backup", func() {
 			log.InfoD("Restoring multiple applications backup")
@@ -1603,6 +1606,7 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 			firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+			scheduleNames = append(scheduleNames, scheduleName)
 		})
 		Step("Restoring scheduled backups", func() {
 			log.InfoD("Restoring scheduled backups")
@@ -1618,11 +1622,12 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			scheduleBackupMultipleNamespace = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-			err = CreateScheduleBackupUsingNamespaceLabel(scheduleName, SourceClusterName, backupLocationName, backupLocationUID,
+			err = CreateScheduleBackupUsingNamespaceLabel(scheduleBackupMultipleNamespace, SourceClusterName, backupLocationName, backupLocationUID,
 				labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx, uniqueLabel)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
-			firstScheduleBackupForMultipleNs, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleBackupMultipleNamespace))
+			firstScheduleBackupForMultipleNs, err = GetFirstScheduleBackupName(ctx, scheduleBackupMultipleNamespace, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+			scheduleNames = append(scheduleNames, scheduleBackupMultipleNamespace)
 		})
 		Step("Restoring scheduled backups for multiple applications", func() {
 			log.InfoD("Restoring scheduled backups")
@@ -1635,30 +1640,39 @@ var _ = Describe("{FilterNamespaceAndTakeMultipleBackups}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		//defer EndPxBackupTorpedoTest(contexts)
-		//ctx, err := backup.GetAdminCtxFromSecret()
-		//dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
-		//log.InfoD("Deleting backup created")
-		//backupDriver := Inst().Backup
-		//backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		//dash.VerifySafely(err, nil, fmt.Sprintf("Getting the backup UID for %s", backupName))
-		//_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		//dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backupName))
-		//scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
-		//dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleName))
-		//allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-		//dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all schedule backup names of schedule named [%s]", scheduleName))
-		//err = DeleteSchedule(scheduleName, scheduleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID)
-		//dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] along with its backups %v and schedule policies [%v]", scheduleName, allScheduleBackupNames, []string{periodicSchedulePolicyName}))
-		//for _, restoreName := range restoreNames {
-		//	err := DeleteRestore(restoreName, orgID, ctx)
-		//	dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
-		//}
-		//opts := make(map[string]bool)
-		//opts[SkipClusterScopedObjects] = true
-		//log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
-		//ValidateAndDestroy(contexts, opts)
-		//CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
-
+		defer EndPxBackupTorpedoTest(contexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
+		log.InfoD("Deleting backup created")
+		backupDriver := Inst().Backup
+		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Getting the backup UID for %s", backupName))
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backupName))
+		for _, scheduleName := range scheduleNames {
+			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleName))
+			allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all schedule backup names of schedule named [%s]", scheduleName))
+			err = DeleteScheduleBackup(scheduleName, scheduleUid, orgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] along with its backups %v", scheduleName, allScheduleBackupNames))
+		}
+		err = DeleteSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule policy %v", periodicSchedulePolicyName))
+		for _, restoreName := range restoreNames {
+			err := DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
+		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
+		ValidateAndDestroy(contexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		//		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+		//		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleName))
+		//		allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+		//		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching all schedule backup names of schedule named [%s]", scheduleName))
+		//		err = DeleteScheduleBackup(scheduleName, scheduleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID)
+		//		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] along with its backups %v and schedule policies [%v]", scheduleName, allScheduleBackupNames, []string{periodicSchedulePolicyName}))
 	})
 })

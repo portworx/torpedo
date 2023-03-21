@@ -2784,6 +2784,59 @@ func DeleteSchedule(backupScheduleName, backupScheduleUID, schedulePolicyName, s
 	return nil
 }
 
+func DeleteScheduleBackup(backupScheduleName, backupScheduleUID, OrgID string) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: OrgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupScheduleUID,
+	}
+	ctx, err := backup.GetPxCentralAdminCtx()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: OrgID, Name: SourceClusterName, IncludeSecrets: true}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+	namespace := "*"
+	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, OrgID,
+		clusterObj,
+		BackupRestoreCompletionTimeoutMin*time.Minute,
+		RetrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func DeleteSchedulePolicy(schedulePolicyName, schedulePolicyUID string) error {
+	backupDriver := Inst().Backup
+	schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+		OrgId: OrgID,
+		Name:  schedulePolicyName,
+		Uid:   schedulePolicyUID,
+	}
+	ctx, err := backup.GetPxCentralAdminCtx()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteSchedulePolicy(ctx, schedulePolicyDeleteRequest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CreateSourceAndDestClusters creates source and destination cluster
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
