@@ -3681,7 +3681,10 @@ var _ = Describe("{DeleteUsersRole}", func() {
 		})
 		Step("Delete users", func() {
 			for userName := range userRoleMapping {
+<<<<<<< HEAD
 				log.Infof("This is the user : ", userName)
+=======
+>>>>>>> 14f4950c4 (TC Automation : Resize volume while schedule backup)
 				err := backup.DeleteUser(userName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the user [%s]", userName))
 			}
