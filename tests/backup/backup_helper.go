@@ -1590,13 +1590,13 @@ func UpgradePxBackup(versionToUpgrade string) error {
 			log.Infof("Status of job %s after completion - "+
 				"\nactive count - %d"+
 				"\nsucceeded count - %d"+
-				"\nfailed count - %d", job.Name, job.Status.Active, job.Status.Succeeded, job.Status.Failed)
+				"\nfailed count - %d\n", job.Name, job.Status.Active, job.Status.Succeeded, job.Status.Failed)
 			return "", false, nil
 		}
 		return "", true, fmt.Errorf("status of job %s not yet in desired state - "+
 			"\nactive count - %d"+
 			"\nsucceeded count - %d"+
-			"\nfailed count - %d", job.Name, job.Status.Active, job.Status.Succeeded, job.Status.Failed)
+			"\nfailed count - %d\n", job.Name, job.Status.Active, job.Status.Succeeded, job.Status.Failed)
 	}
 	_, err = task.DoRetryWithTimeout(postInstallHookJobCompletedCheck, 10*time.Minute, 30*time.Second)
 	if err != nil {
