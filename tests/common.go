@@ -2819,14 +2819,15 @@ func DeleteScheduleBackup(backupScheduleName, backupScheduleUID, OrgID string) e
 	return nil
 }
 
-func DeleteSchedulePolicy(schedulePolicyName, schedulePolicyUID string, ctx context1.Context) error {
+func DeleteSchedulePolicy(schedulePolicyName, schedulePolicyUID string) error {
 	backupDriver := Inst().Backup
 	schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
 		OrgId: OrgID,
 		Name:  schedulePolicyName,
 		Uid:   schedulePolicyUID,
 	}
-	_, err := backupDriver.DeleteSchedulePolicy(ctx, schedulePolicyDeleteRequest)
+	ctx, err := backup.GetPxCentralAdminCtx()
+	_, err = backupDriver.DeleteSchedulePolicy(ctx, schedulePolicyDeleteRequest)
 	if err != nil {
 		return err
 	}
