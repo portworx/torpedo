@@ -1302,7 +1302,7 @@ var _ = Describe("{ScheduleBackupUsingNamespaceLabel}", func() {
 	namespaceMapping := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("ScheduleBackupUsingNamespaceLabel", "Schedule backup and restore, using namespace label and resource label", nil, 58041)
+		StartTorpedoTest("ScheduleBackupUsingNamespaceLabel", "Schedule backup and restore, using namespace label and resource label", nil, 84850)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1420,7 +1420,6 @@ var _ = Describe("{ScheduleBackupUsingNamespaceLabel}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of restoring scheduled backups - %s", restoreName))
 			restoreNames = append(restoreNames, restoreName)
 		})
-
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
@@ -1431,7 +1430,7 @@ var _ = Describe("{ScheduleBackupUsingNamespaceLabel}", func() {
 		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting the backup UID for %s", backupName))
 		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the %s", backupName))
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backupName))
 		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleName))
 		allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)

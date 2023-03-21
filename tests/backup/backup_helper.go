@@ -1638,6 +1638,7 @@ func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (m
 			if err != nil {
 				return nil, err
 			}
+			log.Infof("Adding label %v=%v to namespace %v", key, value, namespace)
 		}
 	}
 	return labelMap, nil
