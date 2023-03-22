@@ -1,6 +1,10 @@
 package ibm
 
 import (
+	"encoding/json"
+	"fmt"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/pkg/osutils"
 	"os"
 	"time"
 
@@ -14,13 +18,25 @@ import (
 
 const (
 	// DriverName is the name of the ibm driver
-	DriverName = "ibm"
+	DriverName                  = "ibm"
+	ibmAPIKey                   = "IBMCLOUD_API_KEY"
+	ibmRegion                   = "us-south"
+	ibmResourceGroup            = "Portworx-RG"
+	iksClusterInfoConfigMapName = "cluster-info"
+	clusterIDconfigMapField     = "cluster-config.json"
 )
 
 type ibm struct {
 	ssh.SSH
 	ops           cloudops.Ops
 	instanceGroup string
+	clusterConfig ClusterConfig
+}
+
+// ClusterConfig stores info about iks cluster as provided by IBM
+type ClusterConfig struct {
+	ClusterID   string `json:"cluster_id"`
+	ClusterName string `json:"name"`
 }
 
 func (i *ibm) String() string {
@@ -42,6 +58,17 @@ func (i *ibm) Init(nodeOpts node.InitOptions) error {
 		return err
 	}
 	i.ops = ops
+	cm, err := core.Instance().GetConfigMap(iksClusterInfoConfigMapName, "kube-system")
+	if err != nil {
+		return err
+	}
+
+	clusterInfo := &ClusterConfig{}
+	err = json.Unmarshal([]byte(cm.Data[clusterIDconfigMapField]), clusterInfo)
+	if err != nil {
+		return err
+	}
+	i.clusterConfig = *clusterInfo
 
 	return nil
 }
@@ -75,10 +102,49 @@ func (i *ibm) GetZones() ([]string, error) {
 	return asgInfo.Zones, nil
 }
 
+func (i *ibm) DeleteNode(node node.Node, timeout time.Duration) error {
+
+	err := loginToIBMCloud()
+	if err != nil {
+		return err
+	}
+
+	cmd := fmt.Sprintf("ibmcloud ks worker rm -c %s -w %s -f", i.clusterConfig.ClusterName, node.Hostname)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to delete node [%s]. Error: %v %v %v", node.Hostname, stderr, err, stdout)
+	}
+
+	return nil
+}
+
 func init() {
 	i := &ibm{
 		SSH: *ssh.New(),
 	}
 
 	node.Register(DriverName, i)
+}
+
+func loginToIBMCloud() error {
+
+	apiKey := os.Getenv(ibmAPIKey)
+	if len(apiKey) == 0 {
+		return fmt.Errorf("IKS API key not provided as env var: %s", apiKey)
+	}
+
+	cmd := fmt.Sprintf("ibmcloud login --apikey %s -g %s -r %s", apiKey, ibmResourceGroup, ibmRegion)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to login to IBM cloud. Error: %v %v %v", stderr, err, stdout)
+	}
+	log.Info("Logged-in to IBM cloud.")
+
+	cmd = "ibmcloud is target --gen 2"
+	stdout, stderr, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to set gen2 as default generation. Error: %v %v %v", stderr, err, stdout)
+	}
+	log.Debug("Successfully set Gen 2 as default generation.")
+	return nil
 }
