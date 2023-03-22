@@ -13,16 +13,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s/apps"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	. "github.com/onsi/ginkgo"
+	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -1425,4 +1425,30 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	}
 	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 	return err
+}
+
+func AddMultipleLabelsToNS(number int, namespace string) (int, error) {
+	labels := make(map[string]string)
+	for i := 0; i < number; i++ {
+		key := fmt.Sprintf("%v-%v", i, uuid.New())
+		value := uuid.New()
+		labels[key] = value
+	}
+
+	errChan := make(chan error)
+	go func() {
+		err := Inst().S.AddNamespaceLabel(namespace, labels)
+		if err != nil {
+			errChan <- fmt.Errorf("unable to add label %v to namespace %v", labels, namespace)
+		} else {
+			errChan <- nil
+		}
+	}()
+
+	err := <-errChan
+	if err != nil {
+		return 0, err
+	}
+
+	return len(labels), nil
 }

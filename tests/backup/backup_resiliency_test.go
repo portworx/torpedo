@@ -1025,3 +1025,72 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// AddMultipleNamespaceLabel adds labels to namespace in range of 1000
+var _ = Describe("{AddMultipleNamespaceLabels}", func() {
+	var (
+		err              error
+		contexts         []*scheduler.Context
+		appContexts      []*scheduler.Context
+		bkpNamespaces    []string
+		batchSize        int
+		desiredNumLabels int
+		batchNs          string
+		directNs         string
+	)
+	bkpNamespaces = make([]string, 0)
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddMultipleNamespaceLabels", "Add multiple namespace labels in range of 1000", nil, 58041)
+		log.InfoD("Deploy applications")
+		batchSize = 10
+		desiredNumLabels = 1000
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < 2; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+	})
+	It("Add multiple namespace labels in range of 1000", func() {
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
+			ValidateApplications(contexts)
+		})
+		Step("Adding 1000 labels to namespace", func() {
+			log.InfoD("Adding 1000 labels to namespace %v", directNs)
+			directNs = bkpNamespaces[0]
+			addedLabels, err := AddMultipleLabelsToNS(desiredNumLabels, directNs)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding [%v] labels to namespaces [%v]", addedLabels, directNs))
+		})
+		Step("Adding labels to namespaces in multiple of 10 until 1000", func() {
+			log.InfoD("Adding labels to namespaces in multiple of 10 until 1000")
+			batchNs = bkpNamespaces[1]
+			for i := 0; i < desiredNumLabels/batchSize; i++ {
+				addedLabels, err := AddMultipleLabelsToNS(batchSize, batchNs)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding [%v] labels to namespaces [%v]", addedLabels, batchNs))
+			}
+		})
+		Step("Verifying number of labels added to namespace", func() {
+			log.InfoD("Verifying number of labels added to namespace")
+			for _, namespace := range bkpNamespaces {
+				labelMap, err := Inst().S.GetNamespaceLabel(namespace)
+				length := len(labelMap)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching labels %v for namespace %v", labelMap, namespace))
+				dash.VerifyFatal(length-3, desiredNumLabels, fmt.Sprintf("Verifying number of added labels to desired labels for namespace %v", namespace))
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
+		ValidateAndDestroy(contexts, opts)
+	})
+})
