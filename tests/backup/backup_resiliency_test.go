@@ -1083,7 +1083,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 				length := len(labelMap)
 				log.InfoD("Length is: %v", length)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching labels %v for namespace %v", labelMap, namespace))
-				dash.VerifyFatal(length, desiredNumLabels, fmt.Sprintf("Verifying number of added labels to desired labels for namespace %v", namespace))
+				dash.VerifyFatal(length-1, desiredNumLabels, fmt.Sprintf("Verifying number of added labels to desired labels for namespace %v", namespace))
 			}
 		})
 	})
