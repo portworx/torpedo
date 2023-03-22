@@ -1061,17 +1061,19 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(contexts)
 		})
+		batch_ns := bkpNamespaces[0]
+		direct_ns := bkpNamespaces[1]
 		Step("Adding labels to namespaces in multiple of 10 until 1000", func() {
-			log.InfoD("Adding labels to namespaces %v in multiple of 10 until 1000", []string{bkpNamespaces[0]})
+			log.InfoD("Adding labels to namespaces %v in multiple of 10 until 1000", batch_ns)
 			for i := 0; i < desiredNumLabels/batchSize; i++ {
-				nsLabelsGroup0, err = AddMultipleLabelsToNS(10, []string{bkpNamespaces[0]}, "nsGroup0")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsGroup0, []string{bkpNamespaces[0]}))
+				err = AddMultipleLabelsToNS(10, batch_ns)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsGroup0, batch_ns))
 			}
 		})
 		Step("Adding 1000 labels to namespace", func() {
-			log.InfoD("Adding 1000 labels to namespace %v", []string{bkpNamespaces[1]})
-			nsLabelsGroup1, err = AddMultipleLabelsToNS(desiredNumLabels, []string{bkpNamespaces[1]}, "nsGroup1")
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsGroup1, []string{bkpNamespaces[1]}))
+			log.InfoD("Adding 1000 labels to namespace %v", direct_ns)
+			err = AddMultipleLabelsToNS(desiredNumLabels, direct_ns)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsGroup1, direct_ns))
 		})
 		Step("Verifying number of labels added to namespace", func() {
 			log.InfoD("Verifying number of labels added to namespace")

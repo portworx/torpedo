@@ -1426,30 +1426,26 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 	return err
 }
-func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (map[string]string, error) {
-	labelMap := make(map[string]string)
+func AddMultipleLabelsToNS(number int, namespace string) error {
+
 	var wg sync.WaitGroup
-	for _, namespace := range namespaces {
-		wg.Add(1)
-		go func(ns string) {
-			defer wg.Done()
-			labels := make(map[string]string)
-			for i := 0; i < number; i++ {
-				key := fmt.Sprintf("%v-%v", i, uuid.New())
-				value := uuid.New()
-				labels[key] = value
-			}
-			log.InfoD("LABELS APPLYING %v", labels)
-			err := Inst().S.AddNamespaceLabel(ns, labels)
-			if err != nil {
-				log.Errorf("unable to add label %v to namespace %v", labels, ns)
-				return
-			}
-			for k, v := range labels {
-				labelMap[k] = v
-			}
-		}(namespace)
-	}
+	wg.Add(1)
+	go func(ns string) {
+		defer wg.Done()
+		labels := make(map[string]string)
+		for i := 0; i < number; i++ {
+			key := fmt.Sprintf("%v-%v", i, uuid.New())
+			value := uuid.New()
+			labels[key] = value
+		}
+		log.InfoD("LABELS APPLYING %v", labels)
+		err := Inst().S.AddNamespaceLabel(ns, labels)
+		if err != nil {
+			log.Errorf("unable to add label %v to namespace %v", labels, ns)
+			return
+		}
+	}(namespace)
 	wg.Wait()
-	return labelMap, nil
+
+	return nil
 }
