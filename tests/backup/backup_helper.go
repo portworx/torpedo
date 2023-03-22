@@ -519,7 +519,9 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 	clusterBackupShareStatusCheck := func() (interface{}, bool, error) {
 		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
 		clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
-		log.FailOnError(err, "Cluster Object for cluster %s and Org id %s is empty", clusterName, orgID)
+		if err != nil {
+			return "", true, err
+		}
 		if clusterResp.GetCluster().BackupShareStatusInfo.GetStatus() != api.ClusterInfo_BackupShareStatusInfo_Success {
 			return "", true, fmt.Errorf("cluster backup share status for cluster %s is still %s", clusterName,
 				clusterResp.GetCluster().BackupShareStatusInfo.GetStatus())
