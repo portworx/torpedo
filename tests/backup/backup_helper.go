@@ -1434,7 +1434,6 @@ func AddMultipleLabelsToNS(number int, namespace string) (int, error) {
 		value := uuid.New()
 		labels[key] = value
 	}
-
 	errChan := make(chan error)
 	go func() {
 		err := Inst().S.AddNamespaceLabel(namespace, labels)
@@ -1444,11 +1443,9 @@ func AddMultipleLabelsToNS(number int, namespace string) (int, error) {
 			errChan <- nil
 		}
 	}()
-
 	err := <-errChan
 	if err != nil {
 		return 0, err
 	}
-
 	return len(labels), nil
 }
