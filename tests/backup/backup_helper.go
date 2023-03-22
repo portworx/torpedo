@@ -1438,7 +1438,8 @@ func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (m
 				key := fmt.Sprintf("label-key-%v", time.Now().Unix())
 				value := uuid.New()
 				labels[key] = value
-				log.InfoD("KEY=VALUE %v=%v", key, value)
+				//log.InfoD("KEY=VALUE %v=%v", key, value)
+				log.InfoD("LABELS in loop - %v", labels)
 			}
 			log.InfoD("LABELS APPLYING %v", labels)
 			err := Inst().S.AddNamespaceLabel(ns, labels)
