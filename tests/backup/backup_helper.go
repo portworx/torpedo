@@ -1435,7 +1435,7 @@ func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (m
 			defer wg.Done()
 			labels := make(map[string]string)
 			for i := 0; i < number; i++ {
-				key := fmt.Sprintf("label-key-%v", time.Now().Unix())
+				key := fmt.Sprintf("label-key-%v", i)
 				value := uuid.New()
 				labels[key] = value
 				//log.InfoD("KEY=VALUE %v=%v", key, value)
