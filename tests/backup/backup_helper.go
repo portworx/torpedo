@@ -524,6 +524,7 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 			return "", true, fmt.Errorf("cluster backup share status for cluster %s is still %s", clusterName,
 				clusterResp.GetCluster().BackupShareStatusInfo.GetStatus())
 		}
+		log.Infof("Cluster %s has status - [%d]", clusterName, clusterResp.GetCluster().BackupShareStatusInfo.GetStatus())
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(clusterBackupShareStatusCheck, 1*time.Minute, 10*time.Second)
