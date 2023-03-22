@@ -1438,8 +1438,6 @@ func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (m
 				key := fmt.Sprintf("%v-%v", i, uuid.New())
 				value := uuid.New()
 				labels[key] = value
-				//log.InfoD("KEY=VALUE %v=%v", key, value)
-				log.InfoD("LABELS in loop - %v", labels)
 			}
 			log.InfoD("LABELS APPLYING %v", labels)
 			err := Inst().S.AddNamespaceLabel(ns, labels)
@@ -1453,6 +1451,5 @@ func AddMultipleLabelsToNS(number int, namespaces []string, groupName string) (m
 		}(namespace)
 	}
 	wg.Wait()
-	log.InfoD("LABELMAP %v", labelMap)
 	return labelMap, nil
 }
