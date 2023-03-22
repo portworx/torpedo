@@ -1077,6 +1077,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 			log.InfoD("Verifying number of labels added to namespace")
 			for _, namespace := range bkpNamespaces {
 				labelMap, err := Inst().S.GetNamespaceLabel(namespace)
+				log.InfoD("LABELMAP FETCHED - %v", labelMap)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching labels %v for namespace %v", labelMap, namespace))
 				dash.VerifyFatal(len(labelMap)-1, desiredNumLabels, fmt.Sprintf("Verifying number of added labels to desired labels for namespace %v", namespace))
 			}
