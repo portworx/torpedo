@@ -1624,11 +1624,11 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	if !strings.EqualFold(postUpgradeVersion, versionToUpgrade) {
 		return fmt.Errorf("expected version after upgrade was %s but got %s", versionToUpgrade, postUpgradeVersion)
 	}
-	log.InfoD("Upgrade from %s to %s is complete", currentBackupVersionString, postUpgradeVersion)
+	log.InfoD("Px-Backup upgrade from %s to %s is complete", currentBackupVersionString, postUpgradeVersion)
 	return nil
 }
 
-// deleteJobAndWait waiting for resources to be deleted
+// deleteJobAndWait waits for the provided job to be deleted
 func deleteJobAndWait(job batchv1.Job) error {
 	t := func() (interface{}, bool, error) {
 		err := batch.Instance().DeleteJob(job.Name, job.Namespace)

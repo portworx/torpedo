@@ -9,12 +9,11 @@ import (
 
 // This testcase verifies Px Backup upgrade
 var _ = Describe("{UpgradePxBackup}", func() {
-	var ()
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("UpgradePxBackup", "Upgrading backup", nil, 0)
 	})
-	It("Basic Backup Creation", func() {
+	It("Upgrade Px Backup", func() {
 		Step("Upgrade Px Backup", func() {
 			log.InfoD("Upgrade Px Backup to version %s", latestPxBackupVersion)
 			err := UpgradePxBackup(latestPxBackupVersion)
