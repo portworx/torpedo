@@ -1427,25 +1427,18 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	return err
 }
 func AddMultipleLabelsToNS(number int, namespace string) error {
+	labels := make(map[string]string)
+	for i := 0; i < number; i++ {
+		key := fmt.Sprintf("%v-%v", i, uuid.New())
+		value := uuid.New()
+		labels[key] = value
+	}
+	log.InfoD("LABELS APPLYING %v", labels)
+	err := Inst().S.AddNamespaceLabel(namespace, labels)
+	if err != nil {
+		log.Errorf("unable to add label %v to namespace %v", labels, namespace)
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(ns string) {
-		defer wg.Done()
-		labels := make(map[string]string)
-		for i := 0; i < number; i++ {
-			key := fmt.Sprintf("%v-%v", i, uuid.New())
-			value := uuid.New()
-			labels[key] = value
-		}
-		log.InfoD("LABELS APPLYING %v", labels)
-		err := Inst().S.AddNamespaceLabel(ns, labels)
-		if err != nil {
-			log.Errorf("unable to add label %v to namespace %v", labels, ns)
-			return
-		}
-	}(namespace)
-	wg.Wait()
-
+	}
 	return nil
+
 }
