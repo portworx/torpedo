@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/apps"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -1444,4 +1445,110 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	}
 	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 	return err
+}
+
+func AddLabelsToMultipleNS(number int, namespaces []string) (map[string]string, error) {
+	labels := make(map[string]string)
+	for i := 0; i < number; i++ {
+		key := fmt.Sprintf("%v-%v", i, uuid.New())
+		value := uuid.New()
+		labels[key] = value
+	}
+	for _, namespace := range namespaces {
+		err := Inst().S.AddNamespaceLabel(namespace, labels)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return labels, nil
+}
+
+func addLabelsToResources(namespace string) (map[string]string, error) {
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+	if err != nil {
+		return nil, err
+	}
+	labeledSelector := make(map[string]string)
+	labelKey := "backup-by-label"
+	labelValue := uuid.New()
+	for _, pvc := range pvcList.Items {
+		pvcPointer, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, namespace)
+		if err != nil {
+			return nil, err
+		}
+		err = AddLabelToResource(pvcPointer, labelKey, labelValue)
+		if err == nil {
+			labeledSelector[labelKey] = labelValue
+			log.Infof("selected resource %v", pvcPointer)
+		}
+	}
+	return labeledSelector, nil
+}
+
+func CreateScheduleBackupUsingNamespaceLabel(scheduleName string, clusterName string, bLocation string, bLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context, nsLabel string) error {
+	var firstScheduleBackupName string
+	var firstScheduleBackupUid string
+	backupDriver := Inst().Backup
+	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  scheduleName,
+			OrgId: orgID,
+		},
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		SchedulePolicy: schPolicyName,
+		Cluster:        clusterName,
+		LabelSelectors: labelSelectors,
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		NsLabelSelectors: nsLabel,
+	}
+	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	if err != nil {
+		return err
+	}
+	time.Sleep(1 * time.Minute)
+	backupSuccessCheck := func() (interface{}, bool, error) {
+		firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		firstScheduleBackupUid, err = GetFirstScheduleBackupUID(ctx, scheduleName, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		backupInspectRequest := &api.BackupInspectRequest{
+			Name:  firstScheduleBackupName,
+			Uid:   firstScheduleBackupUid,
+			OrgId: orgID,
+		}
+		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", true, err
+		}
+		actual := resp.GetBackup().GetStatus().Status
+		expected := api.BackupInfo_StatusInfo_Success
+		if actual != expected {
+			return "", true, fmt.Errorf("status for first schedule backup [%s] expected was [%s] but got [%s]", firstScheduleBackupName, expected, actual)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
 }
