@@ -24,6 +24,18 @@ const (
 	ibmResourceGroup            = "Portworx-RG"
 	iksClusterInfoConfigMapName = "cluster-info"
 	clusterIDconfigMapField     = "cluster-config.json"
+	iksPXWorkerpool             = "default"
+)
+
+const (
+	// DELETED state of the deleted node
+	DELETED = "deleted"
+	// PROVISIONING state of the node when provisioning
+	PROVISIONING = "provisioning"
+	// DEPLOYING state of the node when deploying
+	DEPLOYING = "deploying"
+	// DEPLOYED state of the node when deployed
+	DEPLOYED = "deployed"
 )
 
 type ibm struct {
@@ -31,6 +43,20 @@ type ibm struct {
 	ops           cloudops.Ops
 	instanceGroup string
 	clusterConfig ClusterConfig
+}
+
+// Worker stores info about iks worker node as proviced by IBM
+type Worker struct {
+	WorkerID  string `json:"id"`
+	Lifecycle struct {
+		ActualState string `json:"actualState"`
+	} `json:"lifecycle"`
+	Health struct {
+		State   string `json:"state"`
+		Message string `json:"message"`
+	} `json:"health"`
+	PoolID   string `json:"poolID"`
+	PoolName string `json:"poolName"`
 }
 
 // ClusterConfig stores info about iks cluster as provided by IBM
@@ -116,6 +142,73 @@ func (i *ibm) DeleteNode(node node.Node, timeout time.Duration) error {
 	}
 
 	return nil
+}
+
+func (i *ibm) RebalanceWorkerPool() error {
+
+	err := loginToIBMCloud()
+	if err != nil {
+		return err
+	}
+
+	cmd := fmt.Sprintf("ibmcloud ks worker-pool rebalance -c %s -p %s", i.clusterConfig.ClusterName, iksPXWorkerpool)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to rebalance worker pool %s. Error: %v %v %v", iksPXWorkerpool, stderr, err, stdout)
+	}
+
+	return nil
+}
+
+// GetNodeState returns current state of the given node
+func (i *ibm) GetNodeState(node node.Node) (string, error) {
+	err := loginToIBMCloud()
+	if err != nil {
+		return "", err
+	}
+
+	cmd := fmt.Sprintf("ibmcloud ks worker get -w %s -c %s --output json", node.Hostname, i.clusterConfig.ClusterName)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return "", fmt.Errorf("failed node [%s] info. Error: %v %v %v", node.Hostname, stderr, err, stdout)
+	}
+	worker := &Worker{}
+	err = json.Unmarshal([]byte(stdout), worker)
+	if err != nil {
+		return "", err
+	}
+	return worker.Lifecycle.ActualState, nil
+}
+
+func GetWorkers() ([]Worker, error) {
+	err := loginToIBMCloud()
+	if err != nil {
+		return nil, err
+	}
+
+	cm, err := core.Instance().GetConfigMap(iksClusterInfoConfigMapName, "kube-system")
+	if err != nil {
+		return nil, err
+	}
+
+	clusterInfo := &ClusterConfig{}
+	err = json.Unmarshal([]byte(cm.Data[clusterIDconfigMapField]), clusterInfo)
+	if err != nil {
+		return nil, err
+	}
+	clusterName := clusterInfo.ClusterName
+
+	cmd := fmt.Sprintf("ibmcloud ks worker ls -c %s --output json", clusterName)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workers list info. Error: %v %v %v", stderr, err, stdout)
+	}
+	var workers []Worker
+	err = json.Unmarshal([]byte(stdout), &workers)
+	if err != nil {
+		return nil, err
+	}
+	return workers, nil
 }
 
 func init() {
