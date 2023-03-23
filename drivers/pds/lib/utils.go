@@ -169,7 +169,7 @@ const (
 	timeOut               = 30 * time.Minute
 	timeInterval          = 10 * time.Second
 	maxtimeInterval       = 30 * time.Second
-	resiliencyInterval    = 5 * time.Second
+	resiliencyInterval    = 1 * time.Second
 	envDsVersion          = "DS_VERSION"
 	envDsBuild            = "DS_BUILD"
 	zookeeper             = "ZooKeeper"
@@ -794,15 +794,15 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 }
 
 // Function to check for set amount of Replica Pods
-func GetPdsSs(depName string, ns string, check_till_replica int32) {
+func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	var ss *v1.StatefulSet
-	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+	conditionError = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
 		if err != nil {
 			log.Warnf("An Error Occured while getting statefulsets %v", err)
 			return false, nil
 		}
-		if ss.Status.Replicas >= check_till_replica {
+		if ss.Status.Replicas >= checkTillReplica {
 			ResiliencyCondition <- true
 			log.InfoD("Resiliency Condition Met. Will go ahead and try to induce failure now")
 			return true, nil
@@ -810,6 +810,7 @@ func GetPdsSs(depName string, ns string, check_till_replica int32) {
 		log.Infof("Resiliency Condition still not met. Will retry to see if it has met now.....")
 		return false, nil
 	})
+	return conditionError
 }
 
 // DeleteK8sPods deletes the pods in given namespace

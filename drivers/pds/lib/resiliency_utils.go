@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	active_node_reboot_during_deployment = "active-node-reboot-during-deployment"
+	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
 )
 
 // PDS vars
@@ -27,7 +27,8 @@ var (
 	hasResiliencyConditionMet = false
 	FailureType               TypeOfFailure
 	testError                 error
-	check_till_replica        int32
+	conditionError            error
+	checkTillReplica          int32
 	ResiliencyCondition       = make(chan bool)
 )
 
@@ -76,23 +77,31 @@ func InduceFailure(failure string, ns string) {
 
 // Close all open Resiliency channels here
 func CloseResiliencyChannel() {
-	close(ResiliencyCondition)
+	// Close the Channel if it's empty. Otherwise there is no need to close as per Golang official documentation,
+	// as far as we are making sure no writes are happening to a closed channel. Make sure to call this method only
+	// during Post Test Case execution to avoid any unknown panics
+	if len(ResiliencyCondition) == 0 {
+		close(ResiliencyCondition)
+	}
 }
 
 //
 func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, namespace string, CheckTillReplica int32) error {
 	switch FailureType.Type {
 	// Case when we want to reboot a node onto which a deployment pod is coming up
-	case active_node_reboot_during_deployment:
-		check_till_replica = CheckTillReplica
-		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will reboot the node it is hosted upon.", check_till_replica)
+	case ActiveNodeRebootDuringDeployment:
+		checkTillReplica = CheckTillReplica
+		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will reboot the node it is hosted upon.", checkTillReplica)
 		func1 := func() {
-			GetPdsSs(deployment.GetClusterResourceName(), namespace, check_till_replica)
+			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
 		}
 		ExecuteInParallel(func1, func2)
+		if conditionError != nil {
+			return conditionError
+		}
 		if testError != nil {
 			return testError
 		}

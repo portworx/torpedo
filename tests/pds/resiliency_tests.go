@@ -27,7 +27,7 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 					pdslib.MarkResiliencyTC(true)
 					// Type of failure that this TC needs to cover
 					failuretype := pdslib.TypeOfFailure{
-						Type: active_node_reboot_during_deployment,
+						Type: ActiveNodeRebootDuringDeployment,
 						Method: func() error {
 							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace)
 						},
