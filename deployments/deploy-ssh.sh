@@ -630,6 +630,12 @@ spec:
       value: "${LOGGLY_API_TOKEN}"
     - name: PODMETRIC_METERING_INTERVAL_MINUTES
       value: "${PODMETRIC_METERING_INTERVAL_MINUTES}"
+    - name: SCALEY_MONO_KUBECONFIG
+      value: "${SCALEY_MONO_KUBECONFIG}"
+    - name: SCALEY_MONO_START_NUM
+      value: "${SCALEY_MONO_START_NUM}"
+    - name: SCALEY_MONO_COUNT_NUM
+      value: "${SCALEY_MONO_COUNT_NUM}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
