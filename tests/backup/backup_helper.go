@@ -1453,32 +1453,36 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	return err
 }
 
-// GetPxBackupVersion returns the version of Px Backup like 2.4.0-e85b680
-func GetPxBackupVersion() (string, error) {
+// GetPxBackupVersion return the version of Px Backup as a VersionInfo struct
+func GetPxBackupVersion() (*api.VersionInfo, error) {
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
 	if err != nil {
+		return nil, err
+	}
+	backupVersion := versionResponse.GetVersion()
+	return backupVersion, nil
+}
+
+// GetPxBackupVersionString returns the version of Px Backup like 2.4.0-e85b680
+func GetPxBackupVersionString() (string, error) {
+	backupVersion, err := GetPxBackupVersion()
+	if err != nil {
 		return "", err
 	}
-	version := versionResponse.GetVersion()
-	return fmt.Sprintf("%s.%s.%s-%s", version.GetMajor(), version.GetMinor(), version.GetPatch(), version.GetGitCommit()), nil
+	return fmt.Sprintf("%s.%s.%s-%s", backupVersion.GetMajor(), backupVersion.GetMinor(), backupVersion.GetPatch(), backupVersion.GetGitCommit()), nil
 }
 
 // GetPxBackupVersionSemVer returns the version of Px Backup in semver format like 2.4.0
 func GetPxBackupVersionSemVer() (string, error) {
-	ctx, err := backup.GetAdminCtxFromSecret()
+	backupVersion, err := GetPxBackupVersion()
 	if err != nil {
 		return "", err
 	}
-	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
-	if err != nil {
-		return "", err
-	}
-	version := versionResponse.GetVersion()
-	return fmt.Sprintf("%s.%s.%s", version.GetMajor(), version.GetMinor(), version.GetPatch()), nil
+	return fmt.Sprintf("%s.%s.%s", backupVersion.GetMajor(), backupVersion.GetMinor(), backupVersion.GetPatch()), nil
 }
 
 // GetPxBackupBuildDate returns the Px Backup build date
@@ -1491,8 +1495,8 @@ func GetPxBackupBuildDate() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	version := versionResponse.GetVersion()
-	return version.GetBuildDate(), nil
+	backupVersion := versionResponse.GetVersion()
+	return backupVersion.GetBuildDate(), nil
 }
 
 // UpgradePxBackup will perform the upgrade tasks for Px Backup to the version passed as string
@@ -1559,7 +1563,6 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	storageClassName := pvcs.Items[0].Spec.StorageClassName
 
 	// Get the tarball required for helm upgrade
-
 	cmd = fmt.Sprintf("curl -O  https://raw.githubusercontent.com/portworx/helm/%s/stable/px-central-%s.tgz", latestPxBackupHelmBranch, versionToUpgrade)
 	log.Infof("curl command to get tarball: %v ", cmd)
 	output, _, err := osutils.ExecShell(cmd)
@@ -1569,7 +1572,6 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	log.Infof("Terminal output: %s", output)
 
 	// Execute helm upgrade using cmd
-
 	log.Infof("Upgrading Px-Backup version from %s to %s", currentBackupVersionString, versionToUpgrade)
 	cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --create-namespace --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
 		versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
@@ -1614,7 +1616,10 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 	for _, pod := range allPods.Items {
 		log.Infof("Checking status for pod - %s", pod.GetName())
-		core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+		if err != nil {
+			return err
+		}
 	}
 
 	postUpgradeVersion, err := GetPxBackupVersionSemVer()

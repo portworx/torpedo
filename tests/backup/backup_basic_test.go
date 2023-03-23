@@ -97,7 +97,7 @@ func BackupInitInstance() {
 	}
 
 	// Getting Px-Backup server version info and setting Aetos Dashboard tags
-	PxBackupVersion, err = GetPxBackupVersion()
+	PxBackupVersion, err = GetPxBackupVersionString()
 	log.FailOnError(err, "Error getting Px Backup version")
 	PxBackupBuildDate, err := GetPxBackupBuildDate()
 	log.FailOnError(err, "Error getting Px Backup build date")
