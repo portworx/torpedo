@@ -1549,6 +1549,8 @@ func UpgradePxBackup(versionToUpgrade string) error {
 				}
 			}
 		}
+	} else {
+		log.Infof("%s job not found", pxCentralPostInstallHookJobName)
 	}
 
 	// Get storage class using for px-backup deployment

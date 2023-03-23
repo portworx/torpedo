@@ -17,8 +17,7 @@ var _ = Describe("{UpgradePxBackup}", func() {
 		Step("Upgrade Px Backup", func() {
 			log.InfoD("Upgrade Px Backup to version %s", latestPxBackupVersion)
 			err := UpgradePxBackup(latestPxBackupVersion)
-			log.FailOnError(err, "Failed during upgrade")
-			log.InfoD("Upgrade process complete")
+			dash.VerifyFatal(err, nil, "Verifying Px Backup upgrade completion")
 		})
 	})
 	JustAfterEach(func() {
