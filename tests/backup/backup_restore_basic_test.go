@@ -265,13 +265,10 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s", taskName))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+
 		for _, restore := range restoreNames {
 			err := DeleteRestore(restore, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
@@ -619,14 +616,12 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		log.Info("Deleting restores")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restores - %s", restoreName))
+
 		log.Info("Deleting the deployed apps after test execution")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		for i := 0; i < len(contexts); i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying application %s", taskName))
-		}
+		ValidateAndDestroy(contexts, opts)
+
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
 	})
 })
@@ -755,14 +750,12 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		log.Info("Deleting restores")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restores - %s", restoreName))
+
 		log.Info("Deleting the deployed applications after test execution")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		for i := 0; i < len(contexts); i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying application %s", taskName))
-		}
+		ValidateAndDestroy(contexts, opts)
+
 		log.Info("Deleting backup location, cloud credentials and clusters")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
 	})
@@ -909,13 +902,9 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		}
 
 		log.Infof("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		log.Infof("Deleting backup location, cloud credentials and clusters")
 		CleanupCloudSettingsAndClusters(newBackupLocationMap, credName, cloudCredUID, ctx)
@@ -1089,10 +1078,12 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule named [%s]", scheduleName))
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
 		ValidateAndDestroy(contexts, opts)
+
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
@@ -1289,13 +1280,10 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
