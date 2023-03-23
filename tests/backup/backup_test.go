@@ -306,7 +306,7 @@ var _ = Describe("{BasicScaleyMonoBackupCreation}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
+		StartTorpedoTest("Backup: BasicScaleyMonoBackupCreation", "Scaley testy", nil, 0)
 	})
 
 	It("Basic Backup Creation", func() {
