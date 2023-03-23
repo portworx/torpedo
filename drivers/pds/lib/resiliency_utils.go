@@ -129,7 +129,7 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 		}
 		// Check if Pods have a node assigned or it's in a window where it's just coming up
 		for _, pod := range pods {
-			log.Infof("======= Nodename of pod %v is :%v:========== ", pod.Name, pod.Spec.NodeName)
+			log.Infof("Nodename of pod %v is :%v:", pod.Name, pod.Spec.NodeName)
 			if pod.Spec.NodeName == "" || pod.Spec.NodeName == " " {
 				log.Infof("Pod %v still does not have a node assigned. Retrying in 5 seconds", pod.Name)
 				return false, nil

@@ -803,7 +803,10 @@ func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 			return false, nil
 		}
 		if ss.Status.Replicas >= checkTillReplica {
-			ResiliencyCondition <- true
+			// Checking If this is a resiliency test case
+			if ResiliencyFlag {
+				ResiliencyCondition <- true
+			}
 			log.InfoD("Resiliency Condition Met. Will go ahead and try to induce failure now")
 			return true, nil
 		}
