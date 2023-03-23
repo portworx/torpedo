@@ -547,6 +547,71 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	})
 }
 
+func ValidatePureCloudDriveTopologies() error {
+	nodes, err := Inst().V.GetDriverNodes()
+	if err != nil { return err }
+	nodesMap := node.GetNodesByName()
+
+	driverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil { return err }
+
+	pxPureSecret, err := pureutils.GetPXPureSecret(driverNamespace)
+	if err != nil { return err }
+
+	endpointToZoneMap := pxPureSecret.GetArrayToZoneMap()
+	if len(endpointToZoneMap) == 0 {
+		return fmt.Errorf("parsed px-pure-secret endpoint to zone map, but no arrays in map (len==0)")
+	}
+
+	log.Infof("Endpoint to zone map: %v", endpointToZoneMap)
+
+	for _, node := range nodes {
+		log.Infof("Inspecting drive sets on node %v", node.SchedulerNodeName)
+		nodeFromMap, ok := nodesMap[node.SchedulerNodeName]
+		if !ok {
+			return fmt.Errorf("Failed to find node %s in node map", node.SchedulerNodeName)
+		}
+
+		var nodeZone string
+		if nodeFromMap.SchedulerTopology != nil && nodeFromMap.SchedulerTopology.Labels != nil {
+			if z, ok := nodeFromMap.SchedulerTopology.Labels["topology.portworx.io/zone"]; ok {
+				nodeZone = z
+			}
+		}
+
+		if nodeZone == "" {
+			log.Warnf("Node %s has no zone (missing the topology.portworx.io/zone label), skipping drive set checks for it", node.SchedulerNodeName)
+			continue
+		}
+
+		driveSet, err := Inst().V.GetDriveSet(&nodeFromMap)
+		if err != nil { return err }
+
+		for configID, driveConfig := range driveSet.Configs {
+			err = nil
+			if len(driveConfig.Labels) == 0 {
+				return fmt.Errorf("drive config %s has no labels: validate that you're running on PX master or 3.0+ and using FlashArray cloud drives with topology enabled", configID)
+			}
+
+			var arrayEndpoint string
+			if arrayEndpoint, ok = driveConfig.Labels[pureutils.CloudDriveFAMgmtLabel]; !ok {
+				return fmt.Errorf("drive config %s is missing the '%s' label: validate that you're running PX master or 3.0+ and using FlashArray cloud drives with topology enabled", configID, pureutils.CloudDriveFAMgmtLabel)
+			}
+
+			var driveZone string
+			if driveZone, ok = endpointToZoneMap[arrayEndpoint]; !ok {
+				return fmt.Errorf("drive config %s is on array with endpoint '%s', which is not listed in px-pure-secret", configID, arrayEndpoint)
+			}
+
+			if driveZone != nodeZone {
+				return fmt.Errorf("drive config %s is provisioned on array in zone %s, but node '%s' is in zone %s, which is not topologically correct", configID, driveZone, node.SchedulerNodeName, nodeZone)
+			}
+		}
+	}
+
+	return nil
+}
+
 // ValidateContextForPureVolumesSDK is the ginkgo spec for validating a scheduled context
 func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan error) {
 	defer func() {
@@ -2894,104 +2959,23 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 }
 
 // CreateCloudCredential creates cloud credetials
-func CreateCloudCredential(provider, name string, uid, orgID string) {
-	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
-		log.Infof("Create credential name %s for org %s provider %s", name, orgID, provider)
-		backupDriver := Inst().Backup
-		switch provider {
-		case drivers.ProviderAws:
-			log.Infof("Create creds for aws")
-			id := os.Getenv("AWS_ACCESS_KEY_ID")
-			expect(id).NotTo(equal(""),
-				"AWS_ACCESS_KEY_ID Environment variable should not be empty")
-
-			secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
-			expect(secret).NotTo(equal(""),
-				"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
-
-			credCreateRequest := &api.CloudCredentialCreateRequest{
-				CreateMetadata: &api.CreateMetadata{
-					Name:  name,
-					Uid:   uid,
-					OrgId: orgID,
-				},
-				CloudCredential: &api.CloudCredentialInfo{
-					Type: api.CloudCredentialInfo_AWS,
-					Config: &api.CloudCredentialInfo_AwsConfig{
-						AwsConfig: &api.AWSConfig{
-							AccessKey: id,
-							SecretKey: secret,
-						},
-					},
-				},
-			}
-
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
-
-			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-			if err != nil && strings.Contains(err.Error(), "already exists") {
-				return
-			}
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
-		// TODO: validate CreateCloudCredentialResponse also
-		case drivers.ProviderAzure:
-			log.Infof("Create creds for azure")
-			tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
-			credCreateRequest := &api.CloudCredentialCreateRequest{
-				CreateMetadata: &api.CreateMetadata{
-					Name:  name,
-					Uid:   uid,
-					OrgId: orgID,
-				},
-				CloudCredential: &api.CloudCredentialInfo{
-					Type: api.CloudCredentialInfo_Azure,
-					Config: &api.CloudCredentialInfo_AzureConfig{
-						AzureConfig: &api.AzureConfig{
-							TenantId:       tenantID,
-							ClientId:       clientID,
-							ClientSecret:   clientSecret,
-							AccountName:    accountName,
-							AccountKey:     accountKey,
-							SubscriptionId: subscriptionID,
-						},
-					},
-				},
-			}
-			ctx, err := backup.GetAdminCtxFromSecret()
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-					err))
-			_, err = backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-			if err != nil && strings.Contains(err.Error(), "already exists") {
-				return
-			}
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
-			// TODO: validate CreateCloudCredentialResponse also
-		}
-	})
-}
-
-// CreateCloudCredential creates cloud credetials
-func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string, ctx context1.Context) error {
-	log.Infof("Create credential name %s for org %s provider %s", name, orgID, provider)
-	backupDriver := Inst().Backup
+func CreateCloudCredential(provider, credName string, uid, orgID string, ctx context1.Context) error {
+	log.Infof("Create cloud credential with name [%s] for org [%s] with [%s] as provider", credName, orgID, provider)
+	var credCreateRequest *api.CloudCredentialCreateRequest
 	switch provider {
 	case drivers.ProviderAws:
 		log.Infof("Create creds for aws")
 		id := os.Getenv("AWS_ACCESS_KEY_ID")
 		if id == "" {
-			return fmt.Errorf("AWS_ACCESS_KEY_ID Environment variable should not be empty")
+			return fmt.Errorf("environment variable AWS_ACCESS_KEY_ID should not be empty")
 		}
 		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
 		if secret == "" {
-			return fmt.Errorf("AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
+			return fmt.Errorf("environment variable AWS_SECRET_ACCESS_KEY should not be empty")
 		}
-		credCreateRequest := &api.CloudCredentialCreateRequest{
+		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
-				Name:  name,
+				Name:  credName,
 				Uid:   uid,
 				OrgId: orgID,
 			},
@@ -3005,18 +2989,12 @@ func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string,
 				},
 			},
 		}
-		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-		if err != nil && strings.Contains(err.Error(), "already exists") {
-			return nil
-		}
-		return err
-	// TODO: validate CreateCloudCredentialResponse also
 	case drivers.ProviderAzure:
 		log.Infof("Create creds for azure")
 		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
-		credCreateRequest := &api.CloudCredentialCreateRequest{
+		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
-				Name:  name,
+				Name:  credName,
 				Uid:   uid,
 				OrgId: orgID,
 			},
@@ -3034,11 +3012,15 @@ func CreateCloudCredentialNonAdminUser(provider, name string, uid, orgID string,
 				},
 			},
 		}
-
-		_, err := backupDriver.CreateCloudCredential(ctx, credCreateRequest)
-		if err != nil && strings.Contains(err.Error(), "already exists") {
+	default:
+		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
+	}
+	_, err := Inst().Backup.CreateCloudCredential(ctx, credCreateRequest)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
 			return nil
 		}
+		log.Errorf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider", credName, orgID, provider)
 		return err
 	}
 	return nil
