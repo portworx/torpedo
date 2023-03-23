@@ -296,3 +296,59 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// This testcase verifies basic backup rule,backup location, cloud setting
+var _ = Describe("{BasicScaleyMonoBackupCreation}", func() {
+	var (
+		contexts      []*scheduler.Context
+		clusterUid    string
+		clusterStatus api.ClusterInfo_StatusInfo_Status
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
+	})
+
+	It("Basic Backup Creation", func() {
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster with uid [%s]", clusterUid))
+		})
+
+		Step("Listing all Scaley Mono Clusters", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			backupDriver := Inst().Backup
+			monoStartNum, monoCountNum, err := processScaleyMonoTimes(monoStartNumEnvKey, monoCountNumEnvKey)
+			log.FailOnError(err, "processScaleyMonoTimes error")
+			log.InfoD("Starting cluster cheking...")
+			for i := monoStartNum; i < monoStartNum+monoCountNum; i++ {
+				scaleyMonoClusterName := fmt.Sprintf("scaley-cluster-mono-%d", i)
+				clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: scaleyMonoClusterName, IncludeSecrets: true}
+				clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+				log.FailOnError(err, "scaley mono cluster [%s] was not present", scaleyMonoClusterName)
+				clusterObj := clusterResp.GetCluster()
+				log.InfoD("found scaley mono cluster [%s]", clusterObj.Name)
+			}
+			dash.VerifyFatal(true, true, "cluster checks")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		err = DeleteCluster(SourceClusterName, orgID, ctx)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+		err = DeleteCluster(destinationClusterName, orgID, ctx)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+	})
+})

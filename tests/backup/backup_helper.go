@@ -58,6 +58,8 @@ const (
 	mongodbPodStatusRetryTime                 = 30 * time.Second
 	backupLocationDeleteTimeout               = 30 * time.Minute
 	backupLocationDeleteRetryTime             = 30 * time.Second
+	monoStartNumEnvKey                        = "SCALEY_MONO_START_NUM"
+	monoCountNumEnvKey                        = "SCALEY_MONO_COUNT_NUM"
 )
 
 var (
@@ -1444,4 +1446,27 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	}
 	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 	return err
+}
+
+// processScaleyMonoTimes processes Scaley Mono environment variables
+func processScaleyMonoTimes(monoStartNumEnvKey, monoCountNumEnvKey string) (int, int, error) {
+	monoStartNumEnvVar := os.Getenv(monoStartNumEnvKey)
+	if monoStartNumEnvVar == "" {
+		return 0, 0, fmt.Errorf("error getting [%s] environment variable. it was [%s]", monoStartNumEnvKey, monoStartNumEnvVar)
+	}
+	monoStartNum, err := strconv.Atoi(monoStartNumEnvVar)
+	if err != nil {
+		return 0, 0, fmt.Errorf("[%s] environment variable was not an integer. Err: %v", monoStartNumEnvKey, err)
+	}
+
+	monoCountNumEnvVar := os.Getenv(monoCountNumEnvKey)
+	if monoCountNumEnvVar == "" {
+		return 0, 0, fmt.Errorf("error getting [%s] environment variable. it was [%s]", monoCountNumEnvKey, monoCountNumEnvVar)
+	}
+	monoCountNum, err := strconv.Atoi(monoCountNumEnvVar)
+	if err != nil {
+		return 0, 0, fmt.Errorf("[%s] environment variable was not an integer. Err: %v", monoCountNumEnvKey, err)
+	}
+
+	return monoStartNum, monoCountNum, nil
 }
