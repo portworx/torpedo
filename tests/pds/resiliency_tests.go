@@ -18,9 +18,6 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 	It("deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name != postgresql {
-					continue
-				}
 				Step("Start deployment, Reboot a node on which deployment is coming up and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
