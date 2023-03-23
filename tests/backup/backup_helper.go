@@ -13,16 +13,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s/apps"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	. "github.com/onsi/ginkgo"
+	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -1444,4 +1444,123 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	}
 	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 	return err
+}
+
+func AddLabelsToMultipleNS(number int, namespaces []string) (map[string]string, error) {
+	labels := make(map[string]string)
+	for i := 0; i < number; i++ {
+		key := fmt.Sprintf("%v-%v", i, uuid.New())
+		value := uuid.New()
+		labels[key] = value
+	}
+	for _, namespace := range namespaces {
+		err := Inst().S.AddNamespaceLabel(namespace, labels)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return labels, nil
+}
+
+func CreateScheduleBackupUsingNamespaceLabel(scheduleName string, clusterName string, bLocation string, bLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context.Context, nsLabel string) error {
+	var firstScheduleBackupName string
+	var firstScheduleBackupUid string
+	backupDriver := Inst().Backup
+	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  scheduleName,
+			OrgId: orgID,
+		},
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		SchedulePolicy: schPolicyName,
+		Cluster:        clusterName,
+		LabelSelectors: labelSelectors,
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		NsLabelSelectors: nsLabel,
+	}
+	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	if err != nil {
+		return err
+	}
+	time.Sleep(1 * time.Minute)
+	backupSuccessCheck := func() (interface{}, bool, error) {
+		firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		firstScheduleBackupUid, err = GetFirstScheduleBackupUID(ctx, scheduleName, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		backupInspectRequest := &api.BackupInspectRequest{
+			Name:  firstScheduleBackupName,
+			Uid:   firstScheduleBackupUid,
+			OrgId: orgID,
+		}
+		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", true, err
+		}
+		actual := resp.GetBackup().GetStatus().Status
+		expected := api.BackupInfo_StatusInfo_Success
+		if actual != expected {
+			return "", true, fmt.Errorf("status for first schedule backup [%s] expected was [%s] but got [%s]", firstScheduleBackupName, expected, actual)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(backupSuccessCheck, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func DeleteScheduleBackup(backupScheduleName, backupScheduleUID, OrgID string) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: OrgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupScheduleUID,
+	}
+	ctx, err := backup.GetPxCentralAdminCtx()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: OrgID, Name: SourceClusterName, IncludeSecrets: true}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+	namespace := "*"
+	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, OrgID,
+		clusterObj,
+		BackupRestoreCompletionTimeoutMin*time.Minute,
+		RetrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
 }
