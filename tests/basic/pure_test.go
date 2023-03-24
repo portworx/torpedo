@@ -56,6 +56,7 @@ func deleteCloudsnapCredential() {
 	Expect(err).NotTo(HaveOccurred(), "unexpected error deleting cloudsnap credential")
 }
 
+// This test performs basic tests making sure Pure direct access are running as expected
 var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
