@@ -713,6 +713,9 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			if ctx.SkipMountOptionValidation {
 				return
 			}
+			ctx.SkipVolumeValidation = false
+			ValidateContext(ctx)
+			ctx.SkipVolumeValidation = true
 			vols, err := Inst().S.GetVolumes(ctx)
 			processError(err, errChan...)
 			for _, vol := range vols {
