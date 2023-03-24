@@ -1609,13 +1609,6 @@ func UpgradePxBackup(versionToUpgrade string) error {
 
 	// Checking if all pods are running
 	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
-	log.Infof("Listing all the pods in Px Backup Namespace [%s] - ", pxBackupNamespace)
-	for _, pod := range allPods.Items {
-		log.Infof(pod.GetName())
-	}
-	if err != nil {
-		return err
-	}
 	for _, pod := range allPods.Items {
 		log.Infof("Checking status for pod - %s", pod.GetName())
 		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
