@@ -255,6 +255,8 @@ const (
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
+	defaultCommandRetry       = 5 * time.Second
+	defaultCommandTimeout     = 1 * time.Minute
 )
 
 const (
@@ -300,6 +302,7 @@ var (
 	contain       = gomega.ContainSubstring
 	beTrue        = gomega.BeTrue
 	beNumerically = gomega.BeNumerically
+	k8sCore       = core.Instance()
 )
 
 // Backup vars
@@ -629,6 +632,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 	}()
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
+		var mountoption = []string{"nosuid"}
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
@@ -702,6 +706,32 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 					processError(err, errChan...)
 				})
 			}
+		})
+
+		//check mount option attribute in storage class
+		Step("validating mount options", func() {
+			if ctx.SkipMountOptionValidation {
+				return
+			}
+			vols, err := Inst().S.GetVolumes(ctx)
+			processError(err, errChan...)
+			for _, vol := range vols {
+				pvcObj, err := k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+				sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+				if err != nil {
+					log.Errorf("Error Occured while getting storage class for pvc %v", err)
+				}
+				sc2 := fmt.Sprint(sc)
+				if strings.Contains(sc2, "nosuid") {
+					attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
+					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+					err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, mountoption, attachedNode)
+					dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
+				} else {
+					log.Infof("There is no nosuid mount option in this volume %s", vol)
+				}
+			}
+
 		})
 	})
 }
@@ -1510,6 +1540,9 @@ func ScheduleAppsInTopologyEnabledCluster(
 func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
+			if ctx.App.Key == "nginx-fa-davol" {
+				ctx.SkipVolumeValidation = true
+			}
 			ValidateContextForPureVolumesPXCTL(ctx)
 		}
 	})
@@ -1519,6 +1552,12 @@ func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
 func ValidateApplicationsPureSDK(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
+			if ctx.App.Key == "wordpress" || ctx.App.Key == "nginx-fa-davol" {
+				ctx.SkipMountOptionValidation = false
+			}
+			if ctx.App.Key == "nginx-fa-davol" {
+				ctx.SkipVolumeValidation = true
+			}
 			ValidateContextForPureVolumesSDK(ctx)
 		}
 	})

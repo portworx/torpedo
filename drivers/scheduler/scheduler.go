@@ -38,6 +38,8 @@ type Context struct {
 	ScheduleOptions ScheduleOptions
 	// SkipVolumeValidation for cases when use volume driver other than portworx
 	SkipVolumeValidation bool
+	// SkipVolumeValidation for cases when use volume driver other than portworx
+	SkipMountOptionValidation bool
 	// SkipClusterScopedObject for cases of multi-cluster backup when Storage class does not restored
 	SkipClusterScopedObject bool
 	// RefreshStorageEndpoint force refresh the storage driver endpoint
