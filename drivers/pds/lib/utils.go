@@ -58,6 +58,15 @@ type Parameter struct {
 		Namespace       string `json:"Namespace"`
 		PxNamespace     string `json:"PxNamespace"`
 	} `json:"InfraToTest"`
+	Users struct {
+		AdminUsername    string `json:"AdminUsername"`
+		AdminPassword    string `json:"AdminPassword"`
+		NonAdminUsername string `json:"NonAdminUsername"`
+		NonAdminPassword string `json:"NonAdminPassword"`
+	} `json:"Users"`
+	ResiliencyTest struct {
+		CheckTillReplica int32 `json:"CheckTillReplica"`
+	} `json:"ResiliencyTest"`
 }
 
 // ResourceSettingTemplate struct used to store template values
@@ -150,6 +159,8 @@ type StorageClassConfig struct {
 
 // PDS const
 const (
+	defaultCommandRetry   = 5 * time.Second
+	defaultCommandTimeout = 1 * time.Minute
 	storageTemplateName   = "QaDefault"
 	resourceTemplateName  = "Small"
 	appConfigTemplateName = "QaDefault"
@@ -158,6 +169,7 @@ const (
 	timeOut               = 30 * time.Minute
 	timeInterval          = 10 * time.Second
 	maxtimeInterval       = 30 * time.Second
+	resiliencyInterval    = 1 * time.Second
 	envDsVersion          = "DS_VERSION"
 	envDsBuild            = "DS_BUILD"
 	zookeeper             = "ZooKeeper"
@@ -223,6 +235,7 @@ var (
 	namespaceNameIDMap                      = make(map[string]string)
 	dataServiceVersionBuildMap              = make(map[string][]string)
 	dataServiceImageMap                     = make(map[string][]string)
+	ApiComponents                           *pdsapi.Components
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable.
@@ -750,6 +763,7 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 		log.Errorf("An Error Occured while getting statefulsets %v", err)
 		return err
 	}
+
 	//validate the statefulset deployed in the k8s namespace
 	err = k8sApps.ValidateStatefulSet(ss, timeOut)
 	if err != nil {
@@ -777,6 +791,29 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 		return true, nil
 	})
 	return err
+}
+
+// Function to check for set amount of Replica Pods
+func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
+	var ss *v1.StatefulSet
+	conditionError = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+		if err != nil {
+			log.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		if ss.Status.Replicas >= checkTillReplica {
+			// Checking If this is a resiliency test case
+			if ResiliencyFlag {
+				ResiliencyCondition <- true
+			}
+			log.InfoD("Resiliency Condition Met. Will go ahead and try to induce failure now")
+			return true, nil
+		}
+		log.Infof("Resiliency Condition still not met. Will retry to see if it has met now.....")
+		return false, nil
+	})
+	return conditionError
 }
 
 // DeleteK8sPods deletes the pods in given namespace
@@ -1210,12 +1247,12 @@ func IsReachable(url string) (bool, error) {
 }
 
 // SetupPDSTest returns few params required to run the test
-func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, error) {
+func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, string, error) {
 	var err error
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", "", "", "", err
 	}
 	apiConf.Host = endpointURL.Host
 	apiConf.Scheme = endpointURL.Scheme
@@ -1232,7 +1269,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	acc := components.Account
 	accounts, err := acc.GetAccountsList()
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", "", "", "", err
 	}
 
 	isAccountAvailable = false
@@ -1245,7 +1282,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 		}
 	}
 	if !isAccountAvailable {
-		return "", "", "", "", "", fmt.Errorf("account %v is not available", AccountName)
+		return "", "", "", "", "", "", fmt.Errorf("account %v is not available", AccountName)
 	}
 	log.InfoD("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
 	tnts := components.Tenant
@@ -1260,7 +1297,7 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	log.InfoD("Tenant Details- Name: %s, UUID: %s ", TenantName, tenantID)
 	dnsZone, err := controlplane.GetDNSZone(tenantID)
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", "", "", "", err
 	}
 	log.InfoD("DNSZone: %s, tenantName: %s, accountName: %s", dnsZone, TenantName, AccountName)
 	projcts := components.Project
@@ -1275,16 +1312,16 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 
 	ns, err = k8sCore.GetNamespace("kube-system")
 	if err != nil {
-		return "", "", "", "", "", err
+		return "", "", "", "", "", "", err
 	}
 	clusterID := string(ns.GetObjectMeta().GetUID())
 	if len(clusterID) > 0 {
 		log.InfoD("clusterID %v", clusterID)
 	} else {
-		return "", "", "", "", "", fmt.Errorf("unable to get the clusterID")
+		return "", "", "", "", "", "", fmt.Errorf("unable to get the clusterID")
 	}
 
-	return tenantID, dnsZone, projectID, serviceType, clusterID, err
+	return accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err
 }
 
 // RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
@@ -1940,10 +1977,7 @@ func DeployDataServices(ds, projectID, deploymentTargetID, dnsZone, deploymentNa
 		log.Warnf("An Error Occured while creating deployment %v", err)
 		return nil, nil, nil, err
 	}
-	err = ValidateDataServiceDeployment(deployment, namespace)
-	if err != nil {
-		return deployment, nil, nil, err
-	}
+
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, nil
 }
 

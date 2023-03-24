@@ -4,6 +4,7 @@ import (
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+
 	"github.com/portworx/sched-ops/k8s/core"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
@@ -23,24 +24,25 @@ type PDSDataService struct {
 }
 
 const (
-	pdsNamespace            = "pds-system"
-	deploymentName          = "qa"
-	envDeployAllDataService = "DEPLOY_ALL_DATASERVICE"
-	postgresql              = "PostgreSQL"
-	cassandra               = "Cassandra"
-	elasticSearch           = "Elasticsearch"
-	couchbase               = "Couchbase"
-	redis                   = "Redis"
-	rabbitmq                = "RabbitMQ"
-	mongodb                 = "MongoDB"
-	mysql                   = "MySQL"
-	kafka                   = "Kafka"
-	zookeeper               = "ZooKeeper"
-	consul                  = "Consul"
-	pdsNamespaceLabel       = "pds.portworx.com/available"
-	timeOut                 = 30 * time.Minute
-	maxtimeInterval         = 30 * time.Second
-	timeInterval            = 1 * time.Second
+	pdsNamespace                     = "pds-system"
+	deploymentName                   = "qa"
+	envDeployAllDataService          = "DEPLOY_ALL_DATASERVICE"
+	postgresql                       = "PostgreSQL"
+	cassandra                        = "Cassandra"
+	elasticSearch                    = "Elasticsearch"
+	couchbase                        = "Couchbase"
+	redis                            = "Redis"
+	rabbitmq                         = "RabbitMQ"
+	mongodb                          = "MongoDB"
+	mysql                            = "MySQL"
+	kafka                            = "Kafka"
+	zookeeper                        = "ZooKeeper"
+	consul                           = "Consul"
+	pdsNamespaceLabel                = "pds.portworx.com/available"
+	timeOut                          = 30 * time.Minute
+	maxtimeInterval                  = 30 * time.Second
+	timeInterval                     = 1 * time.Second
+	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
 )
 
 var (
@@ -78,6 +80,7 @@ var (
 	deployment                              *pds.ModelsDeployment
 	k8sCore                                 = core.Instance()
 	pdsLabels                               = make(map[string]string)
+	accountID                               string
 )
 
 var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul}

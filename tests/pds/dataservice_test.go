@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,12 +21,10 @@ import (
 )
 
 const (
-	defaultWaitRebootTimeout     = 5 * time.Minute
 	defaultWaitRebootRetry       = 10 * time.Second
 	defaultCommandRetry          = 5 * time.Second
 	defaultCommandTimeout        = 1 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
-	defaultRebootTimeRange       = 5 * time.Minute
 )
 
 var _ = Describe("{DeletePDSPods}", func() {
@@ -427,48 +426,46 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 		})
 		Step("Deploy, Validate and Delete Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name == postgresql {
-					log.InfoD("Deploying DataService %v ", ds.Name)
-					isDeploymentsDeleted = false
-					dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-					log.FailOnError(err, "Error while getting resource template")
-					log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+				log.InfoD("Deploying DataService %v ", ds.Name)
+				isDeploymentsDeleted = false
+				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting resource template")
+				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
-					dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-					log.FailOnError(err, "Error while getting app configuration template")
-					dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
-					log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-					namespaceID, err := pdslib.GetnameSpaceID(ns, deploymentTargetID)
-					log.FailOnError(err, "error while getting namespaceid")
-					deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
-						deploymentTargetID,
-						dnsZone,
-						deploymentName,
-						namespaceID,
-						dataServiceDefaultAppConfigID,
-						int32(ds.Replicas),
-						serviceType,
-						dataServiceDefaultResourceTemplateID,
-						storageTemplateID,
-						ds.Version,
-						ds.Image,
-						ns,
-					)
-					log.FailOnError(err, "Error while deploying data services")
+				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting app configuration template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
+				namespaceID, err := pdslib.GetnameSpaceID(ns, deploymentTargetID)
+				log.FailOnError(err, "error while getting namespaceid")
+				deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(ds.Name, projectID,
+					deploymentTargetID,
+					dnsZone,
+					deploymentName,
+					namespaceID,
+					dataServiceDefaultAppConfigID,
+					int32(ds.Replicas),
+					serviceType,
+					dataServiceDefaultResourceTemplateID,
+					storageTemplateID,
+					ds.Version,
+					ds.Image,
+					ns,
+				)
+				log.FailOnError(err, "Error while deploying data services")
 
-					Step("Validate Storage Configurations", func() {
-						resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns)
-						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
-					})
+				Step("Validate Storage Configurations", func() {
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+				})
 
-					Step("Delete Deployments", func() {
-						log.InfoD("Deleting DataService %v ", ds.Name)
-						resp, err := pdslib.DeleteDeployment(deployment.GetId())
-						log.FailOnError(err, "Error while deleting data services")
-						dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-					})
-				}
+				Step("Delete Deployments", func() {
+					log.InfoD("Deleting DataService %v ", ds.Name)
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				})
 			}
 		})
 	})
@@ -551,6 +548,8 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			namespace,
 		)
 		log.FailOnError(err, "Error while deploying data services")
+		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 
 		Step("Validate Storage Configurations", func() {
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
@@ -828,7 +827,7 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+func TriggerDeployDataService(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	Step("Deploy Data Services", func() {
 		log.InfoD("Deploying DataService %v ", ds.Name)
 		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
@@ -860,12 +859,20 @@ func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, proje
 			namespace,
 		)
 		log.FailOnError(err, "Error while deploying data services")
+	})
+	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
+}
 
-		Step("Validate Storage Configurations", func() {
-			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-			log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-			ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
-		})
+func DeployandValidateDataServices(ds PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := TriggerDeployDataService(ds, namespace, tenantID, projectID)
+	Step("Validate Data Service Configurations", func() {
+		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
+	})
+	Step("Validate Storage Configurations", func() {
+		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+		ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 	})
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
 }
@@ -898,6 +905,8 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			namespace,
 		)
 		log.FailOnError(err, "Error while deploying data services")
+		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 
 		Step("Validate Storage Configurations", func() {
 			resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
@@ -1050,8 +1059,8 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-					log.FailOnError(err, "Error while deploying data services")
+					deployment, _, _, err = DeployandValidateDataServices(ds, nname, tenantID, projectID)
+					log.FailOnError(err, fmt.Sprintf("Error while deploying data services - %v", ds.Name))
 					cleanup = append(cleanup, deployment)
 				})
 			}
@@ -1074,7 +1083,6 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 					err := pdslib.ValidateDataServiceDeploymentNegative(dep, nname)
 					log.FailOnError(err, "Error while cleaning up data services")
 				}
-				isDeploymentsDeleted = true
 			})
 
 		})
@@ -1336,5 +1344,56 @@ var _ = Describe("{RollingRebootNodes}", func() {
 		}()
 
 		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{AddAndValidateUserRoles}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddAndValidateUser", "Add users with admin or non admin privileges and validate the same.", nil, 0)
+	})
+
+	It("add users with admin or non admin privileges and validate.", func() {
+		usersParam := params.Users
+		defaultAdmin := os.Getenv("PDS_USERNAME")
+		defaultAdminPassword := os.Getenv("PDS_PASSWORD")
+
+		Step("Adding users having admin privileges and validating for same.", func() {
+			log.Info("Adding user with admin privileges.")
+			username := usersParam.AdminUsername
+			password := usersParam.AdminPassword
+			log.InfoD("Adding the user - %v", username)
+			err := pdslib.ApiComponents.AccountRoleBinding.AddUser(accountID, username, true)
+			log.FailOnError(err, fmt.Sprintf("Error while adding the user %s", username))
+			os.Setenv("PDS_USERNAME", username)
+			os.Setenv("PDS_PASSWORD", password)
+			log.Info("Validating the admin role by listing users.")
+			_, err = pdslib.ApiComponents.AccountRoleBinding.ListAccountsRoleBindings(accountID)
+			log.FailOnError(err, fmt.Sprintf("User - %v is unable to fetch all the users belong to this account which is unexpected since it has the admin privileges.", usersParam.AdminUsername))
+			log.InfoD("User - %v is able to fetch all the users belong to this account as expected since it has the admin privileges.", usersParam.AdminUsername)
+
+		})
+
+		Step("Adding users having non-admin privileges and validating it.", func() {
+			log.InfoD("Adding user with non admin privileges.")
+			username := usersParam.NonAdminUsername
+			password := usersParam.NonAdminPassword
+			err := pdslib.ApiComponents.AccountRoleBinding.AddUser(accountID, username, false)
+			log.FailOnError(err, fmt.Sprintf("Error while adding the user %s", username))
+			os.Setenv("PDS_USERNAME", username)
+			os.Setenv("PDS_PASSWORD", password)
+			log.InfoD("Validating the non-admin role by trying to list users belong to this account.")
+			_, err = pdslib.ApiComponents.AccountRoleBinding.ListAccountsRoleBindings(accountID)
+			log.FailOnError(err, fmt.Sprintf("User - %v is unable to fetch all the users belong to this account as expected since it doesn't have the admin privileges.", usersParam.NonAdminUsername))
+
+		})
+		log.InfoD("Resetting to default admin user and validating by listing users.")
+		os.Setenv("PDS_USERNAME", defaultAdmin)
+		os.Setenv("PDS_PASSWORD", defaultAdminPassword)
+		_, err := pdslib.ApiComponents.AccountRoleBinding.ListAccountsRoleBindings(accountID)
+		log.FailOnError(err, fmt.Sprintf("User - %v is unable to fetch all the users belong to this account which is unexpected since it has the admin privileges.", defaultAdmin))
+	})
+
+	JustAfterEach(func() {
+		EndTorpedoTest()
 	})
 })
