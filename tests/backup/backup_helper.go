@@ -1573,6 +1573,12 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 	log.Infof("Terminal output: %s", output)
 
+	// Checking if all pods are healthy before upgrade
+	err = ValidateAllPodsInPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+
 	// Execute helm upgrade using cmd
 	log.Infof("Upgrading Px-Backup version from %s to %s", currentBackupVersionString, versionToUpgrade)
 	cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
@@ -1608,13 +1614,9 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 
 	// Checking if all pods are running
-	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
-	for _, pod := range allPods.Items {
-		log.Infof("Checking status for pod - %s", pod.GetName())
-		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
-		if err != nil {
-			return err
-		}
+	err = ValidateAllPodsInPxBackupNamespace()
+	if err != nil {
+		return err
 	}
 
 	postUpgradeVersion, err := GetPxBackupVersionSemVer()
@@ -1647,5 +1649,18 @@ func deleteJobAndWait(job batchv1.Job) error {
 		return err
 	}
 	log.Infof("job %s deleted", job.Name)
+	return nil
+}
+
+func ValidateAllPodsInPxBackupNamespace() error {
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
+	for _, pod := range allPods.Items {
+		log.Infof("Checking status for pod - %s", pod.GetName())
+		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
