@@ -1027,6 +1027,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 		for _, pod := range newPods {
 			if strings.Contains(pod.Name, deployment.Name) {
 				log.InfoD("Will check for status of Init Container Once......")
+				log.Info("******CURRENT STATUS IS : ", pod.Status.InitContainerStatuses)
 				for _, c := range pod.Status.InitContainerStatuses {
 					if c.State.Terminated != nil {
 						flag = true
@@ -1053,6 +1054,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 		for _, pod := range newPods {
 			if strings.Contains(pod.Name, deployment.Name) {
 				log.InfoD("Waiting for TPCC Workload Container to finish")
+				log.Info("******CURRENT CONTAINER STATUS IS : ", pod.Status.ContainerStatuses)
 				for _, c := range pod.Status.ContainerStatuses {
 					if int32(c.RestartCount) != 0 {
 						flag = true
