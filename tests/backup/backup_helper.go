@@ -66,6 +66,8 @@ const (
 	latestPxBackupVersion                     = "2.4.0"
 	latestPxBackupHelmBranch                  = "master"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
+	quickMaintenancePod                       = "quick-maintenance-repo"
+	fullMaintenancePod                        = "full-maintenance-repo"
 	jobDeleteTimeout                          = 5 * time.Minute
 	jobDeleteRetryTime                        = 10 * time.Second
 )
@@ -1656,6 +1658,11 @@ func ValidateAllPodsInPxBackupNamespace() error {
 	pxBackupNamespace, err := backup.GetPxBackupNamespace()
 	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
 	for _, pod := range allPods.Items {
+		if strings.Contains(pod.Name, pxCentralPostInstallHookJobName) ||
+			strings.Contains(pod.Name, quickMaintenancePod) ||
+			strings.Contains(pod.Name, fullMaintenancePod) {
+			continue
+		}
 		log.Infof("Checking status for pod - %s", pod.GetName())
 		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
 		if err != nil {
