@@ -50,13 +50,14 @@ type Parameter struct {
 		OldImage      string `json:"OldImage"`
 	} `json:"DataServiceToTest"`
 	InfraToTest struct {
-		ControlPlaneURL string `json:"ControlPlaneURL"`
-		AccountName     string `json:"AccountName"`
-		TenantName      string `json:"TenantName"`
-		ProjectName     string `json:"ProjectName"`
-		ClusterType     string `json:"ClusterType"`
-		Namespace       string `json:"Namespace"`
-		PxNamespace     string `json:"PxNamespace"`
+		ControlPlaneURL   string `json:"ControlPlaneURL"`
+		AccountName       string `json:"AccountName"`
+		TenantName        string `json:"TenantName"`
+		ProjectName       string `json:"ProjectName"`
+		ClusterType       string `json:"ClusterType"`
+		Namespace         string `json:"Namespace"`
+		PxNamespace       string `json:"PxNamespace"`
+		OldPDSHelmVersion string `json:"OldPDSHelmVersion"`
 	} `json:"InfraToTest"`
 	Users struct {
 		AdminUsername    string `json:"AdminUsername"`
@@ -1325,16 +1326,28 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 }
 
 // RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
-func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string) error {
+//func RegisterClusterToControlPlane(controlPlaneUrl, tenantId, clusterType string, installOldVersion bool) error {
+func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, installOldVersion bool) error {
 	log.InfoD("Test control plane url connectivity.")
+	var helmChartversion string
+	controlPlaneUrl := infraParams.InfraToTest.ControlPlaneURL
+	clusterType := infraParams.InfraToTest.ClusterType
+
 	_, err := IsReachable(controlPlaneUrl)
 	if err != nil {
 		return fmt.Errorf("unable to reach the control plane with following error - %v", err)
 	}
 
-	helmChartversion, err := components.APIVersion.GetHelmChartVersion()
-	if err != nil {
-		return fmt.Errorf("error while getting helm version - %v", helmChartversion)
+	if installOldVersion {
+		helmChartversion = infraParams.InfraToTest.OldPDSHelmVersion
+		log.InfoD("Deregister PDS and Install Old Version")
+
+	} else {
+		helmChartversion, err = components.APIVersion.GetHelmChartVersion()
+		log.Debugf("helm chart version %v", helmChartversion)
+		if err != nil {
+			return fmt.Errorf("error while getting helm version - %v", helmChartversion)
+		}
 	}
 
 	log.InfoD("Listing service account")
