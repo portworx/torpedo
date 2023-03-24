@@ -254,6 +254,8 @@ const (
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
+	defaultCommandRetry       = 5 * time.Second
+	defaultCommandTimeout     = 1 * time.Minute
 )
 
 const (
@@ -299,6 +301,7 @@ var (
 	contain       = gomega.ContainSubstring
 	beTrue        = gomega.BeTrue
 	beNumerically = gomega.BeNumerically
+	k8sCore       = core.Instance()
 )
 
 // Backup vars
@@ -627,6 +630,42 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 					processError(err, errChan...)
 				})
 			}
+		})
+		// This step performs a basic test making sure Volume create options are working as expected.
+		Step("validating create options", func() {
+			if ctx.SkipCreateOptionValidation {
+				return
+			}
+			ctx.SkipVolumeValidation = false
+			ValidateContext(ctx)
+			ctx.SkipVolumeValidation = true
+			var createoption1 = "xfs"
+			var createoption2 = "ext4"
+			vols, err := Inst().S.GetVolumes(ctx)
+			log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+			log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
+			for _, v := range vols {
+				pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
+				sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+				if err != nil {
+					log.Errorf("Error Occured while getting storage class for pvc %v", err)
+				}
+				sc2 := fmt.Sprint(sc)
+				if strings.Contains(sc2, createoption1) || strings.Contains(sc2, createoption2) {
+					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
+					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+					if v.Name == "mount-fa-pvc" {
+						err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption1, attachedNode)
+						dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
+					} else if v.Name == "createoption-fa-ext4-pvc" {
+						err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption2, attachedNode)
+						dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
+					}
+				} else {
+					log.Infof("Storage class doesn't have createoption %s or %s", createoption1, createoption2)
+				}
+			}
+
 		})
 	})
 }
@@ -1435,6 +1474,9 @@ func ScheduleAppsInTopologyEnabledCluster(
 func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
+			if ctx.App.Key == "nginx-fa-davol" {
+				ctx.SkipVolumeValidation = true
+			}
 			ValidateContextForPureVolumesPXCTL(ctx)
 		}
 	})
@@ -1444,6 +1486,10 @@ func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
 func ValidateApplicationsPureSDK(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
+			if ctx.App.Key == "nginx-fa-davol" {
+				ctx.SkipVolumeValidation = true
+				ctx.SkipCreateOptionValidation = false
+			}
 			ValidateContextForPureVolumesSDK(ctx)
 		}
 	})

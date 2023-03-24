@@ -7,7 +7,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -63,8 +62,6 @@ func deleteCloudsnapCredential() {
 // This test performs basic tests making sure Pure direct access are running as expected
 var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 	var contexts []*scheduler.Context
-	var createoption1 = "xfs"
-	var createoption2 = "ext4"
 	JustBeforeEach(func() {
 		StartTorpedoTest("PureVolumeCRUDWithSDK", "Test pure volumes on applications, run CRUD", nil, 0)
 	})
@@ -76,33 +73,7 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
 		}
-		for _, ctx := range contexts {
-			// context for pure volume mount tests
-			if ctx.App.Key == mountTestApp {
-				ValidateContext(ctx)
-				vols, err := Inst().S.GetVolumes(ctx)
-				log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
-				log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
-				for _, v := range vols {
-					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
-					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-					// This step performs a basic test making sure Volume create options are working as expected.
-					Step("validating create options", func() {
-						if v.Name == "mount-fa-pvc" {
-							err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption1, attachedNode)
-							dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
-						} else if v.Name == "createoption-fa-ext4-pvc" {
-							err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption2, attachedNode)
-							dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
-						}
-					})
-				}
-			} else {
-				// context for pure volume sdk
-				ValidateContextForPureVolumesSDK(ctx)
-			}
-		}
-
+		ValidateApplicationsPureSDK(contexts)
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
@@ -131,12 +102,7 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
 		}
-		for _, ctx := range contexts {
-			if ctx.App.Key != mountTestApp {
-				// context for pure volume pxctl
-				ValidateContextForPureVolumesPXCTL(ctx)
-			}
-		}
+		ValidateApplicationsPurePxctl(contexts)
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 

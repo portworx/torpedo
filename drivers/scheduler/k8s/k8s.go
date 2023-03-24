@@ -827,6 +827,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				Enabled:  app.Enabled,
 			},
 			ScheduleOptions: options,
+			SkipCreateOptionValidation: true,
 		}
 
 		contexts = append(contexts, ctx)

@@ -16,19 +16,6 @@ mountOptions:
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: mount-fb-sc
-parameters:
-  backend: "pure_file"
-provisioner: pxd.portworx.com 
-reclaimPolicy: Delete
-volumeBindingMode: Immediate
-allowVolumeExpansion: true
-mountOptions:
-  - nosuid
----
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
   name: createoption-fa-ext4-sc
 parameters:
   backend: "pure_block"
