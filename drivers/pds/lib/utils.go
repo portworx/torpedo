@@ -166,7 +166,7 @@ const (
 	appConfigTemplateName = "QaDefault"
 	defaultRetryInterval  = 10 * time.Minute
 	duration              = 900
-	timeOut               = 40 * time.Minute
+	timeOut               = 30 * time.Minute
 	timeInterval          = 10 * time.Second
 	maxtimeInterval       = 30 * time.Second
 	resiliencyInterval    = 1 * time.Second
@@ -1019,8 +1019,6 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	timeAskedToRun, err := strconv.Atoi(timeToRun)
 	flag := false
 	// Hard sleep for 10 seconds for deployment to come up
-	val := 10 * time.Second
-	println("SLEEP INTODUCED IS: ", val)
 	time.Sleep(10 * time.Second)
 	var newPods []corev1.Pod
 	for i := 1; i <= 200; i++ {
@@ -1042,7 +1040,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 			break
 		} else {
 			log.InfoD("Init Container is still running means TPCC Schema is being prepared. Will wait for further 30 Seconds.....")
-			time.Sleep(30 * time.Second)
+			time.Sleep(1 * time.Minute)
 		}
 	}
 	if !flag {
