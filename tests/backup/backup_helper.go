@@ -1575,7 +1575,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 
 	// Execute helm upgrade using cmd
 	log.Infof("Upgrading Px-Backup version from %s to %s", currentBackupVersionString, versionToUpgrade)
-	cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --create-namespace --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
+	cmd = fmt.Sprintf("helm upgrade px-central px-central-%s.tgz --namespace %s --version %s --set persistentStorage.enabled=true,persistentStorage.storageClassName=\"%s\",pxbackup.enabled=true",
 		versionToUpgrade, pxBackupNamespace, versionToUpgrade, *storageClassName)
 	log.Infof("helm command: %v ", cmd)
 	output, _, err = osutils.ExecShell(cmd)
