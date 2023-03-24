@@ -101,15 +101,15 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 var _ = Describe("{UpdatePDSHelmVersion}", func() {
 	steplog := "Validate Data service pods post helm upgrade"
+	var deps []*pds.ModelsDeployment
+	var wlparams pdslib.WorkloadGenerationParams
+	var dataservices []PDSDataService
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("UpdatePDSHelmVersion", steplog, pdsLabels, 0)
 	})
 
 	It(steplog, func() {
-		var wlparams pdslib.WorkloadGenerationParams
-		var dataservices []PDSDataService
-
 		steplog = "Install older helm verison"
 		Step(steplog, func() {
 			log.InfoD(steplog)

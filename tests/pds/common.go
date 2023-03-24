@@ -57,7 +57,6 @@ var (
 	replicas                                int32
 	err                                     error
 	supportedDataServices                   []string
-	deps                                    []*pds.ModelsDeployment
 	dataServiceNameDefaultAppConfigMap      map[string]string
 	namespaceID                             string
 	storageTemplateID                       string
