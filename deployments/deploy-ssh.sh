@@ -335,9 +335,9 @@ if [ -n "${KUBECONFIGS}" ]; then
   kubectl create configmap kubeconfigs ${FROM_FILE}
 fi
 
-echo "Create kubeconfig configmap",${KUBECONFIGS}
-if [ -n "${SCALEY_MONO_KUBECONFIG}" ]; then
+if [ -z "${SCALEY_MONO_KUBECONFIG}" -a -n "${SCALEY_MONO_KUBECONFIG_FILE}" ]; then
   SCALEY_MONO_KUBECONFIG="mono-config"
+  echo "Create kubeconfig configmap",${SCALEY_MONO_KUBECONFIG}
   FROM_FILE="--from-file=${SCALEY_MONO_KUBECONFIG}=${SCALEY_MONO_KUBECONFIG_FILE}"
   kubectl create configmap scaleyconfigs ${FROM_FILE}
 fi
