@@ -33,6 +33,7 @@ const (
 
 	// PDSNamespace PDS
 	PDSNamespace = "pds-system"
+	PDSChartRepo = "https://portworx.github.io/pds-charts"
 )
 
 var (
@@ -49,14 +50,16 @@ type TargetCluster struct {
 }
 
 func (targetCluster *TargetCluster) IsLatestPDSHelm(helmChartversion string) (bool, error) {
-	cmd := "helm ls --all -n pds-system | tail -n+2 | awk '{print $9}' "
+	cmd := "helm ls --all -n pds-system | grep pds-target"
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
 		return false, err
 	}
-	log.InfoD("Installed PDS Helm chart version - %v", output)
-	_, pdsHelmVersion, _ := strings.Cut(output, "-")
-	_, helmVersion, _ := strings.Cut(pdsHelmVersion, "-")
+	output = strings.ReplaceAll(output, "\t", " ")
+	bfr, pdsHelmVersion, found := strings.Cut(output, "pds-target-")
+	log.Debugf("Get pds chart: %q, %q, %v\n", bfr, pdsHelmVersion, found)
+	helmVersion, after, found := strings.Cut(pdsHelmVersion, " ")
+	log.Debugf("Get pds chart version: %q, %q, %v\n", helmVersion, after, found)
 	helmVersion = strings.TrimSpace(helmVersion)
 	helmChartversion = strings.TrimSpace(helmChartversion)
 	log.Debugf("Installed PDS Helm version %s and helm chart version passed %s", helmVersion, helmChartversion)
@@ -121,8 +124,8 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 		}
 		if !isLatest {
 			log.InfoD("Upgrading PDS helm chart from to %v", helmChartversion)
-			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
-				"--set bearerToken=%s --set apiEndpoint=%s", PDSNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
+			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s --set tenantId=%s "+
+				"--set bearerToken=%s --set apiEndpoint=%s", PDSNamespace, PDSChartRepo, helmChartversion, tenantId, bearerToken, apiEndpoint)
 		}
 		isRegistered = true
 	}

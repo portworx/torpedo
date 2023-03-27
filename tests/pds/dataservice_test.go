@@ -115,7 +115,7 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 			log.InfoD(steplog)
 			ctx := pdslib.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
 			target := tc.NewTargetCluster(ctx)
-			isOldversion, err := target.IsLatestPDSHelm(params.InfraToTest.OldPDSHelmVersion)
+			isOldversion, err := target.IsLatestPDSHelm(params.PDSHelmVersions.PreviousHelmVersion)
 			if !isOldversion {
 				err = target.DeRegisterFromControlPlane()
 				log.FailOnError(err, "Target Cluster DeRegisteration failed")
@@ -123,7 +123,7 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 				err = pdslib.RegisterClusterToControlPlane(params, tenantID, true)
 				log.FailOnError(err, "Target Cluster Registeration failed")
 			} else {
-				log.InfoD("Target Cluster is with old pds helm version %s", params.InfraToTest.OldPDSHelmVersion)
+				log.InfoD("Target Cluster is with old pds helm version %s", params.PDSHelmVersions.PreviousHelmVersion)
 			}
 		})
 

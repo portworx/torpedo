@@ -50,15 +50,18 @@ type Parameter struct {
 		OldImage      string `json:"OldImage"`
 	} `json:"DataServiceToTest"`
 	InfraToTest struct {
-		ControlPlaneURL   string `json:"ControlPlaneURL"`
-		AccountName       string `json:"AccountName"`
-		TenantName        string `json:"TenantName"`
-		ProjectName       string `json:"ProjectName"`
-		ClusterType       string `json:"ClusterType"`
-		Namespace         string `json:"Namespace"`
-		PxNamespace       string `json:"PxNamespace"`
-		OldPDSHelmVersion string `json:"OldPDSHelmVersion"`
+		ControlPlaneURL string `json:"ControlPlaneURL"`
+		AccountName     string `json:"AccountName"`
+		TenantName      string `json:"TenantName"`
+		ProjectName     string `json:"ProjectName"`
+		ClusterType     string `json:"ClusterType"`
+		Namespace       string `json:"Namespace"`
+		PxNamespace     string `json:"PxNamespace"`
 	} `json:"InfraToTest"`
+	PDSHelmVersions struct {
+		LatestHelmVersion   string `json:"LatestHelmVersion"`
+		PreviousHelmVersion string `json:"PreviousHelmVersion"`
+	} `json:"PDSHelmVersions"`
 	Users struct {
 		AdminUsername    string `json:"AdminUsername"`
 		AdminPassword    string `json:"AdminPassword"`
@@ -1339,7 +1342,7 @@ func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, inst
 	}
 
 	if installOldVersion {
-		helmChartversion = infraParams.InfraToTest.OldPDSHelmVersion
+		helmChartversion = infraParams.PDSHelmVersions.PreviousHelmVersion
 		log.InfoD("Deregister PDS and Install Old Version")
 
 	} else {
