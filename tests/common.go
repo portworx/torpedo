@@ -2367,8 +2367,6 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 		return obj.Name, obj.Kind, obj.Namespace, nil
 	} else if obj, ok := specObj.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
 		return obj.Name, obj.Kind, "", nil
-	} else {
-		return obj.Name, obj.Kind, "", nil
 	}
 
 	return "", "", "", fmt.Errorf("unsupported object while obtaining spec details: %v", reflect.TypeOf(specObj))
