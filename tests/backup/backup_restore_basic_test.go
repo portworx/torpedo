@@ -1459,7 +1459,7 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 				err := SetSourceKubeConfig()
 				log.FailOnError(err, "failed to switch to context to source cluster")
 
-				log.InfoD("ccheduling applications")
+				log.InfoD("scheduling applications")
 				sourceClusterAppsContexts = make([]*scheduler.Context, 0)
 				for i := 0; i < Inst().GlobalScaleFactor; i++ {
 					taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)

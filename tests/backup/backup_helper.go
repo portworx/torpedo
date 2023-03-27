@@ -1316,7 +1316,7 @@ func GetBackupSpecObjectsContexts(backupInspectResponse *api.BackupInspectRespon
 				continue specloop
 			}
 			// The spec in the context (namespace) was NOT found in the created Backup. (this is not anticipated when an entire namespace is backed up)
-			log.Warnf("backup [%s] does not include the spec (name: [%s], kind: [%s], namespace: [%s]) found in the context (namespace) '%s'", backupName, name, kind, ns, clusterAppsContext.ScheduleOptions.Namespace)
+			log.Warnf("backup [%s] does not include the spec (name: [%s], kind: [%s], namespace: [%s]) found in the context (namespace) [%s]", backupName, name, kind, ns, clusterAppsContext.ScheduleOptions.Namespace)
 		}
 
 		// Duplicate the object
