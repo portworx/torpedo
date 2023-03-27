@@ -1385,8 +1385,7 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 			log.InfoD("specs (apps) allowed in execution of test: %v", appsWithCRDsAndWebhooks)
 			for i := 0; i < len(appList); i++ {
 				contains := Contains(appsWithCRDsAndWebhooks, appList[i])
-				dash.VerifyFatal(contains, true,
-					fmt.Sprintf("app [%s] allowed in execution of this test", appList[i]))
+				dash.VerifyFatal(contains, true, fmt.Sprintf("app [%s] allowed in execution of this test", appList[i]))
 			}
 		})
 
@@ -1400,7 +1399,12 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 				log.FailOnError(err, "fetching px-central-admin ctx")
 				err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 				dash.VerifyFatal(err, nil, "creating source and destination cluster")
-				_, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
+				clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+				clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+				log.FailOnError(err, "Fetching [%s] cluster uid", SourceClusterName)
 			})
 
 			Step("Get kubernetes source cluster version", func() {
@@ -1508,14 +1512,19 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 		Step("Creating bucket, backup location and cloud credentials", func() {
 			log.InfoD("Creating bucket, backup location and cloud credentials")
 			for _, provider := range providers {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "fetching px-central-admin ctx")
+
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = backupLocationName
-				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
-				log.InfoD("creating backup location [%s] with cloud cred [%s]", backupLocationName, cloudCredName)
-				err := CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, "creating backup location")
 			}
 		})

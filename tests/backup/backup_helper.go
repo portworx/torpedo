@@ -228,11 +228,8 @@ func CreateBackupAndGetBackupCtx(backupName string, clusterName string, bLocatio
 		return nil, err
 	}
 
-	ok, err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes, 30, ctx)
+	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error occurred while checking if backup [%s] was successful", backupName)
-	}
-	if !ok {
 		return nil, fmt.Errorf("backupSuccessCheck: the backup [%s] was not successful", backupName)
 	}
 
