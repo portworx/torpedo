@@ -1532,7 +1532,8 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 		Step("Taking backup of application from source cluster", func() {
 			log.InfoD("taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "getting context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
 			backupNames = make([]string, len(sourceNamespaces))
 			backupContexts = make([]*BackupRestoreContext, len(sourceNamespaces))
 			for i, namespace := range sourceNamespaces {
