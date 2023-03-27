@@ -1511,10 +1511,10 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 
 		Step("Creating bucket, backup location and cloud credentials", func() {
 			log.InfoD("Creating bucket, backup location and cloud credentials")
-			for _, provider := range providers {
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "fetching px-central-admin ctx")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "fetching px-central-admin ctx")
 
+			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
 				cloudCredUID = uuid.New()
@@ -1574,11 +1574,11 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 					}
 					restoreInProgressCheck := func() (interface{}, bool, error) {
 						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
-						restoreResponseStatus := resp.GetRestore().GetStatus()
 						if err != nil {
 							err := fmt.Errorf("failed getting restore status for - %s; Err: %s", initialRestoreName, err)
 							return "", false, err
 						}
+						restoreResponseStatus := resp.GetRestore().GetStatus()
 
 						// Status should be LATER than InProgress in order for next STEP to execute
 						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_InProgress {
@@ -1627,11 +1627,11 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 					}
 					restorePartialSuccessCheck := func() (interface{}, bool, error) {
 						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
-						restoreResponseStatus := resp.GetRestore().GetStatus()
 						if err != nil {
 							err := fmt.Errorf("failed getting restore status for - %s; Err: %s", laterRestoreName, err)
 							return "", false, err
 						}
+						restoreResponseStatus := resp.GetRestore().GetStatus()
 
 						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success {
 							log.InfoD("restore status of [%s] is [%s]; expected [PartialSuccess] or [Success].\ncondition fulfilled.", laterRestoreName, restoreResponseStatus.GetStatus())
@@ -1675,11 +1675,11 @@ var _ = Describe("{BackupRestoreCRsOnDifferentK8sVersions}", func() {
 					}
 					restoreSuccessCheck := func() (interface{}, bool, error) {
 						resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
-						restoreResponseStatus := resp.GetRestore().GetStatus()
 						if err != nil {
 							err := fmt.Errorf("failed getting restore status for - %s; Err: %s", initialRestoreName, err)
 							return "", false, err
 						}
+						restoreResponseStatus := resp.GetRestore().GetStatus()
 
 						if restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_Success || restoreResponseStatus.GetStatus() == api.RestoreInfo_StatusInfo_PartialSuccess {
 							log.InfoD("restore status of [%s] is [%s]; expected [PartialSuccess] or [Success].\ncondition fulfilled.", initialRestoreName, restoreResponseStatus.GetStatus())
