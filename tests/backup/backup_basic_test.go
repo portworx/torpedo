@@ -2,15 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"os"
-	"strings"
-	"testing"
-	"time"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -19,6 +13,10 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"os"
+	"strings"
+	"testing"
+	"time"
 )
 
 func getBucketNameSuffix() string {
@@ -99,15 +97,15 @@ func BackupInitInstance() {
 	}
 
 	// Getting Px-Backup server version info and setting Aetos Dashboard tags
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
-	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
-	log.FailOnError(err, "Getting Px-Backup version")
-	version := versionResponse.GetVersion()
-	PxBackupVersion = fmt.Sprintf("%s.%s.%s-%s", version.GetMajor(), version.GetMinor(), version.GetPatch(), version.GetGitCommit())
+	PxBackupVersion, err = GetPxBackupVersionString()
+	log.FailOnError(err, "Error getting Px Backup version")
+	PxBackupBuildDate, err := GetPxBackupBuildDate()
+	log.FailOnError(err, "Error getting Px Backup build date")
 	t.Tags["px-backup-version"] = PxBackupVersion
-	t.Tags["px-backup-build-date"] = fmt.Sprintf("%s", version.GetBuildDate())
+	t.Tags["px-backup-build-date"] = PxBackupBuildDate
 
+	// Setting the common password
+	commonPassword = backup.PxCentralAdminPwd + RandomString(4)
 }
 
 var dash *aetosutil.Dashboard

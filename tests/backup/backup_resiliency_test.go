@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -41,8 +42,6 @@ var _ = Describe("{BackupRestartPX}", func() {
 	var clusterUid string
 	var cloudCredName string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
-	var retryDuration int
-	var retryInterval int
 	bkpNamespaces = make([]string, 0)
 	backupNamespaceMap := make(map[string]string)
 
@@ -99,20 +98,27 @@ var _ = Describe("{BackupRestartPX}", func() {
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
 			providers := getProviders()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				cloudCredUID = uuid.New()
 				CloudCredUIDMap[cloudCredUID] = cloudCredName
-				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 			}
 		})
 
 		Step("Register cluster for backup", func() {
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			err := CreateSourceAndDestClusters(orgID, "", "", ctx)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup %s cluster status", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("Creating backup location", func() {
@@ -131,7 +137,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 		Step("Start backup of application to bucket", func() {
 			for _, namespace := range bkpNamespaces {
 				ctx, err := backup.GetAdminCtxFromSecret()
-				dash.VerifyFatal(err, nil, "Getting context")
+				log.FailOnError(err, "Fetching px-central-admin ctx")
 				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
@@ -161,9 +167,8 @@ var _ = Describe("{BackupRestartPX}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
 
-				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
-				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
-				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
+				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Inspecting the backup success for - "+backupName)
 
 			}
 		})
@@ -171,13 +176,9 @@ var _ = Describe("{BackupRestartPX}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -208,8 +209,6 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces := make([]string, 0)
 	var backupNames []string
-	var retryDuration int
-	var retryInterval int
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("KillStorkWithBackupsAndRestoresInProgress", "Kill Stork when backups and restores in progress", nil, 55819)
@@ -264,20 +263,27 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
 			providers := getProviders()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				cloudCredUID = uuid.New()
 				CloudCredUIDMap[cloudCredUID] = cloudCredName
-				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 			}
 		})
 
 		Step("Register cluster for backup", func() {
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			err := CreateSourceAndDestClusters(orgID, "", "", ctx)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, "Verifying backup cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("Creating backup location", func() {
@@ -296,7 +302,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 		Step("Start backup of application to bucket", func() {
 			for _, namespace := range bkpNamespaces {
 				ctx, err := backup.GetAdminCtxFromSecret()
-				dash.VerifyFatal(err, nil, "Getting context")
+				log.FailOnError(err, "Fetching px-central-admin ctx")
 				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
@@ -318,9 +324,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				backupStatus, err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
-				log.FailOnError(err, "Failed while Inspecting Backup for - %s", backupName)
-				dash.VerifyFatal(backupStatus, true, "Inspecting the backup success for - "+backupName)
+				err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Inspecting the backup success for - "+backupName)
 			}
 		})
 		Step("Validate applications", func() {
@@ -345,9 +350,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-restore", backupName)
-				restoreStatus, err := restoreSuccessCheck(restoreName, orgID, retryDuration, retryInterval, ctx)
-				log.FailOnError(err, "Failed while restoring Backup for - %s", backupName)
-				dash.VerifyFatal(restoreStatus, true, "Inspecting the Restore success for - "+restoreName)
+				err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Inspecting the restore success for - "+restoreName)
 			}
 		})
 		Step("Validate applications", func() {
@@ -356,15 +360,12 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
-		ctx, _ := backup.GetAdminCtxFromSecret()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
 
 		backupDriver := Inst().Backup
 		for _, backupName := range backupNames {
@@ -424,20 +425,27 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
 			providers := getProviders()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, timeStamp)
 				cloudCredUID = uuid.New()
 				CloudCredUIDMap[cloudCredUID] = cloudCredName
-				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 			}
 		})
 
 		Step("Register cluster for backup", func() {
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			err := CreateSourceAndDestClusters(orgID, "", "", ctx)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source %s and destination %s cluster", SourceClusterName, destinationClusterName))
-			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster %s", SourceClusterName))
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
 		Step("Creating backup location", func() {
@@ -456,7 +464,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 
 		Step("Start backup of application to bucket", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Verifying Getting context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			err = CreateBackup(backupName, SourceClusterName, backupLocation, backupLocationUID, []string{bkpNamespaces[0]},
 				nil, orgID, clusterUid, "", "", "", "", ctx)
@@ -473,7 +481,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		Step("Share Backup with multiple users", func() {
 			log.InfoD("Sharing Backup with multiple users")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = ShareBackup(backupName, nil, users, ViewOnlyAccess, ctx)
 			log.FailOnError(err, "Failed to share backup %s with users", backupName)
 		})
@@ -500,8 +508,8 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
-				log.FailOnError(err, "Fetching px-central-admin ctx")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "Fetching non admin ctx")
 				userContexts = append(userContexts, ctxNonAdmin)
 
 				// Register Source and Destination cluster
@@ -531,7 +539,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		Step("Share Backup with multiple users", func() {
 			log.InfoD("Sharing Backup with multiple users")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = ShareBackup(backupName, nil, users, RestoreAccess, ctx)
 			log.FailOnError(err, "Failed to share backup %s with users", backupName)
 		})
@@ -547,15 +555,15 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			pods, err := core.Instance().GetPods("px-backup", backupPodLabel)
 			dash.VerifyFatal(err, nil, "Getting mongo pods")
 			for _, pod := range pods.Items {
-				err = core.Instance().ValidatePod(&pod, 10*time.Minute, 30*time.Second)
+				err = core.Instance().ValidatePod(&pod, 20*time.Minute, 30*time.Second)
 				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
 			}
 		})
 		Step("Validate the shared backup with users", func() {
 			for _, user := range users {
 				// Get user context
-				ctxNonAdmin, err := backup.GetNonAdminCtx(user, "Password1")
-				log.FailOnError(err, "Fetching px-central-admin ctx")
+				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "Fetching non admin ctx")
 
 				for _, backup := range backupNames {
 					// Start Restore
@@ -573,15 +581,13 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
-		ctx, _ := backup.GetAdminCtxFromSecret()
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
-		for i := 0; i < len(contexts); i++ {
-			opts := make(map[string]bool)
-			opts[SkipClusterScopedObjects] = true
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			err := Inst().S.Destroy(contexts[i], opts)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify destroying app %s, Err: %v", taskName, err))
-		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+
 		log.InfoD("Deleting the backups")
 		for _, backup := range backupNames {
 			_, err := DeleteBackup(backup, backupMap[backup], orgID, ctx)
@@ -650,14 +656,17 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
 			providers := getProviders()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
-				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
-				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID,
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID,
 					getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 			}
@@ -665,18 +674,22 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 		Step("Registering source and destination clusters for backup", func() {
 			log.InfoD("Registering source and destination clusters for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting admin context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
-			srcClusterStatus, srcClusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying source cluster %s status", SourceClusterName))
-			destClusterStatus, _ = Inst().Backup.RegisterBackupCluster(orgID, destinationClusterName, "")
-			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying destination cluster %s status", destinationClusterName))
+			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
 		})
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting admin context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
 					sem <- struct{}{}
@@ -701,7 +714,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 		Step("Cancelling the ongoing backups", func() {
 			log.InfoD("Cancelling the ongoing backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting admin context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
 				sem <- struct{}{}
 				wg.Add(1)
@@ -732,7 +745,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 					}
 					for _, backupName := range backupNames {
 						if IsPresent(adminBackups, backupName) {
-							return "", true, nil
+							return "", true, fmt.Errorf("%v backup is still present", backupName)
 						}
 					}
 					return "", false, nil
@@ -758,6 +771,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
+
 		log.InfoD("Deleting the remaining backups in case of failure")
 		adminBackups, err := GetAllBackupsAdmin()
 		for _, backupName := range backupNames {
@@ -817,7 +831,6 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
-
 			}
 		}
 	})
@@ -832,13 +845,16 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
 			providers := getProviders()
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
-				CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID)
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID,
 					getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
@@ -847,13 +863,17 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		Step("Registering source and destination clusters for backup", func() {
 			log.InfoD("Registering source and destination clusters for backup")
 			ctx, err = backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting admin context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
-			srcClusterStatus, srcClusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying source cluster %s status", SourceClusterName))
-			destClusterStatus, _ = Inst().Backup.RegisterBackupCluster(orgID, destinationClusterName, "")
-			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying destination cluster %s status", destinationClusterName))
+			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
 		})
 		Step("Getting the replica factor of mongodb statefulset in backup namespace before taking backup", func() {
 			pxBackupNS, err = backup.GetPxBackupNamespace()
@@ -868,7 +888,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
 			ctx, err = backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting admin context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
 				for i := 0; i < numberOfBackups; i++ {
 					sem <- struct{}{}
@@ -915,7 +935,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, mongodbPodStatusTimeout, mongodbPodStatusRetryTime)
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
 		})
@@ -924,15 +944,14 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				backupStatus, err := backupSuccessCheck(backupName, orgID, 0, 0, ctx)
-				dash.VerifyFatal(err, nil, "Getting the status for backup- "+backupName)
-				dash.VerifyFatal(backupStatus, true, "Verifying the backup status for backup - "+backupName)
+				err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Verifying the backup status for backup - "+backupName)
 			}
 		})
 		Step("Restoring the backups taken", func() {
 			log.InfoD("Restoring the backups taken")
 			ctx, err = backup.GetAdminCtxFromSecret()
-			dash.VerifyFatal(err, nil, "Getting admin context")
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
 				sem <- struct{}{}
 				restoreName := fmt.Sprintf("%s-restore", backupName)
@@ -976,7 +995,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, mongodbPodStatusTimeout, mongodbPodStatusRetryTime)
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
 		})
@@ -985,9 +1004,8 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, restoreName := range restoreNames {
-				restoreStatus, err := restoreSuccessCheck(restoreName, orgID, 0, 0, ctx)
-				dash.VerifyFatal(err, nil, "Getting the status for restore-"+restoreName)
-				dash.VerifyFatal(restoreStatus, true, "Verifying the restore status for restore-"+restoreName)
+				err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Verifying the restore status for restore-"+restoreName)
 			}
 		})
 	})
@@ -1017,10 +1035,12 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		dash.VerifySafely(statefulSet.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that all the mongodb pods are in Ready state at the end of the testcase")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
+		
 		log.InfoD("Deleting the restores taken")
 		for _, restoreName := range restoreNames {
 			wg.Add(1)
@@ -1036,166 +1056,258 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 	})
 })
 
-// DeleteIncrementalBackupsAndRecreateNew Delete Incremental Backups and Recreate
-// new ones
-var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
-	backupNames := make([]string, 0)
-	incrementalBackupNames := make([]string, 0)
-	incrementalBackupNamesRecreated := make([]string, 0)
-	var contexts []*scheduler.Context
+// RebootNodesWhenBackupsAreInProgress reboots worker nodes from application cluster when backup is in progress
+// source cluster is backup cluster and destination cluster is application cluster for this testcase
+var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
+	var (
+		contexts          []*scheduler.Context
+		appContexts       []*scheduler.Context
+		appNamespaces     []string
+		cloudCredName     string
+		cloudCredUID      string
+		bkpLocationName   string
+		backupLocationUID string
+		destClusterUid    string
+		srcClusterStatus  api.ClusterInfo_StatusInfo_Status
+		destClusterStatus api.ClusterInfo_StatusInfo_Status
+		backupNames       []string
+		newBackupNames    []string
+		listOfWorkerNodes []node.Node
+	)
 	labelSelectors := make(map[string]string)
-	var backupLocationUID string
-	var cloudCredUID string
-	var cloudCredUidList []string
-	var appContexts []*scheduler.Context
-	var clusterUid string
-	var clusterStatus api.ClusterInfo_StatusInfo_Status
-	var customBackupLocationName string
-	var credName string
-	var fullBackupName string
-	var incrementalBackupName string
-	var bkpNamespaces = make([]string, 0)
+	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "2"))
 	backupLocationMap := make(map[string]string)
-
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteIncrementalBackupsAndRecreateNew",
-			"Delete incremental Backups and re-create them", nil, 58039)
-		log.InfoD("Deploy applications")
-
+		StartTorpedoTest("RebootNodesWhenBackupsAreInProgress",
+			"Reboots node when backup is in progress", nil, 55817)
+		log.InfoD("Switching cluster context to application[destination] cluster which does not have px-backup deployed")
+		SetDestinationKubeConfig()
+		log.InfoD("Deploying applications required for the testcase on application cluster")
 		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		for i := 0; i < numberOfBackups; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts = ScheduleApplications(taskName)
 			contexts = append(contexts, appContexts...)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
-				bkpNamespaces = append(bkpNamespaces, namespace)
+				appNamespaces = append(appNamespaces, namespace)
 			}
 		}
+		log.Infof("The list of namespaces are %v", appNamespaces)
 	})
-
-	It("Delete incremental Backups and re-create them", func() {
-		providers := getProviders()
-		Step("Validate applications", func() {
-			log.InfoD("Validate applications")
+	It("Reboot node when backup is in progress", func() {
+		var sem = make(chan struct{}, numberOfBackups)
+		var wg sync.WaitGroup
+		Step("Validating the deployed applications", func() {
+			log.InfoD("Validating the deployed applications on destination cluster")
 			ValidateApplications(contexts)
 		})
-
-		Step("Adding Credentials and Registering Backup Location", func() {
-			log.InfoD("Creating cloud credentials and backup location")
+		Step("Switching cluster context back to source[backup] cluster", func() {
+			log.InfoD("Switching cluster context back to source[backup] cluster")
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
+		})
+		Step("Adding cloud credential and backup location", func() {
+			log.InfoD("Adding cloud credential and backup location")
+			providers := getProviders()
 			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
 				cloudCredUID = uuid.New()
-				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
 				backupLocationUID = uuid.New()
-				credName = fmt.Sprintf("autogenerated-cred-%v", time.Now().Unix())
-				CreateCloudCredential(provider, credName, cloudCredUID, orgID)
-				log.InfoD("Created Cloud Credentials with name - %s", credName)
-				customBackupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
-				backupLocationMap[backupLocationUID] = customBackupLocationName
-				err := CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
-				log.InfoD("Created Backup Location with name - %s", customBackupLocationName)
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID,
+					getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 			}
 		})
-
-		Step("Register source and destination cluster for backup", func() {
-			log.InfoD("Registering Source and Destination clusters and verifying the status")
-			// Registering for admin user
+		Step("Registering source and destination clusters for backup", func() {
+			log.InfoD("Registering source and destination clusters for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
-			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			clusterStatus, clusterUid = Inst().Backup.RegisterBackupCluster(orgID, SourceClusterName, "")
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying backup cluster %s status", SourceClusterName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
+			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, destinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", destinationClusterName))
 		})
-
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			// Full backup
-			for _, namespace := range bkpNamespaces {
-				fullBackupName = fmt.Sprintf("%s-%s-%v", "full-backup", namespace, time.Now().Unix())
-				backupNames = append(backupNames, fullBackupName)
-				err = CreateBackup(fullBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", fullBackupName))
+			for _, namespace := range appNamespaces {
+				sem <- struct{}{}
+				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				backupNames = append(backupNames, backupName)
+				wg.Add(1)
+				go func(backupName string, namespace string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					defer func() { <-sem }()
+					// Here we are using destination cluster as application cluster
+					_, err = CreateBackupWithoutCheck(backupName, destinationClusterName, bkpLocationName, backupLocationUID,
+						[]string{namespace}, labelSelectors, orgID, destClusterUid, "", "", "", "", ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
+				}(backupName, namespace)
 			}
-
-			// Incremental backup
-			for _, namespace := range bkpNamespaces {
-				incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
-				incrementalBackupNames = append(incrementalBackupNames, incrementalBackupName)
-				err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", incrementalBackupName))
-			}
-			log.Infof("List of backups - %v", backupNames)
-			log.Infof("List of Incremental backups - %v", incrementalBackupNames)
+			wg.Wait()
+			log.InfoD("The list of backups taken are: %v", backupNames)
+		})
+		Step("Reboot one worker node on application cluster when backup is in progress", func() {
+			log.InfoD("Switching cluster context to application[destination] cluster")
+			SetDestinationKubeConfig()
+			listOfWorkerNodes = node.GetWorkerNodes()
+			err := Inst().N.RebootNode(listOfWorkerNodes[0], node.RebootNodeOpts{
+				Force: true,
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         rebootNodeTimeout,
+					TimeBeforeRetry: rebootNodeTimeBeforeRetry,
+				},
+			})
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfWorkerNodes[0].Name))
+			log.InfoD("Switching cluster context back to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
 
 		})
-		Step("Deleting incremental backup", func() {
-			log.InfoD("Deleting incremental backups")
-			backupDriver := Inst().Backup
+		Step("Check if backup is successful after one worker node on application cluster is rebooted", func() {
+			log.InfoD("Check if backup is successful after one worker node on application cluster is rebooted")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, backupName := range incrementalBackupNames {
-				log.Infof("About to delete backup - %s", backupName)
-				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-				_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
+			for _, backupName := range backupNames {
+				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Inspecting backup success for - "+backupName)
 			}
 		})
-		Step("Taking incremental backups of applications again", func() {
-			log.InfoD("Taking incremental backups of applications again")
+		Step("Check if the rebooted node on application cluster is up now", func() {
+			log.InfoD("Check if the rebooted node on application cluster is up now")
+			log.InfoD("Switching cluster context to destination cluster")
+			SetDestinationKubeConfig()
+			listOfWorkerNodes = node.GetWorkerNodes()
+			nodeReadyStatus := func() (interface{}, bool, error) {
+				err := Inst().S.IsNodeReady(listOfWorkerNodes[0])
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err := task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfWorkerNodes[0].Name))
+			err = Inst().V.WaitDriverUpOnNode(listOfWorkerNodes[0], Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfWorkerNodes[0].Name))
+			log.InfoD("Switching cluster context back to source[backup] cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
+		})
+		Step("Taking new backup of applications", func() {
+			log.InfoD("Taking new backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			// Incremental backup
-			for _, namespace := range bkpNamespaces {
-				incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
-				incrementalBackupNamesRecreated = append(incrementalBackupNamesRecreated, incrementalBackupName)
-				err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation", incrementalBackupName))
+			for _, namespace := range appNamespaces {
+				sem <- struct{}{}
+				backupName := fmt.Sprintf("new-%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				newBackupNames = append(newBackupNames, backupName)
+				wg.Add(1)
+				go func(backupName string, namespace string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					defer func() { <-sem }()
+					// Here we are using destination cluster as application cluster
+					_, err = CreateBackupWithoutCheck(backupName, destinationClusterName, bkpLocationName, backupLocationUID,
+						[]string{namespace}, labelSelectors, orgID, destClusterUid, "", "", "", "", ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
+				}(backupName, namespace)
 			}
-			log.Infof("List of New Incremental backups - %v", incrementalBackupNames)
+			wg.Wait()
+			log.InfoD("The list of new backups taken are: %v", newBackupNames)
 		})
-		Step("Check if backups are incremental backups or not", func() {
-			log.InfoD("Check if backups are incremental backups or not")
-			backupDriver := Inst().Backup
+		Step("Reboot 2 worker nodes on application cluster when backup is in progress", func() {
+			log.InfoD("Reboot 2 worker node on application cluster when backup is in progress")
+			log.InfoD("Switching cluster context to application[destination] cluster")
+			SetDestinationKubeConfig()
+			listOfWorkerNodes = node.GetWorkerNodes()
+			for i := 0; i < 2; i++ {
+				err := Inst().N.RebootNode(listOfWorkerNodes[i], node.RebootNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         rebootNodeTimeout,
+						TimeBeforeRetry: rebootNodeTimeBeforeRetry,
+					},
+				})
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Rebooting worker node %v", listOfWorkerNodes[i].Name))
+			}
+			log.InfoD("Switching cluster context back to source cluster")
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster")
+		})
+		Step("Check if backup is successful after two worker nodes are rebooted", func() {
+			log.InfoD("Check if backup is successful after two worker nodes are rebooted")
 			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx failed")
-			for _, incrementalBackupName := range incrementalBackupNamesRecreated {
-				bkpUid, err := backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
-				log.FailOnError(err, "Unable to fetch backup UID - %s", incrementalBackupName)
-				bkpInspectReq := &api.BackupInspectRequest{
-					Name:  incrementalBackupName,
-					OrgId: orgID,
-					Uid:   bkpUid,
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range newBackupNames {
+				err := backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+				dash.VerifyFatal(err, nil, "Inspecting backup success for - "+backupName)
+			}
+		})
+		Step("Check if the rebooted nodes on application cluster are up now", func() {
+			log.InfoD("Check if the rebooted nodes on application cluster are up now")
+			log.Infof("Switching cluster context to destination cluster")
+			SetDestinationKubeConfig()
+			listOfWorkerNodes = node.GetWorkerNodes()
+			for i := 0; i < 2; i++ {
+				nodeReadyStatus := func() (interface{}, bool, error) {
+					err := Inst().S.IsNodeReady(listOfWorkerNodes[i])
+					if err != nil {
+						return "", true, err
+					}
+					return "", false, nil
 				}
-				bkpInspectResponse, _ := backupDriver.InspectBackup(ctx, bkpInspectReq)
-				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
-					backupId := vol.GetBackupId()
-					dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
-						fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
-				}
+				_, err := task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", listOfWorkerNodes[i].Name))
+				err = Inst().V.WaitDriverUpOnNode(listOfWorkerNodes[i], Inst().DriverStartTimeout)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", listOfWorkerNodes[i].Name))
 			}
 		})
 	})
 
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
-		log.InfoD("Deleting the deployed apps after the testcase")
-		// Cleaning up applications created
+		log.InfoD("Check if the rebooted nodes on application cluster are up now")
+		log.Infof("Switching cluster context to destination cluster")
+		SetDestinationKubeConfig()
+		listOfWorkerNodes = node.GetWorkerNodes()
+		for _, node := range listOfWorkerNodes {
+			nodeReadyStatus := func() (interface{}, bool, error) {
+				err := Inst().S.IsNodeReady(node)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err := task.DoRetryWithTimeout(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", node.Name))
+			err = Inst().V.WaitDriverUpOnNode(node, Inst().DriverStartTimeout)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", node.Name))
+		}
+		log.Infof("Deleting the deployed applications on application cluster")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-
-		// Cleaning up px-backup cluster
+		log.Infof("Switching cluster context back to source cluster")
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
