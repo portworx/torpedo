@@ -1020,6 +1020,11 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	flag := false
 	// Hard sleep for 10 seconds for deployment to come up
 	time.Sleep(10 * time.Second)
+	err = k8sApps.ValidateDeployment(deployment, timeInterval, timeOut)
+	if err != nil {
+		log.Errorf("An Error Occured while creating deployment %v", err)
+		return false
+	}
 	var newPods []corev1.Pod
 	for i := 1; i <= 200; i++ {
 		newPodList, _ := GetPods(namespace)
@@ -1039,7 +1044,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 			break
 		} else {
 			log.InfoD("Init Container is still running means TPCC Schema is being prepared. Will wait for further 30 Seconds.....")
-			time.Sleep(1 * time.Minute)
+			time.Sleep(30 * time.Second)
 		}
 	}
 	if !flag {
@@ -1056,6 +1061,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 				for _, c := range pod.Status.ContainerStatuses {
 					if int32(c.RestartCount) != 0 {
 						flag = true
+						log.Infof("****JYOTI**** VALUES are: c.State ----- %v\n", c.State)
 						if c.State.Terminated != nil && c.State.Terminated.ExitCode != 0 && c.State.Terminated.Reason != "Completed" {
 							log.Errorf("Something went wrong and Run Container Exited abruptly. Leaving the TPCC deployment as is - pls check manually")
 							log.InfoD("Printing TPCC Deployment Describe Status here .....")
