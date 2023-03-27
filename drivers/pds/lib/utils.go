@@ -1077,6 +1077,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 					}
 				}
 			}
+			log.Infof("****JYOTI**** VALUES are: c.State ----- %v\n", pod.Status.ContainerStatuses)
 		}
 		if flag {
 			log.InfoD("TPCC Workload run finished. Finishing this Test Case")
