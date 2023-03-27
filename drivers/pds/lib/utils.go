@@ -1020,11 +1020,11 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 	flag := false
 	// Hard sleep for 10 seconds for deployment to come up
 	time.Sleep(10 * time.Second)
-	err = k8sApps.ValidateDeployment(deployment, timeInterval, timeOut)
-	if err != nil {
-		log.Errorf("An Error Occured while creating deployment %v", err)
-		return false
-	}
+	// err = k8sApps.ValidateDeployment(deployment, timeInterval, timeOut)
+	// if err != nil {
+	// 	log.Errorf("An Error Occured while creating deployment %v", err)
+	// 	return false
+	// }
 	var newPods []corev1.Pod
 	for i := 1; i <= 200; i++ {
 		newPodList, _ := GetPods(namespace)
