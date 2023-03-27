@@ -7,19 +7,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ValidatingWebhookConfigurationOps is interface to perform CRUD ops on mutatting webhook controller
+// ValidatingWebhookConfigurationOps is an interface to perform CRUD ops on mutatting webhook controller
 type ValidatingWebhookConfigurationOps interface {
-	// GetValidatingWebhookConfiguration returns a given ValidatingWebhookConfiguration
+	// GetValidatingWebhookConfiguration returns given ValidatingWebhookConfiguration
 	GetValidatingWebhookConfiguration(name string) (*hook.ValidatingWebhookConfiguration, error)
 	// CreateValidatingWebhookConfiguration creates given ValidatingWebhookConfiguration
-	CreateValidatingWebhookConfiguration(req *hook.ValidatingWebhookConfiguration) (*hook.ValidatingWebhookConfiguration, error)
+	CreateValidatingWebhookConfiguration(cfg *hook.ValidatingWebhookConfiguration) (*hook.ValidatingWebhookConfiguration, error)
 	// UpdateValidatingWebhookConfiguration updates given ValidatingWebhookConfiguration
-	UpdateValidatingWebhookConfiguration(*hook.ValidatingWebhookConfiguration) (*hook.ValidatingWebhookConfiguration, error)
+	UpdateValidatingWebhookConfiguration(cfg *hook.ValidatingWebhookConfiguration) (*hook.ValidatingWebhookConfiguration, error)
 	// DeleteValidatingWebhookConfiguration deletes given ValidatingWebhookConfiguration
 	DeleteValidatingWebhookConfiguration(name string) error
 }
 
-// GetValidatingWebhookConfiguration returns a given ValidatingWebhookConfiguration
+// GetValidatingWebhookConfiguration returns given ValidatingWebhookConfiguration
 func (c *Client) GetValidatingWebhookConfiguration(name string) (*hook.ValidatingWebhookConfiguration, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err

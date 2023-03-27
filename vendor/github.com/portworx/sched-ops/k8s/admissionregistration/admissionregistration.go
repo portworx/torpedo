@@ -5,8 +5,9 @@ import (
 	"os"
 	"sync"
 
+	"github.com/portworx/sched-ops/k8s/common"
 	apiadmissionsclientv1 "k8s.io/client-go/kubernetes/typed/admissionregistration/v1"
-	apiadmissionsclientv1betav1 "k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1"
+	apiadmissionsclientv1beta1 "k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -44,7 +45,7 @@ func SetInstance(i Ops) {
 }
 
 // New builds a new admissionregistration client.
-func New(client apiadmissionsclientv1betav1.AdmissionregistrationV1beta1Interface, clientv1 apiadmissionsclientv1.AdmissionregistrationV1Interface) *Client {
+func New(client apiadmissionsclientv1beta1.AdmissionregistrationV1beta1Interface, clientv1 apiadmissionsclientv1.AdmissionregistrationV1Interface) *Client {
 	return &Client{
 		admissionv1beta1: client,
 		admissionv1:      clientv1,
@@ -53,7 +54,7 @@ func New(client apiadmissionsclientv1betav1.AdmissionregistrationV1beta1Interfac
 
 // NewForConfig builds a new admissionregistration client for the given config.
 func NewForConfig(c *rest.Config) (*Client, error) {
-	client, err := apiadmissionsclientv1betav1.NewForConfig(c)
+	client, err := apiadmissionsclientv1beta1.NewForConfig(c)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +83,7 @@ func NewInstanceFromConfigFile(config string) (Ops, error) {
 // Client provides a wrapper for kubernetes admission interface.
 type Client struct {
 	config           *rest.Config
-	admissionv1beta1 apiadmissionsclientv1betav1.AdmissionregistrationV1beta1Interface
+	admissionv1beta1 apiadmissionsclientv1beta1.AdmissionregistrationV1beta1Interface
 	admissionv1      apiadmissionsclientv1.AdmissionregistrationV1Interface
 }
 
@@ -148,8 +149,11 @@ func (c *Client) loadClient() error {
 	}
 
 	var err error
-
-	c.admissionv1beta1, err = apiadmissionsclientv1betav1.NewForConfig(c.config)
+	err = common.SetRateLimiter(c.config)
+	if err != nil {
+		return err
+	}
+	c.admissionv1beta1, err = apiadmissionsclientv1beta1.NewForConfig(c.config)
 	if err != nil {
 		return err
 	}
