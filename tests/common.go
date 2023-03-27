@@ -720,9 +720,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			processError(err, errChan...)
 			for _, vol := range vols {
 				pvcObj, err := k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+				if err != nil {
+					log.FailOnError(err, " Failed to get pvc for volume %s", vol)
+				}
 				sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
 				if err != nil {
-					log.Errorf("Error Occured while getting storage class for pvc %v", err)
+					log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
 				}
 				sc2 := fmt.Sprint(sc)
 				if strings.Contains(sc2, "nosuid") {
