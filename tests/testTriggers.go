@@ -5754,7 +5754,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		}
 		UpdateOutcome(event, err)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			log.Infof("Task name %s\n", taskName)
 			appContexts := ScheduleApplications(taskName)
 			*contexts = append(*contexts, appContexts...)
