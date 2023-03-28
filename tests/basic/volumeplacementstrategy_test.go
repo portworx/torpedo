@@ -49,11 +49,13 @@ var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
 				})
 
 				Step("Validate Deployment with VPS", func() {
+					log.InfoD("Validate Deployment with VPS")
 					err := vpsTestCase.ValidateVPSDeployment(contexts)
 					log.FailOnError(err, "Failed to Validate Deployments with respect to VPS")
 				})
 
 				Step("Destroy VPS Deployment", func() {
+					log.InfoD("Destroy VPS Deployment")
 					err := vpsTestCase.DestroyVPSDeployment()
 					log.FailOnError(err, "Failed to Destroy VPS Deployments")
 				})
