@@ -789,11 +789,6 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 					}
 					log.InfoD("The pods of the Stateful Set %v are not on the cordoned node. Moving ahead now.", *deployment.ClusterResourceName)
 				})
-				Step("UnCordon Selected Node", func() {
-					err = k8sCore.UnCordonNode(nodeName, timeOut, maxtimeInterval)
-					log.FailOnError(err, fmt.Sprintf("UnCordoning the node %s Failed", nodeName))
-					log.InfoD("Node %s successfully UnCordoned", nodeName)
-				})
 				Step("Running Workloads before scaling up of dataservices ", func() {
 					log.InfoD("Running Workloads on DataService %v ", ds.Name)
 					var params pdslib.WorkloadGenerationParams
@@ -810,6 +805,12 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 					}
 					log.FailOnError(err, "error deleting workload generating pods")
 				})
+				Step("UnCordon Selected Node", func() {
+					err = k8sCore.UnCordonNode(nodeName, timeOut, maxtimeInterval)
+					log.FailOnError(err, fmt.Sprintf("UnCordoning the node %s Failed", nodeName))
+					log.InfoD("Node %s successfully UnCordoned", nodeName)
+				})
+
 			}
 		})
 	})
