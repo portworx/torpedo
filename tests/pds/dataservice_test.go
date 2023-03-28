@@ -643,9 +643,6 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 	It("Drain and Decommission a node", func() {
 		Step("Deploy, Validate, Drain Node, Cordon Node, Validate Data Service, Run Workload on Data Service, Uncordon Node", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name != postgresql {
-					continue
-				}
 				isDeploymentsDeleted = false
 				deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 				log.FailOnError(err, fmt.Sprintf("Error while deploying data services %s", ds.Name))
