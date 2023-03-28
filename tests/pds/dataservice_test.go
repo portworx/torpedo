@@ -635,6 +635,88 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 	})
 })
 
+var _ = Describe("{DrainAndDecommissionNode}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DrainAndDecommissionNode", "Deploys a data service, drains one selected node, decommissions that node", pdsLabels, 0)
+	})
+
+	It("Drain and Decommission a node", func() {
+		Step("Deploy, Validate, Drain Node, Cordon Node, Validate Data Service, Run Workload on Data Service, Uncordon Node", func() {
+			for _, ds := range params.DataServiceToTest {
+				if ds.Name != postgresql {
+					continue
+				}
+				isDeploymentsDeleted = false
+				deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+				log.FailOnError(err, fmt.Sprintf("Error while deploying data services %s", ds.Name))
+				log.InfoD("Running Check Node DataService Func %v ", ds.Name)
+				nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
+				log.FailOnError(err, "Cannot fetch nodes of the running Data Service")
+				var nodeName string
+				nodeName = nodes[0].Name // Selecting the 1st node in the list to cordon
+				Step("Drain Pods from a node", func() {
+					podsList, err := pdslib.GetPodsOfSsByNode(*deployment.ClusterResourceName, nodeName, namespace)
+					log.FailOnError(err, fmt.Sprintf("Pod not found on this Node : %s", nodeName))
+					log.InfoD("Pods found on %v node. Trying to Drain pods from this node now.", nodeName)
+					err = k8sCore.DrainPodsFromNode(nodeName, podsList, timeOut, maxtimeInterval)
+					log.FailOnError(err, fmt.Sprintf("Draining pod from the node %s failed", nodeName))
+					log.InfoD("Pods successfully drained from the node %s", nodeName)
+				})
+				Step("Cordon Selected Node", func() {
+					err = k8sCore.CordonNode(nodeName, timeOut, maxtimeInterval)
+					log.FailOnError(err, fmt.Sprintf("Cordoning the node %s Failed", nodeName))
+					log.InfoD("Node %s successfully Cordoned", nodeName)
+				})
+				Step("Validate Data Service to see if Pods have rescheduled on another node", func() {
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, fmt.Sprintf("error on ValidateDataServiceVolumes method for %v", *deployment.ClusterResourceName))
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+				})
+				Step("Validate no pods are on the cordoned node anymore", func() {
+					nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
+					log.FailOnError(err, fmt.Sprintf("Cannot fetch nodes of the running Data Service %v", *deployment.ClusterResourceName))
+					for _, nodeObj := range nodes {
+						if nodeObj.Name == nodeName {
+							log.FailOnError(errors.New("New Pod came up on the node that was cordoned."), "Unexpected error")
+						}
+					}
+					log.InfoD("The pods of the Stateful Set %v are not on the cordoned node. Moving ahead now.", *deployment.ClusterResourceName)
+				})
+				Step("UnCordon Selected Node", func() {
+					err = k8sCore.UnCordonNode(nodeName, timeOut, maxtimeInterval)
+					log.FailOnError(err, fmt.Sprintf("UnCordoning the node %s Failed", nodeName))
+					log.InfoD("Node %s successfully UnCordoned", nodeName)
+				})
+				Step("Running Workloads before scaling up of dataservices ", func() {
+					log.InfoD("Running Workloads on DataService %v ", ds.Name)
+					var params pdslib.WorkloadGenerationParams
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, fmt.Sprintf("Error while generating workloads for dataservice [%s]", ds.Name))
+				})
+				Step("Delete the workload generating deployments", func() {
+					if Contains(dataServiceDeploymentWorkloads, ds.Name) {
+						log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
+						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+					} else if Contains(dataServicePodWorkloads, ds.Name) {
+						log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
+						err = pdslib.DeleteK8sPods(pod.Name, namespace)
+					}
+					log.FailOnError(err, "error deleting workload generating pods")
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		if !isDeploymentsDeleted {
+			Step("Delete created deployments")
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		}
+	})
+})
+
 var _ = Describe("{CordonNodeAndDeletePod}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("CordonNodeAndDeletePod", "Deploys a data service, cordons one selected node, deletes the pod from that node", pdsLabels, 0)
