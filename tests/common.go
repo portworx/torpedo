@@ -255,8 +255,6 @@ const (
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
-	defaultCommandRetry       = 5 * time.Second
-	defaultCommandTimeout     = 1 * time.Minute
 )
 
 const (
@@ -632,7 +630,6 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 	}()
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
-		var mountoption = []string{"nosuid"}
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
@@ -708,36 +705,10 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		//check mount option attribute in storage class
-		Step("validating mount options", func() {
-			if ctx.SkipMountOptionValidation {
-				return
+		Step("validate mount options for pure volumes", func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
 			}
-			ctx.SkipVolumeValidation = false
-			ValidateContext(ctx)
-			ctx.SkipVolumeValidation = true
-			vols, err := Inst().S.GetVolumes(ctx)
-			processError(err, errChan...)
-			for _, vol := range vols {
-				pvcObj, err := k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
-				if err != nil {
-					log.FailOnError(err, " Failed to get pvc for volume %s", vol)
-				}
-				sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
-				if err != nil {
-					log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
-				}
-				sc2 := fmt.Sprint(sc)
-				if strings.Contains(sc2, "nosuid") {
-					attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
-					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-					err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, mountoption, attachedNode)
-					dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
-				} else {
-					log.Infof("There is no nosuid mount option in this volume %s", vol)
-				}
-			}
-
 		})
 	})
 }
@@ -1231,6 +1202,32 @@ func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 
 }
 
+// ValidateMountOptionsWithPureVolumes is the ginkgo spec for executing a check for mountOptions flag
+func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	var requiredMountOptions = []string{"nosuid"}
+	vols, err := Inst().S.GetVolumes(ctx)
+	processError(err, errChan...)
+	for _, vol := range vols {
+		pvcObj, err := k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+		if err != nil {
+			log.FailOnError(err, " Failed to get pvc for volume %s", vol)
+		}
+		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+		if err != nil {
+			log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
+		}
+		if strings.Contains(strings.Join(sc.MountOptions, ""), "nosuid") {
+			attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
+			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+			err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, requiredMountOptions, attachedNode)
+			dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
+		} else {
+			log.Infof("There is no nosuid mount option in this volume %s", vol)
+		}
+	}
+
+}
+
 func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
 	if sizeChangeInBytes < (512-30)*oneMegabytes || sizeChangeInBytes > (512+30)*oneMegabytes {
 		return errUnexpectedSizeChangeAfterPureIO
@@ -1546,9 +1543,6 @@ func ScheduleAppsInTopologyEnabledCluster(
 func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
-			if ctx.App.Key == "nginx-fa-davol" {
-				ctx.SkipVolumeValidation = true
-			}
 			ValidateContextForPureVolumesPXCTL(ctx)
 		}
 	})
@@ -1558,12 +1552,6 @@ func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
 func ValidateApplicationsPureSDK(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
-			if ctx.App.Key == "wordpress" || ctx.App.Key == "nginx-fa-davol" {
-				ctx.SkipMountOptionValidation = false
-			}
-			if ctx.App.Key == "nginx-fa-davol" {
-				ctx.SkipVolumeValidation = true
-			}
 			ValidateContextForPureVolumesSDK(ctx)
 		}
 	})
