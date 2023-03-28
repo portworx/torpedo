@@ -3,11 +3,13 @@ package tests
 import (
 	"fmt"
 
+	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/k8s/talisman"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/vpsutil"
@@ -26,7 +28,7 @@ var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
 	})
 
 	Context("VolumePlacementStrategyValidation", func() {
-		var vpsTestCase VolumePlaceMentStrategyTestCase
+		var vpsTestCase vpsutil.VolumePlaceMentStrategyTestCase
 
 		testValidateVPS := func() {
 			It("has to deploy VPS and validate the scheduled application follow specified rules", func() {
@@ -98,13 +100,6 @@ var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
 	})
 })
 
-type VolumePlaceMentStrategyTestCase interface {
-	TestName() string
-	DeployVPS() error
-	DestroyVPSDeployment() error
-	ValidateVPSDeployment(contexts []*scheduler.Context) error
-}
-
 type VolumePlacementStrategySpec struct {
 	spec *v1beta2.VolumePlacementStrategy
 }
@@ -143,39 +138,23 @@ func (m *mongoVPSAntiAffinity) DestroyVPSDeployment() error {
 }
 
 // mongoVPSAntiAffinity is expecting to have deploy 2 replica of vol for each pod that has label [mongo-0, mongo-1]
-// since this is antiaffinity, we are expecting that vol with the same labels are not deployed on the same pool.
-// to validate that, we get the label from each deployed vol and extra the pool it's deployed on. if deployed correctly,
+// since this is antiaffinity, we are expecting that vol with the same labels are not deployed on the same pool/node.
+// To validate that, we get the label from each deployed vol and extract the pool it's deployed on. if deployed correctly,
 // there should be two pools per label.
 func (m *mongoVPSAntiAffinity) ValidateVPSDeployment(contexts []*scheduler.Context) error {
 	vols, err := Inst().S.GetVolumes(contexts[0])
 	if err != nil {
 		return err
 	}
-
-	resultMap := make(map[string][]string)
-	for _, vol := range vols {
-
-		vol, err := Inst().V.InspectVolume(vol.ID)
-		if err != nil {
-			return err
-		}
-		for key, value := range vol.Locator.VolumeLabels {
-			if key == "px/statefulset-pod" {
-				if Contains(resultMap[value], vol.ReplicaSets[0].PoolUuids[0]) {
-					continue
-				}
-				resultMap[value] = append(resultMap[value], vol.ReplicaSets[0].PoolUuids[0])
-				break
-			}
-		}
+	apiVols, err := getApiVols(vols)
+	if err != nil {
+		return err
 	}
 
-	for _, value := range resultMap {
-		if len(value) != 2 {
-			return fmt.Errorf("failed to validate vps deployment, expecting label to exist in 2 pools, but got length %v and pools %v", len(value), value)
-		}
-	}
-	return nil
+	volumeLabelKey := "px/statefulset-pod"
+	expectedNodeLength := 2
+
+	return vpsutil.ValidateVolumeAntiAffinityByNode(apiVols, volumeLabelKey, expectedNodeLength)
 }
 
 type mongoVPSAffinity struct {
@@ -207,8 +186,8 @@ func (m *mongoVPSAffinity) DestroyVPSDeployment() error {
 }
 
 // mongoVPSAffinity is expecting to have deploy 2 replica of vol for each pod that has label app=mongo-sts
-// since this is affinity, we are expecting that vol with the same labels are not deployed on the same pool.
-// to validate that, we get the label from each deployed vol and extra the pool it's deployed on. if deployed correctly,
+// since this is affinity, we are expecting that vol with the same labels are not deployed on the same pool/node.
+// to validate that, we get the label from each deployed vol and extracts the pool it's deployed on. if deployed correctly,
 // there should be one pools per label only.
 func (m *mongoVPSAffinity) ValidateVPSDeployment(contexts []*scheduler.Context) error {
 	vols, err := Inst().S.GetVolumes(contexts[0])
@@ -216,28 +195,24 @@ func (m *mongoVPSAffinity) ValidateVPSDeployment(contexts []*scheduler.Context) 
 		return err
 	}
 
-	resultMap := make(map[string][]string)
-	for _, vol := range vols {
+	apiVols, err := getApiVols(vols)
+	if err != nil {
+		return err
+	}
 
+	volumeLabelKey := "app"
+
+	return vpsutil.ValidateVolumeAffinityByNode(apiVols, volumeLabelKey)
+}
+
+func getApiVols(vols []*volume.Volume) ([]*api.Volume, error) {
+	var apiVols []*api.Volume
+	for _, vol := range vols {
 		vol, err := Inst().V.InspectVolume(vol.ID)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		for key, value := range vol.Locator.VolumeLabels {
-			if key == "app" {
-				if Contains(resultMap[value], vol.ReplicaSets[0].PoolUuids[0]) {
-					continue
-				}
-				resultMap[value] = append(resultMap[value], vol.ReplicaSets[0].PoolUuids[0])
-				break
-			}
-		}
+		apiVols = append(apiVols, vol)
 	}
-
-	for _, value := range resultMap {
-		if len(value) != 1 {
-			return fmt.Errorf("failed to validate vps deployment, expecting label to exist in 1 pools, but got length %v and pools %v", len(value), value)
-		}
-	}
-	return nil
+	return apiVols, nil
 }

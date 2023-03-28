@@ -1,10 +1,22 @@
 package vpsutil
 
 import (
+	"fmt"
+
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
 	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/tests"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+type VolumePlaceMentStrategyTestCase interface {
+	TestName() string
+	DeployVPS() error
+	DestroyVPSDeployment() error
+	ValidateVPSDeployment(contexts []*scheduler.Context) error
+}
 
 func VolumeAntiAffinityByMatchExpression(name string, matchExpression []*v1beta1.LabelSelectorRequirement) talisman_v1beta2.VolumePlacementStrategy {
 	return talisman_v1beta2.VolumePlacementStrategy{
@@ -36,4 +48,55 @@ func VolumeAffinityByMatchExpression(name string, matchExpression []*v1beta1.Lab
 			},
 		},
 	}
+}
+
+func getNodePlacement(vol *api.Volume) string {
+	return vol.ReplicaSets[0].PoolUuids[0]
+}
+
+func getVolumeLabelsValue(vol *api.Volume, key string) string {
+	return vol.Locator.VolumeLabels[key]
+}
+
+// ValidateVolumeAntiAffinityByNode validates all the volumes with the same volume label key are deployed on different nodes
+// in addition, it checks that the expected number of nodes the volumes deploy on
+func ValidateVolumeAntiAffinityByNode(vols []*api.Volume, volumeLabelKey string, expectedLength int) error {
+	volToNodeMap := make(map[string][]string)
+	for _, vol := range vols {
+		nodeName := getNodePlacement(vol)
+		labelValue := getVolumeLabelsValue(vol, volumeLabelKey)
+
+		if tests.Contains(volToNodeMap[labelValue], nodeName) {
+			return fmt.Errorf("failed to validate vps deployment, expecting vol to be place on unique node but vol %v is duplicated on node %v ... data: %v", labelValue, nodeName, volToNodeMap)
+		}
+		volToNodeMap[labelValue] = append(volToNodeMap[labelValue], nodeName)
+	}
+
+	for _, nodes := range volToNodeMap {
+		if len(nodes) != expectedLength {
+			return fmt.Errorf("failed to validate vps deployment, expecting label to exist in %v unique nodes, but got length %v and nodes %v .... data: %v", expectedLength, len(nodes), nodes, volToNodeMap)
+		}
+	}
+	return nil
+}
+
+// ValidateVolumeAffinityByNode validates all the volumes with the same volume label key are deployed on the same node
+func ValidateVolumeAffinityByNode(vols []*api.Volume, label string) error {
+	volToNodeMap := make(map[string][]string)
+	for _, vol := range vols {
+		nodeName := getNodePlacement(vol)
+		labelValue := getVolumeLabelsValue(vol, label)
+
+		if tests.Contains(volToNodeMap[labelValue], nodeName) {
+			continue
+		}
+		volToNodeMap[labelValue] = append(volToNodeMap[labelValue], nodeName)
+	}
+
+	for _, nodes := range volToNodeMap {
+		if len(nodes) != 1 {
+			return fmt.Errorf("failed to validate vps deployment, expecting label to exist in %v unique nodes, but got length %v and nodes %v .... data: %v", 1, len(nodes), nodes, volToNodeMap)
+		}
+	}
+	return nil
 }
