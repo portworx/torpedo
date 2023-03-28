@@ -54,6 +54,7 @@ const (
 	backupJobCancellationRetryTime            = 30
 	maxWaitPeriodForRestoreJobCancellation    = 20
 	restoreJobCancellationRetryTime           = 30
+	restoreJobProgressRetryTime               = 1
 	K8sNodeReadyTimeout                       = 10
 	K8sNodeRetryInterval                      = 30
 	globalAWSBucketPrefix                     = "global-aws"
