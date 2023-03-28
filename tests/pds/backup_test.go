@@ -14,10 +14,8 @@ const (
 )
 
 var (
-	bkpClient              *pdsbkp.BackupClient
-	awsBkpTargets          []*pds.ModelsBackupTarget
-	azureBkpTargets        []*pds.ModelsBackupTarget
-	s3CompatibleBkpTargets []*pds.ModelsBackupTarget
+	bkpClient                                                             *pdsbkp.BackupClient
+	awsBkpTargets, azureBkpTargets, s3CompatibleBkpTargets, gcpBkpTargets []*pds.ModelsBackupTarget
 )
 
 var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
@@ -34,6 +32,12 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 			log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 			awsBkpTargets = append(awsBkpTargets, bkpTarget)
 		})
+		Step("Create GCP Backup target.", func() {
+			bkpTarget, err := bkpClient.CreateGcpBackupCredsAndTarget(tenantID, fmt.Sprintf("%v-gcp", bkpTargetName))
+			log.FailOnError(err, "Failed to create GCP backup target.")
+			log.InfoD("GCP Backup target - %v created successfully", bkpTarget.GetName())
+			gcpBkpTargets = append(gcpBkpTargets, bkpTarget)
+		})
 		Step("Create Azure(blob) Backup target.", func() {
 			bkpTarget, err := bkpClient.CreateAzureBackupCredsAndTarget(tenantID, fmt.Sprintf("%v-azure", bkpTargetName))
 			log.FailOnError(err, "Failed to create Azure backup target.")
@@ -48,14 +52,22 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		for _, bkptarget := range awsBkpTargets {
-			log.FailOnError(bkpClient.DeleteAwsS3BackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the Aws backup target")
-		}
-		for _, bkptarget := range azureBkpTargets {
-			log.FailOnError(bkpClient.DeleteAzureBackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the Azure backup target")
-		}
-		for _, bkptarget := range s3CompatibleBkpTargets {
-			log.FailOnError(bkpClient.DeleteS3CompatibleBackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the S3 compatible backup target")
-		}
+		deleteAllBkpTargets()
 	})
 })
+
+func deleteAllBkpTargets() {
+	log.Info("Delete all the backup targets.")
+	for _, bkptarget := range awsBkpTargets {
+		log.FailOnError(bkpClient.DeleteAwsS3BackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the Aws backup target")
+	}
+	for _, bkptarget := range azureBkpTargets {
+		log.FailOnError(bkpClient.DeleteAzureBackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the Azure backup target")
+	}
+	for _, bkptarget := range s3CompatibleBkpTargets {
+		log.FailOnError(bkpClient.DeleteS3CompatibleBackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the S3 compatible backup target")
+	}
+	for _, bkptarget := range gcpBkpTargets {
+		log.FailOnError(bkpClient.DeleteGoogleBackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the GCP backup target")
+	}
+}
