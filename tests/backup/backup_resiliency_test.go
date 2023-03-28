@@ -1040,7 +1040,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-		
+
 		log.InfoD("Deleting the restores taken")
 		for _, restoreName := range restoreNames {
 			wg.Add(1)
@@ -1309,5 +1309,286 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// CancelAllRunningRestoreJobs cancels all the running restore jobs while restores are in progress
+var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
+	var (
+		contexts          []*scheduler.Context
+		appContexts       []*scheduler.Context
+		appNamespaces     []string
+		cloudAccountName  string
+		cloudAccountUID   string
+		bkpLocationName   string
+		backupLocationUID string
+		backupName        string
+		srcClusterUid     string
+		restoreName       string
+		schPolicyUid      string
+		scheduleName      string
+		schBackupName     string
+		scheduleNames     []string
+		threadCount       int
+		srcClusterStatus  api.ClusterInfo_StatusInfo_Status
+		destClusterStatus api.ClusterInfo_StatusInfo_Status
+		restoreNames      []string
+		appList           = Inst().AppList
+	)
+	backupLocationMap := make(map[string]string)
+	labelSelectors := make(map[string]string)
+	backupNamesMap := make(map[string][]string)
+	preRuleNameListMap := make(map[string]string)
+	postRuleNameListMap := make(map[string]string)
+	timeStamp := strconv.Itoa(int(time.Now().Unix()))
+	periodicPolicyName := fmt.Sprintf("%s-%s", "periodic", timeStamp)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CancelAllRunningRestoreJobs", "Cancel all the running restore jobs while restores are in progress", nil, 58058)
+		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
+		for i := 0; i < len(appList); i++ {
+			if Contains(postRuleApp, appList[i]) {
+				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
+					dash.VerifyFatal(ok, true, fmt.Sprintf("Post Rule details mentioned for the app %v", appList[i]))
+				}
+			}
+			if Contains(preRuleApp, appList[i]) {
+				if _, ok := portworx.AppParameters[appList[i]]["pre_action_list"]; ok {
+					dash.VerifyFatal(ok, true, fmt.Sprintf("Pre Rule details mentioned for the app %v", appList[i]))
+				}
+			}
+		}
+		log.InfoD("Deploying applications required for the testcase")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+			}
+		}
+	})
+
+	It("Cancel All Running Restore Jobs and validate", func() {
+		Step("Validating the deployed applications", func() {
+			log.InfoD("Validating the deployed applications")
+			ValidateApplications(contexts)
+		})
+
+		Step("Creating rules for backup", func() {
+			log.InfoD("Creating pre and post rule for deployed apps")
+			for i := 0; i < len(appList); i++ {
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating pre rule for deployed apps for %v with status %v", appList[i], preRuleStatus))
+				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
+				preRuleNameListMap[appNamespaces[i]] = ruleName
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating post rule for deployed apps for %v with status %v", appList[i], postRuleStatus))
+				dash.VerifyFatal(postRuleStatus, true, "Verifying post rule for backup")
+				postRuleNameListMap[appNamespaces[i]] = ruleName
+			}
+		})
+
+		Step("Adding cloud account and backup location", func() {
+			log.InfoD("Adding cloud account and backup location")
+			providers := getProviders()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudAccountName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudAccountUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudAccountName, cloudAccountUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud account named [%s] for org [%s] with [%s] as provider", cloudAccountName, orgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudAccountName, cloudAccountUID,
+					getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		Step("Creating Schedule Policies", func() {
+			log.InfoD("Creating Schedule Policies")
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
+			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), orgID, periodicSchedulePolicyInfo)
+			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Verification of creating periodic schedule policy - %s", periodicPolicyName))
+		})
+
+		Step("Registering source and destination clusters for backup", func() {
+			log.InfoD("Registering source and destination clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
+			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+		})
+
+		Step("Taking backup of applications", func() {
+			log.InfoD("Taking backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				backupNames := make([]string, 0)
+				log.Infof("Taking manual backup of application without rule's")
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
+					[]string{namespace}, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
+				backupNames = append(backupNames, backupName)
+
+				log.Infof("Taking schedule backup of application without rule's")
+				scheduleName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicPolicyName)
+				err = CreateScheduleBackup(scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
+					labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", scheduleName))
+				schBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
+				backupNames = append(backupNames, schBackupName)
+				scheduleNames = append(scheduleNames, scheduleName)
+
+				log.Infof("Taking manual backup of application with rule's")
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameListMap[namespace])
+				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameListMap[namespace])
+				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
+					[]string{namespace}, labelSelectors, orgID, srcClusterUid, preRuleNameListMap[namespace], preRuleUid, postRuleNameListMap[namespace], postRuleUid, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
+				backupNames = append(backupNames, backupName)
+
+				log.Infof("Taking schedule backup of application with rule's")
+				scheduleName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+				schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicPolicyName)
+				preRuleUid, _ = Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameListMap[namespace])
+				postRuleUid, _ = Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameListMap[namespace])
+				err = CreateScheduleBackup(scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
+					labelSelectors, orgID, preRuleNameListMap[namespace], preRuleUid, postRuleNameListMap[namespace], postRuleUid, periodicPolicyName, schPolicyUid, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating schedule backup with schedule name - %s", scheduleName))
+				schBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup - %s", schBackupName))
+				backupNames = append(backupNames, schBackupName)
+				scheduleNames = append(scheduleNames, scheduleName)
+				backupNamesMap[namespace] = backupNames
+				threadCount = threadCount + len(backupNames)
+			}
+			log.Infof("The Map of backups taken are: %v", backupNamesMap)
+		})
+
+		var sem = make(chan struct{}, threadCount)
+		var wg sync.WaitGroup
+		Step("Restoring the backed up applications", func() {
+			log.InfoD("Restoring the backed up applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, namespace := range appNamespaces {
+				namespaceMapping := make(map[string]string)
+				for _, backupName := range backupNamesMap[namespace] {
+					sem <- struct{}{}
+					restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+					restoreNames = append(restoreNames, restoreName)
+					time.Sleep(1 * time.Second)
+					namespaceMapping[namespace] = fmt.Sprintf("new-namespace-%v", time.Now().Unix())
+					wg.Add(1)
+					go func(restoreName string, backupName string, namespaceMapping map[string]string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						defer func() { <-sem }()
+						_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
+					}(restoreName, backupName, namespaceMapping)
+				}
+			}
+			wg.Wait()
+			log.Infof("The list of restores taken are: %v", restoreNames)
+			log.InfoD("Sleeping for 20 seconds so that the request reaches stork and the restore process is started")
+			time.Sleep(20 * time.Second)
+		})
+
+		Step("Cancelling the ongoing restores", func() {
+			log.InfoD("Cancelling the ongoing restores")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, restoreName := range restoreNames {
+				sem <- struct{}{}
+				wg.Add(1)
+				go func(restoreName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					defer func() { <-sem }()
+					err := DeleteRestore(restoreName, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore %s while restore is in progress", restoreName))
+				}(restoreName)
+			}
+			wg.Wait()
+			log.InfoD("Sleeping for 30 seconds for the restore cancellation to take place")
+			time.Sleep(30 * time.Second)
+		})
+
+		Step("Verifying if all the restore creation is cancelled", func() {
+			log.InfoD("Verifying if all the restore creation is cancelled")
+			adminRestores, err := GetAllRestoresAdmin()
+			log.Infof("The list of restore after restore cancellation is %v", adminRestores)
+			log.FailOnError(err, "Getting the list of restores after restore cancellation")
+			if len(adminRestores) != 0 {
+				restoreJobCancelStatus := func() (interface{}, bool, error) {
+					adminRestores, err := GetAllRestoresAdmin()
+					if err != nil {
+						return "", true, err
+					}
+					for _, restoreName := range restoreNames {
+						if IsPresent(adminRestores, restoreName) {
+							return "", true, fmt.Errorf("%v restore is still present", restoreName)
+						}
+					}
+					return "", false, nil
+				}
+				_, err = task.DoRetryWithTimeout(restoreJobCancelStatus, maxWaitPeriodForRestoreJobCancellation*time.Minute, restoreJobCancellationRetryTime*time.Second)
+				if err != nil {
+					adminRestores, error := GetAllRestoresAdmin()
+					log.Infof("The list of restores after restore cancellation and wait of 20 minutes is %v", adminRestores)
+					log.FailOnError(error, "Getting the list of restores after restore cancellation and wait of 20 minutes")
+				}
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore jobs cancellation while restores is in progress"))
+			}
+			log.Infof("All the restores created by this testcase is deleted after restore cancellation")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Infof("Deleting backup schedules")
+		for _, scheduleName := range scheduleNames {
+			scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+			log.FailOnError(err, "Error while getting schedule uid %v", scheduleName)
+			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		}
+		log.Infof("Deleting backup schedule policy")
+		policyList := []string{periodicPolicyName}
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
+		log.Infof("Deleting the deployed applications")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+		log.InfoD("Deleting the remaining restores in case of failure")
+		adminRestores, err := GetAllRestoresAdmin()
+		for _, restoreName := range adminRestores {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user restore %s", restoreName))
+		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
 	})
 })
