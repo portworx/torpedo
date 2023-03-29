@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/client-go/tools/clientcmd"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -28,7 +27,7 @@ import (
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -1356,17 +1355,18 @@ func ValidatePDSDeploymentTargetHealthStatus(DeploymentTargetID, healthStatus st
 
 func DeletePDSCRDs(pdsApiGroups []string) error {
 	var isCrdsAvailable bool
-	ctx := GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
-	config, err := clientcmd.BuildConfigFromFlags("", ctx)
-	if err != nil {
-		return err
-	}
+	//ctx := GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+	//config, err := clientcmd.BuildConfigFromFlags("", ctx)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//k8sApiClient, err := apiextensionsclient.NewForConfig(config)
+	//if err != nil {
+	//	return err
+	//}
 
-	k8sApiClient, err := apiextensionsclient.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-
+	var k8sApiClient *clientset.Clientset
 	crdList, err := k8sApiClient.ApiextensionsV1().CustomResourceDefinitions().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error while listing crds: %v", err)
