@@ -805,6 +805,21 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 					}
 					log.FailOnError(err, "error deleting workload generating pods")
 				})
+				Step("Create a new Data Service Deployment and validate this doesn't get created on the Cordoned Node. Delete it as well.", func() {
+					newDeployment, _, _, err := DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, fmt.Sprintf("Error while deploying data services %s", ds.Name))
+					nodes, err := pdslib.GetNodesOfSS(*newDeployment.ClusterResourceName, namespace)
+					log.FailOnError(err, fmt.Sprintf("Cannot fetch nodes of the running Data Service %v", *newDeployment.ClusterResourceName))
+					for _, nodeObj := range nodes {
+						if nodeObj.Name == nodeName {
+							log.FailOnError(errors.New("New Pod came up on the node that was cordoned."), "Unexpected error")
+						}
+					}
+					log.InfoD("The pods of the Stateful Set %v are not on the cordoned node.", *newDeployment.ClusterResourceName)
+					resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				})
 				Step("UnCordon Selected Node", func() {
 					err = k8sCore.UnCordonNode(nodeName, timeOut, maxtimeInterval)
 					log.FailOnError(err, fmt.Sprintf("UnCordoning the node %s Failed", nodeName))
