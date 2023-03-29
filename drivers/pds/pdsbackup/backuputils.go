@@ -27,7 +27,7 @@ type BackupClient struct {
 
 // CreateAwsS3BackupCredsAndTarget create backup creds,bucket and target.
 func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name string) (*pds.ModelsBackupTarget, error) {
-	log.Info("Add AWS S3 backup creadentials")
+	log.Info("Add AWS S3 backup credentials")
 	akid := backupClient.awsStorageClient.accessKey
 	skid := backupClient.awsStorageClient.secretKey
 	region := backupClient.awsStorageClient.region
