@@ -514,7 +514,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 				}
 			}
 		})
-		Step("Register cluster for backup", func() {
+		Step("Configure cluster with px-central-admin ctx", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
