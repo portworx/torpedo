@@ -612,6 +612,26 @@ spec:
       value: "${PDS_PARAM_CM}"
     - name: PDS_ISSUER_URL
       value: "${PDS_ISSUER_URL}"
+    - name: AWS_ACCESS_KEY
+      value: "${AWS_ACCESS_KEY}"
+    - name: AWS_SECRET_KEY
+      value: "${AWS_SECRET_KEY}"
+    - name: AWS_REGION
+      value: "${AWS_REGION}"
+    - name: AZURE_STORAGE_ACCOUNT_NAME
+      value: "${AZURE_STORAGE_ACCOUNT_NAME}"
+    - name: GCP_PROJECT_ID
+      value: "${GCP_PROJECT_ID}"
+    - name: GCP_JSON_PATH
+      value: "${GCP_JSON_PATH}"
+    - name: MINIO_ACCESS_KEY
+      value: "${MINIO_ACCESS_KEY}"
+    - name: MINIO_SECRET_KEY
+      value: "${MINIO_SECRET_KEY}"
+    - name: MINIO_ENDPOINT
+      value: "${MINIO_ENDPOINT}"
+    - name: MINIO_REGION
+      value: "${MINIO_REGION}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG
