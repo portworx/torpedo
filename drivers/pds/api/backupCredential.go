@@ -96,12 +96,13 @@ func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID stri
 		return nil, err
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
+	log.Infof("Response -> %v", res)
+	log.Infof("Rescode -> %v", res.StatusCode)
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiTenantsIdBackupCredentialsPost``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
 	}
 	return backupModel, err
-
 }
 
 // CreateS3CompatibleBackupCredential func
@@ -153,6 +154,8 @@ func (backupCredential *BackupCredential) CreateGoogleCredential(tenantID string
 		return nil, err
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
+	log.Infof("%v", res)
+	log.Infof("%v", res.StatusCode)
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiTenantsIdBackupCredentialsPost``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)

@@ -7,7 +7,7 @@ import (
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-	log "github.com/sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -31,8 +31,10 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	akid := backupClient.awsStorageClient.accessKey
 	skid := backupClient.awsStorageClient.secretKey
 	region := backupClient.awsStorageClient.region
+	log.Infof("%v, %v, %v", akid, skid, region)
+	log.Infof("%v, %v, %v, %v, %v", tenantId, name, akid, awsS3endpoint, skid)
 	backupCred, err := backupClient.components.BackupCredential.CreateS3BackupCredential(tenantId, name, akid, awsS3endpoint, skid)
-
+	log.Infof("%v created successfully.", backupCred.GetName())
 	if err != nil {
 		log.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 		return nil, err
