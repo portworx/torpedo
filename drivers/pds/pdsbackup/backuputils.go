@@ -3,6 +3,7 @@ package pdsbackup
 import (
 	"net/url"
 	"os"
+	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
@@ -11,8 +12,11 @@ import (
 )
 
 const (
-	bucketName    = "pds-qa-automation"
-	awsS3endpoint = "s3.amazonaws.com"
+	bucketName         = "pds-qa-automation"
+	awsS3endpoint      = "s3.amazonaws.com"
+	bkpTimeOut         = 30 * time.Minute
+	bkpTimeInterval    = 10 * time.Second
+	bkpMaxtimeInterval = 30 * time.Second
 )
 
 // BackupClient struct
@@ -31,8 +35,6 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	akid := backupClient.awsStorageClient.accessKey
 	skid := backupClient.awsStorageClient.secretKey
 	region := backupClient.awsStorageClient.region
-	log.Infof("%v, %v, %v", akid, skid, region)
-	log.Infof("%v, %v, %v, %v, %v", tenantId, name, akid, awsS3endpoint, skid)
 	backupCred, err := backupClient.components.BackupCredential.CreateS3BackupCredential(tenantId, name, akid, awsS3endpoint, skid)
 	log.Infof("%v created successfully.", backupCred.GetName())
 	if err != nil {
@@ -49,6 +51,12 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), name, region, "s3")
 	if err != nil {
 		log.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
+		return nil, err
+	}
+	log.Infof("[Backup Target: %v]Syncing to target clusters", name)
+	_, err = backupClient.components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
+	if err != nil {
+		log.Errorf("Failed while syncing to target cluster, Err: %v ", err)
 		return nil, err
 	}
 	return backupTarget, nil
@@ -72,6 +80,12 @@ func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), name, "", "azure")
 	if err != nil {
 		log.Errorf("Failed to create Azure backup target, Err: %v ", err)
+		return nil, err
+	}
+	log.Infof("[Backup Target: %v]Syncing to target clusters", name)
+	_, err = backupClient.components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
+	if err != nil {
+		log.Errorf("Failed while syncing to target cluster, Err: %v ", err)
 		return nil, err
 	}
 	return backupTarget, nil
@@ -106,6 +120,12 @@ func (backupClient *BackupClient) CreateGcpBackupCredsAndTarget(tenantId, name s
 		log.Errorf("Failed to create google backup target, Err: %v ", err)
 		return nil, err
 	}
+	log.Infof("[Backup Target: %v]Syncing to target clusters", name)
+	_, err = backupClient.components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
+	if err != nil {
+		log.Errorf("Failed while syncing to target cluster, Err: %v ", err)
+		return nil, err
+	}
 	return backupTarget, nil
 
 }
@@ -120,7 +140,7 @@ func (backupClient *BackupClient) CreateS3CompatibleBackupCredsAndTarget(tenantI
 	backupCred, err := backupClient.components.BackupCredential.CreateS3CompatibleBackupCredential(tenantId, name, akid, endpoint, skid)
 
 	if err != nil {
-		log.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
+		log.Errorf("Error in adding the S3 compatible backup credentials to PDS , Err: %v ", err)
 		return nil, err
 	}
 	log.Info("Create S3 compatible bucket.")
@@ -133,6 +153,12 @@ func (backupClient *BackupClient) CreateS3CompatibleBackupCredsAndTarget(tenantI
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), name, region, "s3-compatible")
 	if err != nil {
 		log.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
+		return nil, err
+	}
+	log.Infof("[Backup Target: %v]Syncing to target clusters", name)
+	_, err = backupClient.components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
+	if err != nil {
+		log.Errorf("Failed while syncing to target cluster, Err: %v ", err)
 		return nil, err
 	}
 	return backupTarget, nil
@@ -150,6 +176,7 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 		log.Errorf("Failed to delete AWS S3 backup target, Err: %v ", err)
 		return err
 	}
+	time.Sleep(bkpMaxtimeInterval)
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
 		log.Errorf("Failed to delete AWS S3 backup credentials, Err: %v ", err)
@@ -161,9 +188,7 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 		log.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
 		return err
 	}
-
 	return nil
-
 }
 
 // DeleteAzureBackupCredsAndTarget delete backup creds,bucket and target.
@@ -178,9 +203,17 @@ func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId
 		log.Errorf("Failed to delete Azure backup target, Err: %v ", err)
 		return err
 	}
+	time.Sleep(bkpMaxtimeInterval)
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
 		log.Errorf("Failed to delete Azure backup credentials, Err: %v ", err)
+		return err
+	}
+
+	log.Info("Delete Azure blob storage")
+	err = backupClient.azureStorageClient.deleteBucket(bucketName)
+	if err != nil {
+		log.Errorf("Failed to delete  azure blob %s, Err: %v ", bucketName, err)
 		return err
 	}
 
@@ -195,11 +228,11 @@ func (backupClient *BackupClient) DeleteGoogleBackupCredsAndTarget(backupTargetI
 	credId := backupTarget.GetBackupCredentialsId()
 	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
 	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
-	backupTarget.GetBackupCredentialsId()
 	if err != nil {
 		log.Errorf("Failed to delete Google backup target, Err: %v ", err)
 		return err
 	}
+	time.Sleep(bkpMaxtimeInterval)
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
 		log.Errorf("Failed to delete Google backup credentials, Err: %v ", err)
@@ -221,11 +254,11 @@ func (backupClient *BackupClient) DeleteS3CompatibleBackupCredsAndTarget(backupT
 	credId := backupTarget.GetBackupCredentialsId()
 	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
 	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
-	backupTarget.GetBackupCredentialsId()
 	if err != nil {
 		log.Errorf("Failed to delete S3-Compatible backup target, Err: %v ", err)
 		return err
 	}
+	time.Sleep(bkpMaxtimeInterval)
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
 		log.Errorf("Failed to delete S3-Compatible backup credentials, Err: %v ", err)

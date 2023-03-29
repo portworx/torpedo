@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -96,11 +97,11 @@ func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID stri
 		return nil, err
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
-	log.Infof("Response -> %v", res)
-	log.Infof("Rescode -> %v", res.StatusCode)
+	if err != nil {
+		return nil, err
+	}
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupCredentialsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("response code is not 200(OK) when called `ApiTenantsIdBackupCredentialsPost. Full response code %v", res)
 	}
 	return backupModel, err
 }
@@ -126,9 +127,11 @@ func (backupCredential *BackupCredential) CreateS3CompatibleBackupCredential(ten
 		return nil, err
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
+	if err != nil {
+		return nil, err
+	}
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupCredentialsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("response code is not 200(OK) when called `ApiTenantsIdBackupCredentialsPost. Full response code %v", res)
 	}
 	return backupModel, err
 
@@ -154,11 +157,11 @@ func (backupCredential *BackupCredential) CreateGoogleCredential(tenantID string
 		return nil, err
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
-	log.Infof("%v", res)
-	log.Infof("%v", res.StatusCode)
+	if err != nil {
+		return nil, err
+	}
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupCredentialsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("response code is not 200(OK) when called `ApiTenantsIdBackupCredentialsPost. Full response code %v", res)
 	}
 	return backupModel, err
 
@@ -287,9 +290,7 @@ func (backupCredential *BackupCredential) DeleteBackupCredential(backupCredsID s
 		return nil, err
 	}
 	res, err := backupClient.ApiBackupCredentialsIdDelete(ctx, backupCredsID).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupCredentialsIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	if err != nil {
 		return nil, err
 	}
 	return res, nil

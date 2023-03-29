@@ -79,13 +79,11 @@ func (backupTarget *BackupTarget) CreateBackupTarget(tenantID string, name strin
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err
 	}
-	backupTargetModel, res, err := backupTargetClient.ApiTenantsIdBackupTargetsPost(ctx, tenantID).Body(createRequest).Execute()
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupTargetsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	backupTargetModel, _, err := backupTargetClient.ApiTenantsIdBackupTargetsPost(ctx, tenantID).Body(createRequest).Execute()
+	if err != nil {
+		return nil, err
 	}
 	return backupTargetModel, err
-
 }
 
 // UpdateBackupTarget return updated backup target model.
@@ -109,7 +107,7 @@ func (backupTarget *BackupTarget) UpdateBackupTarget(backupTaregetID string, nam
 }
 
 // SyncToBackupLocation returned synced backup target model.
-func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string, name string) (*status.Response, error) {
+func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string) (*status.Response, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
@@ -125,17 +123,15 @@ func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string, n
 }
 
 // DeleteBackupTarget delete backup target and return status.
-func (backupTarget *BackupTarget) DeleteBackupTarget(backupTaregetID string) (*status.Response, error) {
+func (backupTarget *BackupTarget) DeleteBackupTarget(backupTargetID string) (*status.Response, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err
 	}
-	res, err := backupTargetClient.ApiBackupTargetsIdDelete(ctx, backupTaregetID).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupTargetsIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	res, err := backupTargetClient.ApiBackupTargetsIdDelete(ctx, backupTargetID).Force("true").Execute()
+	if err != nil {
 		return nil, err
 	}
 	return res, nil

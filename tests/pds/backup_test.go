@@ -45,8 +45,8 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 			azureBkpTargets = append(azureBkpTargets, bkpTarget)
 		})
 		Step("Create S3 compatible(Minio) Backup target.", func() {
-			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-s3compatible", bkpTargetName))
-			log.FailOnError(err, "Failed to create AWS backup target.")
+			bkpTarget, err := bkpClient.CreateS3CompatibleBackupCredsAndTarget(tenantID, fmt.Sprintf("%v-s3compatible", bkpTargetName))
+			log.FailOnError(err, "Failed to create S3 compatible backup target.")
 			log.InfoD("S3 compatible backup target - %v created successfully", bkpTarget.GetName())
 			s3CompatibleBkpTargets = append(s3CompatibleBkpTargets, bkpTarget)
 		})
@@ -59,15 +59,19 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 func deleteAllBkpTargets() {
 	log.Info("Delete all the backup targets.")
 	for _, bkptarget := range awsBkpTargets {
-		log.FailOnError(bkpClient.DeleteAwsS3BackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the Aws backup target")
+		err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkptarget.GetId())
+		log.FailOnError(err, "Failed while deleting the Aws backup target")
 	}
 	for _, bkptarget := range azureBkpTargets {
-		log.FailOnError(bkpClient.DeleteAzureBackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the Azure backup target")
+		err = bkpClient.DeleteAzureBackupCredsAndTarget(bkptarget.GetId())
+		log.FailOnError(err, "Failed while deleting the Azure backup target")
 	}
 	for _, bkptarget := range s3CompatibleBkpTargets {
-		log.FailOnError(bkpClient.DeleteS3CompatibleBackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the S3 compatible backup target")
+		err = bkpClient.DeleteS3CompatibleBackupCredsAndTarget(bkptarget.GetId())
+		log.FailOnError(err, "Failed while deleting the S3 compatible backup target")
 	}
 	for _, bkptarget := range gcpBkpTargets {
-		log.FailOnError(bkpClient.DeleteGoogleBackupCredsAndTarget(bkptarget.GetId()), "Failed while deleting the GCP backup target")
+		err = bkpClient.DeleteGoogleBackupCredsAndTarget(bkptarget.GetId())
+		log.FailOnError(err, "Failed while deleting the GCP backup target")
 	}
 }
