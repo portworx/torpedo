@@ -255,8 +255,6 @@ const (
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
-	defaultCommandRetry       = 5 * time.Second
-	defaultCommandTimeout     = 1 * time.Minute
 )
 
 const (
@@ -552,14 +550,20 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 func ValidatePureCloudDriveTopologies() error {
 	nodes, err := Inst().V.GetDriverNodes()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	nodesMap := node.GetNodesByName()
 
 	driverNamespace, err := Inst().V.GetVolumeDriverNamespace()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	pxPureSecret, err := pureutils.GetPXPureSecret(driverNamespace)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	endpointToZoneMap := pxPureSecret.GetArrayToZoneMap()
 	if len(endpointToZoneMap) == 0 {
@@ -588,7 +592,9 @@ func ValidatePureCloudDriveTopologies() error {
 		}
 
 		driveSet, err := Inst().V.GetDriveSet(&nodeFromMap)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		for configID, driveConfig := range driveSet.Configs {
 			err = nil
@@ -700,42 +706,9 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		})
 		// This step performs a basic test making sure Volume create options are working as expected.
 		Step("validating create options", func() {
-			if ctx.SkipCreateOptionValidation {
-				return
+			if !ctx.SkipVolumeValidation {
+				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
 			}
-			ctx.SkipVolumeValidation = false
-			ValidateContext(ctx)
-			ctx.SkipVolumeValidation = true
-			var createoption1 = "xfs"
-			var createoption2 = "ext4"
-			vols, err := Inst().S.GetVolumes(ctx)
-			log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
-			log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
-			for _, v := range vols {
-				pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
-				if err != nil {
-					log.FailOnError(err, " Failed to get pvc for volume %s", v)
-				}
-				sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
-				if err != nil {
-					log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
-				}
-				sc2 := fmt.Sprint(sc)
-				if strings.Contains(sc2, createoption1) || strings.Contains(sc2, createoption2) {
-					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
-					log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-					if v.Name == "mount-fa-pvc" {
-						err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption1, attachedNode)
-						dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
-					} else if v.Name == "createoption-fa-ext4-pvc" {
-						err = Inst().V.ValidatePureFaCreateOptions(v.ID, createoption2, attachedNode)
-						dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
-					}
-				} else {
-					log.Infof("Storage class doesn't have createoption %s or %s", createoption1, createoption2)
-				}
-			}
-
 		})
 	})
 }
@@ -1236,6 +1209,38 @@ func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
 	return nil
 }
 
+// ValidateCreateOptionsWithPureVolumes is the ginkgo spec for executing a check for Create options in a volume
+func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	var requiredCreateoption1 = "xfs"
+	var requiredCreateoption2 = "ext4"
+	vols, err := Inst().S.GetVolumes(ctx)
+	log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+	log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
+	for _, v := range vols {
+		pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
+		if err != nil {
+			log.FailOnError(err, " Failed to get pvc for volume %s", v)
+		}
+		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+		if err != nil {
+			log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
+		}
+		if strings.Contains(fmt.Sprint(sc.Parameters), requiredCreateoption1) || strings.Contains(fmt.Sprint(sc.Parameters), requiredCreateoption2) {
+			attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+			if v.Name == "mount-fa-pvc" {
+				err = Inst().V.ValidatePureFaCreateOptions(v.ID, requiredCreateoption1, attachedNode)
+				dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
+			} else if v.Name == "createoption-fa-ext4-pvc" {
+				err = Inst().V.ValidatePureFaCreateOptions(v.ID, requiredCreateoption2, attachedNode)
+				dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
+			}
+		} else {
+			log.Infof("Storage class doesn't have createoption %s or %s", requiredCreateoption1, requiredCreateoption2)
+		}
+	}
+}
+
 // GetVolumeParameters returns volume parameters for all volumes for given context
 func GetVolumeParameters(ctx *scheduler.Context) map[string]map[string]string {
 	var vols map[string]map[string]string
@@ -1544,9 +1549,6 @@ func ScheduleAppsInTopologyEnabledCluster(
 func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
-			if ctx.App.Key == "nginx-fa-davol" {
-				ctx.SkipVolumeValidation = true
-			}
 			ValidateContextForPureVolumesPXCTL(ctx)
 		}
 	})
@@ -1556,10 +1558,6 @@ func ValidateApplicationsPurePxctl(contexts []*scheduler.Context) {
 func ValidateApplicationsPureSDK(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
-			if ctx.App.Key == "nginx-fa-davol" {
-				ctx.SkipVolumeValidation = true
-				ctx.SkipCreateOptionValidation = false
-			}
 			ValidateContextForPureVolumesSDK(ctx)
 		}
 	})
