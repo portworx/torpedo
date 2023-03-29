@@ -3,6 +3,10 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/torpedo/pkg/osutils"
+	batchv1 "k8s.io/api/batch/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -12,10 +16,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/portworx/sched-ops/k8s/batch"
-	"github.com/portworx/torpedo/pkg/osutils"
-	batchv1 "k8s.io/api/batch/v1"
 
 	"github.com/hashicorp/go-version"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
@@ -1959,4 +1959,36 @@ func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, cluster
 		return resp, err
 	}
 	return resp, nil
+}
+
+// AddLabelsToMultipleNamespaces add labels to multiple namespace
+func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.AddNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GenerateRandomLabels generates random label of given int
+func GenerateRandomLabels(number int) map[string]string {
+	labels := make(map[string]string)
+	randomString := uuid.New()
+	for i := 0; i < number; i++ {
+		key := fmt.Sprintf("%v-%v", i, randomString)
+		value := randomString
+		labels[key] = value
+	}
+	return labels
+}
+
+// mapToString will create a string from map
+func mapToString(m map[string]string) string {
+	var pairs []string
+	for k, v := range m {
+		pairs = append(pairs, k+"="+v)
+	}
+	return strings.Join(pairs, ",")
 }
