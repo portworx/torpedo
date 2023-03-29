@@ -1061,25 +1061,46 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodesWhenBackupsAreInProgress",
 			"Reboots node when backup is in progress", nil, 55817)
-		log.InfoD("Switching cluster context to application[destination] cluster which does not have px-backup deployed")
-		SetDestinationKubeConfig()
-		log.InfoD("Deploying applications required for the testcase on application cluster")
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < numberOfBackups; i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
-			for _, ctx := range appContexts {
-				ctx.ReadinessTimeout = appReadinessTimeout
-				namespace := GetAppNamespace(ctx, taskName)
-				appNamespaces = append(appNamespaces, namespace)
-			}
-		}
-		log.Infof("The list of namespaces are %v", appNamespaces)
+
 	})
 	It("Reboot node when backup is in progress", func() {
 		var sem = make(chan struct{}, numberOfBackups)
 		var wg sync.WaitGroup
+		Step("Registering source and destination clusters for backup", func() {
+			log.InfoD("Registering source and destination clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
+			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, destinationClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", destinationClusterName))
+		})
+		Step("Deploying application", func() {
+			log.InfoD("Switching cluster context to application[destination] cluster which does not have px-backup deployed")
+			SetDestinationKubeConfig()
+			listOfWorkerNodes = node.GetWorkerNodes()
+			log.Infof("The list of nodes in application cluster are %v", listOfWorkerNodes)
+			log.InfoD("Deploying applications required for the testcase on application cluster")
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < numberOfBackups; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				appContexts = ScheduleApplications(taskName)
+				contexts = append(contexts, appContexts...)
+				for _, ctx := range appContexts {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(ctx, taskName)
+					appNamespaces = append(appNamespaces, namespace)
+				}
+			}
+			log.Infof("The list of namespaces are %v", appNamespaces)
+
+		})
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications on destination cluster")
 			ValidateApplications(contexts)
@@ -1088,6 +1109,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 			log.InfoD("Switching cluster context back to source[backup] cluster")
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster")
+			listOfWorkerNodes = node.GetWorkerNodes()
+			log.Infof("The list of nodes in source cluster are %v", listOfWorkerNodes)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -1106,21 +1129,6 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 					getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 			}
-		})
-		Step("Registering source and destination clusters for backup", func() {
-			log.InfoD("Registering source and destination clusters for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
-			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
-			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
-			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
-			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, destinationClusterName)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", destinationClusterName))
 		})
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
@@ -1159,6 +1167,8 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 			log.InfoD("Switching cluster context back to source cluster")
 			err = SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster")
+			listOfWorkerNodes = node.GetWorkerNodes()
+			log.Infof("The list of master nodes in source cluster are %v", listOfWorkerNodes)
 
 		})
 		Step("Check if backup is successful after one worker node on application cluster is rebooted", func() {
