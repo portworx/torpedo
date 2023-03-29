@@ -274,6 +274,8 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		if lenValidatedPods == lenExpectedPods {
 			return nil, false, nil
 		}
+		log.Infof("resp: %v", resp)
+		log.Infof("pods: %_v", pods)
 		return nil, true, fmt.Errorf("pods pending validation current: %d. Expected: %d", lenValidatedPods, lenExpectedPods)
 	}
 
