@@ -50,8 +50,12 @@ func VolumeAffinityByMatchExpression(name string, matchExpression []*v1beta1.Lab
 	}
 }
 
-func getNodePlacement(vol *api.Volume) string {
-	return vol.ReplicaSets[0].PoolUuids[0]
+func getNodePlacement(vol *api.Volume) []string {
+	var nodeList []string
+	for _, replica := range vol.ReplicaSets {
+		nodeList = append(nodeList, replica.Nodes...)
+	}
+	return nodeList
 }
 
 func getVolumeLabelsValue(vol *api.Volume, key string) string {
@@ -63,13 +67,15 @@ func getVolumeLabelsValue(vol *api.Volume, key string) string {
 func ValidateVolumeAntiAffinityByNode(vols []*api.Volume, volumeLabelKey string, expectedLength int) error {
 	volToNodeMap := make(map[string][]string)
 	for _, vol := range vols {
-		nodeName := getNodePlacement(vol)
+		nodeList := getNodePlacement(vol)
 		labelValue := getVolumeLabelsValue(vol, volumeLabelKey)
-
-		if tests.Contains(volToNodeMap[labelValue], nodeName) {
-			return fmt.Errorf("failed to validate vps deployment, expecting vol to be place on unique node but vol %v is duplicated on node %v ... data: %v", labelValue, nodeName, volToNodeMap)
+		for _, node := range nodeList {
+			if tests.Contains(volToNodeMap[labelValue], node) {
+				return fmt.Errorf("failed to validate vps deployment, expecting vol to be place on unique node but vol %v is duplicated on node %v ... data: %v", labelValue, node, volToNodeMap)
+			}
+			volToNodeMap[labelValue] = append(volToNodeMap[labelValue], node)
 		}
-		volToNodeMap[labelValue] = append(volToNodeMap[labelValue], nodeName)
+
 	}
 
 	for _, nodes := range volToNodeMap {
@@ -84,13 +90,14 @@ func ValidateVolumeAntiAffinityByNode(vols []*api.Volume, volumeLabelKey string,
 func ValidateVolumeAffinityByNode(vols []*api.Volume, label string) error {
 	volToNodeMap := make(map[string][]string)
 	for _, vol := range vols {
-		nodeName := getNodePlacement(vol)
+		nodeList := getNodePlacement(vol)
 		labelValue := getVolumeLabelsValue(vol, label)
-
-		if tests.Contains(volToNodeMap[labelValue], nodeName) {
-			continue
+		for _, node := range nodeList {
+			if tests.Contains(volToNodeMap[labelValue], node) {
+				continue
+			}
+			volToNodeMap[labelValue] = append(volToNodeMap[labelValue], node)
 		}
-		volToNodeMap[labelValue] = append(volToNodeMap[labelValue], nodeName)
 	}
 
 	for _, nodes := range volToNodeMap {

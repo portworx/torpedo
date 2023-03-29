@@ -19,7 +19,6 @@ import (
 var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
 	var testrailID, runID int
 	var contexts []*scheduler.Context
-	var namespacePrefix string
 
 	JustBeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -42,7 +41,7 @@ var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
 					log.InfoD("Deploy Applications")
 					contexts = make([]*scheduler.Context, 0)
 					for i := 0; i < Inst().GlobalScaleFactor; i++ {
-						contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", namespacePrefix, i))...)
+						contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", vpsTestCase.TestName(), i))...)
 					}
 					log.InfoD("Validate Applications")
 					ValidateApplications(contexts)
@@ -64,19 +63,17 @@ var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
 		}
 
 		// test mongo volume anti affinity
-		Context("{VPSMongoAntiAffinity}", func() {
+		Context("{VPSMongoVolumeAntiAffinity}", func() {
 			BeforeEach(func() {
-				namespacePrefix = "mongovpsantiaffinity"
-				vpsTestCase = &mongoVPSAntiAffinity{}
+				vpsTestCase = &mongoVolumeAntiAffinity{}
 			})
 			testValidateVPS()
 		})
 
 		// test mongo volume anti affinity
-		Context("{VPSMongoAffinity}", func() {
+		Context("{VPSMongVolumeoAffinity}", func() {
 			BeforeEach(func() {
-				namespacePrefix = "mongovpsaffinity"
-				vpsTestCase = &mongoVPSAffinity{}
+				vpsTestCase = &mongoVolumeAffinity{}
 			})
 			testValidateVPS()
 		})
@@ -106,15 +103,15 @@ type VolumePlacementStrategySpec struct {
 	spec *v1beta2.VolumePlacementStrategy
 }
 
-type mongoVPSAntiAffinity struct {
+type mongoVolumeAntiAffinity struct {
 	VolumePlacementStrategySpec
 }
 
-func (m *mongoVPSAntiAffinity) TestName() string {
-	return "mongovpsantiaffinity"
+func (m *mongoVolumeAntiAffinity) TestName() string {
+	return "mongovolumeantiaffinity"
 }
 
-func (m *mongoVPSAntiAffinity) DeployVPS() error {
+func (m *mongoVolumeAntiAffinity) DeployVPS() error {
 
 	matchExpression := []*v1beta1.LabelSelectorRequirement{
 		{
@@ -135,7 +132,7 @@ func (m *mongoVPSAntiAffinity) DeployVPS() error {
 	return err
 }
 
-func (m *mongoVPSAntiAffinity) DestroyVPSDeployment() error {
+func (m *mongoVolumeAntiAffinity) DestroyVPSDeployment() error {
 	return talisman.Instance().DeleteVolumePlacementStrategy(m.spec.Name)
 }
 
@@ -143,7 +140,7 @@ func (m *mongoVPSAntiAffinity) DestroyVPSDeployment() error {
 // since this is antiaffinity, we are expecting that vol with the same labels are not deployed on the same pool/node.
 // To validate that, we get the label from each deployed vol and extract the pool it's deployed on. if deployed correctly,
 // there should be two pools per label.
-func (m *mongoVPSAntiAffinity) ValidateVPSDeployment(contexts []*scheduler.Context) error {
+func (m *mongoVolumeAntiAffinity) ValidateVPSDeployment(contexts []*scheduler.Context) error {
 	vols, err := Inst().S.GetVolumes(contexts[0])
 	if err != nil {
 		return err
@@ -159,15 +156,15 @@ func (m *mongoVPSAntiAffinity) ValidateVPSDeployment(contexts []*scheduler.Conte
 	return vpsutil.ValidateVolumeAntiAffinityByNode(apiVols, volumeLabelKey, expectedNodeLength)
 }
 
-type mongoVPSAffinity struct {
+type mongoVolumeAffinity struct {
 	VolumePlacementStrategySpec
 }
 
-func (m *mongoVPSAffinity) TestName() string {
-	return "mongovpsaffinity"
+func (m *mongoVolumeAffinity) TestName() string {
+	return "mongovolumeaffinity"
 }
 
-func (m *mongoVPSAffinity) DeployVPS() error {
+func (m *mongoVolumeAffinity) DeployVPS() error {
 
 	matchExpression := []*v1beta1.LabelSelectorRequirement{
 		{
@@ -183,15 +180,15 @@ func (m *mongoVPSAffinity) DeployVPS() error {
 	return err
 }
 
-func (m *mongoVPSAffinity) DestroyVPSDeployment() error {
+func (m *mongoVolumeAffinity) DestroyVPSDeployment() error {
 	return talisman.Instance().DeleteVolumePlacementStrategy(m.spec.Name)
 }
 
-// mongoVPSAffinity is expecting to have deploy 2 replica of vol for each pod that has label app=mongo-sts
+// mongoVolumeAffinity is expecting to have deploy 2 replica of vol for each pod that has label app=mongo-sts
 // since this is affinity, we are expecting that vol with the same labels are not deployed on the same pool/node.
 // to validate that, we get the label from each deployed vol and extracts the pool it's deployed on. if deployed correctly,
 // there should be one pools per label only.
-func (m *mongoVPSAffinity) ValidateVPSDeployment(contexts []*scheduler.Context) error {
+func (m *mongoVolumeAffinity) ValidateVPSDeployment(contexts []*scheduler.Context) error {
 	vols, err := Inst().S.GetVolumes(contexts[0])
 	if err != nil {
 		return err
