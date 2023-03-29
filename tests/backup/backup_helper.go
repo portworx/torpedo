@@ -1985,10 +1985,19 @@ func GenerateRandomLabels(number int) map[string]string {
 }
 
 // mapToString will create a string from map
-func mapToString(m map[string]string) string {
+func MapToString(m map[string]string) string {
 	var pairs []string
 	for k, v := range m {
 		pairs = append(pairs, k+"="+v)
 	}
 	return strings.Join(pairs, ",")
+}
+
+// GetKeysAsString returns string of keys
+func GetKeysAsString(m map[string]string) string {
+	var keys []string
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return strings.Join(keys, ",")
 }

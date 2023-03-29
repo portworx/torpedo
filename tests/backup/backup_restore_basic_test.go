@@ -1398,7 +1398,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		})
 		Step("Generating namespace label string from label map", func() {
 			log.InfoD("Generating namespace label string from label map")
-			namespaceLabel = mapToString(nsLabelsMap)
+			namespaceLabel = GetKeysAsString(nsLabelsMap)
 			log.Infof("Generated labels [%s]", namespaceLabel)
 		})
 		Step("Creating credentials and registering backup location", func() {
