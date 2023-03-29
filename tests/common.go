@@ -300,6 +300,7 @@ var (
 	contain       = gomega.ContainSubstring
 	beTrue        = gomega.BeTrue
 	beNumerically = gomega.BeNumerically
+	k8sCore       = core.Instance()
 )
 
 // Backup vars
@@ -701,6 +702,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 					err := Inst().V.ValidateVolumeSetup(vol)
 					processError(err, errChan...)
 				})
+			}
+		})
+
+		Step("validate mount options for pure volumes", func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
 			}
 		})
 	})
@@ -1192,6 +1199,32 @@ func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			}
 		}
 	})
+
+}
+
+// ValidateMountOptionsWithPureVolumes is the ginkgo spec for executing a check for mountOptions flag
+func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	var requiredMountOptions = []string{"nosuid"}
+	vols, err := Inst().S.GetVolumes(ctx)
+	processError(err, errChan...)
+	for _, vol := range vols {
+		pvcObj, err := k8sCore.GetPersistentVolumeClaim(vol.Name, vol.Namespace)
+		if err != nil {
+			log.FailOnError(err, " Failed to get pvc for volume %s", vol)
+		}
+		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+		if err != nil {
+			log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
+		}
+		if strings.Contains(strings.Join(sc.MountOptions, ""), "nosuid") {
+			attachedNode, err := Inst().V.GetNodeForVolume(vol, defaultCmdTimeout*3, defaultCmdRetryInterval)
+			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+			err = Inst().V.ValidatePureFaFbMountOptions(vol.ID, requiredMountOptions, attachedNode)
+			dash.VerifySafely(err, nil, "Testing mount options are properly applied on pure volumes")
+		} else {
+			log.Infof("There is no nosuid mount option in this volume %s", vol)
+		}
+	}
 
 }
 
@@ -4709,8 +4742,10 @@ func Contains(app_list []string, app string) bool {
 func ValidateDriveRebalance(stNode node.Node) error {
 
 	disks := stNode.Disks
+	initPoolCount := len(stNode.Pools)
 	var err error
 	var drivePath string
+	drivePathsToValidate := make([]string, 0)
 	//2 min wait for new disk to associate with the node
 	time.Sleep(2 * time.Minute)
 
@@ -4736,42 +4771,57 @@ func ValidateDriveRebalance(stNode node.Node) error {
 	}
 	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
 	if err != nil {
-		return err
+		//this is a special case occurs where drive is added with same path as deleted pool
+		if initPoolCount == len(stNode.Pools) {
+			for p := range stNode.Disks {
+				drivePathsToValidate = append(drivePathsToValidate, p)
+			}
+		} else {
+			return err
+		}
+
+	} else {
+		drivePathsToValidate = append(drivePathsToValidate, drivePath)
 	}
 
-	cmd := fmt.Sprintf("sv drive add -d %s -o status", drivePath)
-	var prevStatus string
+	for _, p := range drivePathsToValidate {
+		drivePath = p
+		log.Infof("Validating rebalance for path %s", drivePath)
+		cmd := fmt.Sprintf("sv drive add -d %s -o status", drivePath)
+		var prevStatus string
 
-	t = func() (interface{}, bool, error) {
+		t = func() (interface{}, bool, error) {
 
-		// Execute the command and check get rebalance status
-		currStatus, err := Inst().V.GetPxctlCmdOutputConnectionOpts(stNode, cmd, node.ConnectionOpts{
-			IgnoreError:     false,
-			TimeBeforeRetry: defaultRetryInterval,
-			Timeout:         defaultTimeout,
-		}, false)
+			// Execute the command and check get rebalance status
+			currStatus, err := Inst().V.GetPxctlCmdOutputConnectionOpts(stNode, cmd, node.ConnectionOpts{
+				IgnoreError:     false,
+				TimeBeforeRetry: defaultRetryInterval,
+				Timeout:         defaultTimeout,
+			}, false)
 
-		if err != nil {
-			if strings.Contains(err.Error(), "Device already exists") {
+			if err != nil {
+				if strings.Contains(err.Error(), "Device already exists") {
+					return "", false, nil
+				}
+				return "", true, err
+			}
+			log.Infof(fmt.Sprintf("Rebalance Status for drive [%s] in node [%s] : %s", drivePath, stNode.Name, strings.TrimSpace(currStatus)))
+			if strings.Contains(currStatus, "Rebalance done") {
 				return "", false, nil
 			}
-			return "", true, err
+			if prevStatus == currStatus {
+				return "", false, fmt.Errorf("rebalance Status for drive [%s] in node [%s] is not progressing", drivePath, stNode.Name)
+			}
+			prevStatus = currStatus
+			return "", true, fmt.Errorf("wait for pool rebalance to complete for drive [%s]", drivePath)
 		}
-		log.Infof(fmt.Sprintf("Rebalance Status for drive [%s] in node [%s] : %s", drivePath, stNode.Name, strings.TrimSpace(currStatus)))
-		if strings.Contains(currStatus, "Rebalance done") {
-			return "", false, nil
+
+		_, err = task.DoRetryWithTimeout(t, 180*time.Minute, 3*time.Minute)
+		if err != nil {
+			return err
 		}
-		if prevStatus == currStatus {
-			return "", false, fmt.Errorf("rebalance Status for drive [%s] in node [%s] is not progressing", drivePath, stNode.Name)
-		}
-		prevStatus = currStatus
-		return "", true, fmt.Errorf("wait for pool rebalance to complete for drive [%s]", drivePath)
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 180*time.Minute, 3*time.Minute)
-	if err != nil {
-		return err
-	}
 	// checking all pools are online after drive rebalance
 	expectedStatus := "Online"
 	err = WaitForPoolStatusToUpdate(stNode, expectedStatus)
