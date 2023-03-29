@@ -4091,31 +4091,25 @@ var _ = Describe("{SwapShareBackup}", func() {
 		}
 
 		// Cleanup all backup locations
-		for _, userName := range users {
-			ctx, err := backup.GetNonAdminCtx(userName, commonPassword)
+		for i := len(users) - 1; i >= 0; i-- {
+			ctx, err := backup.GetNonAdminCtx(users[i], commonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
-			allBackupLocations, err := getAllBackupLocations(ctx)
-			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-			for backupLocationUid, backupLocationName := range allBackupLocations {
-				err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
-				log.FailOnError(err, fmt.Sprintf("Error while deleting backup Location - %s ", backupLocationName))
-				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
-			}
-
-			for _, backupLocationName := range allBackupLocations {
-				backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
-					status, err := IsBackupLocationPresent(backupLocationName, ctx, orgID)
-					if err != nil {
-						return "", true, fmt.Errorf("backup location %s still present with error %v", backupLocationName, err)
-					}
-					if status == true {
-						return "", true, fmt.Errorf("backup location %s is not deleted yet", backupLocationName)
-					}
-					return "", false, nil
+			backupLocationName := userBackupLocationMapping[users[i]]
+			err = DeleteBackupLocation(backupLocationName, backupLocationUID, orgID, false)
+			log.FailOnError(err, fmt.Sprintf("Error while deleting backup Location - %s ", backupLocationName))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
+			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
+				status, err := IsBackupLocationPresent(backupLocationName, ctx, orgID)
+				if err != nil {
+					return "", true, fmt.Errorf("backup location %s still present with error %v", backupLocationName, err)
 				}
-				_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", backupLocationName))
+				if status == true {
+					return "", true, fmt.Errorf("backup location %s is not deleted yet", backupLocationName)
+				}
+				return "", false, nil
 			}
+			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", backupLocationName))
 		}
 
 		for _, userName := range users {
