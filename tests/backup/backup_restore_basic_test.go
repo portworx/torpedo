@@ -1559,3 +1559,48 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
+
+// ScheduleBackupWithAdditionAndRemovalOfNS performs schedule backup and rest
+var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
+	var (
+		err                        error
+		backupLocationUID          string
+		cloudCredUID               string
+		clusterUid                 string
+		credName                   string
+		backupLocationName         string
+		restoreName                string
+		periodicSchedulePolicyName string
+		periodicSchedulePolicyUid  string
+		scheduleName               string
+		namespaceLabel             string
+		bkpNamespaces              []string
+		cloudCredUidList           []string
+		allScheduleBackupNames     []string
+		restoreNames               []string
+		nsLabelsMap                map[string]string
+		contexts                   []*scheduler.Context
+		appContexts                []*scheduler.Context
+	)
+	labelSelectors := make(map[string]string)
+	backupLocationMap := make(map[string]string)
+	namespaceMapping := make(map[string]string)
+	bkpNamespaces = make([]string, 0)
+	JustBeforeEach(func() {
+		StartTorpedoTest("BackupScheduleForOldAndNewNS", "Schedule backup with old namespace and new namespace", nil, 84852)
+		log.InfoD("Deploy applications")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < 3; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+			}
+		}
+		log.InfoD("Created namespaces %v", bkpNamespaces)
+	})
+	It("")
+})
