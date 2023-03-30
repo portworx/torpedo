@@ -48,7 +48,7 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 		return nil, err
 	}
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
-	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), name, region, "s3")
+	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, region, "s3")
 	if err != nil {
 		log.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
 		return nil, err
@@ -71,7 +71,7 @@ func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name
 	}
 
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
-	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), name, "", "azure")
+	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, "", "azure")
 	if err != nil {
 		log.Errorf("Failed to create Azure backup target, Err: %v ", err)
 		return nil, err
@@ -104,7 +104,7 @@ func (backupClient *BackupClient) CreateGcpBackupCredsAndTarget(tenantId, name s
 		return nil, err
 	}
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
-	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), name, "", "google")
+	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, "", "google")
 	if err != nil {
 		log.Errorf("Failed to create google backup target, Err: %v ", err)
 		return nil, err
@@ -134,7 +134,7 @@ func (backupClient *BackupClient) CreateS3CompatibleBackupCredsAndTarget(tenantI
 		return nil, err
 	}
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
-	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), name, region, "s3-compatible")
+	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, region, "s3-compatible")
 	if err != nil {
 		log.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
 		return nil, err
