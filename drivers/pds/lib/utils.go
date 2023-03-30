@@ -1,13 +1,10 @@
 package lib
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/client-go/tools/clientcmd"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -22,6 +19,7 @@ import (
 	state "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
@@ -244,6 +242,7 @@ var (
 	dataServiceVersionBuildMap              = make(map[string][]string)
 	dataServiceImageMap                     = make(map[string][]string)
 	ApiComponents                           *pdsapi.Components
+	apiExtentions                           = apiextensions.Instance()
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable.
@@ -1356,20 +1355,7 @@ func ValidatePDSDeploymentTargetHealthStatus(DeploymentTargetID, healthStatus st
 
 func DeletePDSCRDs(pdsApiGroups []string) error {
 	var isCrdsAvailable bool
-	var k8sApiClient *apiextensionsclient.Clientset
-
-	ctx := GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
-	config, err := clientcmd.BuildConfigFromFlags("", ctx)
-	if err != nil {
-		return err
-	}
-
-	k8sApiClient, err = apiextensionsclient.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-
-	crdList, err := k8sApiClient.ApiextensionsV1().CustomResourceDefinitions().List(context.TODO(), metav1.ListOptions{})
+	crdList, err := apiExtentions.ListCRDs()
 	if err != nil {
 		return fmt.Errorf("error while listing crds: %v", err)
 	}
@@ -1378,12 +1364,12 @@ func DeletePDSCRDs(pdsApiGroups []string) error {
 		for _, crd := range crdList.Items {
 			log.Debugf("CRD NAMES %s", crd.Name)
 			if strings.Contains(crd.Name, pdsApiGroups[index]) {
-				crdInfo, err := k8sApiClient.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crd.Name, metav1.GetOptions{})
+				crdInfo, err := apiExtentions.GetCRD(crd.Name, metav1.GetOptions{})
 				if err != nil {
 					return fmt.Errorf("error while getting crd information: %v", err)
 				}
 				log.InfoD("Deleting crd: %s", crdInfo.Name)
-				err = k8sApiClient.ApiextensionsV1().CustomResourceDefinitions().Delete(context.TODO(), crd.Name, metav1.DeleteOptions{})
+				err = apiExtentions.DeleteCRD(crd.Name)
 				if err != nil {
 					return fmt.Errorf("error while deleting crd: %v", err)
 				}
