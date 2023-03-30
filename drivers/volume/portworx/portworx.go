@@ -1453,6 +1453,80 @@ func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption [
 
 }
 
+func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string, volumeNode *node.Node) error {
+	//Checking if file systems are properly set
+	FScmd := fmt.Sprintf(mountGrepVolume, volumeName)
+	FSout, err := d.nodeDriver.RunCommandWithNoRetry(
+		*volumeNode,
+		FScmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("Failed to get File System response for volume %s", volumeName)
+	}
+	if strings.Contains(FSout, FStype) {
+		log.Infof("%s file system is available in the volume %s", FStype, volumeName)
+	} else {
+		return fmt.Errorf("Failed to get %s File system ", FStype)
+	}
+
+	//Getting mapper volumename where createoptions are applied
+	mapperCmd := fmt.Sprintf("mount | grep %s | awk '{print $1}'", volumeName)
+	mapperOut, err := d.nodeDriver.RunCommandWithNoRetry(
+		*volumeNode,
+		mapperCmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("Failed to get attached volume for create option for pvc  %s", volumeName)
+	}
+
+	//validating Implementation of create options
+	if FStype == "xfs" {
+		xfsInfoCmd := fmt.Sprintf("xfs_info %s ", strings.ReplaceAll(mapperOut, "\n", ""))
+		xfsInfoOut, err := d.nodeDriver.RunCommandWithNoRetry(
+			*volumeNode,
+			xfsInfoCmd,
+			node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("Failed to get bsize for create option for pvc  %s", volumeName)
+		}
+		if strings.Contains(xfsInfoOut, "bsize=2048") {
+			log.Infof("Blocksize 2048 is correctly configured by the create option of volume %s", volumeName)
+		} else {
+			return fmt.Errorf("Failed to get %s proper block size in the %s file system", xfsInfoOut, FStype)
+		}
+	} else if FStype == "ext4" {
+		ext4InfoCmd := fmt.Sprintf("tune2fs -l %s ", strings.ReplaceAll(mapperOut, "\n", ""))
+		ext4InfoOut, err := d.nodeDriver.RunCommandWithNoRetry(
+			*volumeNode,
+			ext4InfoCmd,
+			node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return fmt.Errorf("Failed to get bsize for create option for pvc  %s", volumeName)
+		}
+		if strings.Contains(ext4InfoOut, "Block size:               2048") {
+			log.Infof("Blocksize 2048 is correctly configured by the create options of volume %s", volumeName)
+		} else {
+			return fmt.Errorf("Failed to get %s proper block size in the %s file system", ext4InfoOut, FStype)
+		}
+
+	}
+
+	return nil
+
+}
+
 func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
 	nodes := node.GetStorageDriverNodes()
 	var strategyStr string

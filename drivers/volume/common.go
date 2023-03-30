@@ -813,11 +813,19 @@ func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string)
 	}
 }
 
-// ValidateMountOptions for pure volumes
+// Validates MountOptions for pure volumes
 func (d *DefaultDriver) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateMountOptions",
+	}
+}
+
+// validates createoptions for pure volumes
+func (d *DefaultDriver) ValidatePureFaCreateOptions(volumeName string, FSType string, volumeNode *node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateCreateOptions",
 	}
 }
 

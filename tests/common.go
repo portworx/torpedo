@@ -710,6 +710,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
 			}
 		})
+
+		Step("validate create options for pure volumes", func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
+			}
+		})
 	})
 }
 
@@ -1226,6 +1232,41 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 		}
 	}
 
+}
+
+// ValidateCreateOptionsWithPureVolumes is the ginkgo spec for executing a check for Create options in a volume
+func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	var FSType1 = "xfs"
+	var FSType2 = "ext4"
+	var requiredXfsCreateoption = "-b 2048"
+	var requiredExt4Createoption = "-b size=2048"
+	vols, err := Inst().S.GetVolumes(ctx)
+	log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+	log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
+	for _, v := range vols {
+		pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
+		if err != nil {
+			log.FailOnError(err, " Failed to get pvc for volume %s", v)
+		}
+		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+		if err != nil {
+			log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
+		}
+
+		if strings.Contains(fmt.Sprint(sc.Parameters), requiredXfsCreateoption) || strings.Contains(fmt.Sprint(sc.Parameters), requiredExt4Createoption) {
+			attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+			if v.Name == "mount-fa-pvc" {
+				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType1, attachedNode)
+				dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
+			} else if v.Name == "createoption-fa-ext4-pvc" {
+				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType2, attachedNode)
+				dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
+			}
+		} else {
+			log.Infof("Storage class doesn't have createoptions %s or %s added to it", requiredXfsCreateoption, requiredExt4Createoption)
+		}
+	}
 }
 
 func checkPureVolumeExpectedSizeChange(sizeChangeInBytes uint64) error {
