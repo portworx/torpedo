@@ -100,7 +100,7 @@ const (
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
-	mountMapperValue                          = "mount | grep %s | awk '{print $1}'"
+	deviceMapper                              = "mount | grep %s | awk '{print $1}'"
 )
 
 const (
@@ -1474,7 +1474,7 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 	}
 
 	// Getting mapper volumename where createoptions are applied
-	mapperCmd := fmt.Sprintf(mountMapperValue, volumeName)
+	mapperCmd := fmt.Sprintf(deviceMapper, volumeName)
 	mapperOut, err := d.nodeDriver.RunCommandWithNoRetry(
 		*volumeNode,
 		mapperCmd,
