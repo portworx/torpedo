@@ -26,8 +26,6 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20230307202502-94d55af59869
-	github.com/libopenstorage/stork v1.4.1-0.20220414104250-3c18fd21ed95
 	github.com/libopenstorage/operator v0.0.0-20230323034810-8853b151f594
 	github.com/libopenstorage/stork v1.4.1-0.20230207013129-a31284f0e973
 	github.com/minio/minio-go/v7 v7.0.50
@@ -39,7 +37,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20230328163250-90d945a030b9
 	github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20230207070155-2e0ef25efadd
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20230302072046-553cc8ef572b
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.46.0
 	github.com/prometheus/client_golang v1.14.0
 	github.com/sirupsen/logrus v1.9.0
@@ -47,9 +45,6 @@ require (
 	github.com/trivago/tgo v1.0.7
 	github.com/vmware/govmomi v0.22.2
 	gocloud.dev v0.20.0
-	golang.org/x/crypto v0.1.0
-	golang.org/x/net v0.7.0
-	golang.org/x/net v0.8.0
 	golang.org/x/crypto v0.6.0
 	golang.org/x/net v0.8.0
 	google.golang.org/genproto v0.0.0-20230301171018-9ab4bdc49ad5
@@ -60,7 +55,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.6.0
 	k8s.io/api v0.25.4
-	k8s.io/apiextensions-apiserver v0.25.2
+	k8s.io/apiextensions-apiserver v0.25.4
 	k8s.io/apimachinery v0.25.4
 	k8s.io/client-go v12.0.0+incompatible
 )
@@ -116,8 +111,6 @@ require (
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b // indirect
-	github.com/emicklei/go-restful/v3 v3.8.0 // indirect
-	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
@@ -240,9 +233,9 @@ require (
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
 	golang.org/x/oauth2 v0.5.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/term v0.5.0 // indirect
-	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/term v0.6.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.1.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
