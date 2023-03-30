@@ -1356,18 +1356,19 @@ func ValidatePDSDeploymentTargetHealthStatus(DeploymentTargetID, healthStatus st
 
 func DeletePDSCRDs(pdsApiGroups []string) error {
 	var isCrdsAvailable bool
+	var k8sApiClient *apiextensionsclient.Clientset
+
 	ctx := GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
 	config, err := clientcmd.BuildConfigFromFlags("", ctx)
 	if err != nil {
 		return err
 	}
 
-	k8sApiClient, err := apiextensionsclient.NewForConfig(config)
+	k8sApiClient, err = apiextensionsclient.NewForConfig(config)
 	if err != nil {
 		return err
 	}
 
-	//var k8sApiClient *clientset.Clientset
 	crdList, err := k8sApiClient.ApiextensionsV1().CustomResourceDefinitions().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error while listing crds: %v", err)
