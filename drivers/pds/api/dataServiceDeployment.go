@@ -62,7 +62,7 @@ func (ds *DataServiceDeployment) CreateDeployment(projectID string, deploymentTa
 }
 
 // CreateDeploymentWithScehduleBackup return newly created deployment model with schedule backup enabled.
-func (ds *DataServiceDeployment) CreateDeploymentWithScehduleBackup(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string, backupPolicyID string, backupTargetID string) (*pds.ModelsDeployment, error) {
+func (ds *DataServiceDeployment) CreateDeploymentWithSchehduleBackup(projectID string, deploymentTargetID string, dnsZone string, name string, namespaceID string, appConfigID string, imageID string, nodeCount int32, serviceType string, resourceTemplateID string, storageTemplateID string, backupPolicyID string, backupTargetID string) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	scheduledBackup := pds.RequestsDeploymentScheduledBackup{
 		BackupPolicyId: &backupPolicyID,
