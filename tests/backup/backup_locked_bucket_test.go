@@ -427,7 +427,6 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		credName                   string
 		periodicSchedulePolicyName string
 		periodicSchedulePolicyUid  string
-		periodicSchedulePolicyUids []string
 		scheduleName               string
 		cloudCredUID               string
 		backupLocation             string
@@ -523,13 +522,12 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 		})
-		Step("Create schedule policy after initializing volume resize", func() {
-			log.InfoD("Create schedule policy after initializing volume resize")
+		Step("Create schedule policy", func() {
+			log.InfoD("Create schedule policy")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to px-central-admin ctx")
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchedulePolicyUid = uuid.New()
-			periodicSchedulePolicyUids = append(periodicSchedulePolicyUids, periodicSchedulePolicyUid)
 			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
 			err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
@@ -603,8 +601,6 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 					err = CreateScheduleBackup(scheduleName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace},
 						labelSelectors, orgID, preRuleNameList[i], preRuleUid, postRuleNameList[i], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
-					firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 				})
 				Step("Verifying backup success after initializing volume resize", func() {
 					log.InfoD("Verifying backup success after initializing volume resize")
@@ -634,10 +630,8 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleUid))
 		err = DeleteSchedule(scheduleName, scheduleUid, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s]", scheduleName))
-		policyList := []string{periodicSchedulePolicyName}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
-		log.InfoD("Deleting backup location and cloud setting")
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
