@@ -53,12 +53,6 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 		log.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
 		return nil, err
 	}
-	log.Infof("[Backup Target: %v]Syncing to target clusters", name)
-	_, err = backupClient.components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
-	if err != nil {
-		log.Errorf("Failed while syncing to target cluster, Err: %v ", err)
-		return nil, err
-	}
 	return backupTarget, nil
 }
 
@@ -83,11 +77,6 @@ func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name
 		return nil, err
 	}
 	log.Infof("[Backup Target: %v]Syncing to target clusters", name)
-	_, err = backupClient.components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
-	if err != nil {
-		log.Errorf("Failed while syncing to target cluster, Err: %v ", err)
-		return nil, err
-	}
 	return backupTarget, nil
 
 }
@@ -120,12 +109,6 @@ func (backupClient *BackupClient) CreateGcpBackupCredsAndTarget(tenantId, name s
 		log.Errorf("Failed to create google backup target, Err: %v ", err)
 		return nil, err
 	}
-	log.Infof("[Backup Target: %v]Syncing to target clusters", name)
-	_, err = backupClient.components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
-	if err != nil {
-		log.Errorf("Failed while syncing to target cluster, Err: %v ", err)
-		return nil, err
-	}
 	return backupTarget, nil
 
 }
@@ -137,6 +120,7 @@ func (backupClient *BackupClient) CreateS3CompatibleBackupCredsAndTarget(tenantI
 	skid := backupClient.s3CompatibleStorageClient.secretKey
 	region := backupClient.s3CompatibleStorageClient.region
 	endpoint := backupClient.s3CompatibleStorageClient.endpoint
+	log.InfoD("%v , %v , %v , %v ", akid, skid, region, endpoint)
 	backupCred, err := backupClient.components.BackupCredential.CreateS3CompatibleBackupCredential(tenantId, name, akid, endpoint, skid)
 
 	if err != nil {
@@ -153,12 +137,6 @@ func (backupClient *BackupClient) CreateS3CompatibleBackupCredsAndTarget(tenantI
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), name, region, "s3-compatible")
 	if err != nil {
 		log.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
-		return nil, err
-	}
-	log.Infof("[Backup Target: %v]Syncing to target clusters", name)
-	_, err = backupClient.components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
-	if err != nil {
-		log.Errorf("Failed while syncing to target cluster, Err: %v ", err)
 		return nil, err
 	}
 	return backupTarget, nil
@@ -299,7 +277,7 @@ func InitializePdsBackup() (*BackupClient, error) {
 		gcpStorageClient: &gcpStorageClient{projectId: envVars.PDSGcpProjectId,
 			jsongPath: envVars.PDSGcpJsonPath},
 		s3CompatibleStorageClient: &s3CompatibleStorageClient{accessKey: envVars.PDSMinioAccessKey,
-			secretKey: envVars.PDSMinioSecretKey, region: envVars.PDSMinioRegion},
+			secretKey: envVars.PDSMinioSecretKey, region: envVars.PDSMinioRegion, endpoint: envVars.PDSMinioEndpoint},
 	}
 	return backupClient, nil
 }
