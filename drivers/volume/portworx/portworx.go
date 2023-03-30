@@ -100,7 +100,7 @@ const (
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
-	mountMapperValue                          = "mount | grep %s | awk '{print $1}'"
+	deviceMapper                              = "mount | grep %s | awk '{print $1}'"
 )
 
 const (
@@ -1455,26 +1455,8 @@ func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption [
 }
 
 func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string, volumeNode *node.Node) error {
-	// Checking if file systems are properly set
-	FScmd := fmt.Sprintf(mountGrepVolume, volumeName)
-	FSout, err := d.nodeDriver.RunCommandWithNoRetry(
-		*volumeNode,
-		FScmd,
-		node.ConnectionOpts{
-			Timeout:         crashDriverTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
-		})
-	if err != nil {
-		return fmt.Errorf("Failed to get mount response for volume %s", volumeName)
-	}
-	if strings.Contains(FSout, FStype) {
-		log.Infof("%s file system is available in the volume %s", FStype, volumeName)
-	} else {
-		return fmt.Errorf("Failed to get %s File system ", FStype)
-	}
-
 	// Getting mapper volumename where createoptions are applied
-	mapperCmd := fmt.Sprintf(mountMapperValue, volumeName)
+	mapperCmd := fmt.Sprintf(deviceMapper, volumeName)
 	mapperOut, err := d.nodeDriver.RunCommandWithNoRetry(
 		*volumeNode,
 		mapperCmd,
