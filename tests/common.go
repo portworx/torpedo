@@ -711,7 +711,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		Step("validate create options for pure volumes", func() {
+		Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
 			}
@@ -1234,10 +1234,8 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 
 }
 
-// ValidateCreateOptionsWithPureVolumes is the ginkgo spec for executing a check for Create options in a volume
+// ValidateCreateOptionsWithPureVolumes is the ginkgo spec for executing file system options check for the given volume
 func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	var FSType1 = "xfs"
-	var FSType2 = "ext4"
 	var requiredXfsCreateoption = "-b 2048"
 	var requiredExt4Createoption = "-b size=2048"
 	vols, err := Inst().S.GetVolumes(ctx)
@@ -1245,23 +1243,20 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 	log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
 	for _, v := range vols {
 		pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
-		if err != nil {
-			log.FailOnError(err, " Failed to get pvc for volume %s", v)
-		}
-		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
-		if err != nil {
-			log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
-		}
+		log.FailOnError(err, " Failed to get pvc for volume %s", v)
 
+		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
+		log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
+
+		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+		log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
 		if strings.Contains(fmt.Sprint(sc.Parameters), requiredXfsCreateoption) || strings.Contains(fmt.Sprint(sc.Parameters), requiredExt4Createoption) {
-			attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
-			log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
-			if v.Name == "mount-fa-pvc" {
-				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType1, attachedNode)
-				dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
-			} else if v.Name == "createoption-fa-ext4-pvc" {
-				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType2, attachedNode)
-				dash.VerifySafely(err, nil, "Testing create options are properly applied on pure volumes")
+			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
+			if ok {
+				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
+				dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
+			} else {
+				log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
 			}
 		} else {
 			log.Infof("Storage class doesn't have createoptions %s or %s added to it", requiredXfsCreateoption, requiredExt4Createoption)

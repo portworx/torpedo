@@ -1,7 +1,7 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: mount-fa-pvc
+  name: nginx-fa-xfs-pvc
 spec:
   accessModes:
     - ReadWriteOnce
@@ -13,7 +13,7 @@ spec:
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: createoption-fa-ext4-pvc
+  name: nginx-fa-ext4-pvc
 spec:
   accessModes:
     - ReadWriteOnce

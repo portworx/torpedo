@@ -100,6 +100,7 @@ const (
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
+	mountMapperValue                          = "mount | grep %s | awk '{print $1}'"
 )
 
 const (
@@ -1454,7 +1455,7 @@ func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption [
 }
 
 func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string, volumeNode *node.Node) error {
-	//Checking if file systems are properly set
+	// Checking if file systems are properly set
 	FScmd := fmt.Sprintf(mountGrepVolume, volumeName)
 	FSout, err := d.nodeDriver.RunCommandWithNoRetry(
 		*volumeNode,
@@ -1464,7 +1465,7 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 			TimeBeforeRetry: defaultRetryInterval,
 		})
 	if err != nil {
-		return fmt.Errorf("Failed to get File System response for volume %s", volumeName)
+		return fmt.Errorf("Failed to get mount response for volume %s", volumeName)
 	}
 	if strings.Contains(FSout, FStype) {
 		log.Infof("%s file system is available in the volume %s", FStype, volumeName)
@@ -1472,8 +1473,8 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 		return fmt.Errorf("Failed to get %s File system ", FStype)
 	}
 
-	//Getting mapper volumename where createoptions are applied
-	mapperCmd := fmt.Sprintf("mount | grep %s | awk '{print $1}'", volumeName)
+	// Getting mapper volumename where createoptions are applied
+	mapperCmd := fmt.Sprintf(mountMapperValue, volumeName)
 	mapperOut, err := d.nodeDriver.RunCommandWithNoRetry(
 		*volumeNode,
 		mapperCmd,
@@ -1485,7 +1486,7 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 		return fmt.Errorf("Failed to get attached volume for create option for pvc  %s", volumeName)
 	}
 
-	//validating Implementation of create options
+	// Validating implementation of create options
 	if FStype == "xfs" {
 		xfsInfoCmd := fmt.Sprintf("xfs_info %s ", strings.ReplaceAll(mapperOut, "\n", ""))
 		xfsInfoOut, err := d.nodeDriver.RunCommandWithNoRetry(
@@ -1520,11 +1521,8 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 		} else {
 			return fmt.Errorf("Failed to get %s proper block size in the %s file system", ext4InfoOut, FStype)
 		}
-
 	}
-
 	return nil
-
 }
 
 func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
