@@ -34,12 +34,6 @@ import (
 
 type PDS_Health_Status string
 
-const (
-	PDS_Health_Status_DOWN     PDS_Health_Status = "Down"
-	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
-	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
-)
-
 type Parameter struct {
 	DataServiceToTest []struct {
 		Name          string `json:"Name"`
@@ -165,6 +159,10 @@ type StorageClassConfig struct {
 
 // PDS const
 const (
+	PDS_Health_Status_DOWN     PDS_Health_Status = "Down"
+	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
+	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
+
 	defaultCommandRetry   = 5 * time.Second
 	defaultCommandTimeout = 1 * time.Minute
 	storageTemplateName   = "QaDefault"
@@ -202,16 +200,23 @@ const (
 	configmapNamespace    = "default"
 )
 
+// K8s/PDS Instances
+var (
+	k8sCore       = core.Instance()
+	k8sApps       = apps.Instance()
+	apiExtentions = apiextensions.Instance()
+	serviceType   = "LoadBalancer"
+)
+
 // PDS vars
 var (
-	k8sCore = core.Instance()
-	k8sApps = apps.Instance()
+	components    *pdsapi.Components
+	deployment    *pds.ModelsDeployment
+	apiClient     *pds.APIClient
+	ns            *corev1.Namespace
+	pdsAgentpod   corev1.Pod
+	ApiComponents *pdsapi.Components
 
-	components                            *pdsapi.Components
-	deployment                            *pds.ModelsDeployment
-	apiClient                             *pds.APIClient
-	ns                                    *corev1.Namespace
-	pdsAgentpod                           corev1.Pod
 	err                                   error
 	isavailable                           bool
 	isTemplateavailable                   bool
@@ -230,7 +235,6 @@ var (
 	istargetclusterAvailable              bool
 	isAccountAvailable                    bool
 	isStorageTemplateAvailable            bool
-	serviceType                           = "LoadBalancer"
 
 	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
 	dataServiceNameIDMap                    = make(map[string]string)
@@ -241,8 +245,6 @@ var (
 	namespaceNameIDMap                      = make(map[string]string)
 	dataServiceVersionBuildMap              = make(map[string][]string)
 	dataServiceImageMap                     = make(map[string][]string)
-	ApiComponents                           *pdsapi.Components
-	apiExtentions                           = apiextensions.Instance()
 )
 
 // GetAndExpectStringEnvVar parses a string from env variable.
