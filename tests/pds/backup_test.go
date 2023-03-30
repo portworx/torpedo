@@ -20,31 +20,39 @@ var (
 
 var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("ValidateBackupTargetsOnSupportedObjectStores", "Validate backup targets for all supported object stores.", nil, 0)
+		StartTorpedoTest("ValidateBackupTargetsOnSupportedObjectStores", "Validate backup targets for all supported object stores.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
 	})
 
-	It("add all supported Object stores as backup target for data services", func() {
-		Step("Create AWS S3 Backup target.", func() {
+	It("Add all supported Object stores as backup target for data services", func() {
+		stepLog := "Create AWS S3 Backup target."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName))
 			log.FailOnError(err, "Failed to create AWS backup target.")
 			log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 			awsBkpTargets = append(awsBkpTargets, bkpTarget)
 		})
-		Step("Create GCP Backup target.", func() {
+		stepLog = "Create GCP Backup target."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			bkpTarget, err := bkpClient.CreateGcpBackupCredsAndTarget(tenantID, fmt.Sprintf("%v-gcp", bkpTargetName))
 			log.FailOnError(err, "Failed to create GCP backup target.")
 			log.InfoD("GCP Backup target - %v created successfully", bkpTarget.GetName())
 			gcpBkpTargets = append(gcpBkpTargets, bkpTarget)
 		})
-		Step("Create Azure(blob) Backup target.", func() {
+		stepLog = "Create Azure(blob) Backup target."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			bkpTarget, err := bkpClient.CreateAzureBackupCredsAndTarget(tenantID, fmt.Sprintf("%v-azure", bkpTargetName))
 			log.FailOnError(err, "Failed to create Azure backup target.")
 			log.InfoD("Azure backup target - %v created successfully", bkpTarget.GetName())
 			azureBkpTargets = append(azureBkpTargets, bkpTarget)
 		})
-		Step("Create S3 compatible(Minio) Backup target.", func() {
+		stepLog = "Create S3 compatible(Minio) Backup target."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			bkpTarget, err := bkpClient.CreateS3CompatibleBackupCredsAndTarget(tenantID, fmt.Sprintf("%v-s3compatible", bkpTargetName))
 			log.FailOnError(err, "Failed to create S3 compatible backup target.")
 			log.InfoD("S3 compatible backup target - %v created successfully", bkpTarget.GetName())
@@ -57,7 +65,7 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 })
 
 func deleteAllBkpTargets() {
-	log.Info("Delete all the backup targets.")
+	log.InfoD("Delete all the backup targets.")
 	for _, bkptarget := range awsBkpTargets {
 		err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkptarget.GetId())
 		log.FailOnError(err, "Failed while deleting the Aws backup target")

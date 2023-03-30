@@ -534,10 +534,10 @@ spec:
       value: "${AZURE_CLIENTID}"
     - name: AZURE_CLIENT_SECRET
       value: "${AZURE_CLIENTSECRET}"
-    - name: AZURE_ACCOUNT_NAME
-      value: "${AZURE_ACCOUNT_NAME}"
-    - name: AZURE_ACCOUNT_KEY
-      value: "${AZURE_ACCOUNT_KEY}"
+    - name: PDS_AZURE_STORAGE_ACCOUNT_NAME
+      value: "${PDS_AZURE_STORAGE_ACCOUNT_NAME}"
+    - name: PDS_AZURE_ACCOUNT_KEY
+      value: "${PDS_AZURE_ACCOUNT_KEY}"
     - name: AZURE_SUBSCRIPTION_ID
       value: "${AZURE_SUBSCRIPTION_ID}"
     - name: AWS_ACCESS_KEY_ID
