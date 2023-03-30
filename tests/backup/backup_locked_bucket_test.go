@@ -608,7 +608,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 					log.FailOnError(err, "Unable to px-central-admin ctx")
 					firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
-					err = backupSuccessCheck(firstScheduleBackupName, orgID, 0, 0, ctx)
+					err = backupSuccessCheck(firstScheduleBackupName, orgID, 10, 30, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", firstScheduleBackupName))
 					allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v", allScheduleBackupNames))
@@ -616,7 +616,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 					time.Sleep(15 * time.Minute)
 					secondScheduleBackupName, err := GetOrdinalScheduleBackupUID(ctx, scheduleName, 2, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching recent backup %v", secondScheduleBackupName))
-					err = backupSuccessCheck(secondScheduleBackupName, orgID, 0, 0, ctx)
+					err = backupSuccessCheck(secondScheduleBackupName, orgID, 10, 30, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", secondScheduleBackupName))
 				})
 			}
