@@ -120,7 +120,6 @@ func (backupClient *BackupClient) CreateS3CompatibleBackupCredsAndTarget(tenantI
 	skid := backupClient.s3CompatibleStorageClient.secretKey
 	region := backupClient.s3CompatibleStorageClient.region
 	endpoint := backupClient.s3CompatibleStorageClient.endpoint
-	log.InfoD("%v , %v , %v , %v ", akid, skid, region, endpoint)
 	backupCred, err := backupClient.components.BackupCredential.CreateS3CompatibleBackupCredential(tenantId, name, akid, endpoint, skid)
 
 	if err != nil {
