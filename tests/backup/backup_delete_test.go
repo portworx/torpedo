@@ -347,8 +347,9 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 				_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+				log.FailOnError(err, "Failed to issue delete backup for - %s", backupName)
 				err = DeleteBackupAndWait(backupName, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleted backup - [%s]", backupName))
 			}
 		})
 		Step("Taking incremental backups of applications again", func() {
