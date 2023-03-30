@@ -1375,13 +1375,14 @@ func DeletePDSCRDs(pdsApiGroups []string) error {
 	isCrdsAvailable = false
 	for index := range pdsApiGroups {
 		for _, crd := range crdList.Items {
+			log.Debugf("CRD NAMES %s", crd.Name)
 			if strings.Contains(crd.Name, pdsApiGroups[index]) {
-				crdInfo, err := k8sApiClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crd.Name, metav1.GetOptions{})
+				crdInfo, err := k8sApiClient.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crd.Name, metav1.GetOptions{})
 				if err != nil {
 					return fmt.Errorf("error while getting crd information: %v", err)
 				}
 				log.InfoD("Deleting crd: %s", crdInfo.Name)
-				err = k8sApiClient.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(context.TODO(), crd.Name, metav1.DeleteOptions{})
+				err = k8sApiClient.ApiextensionsV1().CustomResourceDefinitions().Delete(context.TODO(), crd.Name, metav1.DeleteOptions{})
 				if err != nil {
 					return fmt.Errorf("error while deleting crd: %v", err)
 				}
