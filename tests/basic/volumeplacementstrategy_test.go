@@ -329,7 +329,13 @@ func (m *mongoVPSReplicaAntiAffinity) DeployVPS() error {
 		}
 	}
 
-	matchExpression := []*v1beta1.LabelSelectorRequirement{}
+	matchExpression := []*v1beta1.LabelSelectorRequirement{
+		{
+			Key:      "nodelabel",
+			Operator: v1beta1.LabelSelectorOpIn,
+			Values:   []string{"antiaffinity"},
+		},
+	}
 	vpsSpec := vpsutil.ReplicaAntiAffinityByMatchExpression("mongo-vps", matchExpression)
 	_, err := talisman.Instance().CreateVolumePlacementStrategy(&vpsSpec)
 	m.spec = &vpsSpec
