@@ -1962,6 +1962,17 @@ func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, cluster
 	return resp, nil
 }
 
+// RemoveNamespaceLabelForMultipleNamespaces removes labels from multiple namespace
+func RemoveNamespaceLabelForMultipleNamespaces(labels map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.RemoveNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // AddLabelsToMultipleNamespaces add labels to multiple namespace
 func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string) error {
 	for _, namespace := range namespaces {
@@ -2001,4 +2012,32 @@ func GetKeysAsString(m map[string]string) string {
 		keys = append(keys, k)
 	}
 	return strings.Join(keys, ",")
+}
+
+func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
+	var nextScheduleBackupName string
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	currentScheduleBackupCount := len(allScheduleBackupNames)
+	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
+	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
+		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		return ordinalScheduleBackupName, false, nil
+	}
+	log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
+	time.Sleep(scheduleInterval * time.Minute)
+	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+
+	log.InfoD("Next schedule backup name [%s]", nextScheduleBackup.(string))
+	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return "", err
+	}
+	nextScheduleBackupName = nextScheduleBackup.(string)
+	return nextScheduleBackupName, nil
 }
