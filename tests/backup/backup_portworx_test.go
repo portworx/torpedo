@@ -796,7 +796,6 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Ordinal of the next schedule backup is [%v]", nextScheduleBackupOrdinal)
 					log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
 					time.Sleep(15 * time.Minute)
-
 					checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
 						ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
 						if err != nil {
