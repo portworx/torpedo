@@ -401,13 +401,16 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 							fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
 					} else {
 						// Attempting to take backups and checking if they are incremental or not
+						// as the original incremental backup which we took has taken a full backup this is mostly
+						// because CloudSnap is taking full backup instead of incremental backup as it's hitting one of
+						// the if else condition in CloudSnap which forces it to take full instead of incremental backup
 						log.InfoD("New backup wasn't an incremental backup hence recreating new backup")
-						for i := 0; i < 3; i++ {
-							log.InfoD(fmt.Sprintf("Recreate incremental backup iternation: %d", i))
+						for maxBackupsBeforeIncremental := 0; maxBackupsBeforeIncremental < 3; maxBackupsBeforeIncremental++ {
+							log.InfoD(fmt.Sprintf("Recreate incremental backup iternation: %d", maxBackupsBeforeIncremental))
 							for _, namespace := range bkpNamespaces {
 								// Create a new incremental backups
 								incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
-								incrementalBackupNamesRecreated = append(incrementalBackupNamesRecreated, incrementalBackupName)
+								incrementalBackupNames = append(incrementalBackupNames, incrementalBackupName)
 								err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
 									labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 								dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying incremental backup [%s] creation", incrementalBackupName))
