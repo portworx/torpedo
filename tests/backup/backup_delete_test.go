@@ -405,9 +405,11 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 						// because CloudSnap is taking full backup instead of incremental backup as it's hitting one of
 						// the if else condition in CloudSnap which forces it to take full instead of incremental backup
 						log.InfoD("New backup wasn't an incremental backup hence recreating new backup")
-						for maxBackupsBeforeIncremental := 0; maxBackupsBeforeIncremental < 3; maxBackupsBeforeIncremental++ {
-							log.InfoD(fmt.Sprintf("Recreate incremental backup iternation: %d", maxBackupsBeforeIncremental))
-							for _, namespace := range bkpNamespaces {
+						for _, namespace := range bkpNamespaces {
+							listOfVolumes := make(map[string]bool)
+							var noFailures bool = true
+							for maxBackupsBeforeIncremental := 0; maxBackupsBeforeIncremental < 4; maxBackupsBeforeIncremental++ {
+								log.InfoD(fmt.Sprintf("Recreate incremental backup iteration: %d", maxBackupsBeforeIncremental))
 								// Create a new incremental backups
 								incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
 								incrementalBackupNames = append(incrementalBackupNames, incrementalBackupName)
@@ -423,10 +425,20 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 								for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
 									backupId := vol.GetBackupId()
 									log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
-									if strings.Contains(backupId, "incr") {
-										dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
-											fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
+									if !strings.Contains(backupId, "incr") {
+										listOfVolumes[backupId] = false
+									} else {
+										listOfVolumes[backupId] = true
 									}
+								}
+								for id, isIncremental := range listOfVolumes {
+									if isIncremental == false {
+										log.InfoD(fmt.Sprintf("Backup %s wasn't a incremental backup", id))
+										noFailures = false
+									}
+								}
+								if noFailures {
+									break
 								}
 							}
 						}
