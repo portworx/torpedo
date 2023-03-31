@@ -3,10 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/pborman/uuid"
-	"github.com/portworx/sched-ops/k8s/batch"
-	"github.com/portworx/torpedo/pkg/osutils"
-	batchv1 "k8s.io/api/batch/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -16,6 +12,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/torpedo/pkg/osutils"
+	batchv1 "k8s.io/api/batch/v1"
 
 	"github.com/hashicorp/go-version"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
@@ -2060,6 +2061,52 @@ func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, cluster
 		return resp, err
 	}
 	return resp, nil
+}
+
+// suspendBackupSchedule will suspend backup schedule
+func suspendBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	if err != nil {
+		return err
+	}
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schPolicyName)
+	if err != nil {
+		return err
+	}
+	bkpScheduleSuspendRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{Name: backupScheduleName, OrgId: OrgID, Uid: backupScheduleUID},
+		Suspend:        true,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+	}
+	_, err = backupDriver.UpdateBackupSchedule(ctx, bkpScheduleSuspendRequest)
+	return err
+}
+
+// resumeBackupSchedule will resume backup schedule
+func resumeBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	if err != nil {
+		return err
+	}
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schPolicyName)
+	if err != nil {
+		return err
+	}
+	bkpScheduleSuspendRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{Name: backupScheduleName, OrgId: OrgID, Uid: backupScheduleUID},
+		Suspend:        false,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+	}
+	_, err = backupDriver.UpdateBackupSchedule(ctx, bkpScheduleSuspendRequest)
+	return err
 }
 
 // NamespaceLabelBackupSuccessCheck verifies if the labeled namespaces are backed up and checks for labels applied to backups
