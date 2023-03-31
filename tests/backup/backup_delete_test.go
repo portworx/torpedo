@@ -396,8 +396,38 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
 					backupId := vol.GetBackupId()
 					log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
-					dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
-						fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
+					if strings.Contains(backupId, "incr") {
+						dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
+							fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
+					} else {
+						// Attempting to take backups and checking if they are incremental or not
+						log.InfoD("New backup wasn't an incremental backup hence recreating new backup")
+						for i := 0; i > 3; i++ {
+							log.Info(fmt.Sprintf("Recreate incremental backup iternation: %d", i))
+							for _, namespace := range bkpNamespaces {
+								// Create a new incremental backups
+								incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
+								incrementalBackupNamesRecreated = append(incrementalBackupNamesRecreated, incrementalBackupName)
+								err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
+									labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying incremental backup [%s] creation", incrementalBackupName))
+
+								// Check if they are incremental or not
+								bkpUid, err = backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
+								log.FailOnError(err, "Unable to fetch backup UID - %s", incrementalBackupName)
+								bkpInspectResponse, err = backupDriver.InspectBackup(ctx, bkpInspectReq)
+								log.FailOnError(err, "Unable to fetch backup - %s", incrementalBackupName)
+								for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
+									backupId := vol.GetBackupId()
+									log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
+									if strings.Contains(backupId, "incr") {
+										dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
+											fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 		})
