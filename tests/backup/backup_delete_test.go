@@ -420,6 +420,11 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 								// Check if they are incremental or not
 								bkpUid, err = backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
 								log.FailOnError(err, "Unable to fetch backup UID - %s", incrementalBackupName)
+								bkpInspectReq := &api.BackupInspectRequest{
+									Name:  incrementalBackupName,
+									OrgId: orgID,
+									Uid:   bkpUid,
+								}
 								bkpInspectResponse, err = backupDriver.InspectBackup(ctx, bkpInspectReq)
 								log.FailOnError(err, "Unable to fetch backup - %s", incrementalBackupName)
 								for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
@@ -441,8 +446,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 									break
 								}
 							}
-							dash.VerifyFatal(noFailures, true,
-								fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
+							dash.VerifyFatal(noFailures, true, "Check if the backups are incremental or not")
 						}
 					}
 				}
