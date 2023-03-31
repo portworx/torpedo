@@ -402,8 +402,8 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 					} else {
 						// Attempting to take backups and checking if they are incremental or not
 						log.InfoD("New backup wasn't an incremental backup hence recreating new backup")
-						for i := 0; i > 3; i++ {
-							log.Info(fmt.Sprintf("Recreate incremental backup iternation: %d", i))
+						for i := 0; i < 3; i++ {
+							log.InfoD(fmt.Sprintf("Recreate incremental backup iternation: %d", i))
 							for _, namespace := range bkpNamespaces {
 								// Create a new incremental backups
 								incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
