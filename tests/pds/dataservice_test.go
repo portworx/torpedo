@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
+	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -104,6 +105,7 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 	var deps []*pds.ModelsDeployment
 	var wlparams pdslib.WorkloadGenerationParams
 	var dataservices []PDSDataService
+	var workloadPods []string
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("UpdatePDSHelmVersion", steplog, pdsLabels, 0)
@@ -152,27 +154,36 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 
 		steplog = "Running Workloads before scaling up of dataservices"
 		Step(steplog, func() {
+
 			for _, ds := range params.DataServiceToTest {
 				dataservices = append(dataservices, ds)
 			}
 			for index, deployment := range deps {
 				log.InfoD("Running Workloads on deployment %v ", *deployment.ClusterResourceName)
 				pod, dep, err = RunWorkloads(wlparams, dataservices[index], deployment, namespace)
+				if dep == nil {
+					workloadPods = append(workloadPods, pod.Name)
+				} else {
+					workloadPods = append(workloadPods, dep.Name)
+				}
 				log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", dataservices[index].Name))
 			}
 		})
 
 		defer func() {
+			//delete all the workload generating pods
 			Step("Delete the workload generating deployments", func() {
-				for _, ds := range params.DataServiceToTest {
-					if Contains(dataServiceDeploymentWorkloads, ds.Name) {
-						log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
-						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-					} else if Contains(dataServicePodWorkloads, ds.Name) {
-						log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
-						err = pdslib.DeleteK8sPods(pod.Name, namespace)
+				for _, workloadGeneratorName := range workloadPods {
+					for _, ds := range params.DataServiceToTest {
+						if Contains(dataServiceDeploymentWorkloads, ds.Name) {
+							log.InfoD("Deleting Workload Generating pods %v ", workloadGeneratorName)
+							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+						} else if Contains(dataServicePodWorkloads, ds.Name) {
+							log.InfoD("Deleting Workload Generating pods %v ", workloadGeneratorName)
+							err = pdslib.DeleteK8sPods(pod.Name, namespace)
+						}
+						log.FailOnError(err, "error deleting workload generating pods")
 					}
-					log.FailOnError(err, "error deleting workload generating pods")
 				}
 			})
 		}()
@@ -420,7 +431,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", pdsLabels, 0)
 	})
 
-	It("deploy Dataservices", func() {
+	It("Deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				if ds.Name == zookeeper {
@@ -433,12 +444,32 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					log.FailOnError(err, "Error while deploying data services")
 				})
 
+				defer func() {
+					Step("Delete created deployments")
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				}()
+
 				Step("Running Workloads before scaling up of dataservices ", func() {
 					log.InfoD("Running Workloads on DataService %v ", ds.Name)
 					var params pdslib.WorkloadGenerationParams
 					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
 					log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
 				})
+
+				defer func() {
+					Step("Delete the workload generating deployments", func() {
+						if Contains(dataServiceDeploymentWorkloads, ds.Name) {
+							log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
+							err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+						} else if Contains(dataServicePodWorkloads, ds.Name) {
+							log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
+							err = pdslib.DeleteK8sPods(pod.Name, namespace)
+						}
+						log.FailOnError(err, "error deleting workload generating pods")
+					})
+				}()
 
 				Step("Validate Deployments before scale up", func() {
 					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
@@ -462,38 +493,11 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					}
 				})
 
-				Step("Delete Deployments", func() {
-					log.InfoD("Deleting DataService %v ", ds.Name)
-					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					log.FailOnError(err, "Error while deleting data services")
-					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-					isDeploymentsDeleted = true
-				})
-
-				Step("Delete the workload generating deployments", func() {
-					if Contains(dataServiceDeploymentWorkloads, ds.Name) {
-						log.InfoD("Deleting Workload Generating pods %v ", dep.Name)
-						err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
-					} else if Contains(dataServicePodWorkloads, ds.Name) {
-						log.InfoD("Deleting Workload Generating pods %v ", pod.Name)
-						err = pdslib.DeleteK8sPods(pod.Name, namespace)
-					}
-					log.FailOnError(err, "error deleting workload generating pods")
-				})
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
 	})
 })
 
@@ -1082,7 +1086,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 		StartTorpedoTest("DeployMultipleNamespaces", "Create multiple namespaces and deploy all dataservices", pdsLabels, 0)
 	})
 
-	It("creates multiple namespaces, deploys in each namespace", func() {
+	It("Creates multiple namespaces, deploys in each namespace", func() {
 
 		var namespaces []*corev1.Namespace
 		// create k8s namespaces
@@ -1153,7 +1157,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 
 	It("Deploy Dataservices and delete namespace", func() {
 
-		nname := "test-namespace-0"
+		nname := "namespace-" + strconv.Itoa(rand.Int())
 		_, err := pdslib.CreateK8sPDSNamespace(nname)
 		log.FailOnError(err, "error while creating pds namespace")
 		isNamespacesDeleted = false
@@ -1179,6 +1183,9 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 				})
 			}
 			log.InfoD("List of created deployments: %v ", cleanup)
+			for _, deployment := range cleanup {
+				log.InfoD("%v ", *deployment.ClusterResourceName)
+			}
 
 			Step("Delete created namespace", func() {
 				log.InfoD("Cleanup: Deleting created namespace %v", nname)
