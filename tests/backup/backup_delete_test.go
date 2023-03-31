@@ -407,7 +407,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 						log.InfoD("New backup wasn't an incremental backup hence recreating new backup")
 						for _, namespace := range bkpNamespaces {
 							listOfVolumes := make(map[string]bool)
-							var noFailures bool = true
+							noFailures := true
 							for maxBackupsBeforeIncremental := 0; maxBackupsBeforeIncremental < 4; maxBackupsBeforeIncremental++ {
 								log.InfoD(fmt.Sprintf("Recreate incremental backup iteration: %d", maxBackupsBeforeIncremental))
 								// Create a new incremental backups
@@ -441,6 +441,8 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 									break
 								}
 							}
+							dash.VerifyFatal(noFailures, true,
+								fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
 						}
 					}
 				}
