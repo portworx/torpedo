@@ -1751,6 +1751,15 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 			err = CreateRestore(restoreAfterNamespaceIsRemoved, secondScheduleBackupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup restore for %s", restoreBeforeNamespaceIsRemoved))
 			restoreNames = append(restoreNames, restoreAfterNamespaceIsRemoved)
+			restoreInspectRequest := &api.RestoreInspectRequest{
+				Name:  restoreAfterNamespaceIsRemoved,
+				OrgId: orgID,
+			}
+			resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+			log.FailOnError(err, "Unable to fetch restore response")
+			namespaceMap := resp.GetRestore().NamespaceMapping
+			isRestored := NamespaceExistsInNamespaceMapping(namespaceMap, bkpNamespaces[3:])
+			dash.VerifyFatal(isRestored, true, fmt.Sprintf("Verifying restoration of schedule backup %s which was taken with less namespaces %v", secondScheduleBackupName, bkpNamespaces[3:]))
 		})
 	})
 	JustAfterEach(func() {
