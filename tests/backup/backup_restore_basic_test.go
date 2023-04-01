@@ -1575,15 +1575,15 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		namespaceLabel                  string
 		secondScheduleBackupName        string
 		restoreBeforeNamespaceIsRemoved string
-		thirdScheduleBackupName         string
-		removedNamespace                []string
-		bkpNamespaces                   []string
-		cloudCredUidList                []string
-		allScheduleBackupNames          []string
-		restoreNames                    []string
-		nsLabelsMap                     map[string]string
-		contexts                        []*scheduler.Context
-		appContexts                     []*scheduler.Context
+		//thirdScheduleBackupName         string
+		removedNamespace []string
+		bkpNamespaces    []string
+		cloudCredUidList []string
+		//allScheduleBackupNames          []string
+		//restoreNames                    []string
+		nsLabelsMap map[string]string
+		contexts    []*scheduler.Context
+		appContexts []*scheduler.Context
 	)
 	backupLocationMap := make(map[string]string)
 	namespaceMapping := make(map[string]string)
@@ -1682,12 +1682,12 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Remove namespace label from namespace and check backup success of next schedule backup", func() {
 			log.InfoD("Remove namespace label from namespace and check backup success of next schedule backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			//ctx, err := backup.GetAdminCtxFromSecret()
+			//log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			removedNamespace = bkpNamespaces[:3]
 			err = RemoveNamespaceLabelForMultipleNamespaces(nsLabelsMap, removedNamespace)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Removing labels [%v] from namespaces [%v]", nsLabelsMap, removedNamespace))
-			thirdScheduleBackupName, err = GetNextScheduleBackupName(scheduleName, 2, ctx)
+			//thirdScheduleBackupName, err = GetNextScheduleBackupName(scheduleName, 2, ctx)
 		})
 		Step("Restore the backup which was taken before the namespace removal and the namespace should be recovered", func() {
 			log.InfoD("Restore the backup which was taken before the namespace removal and the namespace should be recovered")
@@ -1698,9 +1698,14 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation", secondScheduleBackupName, restoreBeforeNamespaceIsRemoved))
 			// print the map to see the output
 			restoreInspectRequest := &api.RestoreInspectRequest{
-				Name:  restoreName,
+				Name:  restoreBeforeNamespaceIsRemoved,
 				OrgId: orgID,
 			}
+			resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+			log.FailOnError(err, "Unable to fetch restore response")
+			namespaceMap := resp.GetRestore().NamespaceMapping
+			log.InfoD("NAMESPACEMAPPING %v", namespaceMap)
+
 		})
 
 	})
