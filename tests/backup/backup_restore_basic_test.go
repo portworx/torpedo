@@ -1576,6 +1576,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		secondScheduleBackupName        string
 		restoreBeforeNamespaceIsRemoved string
 		scheduleBackupAfterNSRemovalOne string
+		newNamespaces                   []string
 		removedNamespace                []string
 		bkpNamespaces                   []string
 		cloudCredUidList                []string
@@ -1673,11 +1674,11 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 				nil, orgID, "", "", "", "", namespaceLabel, periodicSchedulePolicyName, periodicSchedulePolicyUid, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule name [%s]", scheduleName))
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of first schedule backup [%s]", firstScheduleBackupName))
 			log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
 			time.Sleep(2 * time.Minute)
 			secondScheduleBackupName, err = GetOrdinalScheduleBackupName(ctx, scheduleName, 2, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the second schedule backup [%s]", secondScheduleBackupName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of second schedule backup [%s]", secondScheduleBackupName))
 		})
 		Step("Remove namespace label from namespace and check backup success of next schedule backup", func() {
 			log.InfoD("Remove namespace label from namespace and check backup success of next schedule backup")
@@ -1718,7 +1719,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 					ctx.ReadinessTimeout = appReadinessTimeout
 					namespace := GetAppNamespace(ctx, taskName)
 					log.InfoD("Scheduled application with namespace [%s]", namespace)
-					bkpNamespaces = append(bkpNamespaces, namespace)
+					newNamespaces = append(newNamespaces, namespace)
 				}
 			}
 		})
@@ -1728,9 +1729,8 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Apply same namespace labels to new namespace", func() {
 			log.InfoD("Apply same namespace labels to new namespace")
-			newNamespace := bkpNamespaces[len(bkpNamespaces)-1]
-			err = Inst().S.AddNamespaceLabel(newNamespace, nsLabelsMap)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Applying same namespace labels %v to new namespace %v", nsLabelsMap, newNamespace))
+			err = AddLabelsToMultipleNamespaces(nsLabelsMap, newNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to new namespaces [%s]", nsLabelsMap, newNamespaces))
 		})
 		Step("Continue next schedule backups", func() {
 			log.InfoD("Continue next schedule backups")
