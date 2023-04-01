@@ -1996,15 +1996,6 @@ func GenerateRandomLabels(number int) map[string]string {
 	return labels
 }
 
-// mapToString will create a string from map
-func MapToString(m map[string]string) string {
-	var pairs []string
-	for k, v := range m {
-		pairs = append(pairs, k+"="+v)
-	}
-	return strings.Join(pairs, ",")
-}
-
 // GetKeysAsString returns string of keys
 func GetKeysAsString(m map[string]string) string {
 	var keys []string
@@ -2040,4 +2031,15 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 	}
 	nextScheduleBackupName = nextScheduleBackup.(string)
 	return nextScheduleBackupName, nil
+}
+
+// NamespaceExistsInNamespaceMapping checks if namespace is present in map of namespace mapping
+func NamespaceExistsInNamespaceMapping(namespaceMap map[string]string, namespaces []string) bool {
+	for _, namespace := range namespaces {
+		if _, ok := namespaceMap[namespace]; !ok {
+			fmt.Printf("%s is not a present in namespaces %v", namespace, namespaces)
+			return false
+		}
+	}
+	return true
 }

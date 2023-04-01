@@ -1560,7 +1560,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 	})
 })
 
-// ScheduleBackupWithAdditionAndRemovalOfNS performs schedule backup and rest
+// ScheduleBackupWithAdditionAndRemovalOfNS perform schedule backup during which remove and add namespace and verify restoration of removed namespace
 var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 	var (
 		err                             error
@@ -1575,24 +1575,23 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		namespaceLabel                  string
 		secondScheduleBackupName        string
 		restoreBeforeNamespaceIsRemoved string
-		//thirdScheduleBackupName         string
-		removedNamespace []string
-		bkpNamespaces    []string
-		cloudCredUidList []string
-		//allScheduleBackupNames          []string
-		//restoreNames                    []string
-		nsLabelsMap map[string]string
-		contexts    []*scheduler.Context
-		appContexts []*scheduler.Context
+		scheduleBackupAfterNSRemovalOne string
+		removedNamespace                []string
+		bkpNamespaces                   []string
+		cloudCredUidList                []string
+		restoreNames                    []string
+		nsLabelsMap                     map[string]string
+		contexts                        []*scheduler.Context
+		appContexts                     []*scheduler.Context
 	)
 	backupLocationMap := make(map[string]string)
 	namespaceMapping := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupScheduleForOldAndNewNS", "Schedule backup with old namespace and new namespace", nil, 84852)
+		StartTorpedoTest("BackupScheduleForOldAndNewNS", "Perform schedule backup during which remove and add namespace and verify restoration of removed namespace", nil, 84848)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < 6; i++ {
+		for i := 0; i < 1; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts = ScheduleApplications(taskName)
 			contexts = append(contexts, appContexts...)
@@ -1604,7 +1603,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		}
 		log.InfoD("Created namespaces %v", bkpNamespaces)
 	})
-	It("Verification of schedule backup and restore by adding and removing namespace using namespace labels", func() {
+	It("Perform schedule backup during which remove and add namespace and verify restoration of removed namespace", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
@@ -1682,21 +1681,22 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Remove namespace label from namespace and check backup success of next schedule backup", func() {
 			log.InfoD("Remove namespace label from namespace and check backup success of next schedule backup")
-			//ctx, err := backup.GetAdminCtxFromSecret()
-			//log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			removedNamespace = bkpNamespaces[:3]
 			err = RemoveNamespaceLabelForMultipleNamespaces(nsLabelsMap, removedNamespace)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Removing labels [%v] from namespaces [%v]", nsLabelsMap, removedNamespace))
-			//thirdScheduleBackupName, err = GetNextScheduleBackupName(scheduleName, 2, ctx)
+			scheduleBackupAfterNSRemovalOne, err = GetNextScheduleBackupName(scheduleName, 2, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup after nmaespace removal %v", scheduleBackupAfterNSRemovalOne, removedNamespace))
 		})
 		Step("Restore the backup which was taken before the namespace removal and the namespace should be recovered", func() {
 			log.InfoD("Restore the backup which was taken before the namespace removal and the namespace should be recovered")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			restoreBeforeNamespaceIsRemoved = fmt.Sprintf("%s-%v", restoreNamePrefix, time.Now().Unix())
+			restoreBeforeNamespaceIsRemoved := fmt.Sprintf("%s-%v", restoreNamePrefix, time.Now().Unix())
 			err = CreateRestore(restoreBeforeNamespaceIsRemoved, secondScheduleBackupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation", secondScheduleBackupName, restoreBeforeNamespaceIsRemoved))
-			// print the map to see the output
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup restore for %s", restoreBeforeNamespaceIsRemoved))
+			restoreNames = append(restoreNames, restoreBeforeNamespaceIsRemoved)
 			restoreInspectRequest := &api.RestoreInspectRequest{
 				Name:  restoreBeforeNamespaceIsRemoved,
 				OrgId: orgID,
@@ -1704,9 +1704,72 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 			resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
 			log.FailOnError(err, "Unable to fetch restore response")
 			namespaceMap := resp.GetRestore().NamespaceMapping
-			log.InfoD("NAMESPACEMAPPING %v", namespaceMap)
-
+			isRestored := NamespaceExistsInNamespaceMapping(namespaceMap, removedNamespace)
+			dash.VerifyFatal(isRestored, true, fmt.Sprintf("Verifying if deleted namespaces %v are restored in schedule backup %s", removedNamespace, secondScheduleBackupName))
 		})
-
+		Step("Schedule applications to create new namespaces", func() {
+			log.InfoD("Scheduling applications to create new namespaces")
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < 2; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				appContexts := ScheduleApplications(taskName)
+				contexts = append(contexts, appContexts...)
+				for _, ctx := range appContexts {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					namespace := GetAppNamespace(ctx, taskName)
+					log.InfoD("Scheduled application with namespace [%s]", namespace)
+					bkpNamespaces = append(bkpNamespaces, namespace)
+				}
+			}
+		})
+		Step("Validate new namespaces", func() {
+			log.InfoD("Validating new namespaces")
+			ValidateApplications(contexts)
+		})
+		Step("Apply same namespace labels to new namespace", func() {
+			log.InfoD("Apply same namespace labels to new namespace")
+			newNamespace := bkpNamespaces[len(bkpNamespaces)-1]
+			err = Inst().S.AddNamespaceLabel(newNamespace, nsLabelsMap)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Applying same namespace labels %v to new namespace %v", nsLabelsMap, newNamespace))
+		})
+		Step("Continue next schedule backups", func() {
+			log.InfoD("Continue next schedule backups")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			scheduleBkpAfterNSRemovalTwo, err := GetNextScheduleBackupName(scheduleName, 2, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup %s", scheduleBkpAfterNSRemovalTwo, scheduleName))
+			log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
+			time.Sleep(2 * time.Minute)
+			scheduleBkpAfterNSRemovalThree, err := GetNextScheduleBackupName(scheduleName, 2, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup %s", scheduleBkpAfterNSRemovalThree, scheduleName))
+		})
+		Step("Restore the backup which was taken with less namespaces", func() {
+			log.InfoD("Restore the backup which was taken with less namespaces")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			restoreAfterNamespaceIsRemoved := fmt.Sprintf("%s-%v", restoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreAfterNamespaceIsRemoved, secondScheduleBackupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup restore for %s", restoreBeforeNamespaceIsRemoved))
+			restoreNames = append(restoreNames, restoreAfterNamespaceIsRemoved)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
+		err = DeleteSchedule(scheduleName, scheduleUid, orgID)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
+		for _, restoreName := range restoreNames {
+			err := DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
+		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
+		ValidateAndDestroy(contexts, opts)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })

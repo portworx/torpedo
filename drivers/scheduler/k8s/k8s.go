@@ -6347,7 +6347,7 @@ func getLabelsFromNodeAffinity(nodeAffSpec *v1.NodeAffinity) map[string]string {
 }
 
 // mergeMaps merges two maps
-func mergeMaps(m1 map[string]string, m2 map[string]string) map[string]string {
+func MergeMaps(m1 map[string]string, m2 map[string]string) map[string]string {
 	for k, v := range m2 {
 		m1[k] = v
 	}
@@ -6360,7 +6360,7 @@ func (k *K8s) AddNamespaceLabel(namespace string, labelMap map[string]string) er
 	if err != nil {
 		return err
 	}
-	newLabels := mergeMaps(ns.Labels, labelMap)
+	newLabels := MergeMaps(ns.Labels, labelMap)
 	ns.SetLabels(newLabels)
 	if _, err := k8sCore.UpdateNamespace(ns); err == nil {
 		return nil
