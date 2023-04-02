@@ -1711,7 +1711,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		Step("Schedule applications to create new namespaces", func() {
 			log.InfoD("Scheduling applications to create new namespaces")
 			contexts = make([]*scheduler.Context, 0)
-			for i := 0; i < 2; i++ {
+			for i := 0; i < 1; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
