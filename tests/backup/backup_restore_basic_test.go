@@ -1729,7 +1729,6 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Apply same namespace labels to new namespace", func() {
 			log.InfoD("Apply same namespace labels to new namespace")
-			bkpNamespaces = append(bkpNamespaces, newNamespaces...)
 			err = AddLabelsToMultipleNamespaces(nsLabelsMap, newNamespaces)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to new namespaces [%s]", nsLabelsMap, newNamespaces))
 		})
@@ -1776,6 +1775,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 			err := DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
 		}
+		bkpNamespaces = append(bkpNamespaces, newNamespaces...)
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
