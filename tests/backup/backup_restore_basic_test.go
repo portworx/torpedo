@@ -1592,7 +1592,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		StartTorpedoTest("BackupScheduleForOldAndNewNS", "Perform schedule backup during which remove and add namespace and verify restoration of removed namespace", nil, 84848)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < 1; i++ {
+		for i := 0; i < 5; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts = ScheduleApplications(taskName)
 			contexts = append(contexts, appContexts...)
