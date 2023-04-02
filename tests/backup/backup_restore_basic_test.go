@@ -1769,6 +1769,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		scheduleUid, err := GetScheduleUID(scheduleName, orgID, ctx)
 		err = DeleteSchedule(scheduleName, scheduleUid, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		time.Sleep(1 * time.Minute)
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
 		for _, restoreName := range restoreNames {
