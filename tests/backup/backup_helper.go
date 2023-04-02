@@ -1972,35 +1972,15 @@ func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string
 	return nil
 }
 
-// GenerateRandomLabels creates random label
-func GenerateRandomLabels(number int) map[string]string {
+// GenerateRandomLabelsWithMaxChar creates random label with max characters
+func GenerateRandomLabelsWithMaxChar(number int, charLimit int) map[string]string {
 	labels := make(map[string]string)
 	for i := 0; i < number; i++ {
-		key := fmt.Sprintf("%v-%v", i, uuid.New())
+		key := RandomString(charLimit)
 		value := uuid.New()
 		labels[key] = value
 	}
 	return labels
-}
-
-// FetchNamespaceFromBackup fetches the namespace from backup
-func FetchNamespaceFromBackup(ctx context.Context, backupName string, orgID string) ([]string, error) {
-	var backedUpNamespaces []string
-	backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-	if err != nil {
-		return nil, err
-	}
-	backupInspectRequest := &api.BackupInspectRequest{
-		Name:  backupName,
-		Uid:   backupUid,
-		OrgId: orgID,
-	}
-	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
-	if err != nil {
-		return nil, err
-	}
-	backedUpNamespaces = resp.GetBackup().GetNamespaces()
-	return backedUpNamespaces, err
 }
 
 // MapToString will create a string from map
