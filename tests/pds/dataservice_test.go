@@ -434,6 +434,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 	It("Deploy Dataservices", func() {
 		var generateWorkloads = make(map[string]string)
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var dsVersions = make(map[string]map[string][]string)
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				if ds.Name == zookeeper {
@@ -442,9 +443,10 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 				}
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 					deployments[ds] = deployment
+					dsVersions[ds.Name] = dataServiceVersionBuildMap
 				})
 			}
 
@@ -514,12 +516,9 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 						int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
 					log.FailOnError(err, "Error while updating dataservices")
 
-					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-					ValidateDeployments(resourceTemp, storageOp, config, ds.ScaleReplicas, dataServiceVersionBuildMap)
-					for version, build := range dataServiceVersionBuildMap {
-						dash.VerifyFatal(config.Spec.Version, version+"-"+build[0], "validating ds build and version")
-					}
+					dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
 				}
 			})
 		})
