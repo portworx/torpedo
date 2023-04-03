@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
-	KillDeploymentControllerPod      = "kill-deployment-controller-pod-during-deployment"
+	PdsDeploymentControllerManagerPod = "pds-deployment-controller-manager"
+	ActiveNodeRebootDuringDeployment  = "active-node-reboot-during-deployment"
+	KillDeploymentControllerPod       = "kill-deployment-controller-pod-during-deployment"
 )
 
 // PDS vars
@@ -193,16 +194,15 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 
 // Kill the Deployment Controller Pod while Data Service is coming up
 func KillDeploymentPodDuringDeployment(ns string) error {
+	var deploymentControllerPods []corev1.Pod
 	// Fetch All the pods in pds-system namespace
 	podList, testError := GetPods(ns)
 	if testError != nil {
 		return testError
 	}
 	// Get List of All Pods matching with the name : deployment controller manager pod
-	var deploymentControllerPods []corev1.Pod
-	podNameString := "pds-deployment-controller-manager"
 	for _, pod := range podList.Items {
-		if strings.Contains(pod.Name, podNameString) {
+		if strings.Contains(pod.Name, PdsDeploymentControllerManagerPod) {
 			log.Infof("Deployment Controller Pod Name is : %v", pod.Name)
 			deploymentControllerPods = append(deploymentControllerPods, pod)
 		}
