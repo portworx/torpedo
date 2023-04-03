@@ -3,13 +3,14 @@ package tests
 import (
 	"errors"
 	"fmt"
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -77,6 +78,9 @@ var _ = Describe("{DeletePDSPods}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 					isDeploymentsDeleted = true
 					log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 				})
@@ -140,6 +144,9 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 				for _, dep := range deps {
 					_, err := pdslib.DeleteDeployment(*dep.Id)
 					log.FailOnError(err, "error while deleting deployments")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*dep.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 				}
 				isDeploymentsDeleted = true
 			})
@@ -266,6 +273,9 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 					isDeploymentsDeleted = true
 					log.InfoD("Deployment %v Deleted Successfully", *deployment.Name)
 				})
@@ -344,6 +354,9 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 					isDeploymentsDeleted = true
 				})
 			}
@@ -467,6 +480,9 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 					isDeploymentsDeleted = true
 				})
 
@@ -575,6 +591,9 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 				})
 			}
 		})
@@ -689,6 +708,12 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
 			log.FailOnError(err, "Error while deleting data services")
 			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			log.InfoD("Getting all PV and associated PVCs and deleting them")
+			error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+			log.FailOnError(error, "Error while deleting PV and PVCs")
+			log.InfoD("Getting all PV and associated PVCs and deleting them")
+			eror := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+			log.FailOnError(eror, "Error while deleting PV and PVCs")
 			isDeploymentsDeleted = true
 		})
 
@@ -800,6 +825,9 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 					resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 					deployment = old_deployment
 				})
 				Step("Running Workloads before scaling up of dataservices ", func() {
@@ -913,6 +941,9 @@ var _ = Describe("{CordonNodeAndDeletePod}", func() {
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
 				log.FailOnError(err, "Error while deleting data services")
 				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				log.InfoD("Getting all PV and associated PVCs and deleting them")
+				error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+				log.FailOnError(error, "Error while deleting PV and PVCs")
 			}
 		}()
 	})
@@ -939,6 +970,9 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 					isDeploymentsDeleted = true
 				})
 			}
@@ -1032,6 +1066,9 @@ var _ = Describe("{DeployAllDataServices}", func() {
 					for index := range dep {
 						_, err := pdslib.DeleteDeployment(dep[index].GetId())
 						Expect(err).NotTo(HaveOccurred())
+						log.InfoD("Getting all PV and associated PVCs and deleting them")
+						error := pdslib.DeletePvandPVCs(*dep[index].ClusterResourceName)
+						log.FailOnError(error, "Error while deleting PV and PVCs")
 					}
 				}
 			}()
@@ -1173,6 +1210,12 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
 			log.FailOnError(err, "Error while deleting data services")
 			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			log.InfoD("Getting all PV and associated PVCs and deleting them")
+			error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+			log.FailOnError(error, "Error while deleting PV and PVCs")
+			log.InfoD("Getting all PV and associated PVCs and deleting them")
+			eror := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+			log.FailOnError(eror, "Error while deleting PV and PVCs")
 			isDeploymentsDeleted = true
 		})
 
@@ -1228,6 +1271,9 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 				for _, dep := range cleanupall {
 					_, err := pdslib.DeleteDeployment(*dep.Id)
 					log.FailOnError(err, "error while deleting deployments")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*dep.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 				}
 			})
 
@@ -1312,6 +1358,9 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
 				log.FailOnError(err, "Error while deleting data services")
 				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				log.InfoD("Getting all PV and associated PVCs and deleting them")
+				error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+				log.FailOnError(error, "Error while deleting PV and PVCs")
 			}
 		}()
 
@@ -1429,6 +1478,9 @@ var _ = Describe("{RestartPXPods}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "error deleting deployment")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 					isDeploymentsDeleted = true
 				})
 			}
@@ -1544,6 +1596,9 @@ var _ = Describe("{RollingRebootNodes}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "error deleting deployment")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					error := pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
+					log.FailOnError(error, "Error while deleting PV and PVCs")
 					isDeploymentsDeleted = true
 				})
 			}
