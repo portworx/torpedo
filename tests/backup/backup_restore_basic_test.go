@@ -1323,7 +1323,6 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 	})
 })
 
-<<<<<<< HEAD
 // BackupMultipleNsWithSameLabel takes backup and restores multiple namespace having same labels
 var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 	var (
@@ -2105,8 +2104,6 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 5; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			//Adding 2 sec sleep to have unique timestamp
-			time.Sleep(sleepToGetUniqueTimeStamp)
 			appContexts = ScheduleApplications(taskName)
 			contexts = append(contexts, appContexts...)
 			for _, ctx := range appContexts {
