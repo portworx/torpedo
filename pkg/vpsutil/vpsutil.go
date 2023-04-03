@@ -145,7 +145,7 @@ func ValidateVolumeAffinityByNode(vols []*api.Volume, label string) error {
 	return nil
 }
 
-// ValidateReplicaAffinityByNode validates all the volumes with the same volume label key are deployed on the same node
+// ValidateReplicaAffinityByNode validated the volumes are only placed on `deployedNode`.
 func ValidateReplicaAffinityByNode(vols []*api.Volume, deployedNode node.Node) error {
 	for _, vol := range vols {
 		nodeList := getNodePlacement(vol)

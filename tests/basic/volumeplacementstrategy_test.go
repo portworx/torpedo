@@ -279,6 +279,7 @@ func (m *mongoVPSReplicaAffinity) DeployVPS() error {
 	m.spec = &vpsSpec
 	return err
 }
+
 func (m *mongoVPSReplicaAffinity) ValidateVPSDeployment(contexts []*scheduler.Context) error {
 	vols, err := Inst().S.GetVolumes(contexts[0])
 	if err != nil {
