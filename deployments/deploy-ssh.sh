@@ -270,7 +270,20 @@ TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\"
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
 AWS_VOLUME_MOUNT="{ \"name\": \"aws-volume\", \"mountPath\": \"/root/.aws/\" }"
 
+
+
 VOLUMES="${TESTRESULTS_VOLUME}"
+
+CUSTOM_PDS_QA_GCP_JSON_PATH=""
+if [ -n "${PDS_QA_GCP_JSON_PATH}" ]; then
+    kubectl create configmap custom-pds-qa-gcp-json-path --from-file=custom-pds-qa-gcp-json-path=${PDS_QA_GCP_JSON_PATH}
+    CUSTOM_PDS_QA_GCP_JSON_PATH="/tmp/gcp_json"
+    PDS_QA_GCP_JSON_PATH_VOLUME="{ \"name\": \"custom-pds-qa-gcp-json-path-volume\", \"configMap\": { \"name\": \"custom-pds-qa-gcp-json-path\", \"items\": [{\"key\": \"custom-pds-qa-gcp-json-path\", \"path\": \"gcp_json\"}] } }"
+    PDS_QA_GCP_JSON_PATH_MOUNT="{ \"name\": \"custom-pds-qa-gcp-json-path-volume\", \"mountPath\": \"${CUSTOM_PDS_QA_GCP_JSON_PATH}\", \"subPath\": \"gcp_json\" }"
+fi
+
+VOLUMES="${VOLUMES},${PDS_QA_GCP_JSON_PATH_VOLUME}"
+VOLUME_MOUNTS="${VOLUME_MOUNTS},${PDS_QA_GCP_JSON_PATH_MOUNT}"
 
 if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUMES="${VOLUMES},${AWS_VOLUME}"
@@ -600,6 +613,23 @@ spec:
       value: "${DEPLOY_ALL_IMAGES}"
     - name: DEPLOY_ALL_DATASERVICE
       value: "${DEPLOY_ALL_DATASERVICE}"
+    - name: PDS_QA_AWS_ACCESS_KEY
+      value: "${PDS_QA_AWS_ACCESS_KEY}"
+    - name: PDS_QA_AWS_SECRET_KEY
+      value: "${PDS_QA_AWS_SECRET_KEY}"
+    - name: PDS_QA_AWS_REGION
+      value: "${PDS_QA_AWS_REGION}"
+    - name: PDS_QA_AZURE_STORAGE_ACCOUNT_NAME
+      value: "${PDS_QA_AZURE_STORAGE_ACCOUNT_NAME}"
+    - name: PDS_QA_AZURE_ACCOUNT_KEY
+      value: "${PDS_QA_AZURE_ACCOUNT_KEY}"
+    - name: PDS_QA_GCP_PROJECT_ID
+      value: "${PDS_QA_GCP_PROJECT_ID}"
+    - name: PDS_QA_GCP_JSON_PATH
+      valueFrom:
+        configMapKeyRef:
+          name: custom-pds-qa-gcp-json-path
+          key: custom-pds-qa-gcp-json-path
     - name: PDS_USERNAME
       value: "${PDS_USERNAME}"
     - name: PDS_PASSWORD
@@ -633,6 +663,8 @@ spec:
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
+
+
 EOF
 
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then

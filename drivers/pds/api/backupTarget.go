@@ -5,7 +5,7 @@ import (
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds/pdsutils"
-	"github.com/portworx/torpedo/pkg/log"
+	log "github.com/sirupsen/logrus"
 )
 
 // BackupTarget struct
@@ -79,13 +79,11 @@ func (backupTarget *BackupTarget) CreateBackupTarget(tenantID string, name strin
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err
 	}
-	backupTargetModel, res, err := backupTargetClient.ApiTenantsIdBackupTargetsPost(ctx, tenantID).Body(createRequest).Execute()
-	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiTenantsIdBackupTargetsPost``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	backupTargetModel, _, err := backupTargetClient.ApiTenantsIdBackupTargetsPost(ctx, tenantID).Body(createRequest).Execute()
+	if err != nil {
+		return nil, err
 	}
 	return backupTargetModel, err
-
 }
 
 // UpdateBackupTarget return updated backup target model.
@@ -109,36 +107,31 @@ func (backupTarget *BackupTarget) UpdateBackupTarget(backupTaregetID string, nam
 }
 
 // SyncToBackupLocation returned synced backup target model.
-func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string, name string) (*pds.ModelsBackupTarget, error) {
+func (backupTarget *BackupTarget) SyncToBackupLocation(backupTaregetID string) (*status.Response, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
-	updateRequest := pds.ControllersUpdateBackupTargetRequest{
-		Name: &name,
-	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err
 	}
-	backupTargetModel, res, err := backupTargetClient.ApiBackupTargetsIdPut(ctx, backupTaregetID).Body(updateRequest).Execute()
+	res, err := backupTargetClient.ApiBackupTargetsIdRetryPost(ctx, backupTaregetID).Execute()
 	if res.StatusCode != status.StatusOK {
 		log.Errorf("Error when calling `ApiBackupTargetsIdPut``: %v\n", err)
 		log.Errorf("Full HTTP response: %v\n", res)
 	}
-	return backupTargetModel, err
+	return res, err
 }
 
 // DeleteBackupTarget delete backup target and return status.
-func (backupTarget *BackupTarget) DeleteBackupTarget(backupTaregetID string) (*status.Response, error) {
+func (backupTarget *BackupTarget) DeleteBackupTarget(backupTargetID string) (*status.Response, error) {
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
 		log.Errorf("Error in getting context for api call: %v\n", err)
 		return nil, err
 	}
-	res, err := backupTargetClient.ApiBackupTargetsIdDelete(ctx, backupTaregetID).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupTargetsIdDelete``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+	res, err := backupTargetClient.ApiBackupTargetsIdDelete(ctx, backupTargetID).Force("true").Execute()
+	if err != nil {
 		return nil, err
 	}
 	return res, nil

@@ -7,28 +7,46 @@ import (
 )
 
 const (
-	envControlPlaneURL    = "CONTROL_PLANE_URL"
-	envPDSTestAccountName = "TEST_ACCOUNT_NAME"
-	envTargetKubeconfig   = "TARGET_KUBECONFIG"
-	envUsername           = "PDS_USERNAME"
-	envPassword           = "PDS_PASSWORD"
-	envPDSClientSecret    = "PDS_CLIENT_SECRET"
-	envPDSClientID        = "PDS_CLIENT_ID"
-	envPDSISSUERURL       = "PDS_ISSUER_URL"
-	envClusterType        = "CLUSTER_TYPE"
+	envControlPlaneURL         = "CONTROL_PLANE_URL"
+	envPDSTestAccountName      = "TEST_ACCOUNT_NAME"
+	envTargetKubeconfig        = "TARGET_KUBECONFIG"
+	envUsername                = "PDS_USERNAME"
+	envPassword                = "PDS_PASSWORD"
+	envPDSClientSecret         = "PDS_CLIENT_SECRET"
+	envPDSClientID             = "PDS_CLIENT_ID"
+	envPDSISSUERURL            = "PDS_ISSUER_URL"
+	envClusterType             = "CLUSTER_TYPE"
+	envAwsAccessKey            = "PDS_QA_AWS_ACCESS_KEY"
+	envAwsSecretKey            = "PDS_QA_AWS_SECRET_KEY"
+	envAwsRegion               = "PDS_QA_AWS_REGION"
+	envAzureStorageAccountName = "PDS_QA_AZURE_STORAGE_ACCOUNT_NAME"
+	envAzurePrimaryAccountKey  = "PDS_QA_AZURE_ACCOUNT_KEY"
+	envGcpProjectId            = "PDS_QA_GCP_PROJECT_ID"
+	envGcpJsonPath             = "PDS_QA_GCP_JSON_PATH"
 )
 
-// Environment lhasha
+// Environment struct for PDS test execution
 type Environment struct {
-	PDSControlPlaneURL   string
-	PDSTestAccountName   string
-	PDSTargetKUBECONFIG  string
-	PDSUsername          string
-	PDSPassword          string
-	PDSIssuerURL         string
-	PDSClientID          string
-	PDSClientSecret      string
-	PDSTargetClusterType string
+	PDSControlPlaneURL         string
+	PDSTestAccountName         string
+	PDSTargetKUBECONFIG        string
+	PDSUsername                string
+	PDSPassword                string
+	PDSIssuerURL               string
+	PDSClientID                string
+	PDSClientSecret            string
+	PDSTargetClusterType       string
+	PDSAwsAccessKey            string
+	PDSAwsSecretKey            string
+	PDSAwsRegion               string
+	PDSAzureStorageAccountName string
+	PDSAzurePrimaryAccountKey  string
+	PDSGcpProjectId            string
+	PDSGcpJsonPath             string
+	PDSMinioAccessKey          string
+	PDSMinioSecretKey          string
+	PDSMinioEndpoint           string
+	PDSMinioRegion             string
 }
 
 // MustHaveEnvVariables return emnvironment variables.
@@ -40,6 +58,20 @@ func MustHaveEnvVariables() Environment {
 		PDSIssuerURL:       mustGetEnvVariable(envPDSISSUERURL),
 		PDSClientID:        mustGetEnvVariable(envPDSClientID),
 		PDSClientSecret:    mustGetEnvVariable(envPDSClientSecret),
+	}
+}
+
+// BackupEnvVariables return environment variables specific to backup.
+func BackupEnvVariables() Environment {
+	return Environment{
+		PDSControlPlaneURL:         mustGetEnvVariable(envControlPlaneURL),
+		PDSAwsAccessKey:            mustGetEnvVariable(envAwsAccessKey),
+		PDSAwsSecretKey:            mustGetEnvVariable(envAwsSecretKey),
+		PDSAwsRegion:               mustGetEnvVariable(envAwsRegion),
+		PDSAzureStorageAccountName: mustGetEnvVariable(envAzureStorageAccountName),
+		PDSAzurePrimaryAccountKey:  mustGetEnvVariable(envAzurePrimaryAccountKey),
+		PDSGcpProjectId:            mustGetEnvVariable(envGcpProjectId),
+		PDSGcpJsonPath:             mustGetEnvVariable(envGcpJsonPath),
 	}
 }
 
