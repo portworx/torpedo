@@ -1323,6 +1323,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 	})
 })
 
+<<<<<<< HEAD
 // BackupMultipleNsWithSameLabel takes backup and restores multiple namespace having same labels
 var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 	var (
