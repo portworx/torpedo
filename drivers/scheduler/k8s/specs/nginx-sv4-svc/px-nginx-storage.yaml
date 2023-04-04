@@ -16,6 +16,7 @@ parameters:
   repl: "3"
   sharedv4: "true"
   nodiscard: "true"
+  sharedv4_svc_type: "ClusterIP"
 allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim

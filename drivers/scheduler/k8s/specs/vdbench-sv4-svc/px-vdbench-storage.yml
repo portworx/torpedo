@@ -17,6 +17,7 @@ parameters:
   nodiscard: "true"
   mount_options: "nodiscard=true"
   nodiscard: "true"
+  sharedv4_svc_type: "ClusterIP"
 allowVolumeExpansion: true
 ---
 kind: PersistentVolumeClaim
