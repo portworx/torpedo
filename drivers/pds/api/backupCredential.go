@@ -98,13 +98,6 @@ func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID stri
 		return nil, err
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
-	log.Infof("Error -> %v", err)
-	log.Infof("Resp -> %v", res)
-	log.Infof("Request context -> %v", res.Request.RequestURI)
-	log.Infof("Request Header -> %v", res.Request.Header)
-	log.Infof("Request Host -> %v", res.Request.Host)
-	log.Infof("Request Body -> %v", res.Request.Body)
-	log.Infof("Request GetBody -> %v", res.Request.GetBody)
 
 	if err != nil {
 		return nil, err

@@ -280,10 +280,9 @@ if [ -n "${PDS_QA_GCP_JSON_PATH}" ]; then
     CUSTOM_PDS_QA_GCP_JSON_PATH="/tmp/gcp_json"
     PDS_QA_GCP_JSON_PATH_VOLUME="{ \"name\": \"custom-pds-qa-gcp-json-path-volume\", \"configMap\": { \"name\": \"custom-pds-qa-gcp-json-path\", \"items\": [{\"key\": \"custom-pds-qa-gcp-json-path\", \"path\": \"gcp_json\"}] } }"
     PDS_QA_GCP_JSON_PATH_MOUNT="{ \"name\": \"custom-pds-qa-gcp-json-path-volume\", \"mountPath\": \"${CUSTOM_PDS_QA_GCP_JSON_PATH}\", \"subPath\": \"gcp_json\" }"
+    VOLUMES="${VOLUMES},${PDS_QA_GCP_JSON_PATH_VOLUME}"
+    VOLUME_MOUNTS="${VOLUME_MOUNTS},${PDS_QA_GCP_JSON_PATH_MOUNT}"
 fi
-
-VOLUMES="${VOLUMES},${PDS_QA_GCP_JSON_PATH_VOLUME}"
-VOLUME_MOUNTS="${VOLUME_MOUNTS},${PDS_QA_GCP_JSON_PATH_MOUNT}"
 
 if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUMES="${VOLUMES},${AWS_VOLUME}"
