@@ -927,21 +927,21 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			log.Infof("mongodb replica after scaling back to original replica is %v", *statefulSet.Spec.Replicas)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Scaling MongoDB statefulset back to original replica"))
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == originalReplicaCount, true, "Verify mongodb statefulset replica after scaling back to original")
-			log.Infof("Verify that at least one mongodb pod is in Ready state")
+			log.Infof("Verify that all mongodb pods are in Ready state")
 			mongoDBPodStatus := func() (interface{}, bool, error) {
 				statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
 				if err != nil {
 					return "", true, err
 				}
-				if statefulSet.Status.ReadyReplicas < 1 {
-					return "", true, fmt.Errorf("no mongodb pods are ready yet")
+				if statefulSet.Status.ReadyReplicas != originalReplicaCount {
+					return "", true, fmt.Errorf("all mongodb pods are ready yet")
 				}
 				return "", false, nil
 			}
 			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, podStatusTimeOut, podStatusRetryTime)
-			log.FailOnError(err, "Verify status of mongodb pod")
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
-			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
+			log.FailOnError(err, "Verify status of mongodb pod")
+			dash.VerifyFatal(statefulSet.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that all mongodb pods are in Ready state")
 		})
 		Step("Check if backup is successful after MongoDB statefulset is scaled back to original replica", func() {
 			log.InfoD("Check if backup is successful after MongoDB statefulset is scaled back to original replica")
@@ -988,21 +988,21 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 			log.Infof("mongodb replica after scaling back to original replica is %v", *statefulSet.Spec.Replicas)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Scaling MongoDB statefulset back to original replica"))
 			dash.VerifyFatal(*statefulSet.Spec.Replicas == originalReplicaCount, true, "Verify mongodb statefulset replica after scaling back to original")
-			log.Infof("Verify that at least one mongodb pod is in Ready state")
+			log.Infof("Verify that all mongodb pods are in Ready state")
 			mongoDBPodStatus := func() (interface{}, bool, error) {
 				statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
 				if err != nil {
 					return "", true, err
 				}
-				if statefulSet.Status.ReadyReplicas < 1 {
-					return "", true, fmt.Errorf("no mongodb pods are ready yet")
+				if statefulSet.Status.ReadyReplicas != originalReplicaCount {
+					return "", true, fmt.Errorf("all mongodb pods are not ready yet")
 				}
 				return "", false, nil
 			}
 			_, err = task.DoRetryWithTimeout(mongoDBPodStatus, podStatusTimeOut, podStatusRetryTime)
-			log.FailOnError(err, "Verify status of mongodb pod")
 			log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
-			dash.VerifyFatal(statefulSet.Status.ReadyReplicas > 0, true, "Verifying that at least one mongodb pod is in Ready state")
+			log.FailOnError(err, "Verify status of mongodb pod")
+			dash.VerifyFatal(statefulSet.Status.ReadyReplicas == originalReplicaCount, true, "Verifying that all mongodb pods are in Ready state")
 		})
 		Step("Check if restore is successful after MongoDB statefulset is scaled back to original replica", func() {
 			log.InfoD("Check if restore is successful after MongoDB statefulset is scaled back to original replica")

@@ -78,7 +78,7 @@ const (
 	fullMaintenancePod                        = "full-maintenance-repo"
 	jobDeleteTimeout                          = 5 * time.Minute
 	jobDeleteRetryTime                        = 10 * time.Second
-	podStatusTimeOut                          = 20 * time.Minute
+	podStatusTimeOut                          = 30 * time.Minute
 	podStatusRetryTime                        = 30 * time.Second
 )
 
