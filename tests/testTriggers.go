@@ -5796,8 +5796,6 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
-		} else {
-			UpdateOutcome(event, err)
 		}
 	}
 	updateMetrics(*event)
@@ -5868,7 +5866,6 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			log.Errorf("Failed to Set source kubeconfig: %v", err)
 			return
 		}
-		UpdateOutcome(event, err)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			log.Infof("Task name %s\n", taskName)
@@ -5909,8 +5906,6 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
-		} else {
-			UpdateOutcome(event, err)
 		}
 	}
 	updateMetrics(*event)
