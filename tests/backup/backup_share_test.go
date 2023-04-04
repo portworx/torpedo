@@ -2629,7 +2629,6 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-		wg.Wait()
 		log.Infof("Generating user context")
 		for _, userName := range users {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
