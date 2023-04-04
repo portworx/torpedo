@@ -612,6 +612,8 @@ spec:
       value: "${DEPLOY_ALL_IMAGES}"
     - name: DEPLOY_ALL_DATASERVICE
       value: "${DEPLOY_ALL_DATASERVICE}"
+    - name: CONTROL_PLANE_URL
+      value: "${CONTROL_PLANE_URL}"
     - name: PDS_QA_AWS_ACCESS_KEY
       value: "${PDS_QA_AWS_ACCESS_KEY}"
     - name: PDS_QA_AWS_SECRET_KEY
