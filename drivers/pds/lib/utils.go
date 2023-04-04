@@ -1,10 +1,12 @@
 package lib
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/client-go/tools/clientcmd"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -26,6 +28,7 @@ import (
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -1332,6 +1335,64 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	}
 
 	return accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err
+}
+
+func ValidatePDSDeploymentTargetHealthStatus(DeploymentTargetID, healthStatus string) (*pds.ModelsDeploymentTarget, error) {
+	var deploymentTarget *pds.ModelsDeploymentTarget
+
+	waiError := wait.Poll(timeInterval, timeOut, func() (bool, error) {
+		deploymentTarget, err = components.DeploymentTarget.GetTarget(DeploymentTargetID)
+		log.FailOnError(err, "Error occurred while getting deployment target")
+		if deploymentTarget.GetStatus() == healthStatus {
+			return true, nil
+		}
+		log.Infof("deployment target status %s", deploymentTarget.GetStatus())
+		return false, nil
+	})
+	log.Infof("deployment target status %s", deploymentTarget.GetStatus())
+
+	return deploymentTarget, waiError
+}
+
+func DeletePDSCRDs(pdsApiGroups []string) error {
+	var isCrdsAvailable bool
+	ctx := GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+	config, err := clientcmd.BuildConfigFromFlags("", ctx)
+	if err != nil {
+		return err
+	}
+
+	k8sApiClient, err := apiextensionsclient.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	crdList, err := k8sApiClient.ApiextensionsV1().CustomResourceDefinitions().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("error while listing crds: %v", err)
+	}
+	isCrdsAvailable = false
+	for index := range pdsApiGroups {
+		for _, crd := range crdList.Items {
+			if strings.Contains(crd.Name, pdsApiGroups[index]) {
+				crdInfo, err := k8sApiClient.ApiextensionsV1().CustomResourceDefinitions().Get(context.Background(), crd.Name, metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("error while getting crd information: %v", err)
+				}
+				log.InfoD("Deleting crd: %s", crdInfo.Name)
+				err = k8sApiClient.ApiextensionsV1().CustomResourceDefinitions().Delete(context.Background(), crd.Name, metav1.DeleteOptions{})
+				if err != nil {
+					return fmt.Errorf("error while deleting crd: %v", err)
+				}
+				isCrdsAvailable = true
+			}
+		}
+		if !isCrdsAvailable {
+			log.InfoD("No crd's found for api groups %s", pdsApiGroups[index])
+		}
+		isCrdsAvailable = false
+	}
+	return nil
 }
 
 // RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
