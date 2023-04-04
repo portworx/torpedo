@@ -656,7 +656,7 @@ github.com/libopenstorage/operator/pkg/util/test
 # github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 ## explicit; go 1.13
 github.com/libopenstorage/secrets/aws/credentials
-# github.com/libopenstorage/stork v1.4.1-0.20230207013129-a31284f0e973 => github.com/libopenstorage/stork v1.4.1-0.20230207013129-a31284f0e973
+# github.com/libopenstorage/stork v1.4.1-0.20230329095542-eefc6837653a => github.com/libopenstorage/stork v1.4.1-0.20230329095542-eefc6837653a
 ## explicit; go 1.19
 github.com/libopenstorage/stork/drivers
 github.com/libopenstorage/stork/drivers/volume
@@ -861,7 +861,7 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 # github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba
 ## explicit; go 1.19
 github.com/portworx/px-backup-api/pkg/apis/v1
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20230326023818-02601cc1bedc => github.com/portworx/sched-ops v1.20.4-rc1.0.20230326023818-02601cc1bedc
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6 => github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -882,7 +882,17 @@ github.com/portworx/sched-ops/k8s/prometheus
 github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
+github.com/portworx/sched-ops/k8s/talisman
 github.com/portworx/sched-ops/task
+# github.com/portworx/talisman v1.1.3
+## explicit; go 1.13
+github.com/portworx/talisman/pkg/apis/portworx
+github.com/portworx/talisman/pkg/apis/portworx/v1beta1
+github.com/portworx/talisman/pkg/apis/portworx/v1beta2
+github.com/portworx/talisman/pkg/client/clientset/versioned
+github.com/portworx/talisman/pkg/client/clientset/versioned/scheme
+github.com/portworx/talisman/pkg/client/clientset/versioned/typed/portworx/v1beta1
+github.com/portworx/talisman/pkg/client/clientset/versioned/typed/portworx/v1beta2
 # github.com/pquerna/cachecontrol v0.1.0
 ## explicit; go 1.16
 github.com/pquerna/cachecontrol
@@ -948,7 +958,7 @@ github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.5
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/stretchr/testify v1.8.1
+# github.com/stretchr/testify v1.8.2
 ## explicit; go 1.13
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
@@ -1976,8 +1986,8 @@ sigs.k8s.io/yaml
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
-# github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230207013129-a31284f0e973
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230326023818-02601cc1bedc
+# github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230329095542-eefc6837653a
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.1
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.1
