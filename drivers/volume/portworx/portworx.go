@@ -1454,6 +1454,7 @@ func (d *portworx) ValidatePureFaFbMountOptions(volumeName string, mountoption [
 
 }
 
+// ValidatePureFaCreateOptions validates FStype and createoptions with block size 2048 on those FStypes
 func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string, volumeNode *node.Node) error {
 	// Checking if file systems are properly set
 	FScmd := fmt.Sprintf(mountGrepVolume, volumeName)
@@ -1465,12 +1466,12 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 			TimeBeforeRetry: defaultRetryInterval,
 		})
 	if err != nil {
-		return fmt.Errorf("Failed to get mount response for volume %s", volumeName)
+		return fmt.Errorf("Failed to get mount response for volume %s, Err: %v", volumeName, err)
 	}
 	if strings.Contains(FSout, FStype) {
 		log.Infof("%s file system is available in the volume %s", FStype, volumeName)
 	} else {
-		return fmt.Errorf("Failed to get %s File system ", FStype)
+		return fmt.Errorf("Failed to get %s File system, Err: %v", FStype, err)
 	}
 
 	// Getting mapper volumename where createoptions are applied
@@ -1483,7 +1484,7 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 			TimeBeforeRetry: defaultRetryInterval,
 		})
 	if err != nil {
-		return fmt.Errorf("Failed to get attached volume for create option for pvc  %s", volumeName)
+		return fmt.Errorf("Failed to get attached volume for create option for pvc %s, Err: %v", volumeName, err)
 	}
 
 	// Validating implementation of create options
@@ -1497,12 +1498,12 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 				TimeBeforeRetry: defaultRetryInterval,
 			})
 		if err != nil {
-			return fmt.Errorf("Failed to get bsize for create option for pvc  %s", volumeName)
+			return fmt.Errorf("Failed to get bsize for create option for pvc %s, Err: %v", volumeName, err)
 		}
 		if strings.Contains(xfsInfoOut, "bsize=2048") {
 			log.Infof("Blocksize 2048 is correctly configured by the create option of volume %s", volumeName)
 		} else {
-			return fmt.Errorf("Failed to get %s proper block size in the %s file system", xfsInfoOut, FStype)
+			return fmt.Errorf("Failed to get %s proper block size in the %s file system, Err: %v", xfsInfoOut, FStype, err)
 		}
 	} else if FStype == "ext4" {
 		ext4InfoCmd := fmt.Sprintf("tune2fs -l %s ", strings.ReplaceAll(mapperOut, "\n", ""))
@@ -1514,12 +1515,12 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 				TimeBeforeRetry: defaultRetryInterval,
 			})
 		if err != nil {
-			return fmt.Errorf("Failed to get bsize for create option for pvc  %s", volumeName)
+			return fmt.Errorf("Failed to get bsize for create option for pvc %s, Err: %v", volumeName, err)
 		}
 		if strings.Contains(ext4InfoOut, "Block size:               2048") {
 			log.Infof("Blocksize 2048 is correctly configured by the create options of volume %s", volumeName)
 		} else {
-			return fmt.Errorf("Failed to get %s proper block size in the %s file system", ext4InfoOut, FStype)
+			return fmt.Errorf("Failed to get %s proper block size in the %s file system, Err: %v", ext4InfoOut, FStype, err)
 		}
 	}
 	return nil

@@ -813,7 +813,7 @@ func (d *DefaultDriver) UpdateIOPriority(volumeName string, priorityType string)
 	}
 }
 
-// Validates MountOptions for pure volumes
+// ValidatePureFaFbMountOptions Validates MountOptions for pure volumes
 func (d *DefaultDriver) ValidatePureFaFbMountOptions(volumeName string, mountoption []string, volumeNode *node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -821,7 +821,7 @@ func (d *DefaultDriver) ValidatePureFaFbMountOptions(volumeName string, mountopt
 	}
 }
 
-// validates createoptions for pure volumes
+// ValidatePureFaCreateOptions validates createoptions for pure volumes
 func (d *DefaultDriver) ValidatePureFaCreateOptions(volumeName string, FSType string, volumeNode *node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",

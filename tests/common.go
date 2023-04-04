@@ -1243,13 +1243,22 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 	log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
 	for _, v := range vols {
 		pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
-		log.FailOnError(err, " Failed to get pvc for volume %s", v)
+		if err != nil {
+			err = fmt.Errorf("Failed to get pvc for volume %s. Err: %v", v, err)
+			processError(err, errChan...)
+		}
 
 		sc, err := k8sCore.GetStorageClassForPVC(pvcObj)
-		log.FailOnError(err, " Error Occured while getting storage class for pvc %s", pvcObj)
+		if err != nil {
+			err = fmt.Errorf("Error Occured while getting storage class for pvc %s. Err: %v", pvcObj, err)
+			processError(err, errChan...)
+		}
 
 		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
-		log.FailOnError(err, "Failed to get app %s's attachednode", ctx.App.Key)
+		if err != nil {
+			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
+			processError(err, errChan...)
+		}
 		if strings.Contains(fmt.Sprint(sc.Parameters), requiredXfsCreateoption) || strings.Contains(fmt.Sprint(sc.Parameters), requiredExt4Createoption) {
 			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
 			if ok {
