@@ -1457,7 +1457,7 @@ func DeletePvandPVCs(resourceName string) error {
 			log.Debugf("strings.Contains : %v\n", strings.Contains(claimName, resourceName))
 			error := CheckAndDeleteIndependentPV(vol.Name)
 			if error != nil {
-				return fmt.Errorf("unable to delete the associated PV and PVCS due to : %v . Please check manually!", error)
+				return fmt.Errorf("unable to delete the associated PV and PVCS due to : %v .Please check manually", error)
 			}
 			log.Debugf("The PV : %v and its associated PVC : %v is finally deleted !", vol.Name, claimName)
 		}
