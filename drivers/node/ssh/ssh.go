@@ -2,6 +2,14 @@ package ssh
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
@@ -13,16 +21,9 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	ssh_pkg "golang.org/x/crypto/ssh"
-	"io/ioutil"
 	appsv1_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"net"
-	"os"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const (
@@ -86,6 +87,29 @@ func (s *SSH) IsUsingSSH() bool {
 	return len(os.Getenv("TORPEDO_SSH_KEY")) > 0 || len(os.Getenv("TORPEDO_SSH_PASSWORD")) > 0
 }
 
+// WaitForValidUptime Wait for valid uptime.
+func (s *SSH) WaitForValidUptime(n node.Node) (interface{}, error) {
+	uptimeCmd := "sudo uptime -s"
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}, uptimeCmd, true)
+		return out, true, err
+	}
+	uptimecall := func() (interface{}, bool, error) {
+		out, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+		if err != nil {
+			return out, true, fmt.Errorf("Error while getting uptime %v ", err)
+		} else if len(strings.Fields(strings.TrimSpace(out.(string)))) == 0 {
+			return out, true, fmt.Errorf("No uptime available")
+		} else {
+			return out, true, err
+		}
+	}
+	return task.DoRetryWithTimeout(uptimecall, 5*time.Minute, 5*time.Second)
+}
+
 // IsNodeRebootedInGivenTimeRange return true if node rebooted in given time range
 func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duration) (bool, error) {
 	log.Infof("Checking the uptime for a node %s", n.SchedulerNodeName)
@@ -106,7 +130,14 @@ func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duratio
 			Cause: fmt.Sprintf("Failed to run uptime command in node %v", n),
 		}
 	}
-
+	if len(strings.TrimSpace(out.(string))) == 0 {
+		//If node reboot using VM is reset then we need to wait for
+		//additional time to get valid uptime
+		out, err = s.WaitForValidUptime(n)
+		if err != nil {
+			return false, fmt.Errorf("Unable to parse uptime command output. Err: %s", err)
+		}
+	}
 	upTime := strings.Fields(strings.TrimSpace(out.(string)))
 
 	// Converting the unix date to timestamp
