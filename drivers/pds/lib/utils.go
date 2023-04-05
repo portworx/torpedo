@@ -1447,7 +1447,7 @@ func DeletePvandPVCs(resourceName string) error {
 	pv_list, err := k8sCore.GetPersistentVolumes()
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return fmt.Errorf("Persistant volumes Not Found due to : %v", err)
+			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
 		}
 		return nil
 	}
@@ -1457,7 +1457,7 @@ func DeletePvandPVCs(resourceName string) error {
 			log.Debugf("strings.Contains : %v\n", strings.Contains(claimName, resourceName))
 			error := CheckAndDeleteIndependentPV(vol.Name)
 			if error != nil {
-				return error
+				return fmt.Errorf("unable to delete the associated PV and PVCS due to : %v . Please check manually!", error)
 			}
 			log.Debugf("The PV : %v and its associated PVC : %v is finally deleted !", vol.Name, claimName)
 		}
