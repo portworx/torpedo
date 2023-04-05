@@ -1384,7 +1384,7 @@ func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, inst
 
 // Check if a deployment specific PV and associated PVC is still present. If yes then delete both of them
 func DeletePvandPVCs(resourceName string) error {
-	log.Debugf("Starting to delete the PV and PVCs for resource %v\n", resourceName)
+	log.Debugf("Starting to delete the PVs and PVCs for resource %v\n", resourceName)
 	pv_list, err := k8sCore.GetPersistentVolumes()
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {

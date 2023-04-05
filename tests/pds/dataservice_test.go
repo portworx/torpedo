@@ -1382,7 +1382,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 					log.FailOnError(err, "error while deleting deployments")
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					error := pdslib.DeletePvandPVCs(*dep.ClusterResourceName)
-					log.FailOnError(error, "Error while deleting PV and PVCs")
+					log.FailOnError(error, "Error while deleting the PV and PVCs")
 				}
 			})
 
