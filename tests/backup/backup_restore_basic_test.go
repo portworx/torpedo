@@ -1633,6 +1633,7 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+			log.InfoD("Check each backup for success status")
 			for _, bkp = range curBackups.GetBackups() {
 				backupInspectRequest := &api.BackupInspectRequest{
 					Name:  bkp.Name,
@@ -1640,10 +1641,10 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 					OrgId: orgID,
 				}
 				resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-				log.FailOnError(err, "Inspect each backup from list")
+				log.FailOnError(err, fmt.Sprintf("failed to Inspect Backup %s", bkp.Name))
 				actual := resp.GetBackup().GetStatus().Status
 				expected := api.BackupInfo_StatusInfo_Success
-				dash.VerifyFatal(actual, expected, fmt.Sprintf("Check each backup for success status %s", bkp.Name))
+				dash.VerifyFatal(actual, expected, fmt.Sprintf("backup [%s] has success status", bkp.Name))
 			}
 		})
 	})
