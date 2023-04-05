@@ -5127,6 +5127,92 @@ func (k *K8s) getKubeClient(kubeconfig string) (kubernetes.Interface, error) {
 	return kubeClient, nil
 }
 
+func (k *K8s) GetAllResourceInNamespace(namespace string) ([]interface{}, error) {
+	clientset, err := k.getKubeClient("")
+	if err != nil {
+		return nil, err
+	}
+
+	resourceLists, err := clientset.Discovery().ServerPreferredResources()
+	if err != nil {
+		return nil, err
+	}
+	total := 0
+	for _, resourceList := range resourceLists {
+		for _, resource := range resourceList.APIResources {
+			// Example:
+			// resourceList.GroupVersion = "admissionregistration.k8s.io/v1"
+			// resource.Kind = "ValidatingWebhookConfiguration"
+
+			var resourcesList []byte
+			var req *rest.Request
+
+			if resource.Namespaced {
+				if resourceList.GroupVersion == "v1" {
+					req = clientset.Discovery().RESTClient().Get().
+						AbsPath(fmt.Sprintf("/api/%s/namespaces/%s/%s", resourceList.GroupVersion, namespace, resource.Name))
+				} else {
+					req = clientset.Discovery().RESTClient().Get().
+						AbsPath(fmt.Sprintf("/apis/%s/namespaces/%s/%s", resourceList.GroupVersion, namespace, resource.Name))
+				}
+				resourcesList, err = req.DoRaw(context.TODO())
+				if err != nil {
+					if strings.Contains(err.Error(), "the server does not allow this method on the requested resource") {
+						continue
+					} else {
+						log.Errorf("%s :: %s :: %v", resourceList.GroupVersion, resource.Kind, err)
+						//TODO: change to FailOnError
+						continue
+					}
+				}
+			} else {
+				if resourceList.GroupVersion == "v1" {
+					req = clientset.Discovery().RESTClient().Get().
+						AbsPath(fmt.Sprintf("/api/%s/%s", resourceList.GroupVersion, resource.Name))
+				} else {
+					req = clientset.Discovery().RESTClient().Get().
+						AbsPath(fmt.Sprintf("/apis/%s/%s", resourceList.GroupVersion, resource.Name))
+				}
+				resourcesList, err = req.DoRaw(context.TODO())
+				if err != nil {
+					if strings.Contains(err.Error(), "the server does not allow this method on the requested resource") {
+						continue
+					} else {
+						log.Errorf("%s :: %s :: %v", resourceList.GroupVersion, resource.Kind, err)
+						//TODO: change to FailOnError
+						continue
+					}
+				}
+			}
+
+			var list v1.List
+			if err := json.Unmarshal(resourcesList, &list); err != nil {
+				log.Errorf("%s :: %s :: %v", resourceList.GroupVersion, resource.Kind, err)
+				//TODO: change to FailOnError
+				continue
+			}
+
+			if resource.Namespaced {
+				log.Errorf("%s :: %s :: %d", resourceList.GroupVersion, resource.Kind, len(list.Items))
+				total += len(list.Items)
+			}
+
+			// var service corev1.Service
+			// for _, item := range list.Items {
+			// 	if err := json.Unmarshal(item.Raw, &service); err != nil {
+			// 		//log.Errorf("%v", err)
+			// 		continue
+			// 	}
+			// 	log.Infof("Service: %s", service.Name)
+			// }
+		}
+	}
+
+	log.Errorf("TOTAL: %d", total)
+
+	return nil, nil
+}
+
 // GetEvents dumps events from event storage
 func (k *K8s) GetEvents() map[string][]scheduler.Event {
 	log.Infof("Getting events for validation")
