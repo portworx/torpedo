@@ -40,8 +40,7 @@ func (awsObj *awsStorageClient) createBucket(bucketName string) error {
 	})
 
 	if err != nil {
-		log.Errorf("Failed to initialize new session: %v", err)
-		return err
+		return fmt.Errorf("failed to initialize new session: %v", err)
 	}
 
 	client := s3.New(sess)
@@ -55,8 +54,7 @@ func (awsObj *awsStorageClient) createBucket(bucketName string) error {
 				log.Infof("Bucket: %v ,already exist.", bucketName)
 				return nil
 			} else {
-				log.Errorf("Couldn't create bucket: %v", err)
-				return err
+				return fmt.Errorf("couldn't create bucket: %v", err)
 			}
 
 		}
@@ -76,8 +74,7 @@ func (awsObj *awsStorageClient) deleteBucket(bucketName string) error {
 	})
 
 	if err != nil {
-		log.Infof("Failed to initialize new session: %v", err)
-		return err
+		return fmt.Errorf("failed to initialize new session: %v", err)
 	}
 
 	client := s3.New(sess)
@@ -90,8 +87,7 @@ func (awsObj *awsStorageClient) deleteBucket(bucketName string) error {
 				log.Infof("[AWS] Bucket: %v doesn't exists.!!", bucketName)
 				return nil
 			} else {
-				log.Errorf("Couldn't delete bucket: %v", err)
-				return err
+				return fmt.Errorf("couldn't delete bucket: %v", err)
 			}
 
 		}
@@ -109,8 +105,7 @@ func (azObj *azureStorageClient) createBucket(containerName string) error {
 	}
 	client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("https://%s.blob.core.windows.net/", azObj.accountName), cred, nil)
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return fmt.Errorf("error -> %v", err.Error())
 	}
 
 	_, err = client.CreateContainer(context.TODO(), containerName, nil)
@@ -125,13 +120,11 @@ func (azObj *azureStorageClient) createBucket(containerName string) error {
 func (azObj *azureStorageClient) deleteBucket(containerName string) error {
 	cred, err := azblob.NewSharedKeyCredential(azObj.accountName, azObj.accountKey)
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return fmt.Errorf("error -> %v", err.Error())
 	}
 	client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("https://%s.blob.core.windows.net/", azObj.accountName), cred, nil)
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		return fmt.Errorf("error -> %v", err.Error())
 	}
 
 	_, err = client.DeleteContainer(context.TODO(), containerName, nil)
@@ -149,7 +142,7 @@ func (gcpObj *gcpStorageClient) createBucket(bucketName string) error {
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/json")
 	client, err := storage.NewClient(context.Background())
 	if err != nil {
-		log.Fatalf("Failed to create gcp client: %v", err)
+		return fmt.Errorf("failed to create gcp client: %v", err)
 	}
 
 	defer client.Close()
@@ -161,16 +154,14 @@ func (gcpObj *gcpStorageClient) createBucket(bucketName string) error {
 
 	if exist != nil {
 		if err != nil {
-			log.Errorf("Unexpected error occured: %v", err)
-			return err
+			return fmt.Errorf("unexpected error occured: %v", err)
 		} else {
 			log.Infof("[GCP] Bucket: %v already exists.!!", bucketName)
 		}
 	} else {
 		err := bucketClient.Create(ctx, gcpObj.projectId, nil)
 		if err != nil {
-			log.Errorf("Bucket(%v).Create: %v", bucketName, err)
-			return err
+			return fmt.Errorf("Bucket(%v).Create: %v", bucketName, err)
 		}
 		log.Infof("[GCP] Successfully create the Bucket: %v", bucketName)
 	}
@@ -183,7 +174,7 @@ func (gcpObj *gcpStorageClient) deleteBucket(bucketName string) error {
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/json")
 	client, err := storage.NewClient(context.Background())
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		return fmt.Errorf("failed to create client: %v", err)
 	}
 
 	defer client.Close()
@@ -196,13 +187,11 @@ func (gcpObj *gcpStorageClient) deleteBucket(bucketName string) error {
 
 	if exist != nil {
 		if err != nil {
-			log.Errorf("Unexpected error occured: %v", err)
-			return err
+			return fmt.Errorf("unexpected error occured: %v", err)
 		} else {
 			err := bucketClient.Delete(ctx)
 			if err != nil {
-				log.Errorf("Bucket(%v).Delete: %v", bucketName, err)
-				return err
+				return fmt.Errorf("Bucket(%v).Delete: %v", bucketName, err)
 			}
 			log.Infof("[GCP]Successfully deleted the Bucket: %v", bucketName)
 		}

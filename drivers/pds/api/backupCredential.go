@@ -100,7 +100,7 @@ func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID stri
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error when called `ApiTenantsIdBackupCredentialsPost` to create credentials - %v", err)
 	}
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("response code is not 200(OK) when called `ApiTenantsIdBackupCredentialsPost. Full response code %v", res)
@@ -130,7 +130,7 @@ func (backupCredential *BackupCredential) CreateS3CompatibleBackupCredential(ten
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error when called `ApiTenantsIdBackupCredentialsPost` to create credentials - %v", err)
 	}
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("response code is not 200(OK) when called `ApiTenantsIdBackupCredentialsPost. Full response code %v", res)

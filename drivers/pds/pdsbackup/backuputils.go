@@ -1,6 +1,8 @@
 package pdsbackup
 
 import (
+	"fmt"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"net/url"
 	"os"
 	"time"
@@ -37,20 +39,18 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	backupCred, err := backupClient.components.BackupCredential.CreateS3BackupCredential(tenantId, name, akid, awsS3endpoint, skid)
 	log.Infof("%v created successfully.", backupCred.GetName())
 	if err != nil {
-		log.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 	}
 	log.Info("Create S3 bucket on AWS cloud.")
 	err = backupClient.awsStorageClient.createBucket(bucketName)
 	if err != nil {
-		log.Errorf("Failed while creating S3 bucket, Err: %v ", err)
-		return nil, err
+		return nil, fmt.Errorf("Failed while creating S3 bucket, Err: %v ", err)
 	}
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, region, "s3")
 	if err != nil {
-		log.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
-		return nil, err
+
+		return nil, fmt.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
 	}
 	return backupTarget, nil
 }
@@ -65,15 +65,14 @@ func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name
 	backupCred, err := backupClient.components.BackupCredential.CreateAzureBackupCredential(tenantId, name, accountKey, accountName)
 
 	if err != nil {
-		log.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
-		return nil, err
+
+		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 	}
 
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, "", "azure")
 	if err != nil {
-		log.Errorf("Failed to create Azure backup target, Err: %v ", err)
-		return nil, err
+		return nil, fmt.Errorf("Failed to create Azure backup target, Err: %v ", err)
 	}
 	log.Infof("[Backup Target: %v]Syncing to target clusters", name)
 	return backupTarget, nil
@@ -88,20 +87,17 @@ func (backupClient *BackupClient) CreateGcpBackupCredsAndTarget(tenantId, name s
 	backupCred, err := backupClient.components.BackupCredential.CreateGoogleCredential(tenantId, name, projectId, gcpJsonKey)
 
 	if err != nil {
-		log.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 	}
 	log.Info("Create google storage.")
 	err = backupClient.gcpStorageClient.createBucket(bucketName)
 	if err != nil {
-		log.Errorf("Failed while creating bucket, Err: %v ", err)
-		return nil, err
+		return nil, fmt.Errorf("Failed while creating bucket, Err: %v ", err)
 	}
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, "", "google")
 	if err != nil {
-		log.Errorf("Failed to create google backup target, Err: %v ", err)
-		return nil, err
+		return nil, fmt.Errorf("Failed to create google backup target, Err: %v ", err)
 	}
 	return backupTarget, nil
 
@@ -114,22 +110,30 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 	credId := backupTarget.GetBackupCredentialsId()
 	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
 	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
-	backupTarget.GetBackupCredentialsId()
 	if err != nil {
-		log.Errorf("Failed to delete AWS S3 backup target, Err: %v ", err)
-		return err
+		return fmt.Errorf("Failed to delete AWS S3 backup target, Err: %v ", err)
 	}
-	time.Sleep(bkpMaxtimeInterval)
+	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
+		model, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
+		if model != nil {
+			log.Info(model.GetName())
+			return false, nil
+		} else {
+			return true, nil
+		}
+		return false, nil
+	})
+	if waitErr != nil {
+		return fmt.Errorf("error occured while polling for deleting backuptarget : %v", err)
+	}
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
-		log.Errorf("Failed to delete AWS S3 backup credentials, Err: %v ", err)
-		return err
+		return fmt.Errorf("Failed to delete AWS S3 backup credentials, Err: %v ", err)
 	}
 	log.Info("Delete S3 bucket from AWS cloud.")
 	err = backupClient.awsStorageClient.deleteBucket(bucketName)
 	if err != nil {
-		log.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
-		return err
+		return fmt.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
 	}
 	return nil
 }
@@ -143,21 +147,30 @@ func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId
 	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
 	backupTarget.GetBackupCredentialsId()
 	if err != nil {
-		log.Errorf("Failed to delete Azure backup target, Err: %v ", err)
-		return err
+		return fmt.Errorf("Failed to delete Azure backup target, Err: %v ", err)
 	}
-	time.Sleep(bkpMaxtimeInterval)
+	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
+		model, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
+		if model != nil {
+			log.Info(model.GetName())
+			return false, nil
+		} else {
+			return true, nil
+		}
+		return false, nil
+	})
+	if waitErr != nil {
+		return fmt.Errorf("error occured while polling for deleting backuptarget : %v", err)
+	}
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
-		log.Errorf("Failed to delete Azure backup credentials, Err: %v ", err)
-		return err
+		return fmt.Errorf("Failed to delete Azure backup credentials, Err: %v ", err)
 	}
 
 	log.Info("Delete Azure blob storage")
 	err = backupClient.azureStorageClient.deleteBucket(bucketName)
 	if err != nil {
-		log.Errorf("Failed to delete  azure blob %s, Err: %v ", bucketName, err)
-		return err
+		return fmt.Errorf("Failed to delete  azure blob %s, Err: %v ", bucketName, err)
 	}
 	return nil
 }
@@ -170,20 +183,29 @@ func (backupClient *BackupClient) DeleteGoogleBackupCredsAndTarget(backupTargetI
 	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
 	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
 	if err != nil {
-		log.Errorf("Failed to delete Google backup target, Err: %v ", err)
-		return err
+		return fmt.Errorf("Failed to delete Google backup target, Err: %v ", err)
 	}
-	time.Sleep(bkpMaxtimeInterval)
+	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
+		model, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
+		if model != nil {
+			log.Info(model.GetName())
+			return false, nil
+		} else {
+			return true, nil
+		}
+		return false, nil
+	})
+	if waitErr != nil {
+		return fmt.Errorf("error occured while polling for deleting backuptarget : %v", err)
+	}
 	_, err = backupClient.components.BackupCredential.DeleteBackupCredential(credId)
 	if err != nil {
-		log.Errorf("Failed to delete Google backup credentials, Err: %v ", err)
-		return err
+		return fmt.Errorf("Failed to delete Google backup credentials, Err: %v ", err)
 	}
 	log.Info("Deleting google storage.")
 	err = backupClient.gcpStorageClient.deleteBucket(bucketName)
 	if err != nil {
-		log.Errorf("Failed to delete bucket %s, Err: %v ", bucketName, err)
-		return err
+		return fmt.Errorf("Failed to delete bucket %s, Err: %v ", bucketName, err)
 	}
 	return nil
 }
@@ -195,8 +217,7 @@ func InitializePdsBackup() (*BackupClient, error) {
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(envVars.PDSControlPlaneURL)
 	if err != nil {
-		log.Errorf("An Error Occured while parsing the URL %v", err)
-		return nil, err
+		return nil, fmt.Errorf("an Error Occured while parsing the URL %v", err)
 	}
 	apiConf.Host = endpointURL.Host
 	apiConf.Scheme = endpointURL.Scheme

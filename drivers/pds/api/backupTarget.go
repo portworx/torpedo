@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -52,14 +53,12 @@ func (backupTarget *BackupTarget) GetBackupTarget(backupTargetID string) (*pds.M
 	backupTargetClient := backupTarget.apiClient.BackupTargetsApi
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupTargetModel, res, err := backupTargetClient.ApiBackupTargetsIdGet(ctx, backupTargetID).Execute()
 
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupTargetsIdGet``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when called `ApiBackupTargetsIdGet`, Full HTTP response: %v\n", res)
 	}
 	return backupTargetModel, err
 }
@@ -81,7 +80,7 @@ func (backupTarget *BackupTarget) CreateBackupTarget(tenantID string, name strin
 	}
 	backupTargetModel, _, err := backupTargetClient.ApiTenantsIdBackupTargetsPost(ctx, tenantID).Body(createRequest).Execute()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error when called `ApiTenantsIdBackupTargetsPost` to create backup target - %v", err)
 	}
 	return backupTargetModel, err
 }
