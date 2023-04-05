@@ -1560,7 +1560,7 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 			// Issue a remove backup location call
 			for backupLocationUID, customBackupLocationName = range backupLocationMap {
 				err := DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID, false)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
 
 				// Wait until backup location is removed
 				backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
@@ -1576,7 +1576,7 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 					return "", false, nil
 				}
 				_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, 3*time.Minute, 30*time.Second)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
 			}
 		})
 
