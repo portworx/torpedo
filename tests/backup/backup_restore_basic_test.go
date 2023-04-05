@@ -1463,6 +1463,7 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 		restoreList       []string
 		sourceScName      *storageApi.StorageClass
 		scNames           []string
+		scCount           int
 	)
 	namespaceMap := make(map[string]string)
 	backupLocationMap := make(map[string]string)
@@ -1507,7 +1508,7 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 		})
 		Step("Create new storage class on source cluster for storage class mapping for restore", func() {
 			log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
-			scCount := 2
+			scCount = 2
 			for i := 0; i < scCount; i++ {
 				scName := fmt.Sprintf("replica-sc-%d-%v", time.Now().Unix(), i)
 				params["repl"] = "2"
