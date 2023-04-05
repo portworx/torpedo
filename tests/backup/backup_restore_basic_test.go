@@ -1558,11 +1558,7 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 			sourceScName, err = core.Instance().GetStorageClassForPVC(&singlePvc)
 			var wg sync.WaitGroup
 			for _, scName := range scNames {
-<<<<<<< HEAD
 				log.InfoD("Restoring backup in different storage class in same cluster at the same time")
-=======
-				log.InfoD("Restoring backup in different storage class in same cluster")
->>>>>>> 344318bee (TC Automation Issue multiple custom restores at the same time using different storage class mapping)
 				storageClassMapping[sourceScName.Name] = scName
 				time.Sleep(2)
 				namespaceMap[bkpNamespaces[0]] = fmt.Sprintf("new-namespace-%v", time.Now().Unix())
