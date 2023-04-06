@@ -1449,17 +1449,17 @@ func DeletePvandPVCs(resourceName string) error {
 		if strings.Contains(err.Error(), "not found") {
 			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
 		}
-		return nil
+		return err
 	}
 	for _, vol := range pv_list.Items {
 		claimName := vol.Spec.ClaimRef.Name
 		if strings.Contains(claimName, resourceName) {
-			log.Debugf("strings.Contains : %v\n", strings.Contains(claimName, resourceName))
-			error := CheckAndDeleteIndependentPV(vol.Name)
-			if error != nil {
-				return fmt.Errorf("unable to delete the associated PV and PVCS due to : %v .Please check manually", error)
+			log.Debugf("claim :%s is identified", claimName)
+			err := CheckAndDeleteIndependentPV(vol.Name)
+			if err != nil {
+				return fmt.Errorf("unable to delete the associated PV and PVCS due to : %v .Please check manually", err)
 			}
-			log.Debugf("The PV : %v and its associated PVC : %v is finally deleted !", vol.Name, claimName)
+			log.Debugf("The PV : %v and its associated PVC : %v is deleted !", vol.Name, claimName)
 		}
 	}
 	return nil
