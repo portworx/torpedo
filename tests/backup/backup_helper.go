@@ -729,8 +729,8 @@ func kubectlExec(arguments []string) (string, error) {
 	}
 	cmd := exec.Command("kubectl", arguments...)
 	output, err := cmd.Output()
-	log.InfoD("command output for '%s'", cmd.String())
-	log.Infof("command output for '%s': %s", cmd.String(), string(output))
+	log.InfoD("Command '%s'", cmd.String())
+	log.Infof("Command output for '%s': %s", cmd.String(), string(output))
 	if err != nil {
 		return "", fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}
