@@ -699,6 +699,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		for _, namespace := range appNamespaces {
 			for backupLocationUID, backupLocationName := range backupLocationMap {
 				Step("Getting size of volume before resizing", func() {
+					log.InfoD("Getting size of volume before resizing")
 					pods, err := core.Instance().GetPods(namespace, labelSelectors)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
