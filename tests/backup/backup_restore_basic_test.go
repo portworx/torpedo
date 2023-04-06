@@ -1552,7 +1552,7 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup: %s", backupName))
 		})
 		Step("Multiple restore for same backup in different storage class in same cluster at the same time", func() {
-			log.InfoD("Multiple restore for same backup in different storage class in same cluster at the same time")
+			log.InfoD(fmt.Sprintf("Multiple restore for same backup into %d different storage class in same cluster at the same time", scCount))
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			pvcs, err := core.Instance().GetPersistentVolumeClaims(bkpNamespaces[0], labelSelectors)
