@@ -121,7 +121,6 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 		} else {
 			return true, nil
 		}
-		return false, nil
 	})
 	if waitErr != nil {
 		return fmt.Errorf("error occured while polling for deleting backuptarget : %v", err)
@@ -157,7 +156,6 @@ func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId
 		} else {
 			return true, nil
 		}
-		return false, nil
 	})
 	if waitErr != nil {
 		return fmt.Errorf("error occured while polling for deleting backuptarget : %v", err)
@@ -193,7 +191,6 @@ func (backupClient *BackupClient) DeleteGoogleBackupCredsAndTarget(backupTargetI
 		} else {
 			return true, nil
 		}
-		return false, nil
 	})
 	if waitErr != nil {
 		return fmt.Errorf("error occured while polling for deleting backuptarget : %v", err)
