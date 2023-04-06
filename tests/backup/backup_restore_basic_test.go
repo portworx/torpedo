@@ -1508,7 +1508,7 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 		})
 		Step("Create new storage class on source cluster for storage class mapping for restore", func() {
 			log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
-			scCount = 5
+			scCount = 10
 			for i := 0; i < scCount; i++ {
 				scName := fmt.Sprintf("replica-sc-%d-%v", time.Now().Unix(), i)
 				params["repl"] = "2"
