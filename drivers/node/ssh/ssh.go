@@ -87,60 +87,20 @@ func (s *SSH) IsUsingSSH() bool {
 	return len(os.Getenv("TORPEDO_SSH_KEY")) > 0 || len(os.Getenv("TORPEDO_SSH_PASSWORD")) > 0
 }
 
-// // WaitForValidUptime Wait for valid uptime.
-// func (s *SSH) WaitForValidUptime(n node.Node) (string, error) {
-// 	uptimeCmd := "sudo uptime -s"
-
-// 	// t := func() (interface{}, bool, error) {
-// 	// 	out, err := s.doCmd(n, node.ConnectionOpts{
-// 	// 		Timeout:         1 * time.Minute,
-// 	// 		TimeBeforeRetry: 10 * time.Second,
-// 	// 	}, uptimeCmd, true)
-// 	// 	return out, true, err
-// 	// }
-// 	uptimecall := func() (interface{}, bool, error) {
-// 		out, err := s.RunCommand(n, uptimeCmd, node.ConnectionOpts{
-// 			Timeout:         1 * time.Minute,
-// 			TimeBeforeRetry: 10 * time.Second,
-// 		})
-// 		//out, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
-// 		if err != nil {
-// 			return out, true, fmt.Errorf("Error while getting uptime %v ", err)
-// 		} else if len(strings.Fields(strings.TrimSpace(out))) == 0 {
-// 			return out, true, fmt.Errorf("No uptime available")
-// 		}
-// 		return out, false, nil
-// 	}
-// 	uptimeOut, err := task.DoRetryWithTimeout(uptimecall, 5*time.Minute, 10*time.Second)
-// 	return uptimeOut.(string), err
-// }
-
 // IsNodeRebootedInGivenTimeRange return true if node rebooted in given time range
 func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duration) (bool, error) {
 	log.Infof("Checking the uptime for a node %s", n.SchedulerNodeName)
 	uptimeCmd := "sudo uptime -s"
-	//	var cmdOut string
-	//Code changes
-
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, node.ConnectionOpts{
 			Timeout:         1 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		}, uptimeCmd, true)
-		// out, err := s.RunCommand(n, uptimeCmd, node.ConnectionOpts{
-		// 	Timeout:         1 * time.Minute,
-		// 	TimeBeforeRetry: 5 * time.Second,
-		// })
-		log.Infof("Before output check %s", out)
-		//out, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
 		if err != nil {
-			log.Infof("Error occured %v", err)
 			return out, true, fmt.Errorf("Error while getting uptime %v ", err)
 		} else if len(strings.Fields(strings.TrimSpace(out))) == 0 {
-			log.Infof("Empty out string ")
 			return out, true, fmt.Errorf("No uptime available")
 		}
-		log.Infof("After output check %s", out)
 		return out, false, nil
 	}
 	out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
@@ -150,32 +110,6 @@ func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duratio
 			Cause: fmt.Sprintf("Failed to run uptime command in node %v", n),
 		}
 	}
-	log.Infof("After exit output check %s", out)
-	// t := func() (interface{}, bool, error) {
-	// 	out, err := s.doCmd(n, node.ConnectionOpts{
-	// 		Timeout:         1 * time.Minute,
-	// 		TimeBeforeRetry: 10 * time.Second,
-	// 	}, uptimeCmd, true)
-	// 	return out, true, err
-	// }
-	// out, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
-	// cmdOut = strings.TrimSpace(out.(string))
-	// if err != nil || len(strings.TrimSpace(out.(string))) == 0 {
-	// 	if err != nil {
-	// 		return false, &node.ErrFailedToRunCommand{
-	// 			Node:  n,
-	// 			Cause: fmt.Sprintf("Failed to run uptime command in node %v", n),
-	// 		}
-	// 	}
-	// 	if len(strings.TrimSpace(out.(string))) == 0 {
-	// 		//If node reboot using VM is reset then we need to wait for
-	// 		//additional time to get valid uptime
-	// 		cmdOut, err = s.WaitForValidUptime(n)
-	// 		if err != nil {
-	// 			return false, fmt.Errorf("Unable to parse uptime command output. Err: %s", err)
-	// 		}
-	// 	}
-	// }
 	upTime := strings.Fields(strings.TrimSpace(out.(string)))
 	// Converting the unix date to timestamp
 	thetime, err := time.Parse(time.RFC3339, upTime[0]+"T"+upTime[1]+"+00:00")
