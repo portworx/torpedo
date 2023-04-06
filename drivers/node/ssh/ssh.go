@@ -98,7 +98,7 @@ func (s *SSH) IsNodeRebootedInGivenTimeRange(n node.Node, timerange time.Duratio
 		}, uptimeCmd, true)
 		if err != nil {
 			return out, true, fmt.Errorf("Error while getting uptime %v ", err)
-		} else if len(strings.Fields(strings.TrimSpace(out))) == 0 {
+		} else if len(out) == 0 {
 			return out, true, fmt.Errorf("No uptime available")
 		}
 		return out, false, nil
@@ -476,7 +476,6 @@ func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpt
 	if err != nil {
 		return "", err
 	}
-	log.Infof("OUTPUT %s ", output.(string))
 	return output.(string), nil
 }
 
