@@ -222,16 +222,17 @@ func (s *SSH) GetDeviceMapperCount(n node.Node, timerange time.Duration) (int, e
 	return count, nil
 }
 
-// Init initializes SSH node driver
-func (s *SSH) Init(nodeOpts node.InitOptions) error {
+// updateDriver updates the information stored in the driver w.r.t. current context
+func (s *SSH) updateDriver() error {
 	var err error
-	s.specDir = nodeOpts.SpecDir
 
+	// The namespace of the portworx-service in the current context
 	execPodNamespace, err := getExecPodNamespace()
 	if err != nil {
 		return err
 	}
 	s.execPodNamespace = execPodNamespace
+	log.InfoD("UpdateDriver: ssh driver's namespace (the 'portworx-service' namespace) is updated to [%s]", execPodNamespace)
 
 	nodes := node.GetWorkerNodes()
 	if s.IsUsingSSH() {
@@ -260,6 +261,17 @@ func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	}
 
 	return nil
+}
+
+// Init initializes SSH node driver
+func (s *SSH) Init(nodeOpts node.InitOptions) error {
+	s.specDir = nodeOpts.SpecDir
+	return s.updateDriver()
+}
+
+// RefreshDriver refreshes the driver on a context switch
+func RefreshDriver(s *SSH) error {
+	return s.updateDriver()
 }
 
 func (s *SSH) initExecPod() error {
