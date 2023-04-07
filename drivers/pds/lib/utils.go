@@ -1071,6 +1071,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 				for _, c := range pod.Status.ContainerStatuses {
 					if int32(c.RestartCount) != 0 {
 						flag = true
+						log.Infof("****JYOTI**** VALUES are: c.State ----- %v\n", c.State)
 						if c.State.Terminated != nil && c.State.Terminated.ExitCode != 0 && c.State.Terminated.Reason != "Completed" {
 							log.Errorf("Something went wrong and Run Container Exited abruptly. Leaving the TPCC deployment as is - pls check manually")
 							log.InfoD("Printing TPCC Deployment Describe Status here .....")
@@ -1086,6 +1087,7 @@ func RunTpccWorkload(dbUser string, pdsPassword string, dnsEndpoint string, dbNa
 					}
 				}
 			}
+			log.Infof("****JYOTI**** VALUES are: c.State ----- %v\n", pod.Status.ContainerStatuses)
 		}
 		if flag {
 			log.InfoD("TPCC Workload run finished. Finishing this Test Case")
