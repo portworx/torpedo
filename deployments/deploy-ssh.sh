@@ -602,12 +602,6 @@ spec:
       value: "${DEPLOY_ALL_DATASERVICE}"
     - name: CONTROL_PLANE_URL
       value: "${CONTROL_PLANE_URL}"
-    - name: PDS_QA_AWS_ACCESS_KEY
-      value: "${PDS_QA_AWS_ACCESS_KEY}"
-    - name: PDS_QA_AWS_SECRET_KEY
-      value: "${PDS_QA_AWS_SECRET_KEY}"
-    - name: PDS_QA_AWS_REGION
-      value: "${PDS_QA_AWS_REGION}"
     - name: PDS_QA_AZURE_STORAGE_ACCOUNT_NAME
       value: "${PDS_QA_AZURE_STORAGE_ACCOUNT_NAME}"
     - name: PDS_QA_AZURE_ACCOUNT_KEY

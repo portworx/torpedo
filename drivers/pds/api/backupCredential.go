@@ -271,16 +271,13 @@ func (backupCredential *BackupCredential) UpdateGoogleBackupCredential(backupCre
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiBackupCredentialsIdPut(ctx, backupCredsID).Body(updateRequest).Execute()
 	if res.StatusCode != status.StatusOK {
-		log.Errorf("Error when calling `ApiBackupCredentialsIdPut``: %v\n", err)
-		log.Errorf("Full HTTP response: %v\n", res)
+		return nil, fmt.Errorf("Error when calling `ApiBackupCredentialsIdPut``: %v\n", err)
 	}
 	return backupModel, err
-
 }
 
 // DeleteBackupCredential func

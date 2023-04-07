@@ -53,6 +53,7 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 	})
 	JustAfterEach(func() {
 		deleteAllBkpTargets()
+		EndTorpedoTest()
 	})
 })
 

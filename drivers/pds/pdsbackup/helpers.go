@@ -100,7 +100,6 @@ func (awsObj *awsStorageClient) deleteBucket(bucketName string) error {
 func (azObj *azureStorageClient) createBucket(containerName string) error {
 	cred, err := azblob.NewSharedKeyCredential(azObj.accountName, azObj.accountKey)
 	if err != nil {
-		log.Error(err.Error())
 		return err
 	}
 	client, err := azblob.NewClientWithSharedKeyCredential(fmt.Sprintf("https://%s.blob.core.windows.net/", azObj.accountName), cred, nil)
@@ -151,7 +150,9 @@ func (gcpObj *gcpStorageClient) createBucket(bucketName string) error {
 	defer cancel()
 	bucketClient := client.Bucket(bucketName)
 	exist, err := bucketClient.Attrs(ctx)
-
+	if err != nil {
+		return err
+	}
 	if exist != nil {
 		if err != nil {
 			return fmt.Errorf("unexpected error occured: %v", err)
@@ -209,7 +210,6 @@ func createGcpJsonFile(path string) error {
 	defer f.Close()
 	_, err = f.WriteString(os.Getenv("PDS_QA_GCP_JSON_PATH"))
 	if err != nil {
-		fmt.Println(err)
 		return fmt.Errorf("error while writing the data to file -> %v", err)
 	}
 	return nil

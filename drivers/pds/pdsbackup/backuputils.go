@@ -37,10 +37,10 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	skid := backupClient.awsStorageClient.secretKey
 	region := backupClient.awsStorageClient.region
 	backupCred, err := backupClient.components.BackupCredential.CreateS3BackupCredential(tenantId, name, akid, awsS3endpoint, skid)
-	log.Infof("%v created successfully.", backupCred.GetName())
 	if err != nil {
 		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 	}
+	log.Infof("Backup Credential %v created successfully.", backupCred.GetName())
 	log.Info("Create S3 bucket on AWS cloud.")
 	err = backupClient.awsStorageClient.createBucket(bucketName)
 	if err != nil {
@@ -61,14 +61,11 @@ func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name
 	log.Info("Add Azure backup creadentials")
 	accountKey := backupClient.azureStorageClient.accountKey
 	accountName := backupClient.azureStorageClient.accountName
-
 	backupCred, err := backupClient.components.BackupCredential.CreateAzureBackupCredential(tenantId, name, accountKey, accountName)
-
 	if err != nil {
 
 		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 	}
-
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, "", "azure")
 	if err != nil {
@@ -76,7 +73,6 @@ func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name
 	}
 	log.Infof("[Backup Target: %v]Syncing to target clusters", name)
 	return backupTarget, nil
-
 }
 
 // CreateGcpBackupCredsAndTarget create backup creds,bucket and target.
@@ -114,10 +110,10 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 		return fmt.Errorf("Failed to delete AWS S3 backup target, Err: %v ", err)
 	}
 	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
-		model, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
+		model, bkpErr := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
 		if model != nil {
 			log.Info(model.GetName())
-			return false, nil
+			return false, bkpErr
 		} else {
 			return true, nil
 		}
@@ -144,15 +140,14 @@ func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId
 	credId := backupTarget.GetBackupCredentialsId()
 	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
 	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
-	backupTarget.GetBackupCredentialsId()
 	if err != nil {
 		return fmt.Errorf("Failed to delete Azure backup target, Err: %v ", err)
 	}
 	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
-		model, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
+		model, bkpErr := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
 		if model != nil {
 			log.Info(model.GetName())
-			return false, nil
+			return false, bkpErr
 		} else {
 			return true, nil
 		}
@@ -176,18 +171,21 @@ func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId
 // DeleteGoogleBackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteGoogleBackupCredsAndTarget(backupTargetId string) error {
 	log.Info("Removing Google backup creadentials and target from PDS.")
-	backupTarget, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
+	backupTarget, err := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
+	if err != nil {
+		return fmt.Errorf("Unable to fetch backup target details using uuid - %v, Err: %v ", backupTargetId, err)
+	}
 	credId := backupTarget.GetBackupCredentialsId()
 	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
-	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
+	_, err = backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
 	if err != nil {
 		return fmt.Errorf("Failed to delete Google backup target, Err: %v ", err)
 	}
 	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
-		model, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
+		model, bkpErr := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
 		if model != nil {
 			log.Info(model.GetName())
-			return false, nil
+			return false, bkpErr
 		} else {
 			return true, nil
 		}
