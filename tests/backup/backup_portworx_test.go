@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/sched-ops/task"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -605,6 +606,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		firstScheduleBackupName     string
 		appClusterName              string
 		nextScheduleBackupName      interface{}
+		restoreNames                []string
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -815,6 +817,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", namespace, time.Now().Unix())
+					restoreNames = append(restoreNames, restoreName)
 					err = CreateRestore(restoreName, firstScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, firstScheduleBackupName))
 				})
@@ -823,6 +826,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore-recent-backup", namespace, time.Now().Unix())
+					restoreNames = append(restoreNames, restoreName)
 					err = CreateRestore(restoreName, nextScheduleBackupName.(string), make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, nextScheduleBackupName.(string)))
 				})
@@ -830,6 +834,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		}
 	})
 	JustAfterEach(func() {
+		var wg sync.WaitGroup
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
@@ -838,6 +843,16 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Fetching uid of schedule named [%s]", scheduleNames[i]))
 			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] and schedule policies [%v]", scheduleNames[i], periodicSchedulePolicyNames[i]))
+		}
+		log.InfoD("Deleting created restores")
+		for _, restoreName := range restoreNames {
+			wg.Add(1)
+			go func(restoreName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err = DeleteRestore(restoreName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
+			}(restoreName)
 		}
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
