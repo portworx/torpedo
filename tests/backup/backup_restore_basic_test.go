@@ -1604,7 +1604,6 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 	})
 })
 
-
 // CloudSnapsSafeWhenBackupLocationDeleteTest takes a good number of backups to check if cloud snaps are
 // safe (not deleted) if backup location is removed
 var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
@@ -1712,9 +1711,9 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation: %s", backupName))
 						}(backupName)
 					}
-					wg.Wait()
 				}
 			}
+			wg.Wait()
 			log.Infof("List of backups - %v", backupNames)
 		})
 
@@ -1726,7 +1725,7 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
 
 				// Wait until backup location is removed
-        ctx, err := backup.GetAdminCtxFromSecret()
+				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
 					status, err := IsBackupLocationPresent(customBackupLocationName, ctx, orgID)
@@ -1823,4 +1822,3 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
-
