@@ -100,7 +100,7 @@ const (
 	pxReleaseManifestURLEnvVarName            = "PX_RELEASE_MANIFEST_URL"
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
-	deviceMapper                              = "mount | grep %s | awk '{print $1}'"
+	mountGrepFirstColumn                      = "mount | grep %s | awk '{print $1}'"
 )
 
 const (
@@ -1475,7 +1475,7 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 	}
 
 	// Getting mapper volumename where createoptions are applied
-	mapperCmd := fmt.Sprintf(deviceMapper, volumeName)
+	mapperCmd := fmt.Sprintf(mountGrepFirstColumn, volumeName)
 	mapperOut, err := d.nodeDriver.RunCommandWithNoRetry(
 		*volumeNode,
 		mapperCmd,
@@ -1503,6 +1503,7 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 		if strings.Contains(xfsInfoOut, "bsize=2048") {
 			log.Infof("Blocksize 2048 is correctly configured by the create option of volume %s", volumeName)
 		} else {
+			log.Warnf("The filesystem type %s isn't properly implemented as block size 2048 has not been set, Err: %v", FStype, err)
 			return fmt.Errorf("Failed to get %s proper block size in the %s file system, Err: %v", xfsInfoOut, FStype, err)
 		}
 	} else if FStype == "ext4" {
@@ -1517,9 +1518,17 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 		if err != nil {
 			return fmt.Errorf("Failed to get bsize for create option for pvc %s, Err: %v", volumeName, err)
 		}
-		if strings.Contains(ext4InfoOut, "Block size:               2048") {
+		blockSize := false
+		for _, b := range strings.Split(ext4InfoOut, "\n") {
+			if strings.Contains(b, "Block size") && strings.Contains(b, "2048") {
+				blockSize = true
+				break
+			}
+		}
+		if blockSize {
 			log.Infof("Blocksize 2048 is correctly configured by the create options of volume %s", volumeName)
 		} else {
+			log.Warnf("The filesystem type %s isn't properly implemented as block size 2048 has not been set, Err: %v", FStype, err)
 			return fmt.Errorf("Failed to get %s proper block size in the %s file system, Err: %v", ext4InfoOut, FStype, err)
 		}
 	}

@@ -1236,8 +1236,6 @@ func ValidateMountOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*cha
 
 // ValidateCreateOptionsWithPureVolumes is the ginkgo spec for executing file system options check for the given volume
 func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	var requiredXfsCreateoption = "-b 2048"
-	var requiredExt4Createoption = "-b size=2048"
 	vols, err := Inst().S.GetVolumes(ctx)
 	log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
 	log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
@@ -1259,7 +1257,7 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
 			processError(err, errChan...)
 		}
-		if strings.Contains(fmt.Sprint(sc.Parameters), requiredXfsCreateoption) || strings.Contains(fmt.Sprint(sc.Parameters), requiredExt4Createoption) {
+		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
 			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
 			if ok {
 				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
@@ -1268,7 +1266,7 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 				log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
 			}
 		} else {
-			log.Infof("Storage class doesn't have createoptions %s or %s added to it", requiredXfsCreateoption, requiredExt4Createoption)
+			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
 		}
 	}
 }
