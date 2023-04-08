@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -9,6 +11,7 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	common "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -85,6 +88,31 @@ var (
 
 var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul}
 var dataServicePodWorkloads = []string{redis, rabbitmq, couchbase}
+
+func CreateContext(pdsApps []*pds.ModelsDeployment) ([]*scheduler.Context, error) {
+	var specObjects []interface{}
+	var Contexts []*scheduler.Context
+	var ctx *scheduler.Context
+	//errorChan := make(chan error, 50)
+	triggerEventsChan := make(chan *common.EventRecord, 100)
+	for _, dep := range pdsApps {
+		specObjects = append(specObjects, dep)
+		ctx = &scheduler.Context{
+			UID: dep.GetId(),
+			App: &spec.AppSpec{
+				Key:      *dep.ClusterResourceName,
+				SpecList: specObjects,
+			},
+		}
+		Contexts = append(Contexts, ctx)
+	}
+
+	//common.ValidateContext(ctx, &errorChan)
+	log.Infof("Calling reboot node testcase")
+	common.TriggerRebootNodes(&Contexts, &triggerEventsChan)
+
+	return Contexts, nil
+}
 
 func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, deployment *pds.ModelsDeployment, namespace string) (*corev1.Pod, *v1.Deployment, error) {
 	params.DataServiceName = ds.Name

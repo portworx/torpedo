@@ -288,6 +288,8 @@ func ProcessErrorWithMessage(event *EventRecord, err error, desc string) {
 const (
 	// DeployApps installs new apps
 	DeployApps = "deployApps"
+	// DeployPDSApps installs PDS apps
+	DeployPDSApps = "deployPDSApps"
 	// HAIncrease performs repl-add
 	HAIncrease = "haIncrease"
 	// HADecrease performs repl-reduce

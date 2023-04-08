@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"net/http"
 	"os"
 	"strconv"
@@ -28,6 +29,65 @@ const (
 	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
+var (
+	contexts        []*scheduler.Context
+	appContexts     []*scheduler.Context
+	nonPDSnamespace string
+)
+
+var _ = Describe("{CreateContexForPDSapps}", func() {
+	contexts = make([]*scheduler.Context, 0)
+	JustBeforeEach(func() {
+		StartTorpedoTest("NonPDSApps", "deploy non pds apps", pdsLabels, 0)
+	})
+
+	It("Deploy PDS apps and create context", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var dsVersions = make(map[string]map[string][]string)
+		var pdsApps []*pds.ModelsDeployment
+		for _, ds := range params.DataServiceToTest {
+			if ds.Name == zookeeper {
+				log.Warnf("Scaling of nodes is not supported for %v dataservice ", ds.Name)
+				continue
+			}
+			Step("Deploy and validate data service", func() {
+				isDeploymentsDeleted = false
+				deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+				log.FailOnError(err, "Error while deploying data services")
+				deployments[ds] = deployment
+				dsVersions[ds.Name] = dataServiceVersionBuildMap
+				pdsApps = append(pdsApps, deployment)
+				//move this out of for loop and pass list of deployments
+				//in CreateContext method get the list of deployments and create context for those deployments
+
+			})
+			defer func() {
+				for _, newDeployment := range deployments {
+					Step("Delete created deployments")
+					resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				}
+			}()
+		}
+		CreateContext(pdsApps)
+	})
+
+	//It("Test non pds apps", func() {
+	//	Step("Deploy and get context of non pds apps", func() {
+	//		taskName := fmt.Sprintf("%s", "nonpdsapp")
+	//		appContexts = ScheduleApplications(taskName)
+	//		contexts = append(contexts, appContexts...)
+	//		for _, ctx := range appContexts {
+	//			log.Infof("printing context: %v", ctx)
+	//			nonPDSnamespace = GetAppNamespace(ctx, taskName)
+	//		}
+	//	})
+	//	log.Infof("Non pds namespace %v", nonPDSnamespace)
+	//})
+
+})
+
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)
@@ -35,11 +95,18 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 	It("Delete pds pods and validate if its coming back online and dataserices are not affected", func() {
 		Step("Deploy dataservice, delete and validate pds pods", func() {
+			//var specObjects []interface{}
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
+					//specObjects = append(specObjects, deployment)
+					//for _, ctx := range appContexts {
+					//	ctx.App.SpecList = specObjects
+					//}
+					////create app spec and return context
+					//// now validate the deployments
 				})
 
 				pdsPods := make([]corev1.Pod, 0)

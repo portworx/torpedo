@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -2207,6 +2208,31 @@ func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
 					Cause:     err,
 				}
 			}
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			var ss *appsapi.StatefulSet
+			namespace := "pds-automation"
+			if ss, err = k8sApps.GetStatefulSet(obj.GetClusterResourceName(), namespace); err != nil {
+				return &scheduler.ErrFailedToValidateTopologyLabel{
+					NameSpace: namespace,
+					Cause:     err,
+				}
+			}
+			nodeAff := ss.Spec.Template.Spec.Affinity.NodeAffinity
+			labels := getLabelsFromNodeAffinity(nodeAff)
+			zone = labels[TopologyZoneK8sNodeLabel]
+			if podList, err = k8sCore.GetPods(namespace, nil); err != nil {
+				return &scheduler.ErrFailedToValidateTopologyLabel{
+					NameSpace: namespace,
+					Cause:     err,
+				}
+			}
+			if err = k.validatePodsTopology(podList, zone); err != nil {
+				return &scheduler.ErrFailedToValidateTopologyLabel{
+					NameSpace: namespace,
+					Cause:     err,
+				}
+			}
+
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			var ss *appsapi.StatefulSet
 			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err != nil {
@@ -2266,6 +2292,23 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 
 			log.Infof("[%v] Validated deployment: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			namespace := "pds-automation"
+			var ss *appsapi.StatefulSet
+			var err error
+			if ss, err = k8sApps.GetStatefulSet(obj.GetClusterResourceName(), namespace); err != nil {
+				return &scheduler.ErrFailedToValidateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate StatefulSet: %v,Namespace: %v. Err: %v", obj.Name, namespace, err),
+				}
+			}
+			if err := k8sApps.ValidateStatefulSet(ss, timeout*time.Duration(*obj.NodeCount)); err != nil {
+				return &scheduler.ErrFailedToValidateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate StatefulSet: %v,Namespace: %v. Err: %v", obj.Name, namespace, err),
+				}
+			}
+			log.Infof("[%v] Validated pds Deployment: %v", ctx.App.Key, *obj.ClusterResourceName)
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			if err := k8sApps.ValidateStatefulSet(obj, timeout*time.Duration(*obj.Spec.Replicas)); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
@@ -2923,6 +2966,55 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			result[snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID] = map[string]string{
 				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
 			}
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			var labels map[string]string
+			namespace := "pds-automation"
+			ss, err := k8sApps.GetStatefulSet(*obj.ClusterResourceName, namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v, Namespace : %v. Err: %v", obj.Name, namespace, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVCs for StatefulSet: %v, Namespace: %v. Err: %v", ss.Name, ss.Namespace, err),
+				}
+			}
+
+			if len(ctx.ScheduleOptions.TopologyLabels) > 0 {
+				nodeAff := ss.Spec.Template.Spec.Affinity.NodeAffinity
+				labels = getLabelsFromNodeAffinity(nodeAff)
+			}
+
+			for _, pvc := range pvcList.Items {
+				params, err := k8sCore.GetPersistentVolumeClaimParams(&pvc)
+				if err != nil {
+					return nil, &scheduler.ErrFailedToGetVolumeParameters{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to get params for volume: %v, namespace: %v. Err: %v", pvc.Name, pvc.Namespace, err),
+					}
+				}
+
+				for k, v := range pvc.Annotations {
+					params[k] = v
+				}
+				params[PvcNameKey] = pvc.GetName()
+				params[PvcNamespaceKey] = pvc.GetNamespace()
+
+				if len(pvc.Spec.VolumeName) > 0 && len(ctx.ScheduleOptions.TopologyLabels) > 0 {
+					for key, val := range labels {
+						params[key] = val
+						log.Infof("Topology labels for volume [%s] are: [%s]", pvc.Spec.VolumeName, params[key])
+					}
+				}
+				result[pvc.Spec.VolumeName] = params
+
+			}
+
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			var labels map[string]string
 			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
@@ -2994,6 +3086,27 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					}
 				}
 			}
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			log.Infof("Deployment %s receviced for validation", *obj.ClusterResourceName)
+			ss, err := k8sApps.GetStatefulSet(*obj.ClusterResourceName, "pds-automation")
+			if err != nil {
+				return &scheduler.ErrFailedToValidateStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v, Namespace: %v. Err: %v", obj.Name, "pds-automation", err),
+				}
+			}
+			// Providing the scaling factor in timeout
+			scalingFactor := *obj.NodeCount
+			if *ss.Spec.Replicas > *obj.NodeCount {
+				scalingFactor = int32(*ss.Spec.Replicas - *obj.NodeCount)
+			}
+			if err := k8sApps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(scalingFactor), retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate PVCs for statefulset: %v,Namespace: %v. Err: %v", ss.Name, ss.Namespace, err),
+				}
+			}
+			log.Infof("[%v] Validated PVCs from StatefulSet: %v", ctx.App.Key, *obj.ClusterResourceName)
 		} else if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
 			err := k8sCore.ValidatePersistentVolumeClaim(obj, timeout, retryInterval)
 			if err != nil {
@@ -3334,6 +3447,33 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				vol.Annotations[key] = val
 			}
 			vols = append(vols, vol)
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			namespace := "pds-automation"
+			ss, err := k8sOps.GetStatefulSet(obj.GetClusterResourceName(), namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v , Namespace: %v. Err: %v", obj.Name, namespace, err),
+				}
+			}
+
+			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v, Namespace: %s. Err: %v", ss.Name, ss.Namespace, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				vols = append(vols, &volume.Volume{
+					ID:        pvc.Spec.VolumeName,
+					Name:      pvc.Name,
+					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
+				})
+			}
+
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
@@ -3746,6 +3886,30 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				buf.WriteString(dumpPodStatusRecursively(pod))
 			}
 			buf.WriteString(insertLineBreak("END Deployment"))
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			namespace := "pds-automation"
+			buf.WriteString(insertLineBreak(fmt.Sprintf("StatefulSet: [%s] %s", namespace, obj.GetClusterResourceName())))
+			var ssetStatus *appsapi.StatefulSetStatus
+			if ssetStatus, err = k8sApps.DescribeStatefulSet(*obj.ClusterResourceName, namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get status of statefulset: %v. Err: %v", obj.GetClusterResourceName(), err),
+				}))
+			}
+			// Dump ssetStatus
+			ssetStatusString := "nil"
+			if ssetStatus != nil {
+				ssetStatusString = fmt.Sprintf("%+v", *ssetStatus)
+			}
+			buf.WriteString(fmt.Sprintf("Status: %s\n", ssetStatusString))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(namespace, "StatefulSet", *obj.ClusterResourceName)))
+			ss, _ := k8sApps.GetStatefulSet(*obj.ClusterResourceName, namespace)
+			pods, _ := k8sApps.GetStatefulSetPods(ss)
+			for _, pod := range pods {
+				buf.WriteString(dumpPodStatusRecursively(pod))
+			}
+			buf.WriteString(insertLineBreak("END StatefulSet"))
+
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("StatefulSet: [%s] %s", obj.Namespace, obj.Name)))
 			var ssetStatus *appsapi.StatefulSetStatus
