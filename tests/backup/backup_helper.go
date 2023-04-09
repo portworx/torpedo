@@ -2071,7 +2071,7 @@ func GetNextPeriodicScheduleBackupName(scheduleName string, scheduleInterval tim
 		}
 		return ordinalScheduleBackupName, false, nil
 	}
-	log.InfoD("Waiting for %v minute for the next schedule backup to be triggered", scheduleInterval)
+	log.InfoD("Waiting for %v minutes for the next schedule backup to be triggered", scheduleInterval)
 	time.Sleep(scheduleInterval * time.Minute)
 	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 
