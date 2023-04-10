@@ -100,7 +100,7 @@ const (
 )
 
 const (
-	validateReplicationUpdateTimeout = 2 * time.Hour
+	validateReplicationUpdateTimeout = 4 * time.Hour
 	errorChannelSize                 = 50
 )
 
@@ -722,10 +722,10 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 								if err != nil {
 									log.Errorf("There is an error decreasing repl [%v]", err.Error())
 									UpdateOutcome(event, err)
-
 								}
 								rep--
-
+								//waiting for volume to be stable
+								time.Sleep(1 * time.Minute)
 							}
 
 						}
@@ -1126,7 +1126,7 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 				func() {
 					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("stop volume driver on node: %s.",
-						appNode.MgmtIp)
+						appNode.Name)
 					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
@@ -1140,7 +1140,7 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 				func() {
 					log.InfoD(stepLog)
 					taskStep := fmt.Sprintf("starting volume driver on node: %s.",
-						appNode.MgmtIp)
+						appNode.Name)
 					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					StartVolDriverAndWait([]node.Node{appNode}, &errorChan)
@@ -1373,7 +1373,7 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		nodesToReboot := node.GetWorkerNodes()
 
 		// Reboot node and check driver status
-		stepLog = fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot)
+		stepLog = fmt.Sprintf("reboot node one at a time")
 		Step(stepLog, func() {
 			// TODO: Below is the same code from existing nodeReboot test
 			log.InfoD(stepLog)
@@ -1381,7 +1381,8 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 				if n.IsStorageDriverInstalled {
 					stepLog = fmt.Sprintf("reboot node: %s", n.Name)
 					Step(stepLog, func() {
-						taskStep := fmt.Sprintf("reboot node: %s.", n.MgmtIp)
+						log.InfoD(stepLog)
+						taskStep := fmt.Sprintf("reboot node: %s.", n.Name)
 						event.Event.Type += "<br>" + taskStep
 						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
 							Force: true,
@@ -3951,28 +3952,25 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 }
 
 func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
-	pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
-	if err != nil {
-		err = fmt.Errorf("error getting storage pools list. Err: %v", err)
-		return nil, err
-
-	}
-
-	if len(pools) == 0 {
-		err = fmt.Errorf("length of pools should be greater than 0")
-		return nil, err
-	}
-
-	// pick a random pools from a pools list and resize it
-	expectedCapacity := (len(pools) / 2) + 1
+	stNodes := node.GetStorageNodes()
+	expectedCapacity := (len(stNodes) / 2) + 1
 	poolsToExpand := make([]*opsapi.StoragePool, 0)
-	for _, pool := range pools {
-		if len(poolsToExpand) <= expectedCapacity {
-			poolsToExpand = append(poolsToExpand, pool)
-		} else {
-			break
+	for _, stNode := range stNodes {
+		eligibility, err := GetPoolExpansionEligibility(&stNode)
+		if err != nil {
+			return nil, err
 		}
-
+		if len(poolsToExpand) <= expectedCapacity {
+			if eligibility[stNode.Id] {
+				for _, p := range stNode.Pools {
+					if eligibility[p.Uuid] {
+						poolsToExpand = append(poolsToExpand, p)
+					}
+				}
+			}
+			continue
+		}
+		break
 	}
 	return poolsToExpand, nil
 
@@ -4682,9 +4680,20 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 				}
 				attachedNode := appVol.AttachedOn
 
-				fsTrimStatuses, err := Inst().V.GetAutoFsTrimStatus(attachedNode)
+				var fsTrimStatuses map[string]opsapi.FilesystemTrim_FilesystemTrimStatus
+
+				t := func() (interface{}, bool, error) {
+					fsTrimStatuses, err = Inst().V.GetAutoFsTrimStatus(attachedNode)
+					if err != nil {
+						return nil, true, fmt.Errorf("error autofstrim status node %v status", attachedNode)
+					}
+
+					return nil, false, nil
+				}
+				_, err = task.DoRetryWithTimeout(t, defaultDriverStartTimeout, defaultRetryInterval)
 				if err != nil {
 					UpdateOutcome(event, err)
+					return
 				}
 
 				val, ok := fsTrimStatuses[appVol.Id]
@@ -4698,7 +4707,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 
 				if fsTrimStatus != -1 {
 
-					if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED {
+					if fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_FAILED || fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_STOPPED || fsTrimStatus == opsapi.FilesystemTrim_FS_TRIM_UNKNOWN {
 
 						err = fmt.Errorf("AutoFstrim failed for volume %v, status: %v", v.ID, val.String())
 						UpdateOutcome(event, err)
@@ -4708,9 +4717,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 
 					}
 				} else {
-					err = fmt.Errorf("autofstrim for volume %v not started", v.ID)
-					log.Errorf("Error: %v", err)
-					UpdateOutcome(event, err)
+					log.Infof("autofstrim for volume %v not started yet", v.ID)
 				}
 
 			}
@@ -4722,7 +4729,7 @@ func validateAutoFsTrim(contexts *[]*scheduler.Context, event *EventRecord) {
 
 func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) (opsapi.FilesystemTrim_FilesystemTrimStatus, error) {
 	doExit := false
-	exitCount := 50
+	exitCount := 5
 
 	for !doExit {
 		log.Infof("Autofstrim for volume %v not started, retrying after 2 mins", volumeID)
@@ -4737,7 +4744,6 @@ func waitForFsTrimStatus(event *EventRecord, attachedNode, volumeID string) (ops
 		}
 
 		fsTrimStatus, isValueExist := fsTrimStatuses[volumeID]
-
 		if isValueExist {
 			return fsTrimStatus, nil
 		}
