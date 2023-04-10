@@ -1318,10 +1318,7 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 		return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
 	}
 	_, err := task.DoRetryWithTimeout(restoreSuccessCheckFunc, retryDuration, retryInterval)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // IsBackupLocationPresent checks whether the backup location is present or not
