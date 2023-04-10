@@ -588,25 +588,26 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 // This testcase verifies schedule backups are successful while volume resize is in progress
 var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	var (
-		appList                     = Inst().AppList
-		contexts                    []*scheduler.Context
-		preRuleNameList             []string
-		postRuleNameList            []string
-		appContexts                 []*scheduler.Context
-		appNamespaces               []string
-		beforeSize                  int
-		credName                    string
-		periodicSchedulePolicyName  string
-		periodicSchedulePolicyNames []string
-		periodicSchedulePolicyUid   string
-		periodicSchedulePolicyUids  []string
-		scheduleName                string
-		scheduleNames               []string
-		cloudCredUID                string
-		firstScheduleBackupName     string
-		appClusterName              string
-		nextScheduleBackupName      interface{}
-		restoreNames                []string
+		appList                      = Inst().AppList
+		contexts                     []*scheduler.Context
+		preRuleNameList              []string
+		postRuleNameList             []string
+		appContexts                  []*scheduler.Context
+		appNamespaces                []string
+		beforeSize                   int
+		credName                     string
+		periodicSchedulePolicyName   string
+		periodicSchedulePolicyNames  []string
+		periodicSchedulePolicyUid    string
+		periodicSchedulePolicyUids   []string
+		scheduleName                 string
+		scheduleNames                []string
+		cloudCredUID                 string
+		firstScheduleBackupName      string
+		appClusterName               string
+		nextScheduleBackupName       interface{}
+		restoreNames                 []string
+		nextScheduleBackupNameString string
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -798,18 +799,19 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Ordinal of the next schedule backup is [%v]", nextScheduleBackupOrdinal)
 					log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
 					time.Sleep(15 * time.Minute)
-					checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
+					checkNextScheduleBackupCreation := func() (interface{}, bool, error) {
 						ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
 						if err != nil {
 							return "", true, err
 						}
 						return ordinalScheduleBackupName, false, nil
 					}
-					nextScheduleBackupName, err = task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+					nextScheduleBackupName, err = task.DoRetryWithTimeout(checkNextScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of ordinal [%v] of schedule named [%s]", nextScheduleBackupOrdinal, scheduleName))
-					log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName.(string))
-					err = backupSuccessCheck(nextScheduleBackupName.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying success of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName.(string), scheduleName))
+					nextScheduleBackupNameString = nextScheduleBackupName.(string)
+					log.InfoD("Next schedule backup name [%s]", nextScheduleBackupNameString)
+					err = backupSuccessCheck(nextScheduleBackupNameString, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying success of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupNameString, scheduleName))
 				})
 				Step("Restoring application from first schedule backup", func() {
 					log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", firstScheduleBackupName))
@@ -821,13 +823,13 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, firstScheduleBackupName))
 				})
 				Step("Restoring application from recent backup", func() {
-					log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", nextScheduleBackupName.(string)))
+					log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", nextScheduleBackupNameString))
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore-recent-backup", namespace, time.Now().Unix())
 					restoreNames = append(restoreNames, restoreName)
-					err = CreateRestore(restoreName, nextScheduleBackupName.(string), make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, nextScheduleBackupName.(string)))
+					err = CreateRestore(restoreName, nextScheduleBackupNameString, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, nextScheduleBackupNameString))
 				})
 			}
 		}
