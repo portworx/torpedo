@@ -1815,7 +1815,7 @@ var _ = Describe("{ManualBackupAndScheduleBackupUsingNamespaceLabel}", func() {
 	backupLocationMap := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("BasicBackupAndScheduleBackupUsingNamespaceLabel", "Basic, schedule backup and restore, using namespace label and resource label", nil, 84850)
+		StartTorpedoTest("ManualBackupAndScheduleBackupUsingNamespaceLabel", "Manual, schedule backup and restore, using namespace label and resource label", nil, 84850)
 		log.InfoD("Deploy applications")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 3; i++ {
