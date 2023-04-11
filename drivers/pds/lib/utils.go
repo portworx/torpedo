@@ -1880,7 +1880,6 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 		log.Errorf("An Error Occured while getting connection info %v", err)
 		return false, err
 	}
-	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 	pdsPassword, err := GetDeploymentCredentials(deploymentID)
 	if err != nil {
 		log.Errorf("An Error Occured while getting credentials info %v", err)
@@ -1903,7 +1902,6 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	// Create TPCC Schema and then run it.
 	case mysql:
 		dbName := "tpcc"
-		dbUser := "pds"
 		var wasMysqlConfigured bool
 		// Waiting for approx an hour to check if Mysql deployment comes up
 		for i := 1; i <= 80; i++ {
