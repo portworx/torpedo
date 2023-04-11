@@ -636,7 +636,7 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 	return nil
 }
 
-// CreateRestoreWithReplacePolicy creates restore
+// CreateRestoreWithReplacePolicy Creates in-place restore and waits for it to complete
 func CreateRestoreWithReplacePolicy(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicy_Type) error {
 
