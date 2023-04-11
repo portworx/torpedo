@@ -130,7 +130,7 @@ func WaitForAppBackupToStart(name, namespace string, timeout time.Duration) erro
 	return err
 }
 
-//IsDebugEnv returns if current run is debug run based on environment variable DEBUG_ENVIRONMENT set to true/false
+// IsDebugEnv returns if current run is debug run based on environment variable DEBUG_ENVIRONMENT set to true/false
 func IsDebugEnv() bool {
 	debugEnv := os.Getenv("DEBUG_ENVIRONMENT")
 

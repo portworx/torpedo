@@ -131,6 +131,6 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 				break
 			}
 		}
-		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+		CleanupCloudSettingsAndClusters(nil, "", "", ctx, true)
 	})
 })
