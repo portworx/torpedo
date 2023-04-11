@@ -73,14 +73,14 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(PxBackupAdminContext, appList[i], orgID, "pre")
 				log.FailOnError(err, "Creating pre rule for deployed apps failed")
 				dash.VerifyFatal(preRuleStatus, true, fmt.Sprintf("Verifying pre rule %s for backup", ruleName))
 				preRuleNameList = append(preRuleNameList, ruleName)
 			}
 			log.InfoD("Creating post rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(PxBackupAdminContext, appList[i], orgID, "post")
 				log.FailOnError(err, "Creating post rule for deployed apps failed")
 				dash.VerifyFatal(postRuleStatus, true, fmt.Sprintf("Verifying post rule %s for backup", ruleName))
 				postRuleNameList = append(postRuleNameList, ruleName)
@@ -256,14 +256,14 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(PxBackupAdminContext, appList[i], orgID, "pre")
 				log.FailOnError(err, "Creating pre rule for deployed apps failed")
 				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
 				preRuleNameList = append(preRuleNameList, ruleName)
 			}
 			log.InfoD("Creating post rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(PxBackupAdminContext, appList[i], orgID, "post")
 				log.FailOnError(err, "Creating post rule for deployed apps failed")
 				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
 				postRuleNameList = append(postRuleNameList, ruleName)

@@ -316,14 +316,14 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(PxBackupAdminContext, appList[i], orgID, "pre")
 				log.FailOnError(err, "Creating pre rule for deployed apps failed")
 				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
 				preRuleNameList = append(preRuleNameList, ruleName)
 			}
 			log.InfoD("Creating post rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(PxBackupAdminContext, appList[i], orgID, "post")
 				log.FailOnError(err, "Creating post rule for deployed apps failed")
 				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
 				postRuleNameList = append(postRuleNameList, ruleName)
@@ -617,11 +617,11 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre and post rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(PxBackupAdminContext, appList[i], orgID, "pre")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating pre rule for deployed apps for %v with status %v", appList[i], preRuleStatus))
 				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
 				preRuleNameList = append(preRuleNameList, ruleName)
-				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(PxBackupAdminContext, appList[i], orgID, "post")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating post rule for deployed apps for %v with status %v", appList[i], postRuleStatus))
 				dash.VerifyFatal(postRuleStatus, true, "Verifying post rule for backup")
 				postRuleNameList = append(postRuleNameList, ruleName)
@@ -679,7 +679,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					periodicSchedulePolicyUid = uuid.New()
 					periodicSchedulePolicyUids = append(periodicSchedulePolicyUids, periodicSchedulePolicyUid)
 					periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
-					err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
+					err = Inst().Backup.BackupSchedulePolicy(PxBackupAdminContext, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
 					periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, PxBackupAdminContext, periodicSchedulePolicyName)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))

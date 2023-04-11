@@ -1258,7 +1258,7 @@ var (
 	}
 )
 
-func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error) {
+func (p *portworx) CreateRuleForBackup(ctx context.Context, appName string, orgID string, prePostFlag string) (bool, string, error) {
 	var podSelector []map[string]string
 	var actionValue []string
 	var container []string
@@ -1325,13 +1325,8 @@ func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag
 		},
 		RulesInfo: &rulesInfo,
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
-		return false, ruleName, err
-	}
 
-	_, err = p.CreateRule(ctx, RuleCreateReq)
+	_, err := p.CreateRule(ctx, RuleCreateReq)
 	if err != nil {
 		err = fmt.Errorf("Failed to create backup rules: [%v]", err)
 		return false, ruleName, err
@@ -1415,13 +1410,8 @@ func (p *portworx) CreateMonthlySchedulePolicy(retain int64, date int64, time st
 	return SchedulePolicy
 }
 
-func (p *portworx) BackupSchedulePolicy(name string, uid string, orgId string, schedulePolicyInfo *api.SchedulePolicyInfo) error {
+func (p *portworx) BackupSchedulePolicy(ctx context.Context, name string, uid string, orgId string, schedulePolicyInfo *api.SchedulePolicyInfo) error {
 	log.InfoD("Create Backup Schedule Policy")
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
-		return err
-	}
 	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -1430,7 +1420,7 @@ func (p *portworx) BackupSchedulePolicy(name string, uid string, orgId string, s
 		},
 		SchedulePolicy: schedulePolicyInfo,
 	}
-	_, err = p.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	_, err := p.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
 	if err != nil {
 		err = fmt.Errorf("Error in creating schedule policy is +%v", err)
 		return err
@@ -1474,12 +1464,7 @@ func (p *portworx) GetRuleUid(orgID string, ctx context.Context, ruleName string
 	return "", nil
 }
 
-func (p *portworx) DeleteRuleForBackup(orgID string, ruleName string) error {
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
-		return err
-	}
+func (p *portworx) DeleteRuleForBackup(ctx context.Context, orgID string, ruleName string) error {
 	ruleUid, err := p.GetRuleUid(orgID, ctx, ruleName)
 	if err != nil {
 		err = fmt.Errorf("Failed to get rule UID: [%v]", err)
@@ -1503,12 +1488,7 @@ func (p *portworx) DeleteRuleForBackup(orgID string, ruleName string) error {
 	return nil
 }
 
-func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string) error {
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
-		return err
-	}
+func (p *portworx) DeleteBackupSchedulePolicy(ctx context.Context, orgID string, policyList []string) error {
 	schedPolicyMap := make(map[string]string)
 	schedPolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
 		OrgId: orgID,

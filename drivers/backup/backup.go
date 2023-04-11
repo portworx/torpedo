@@ -280,10 +280,10 @@ type SchedulePolicy interface {
 	CreateMonthlySchedulePolicy(retain int64, date int64, time string, incrCount uint64) *api.SchedulePolicyInfo
 
 	// BackupSchedulePolicy creates backup schedule policy
-	BackupSchedulePolicy(name string, uid string, orgId string, schedulePolicyInfo *api.SchedulePolicyInfo) error
+	BackupSchedulePolicy(ctx context.Context, name string, uid string, orgId string, schedulePolicyInfo *api.SchedulePolicyInfo) error
 
 	// DeleteBackupSchedulePolicy deletes the list of schedule policies
-	DeleteBackupSchedulePolicy(orgID string, policyList []string) error
+	DeleteBackupSchedulePolicy(ctx context.Context, orgID string, policyList []string) error
 
 	// GetSchedulePolicyUid gets the uid for the given schedule policy
 	GetSchedulePolicyUid(orgID string, ctx context.Context, schedulePolicyName string) (string, error)
@@ -356,10 +356,10 @@ type Rule interface {
 	UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error)
 
 	// CreateRuleForBackup creates backup rule
-	CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error)
+	CreateRuleForBackup(ctx context.Context, appName string, orgID string, prePostFlag string) (bool, string, error)
 
 	// DeleteRuleForBackup deletes backup rule
-	DeleteRuleForBackup(orgID string, ruleName string) error
+	DeleteRuleForBackup(ctx context.Context, orgID string, ruleName string) error
 
 	// GetRuleUid fetches uid for the given rule
 	GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error)

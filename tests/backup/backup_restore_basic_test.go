@@ -335,7 +335,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(PxBackupAdminContext, appList[i], orgID, "pre")
 				log.FailOnError(err, "Creating pre rule %s for deployed apps failed", ruleName)
 				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
 
@@ -345,7 +345,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			}
 			log.InfoD("Creating post rule for deployed apps")
 			for i := 0; i < len(appList); i++ {
-				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(PxBackupAdminContext, appList[i], orgID, "post")
 				log.FailOnError(err, "Creating post %s rule for deployed apps failed", ruleName)
 				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
 				if ruleName != "" {
@@ -370,7 +370,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		Step("Creating backup schedule policy", func() {
 			log.InfoD("Creating a backup schedule policy")
 			intervalSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
-			intervalPolicyStatus := Inst().Backup.BackupSchedulePolicy(intervalName, uuid.New(), orgID, intervalSchedulePolicyInfo)
+			intervalPolicyStatus := Inst().Backup.BackupSchedulePolicy(PxBackupAdminContext, intervalName, uuid.New(), orgID, intervalSchedulePolicyInfo)
 			dash.VerifyFatal(intervalPolicyStatus, nil, fmt.Sprintf("Creating interval schedule policy %s", intervalName))
 		})
 		Step("Register cluster for backup", func() {
@@ -432,21 +432,21 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		Step("Delete backup schedule policy", func() {
 			log.InfoD("Delete backup schedule policy")
 			policyList := []string{intervalName}
-			err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+			err = Inst().Backup.DeleteBackupSchedulePolicy(PxBackupAdminContext, orgID, policyList)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
 		})
 		Step("Delete the pre and post rules", func() {
 			log.InfoD("Delete the pre rule")
 			if len(preRuleNameList) > 0 {
 				for _, ruleName := range preRuleNameList {
-					err = Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+					err = Inst().Backup.DeleteRuleForBackup(PxBackupAdminContext, orgID, ruleName)
 					dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup pre rules %s", ruleName))
 				}
 			}
 			log.InfoD("Delete the post rules")
 			if len(postRuleNameList) > 0 {
 				for _, ruleName := range postRuleNameList {
-					err = Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+					err = Inst().Backup.DeleteRuleForBackup(PxBackupAdminContext, orgID, ruleName)
 					dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup post rules %s", ruleName))
 				}
 			}
@@ -540,7 +540,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		Step("Creating Schedule Policies", func() {
 			log.InfoD("Creating Schedule Policies")
 			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
-			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), orgID, periodicSchedulePolicyInfo)
+			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(PxBackupAdminContext, periodicPolicyName, uuid.New(), orgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Verification of creating periodic schedule policy - %s", periodicPolicyName))
 		})
 
@@ -587,7 +587,7 @@ var _ = Describe("{ScheduleBackupCreationSingleNS}", func() {
 		}
 		log.Infof("Deleting backup schedule policy")
 		policyList := []string{periodicPolicyName}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		err = Inst().Backup.DeleteBackupSchedulePolicy(PxBackupAdminContext, orgID, policyList)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
 		log.Infof("Deleting restores")
 		err = DeleteRestore(restoreName, orgID, PxBackupAdminContext)
@@ -677,7 +677,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		Step("Creating Schedule Policies", func() {
 			log.InfoD("Adding application clusters")
 			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
-			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), orgID, periodicSchedulePolicyInfo)
+			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(PxBackupAdminContext, periodicPolicyName, uuid.New(), orgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Verification of creating periodic schedule policy - %s", periodicPolicyName))
 		})
 
@@ -722,7 +722,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 		}
 		log.Infof("Deleting backup schedule policy")
 		policyList := []string{periodicPolicyName}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		err = Inst().Backup.DeleteBackupSchedulePolicy(PxBackupAdminContext, orgID, policyList)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
 		log.Infof("Deleting restores")
 		err = DeleteRestore(restoreName, orgID, PxBackupAdminContext)
@@ -935,7 +935,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
-			err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
+			err = Inst().Backup.BackupSchedulePolicy(PxBackupAdminContext, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
 			periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, PxBackupAdminContext, periodicSchedulePolicyName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
@@ -1034,7 +1034,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		}
 		log.Infof("Deleting backup schedule policy")
 		policyList := []string{periodicSchedulePolicyName}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		err = Inst().Backup.DeleteBackupSchedulePolicy(PxBackupAdminContext, orgID, policyList)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
 		err = DeleteRestore(restoreName, orgID, PxBackupAdminContext)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
@@ -1621,7 +1621,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 2, 5)
-			err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
+			err = Inst().Backup.BackupSchedulePolicy(PxBackupAdminContext, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
 			periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, PxBackupAdminContext, periodicSchedulePolicyName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
@@ -1663,7 +1663,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		log.FailOnError(err, "Error while getting schedule uid %s", scheduleName)
 		err = DeleteSchedule(scheduleName, scheduleUid, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
+		err = Inst().Backup.DeleteBackupSchedulePolicy(PxBackupAdminContext, orgID, []string{periodicSchedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
 		for _, restoreName := range restoreNames {
 			err := DeleteRestore(restoreName, orgID, PxBackupAdminContext)
@@ -1806,7 +1806,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 2, 5)
-			err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
+			err = Inst().Backup.BackupSchedulePolicy(PxBackupAdminContext, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
 			periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, PxBackupAdminContext, periodicSchedulePolicyName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
@@ -1926,7 +1926,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 			err = DeleteSchedule(scheduleName, scheduleUid, orgID)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
+		err = Inst().Backup.DeleteBackupSchedulePolicy(PxBackupAdminContext, orgID, []string{periodicSchedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
 		for _, restoreName := range restoreNames {
 			err := DeleteRestore(restoreName, orgID, PxBackupAdminContext)

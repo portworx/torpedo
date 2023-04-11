@@ -2166,7 +2166,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
-			err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
+			err = Inst().Backup.BackupSchedulePolicy(PxBackupAdminContext, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
 			periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, PxBackupAdminContext, periodicSchedulePolicyName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
@@ -2238,7 +2238,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		}
 		log.Infof("Deleting backup schedule policy")
 		policyList := []string{periodicSchedulePolicyName}
-		err := Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		err := Inst().Backup.DeleteBackupSchedulePolicy(PxBackupAdminContext, orgID, policyList)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
 		ctxNonAdmin, err := backup.GetNonAdminCtx(username, commonPassword)
 		log.FailOnError(err, "Fetching non admin ctx")

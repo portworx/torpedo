@@ -107,7 +107,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 		Step("Creating Schedule Policiy", func() {
 			log.InfoD("Creating Schedule Policy")
 			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
-			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(periodicPolicyName, uuid.New(), orgID, periodicSchedulePolicyInfo)
+			periodicPolicyStatus := Inst().Backup.BackupSchedulePolicy(PxBackupAdminContext, periodicPolicyName, uuid.New(), orgID, periodicSchedulePolicyInfo)
 			dash.VerifyFatal(periodicPolicyStatus, nil, fmt.Sprintf("Verification of creating periodic schedule policy - %s", periodicPolicyName))
 		})
 
@@ -181,7 +181,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 		}
 		log.Infof("Deleting backup schedule policy")
 		policyList := []string{periodicPolicyName}
-		err := Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		err := Inst().Backup.DeleteBackupSchedulePolicy(PxBackupAdminContext, orgID, policyList)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
 		log.Infof("Deleting the deployed apps after test execution")
 		opts := make(map[string]bool)
