@@ -709,10 +709,10 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 
 	It("Deploy , Validate and start TPCC Workload", func() {
 		for _, ds := range params.DataServiceToTest {
-			// if ds.Name == postgresql {
-			// 	log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
-			// 	deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
-			// }
+			if ds.Name == postgresql {
+				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
+				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+			}
 			if ds.Name == mysql {
 				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
 				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
@@ -772,13 +772,13 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 		})
 
 		Step("Running TPCC Workloads - ", func() {
-			// if dataservice == postgresql {
-			// 	deploymentName := "pg-tpcc"
-			// 	tpccRunResult, _ := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
-			// 	if !tpccRunResult {
-			// 		dash.VerifyFatal(tpccRunResult, true, "Validating if Postgres TPCC Run was successful or not")
-			// 	}
-			// }
+			if dataservice == postgresql {
+				deploymentName := "pg-tpcc"
+				tpccRunResult, _ := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+				if !tpccRunResult {
+					dash.VerifyFatal(tpccRunResult, true, "Validating if Postgres TPCC Run was successful or not")
+				}
+			}
 			if dataservice == mysql {
 				deploymentName := "my-tpcc"
 				tpccRunResult, _ := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
