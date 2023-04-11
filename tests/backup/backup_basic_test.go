@@ -10,7 +10,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -229,7 +228,7 @@ var _ = AfterSuite(func() {
 			return "", false, nil
 		}
 	}
-	_, err = task.DoRetryWithTimeout(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
 	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 
 	// Cleanup all cloud credentials
@@ -249,7 +248,7 @@ var _ = AfterSuite(func() {
 			return "", false, nil
 		}
 	}
-	_, err = task.DoRetryWithTimeout(cloudCredentialDeletionSuccess, 5*time.Minute, 30*time.Second)
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(cloudCredentialDeletionSuccess, 5*time.Minute, 30*time.Second)
 	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 
 	// Cleanup all buckets after suite
