@@ -2,10 +2,10 @@ package tests
 
 import (
 	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -19,6 +19,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		totalNumberOfWorkerNodes      []node.Node
 		srcClusterStatus              api.ClusterInfo_StatusInfo_Status
 		destClusterStatus             api.ClusterInfo_StatusInfo_Status
+		err                           error
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("NodeCountForLicensing",
@@ -28,14 +29,12 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 	It("Verify worker node on application cluster with label portworx.io/nobackup=true is not counted for licensing", func() {
 		Step("Registering source and destination clusters for backup", func() {
 			log.InfoD("Registering source and destination clusters for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateSourceAndDestClusters(orgID, "", "", PxBackupAdminContext)
 			log.FailOnError(err, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
-			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, PxBackupAdminContext)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, PxBackupAdminContext)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
 			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
 		})
@@ -56,18 +55,14 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		})
 		Step("Verifying the license count after adding source and destination clusters", func() {
 			log.InfoD("Verifying the license count after adding source and destination clusters")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)))
+			err = VerifyLicenseConsumedCount(PxBackupAdminContext, orgID, int64(len(totalNumberOfWorkerNodes)))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the license count when source cluster with %d worker nodes and destination cluster with %d worker nodes are added to backup", len(sourceClusterWorkerNodes), len(destinationClusterWorkerNodes)))
 		})
 		Step("Verify worker node on application cluster with label portworx.io/nobackup=true is not counted for licensing", func() {
 			log.InfoD("Applying label portworx.io/nobackup=true to one of the worker node on source cluster and verifying the license count")
 			err := Inst().S.AddLabelOnNode(sourceClusterWorkerNodes[0], "portworx.io/nobackup", "true")
 			log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to worker node %v", sourceClusterWorkerNodes[0].Name))
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)-1))
+			err = VerifyLicenseConsumedCount(PxBackupAdminContext, orgID, int64(len(totalNumberOfWorkerNodes)-1))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to node %v", sourceClusterWorkerNodes[0].Name))
 			log.InfoD("Switching cluster context to destination cluster")
 			SetDestinationKubeConfig()
@@ -77,16 +72,14 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 			log.InfoD("Switching cluster context back to source cluster")
 			err = SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster")
-			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)-2))
+			err = VerifyLicenseConsumedCount(PxBackupAdminContext, orgID, int64(len(totalNumberOfWorkerNodes)-2))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to node %v", destinationClusterWorkerNodes[0].Name))
 		})
 		Step("Removing label portworx.io/nobackup=true from worker nodes and verifying the license count", func() {
 			log.InfoD("Removing label from worker node on source cluster on which label was applied earlier and verifying the license count")
 			err := Inst().S.RemoveLabelOnNode(sourceClusterWorkerNodes[0], "portworx.io/nobackup")
 			log.FailOnError(err, fmt.Sprintf("Failed to remove label portworx.io/nobackup=true from worker node %v", sourceClusterWorkerNodes[0].Name))
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)-1))
+			err = VerifyLicenseConsumedCount(PxBackupAdminContext, orgID, int64(len(totalNumberOfWorkerNodes)-1))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after removing label portworx.io/nobackup=true from node %v", sourceClusterWorkerNodes[0].Name))
 			log.InfoD("Switching cluster context to destination cluster")
 			SetDestinationKubeConfig()
@@ -96,13 +89,11 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 			log.InfoD("Switching cluster context back to source cluster")
 			err = SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster")
-			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)))
+			err = VerifyLicenseConsumedCount(PxBackupAdminContext, orgID, int64(len(totalNumberOfWorkerNodes)))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after removing label portworx.io/nobackup=true from node %v", destinationClusterWorkerNodes[0].Name))
 		})
 	})
 	JustAfterEach(func() {
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
 		SetDestinationKubeConfig()
 		nodeLabels, err := core.Instance().GetLabelsOnNode(destinationClusterWorkerNodes[0].Name)
 		if err != nil {
@@ -131,6 +122,6 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 				break
 			}
 		}
-		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
+		CleanupCloudSettingsAndClusters(nil, "", "", PxBackupAdminContext)
 	})
 })
