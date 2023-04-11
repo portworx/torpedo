@@ -856,7 +856,7 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 
 // GetDeploymentConnectionInfo returns the dns endpoint
 func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
-	//var isfound bool
+	var isfound bool
 	var dnsEndpoint string
 
 	dataServiceDeployment := components.DataServiceDeployment
@@ -866,24 +866,20 @@ func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 		log.Errorf("An Error Occured %v", err)
 		return "", err
 	}
-	log.Infof("***************** cluster details key : %v ", clusterDetails)
 	deploymentNodes := deploymentConnectionDetails.GetNodes()
 	log.Infof("Deployment nodes %v", deploymentNodes)
-	// isfound = false
-	// for key, value := range clusterDetails {
-	// 	log.Infof("host details key %v value %v", key, value)
-	// 	log.Debugf("***************** cluster details key : %v value is: %v *****", key, value)
-	// 	if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
-	// 		dnsEndpoint = fmt.Sprint(value)
-	// 		isfound = true
-	// 	}
-	// }
-	// if !isfound {
-	// 	log.Errorf("No connection string found")
-	// 	return "", err
-	// }
-	log.Debugf("************ Dns is : %v\n", dnsEndpoint)
-	dnsEndpoint = deploymentNodes[1]
+	isfound = false
+	for key, value := range clusterDetails {
+		log.Infof("host details key %v value %v", key, value)
+		if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
+			dnsEndpoint = fmt.Sprint(value)
+			isfound = true
+		}
+	}
+	if !isfound {
+		log.Errorf("No connection string found")
+		return "", err
+	}
 
 	return dnsEndpoint, nil
 }
@@ -905,6 +901,8 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint string, namespace string) bool {
 	log.InfoD("Trying to configure Mysql deployment for TPCC Workload")
 	log.Debugf("dbuser is : %v pwd is: %v  and endpoint is: %v", dbUser, pdsPassword, dnsEndpoint)
+
+	dbUser = "pds"
 	podSpec := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
