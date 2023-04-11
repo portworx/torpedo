@@ -3,10 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/pborman/uuid"
-	"github.com/portworx/sched-ops/k8s/batch"
-	"github.com/portworx/torpedo/pkg/osutils"
-	batchv1 "k8s.io/api/batch/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -16,6 +12,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/torpedo/pkg/osutils"
+	batchv1 "k8s.io/api/batch/v1"
 
 	"github.com/hashicorp/go-version"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
@@ -808,10 +809,6 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 	var access BackupAccess
 	var role backup.PxBackupRole
 	roleAccessUserBackupContext := make(map[userRoleAccess]string)
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return nil, err
-	}
 	for i := 0; i < len(users); i++ {
 		userIndex := i % 9
 		switch userIndex {
@@ -857,7 +854,7 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 			err = fmt.Errorf("failed to add role %s to user %s with err %v", role, users[i], err)
 			return nil, err
 		}
-		err = ShareBackup(backupNames[i], nil, []string{users[i]}, access, ctx)
+		err = ShareBackup(backupNames[i], nil, []string{users[i]}, access, PxBackupAdminContext)
 		if err != nil {
 			return nil, err
 		}
@@ -866,8 +863,6 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 	return roleAccessUserBackupContext, nil
 }
 func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName string, restoreName string) {
-	ctx, err := backup.GetAdminCtxFromSecret()
-	Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 	userCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 	Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching %s user ctx", user))
 	log.InfoD("Registering Source and Destination clusters from user context")
@@ -882,7 +877,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
 		// Try to delete the backup with user having ViewOnlyAccess, and it should not pass
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		backupUID, err := backupDriver.GetBackupUID(PxBackupAdminContext, backupName, orgID)
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has ViewOnlyAccess and cannot delete backup
 		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
@@ -894,7 +889,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
 		Inst().Dash.VerifyFatal(err, nil, "Verifying that restore is possible")
 		// Try to delete the backup with user having RestoreAccess, and it should not pass
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		backupUID, err := backupDriver.GetBackupUID(PxBackupAdminContext, backupName, orgID)
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has Restore Access and delete backup should fail
 		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
@@ -906,7 +901,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
 		Inst().Dash.VerifyFatal(err, nil, "Verifying that restore is possible")
 		// Try to delete the backup with user having FullAccess, and it should pass
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		backupUID, err := backupDriver.GetBackupUID(PxBackupAdminContext, backupName, orgID)
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has Full Access
 		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
@@ -964,13 +959,9 @@ func GetAllBackupsAdmin() ([]string, error) {
 	var bkp *api.BackupObject
 	backupNames := make([]string, 0)
 	backupDriver := Inst().Backup
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return nil, err
-	}
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: orgID}
-	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	curBackups, err := backupDriver.EnumerateBackup(PxBackupAdminContext, bkpEnumerateReq)
 	if err != nil {
 		return nil, err
 	}
@@ -984,15 +975,11 @@ func GetAllBackupsAdmin() ([]string, error) {
 func GetAllRestoresAdmin() ([]string, error) {
 	restoreNames := make([]string, 0)
 	backupDriver := Inst().Backup
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return restoreNames, err
-	}
 
 	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
 		OrgId: orgID,
 	}
-	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
+	restoreResponse, err := backupDriver.EnumerateRestore(PxBackupAdminContext, restoreEnumerateRequest)
 	if err != nil {
 		return restoreNames, err
 	}
@@ -1470,11 +1457,7 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 
 // GetPxBackupVersion return the version of Px Backup as a VersionInfo struct
 func GetPxBackupVersion() (*api.VersionInfo, error) {
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return nil, err
-	}
-	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
+	versionResponse, err := Inst().Backup.GetPxBackupVersion(PxBackupAdminContext, &api.VersionGetRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -1502,11 +1485,7 @@ func GetPxBackupVersionSemVer() (string, error) {
 
 // GetPxBackupBuildDate returns the Px Backup build date
 func GetPxBackupBuildDate() (string, error) {
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return "", err
-	}
-	versionResponse, err := Inst().Backup.GetPxBackupVersion(ctx, &api.VersionGetRequest{})
+	versionResponse, err := Inst().Backup.GetPxBackupVersion(PxBackupAdminContext, &api.VersionGetRequest{})
 	if err != nil {
 		return "", err
 	}
