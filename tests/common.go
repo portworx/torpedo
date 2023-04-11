@@ -330,6 +330,7 @@ var (
 	SchedulePolicyScaleUID               string
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
+	PxBackupAdminContext                 context1.Context
 	CurrentClusterConfigPath             = ""
 )
 

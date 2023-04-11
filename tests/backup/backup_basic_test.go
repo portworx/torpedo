@@ -2,6 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -13,10 +18,6 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"os"
-	"strings"
-	"testing"
-	"time"
 )
 
 func getBucketNameSuffix() string {
@@ -113,6 +114,10 @@ func BackupInitInstance() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList), 2, "2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
+
+	log.Infof("Fetching px-central-admin user's credentials from secret to create PxBackupAdminAccessContext")
+	PxBackupAdminContext, err = backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, "PxBackupAdminAccessContext created with px-central-admin user's credentials")
 }
 
 var dash *aetosutil.Dashboard
