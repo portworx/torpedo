@@ -180,15 +180,13 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		})
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
-				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, PxBackupAdminContext)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, "Creating backup location")
@@ -218,35 +216,29 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		})
 		Step("Registering cluster for backup", func() {
 			log.InfoD("Registering cluster for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err := CreateSourceAndDestClusters(orgID, "", "", PxBackupAdminContext)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, PxBackupAdminContext)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			clusterUid, err = Inst().Backup.GetClusterUID(PxBackupAdminContext, orgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 		Step("Taking backup of all namespaces", func() {
 			log.InfoD("Taking backup of all namespaces")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, RandomString(4))
 				for strings.Contains(strings.Join(backupNames, ","), backupName) {
 					backupName = fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, RandomString(4))
 				}
 				backupNames = append(backupNames, backupName)
-				err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
-					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+				err := CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace},
+					labelSelectors, orgID, clusterUid, "", "", "", "", PxBackupAdminContext)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying [%s] backup creation", backupName))
 			}
 		})
 		Step("Restoring the backed up namespaces", func() {
 			log.InfoD("Restoring the backed up namespaces")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for index, namespace := range bkpNamespaces {
 				restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", namespace, RandomString(4))
 				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
@@ -254,7 +246,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				}
 				restoreNames = append(restoreNames, restoreName)
 				log.InfoD("Restoring [%s] namespace from the [%s] backup", namespace, backupNames[index])
-				err = CreateRestore(restoreName, backupNames[index], namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
+				err := CreateRestore(restoreName, backupNames[index], namespaceMapping, destinationClusterName, orgID, PxBackupAdminContext, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			}
 		})
@@ -262,8 +254,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		policyList := []string{intervalName, dailyName, weeklyName, monthlyName}
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
 		if len(preRuleNameList) > 0 {
 			for _, ruleName := range preRuleNameList {
 				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
@@ -276,7 +266,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules [%s]", ruleName))
 			}
 		}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		err := Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
 		dash.VerifySafely(err, nil, "Deleting backup schedule policies")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
@@ -285,17 +275,17 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		backupDriver := Inst().Backup
 		log.Info("Deleting backed up namespaces")
 		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			backupUID, err := backupDriver.GetBackupUID(PxBackupAdminContext, backupName, orgID)
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
+			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, PxBackupAdminContext)
 			log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
 			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
 		}
 		log.Info("Deleting restored namespaces")
 		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, orgID, ctx)
+			err = DeleteRestore(restoreName, orgID, PxBackupAdminContext)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
 		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, PxBackupAdminContext)
 	})
 })
