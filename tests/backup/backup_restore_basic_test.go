@@ -2340,8 +2340,8 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 						}(backupName)
 					}
 				}
+				wg.Wait()
 			}
-			wg.Wait()
 			log.Infof("List of backups - %v", backupNames)
 		})
 
