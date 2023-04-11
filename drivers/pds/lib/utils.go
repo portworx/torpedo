@@ -856,7 +856,7 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 
 // GetDeploymentConnectionInfo returns the dns endpoint
 func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
-	var isfound bool
+	//var isfound bool
 	var dnsEndpoint string
 
 	dataServiceDeployment := components.DataServiceDeployment
@@ -866,22 +866,24 @@ func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 		log.Errorf("An Error Occured %v", err)
 		return "", err
 	}
+	log.Infof("***************** cluster details key : %v ", clusterDetails)
 	deploymentNodes := deploymentConnectionDetails.GetNodes()
 	log.Infof("Deployment nodes %v", deploymentNodes)
-	isfound = false
-	log.Debugf("##### CLUSTER DETAILS ARE: %v\n", clusterDetails)
-	for key, value := range clusterDetails {
-		log.Infof("host details key %v value %v", key, value)
-		if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
-			log.Debugf("&&&&&&&&&& key value is : %v - %v ", key, value)
-			dnsEndpoint = fmt.Sprint(value)
-			isfound = true
-		}
-	}
-	if !isfound {
-		log.Errorf("No connection string found")
-		return "", err
-	}
+	// isfound = false
+	// for key, value := range clusterDetails {
+	// 	log.Infof("host details key %v value %v", key, value)
+	// 	log.Debugf("***************** cluster details key : %v value is: %v *****", key, value)
+	// 	if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
+	// 		dnsEndpoint = fmt.Sprint(value)
+	// 		isfound = true
+	// 	}
+	// }
+	// if !isfound {
+	// 	log.Errorf("No connection string found")
+	// 	return "", err
+	// }
+	log.Debugf("************ Dns is : %v\n", dnsEndpoint)
+	dnsEndpoint = deploymentNodes[1]
 
 	return dnsEndpoint, nil
 }
