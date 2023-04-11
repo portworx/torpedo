@@ -869,9 +869,11 @@ func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 	deploymentNodes := deploymentConnectionDetails.GetNodes()
 	log.Infof("Deployment nodes %v", deploymentNodes)
 	isfound = false
+	log.Debugf("##### CLUSTER DETAILS ARE: %v\n", clusterDetails)
 	for key, value := range clusterDetails {
 		log.Infof("host details key %v value %v", key, value)
 		if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
+			log.Debugf("&&&&&&&&&& key value is : %v - %v ", key, value)
 			dnsEndpoint = fmt.Sprint(value)
 			isfound = true
 		}
