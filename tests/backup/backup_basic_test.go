@@ -66,6 +66,11 @@ func BackupInitInstance() {
 	var err error
 	var token string
 	log.Info("Inside BackupInitInstance")
+
+	log.Infof("Fetching px-central-admin user's credentials from secret to create PxBackupAdminAccessContext")
+	PxBackupAdminContext, err = backup.GetAdminCtxFromSecret()
+	dash.VerifyFatal(err, nil, "PxBackupAdminAccessContext created with px-central-admin user's credentials")
+
 	err = Inst().S.Init(scheduler.InitOptions{
 		SpecDir:            Inst().SpecDir,
 		VolDriverName:      Inst().V.String(),
@@ -114,10 +119,6 @@ func BackupInitInstance() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList), 2, "2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
-
-	log.Infof("Fetching px-central-admin user's credentials from secret to create PxBackupAdminAccessContext")
-	PxBackupAdminContext, err = backup.GetAdminCtxFromSecret()
-	dash.VerifyFatal(err, nil, "PxBackupAdminAccessContext created with px-central-admin user's credentials")
 }
 
 var dash *aetosutil.Dashboard
