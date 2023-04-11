@@ -2072,3 +2072,14 @@ func FetchNamespacesFromBackup(ctx context.Context, backupName string, orgID str
 	backedUpNamespaces = resp.GetBackup().GetNamespaces()
 	return backedUpNamespaces, err
 }
+
+// GenerateRandomLabelsWithMaxChar creates random label with max characters
+func GenerateRandomLabelsWithMaxChar(number int, charLimit int) map[string]string {
+	labels := make(map[string]string)
+	for i := 0; i < number; i++ {
+		key := RandomString(charLimit)
+		value := uuid.New()
+		labels[key] = value
+	}
+	return labels
+}
