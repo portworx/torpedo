@@ -171,8 +171,6 @@ var _ = AfterSuite(func() {
 	defer EndTorpedoTest()
 
 	// Cleanup all non admin users
-	ctx, err := backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
 	allUsers, err := backup.GetAllUsers()
 	dash.VerifySafely(err, nil, "Verifying cleaning up of all users from keycloak")
 	for _, user := range allUsers {
@@ -198,21 +196,21 @@ var _ = AfterSuite(func() {
 	// Cleanup all backups
 	allBackups, err := GetAllBackupsAdmin()
 	for _, backupName := range allBackups {
-		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+		backupUID, err := Inst().Backup.GetBackupUID(PxBackupAdminContext, backupName, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		_, err = DeleteBackup(backupName, backupUID, orgID, PxBackupAdminContext)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
 	}
 
 	// Cleanup all restores
 	allRestores, err := GetAllRestoresAdmin()
 	for _, restoreName := range allRestores {
-		err = DeleteRestore(restoreName, orgID, ctx)
+		err = DeleteRestore(restoreName, orgID, PxBackupAdminContext)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 	}
 
 	// Cleanup all backup locations
-	allBackupLocations, err := getAllBackupLocations(ctx)
+	allBackupLocations, err := getAllBackupLocations(PxBackupAdminContext)
 	dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 	for backupLocationUid, backupLocationName := range allBackupLocations {
 		err = DeleteBackupLocation(backupLocationName, backupLocationUid, orgID, true)
@@ -220,7 +218,7 @@ var _ = AfterSuite(func() {
 	}
 
 	backupLocationDeletionSuccess := func() (interface{}, bool, error) {
-		allBackupLocations, err := getAllBackupLocations(ctx)
+		allBackupLocations, err := getAllBackupLocations(PxBackupAdminContext)
 		dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
 		if len(allBackupLocations) > 0 {
 			return "", true, fmt.Errorf("found %d backup locations", len(allBackupLocations))
@@ -232,7 +230,7 @@ var _ = AfterSuite(func() {
 	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 
 	// Cleanup all cloud credentials
-	allCloudCredentials, err := getAllCloudCredentials(ctx)
+	allCloudCredentials, err := getAllCloudCredentials(PxBackupAdminContext)
 	dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
 	for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
 		err = DeleteCloudCredential(cloudCredentialName, orgID, cloudCredentialUid)
@@ -240,7 +238,7 @@ var _ = AfterSuite(func() {
 	}
 
 	cloudCredentialDeletionSuccess := func() (interface{}, bool, error) {
-		allCloudCredentials, err := getAllCloudCredentials(ctx)
+		allCloudCredentials, err := getAllCloudCredentials(PxBackupAdminContext)
 		dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
 		if len(allCloudCredentials) > 0 {
 			return "", true, fmt.Errorf("found %d cloud credentials", len(allBackupLocations))
