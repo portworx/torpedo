@@ -1781,7 +1781,6 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 func CreateBackupWithNamespaceLabel(backupName string, clusterName string, bkpLocation string, bkpLocationUID string,
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
 	postRuleUid string, namespaceLabel string, ctx context.Context) error {
-
 	backupDriver := Inst().Backup
 	bkpCreateRequest := &api.BackupCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -1968,6 +1967,15 @@ func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, cluster
 	return resp, nil
 }
 
+// MapToString will create a string from map
+func MapToString(m map[string]string) string {
+	var pairs []string
+	for k, v := range m {
+		pairs = append(pairs, k+"="+v)
+	}
+	return strings.Join(pairs, ",")
+}
+
 // NamespaceLabelBackupSuccessCheck verifies if the labeled namespaces are backed up and checks for labels applied to backups
 func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, listOfLabelledNamespaces []string, namespaceLabel string) error {
 	backupDriver := Inst().Backup
@@ -1987,13 +1995,15 @@ func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, li
 	}
 	namespaceList := resp.GetBackup().GetNamespaces()
 	log.Infof("The list of namespaces backed up are %v", namespaceList)
-	if !reflect.DeepEqual(namespaceList, listOfLabelledNamespaces) {
+	if !AreSlicesEqual(namespaceList, listOfLabelledNamespaces) {
 		return fmt.Errorf("list of namespaces backed up are %v which is not same as expected %v", namespaceList, listOfLabelledNamespaces)
 	}
 	backupLabels := resp.GetBackup().GetNsLabelSelectors()
 	log.Infof("The list of labels applied to backup are %v", backupLabels)
-	if !reflect.DeepEqual(backupLabels, namespaceLabel) {
-		return fmt.Errorf("labels applied to backup are %v which is not same as expected %v", backupLabels, namespaceLabel)
+	expectedLabels := strings.Split(namespaceLabel, ",")
+	actualLabels := strings.Split(backupLabels, ",")
+	if !AreSlicesEqual(expectedLabels, actualLabels) {
+		return fmt.Errorf("labels applied to backup are %v which is not same as expected %v", actualLabels, expectedLabels)
 	}
 	return nil
 }
@@ -2071,4 +2081,84 @@ func FetchNamespacesFromBackup(ctx context.Context, backupName string, orgID str
 	}
 	backedUpNamespaces = resp.GetBackup().GetNamespaces()
 	return backedUpNamespaces, err
+}
+
+// AreSlicesEqual verifies if two slices are equal or not
+func AreSlicesEqual(slice1, slice2 interface{}) bool {
+	v1 := reflect.ValueOf(slice1)
+	v2 := reflect.ValueOf(slice2)
+	if v1.Len() != v2.Len() {
+		return false
+	}
+	m := make(map[interface{}]int)
+	for i := 0; i < v2.Len(); i++ {
+		m[v2.Index(i).Interface()]++
+	}
+	for i := 0; i < v1.Len(); i++ {
+		if m[v1.Index(i).Interface()] == 0 {
+			return false
+		}
+		m[v1.Index(i).Interface()]--
+	}
+	return true
+}
+
+func UpdateBackupLocationOwnership(name string, uid string, userNames []string, groups []string, accessType api.Ownership_AccessType) error {
+	log.Infof("UpdateBackupLocationOwnership for users %v", userNames)
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	userBackupLocationOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userBackupLocationOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: accessType,
+		}
+		userBackupLocationOwnershipAccessConfigs = append(userBackupLocationOwnershipAccessConfigs, userBackupLocationOwnershipAccessConfig)
+	}
+
+	groupBackupLocationOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupBackupLocationOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: accessType,
+		}
+		groupBackupLocationOwnershipAccessConfigs = append(groupBackupLocationOwnershipAccessConfigs, groupBackupLocationOwnershipAccessConfig)
+	}
+
+	bLocationOwnershipUpdateReq := &api.BackupLocationOwnershipUpdateRequest{
+		OrgId:     orgID,
+		Name:      name,
+		Ownership: &api.Ownership{Groups: groupBackupLocationOwnershipAccessConfigs, Collaborators: userBackupLocationOwnershipAccessConfigs},
+		Uid:       uid,
+	}
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+
+	_, err = backupDriver.UpdateOwnershipBackupLocation(ctx, bLocationOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
 }
