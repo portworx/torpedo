@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"fmt"
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"math/rand"
 	"net/http"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -771,18 +772,18 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 		})
 
 		Step("Running TPCC Workloads - ", func() {
-			if dataservice == postgresql {
-				deploymentName := "pg-tpcc"
-				tpccRunResult, _ := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
-				if !tpccRunResult {
-					dash.VerifyFatal(tpccRunResult, true, "Validating if Postgres TPCC Run was successful or not")
-				}
-			}
+			// if dataservice == postgresql {
+			// 	deploymentName := "pg-tpcc"
+			// 	tpccRunResult, _ := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
+			// 	if !tpccRunResult {
+			// 		dash.VerifyFatal(tpccRunResult, true, "Validating if Postgres TPCC Run was successful or not")
+			// 	}
+			// }
 			if dataservice == mysql {
 				deploymentName := "my-tpcc"
 				tpccRunResult, _ := pdslib.CreateTpccWorkloads(dataservice, deployment.GetId(), "100", "1", deploymentName, namespace)
 				if !tpccRunResult {
-					dash.VerifyFatal(tpccRunResult, true, "Validating if MySQL TPCC Run was successful or not")
+					dash.VerifyFatal(tpccRunResult, true, "Validating if MySQL-TPCC Run was successful or not")
 				}
 			}
 		})

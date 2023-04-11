@@ -1904,9 +1904,11 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 		var wasMysqlConfigured bool
 		// Waiting for approx an hour to check if Mysql deployment comes up
 		for i := 1; i <= 80; i++ {
-			wasMysqlConfigured := SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
-			if wasMysqlConfigured {
+			isMysqlConfigured := SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
+			if isMysqlConfigured {
 				log.InfoD("MySQL Deployment is successfully configured to run for TPCC Workload. Starting TPCC Workload Now.")
+				log.Debugf("********IS MYSQL CONFIGURED %v", isMysqlConfigured)
+				wasMysqlConfigured = isMysqlConfigured
 				break
 			} else {
 				log.InfoD("MySQL deployment is not yet configured for TPCC. It may still be starting up or there could be some error")
@@ -1914,9 +1916,10 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 				time.Sleep(30 * time.Second)
 			}
 		}
+		log.Debugf("********WAS MYSQL CONFIGURED %v", wasMysqlConfigured)
 		if !wasMysqlConfigured {
 			log.Errorf("Something went wrong and DB Couldn't be prepared for TPCC workload. Exiting.")
-			return wasMysqlConfigured, errors.New("MySQL DB Couldnt be prepared for TPCC as it wasnt reachable. This could be a bug, please check manually.")
+			return wasMysqlConfigured, errors.New("MySQL DB Couldnt be prepared for TPCC as it wasnt reachable. This could be a bug, please check manually")
 		}
 		wasTpccRunSuccessful := RunTpccWorkload(dbUser, "password", dnsEndpoint, dbName,
 			timeToRun, numOfThreads, numOfCustomers, numOfWarehouses,
