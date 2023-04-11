@@ -900,9 +900,7 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 // done for MySQL before running MySQL.
 func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint string, namespace string) bool {
 	log.InfoD("Trying to configure Mysql deployment for TPCC Workload")
-	if dbUser == "" {
-		dbUser = "pds"
-	}
+
 	podSpec := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
@@ -925,6 +923,7 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
+	log.Debugf("************ POD SPEC **************", podSpec)
 	_, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
 		log.Errorf("An Error Occured while creating %v", err)
@@ -1902,7 +1901,9 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	// Create TPCC Schema and then run it.
 	case mysql:
 		dbName := "tpcc"
+		dbUser = "pds"
 		var wasMysqlConfigured bool
+
 		// Waiting for approx an hour to check if Mysql deployment comes up
 		for i := 1; i <= 80; i++ {
 			isMysqlConfigured := SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
