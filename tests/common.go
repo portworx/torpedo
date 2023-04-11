@@ -2409,13 +2409,18 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 
 // DeleteCloudCredential deletes cloud credentials
 func DeleteCloudCredential(name string, orgID string, cloudCredUID string) error {
+
 	backupDriver := Inst().Backup
 	credDeleteRequest := &api.CloudCredentialDeleteRequest{
 		Name:  name,
 		OrgId: orgID,
 		Uid:   cloudCredUID,
 	}
-	_, err := backupDriver.DeleteCloudCredential(PxBackupAdminContext, credDeleteRequest)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
 	return err
 }
 
@@ -2786,7 +2791,11 @@ func CreateBackupGetErr(backupName string, clusterName string, bLocation string,
 			Namespaces:     namespaces,
 			LabelSelectors: labelSelectors,
 		}
-		_, err := backupDriver.CreateBackup(PxBackupAdminContext, bkpCreateRequest)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+		_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 		if err != nil {
 			log.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]",
 				backupName, orgID, err)
@@ -2799,6 +2808,7 @@ func CreateBackupGetErr(backupName string, clusterName string, bLocation string,
 // CreateScheduledBackup creates a scheduled backup with time interval
 func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicyName, schedulePolicyUID string,
 	interval time.Duration, namespaces []string) (err error) {
+	var ctx context1.Context
 	labelSelectors := make(map[string]string)
 	Step(fmt.Sprintf("Create scheduled backup %s of namespaces %v on cluster %s in organization %s",
 		backupScheduleNamePrefix+backupScheduleName, namespaces, SourceClusterName, OrgID), func() {
@@ -2823,7 +2833,12 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				},
 			},
 		}
-		_, err = backupDriver.CreateSchedulePolicy(PxBackupAdminContext, schedulePolicyCreateRequest)
+		//ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		_, err = backupDriver.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
 		if err != nil {
 			return
 		}
@@ -2853,7 +2868,12 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				Uid:  BackupLocationUID,
 			},
 		}
-		_, err = backupDriver.CreateBackupSchedule(PxBackupAdminContext, bkpScheduleCreateRequest)
+		//ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		_, err = backupDriver.CreateBackupSchedule(ctx, bkpScheduleCreateRequest)
 		if err != nil {
 			return
 		}
@@ -2946,8 +2966,11 @@ func GetBackupCreateRequest(backupName string, clusterName string, bLocation str
 
 // CreateBackupFromRequest creates a backup using a provided request
 func CreateBackupFromRequest(backupName string, orgID string, request *api.BackupCreateRequest) (err error) {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
 	backupDriver := Inst().Backup
-	_, err = backupDriver.CreateBackup(PxBackupAdminContext, request)
+	_, err = backupDriver.CreateBackup(ctx, request)
 	if err != nil {
 		log.Errorf("Failed to create backup [%s] in org [%s]. Error: [%v]",
 			backupName, orgID, err)
@@ -2957,6 +2980,8 @@ func CreateBackupFromRequest(backupName string, orgID string, request *api.Backu
 
 // InspectBackup inspects the backup name passed in
 func InspectBackup(backupName string) (bkpInspectResponse *api.BackupInspectResponse, err error) {
+	var ctx context1.Context
+
 	Step(fmt.Sprintf("Inspect backup %s in org %s",
 		backupName, OrgID), func() {
 		backupDriver := Inst().Backup
@@ -2965,7 +2990,12 @@ func InspectBackup(backupName string) (bkpInspectResponse *api.BackupInspectResp
 			OrgId: OrgID,
 			Name:  backupName,
 		}
-		bkpInspectResponse, err = backupDriver.InspectBackup(PxBackupAdminContext, bkpInspectRequest)
+		//ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		bkpInspectResponse, err = backupDriver.InspectBackup(ctx, bkpInspectRequest)
 		if err != nil {
 			return
 		}
@@ -2982,7 +3012,11 @@ func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Durati
 		log.Infof("Enumerating backups")
 		bkpEnumerateReq := &api.BackupEnumerateRequest{
 			OrgId: OrgID}
-		curBackups, err := Inst().Backup.EnumerateBackup(PxBackupAdminContext, bkpEnumerateReq)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return nil, true, err
+		}
+		curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
 		if err != nil {
 			return nil, true, err
 		}
@@ -3013,6 +3047,8 @@ func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Durati
 
 // InspectScheduledBackup inspects the scheduled backup
 func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpScheduleInspectResponse *api.BackupScheduleInspectResponse, err error) {
+	var ctx context1.Context
+
 	Step(fmt.Sprintf("Inspect scheduled backup %s of all namespaces on cluster %s in organization %s",
 		backupScheduleNamePrefix, SourceClusterName, OrgID), func() {
 		backupDriver := Inst().Backup
@@ -3022,7 +3058,12 @@ func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpSc
 			Name:  backupScheduleNamePrefix + backupScheduleName,
 			Uid:   backupScheduleUID,
 		}
-		bkpScheduleInspectResponse, err = backupDriver.InspectBackupSchedule(PxBackupAdminContext, bkpScheduleInspectRequest)
+		//ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		bkpScheduleInspectResponse, err = backupDriver.InspectBackupSchedule(ctx, bkpScheduleInspectRequest)
 		if err != nil {
 			return
 		}
@@ -3064,13 +3105,15 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 
 // DeleteBackupAndDependencies deletes backup and dependent backups
 func DeleteBackupAndDependencies(backupName string, backupUID string, orgID string, clusterName string) error {
+	ctx, err := backup.GetAdminCtxFromSecret()
+
 	backupDeleteRequest := &api.BackupDeleteRequest{
 		Name:    backupName,
 		Uid:     backupUID,
 		OrgId:   orgID,
 		Cluster: clusterName,
 	}
-	_, err := Inst().Backup.DeleteBackup(PxBackupAdminContext, backupDeleteRequest)
+	_, err = Inst().Backup.DeleteBackup(ctx, backupDeleteRequest)
 	if err != nil {
 		return err
 	}
@@ -3080,7 +3123,7 @@ func DeleteBackupAndDependencies(backupName string, backupUID string, orgID stri
 		Uid:   backupUID,
 		OrgId: orgID,
 	}
-	resp, err := Inst().Backup.InspectBackup(PxBackupAdminContext, backupInspectRequest)
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
 	if err != nil {
 		return err
 	}
@@ -3095,7 +3138,7 @@ func DeleteBackupAndDependencies(backupName string, backupUID string, orgID stri
 		}
 	}
 
-	err = Inst().Backup.WaitForBackupDeletion(PxBackupAdminContext, backupName, orgID, defaultTimeout, defaultRetryInterval)
+	err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, orgID, defaultTimeout, defaultRetryInterval)
 	if err != nil {
 		return err
 	}
@@ -3152,6 +3195,7 @@ func DeleteCluster(name string, orgID string, ctx context1.Context) error {
 
 // DeleteBackupLocation deletes backup location
 func DeleteBackupLocation(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool) error {
+
 	backupDriver := Inst().Backup
 	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
 		Name:          name,
@@ -3159,7 +3203,11 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 		DeleteBackups: DeleteExistingBackups,
 		Uid:           backupLocationUID,
 	}
-	_, err := backupDriver.DeleteBackupLocation(PxBackupAdminContext, bLocationDeleteReq)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
 	if err != nil {
 		return err
 	}
@@ -3407,7 +3455,13 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			},
 		},
 	}
-	_, err := backupDriver.CreateBackupLocation(PxBackupAdminContext, bLocationCreateReq)
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location: %v", err)
 	}
@@ -3469,7 +3523,11 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 			Type: api.BackupLocationInfo_Azure,
 		},
 	}
-	_, err := backupDriver.CreateBackupLocation(PxBackupAdminContext, bLocationCreateReq)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
@@ -3499,7 +3557,11 @@ func CreateOrganization(orgID string) {
 				Name: orgID,
 			},
 		}
-		backupDriver.CreateOrganization(PxBackupAdminContext, req)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
+				err))
+		_, err = backupDriver.CreateOrganization(ctx, req)
 		//expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to create organization [%s]. Error: [%v]",
 		//		orgID, err))
@@ -3508,6 +3570,8 @@ func CreateOrganization(orgID string) {
 
 // UpdateScheduledBackup updates the scheduled backup with time interval from global vars
 func UpdateScheduledBackup(schedulePolicyName, schedulePolicyUID string, ScheduledBackupInterval time.Duration) (err error) {
+	var ctx context1.Context
+
 	Step(fmt.Sprintf("Update schedule policy %s", schedulePolicyName), func() {
 		backupDriver := Inst().Backup
 
@@ -3530,7 +3594,12 @@ func UpdateScheduledBackup(schedulePolicyName, schedulePolicyUID string, Schedul
 				},
 			},
 		}
-		_, err = backupDriver.UpdateSchedulePolicy(PxBackupAdminContext, schedulePolicyUpdateRequest)
+		//ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = backup.GetAdminCtxFromSecret()
+		if err != nil {
+			return
+		}
+		_, err = backupDriver.UpdateSchedulePolicy(ctx, schedulePolicyUpdateRequest)
 		if err != nil {
 			return
 		}
