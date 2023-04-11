@@ -2416,11 +2416,7 @@ func DeleteCloudCredential(name string, orgID string, cloudCredUID string) error
 		OrgId: orgID,
 		Uid:   cloudCredUID,
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	_, err = backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
+	_, err := backupDriver.DeleteCloudCredential(PxBackupAdminContext, credDeleteRequest)
 	return err
 }
 
@@ -3195,7 +3191,6 @@ func DeleteCluster(name string, orgID string, ctx context1.Context) error {
 
 // DeleteBackupLocation deletes backup location
 func DeleteBackupLocation(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool) error {
-
 	backupDriver := Inst().Backup
 	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
 		Name:          name,
@@ -3203,17 +3198,12 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 		DeleteBackups: DeleteExistingBackups,
 		Uid:           backupLocationUID,
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	_, err = backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
+	_, err := backupDriver.DeleteBackupLocation(PxBackupAdminContext, bLocationDeleteReq)
 	if err != nil {
 		return err
 	}
 	// TODO: validate createBackupLocationResponse also
 	return nil
-
 }
 
 // DeleteSchedule deletes backup schedule
@@ -3455,13 +3445,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			},
 		},
 	}
-
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.CreateBackupLocation(PxBackupAdminContext, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location: %v", err)
 	}
@@ -3523,11 +3507,7 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 			Type: api.BackupLocationInfo_Azure,
 		},
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.CreateBackupLocation(PxBackupAdminContext, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
@@ -3557,11 +3537,7 @@ func CreateOrganization(orgID string) {
 				Name: orgID,
 			},
 		}
-		ctx, err := backup.GetAdminCtxFromSecret()
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
-				err))
-		_, err = backupDriver.CreateOrganization(ctx, req)
+		backupDriver.CreateOrganization(PxBackupAdminContext, req)
 		//expect(err).NotTo(haveOccurred(),
 		//	fmt.Sprintf("Failed to create organization [%s]. Error: [%v]",
 		//		orgID, err))
