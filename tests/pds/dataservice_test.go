@@ -1305,7 +1305,8 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 		var namespaces []*corev1.Namespace
 		// create k8s namespaces
 		for i := 0; i < 2; i++ {
-			nname := "namespace-" + strconv.Itoa(i)
+			randInt := strconv.Itoa(rand.Int())
+			nname := "mulnamespace-" + randInt
 			ns, err := pdslib.CreateK8sPDSNamespace(nname)
 			log.InfoD("Created namespace: %v", nname)
 			log.FailOnError(err, "error while creating namespace")
