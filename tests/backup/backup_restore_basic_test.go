@@ -2339,8 +2339,8 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup creation: %s", backupName))
 						}(backupName)
 					}
+					wg.Wait()
 				}
-				wg.Wait()
 			}
 			log.Infof("List of backups - %v", backupNames)
 		})
