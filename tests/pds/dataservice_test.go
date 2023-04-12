@@ -372,7 +372,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
 					isDeploymentsDeleted = true
-					log.InfoD("Deployment %v Deleted Successfully", *deployment.Name)
+					log.InfoD("Deployment %v Deleted Successfully", *deployment.ClusterResourceName)
 				})
 
 			})
