@@ -2448,6 +2448,6 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMapNew, credName, cloudCredUID, ctx)
 	})
 })
