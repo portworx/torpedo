@@ -364,7 +364,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				log.FailOnError(err, "Error while validating the pds deployment pods")
 
 				Step("Delete Deployments", func() {
-					log.InfoD("Deleting Deployment %v ", *deployment.Name)
+					log.InfoD("Deleting Deployment %v ", *deployment.ClusterResourceName)
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
