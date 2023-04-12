@@ -143,8 +143,8 @@ func (backupCredential *BackupCredential) CreateS3CompatibleBackupCredential(ten
 func (backupCredential *BackupCredential) CreateGoogleCredential(tenantID string, name string, GcpProjectId string, jsonkey string) (*pds.ModelsBackupCredentials, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
 	gcpCredsModel := pds.ModelsGoogleCredentials{
-		JsonKey:   &GcpProjectId,
-		ProjectId: &jsonkey,
+		JsonKey:   &jsonkey,
+		ProjectId: &GcpProjectId,
 	}
 	controllerCreds := pds.ControllersCredentials{
 		Google: &gcpCredsModel,

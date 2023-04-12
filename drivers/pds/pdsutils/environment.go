@@ -19,10 +19,10 @@ const (
 	envAwsAccessKey            = "AWS_ACCESS_KEY_ID"
 	envAwsSecretKey            = "AWS_SECRET_ACCESS_KEY"
 	envAwsRegion               = "AWS_REGION"
-	envAzureStorageAccountName = "PDS_QA_AZURE_STORAGE_ACCOUNT_NAME"
-	envAzurePrimaryAccountKey  = "PDS_QA_AZURE_ACCOUNT_KEY"
-	envGcpProjectId            = "PDS_QA_GCP_PROJECT_ID"
-	envGcpJsonPath             = "PDS_QA_GCP_JSON_PATH"
+	envAzureStorageAccountName = "AZURE_ACCOUNT_NAME"
+	envAzurePrimaryAccountKey  = "AZURE_ACCOUNT_KEY"
+	envGcpProjectId            = "GCP_PROJECT_ID"
+	envGcpJsonPath             = "GCP_JSON_PATH"
 )
 
 // Environment struct for PDS test execution
@@ -71,7 +71,6 @@ func BackupEnvVariables() Environment {
 		PDSAzureStorageAccountName: mustGetEnvVariable(envAzureStorageAccountName),
 		PDSAzurePrimaryAccountKey:  mustGetEnvVariable(envAzurePrimaryAccountKey),
 		PDSGcpProjectId:            mustGetEnvVariable(envGcpProjectId),
-		PDSGcpJsonPath:             mustGetEnvVariable(envGcpJsonPath),
 	}
 }
 

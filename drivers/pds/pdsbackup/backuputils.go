@@ -77,18 +77,20 @@ func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name
 
 // CreateGcpBackupCredsAndTarget create backup creds,bucket and target.
 func (backupClient *BackupClient) CreateGcpBackupCredsAndTarget(tenantId, name string) (*pds.ModelsBackupTarget, error) {
-	log.Info("Add GCP backup creadentials")
+	log.Info("Create google storage for adding GCP backup target to control plane.")
+	err := backupClient.gcpStorageClient.createBucket(bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("Failed while creating bucket, Err: %v ", err)
+	}
+	log.Info("Add GCP backup credentials")
 	projectId := backupClient.gcpStorageClient.projectId
-	gcpJsonKey := os.Getenv("PDS_QA_GCP_JSON_PATH")
+	gcpJsonKey := os.Getenv("GCP_JSON_PATH")
+
+	log.Infof("GCP Json PATH - %v projectId-%v ", gcpJsonKey, projectId)
 	backupCred, err := backupClient.components.BackupCredential.CreateGoogleCredential(tenantId, name, projectId, gcpJsonKey)
 
 	if err != nil {
 		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
-	}
-	log.Info("Create google storage.")
-	err = backupClient.gcpStorageClient.createBucket(bucketName)
-	if err != nil {
-		return nil, fmt.Errorf("Failed while creating bucket, Err: %v ", err)
 	}
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, "", "google")

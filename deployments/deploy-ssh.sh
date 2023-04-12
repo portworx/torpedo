@@ -602,17 +602,8 @@ spec:
       value: "${DEPLOY_ALL_DATASERVICE}"
     - name: CONTROL_PLANE_URL
       value: "${CONTROL_PLANE_URL}"
-    - name: PDS_QA_AZURE_STORAGE_ACCOUNT_NAME
-      value: "${PDS_QA_AZURE_STORAGE_ACCOUNT_NAME}"
-    - name: PDS_QA_AZURE_ACCOUNT_KEY
-      value: "${PDS_QA_AZURE_ACCOUNT_KEY}"
-    - name: PDS_QA_GCP_PROJECT_ID
-      value: "${PDS_QA_GCP_PROJECT_ID}"
-    - name: PDS_QA_GCP_JSON_PATH
-      valueFrom:
-        configMapKeyRef:
-          name: custom-pds-qa-gcp-json-path
-          key: custom-pds-qa-gcp-json-path
+    - name: GCP_PROJECT_ID
+      value: "${GCP_PROJECT_ID}"
     - name: PDS_USERNAME
       value: "${PDS_USERNAME}"
     - name: PDS_PASSWORD

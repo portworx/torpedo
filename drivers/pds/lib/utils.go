@@ -1331,6 +1331,8 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	log.InfoD("Project Details- Name: %s, UUID: %s ", ProjectName, projectID)
 
 	ns, err = k8sCore.GetNamespace("kube-system")
+	log.Infof("kube-system ns-> %v", ns)
+	log.Infof("Error Get kube-system ns-> %v", err)
 	if err != nil {
 		return "", "", "", "", "", "", err
 	}

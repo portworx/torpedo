@@ -3,6 +3,8 @@ package pdsbackup
 import (
 	"context"
 	"fmt"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/api/option"
 	"os"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -58,7 +61,6 @@ func (awsObj *awsStorageClient) createBucket(bucketName string) error {
 			}
 
 		}
-
 	}
 
 	log.Infof("[AWS]Successfully created the bucket. Info: %v", bucketObj)
@@ -136,38 +138,69 @@ func (azObj *azureStorageClient) deleteBucket(containerName string) error {
 }
 
 func (gcpObj *gcpStorageClient) createBucket(bucketName string) error {
-	ctx := context.Background()
-	createGcpJsonFile("/tmp/json")
-	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/json")
-	client, err := storage.NewClient(context.Background())
-	if err != nil {
-		return fmt.Errorf("failed to create gcp client: %v", err)
-	}
-
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
-	defer cancel()
-	bucketClient := client.Bucket(bucketName)
-	exist, err := bucketClient.Attrs(ctx)
+	err := gcpObj.setGcpJsonPath()
 	if err != nil {
 		return err
 	}
-	if exist != nil {
-		if err != nil {
-			return fmt.Errorf("unexpected error occured: %v", err)
+	err = gcpObj.createGcpJsonFile("/tmp/json")
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile("/tmp/json"))
+	if err != nil {
+		return fmt.Errorf("failed to create client: %v", err)
+	}
+
+	if _, err := client.Bucket(bucketName).Attrs(ctx); err != nil {
+		if err == storage.ErrBucketNotExist {
+			if err := client.Bucket(bucketName).Create(ctx, gcpObj.projectId, nil); err != nil {
+				return fmt.Errorf("failed to create bucket: %v", err)
+			}
+			log.Infof("Bucket created: gs://%s\n", bucketName)
 		} else {
-			log.Infof("[GCP] Bucket: %v already exists.!!", bucketName)
+			apiErr, ok := err.(*googleapi.Error)
+			if ok && apiErr.Code == 403 {
+				return fmt.Errorf("access denied to bucket: %v", err)
+			} else {
+				return fmt.Errorf("failed to get bucket: %v", err)
+			}
 		}
 	} else {
-		err := bucketClient.Create(ctx, gcpObj.projectId, nil)
-		if err != nil {
-			return fmt.Errorf("Bucket(%v).Create: %v", bucketName, err)
-		}
-		log.Infof("[GCP] Successfully create the Bucket: %v", bucketName)
+		log.Infof("Bucket already exists: gs://%s\n", bucketName)
+	}
+
+	return nil
+}
+
+func (gcpObj *gcpStorageClient) setGcpJsonPath() error {
+	cm, err := core.Instance().GetConfigMap("custom-pds-qa-gcp-json-path", "default")
+	if err != nil {
+		return err
+	}
+	if _, ok := cm.Data["custom-pds-qa-gcp-json-path"]; ok {
+		gcpJsonData := cm.Data["custom-pds-qa-gcp-json-path"]
+		os.Setenv("GCP_JSON_PATH", gcpJsonData)
+		return nil
+	}
+	return fmt.Errorf("key: custom-pds-qa-gcp-json-path doesn't exists in the gcp configmap")
+}
+
+func (gcpObj *gcpStorageClient) createGcpJsonFile(path string) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("error while creating the file -> %v", err)
+	}
+	defer f.Close()
+	err = f.Truncate(0)
+	if err != nil {
+		return fmt.Errorf("error truncating file. Err: %v", err)
+	}
+	_, err = f.WriteString(os.Getenv("GCP_JSON_PATH"))
+	if err != nil {
+		return fmt.Errorf("error while writing the data to file -> %v", err)
 	}
 	return nil
-
 }
 
 func (gcpObj *gcpStorageClient) deleteBucket(bucketName string) error {
@@ -198,19 +231,6 @@ func (gcpObj *gcpStorageClient) deleteBucket(bucketName string) error {
 		}
 	} else {
 		log.Infof("[GCP]Bucket: %v doesn't exist.", bucketName)
-	}
-	return nil
-}
-
-func createGcpJsonFile(path string) error {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("error while creating the file -> %v", err)
-	}
-	defer f.Close()
-	_, err = f.WriteString(os.Getenv("PDS_QA_GCP_JSON_PATH"))
-	if err != nil {
-		return fmt.Errorf("error while writing the data to file -> %v", err)
 	}
 	return nil
 }
