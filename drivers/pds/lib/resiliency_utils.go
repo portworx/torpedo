@@ -217,34 +217,7 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 	return testError
 }
 
-// Kill the Deployment Controller Pod while Data Service is coming up
-func KillDeploymentPodDuringDeployment(ns string) error {
-	var deploymentControllerPods []corev1.Pod
-	// Fetch All the pods in pds-system namespace
-	podList, testError := GetPods(ns)
-	if testError != nil {
-		CapturedErrors <- testError
-		return testError
-	}
-	// Get List of All Pods matching with the name : deployment controller manager pod
-	for _, pod := range podList.Items {
-		if strings.Contains(pod.Name, PdsDeploymentControllerManagerPod) {
-			log.Infof("Deployment Controller Pod Name is : %v", pod.Name)
-			deploymentControllerPods = append(deploymentControllerPods, pod)
-		}
-	}
-	// Kill All Deployment Controller Pods
-	for _, pod := range deploymentControllerPods {
-		testError = DeleteK8sPods(pod.Name, ns)
-		if testError != nil {
-			CapturedErrors <- testError
-			return testError
-		}
-		log.InfoD("Successfully Killed Pod: %v", pod.Name)
-	}
-	return testError
-}
-
+// Reboot All Worker Nodes while deployment is ongoing
 func RebootWorkerNodesDuringDeployment(ns string) error {
 	// Waiting till atleast first pod have a node assigned
 	var pods []corev1.Pod

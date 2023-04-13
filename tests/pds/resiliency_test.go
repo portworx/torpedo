@@ -67,7 +67,7 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 					failuretype := pdslib.TypeOfFailure{
 						Type: KillDeploymentControllerPod,
 						Method: func() error {
-							return pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, KillDeploymentControllerPod)
+							return pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, pdslib.PdsDeploymentControllerManagerPod)
 						},
 					}
 					pdslib.DefineFailureType(failuretype)
