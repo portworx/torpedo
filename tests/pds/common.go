@@ -46,6 +46,8 @@ const (
 	KillDeploymentControllerPod      = "kill-deployment-controller-pod-during-deployment"
 	BackUpCRD                        = "backups.pds.io"
 	DeploymentCRD                    = "deployments.pds.io"
+	RebootNodesDuringDeployment      = "reboot-multiple-nodes-during-deployment"
+	KillAgentPodDuringDeployment     = "kill-agent-pod-during-deployment"
 )
 
 var (

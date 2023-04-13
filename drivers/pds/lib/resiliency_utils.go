@@ -20,8 +20,11 @@ import (
 
 const (
 	PdsDeploymentControllerManagerPod = "pds-deployment-controller-manager"
+	PdsAgentPod                       = "pds-agent"
 	ActiveNodeRebootDuringDeployment  = "active-node-reboot-during-deployment"
 	KillDeploymentControllerPod       = "kill-deployment-controller-pod-during-deployment"
+	RebootNodesDuringDeployment       = "reboot-multiple-nodes-during-deployment"
+	KillAgentPodDuringDeployment      = "kill-agent-pod-during-deployment"
 )
 
 // PDS vars
@@ -104,6 +107,26 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 	case KillDeploymentControllerPod:
 		checkTillReplica = CheckTillReplica
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the deployment Controller Pod.", checkTillReplica)
+		func1 := func() {
+			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case RebootNodesDuringDeployment:
+		checkTillReplica = CheckTillReplica
+		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will start rebooting all worker nodes.", checkTillReplica)
+		func1 := func() {
+			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case KillAgentPodDuringDeployment:
+		checkTillReplica = CheckTillReplica
+		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the Agent Pod.", checkTillReplica)
 		func1 := func() {
 			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
 		}
@@ -212,6 +235,94 @@ func KillDeploymentPodDuringDeployment(ns string) error {
 	}
 	// Kill All Deployment Controller Pods
 	for _, pod := range deploymentControllerPods {
+		testError = DeleteK8sPods(pod.Name, ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return testError
+		}
+		log.InfoD("Successfully Killed Pod: %v", pod.Name)
+	}
+	return testError
+}
+
+func RebootWorkerNodesDuringDeployment(ns string) error {
+	// Waiting till atleast first pod have a node assigned
+	var pods []corev1.Pod
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+		if err != nil {
+			CapturedErrors <- err
+			return false, err
+		}
+		// Get Pods of this StatefulSet
+		pods, err = k8sApps.GetStatefulSetPods(ss)
+		if err != nil {
+			CapturedErrors <- err
+			return false, err
+		}
+		// Check if Pods have a node assigned or it's in a window where it's just coming up
+		for _, pod := range pods {
+			log.Infof("Nodename of pod %v is :%v:", pod.Name, pod.Spec.NodeName)
+			if pod.Spec.NodeName == "" || pod.Spec.NodeName == " " {
+				log.Infof("Pod %v still does not have a node assigned. Retrying in 5 seconds", pod.Name)
+				return false, nil
+			} else {
+				return true, nil
+			}
+		}
+		return true, nil
+	})
+	if err != nil {
+		CapturedErrors <- err
+		return err
+	}
+	// Reboot All Worker Nodes
+	nodesToReboot := node.GetWorkerNodes()
+	for _, n := range nodesToReboot {
+		log.InfoD("reboot node: %s", n.Name)
+		err = tests.Inst().N.RebootNode(n, node.RebootNodeOpts{
+			Force: true,
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         defaultCommandTimeout,
+				TimeBeforeRetry: defaultCommandRetry,
+			},
+		})
+		if err != nil {
+			CapturedErrors <- err
+			return err
+		}
+
+		log.Infof("wait for node: %s to be back up", n.Name)
+		err = tests.Inst().N.TestConnection(n, node.ConnectionOpts{
+			Timeout:         defaultTestConnectionTimeout,
+			TimeBeforeRetry: defaultWaitRebootRetry,
+		})
+		if err != nil {
+			CapturedErrors <- err
+			return err
+		}
+	}
+	return nil
+}
+
+// Kill All pods matching podName string in a given namespace
+func KillPodsInNamespace(ns string, podName string) error {
+	var Pods []corev1.Pod
+	// Fetch All the pods in pds-system namespace
+	podList, testError := GetPods(ns)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+	// Get List of All Pods matching with the name : deployment controller manager pod
+	for _, pod := range podList.Items {
+		if strings.Contains(pod.Name, podName) {
+			log.Infof("Pod Name is : %v", pod.Name)
+			Pods = append(Pods, pod)
+		}
+	}
+	// Kill All Deployment Controller Pods
+	for _, pod := range Pods {
 		testError = DeleteK8sPods(pod.Name, ns)
 		if testError != nil {
 			CapturedErrors <- testError
