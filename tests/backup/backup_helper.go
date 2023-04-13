@@ -2217,3 +2217,25 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 	nextScheduleBackupName = nextScheduleBackup.(string)
 	return nextScheduleBackupName, nil
 }
+
+// NamespaceExistsInNamespaceMapping checks if namespace is present in map of namespace mapping
+func NamespaceExistsInNamespaceMapping(namespaceMap map[string]string, namespaces []string) bool {
+	for _, namespace := range namespaces {
+		if _, ok := namespaceMap[namespace]; !ok {
+			fmt.Printf("%s is not a present in namespaces %v", namespace, namespaces)
+			return false
+		}
+	}
+	return true
+}
+
+// RemoveNamespaceLabelForMultipleNamespaces removes labels from multiple namespace
+func RemoveNamespaceLabelForMultipleNamespaces(labels map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.RemoveNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
