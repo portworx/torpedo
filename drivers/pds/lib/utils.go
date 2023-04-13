@@ -1480,7 +1480,9 @@ func CheckAndDeleteIndependentPV(name string) error {
 		return err
 	}
 	log.InfoD("Stranded PV Found by the name - %s. Going ahead to delete this PV and associated entities", name)
+	log.Debugf("****** STATUS OF STRNADED PV IS : %s", pv_check.Status.Phase)
 	if pv_check.Status.Phase == corev1.VolumeBound {
+		log.Debugf("****** pv_check.Spec.ClaimRef IS : %s and pv_check.Spec.ClaimRef.Kind IS : %s ", pv_check.Status.Phase, pv_check.Spec.ClaimRef.Kind)
 		if pv_check.Spec.ClaimRef != nil && pv_check.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
 			namespace := pv_check.Spec.ClaimRef.Namespace
 			pvc_name := pv_check.Spec.ClaimRef.Name
@@ -1498,6 +1500,7 @@ func CheckAndDeleteIndependentPV(name string) error {
 				return err
 			}
 			// Delete PVC from figured out namespace
+			log.Debugf("********** FIGURED OUT NS IS %s AND ITS PVC IS : %s", namespace, pvc_name)
 			err = k8sCore.DeletePersistentVolumeClaim(pvc_name, namespace)
 			if err != nil {
 				return err
