@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"fmt"
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"math/rand"
 	"net/http"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -449,7 +450,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					log.InfoD("Getting all PV and associated PVCs for %v deployment and deleting them", *deployment.ClusterResourceName)
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
 					isDeploymentsDeleted = true

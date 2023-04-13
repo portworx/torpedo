@@ -1454,8 +1454,11 @@ func DeletePvandPVCs(resourceName string) error {
 	}
 	for _, vol := range pv_list.Items {
 		claimName := vol.Spec.ClaimRef.Name
-		if strings.Contains(claimName, resourceName) {
-			log.Debugf("claim :%s is identified", claimName)
+		flag := strings.Contains(claimName, resourceName)
+		log.Debugf("String Match is : %v", flag)
+		if flag {
+			log.Debugf("claim :%s is identified for the resource: %s", claimName, resourceName)
+			log.Debugf("The pv is : %s", vol.Name)
 			err := CheckAndDeleteIndependentPV(vol.Name)
 			if err != nil {
 				return fmt.Errorf("unable to delete the associated PV and PVCS due to : %v .Please check manually", err)
