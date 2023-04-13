@@ -450,7 +450,7 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 					resp, err := pdslib.DeleteDeployment(deployment.GetId())
 					log.FailOnError(err, "Error while deleting data services")
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-					log.InfoD("Getting all PV and associated PVCs for %v deployment and deleting them", *deployment.ClusterResourceName)
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
 					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
 					log.FailOnError(err, "Error while deleting PV and PVCs")
 					isDeploymentsDeleted = true
@@ -1345,7 +1345,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 					_, err := pdslib.DeleteDeployment(*dep.Id)
 					log.FailOnError(err, "error while deleting deployments")
 					log.InfoD("Getting all PV and associated PVCs and deleting them")
-					err = pdslib.DeletePvandPVCs(*dep.ClusterResourceName, false)
+					err = pdslib.DeletePvandPVCs(*dep.ClusterResourceName, false)s
 					log.FailOnError(err, "Error while deleting PV and PVCs")
 				}
 			})
