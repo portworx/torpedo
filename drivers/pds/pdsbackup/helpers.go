@@ -210,25 +210,20 @@ func (gcpObj *gcpStorageClient) deleteBucket(bucketName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create client: %v", err)
 	}
-
 	defer client.Close()
-
 	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
-
 	bucketClient := client.Bucket(bucketName)
 	exist, err := bucketClient.Attrs(ctx)
-
+	if err != nil {
+		return fmt.Errorf("unexpected error occured: %v", err)
+	}
 	if exist != nil {
+		err := bucketClient.Delete(ctx)
 		if err != nil {
-			return fmt.Errorf("unexpected error occured: %v", err)
-		} else {
-			err := bucketClient.Delete(ctx)
-			if err != nil {
-				return fmt.Errorf("Bucket(%v).Delete: %v", bucketName, err)
-			}
-			log.Infof("[GCP]Successfully deleted the Bucket: %v", bucketName)
+			return fmt.Errorf("Bucket(%v).Delete: %v", bucketName, err)
 		}
+		log.Infof("[GCP]Successfully deleted the Bucket: %v", bucketName)
 	} else {
 		log.Infof("[GCP]Bucket: %v doesn't exist.", bucketName)
 	}

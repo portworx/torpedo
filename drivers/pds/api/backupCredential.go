@@ -155,8 +155,7 @@ func (backupCredential *BackupCredential) CreateGoogleCredential(tenantID string
 	}
 	ctx, err := pdsutils.GetContext()
 	if err != nil {
-		log.Errorf("Error in getting context for api call: %v\n", err)
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
 	if err != nil {
@@ -274,6 +273,9 @@ func (backupCredential *BackupCredential) UpdateGoogleBackupCredential(backupCre
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiBackupCredentialsIdPut(ctx, backupCredsID).Body(updateRequest).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("Error when calling `ApiBackupCredentialsIdPut``: %v\n", err)
+	}
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiBackupCredentialsIdPut``: %v\n", err)
 	}

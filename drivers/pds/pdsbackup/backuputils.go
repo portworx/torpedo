@@ -5,6 +5,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -84,11 +85,12 @@ func (backupClient *BackupClient) CreateGcpBackupCredsAndTarget(tenantId, name s
 	}
 	log.Info("Add GCP backup credentials")
 	projectId := backupClient.gcpStorageClient.projectId
-	gcpJsonKey := os.Getenv("GCP_JSON_PATH")
-
-	log.Infof("GCP Json PATH - %v projectId-%v ", gcpJsonKey, projectId)
+	key := "GCP_JSON_PATH"
+	gcpJsonKey, isExist := os.LookupEnv(key)
+	if !isExist {
+		return nil, fmt.Errorf("environment var: %v doesn't exist", key)
+	}
 	backupCred, err := backupClient.components.BackupCredential.CreateGoogleCredential(tenantId, name, projectId, gcpJsonKey)
-
 	if err != nil {
 		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 	}
@@ -116,9 +118,11 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 		if model != nil {
 			log.Info(model.GetName())
 			return false, bkpErr
-		} else {
+		}
+		if bkpErr != nil && strings.Contains(bkpErr.Error(), "not found") {
 			return true, nil
 		}
+		return false, bkpErr
 	})
 	if waitErr != nil {
 		return fmt.Errorf("error occured while polling for deleting backuptarget : %v", err)
@@ -137,7 +141,7 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 
 // DeleteAzureBackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId string) error {
-	log.Info("Removing Azure backup creadentials and target from PDS.")
+	log.Info("Removing Azure backup credentials and target from PDS.")
 	backupTarget, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
 	credId := backupTarget.GetBackupCredentialsId()
 	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
@@ -150,9 +154,11 @@ func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId
 		if model != nil {
 			log.Info(model.GetName())
 			return false, bkpErr
-		} else {
+		}
+		if bkpErr != nil && strings.Contains(bkpErr.Error(), "not found") {
 			return true, nil
 		}
+		return false, bkpErr
 	})
 	if waitErr != nil {
 		return fmt.Errorf("error occured while polling for deleting backuptarget : %v", err)
@@ -172,7 +178,7 @@ func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId
 
 // DeleteGoogleBackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteGoogleBackupCredsAndTarget(backupTargetId string) error {
-	log.Info("Removing Google backup creadentials and target from PDS.")
+	log.Info("Removing Google backup credentials and target from PDS.")
 	backupTarget, err := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
 	if err != nil {
 		return fmt.Errorf("Unable to fetch backup target details using uuid - %v, Err: %v ", backupTargetId, err)
@@ -188,9 +194,11 @@ func (backupClient *BackupClient) DeleteGoogleBackupCredsAndTarget(backupTargetI
 		if model != nil {
 			log.Info(model.GetName())
 			return false, bkpErr
-		} else {
+		}
+		if bkpErr != nil && strings.Contains(bkpErr.Error(), "not found") {
 			return true, nil
 		}
+		return false, bkpErr
 	})
 	if waitErr != nil {
 		return fmt.Errorf("error occured while polling for deleting backuptarget : %v", err)
@@ -209,7 +217,6 @@ func (backupClient *BackupClient) DeleteGoogleBackupCredsAndTarget(backupTargetI
 
 // InitializePdsBackup to create backup creds/targets.
 func InitializePdsBackup() (*BackupClient, error) {
-
 	envVars := pdsutils.BackupEnvVariables()
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(envVars.PDSControlPlaneURL)
