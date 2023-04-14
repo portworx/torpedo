@@ -238,7 +238,6 @@ func (r *ResourceTransformationController) validateTransformResource(ctx context
 			[]string{transform.Namespace},
 			spec.Selectors,
 			nil,
-			nil,
 			false,
 			resourceCollectorOpts,
 		)

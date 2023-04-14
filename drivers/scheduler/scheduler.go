@@ -113,6 +113,8 @@ type InitOptions struct {
 	RunCSISnapshotAndRestoreManyTest bool
 	//SecureApps identifies apps to be deployed with secure annotation in storage class
 	SecureApps []string
+	Endpoint   string
+	Token      string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
