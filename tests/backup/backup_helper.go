@@ -2128,13 +2128,15 @@ func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, li
 	}
 	namespaceList := resp.GetBackup().GetNamespaces()
 	log.Infof("The list of namespaces backed up are %v", namespaceList)
-	if !reflect.DeepEqual(namespaceList, listOfLabelledNamespaces) {
+	if !AreSlicesEqual(namespaceList, listOfLabelledNamespaces) {
 		return fmt.Errorf("list of namespaces backed up are %v which is not same as expected %v", namespaceList, listOfLabelledNamespaces)
 	}
 	backupLabels := resp.GetBackup().GetNsLabelSelectors()
 	log.Infof("The list of labels applied to backup are %v", backupLabels)
-	if !reflect.DeepEqual(backupLabels, namespaceLabel) {
-		return fmt.Errorf("labels applied to backup are %v which is not same as expected %v", backupLabels, namespaceLabel)
+	expectedLabels := strings.Split(namespaceLabel, ",")
+	actualLabels := strings.Split(backupLabels, ",")
+	if !AreSlicesEqual(expectedLabels, actualLabels) {
+		return fmt.Errorf("labels applied to backup are %v which is not same as expected %v", actualLabels, expectedLabels)
 	}
 	return nil
 }
@@ -2212,4 +2214,72 @@ func FetchNamespacesFromBackup(ctx context.Context, backupName string, orgID str
 	}
 	backedUpNamespaces = resp.GetBackup().GetNamespaces()
 	return backedUpNamespaces, err
+}
+
+// AreSlicesEqual verifies if two slices are equal or not
+func AreSlicesEqual(slice1, slice2 interface{}) bool {
+	v1 := reflect.ValueOf(slice1)
+	v2 := reflect.ValueOf(slice2)
+	if v1.Len() != v2.Len() {
+		return false
+	}
+	m := make(map[interface{}]int)
+	for i := 0; i < v2.Len(); i++ {
+		m[v2.Index(i).Interface()]++
+	}
+	for i := 0; i < v1.Len(); i++ {
+		if m[v1.Index(i).Interface()] == 0 {
+			return false
+		}
+		m[v1.Index(i).Interface()]--
+	}
+	return true
+}
+
+// GetNextScheduleBackupName returns the upcoming schedule backup when this function is called
+func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
+	var nextScheduleBackupName string
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	currentScheduleBackupCount := len(allScheduleBackupNames)
+	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
+	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
+		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		return ordinalScheduleBackupName, false, nil
+	}
+	log.InfoD("Waiting for the next schedule backup to be triggered")
+	time.Sleep(scheduleInterval * time.Minute)
+	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+
+	log.InfoD("Next schedule backup name [%s]", nextScheduleBackup.(string))
+	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return "", err
+	}
+	nextScheduleBackupName = nextScheduleBackup.(string)
+	return nextScheduleBackupName, nil
+}
+
+// RemoveElementByValue remove the first occurence of the element from the array.Pass a pointer to the array and the element by value.
+func RemoveElementByValue(arr interface{}, value interface{}) error {
+	v := reflect.ValueOf(arr)
+	if v.Kind() != reflect.Ptr {
+		return fmt.Errorf("removeElementByValue: not a pointer")
+	}
+	v = v.Elem()
+	if v.Kind() != reflect.Slice {
+		return fmt.Errorf("removeElementByValue: not a slice pointer")
+	}
+	for i := 0; i < v.Len(); i++ {
+		if v.Index(i).Interface() == value {
+			v.Set(reflect.AppendSlice(v.Slice(0, i), v.Slice(i+1, v.Len())))
+			break
+		}
+	}
+	return nil
 }
