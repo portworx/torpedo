@@ -3,10 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/pborman/uuid"
-	"github.com/portworx/sched-ops/k8s/batch"
-	"github.com/portworx/torpedo/pkg/osutils"
-	batchv1 "k8s.io/api/batch/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -16,6 +12,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/torpedo/pkg/osutils"
+	batchv1 "k8s.io/api/batch/v1"
 
 	"github.com/hashicorp/go-version"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
@@ -2062,6 +2063,52 @@ func CreateNamespaceLabelScheduleBackupWithoutCheck(scheduleName string, cluster
 	return resp, nil
 }
 
+// suspendBackupSchedule will suspend backup schedule
+func suspendBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	if err != nil {
+		return err
+	}
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schPolicyName)
+	if err != nil {
+		return err
+	}
+	bkpScheduleSuspendRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{Name: backupScheduleName, OrgId: OrgID, Uid: backupScheduleUID},
+		Suspend:        true,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+	}
+	_, err = backupDriver.UpdateBackupSchedule(ctx, bkpScheduleSuspendRequest)
+	return err
+}
+
+// resumeBackupSchedule will resume backup schedule
+func resumeBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	if err != nil {
+		return err
+	}
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schPolicyName)
+	if err != nil {
+		return err
+	}
+	bkpScheduleSuspendRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{Name: backupScheduleName, OrgId: OrgID, Uid: backupScheduleUID},
+		Suspend:        false,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+	}
+	_, err = backupDriver.UpdateBackupSchedule(ctx, bkpScheduleSuspendRequest)
+	return err
+}
+
 // NamespaceLabelBackupSuccessCheck verifies if the labeled namespaces are backed up and checks for labels applied to backups
 func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, listOfLabelledNamespaces []string, namespaceLabel string) error {
 	backupDriver := Inst().Backup
@@ -2187,4 +2234,52 @@ func AreSlicesEqual(slice1, slice2 interface{}) bool {
 		m[v1.Index(i).Interface()]--
 	}
 	return true
+}
+
+// GetNextScheduleBackupName returns the upcoming schedule backup when this function is called
+func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
+	var nextScheduleBackupName string
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	currentScheduleBackupCount := len(allScheduleBackupNames)
+	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
+	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
+		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		if err != nil {
+			return "", true, err
+		}
+		return ordinalScheduleBackupName, false, nil
+	}
+	log.InfoD("Waiting for the next schedule backup to be triggered")
+	time.Sleep(scheduleInterval * time.Minute)
+	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+
+	log.InfoD("Next schedule backup name [%s]", nextScheduleBackup.(string))
+	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return "", err
+	}
+	nextScheduleBackupName = nextScheduleBackup.(string)
+	return nextScheduleBackupName, nil
+}
+
+// RemoveElementByValue remove the first occurence of the element from the array.Pass a pointer to the array and the element by value.
+func RemoveElementByValue(arr interface{}, value interface{}) error {
+	v := reflect.ValueOf(arr)
+	if v.Kind() != reflect.Ptr {
+		return fmt.Errorf("removeElementByValue: not a pointer")
+	}
+	v = v.Elem()
+	if v.Kind() != reflect.Slice {
+		return fmt.Errorf("removeElementByValue: not a slice pointer")
+	}
+	for i := 0; i < v.Len(); i++ {
+		if v.Index(i).Interface() == value {
+			v.Set(reflect.AppendSlice(v.Slice(0, i), v.Slice(i+1, v.Len())))
+			break
+		}
+	}
+	return nil
 }
