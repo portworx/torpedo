@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"net/http"
 
 	. "github.com/onsi/ginkgo"
@@ -9,6 +10,65 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
+
+var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXDuringAppScaleUp", "Restart PX on a node during application is scaled up", pdsLabels, 0)
+	})
+
+	It("Deploy Dataservices", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+
+		Step("Deploy Data Services", func() {
+			pdslib.MarkResiliencyTC(true, false)
+
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+				})
+			}
+		})
+
+		Step("Scale Up Data Services and restart portworx", func() {
+			for ds, deployment := range deployments {
+
+				failuretype := pdslib.TypeOfFailure{
+					Type: RestartPxDuringDSScaleUp,
+					Method: func() error {
+						return pdslib.RestartPXDuringDSScaleUp(params.InfraToTest.Namespace)
+					},
+				}
+				pdslib.DefineFailureType(failuretype)
+
+				log.InfoD("Scaling up DataService %v ", ds.Name)
+				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting app configuration template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+
+				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting resource setting template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+
+				updatedDeployment, err := pdslib.UpdateDataServices(deployment.GetId(),
+					dataServiceDefaultAppConfigID, deployment.GetImageId(),
+					int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
+				log.FailOnError(err, "Error while updating dataservices")
+
+				//wait for the scaled up data service and restart px
+				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, int32(ds.ScaleReplicas))
+				log.FailOnError(err, fmt.Sprintf("Error happened while restarting px for data service %v", *deployment.ClusterResourceName))
+
+				_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+				dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
+
+			}
+		})
+	})
+})
 
 var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 	JustBeforeEach(func() {
