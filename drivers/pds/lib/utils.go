@@ -2229,11 +2229,6 @@ func UpdateDataServices(deploymentID string, appConfigID string, imageID string,
 		return true, nil
 	})
 
-	//err = ValidateDataServiceDeployment(deployment, namespace)
-	//if err != nil {
-	//	return nil, err
-	//}
-
 	return deployment, nil
 }
 

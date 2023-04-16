@@ -18,6 +18,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 
 	It("Deploy Dataservices", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var generateWorkloads = make(map[string]string)
 
 		Step("Deploy Data Services", func() {
 			pdslib.MarkResiliencyTC(true, false)
@@ -32,7 +33,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 			}
 		})
 
-		Step("Scale Up Data Services and restart portworx", func() {
+		Step("Scale Up Data Services and Restart Portworx", func() {
 			for ds, deployment := range deployments {
 
 				failuretype := pdslib.TypeOfFailure{
@@ -65,6 +66,26 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 				dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
 
+			}
+		})
+		Step("Running Workloads before scaling up of dataservices ", func() {
+			for ds, deployment := range deployments {
+				if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+					log.InfoD("Running Workloads on DataService %v ", ds.Name)
+					var params pdslib.WorkloadGenerationParams
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+					if dep == nil {
+						generateWorkloads[ds.Name] = pod.Name
+					} else {
+						generateWorkloads[ds.Name] = dep.Name
+					}
+					for dsName, workloadContainer := range generateWorkloads {
+						log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+					}
+				} else {
+					log.InfoD("Workload script not available for ds %v", ds.Name)
+				}
 			}
 		})
 	})

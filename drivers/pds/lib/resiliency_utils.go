@@ -14,7 +14,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	schedops "github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
 )
@@ -36,10 +35,6 @@ var (
 	checkTillReplica          int32
 	ResiliencyCondition       = make(chan bool)
 )
-
-type px struct {
-	schedOps schedops.Driver
-}
 
 // Struct Definition for kind of Failure the framework needs to trigger
 type TypeOfFailure struct {
@@ -200,37 +195,6 @@ func RestartPXDuringDSScaleUp(ns string) error {
 	}
 
 	log.InfoD("PX restarted successfully on node %v", podName)
-
-	// Check which Pod is still not up. Try to reboot the node on which this Pod is hosted.
-	//for _, pod := range pods {
-	//	log.Infof("Checking Pod %v running on Node: %v", pod.Name, pod.Spec.NodeName)
-	//	if k8sCore.IsPodReady(pod) {
-	//		log.Infof("This Pod running on Node %v is Ready so skipping this pod......", pod.Spec.NodeName)
-	//		continue
-	//	} else {
-	//		var nodeToRestartPX node.Node
-	//		nodeToRestartPX, testError := node.GetNodeByName(pod.Spec.NodeName)
-	//		if testError != nil {
-	//			CapturedErrors <- testError
-	//			return testError
-	//		}
-	//		if nodeToRestartPX.Name == "" {
-	//			testError = errors.New("Something happened and node is coming out to be empty from Node registry")
-	//			CapturedErrors <- testError
-	//			return testError
-	//		}
-	//		log.InfoD("Going ahead and restarting PX the node %v as there is an "+
-	//			"application pod %v that's coming up on this node", pod.Spec.NodeName, pod.Name)
-	//
-	//		var d *px
-	//		testError = d.schedOps.RestartPxOnNode(nodeToRestartPX)
-	//		if testError != nil {
-	//			CapturedErrors <- testError
-	//			return testError
-	//		}
-	//		log.InfoD("PX restarted successfully on node %v", pod.Spec.NodeName)
-	//	}
-	//}
 	return testError
 }
 
