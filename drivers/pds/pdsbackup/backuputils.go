@@ -142,10 +142,13 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 // DeleteAzureBackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId string) error {
 	log.Info("Removing Azure backup credentials and target from PDS.")
-	backupTarget, _ := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
+	backupTarget, err := backupClient.components.BackupTarget.GetBackupTarget(backupTargetId)
+	if err != nil {
+		return fmt.Errorf("Failed while fetching the backup target details, Err: %v ", err)
+	}
 	credId := backupTarget.GetBackupCredentialsId()
 	log.Infof("Deleting backup target {Name: %v} to PDS.", backupTarget.GetName())
-	_, err := backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
+	_, err = backupClient.components.BackupTarget.DeleteBackupTarget(backupTargetId)
 	if err != nil {
 		return fmt.Errorf("Failed to delete Azure backup target, Err: %v ", err)
 	}
