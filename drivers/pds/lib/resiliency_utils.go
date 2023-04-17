@@ -26,6 +26,7 @@ const (
 	RestartPxDuringDSScaleUp          = "restart-portworx-during-ds-scaleup"
 	RebootNodesDuringDeployment       = "reboot-multiple-nodes-during-deployment"
 	KillAgentPodDuringDeployment      = "kill-agent-pod-during-deployment"
+	RestartAppDuringResourceUpdate    = "restart-app-during-resource-update"
 )
 
 // PDS vars
@@ -120,6 +121,16 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 		log.InfoD("Entering to check if Data service has %v active pods. Once it does, we will kill the deployment Controller Pod.", checkTillReplica)
 		func1 := func() {
 			GetPdsSs(deployment.GetClusterResourceName(), namespace, checkTillReplica)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case RestartAppDuringResourceUpdate:
+		log.InfoD("Entering to check if Data service has %v active pods. "+
+			"Once it does, we restart application pods", checkTillReplica)
+		func1 := func() {
+			GetPdsSs(deployment.GetClusterResourceName(), namespace, CheckTillReplica)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -374,6 +385,52 @@ func KillPodsInNamespace(ns string, podName string) error {
 			return testError
 		}
 		log.InfoD("Successfully Killed Pod: %v", pod.Name)
+	}
+	return testError
+}
+
+func RestartApplicationDuringResourceUpdate(ns string) error {
+	// Get StatefulSet Object
+	var ss *v1.StatefulSet
+	var testError error
+	var deploymentPods []corev1.Pod
+
+	// Waiting till atleast first pod have a node assigned
+	var pods []corev1.Pod
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Get Pods of this StatefulSet
+		pods, testError = k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Check if Pods have a node assigned, or it's in a window where it's just coming up
+		for _, pod := range pods {
+			log.Infof("Nodename of pod %v is :%v:", pod.Name, pod.Spec.NodeName)
+			if pod.Spec.NodeName == "" || pod.Spec.NodeName == " " {
+				log.Infof("Pod %v still does not have a node assigned. Retrying in 5 seconds", pod.Name)
+				return false, nil
+			} else {
+				deploymentPods = append(deploymentPods, pod)
+				return true, nil
+			}
+		}
+		return true, nil
+	})
+
+	// Delete the deployment Pods during update.
+	for _, pod := range deploymentPods {
+		testError = DeleteK8sPods(pod.Name, ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return testError
+		}
+		log.InfoD("Successfully deleted Pod: %v", pod.Name)
 	}
 	return testError
 }

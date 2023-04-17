@@ -4,6 +4,7 @@ import (
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"net/http"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
@@ -294,5 +295,80 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 			log.FailOnError(err, "Error while deleting data services")
 			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 		}
+	})
+})
+
+var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartAppDuringResourceUpdate", "Restart application pod during resource update", pdsLabels, 0)
+		pdslib.MarkResiliencyTC(true, true)
+	})
+
+	It("Deploy Dataservices", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var resourceTemplateId string
+
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+				})
+			}
+		})
+
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+		}()
+
+		Step("Update the resource and Restart application pods", func() {
+			for ds, deployment := range deployments {
+
+				failuretype := pdslib.TypeOfFailure{
+					Type: RestartAppDuringResourceUpdate,
+					Method: func() error {
+						return pdslib.RestartApplicationDuringResourceUpdate(params.InfraToTest.Namespace)
+					},
+				}
+				pdslib.DefineFailureType(failuretype)
+
+				log.InfoD("Scaling up DataService %v ", ds.Name)
+				dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
+				log.FailOnError(err, "Error while getting app configuration template")
+				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+
+				resourceTemplates, err := pdslib.ApiComponents.ResourceSettingsTemplate.ListTemplates(tenantID)
+				log.FailOnError(err, "Error while getting resource setting template")
+				for _, template := range resourceTemplates {
+					if strings.Contains(strings.ToLower(template.GetName()), "medium") {
+						resourceTemplateId = template.GetId()
+					}
+				}
+				if !strings.Contains(strings.ToLower(resourceTemplateId), "medium") {
+					log.FailOnError(fmt.Errorf("resource template - {Medium} , not found"), "Error while getting resource setting template")
+				}
+				updatedDeployment, err := pdslib.UpdateDataServices(deployment.GetId(),
+					dataServiceDefaultAppConfigID, deployment.GetImageId(),
+					int32(ds.ScaleReplicas), resourceTemplateId, namespace)
+				log.FailOnError(err, "Error while updating dataservices")
+
+				//wait for the scaled up data service and restart px
+				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, 1)
+				log.FailOnError(err, fmt.Sprintf("Error happened while restarting px for data service %v", *deployment.ClusterResourceName))
+
+				_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+				dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
+			}
+		})
 	})
 })
