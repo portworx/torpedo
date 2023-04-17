@@ -179,7 +179,6 @@ func RestartPXDuringDSScaleUp(ns string) error {
 		}
 		return true, nil
 	})
-	//var d *px
 	nodeToRestartPX, testError = node.GetNodeByName(nodeName)
 	if testError != nil {
 		CapturedErrors <- testError
