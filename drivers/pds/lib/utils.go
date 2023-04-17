@@ -2592,3 +2592,30 @@ func GetPodsOfSsByNode(SSName string, nodeName string, namespace string) ([]core
 	}
 	return nil, errors.New(fmt.Sprintf("There is no pod of the given statefulset running on the given node name %s", nodeName))
 }
+
+func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, resourceTemplate string) error {
+	var resourceTemplateId string
+	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(*deployment.TenantId)
+	if err != nil {
+		return err
+	}
+	for _, template := range resourceTemplates {
+		log.Infof("template - %v", template.GetName())
+		if strings.ToLower(template.GetName()) == strings.ToLower(resourceTemplate) {
+			resourceTemplateId = template.GetId()
+		}
+	}
+	if resourceTemplateId == "" {
+		log.FailOnError(fmt.Errorf("resource template - {%v} , not found", resourceTemplate), "Error while getting the required resource setting template.")
+	}
+	log.Infof("Deployment details.")
+	log.Infof("Ds id- %v, appConfigTemplateID - %v, imageId - %v, Node count -%v, resourceTemplateId- %v ", deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId)
+	_, err = components.DataServiceDeployment.UpdateDeployment(deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, nil)
+	if err != nil {
+		return err
+	}
+	ResiliencyCondition <- true
+	return nil
+}
