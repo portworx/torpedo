@@ -1237,7 +1237,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		log.Infof("Version/Build: %v %v", dsVersion, dsBuild)
 		updatedDeployment, err := pdslib.UpdateDataServiceVerison(deployment.GetDataServiceId(), deployment.GetId(),
 			dataServiceDefaultAppConfigID,
-			replicas, dataServiceDefaultResourceTemplateID, dsBuild, namespace, dsVersion)
+			replicas, dataServiceDefaultResourceTemplateID, dsBuild, dsVersion)
 		log.FailOnError(err, "Error while updating data services")
 		log.InfoD("data service deployed %v ", dataservice)
 

@@ -218,7 +218,7 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 				log.Infof("Version/Build: %v %v", ds.Version, ds.Image)
 				updatedDeployment, err := pdslib.UpdateDataServiceVerison(deployment.GetDataServiceId(), deployment.GetId(),
 					dataServiceDefaultAppConfigID,
-					replicas, dataServiceDefaultResourceTemplateID, ds.Version, namespace, ds.Image)
+					replicas, dataServiceDefaultResourceTemplateID, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while updating data services")
 				log.InfoD("data service %v update triggered", ds.Name)
 

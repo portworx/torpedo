@@ -2170,7 +2170,7 @@ func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID
 }
 
 // UpdateDataServiceVerison modifies the existing deployment version/image
-func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID string, nodeCount int32, resourceTemplateID, dsImage, namespace, dsVersion string) (*pds.ModelsDeployment, error) {
+func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID string, nodeCount int32, resourceTemplateID, dsImage, dsVersion string) (*pds.ModelsDeployment, error) {
 
 	//Validate if the passed dsImage is available in the list of images
 	var versions []pds.ModelsVersion
