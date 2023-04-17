@@ -14,6 +14,7 @@ import (
 var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartPXDuringAppScaleUp", "Restart PX on a node during application is scaled up", pdsLabels, 0)
+		pdslib.MarkResiliencyTC(true, true)
 	})
 
 	It("Deploy Dataservices", func() {
@@ -21,8 +22,6 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 		var generateWorkloads = make(map[string]string)
 
 		Step("Deploy Data Services", func() {
-			pdslib.MarkResiliencyTC(true, false)
-
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
@@ -79,7 +78,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 
 			}
 		})
-		Step("Running Workloads before scaling up of dataservices ", func() {
+		Step("Running Workloads", func() {
 			for ds, deployment := range deployments {
 				if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
 					log.InfoD("Running Workloads on DataService %v ", ds.Name)
