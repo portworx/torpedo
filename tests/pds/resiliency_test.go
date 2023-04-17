@@ -92,9 +92,9 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 	})
 })
 
-var _ = Describe("{RebootMultipleNodesDuringDeployment}", func() {
+var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RebootMultipleNodesDuringDeployment", "Reboots multiple Nodes (all worker) while a data service pod is coming up", pdsLabels, 0)
+		StartTorpedoTest("RebootAllWorkerNodesDuringDeployment", "Reboots all worker nodes while a data service pod is coming up", pdsLabels, 0)
 	})
 
 	It("deploy Dataservices", func() {
