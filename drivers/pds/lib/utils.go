@@ -2204,11 +2204,6 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 		return nil, err
 	}
 
-	err = ValidateDataServiceDeployment(deployment, namespace)
-	if err != nil {
-		return nil, err
-	}
-
 	return deployment, nil
 
 }
