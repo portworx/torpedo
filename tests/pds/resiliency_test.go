@@ -17,7 +17,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 		pdslib.MarkResiliencyTC(true, true)
 	})
 
-	It("Deploy Dataservices", func() {
+	It("Deploy Dataservices and Restart PX During App scaleup", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var generateWorkloads = make(map[string]string)
 
@@ -72,8 +72,10 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, int32(ds.ScaleReplicas))
 				log.FailOnError(err, fmt.Sprintf("Error happened while restarting px for data service %v", *deployment.ClusterResourceName))
 
-				_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+				//TODO: Rename the method ValidateDataServiceVolumes
+				resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+				ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
 				dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
 
 			}
