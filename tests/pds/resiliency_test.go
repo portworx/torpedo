@@ -75,7 +75,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				//TODO: Rename the method ValidateDataServiceVolumes
 				resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-				ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+				ValidateDeployments(resourceTemp, storageOp, config, int(ds.ScaleReplicas), dataServiceVersionBuildMap)
 				dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
 
 			}
