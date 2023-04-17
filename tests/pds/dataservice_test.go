@@ -687,10 +687,7 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-
-		log.InfoD("Trying to Delete Independent App pod now : %s", podName)
-		err = pdslib.DeleteK8sPods(podName, ns)
-		log.FailOnError(err, "Error while deleting K8s pods")
+		
 		log.InfoD("Trying to Delete Independent PVC now from ns : %s", ns)
 		err = k8sCore.DeletePersistentVolumeClaim("mysql-pvc-"+ns, ns)
 		log.FailOnError(err, "Error while deleting Independent PVC")
