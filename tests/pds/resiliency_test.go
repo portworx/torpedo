@@ -115,6 +115,10 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 			}
 		}()
 	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		pdslib.CloseResiliencyChannel()
+	})
 })
 
 var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
