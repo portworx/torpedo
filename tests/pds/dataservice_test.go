@@ -1120,9 +1120,11 @@ func TriggerDeployDataService(ds PDSDataService, namespace, tenantID, projectID 
 		if deployOldVersion {
 			dsVersion = ds.OldVersion
 			dsImage = ds.OldImage
+			log.Debugf("Deploying old version %s and image %s", dsVersion, dsImage)
 		} else {
 			dsVersion = ds.Version
 			dsImage = ds.Image
+			log.Debugf("Deploying latest version %s and image %s", dsVersion, dsImage)
 		}
 
 		log.InfoD("Deploying DataService %v ", ds.Name)

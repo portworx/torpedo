@@ -187,7 +187,7 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 
 				resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-				ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+				ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 			}
 		})
 
@@ -241,7 +241,7 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 				_, _, dataServiceVersionBuildMap, err := pdslib.GetVersionsImage(ds.Version, ds.Image, id)
 				log.FailOnError(err, "Error while fetching versions/image information")
 
-				ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+				ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
 				dash.VerifyFatal(config.Spec.Version, ds.Version+"-"+ds.Image, "validating ds build and version")
 			}
 
