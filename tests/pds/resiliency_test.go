@@ -169,7 +169,7 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 		StartTorpedoTest("KillDeploymentControllerDuringDeployment", "Kill Deployment Controller Pod when a DS Deployment is happening", pdsLabels, 0)
 	})
 
-	It("Deploy Dataservices", func() {
+	It("Deploy Data Services", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Start deployment, Kill Deployment Controller Pod while deployment is ongoing and validate data service", func() {
@@ -302,13 +302,10 @@ var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
 		pdslib.MarkResiliencyTC(true, false)
 	})
 
-	It("Deploy Dataservices", func() {
+	It("Deploy Data Services", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name != postgresql {
-					continue
-				}
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
 					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
@@ -331,14 +328,13 @@ var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
 
 		Step("Update the resource and Restart application pods", func() {
 			for _, deployment := range deployments {
-
-				failuretype := pdslib.TypeOfFailure{
+				failureType := pdslib.TypeOfFailure{
 					Type: RestartAppDuringResourceUpdate,
 					Method: func() error {
 						return pdslib.RestartApplicationDuringResourceUpdate(params.InfraToTest.Namespace)
 					},
 				}
-				pdslib.DefineFailureType(failuretype)
+				pdslib.DefineFailureType(failureType)
 
 				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, 0)
 				log.FailOnError(err, fmt.Sprintf("Error while pod restart during Resource update %v", *deployment.ClusterResourceName))
@@ -347,5 +343,9 @@ var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
 				log.FailOnError(err, "error on ValidateDataServiceDeployment")
 			}
 		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		pdslib.CloseResiliencyChannel()
 	})
 })

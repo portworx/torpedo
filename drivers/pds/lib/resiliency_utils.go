@@ -29,6 +29,7 @@ const (
 	RebootNodesDuringDeployment       = "reboot-multiple-nodes-during-deployment"
 	KillAgentPodDuringDeployment      = "kill-agent-pod-during-deployment"
 	RestartAppDuringResourceUpdate    = "restart-app-during-resource-update"
+	UpdateTemplate                    = "medium"
 )
 
 // PDS vars
@@ -132,7 +133,7 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 		log.InfoD("Entering to check if Data service has %v active pods. "+
 			"Once it does, we restart application pods", checkTillReplica)
 		func1 := func() {
-			UpdateDeploymentResourceConfig(deployment, "medium")
+			UpdateDeploymentResourceConfig(deployment, namespace, UpdateTemplate)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)

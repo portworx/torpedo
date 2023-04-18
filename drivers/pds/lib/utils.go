@@ -2593,8 +2593,9 @@ func GetPodsOfSsByNode(SSName string, nodeName string, namespace string) ([]core
 	return nil, errors.New(fmt.Sprintf("There is no pod of the given statefulset running on the given node name %s", nodeName))
 }
 
-func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, resourceTemplate string) error {
+func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace string, resourceTemplate string) error {
 	var resourceTemplateId string
+	var cpuLimits int64
 	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(*deployment.TenantId)
 	if err != nil {
 		return err
@@ -2602,20 +2603,43 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, resourceTe
 	for _, template := range resourceTemplates {
 		log.Infof("template - %v", template.GetName())
 		if strings.ToLower(template.GetName()) == strings.ToLower(resourceTemplate) {
+			cpuLimits, _ = strconv.ParseInt(template.GetCpuLimit(), 10, 64)
 			resourceTemplateId = template.GetId()
 		}
 	}
 	if resourceTemplateId == "" {
 		log.FailOnError(fmt.Errorf("resource template - {%v} , not found", resourceTemplate), "Error while getting the required resource setting template.")
 	}
-	log.Infof("Deployment details.")
-	log.Infof("Ds id- %v, appConfigTemplateID - %v, imageId - %v, Node count -%v, resourceTemplateId- %v ", deployment.GetId(),
+	log.Infof("Deployment details: Ds id- %v, appConfigTemplateID - %v, imageId - %v, Node count -%v, resourceTemplateId- %v ", deployment.GetId(),
 		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId)
-	_, err = components.DataServiceDeployment.UpdateDeployment(deployment.GetId(),
-		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, nil)
+	_, err = UpdateDataServices(deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, namespace)
 	if err != nil {
 		return err
 	}
-	ResiliencyCondition <- true
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, testError := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Get Pods of this StatefulSet
+		pods, testError := k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		for _, pod := range pods {
+			for _, container := range pod.Spec.Containers {
+				if container.Resources.Limits.Cpu().Value() == cpuLimits {
+					ResiliencyCondition <- true
+					return true, nil
+				} else {
+					return false, nil
+				}
+			}
+		}
+		return true, nil
+	})
 	return nil
 }
