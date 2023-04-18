@@ -146,6 +146,9 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 					log.FailOnError(err, "Error while deploying data services")
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot test for data service %v", *deployment.ClusterResourceName))
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
 				})
 			}
 		})
@@ -187,6 +190,9 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 					log.FailOnError(err, "Error while deploying data services")
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Deployment Controller test for data service %v", *deployment.ClusterResourceName))
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
 				})
 			}
 		})
@@ -228,6 +234,9 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 					log.FailOnError(err, "Error while deploying data services")
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot all worker nodes test for data service %v", *deployment.ClusterResourceName))
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
 				})
 			}
 		})
@@ -252,9 +261,6 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 	It("Deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name != postgresql {
-					continue
-				}
 				Step("Start deployment, Kill Agent Pod while deployment is ongoing and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
@@ -272,6 +278,9 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 					log.FailOnError(err, "Error while deploying data services")
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Agent Pod test for data service %v", *deployment.ClusterResourceName))
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
 				})
 			}
 		})

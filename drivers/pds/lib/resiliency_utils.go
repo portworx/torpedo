@@ -24,7 +24,7 @@ const (
 	ActiveNodeRebootDuringDeployment  = "active-node-reboot-during-deployment"
 	KillDeploymentControllerPod       = "kill-deployment-controller-pod-during-deployment"
 	RestartPxDuringDSScaleUp          = "restart-portworx-during-ds-scaleup"
-  RebootNodesDuringDeployment       = "reboot-multiple-nodes-during-deployment"
+	RebootNodesDuringDeployment       = "reboot-multiple-nodes-during-deployment"
 	KillAgentPodDuringDeployment      = "kill-agent-pod-during-deployment"
 )
 
