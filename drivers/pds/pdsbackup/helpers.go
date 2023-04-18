@@ -113,6 +113,8 @@ func (azObj *azureStorageClient) createBucket(containerName string) error {
 	_, err = client.CreateContainer(context.TODO(), containerName, nil)
 	if err != nil && strings.Contains(err.Error(), "ContainerAlreadyExists") {
 		log.Infof("Container: %s, already exists.", containerName)
+	} else if err != nil && !strings.Contains(err.Error(), "ContainerAlreadyExists") {
+		return fmt.Errorf("error while creating azure container. Error - %v", err)
 	} else {
 		log.Infof("[Azure]Successfully created the container: %s", containerName)
 	}
@@ -128,10 +130,11 @@ func (azObj *azureStorageClient) deleteBucket(containerName string) error {
 	if err != nil {
 		return fmt.Errorf("error -> %v", err.Error())
 	}
-
 	_, err = client.DeleteContainer(context.TODO(), containerName, nil)
-	if err != nil {
+	if err != nil && strings.Contains(err.Error(), "not found") {
 		log.Infof("[Azure]Container: %s not found!!", containerName)
+	} else if err != nil && !strings.Contains(err.Error(), "not found") {
+		return fmt.Errorf("error while creating azure container. Error - %v", err)
 	} else {
 		log.Infof("[Azure]Container: %s deleted successfully!!", containerName)
 	}
