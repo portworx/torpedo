@@ -397,11 +397,13 @@ func RestartApplicationDuringResourceUpdate(ns string) error {
 	ss, testError := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
 	if testError != nil {
 		CapturedErrors <- testError
+		return testError
 	}
 	// Get Pods of this StatefulSet
 	pods, testError := k8sApps.GetStatefulSetPods(ss)
 	if testError != nil {
 		CapturedErrors <- testError
+		return testError
 	}
 	rand.Seed(time.Now().Unix())
 	pod := pods[rand.Intn(len(pods))]

@@ -2598,23 +2598,25 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace 
 	var cpuLimits int64
 	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(*deployment.TenantId)
 	if err != nil {
+		CapturedErrors <- err
 		return err
 	}
 	for _, template := range resourceTemplates {
-		log.Infof("template - %v", template.GetName())
+		log.Debugf("template - %v", template.GetName())
 		if strings.ToLower(template.GetName()) == strings.ToLower(resourceTemplate) {
 			cpuLimits, _ = strconv.ParseInt(template.GetCpuLimit(), 10, 64)
 			resourceTemplateId = template.GetId()
 		}
 	}
 	if resourceTemplateId == "" {
-		log.FailOnError(fmt.Errorf("resource template - {%v} , not found", resourceTemplate), "Error while getting the required resource setting template.")
+		return fmt.Errorf("resource template - {%v} , not found", resourceTemplate)
 	}
 	log.Infof("Deployment details: Ds id- %v, appConfigTemplateID - %v, imageId - %v, Node count -%v, resourceTemplateId- %v ", deployment.GetId(),
 		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId)
 	_, err = UpdateDataServices(deployment.GetId(),
 		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, namespace)
 	if err != nil {
+		CapturedErrors <- err
 		return err
 	}
 	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
@@ -2639,7 +2641,11 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace 
 				}
 			}
 		}
-		return true, nil
+		return false, fmt.Errorf("no pods has been updated to required resource configuration")
 	})
+	if err != nil {
+		CapturedErrors <- err
+		return err
+	}
 	return nil
 }
