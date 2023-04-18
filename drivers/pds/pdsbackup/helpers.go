@@ -6,6 +6,7 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	"os"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -110,7 +111,7 @@ func (azObj *azureStorageClient) createBucket(containerName string) error {
 	}
 
 	_, err = client.CreateContainer(context.TODO(), containerName, nil)
-	if err != nil {
+	if err != nil && strings.Contains(err.Error(), "ContainerAlreadyExists") {
 		log.Infof("Container: %s, already exists.", containerName)
 	} else {
 		log.Infof("[Azure]Successfully created the container: %s", containerName)

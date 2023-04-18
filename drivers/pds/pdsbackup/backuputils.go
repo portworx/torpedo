@@ -64,8 +64,12 @@ func (backupClient *BackupClient) CreateAzureBackupCredsAndTarget(tenantId, name
 	accountName := backupClient.azureStorageClient.accountName
 	backupCred, err := backupClient.components.BackupCredential.CreateAzureBackupCredential(tenantId, name, accountKey, accountName)
 	if err != nil {
-
 		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
+	}
+	log.Info("Create Azure containers for backup.")
+	err = backupClient.azureStorageClient.createBucket(bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("Failed while creating Azure container, Err: %v ", err)
 	}
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, "", "azure")
