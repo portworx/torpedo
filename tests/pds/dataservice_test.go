@@ -1216,8 +1216,11 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 	Step("Running Workloads before scaling up of dataservices ", func() {
 		var params pdslib.WorkloadGenerationParams
-		pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
-		log.FailOnError(err, "Error while genearating workloads")
+		if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+			pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+			log.FailOnError(err, "Error while genearating workloads")
+		}
+
 	})
 
 	defer func() {
