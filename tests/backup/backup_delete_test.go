@@ -16,7 +16,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-// createBackupUntilIncrementalBackup creates backup until incremental backups is created
+// createBackupUntilIncrementalBackup creates backup until incremental backups is created returns the name of the incremental backup created
 func createBackupUntilIncrementalBackup(namespace string, customBackupLocationName string, backupLocationUID string, labelSelectors map[string]string, orgID string, clusterUid string, ctx context.Context) (string, error) {
 	incrementalBackupName := fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
 	err := CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
@@ -93,16 +93,13 @@ func createBackupUntilIncrementalBackup(namespace string, customBackupLocationNa
 					}
 				}
 				for id, isIncremental := range listOfVolumes {
-					if isIncremental == false {
+					if !isIncremental {
 						log.InfoD(fmt.Sprintf("Backup %s wasn't a incremental backup", id))
 						noFailures = false
 					}
 				}
 				if noFailures {
 					break
-				}
-				if noFailures == false {
-					return "", fmt.Errorf("check if the backups are incremental or not")
 				}
 			}
 		}
