@@ -805,6 +805,43 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 	return err
 }
 
+func CheckPodIsTerminating(depName, ns string) error {
+	var ss *v1.StatefulSet
+	conditionError := wait.PollImmediate(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(depName, ns)
+		if err != nil {
+			log.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		log.Debugf("pods current replica %v", ss.Status.Replicas)
+		pods, err := k8sApps.GetStatefulSetPods(ss)
+		if err != nil {
+			return false, fmt.Errorf("An error occured while getting the pods belonging to this statefulset %v", err)
+		}
+
+		for _, pod := range pods {
+			if pod.DeletionTimestamp != nil {
+				log.InfoD("pod %v is terminating", pod.Name)
+				// Checking If this is a resiliency test case
+				if ResiliencyFlag {
+					ResiliencyCondition <- true
+				}
+				log.InfoD("Resiliency Condition Met. Will go ahead and try to induce failure now")
+				return true, nil
+			}
+		}
+		log.Infof("Resiliency Condition still not met. Will retry to see if it has met now.....")
+		return false, nil
+	})
+	if conditionError != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- conditionError
+		}
+	}
+	return conditionError
+}
+
 // Function to check for set amount of Replica Pods
 func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	var ss *v1.StatefulSet
@@ -1356,8 +1393,9 @@ func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, Project
 	log.InfoD("Project Details- Name: %s, UUID: %s ", ProjectName, projectID)
 
 	ns, err = k8sCore.GetNamespace("kube-system")
+	log.Infof("kube-system ns-> %v", ns)
 	if err != nil {
-		return "", "", "", "", "", "", err
+		return "", "", "", "", "", "", fmt.Errorf("error Get kube-system ns-> %v", err)
 	}
 	clusterID := string(ns.GetObjectMeta().GetUID())
 	if len(clusterID) > 0 {
@@ -1474,6 +1512,7 @@ func RegisterClusterToControlPlane(infraParams *Parameter, tenantId string, inst
 // Check if a deployment specific PV and associated PVC is still present. If yes then delete both of them
 func DeletePvandPVCs(resourceName string, delPod bool) error {
 	log.Debugf("Starting to delete the PV and PVCs for resource %v\n", resourceName)
+	var claimName string
 	pv_list, err := k8sCore.GetPersistentVolumes()
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -1482,7 +1521,12 @@ func DeletePvandPVCs(resourceName string, delPod bool) error {
 		return err
 	}
 	for _, vol := range pv_list.Items {
-		claimName := vol.Spec.ClaimRef.Name
+		if vol.Spec.ClaimRef != nil {
+			claimName = vol.Spec.ClaimRef.Name
+		} else {
+			log.Infof("No PVC bounded to the PV - %v", vol.Name)
+			continue
+		}
 		flag := strings.Contains(claimName, resourceName)
 		if flag {
 			err := CheckAndDeleteIndependentPV(vol.Name, delPod)
@@ -2188,7 +2232,7 @@ func DeployAllDataServices(supportedDataServicesMap map[string]string, projectID
 }
 
 // UpdateDataServiceVerison modifies the existing deployment version/image
-func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID string, nodeCount int32, resourceTemplateID, dsImage, namespace, dsVersion string) (*pds.ModelsDeployment, error) {
+func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID string, nodeCount int32, resourceTemplateID, dsImage, dsVersion string) (*pds.ModelsDeployment, error) {
 
 	//Validate if the passed dsImage is available in the list of images
 	var versions []pds.ModelsVersion
@@ -2219,11 +2263,6 @@ func UpdateDataServiceVerison(dataServiceID, deploymentID string, appConfigID st
 	deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, dsImageID, nodeCount, resourceTemplateID, nil)
 	if err != nil {
 		log.Errorf("An Error Occured while updating the deployment %v", err)
-		return nil, err
-	}
-
-	err = ValidateDataServiceDeployment(deployment, namespace)
-	if err != nil {
 		return nil, err
 	}
 
@@ -2609,4 +2648,74 @@ func GetPodsOfSsByNode(SSName string, nodeName string, namespace string) ([]core
 		return podsList, nil
 	}
 	return nil, errors.New(fmt.Sprintf("There is no pod of the given statefulset running on the given node name %s", nodeName))
+}
+
+func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace string, resourceTemplate string) error {
+	var resourceTemplateId string
+	var cpuLimits int64
+	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(*deployment.TenantId)
+	if err != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		return err
+	}
+	for _, template := range resourceTemplates {
+		log.Debugf("template - %v", template.GetName())
+		if template.GetDataServiceId() == deployment.GetDataServiceId() && strings.ToLower(template.GetName()) == strings.ToLower(resourceTemplate) {
+			cpuLimits, _ = strconv.ParseInt(template.GetCpuLimit(), 10, 64)
+			log.Debugf("CpuLimit - %v, %T", cpuLimits, cpuLimits)
+			resourceTemplateId = template.GetId()
+		}
+	}
+	if resourceTemplateId == "" {
+		return fmt.Errorf("resource template - {%v} , not found", resourceTemplate)
+	}
+	log.Infof("Deployment details: Ds id- %v, appConfigTemplateID - %v, imageId - %v, Node count -%v, resourceTemplateId- %v ", deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId)
+	_, err = components.DataServiceDeployment.UpdateDeployment(deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, nil)
+	if err != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		return err
+	}
+	ss, testError := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+	if testError != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- testError
+		}
+		return testError
+	}
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		// Get Pods of this StatefulSet
+		pods, testError := k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			if ResiliencyFlag {
+				CapturedErrors <- testError
+			}
+			return false, testError
+		}
+		for _, pod := range pods {
+			for _, container := range pod.Spec.Containers {
+				if container.Resources.Limits.Cpu().Value() == cpuLimits {
+					if ResiliencyFlag {
+						ResiliencyCondition <- true
+					}
+					return true, nil
+				} else {
+					return false, nil
+				}
+			}
+		}
+		return false, fmt.Errorf("no pods has been updated to required resource configuration")
+	})
+	if err != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- err
+		}
+		return err
+	}
+	return nil
 }
