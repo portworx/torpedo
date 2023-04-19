@@ -2623,14 +2623,14 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace 
 		}
 		return err
 	}
-	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
-		ss, testError := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
-		if testError != nil {
-			if ResiliencyFlag {
-				CapturedErrors <- testError
-			}
-			return false, testError
+	ss, testError := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+	if testError != nil {
+		if ResiliencyFlag {
+			CapturedErrors <- testError
 		}
+		return testError
+	}
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
 		// Get Pods of this StatefulSet
 		pods, testError := k8sApps.GetStatefulSetPods(ss)
 		if testError != nil {
