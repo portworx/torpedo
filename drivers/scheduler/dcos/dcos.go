@@ -1000,6 +1000,15 @@ func (d *dcos) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName string, sn
 
 }
 
+func (d *dcos) GetAllSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error) {
+	// GetAllSnapshotClasses is not supported
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAllSnapshotClasses()",
+	}
+
+}
+
 func (d *dcos) GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error) {
 	// GetPodsRestartCount is not supported
 	return nil, &errors.ErrNotSupported{
