@@ -125,6 +125,9 @@ import (
 	// import driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
 
+	_ "github.com/portworx/torpedo/drivers/volume/pure"
+	// import pure driver to invoke it's init
+
 	context1 "context"
 
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"

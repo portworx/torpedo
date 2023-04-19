@@ -5028,7 +5028,7 @@ func (d *portworx) GetRebalanceJobStatus(jobID string) (*api.SdkGetRebalanceJobS
 
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &portworx{})
-	torpedovolume.Register(PureDriverName, csiProvisionerOnly, &pure{portworx: portworx{}})
+	//torpedovolume.Register(PureDriverName, csiProvisionerOnly, &pure{portworx: portworx{}})
 }
 
 // UpdatePoolLabels updates the pool label for a particular pool id
