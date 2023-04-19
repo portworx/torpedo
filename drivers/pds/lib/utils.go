@@ -934,11 +934,16 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 		log.Errorf("An Error Occured while creating %v", err)
 		return false
 	}
+	configureMysqlPodName := configureMysqlPod.ObjectMeta.Name
 	//Static sleep to let DB changes settle in
 	time.Sleep(20 * time.Second)
 
 	err = wait.Poll(defaultCommandRetry, defaultRetryInterval, func() (bool, error) {
-		if k8sCore.IsPodRunning(*configureMysqlPod) {
+		pod, err := k8sCore.GetPodByName(configureMysqlPodName, namespace)
+		if err != nil {
+			return false, err
+		}
+		if k8sCore.IsPodRunning(*pod) {
 			log.Infof("Looks like configure-mysql pod is running. Waiting for it to complete.")
 			return false, nil
 		} else {
@@ -957,7 +962,7 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 
 	// Validate if MySQL pod is configured successfully or not for running TPCC
 	for _, pod := range newPods {
-		if strings.Contains(pod.Name, configureMysqlPod.ObjectMeta.Name) {
+		if strings.Contains(pod.Name, configureMysqlPodName) {
 			log.InfoD("pds system pod name %v", pod.Name)
 			for _, c := range pod.Status.ContainerStatuses {
 				if c.State.Terminated != nil {
