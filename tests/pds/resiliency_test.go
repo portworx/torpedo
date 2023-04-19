@@ -167,6 +167,8 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodeDuringAppVersionUpdate", "Reboot node while app version update is going on", pdsLabels, 0)
+		// Global Resiliency TC marker
+		pdslib.MarkResiliencyTC(true, true)
 	})
 
 	It("Reboot Node While App Version update is going on", func() {
@@ -177,6 +179,7 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 			for _, ds := range params.DataServiceToTest {
 				deployment, _, _, err = TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, true)
 				log.FailOnError(err, "Error while deploying data services")
+
 				err = pdslib.ValidateDataServiceDeployment(deployment, params.InfraToTest.Namespace)
 				log.FailOnError(err, "Error while validating data service deployment")
 				deployments[ds] = deployment
@@ -204,13 +207,11 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 
 		Step("Update Data Service Version and reboot node", func() {
 			for ds, deployment := range deployments {
-				// Global Resiliency TC marker
-				pdslib.MarkResiliencyTC(true, true)
 				// Type of failure that this TC needs to cover
 				failuretype := pdslib.TypeOfFailure{
-					Type: ActiveNodeRebootDuringDeployment,
+					Type: RebootNodeDuringAppVersionUpdate,
 					Method: func() error {
-						return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace)
+						return pdslib.NodeRebootDurinAppVersionUpdate(params.InfraToTest.Namespace)
 					},
 				}
 				pdslib.DefineFailureType(failuretype)

@@ -805,6 +805,43 @@ func ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace s
 	return err
 }
 
+func CheckPodIsTerminating(depName, ns string) error {
+	var ss *v1.StatefulSet
+	conditionError := wait.PollImmediate(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, err = k8sApps.GetStatefulSet(depName, ns)
+		if err != nil {
+			log.Warnf("An Error Occured while getting statefulsets %v", err)
+			return false, nil
+		}
+		log.Debugf("pods current replica %v", ss.Status.Replicas)
+		pods, err := k8sApps.GetStatefulSetPods(ss)
+		if err != nil {
+			return false, fmt.Errorf("An error occured while getting the pods belonging to this statefulset %v", err)
+		}
+
+		for _, pod := range pods {
+			if pod.DeletionTimestamp != nil {
+				log.InfoD("pod %v is terminating", pod.Name)
+				// Checking If this is a resiliency test case
+				if ResiliencyFlag {
+					ResiliencyCondition <- true
+				}
+				log.InfoD("Resiliency Condition Met. Will go ahead and try to induce failure now")
+				return true, nil
+			}
+		}
+		log.Infof("Resiliency Condition still not met. Will retry to see if it has met now.....")
+		return false, nil
+	})
+	if conditionError != nil {
+		if ResiliencyFlag {
+			ResiliencyCondition <- false
+			CapturedErrors <- conditionError
+		}
+	}
+	return conditionError
+}
+
 // Function to check for set amount of Replica Pods
 func GetPdsSs(depName string, ns string, checkTillReplica int32) error {
 	var ss *v1.StatefulSet
