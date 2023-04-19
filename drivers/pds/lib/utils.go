@@ -2605,8 +2605,9 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace 
 	}
 	for _, template := range resourceTemplates {
 		log.Debugf("template - %v", template.GetName())
-		if strings.ToLower(template.GetName()) == strings.ToLower(resourceTemplate) {
+		if template.GetDataServiceId() == deployment.GetDataServiceId() && strings.ToLower(template.GetName()) == strings.ToLower(resourceTemplate) {
 			cpuLimits, _ = strconv.ParseInt(template.GetCpuLimit(), 10, 64)
+			log.Debugf("CpuLimit - %v, %T", cpuLimits, cpuLimits)
 			resourceTemplateId = template.GetId()
 		}
 	}
@@ -2615,8 +2616,8 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace 
 	}
 	log.Infof("Deployment details: Ds id- %v, appConfigTemplateID - %v, imageId - %v, Node count -%v, resourceTemplateId- %v ", deployment.GetId(),
 		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId)
-	_, err = UpdateDataServices(deployment.GetId(),
-		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, namespace)
+	_, err = components.DataServiceDeployment.UpdateDeployment(deployment.GetId(),
+		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, nil)
 	if err != nil {
 		if ResiliencyFlag {
 			CapturedErrors <- err

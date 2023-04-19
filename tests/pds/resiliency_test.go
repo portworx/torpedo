@@ -307,7 +307,6 @@ var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
-					isDeploymentsDeleted = false
 					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 					deployments[ds] = deployment
