@@ -198,7 +198,7 @@ const (
 	rabbitmq                     = "RabbitMQ"
 	mysql                        = "MySQL"
 	pxLabel                      = "pds.portworx.com/available"
-	defaultParams                = "/Users/dbhatnagar/PDS/dhruv/tpcc/torpedo/drivers/pds/parameters/pds_default_parameters.json"
+	defaultParams                = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap           = "pds-params"
 	configmapNamespace           = "default"
 )
@@ -951,7 +951,9 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 			return true, nil
 		}
 	})
-
+	if err != nil {
+		return false
+	}
 	var newPods []corev1.Pod
 	newPodList, err := GetPods(namespace)
 	if err != nil {
