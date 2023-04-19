@@ -198,7 +198,7 @@ const (
 	rabbitmq                     = "RabbitMQ"
 	mysql                        = "MySQL"
 	pxLabel                      = "pds.portworx.com/available"
-	defaultParams                = "../drivers/pds/parameters/pds_default_parameters.json"
+	defaultParams                = "/Users/dbhatnagar/PDS/dhruv/tpcc/torpedo/drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap           = "pds-params"
 	configmapNamespace           = "default"
 )
@@ -904,6 +904,9 @@ func GetDeploymentCredentials(deploymentID string) (string, error) {
 // done for MySQL before running MySQL.
 func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint string, namespace string) bool {
 	log.InfoD("Trying to configure Mysql deployment for TPCC Workload")
+	if dbUser == "" {
+		dbUser = "pds"
+	}
 	podSpec := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
@@ -1911,7 +1914,7 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 		var wasMysqlConfigured bool
 		// Waiting for approx an hour to check if Mysql deployment comes up
 		for i := 1; i <= 80; i++ {
-			wasMysqlConfigured := SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
+			wasMysqlConfigured = SetupMysqlDatabaseForTpcc(dbUser, pdsPassword, dnsEndpoint, namespace)
 			if wasMysqlConfigured {
 				log.InfoD("MySQL Deployment is successfully configured to run for TPCC Workload. Starting TPCC Workload Now.")
 				break
