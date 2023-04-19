@@ -929,14 +929,24 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
-	_, err := k8sCore.CreatePod(podSpec)
+	configureMysqlPod, err := k8sCore.CreatePod(podSpec)
 	if err != nil {
 		log.Errorf("An Error Occured while creating %v", err)
 		return false
 	}
-
 	//Static sleep to let DB changes settle in
 	time.Sleep(20 * time.Second)
+
+	err = wait.Poll(defaultCommandRetry, defaultRetryInterval, func() (bool, error) {
+		if k8sCore.IsPodRunning(*configureMysqlPod) {
+			log.Infof("Looks like configure-mysql pod is running. Waiting for it to complete.")
+			return false, nil
+		} else {
+			log.Infof("configure-mysql pod is now not running. Moving ahead.")
+			return true, nil
+		}
+	})
+
 	var newPods []corev1.Pod
 	newPodList, err := GetPods(namespace)
 	if err != nil {
@@ -947,15 +957,20 @@ func SetupMysqlDatabaseForTpcc(dbUser string, pdsPassword string, dnsEndpoint st
 
 	// Validate if MySQL pod is configured successfully or not for running TPCC
 	for _, pod := range newPods {
-		if strings.Contains(pod.Name, "configure-mysql") {
+		if strings.Contains(pod.Name, configureMysqlPod.ObjectMeta.Name) {
 			log.InfoD("pds system pod name %v", pod.Name)
 			for _, c := range pod.Status.ContainerStatuses {
-				if c.State.Terminated.ExitCode == 0 && c.State.Terminated.Reason == "Completed" {
-					log.InfoD("Successfully Configured Mysql for TPCC Run. Exiting")
-					DeleteK8sPods(pod.Name, namespace)
-					return true
+				if c.State.Terminated != nil {
+					if c.State.Terminated.ExitCode == 0 && c.State.Terminated.Reason == "Completed" {
+						log.InfoD("Successfully Configured Mysql for TPCC Run. Exiting")
+						DeleteK8sPods(pod.Name, namespace)
+						return true
+					} else {
+						DeleteK8sPods(pod.Name, namespace)
+					}
 				} else {
-					DeleteK8sPods(pod.Name, namespace)
+					log.Infof("configure-mysql pod seems to be still running. This is not expected.")
+					return false
 				}
 			}
 		}
