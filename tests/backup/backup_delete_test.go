@@ -17,31 +17,40 @@ import (
 )
 
 // createBackupUntilIncrementalBackup creates backup until incremental backups is created
-func createBackupUntilIncrementalBackup(namespace string, customBackupLocationName string, backupLocationUID string, labelSelectors map[string]string, orgID string, clusterUid string, ctx context.Context) string {
+func createBackupUntilIncrementalBackup(namespace string, customBackupLocationName string, backupLocationUID string, labelSelectors map[string]string, orgID string, clusterUid string, ctx context.Context) (string, error) {
 	incrementalBackupName := fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
 	err := CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
 		labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying incremental backup [%s] creation", incrementalBackupName))
+	if err != nil {
+		return "", fmt.Errorf("verifying incremental backup [%s] creation", incrementalBackupName)
+	}
 
 	log.InfoD("Check if backups are incremental backups or not")
 	backupDriver := Inst().Backup
 	ctx, err = backup.GetAdminCtxFromSecret()
-	log.FailOnError(err, "Fetching px-central-admin ctx")
+	if err != nil {
+		return "", fmt.Errorf("fetching px-central-admin ctx")
+	}
 	bkpUid, err := backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
-	log.FailOnError(err, "Unable to fetch backup UID - %s", incrementalBackupName)
+	if err != nil {
+		return "", fmt.Errorf("unable to fetch backup UID - %s", incrementalBackupName)
+	}
+
 	bkpInspectReq := &api.BackupInspectRequest{
 		Name:  incrementalBackupName,
 		OrgId: orgID,
 		Uid:   bkpUid,
 	}
 	bkpInspectResponse, err := backupDriver.InspectBackup(ctx, bkpInspectReq)
-	log.FailOnError(err, "Unable to fetch backup - %s", incrementalBackupName)
+	if err != nil {
+		return "", fmt.Errorf("unable to fetch backup - %s", incrementalBackupName)
+	}
+
 	for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
 		backupId := vol.GetBackupId()
 		log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
 		if strings.Contains(backupId, "incr") {
-			dash.VerifyFatal(strings.Contains(backupId, "incr"), true,
-				fmt.Sprintf("Check if the backup %s is incremental or not ", incrementalBackupName))
+			return incrementalBackupName, nil
 		} else {
 			// Attempting to take backups and checking if they are incremental or not
 			// as the original incremental backup which we took has taken a full backup this is mostly
@@ -56,18 +65,24 @@ func createBackupUntilIncrementalBackup(namespace string, customBackupLocationNa
 				incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
 				err = CreateBackup(incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []string{namespace},
 					labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying incremental backup [%s] creation", incrementalBackupName))
+				if err != nil {
+					return "", fmt.Errorf("verifying incremental backup [%s] creation", incrementalBackupName)
+				}
 
 				// Check if they are incremental or not
 				bkpUid, err = backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
-				log.FailOnError(err, "Unable to fetch backup UID - %s", incrementalBackupName)
+				if err != nil {
+					return "", fmt.Errorf("unable to fetch backup - %s", incrementalBackupName)
+				}
 				bkpInspectReq := &api.BackupInspectRequest{
 					Name:  incrementalBackupName,
 					OrgId: orgID,
 					Uid:   bkpUid,
 				}
 				bkpInspectResponse, err = backupDriver.InspectBackup(ctx, bkpInspectReq)
-				log.FailOnError(err, "Unable to fetch backup - %s", incrementalBackupName)
+				if err != nil {
+					return "", fmt.Errorf("unable to fetch backup - %s", incrementalBackupName)
+				}
 				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
 					backupId := vol.GetBackupId()
 					log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
@@ -86,13 +101,13 @@ func createBackupUntilIncrementalBackup(namespace string, customBackupLocationNa
 				if noFailures {
 					break
 				}
-				dash.VerifyFatal(noFailures, true, "Check if the backups are incremental or not")
+				if noFailures == false {
+					return "", fmt.Errorf("check if the backups are incremental or not")
+				}
 			}
 		}
-		return incrementalBackupName
 	}
-
-	return ""
+	return incrementalBackupName, nil
 }
 
 // IssueDeleteOfIncrementalBackupsAndRestore Issues delete of incremental backups in between and tries to restore from
@@ -206,13 +221,15 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 
 			// Incremental backup set 1
 			for _, namespace := range bkpNamespaces {
-				incrementalBackupName = createBackupUntilIncrementalBackup(namespace, customBackupLocationName, backupLocationUID, labelSelectors, orgID, clusterUid, ctx)
+				incrementalBackupName, err = createBackupUntilIncrementalBackup(namespace, customBackupLocationName, backupLocationUID, labelSelectors, orgID, clusterUid, ctx)
+				dash.VerifyFatal(err, nil, "Creating incremental backup")
 				incrementalBackupNames = append(incrementalBackupNames, incrementalBackupName)
 			}
 
 			// Incremental backup set 2
 			for _, namespace := range bkpNamespaces {
-				incrementalBackupName = createBackupUntilIncrementalBackup(namespace, customBackupLocationName, backupLocationUID, labelSelectors, orgID, clusterUid, ctx)
+				incrementalBackupName, err = createBackupUntilIncrementalBackup(namespace, customBackupLocationName, backupLocationUID, labelSelectors, orgID, clusterUid, ctx)
+				dash.VerifyFatal(err, nil, "Creating incremental backup")
 				incrementalBackupNames2 = append(incrementalBackupNames2, incrementalBackupName)
 			}
 
@@ -401,7 +418,8 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			// Incremental backup
 			for _, namespace := range bkpNamespaces {
-				incrementalBackupName = createBackupUntilIncrementalBackup(namespace, customBackupLocationName, backupLocationUID, labelSelectors, orgID, clusterUid, ctx)
+				incrementalBackupName, err = createBackupUntilIncrementalBackup(namespace, customBackupLocationName, backupLocationUID, labelSelectors, orgID, clusterUid, ctx)
+				dash.VerifyFatal(err, nil, "Creating incremental backup")
 				incrementalBackupNamesRecreated = append(incrementalBackupNamesRecreated, incrementalBackupName)
 			}
 			log.Infof("List of New Incremental backups - %v", incrementalBackupNames)
