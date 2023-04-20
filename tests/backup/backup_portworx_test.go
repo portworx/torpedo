@@ -108,11 +108,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
-		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, CloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, CloudCredUID, ctx, true)
 	})
 
 })
@@ -269,7 +265,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx, true)
 	})
 })
 
@@ -455,7 +451,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx, true)
 	})
 })
 
@@ -571,14 +567,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
 		}
 		ctx, err = backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		for _, backupName := range backupNames {
-			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
-		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, CredName, CloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, CredName, CloudCredUID, ctx, true)
 		DeleteBucket(providers[0], encryptionBucketName)
 	})
 
@@ -858,6 +847,6 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
 		ValidateAndDestroy(contexts, opts)
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx, true)
 	})
 })

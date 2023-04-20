@@ -634,6 +634,8 @@ spec:
       value: "${LOGGLY_API_TOKEN}"
     - name: PODMETRIC_METERING_INTERVAL_MINUTES
       value: "${PODMETRIC_METERING_INTERVAL_MINUTES}"
+    - name: DEBUG_ENVIRONMENT
+      value: "${DEBUG_ENVIRONMENT}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
