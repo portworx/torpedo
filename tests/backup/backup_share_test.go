@@ -3624,14 +3624,6 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
-		log.InfoD("Deleting the backup created")
-		backupDriver := Inst().Backup
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Getting the backup UID for %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting the %s", backupName))
 		log.InfoD("Deleting restore created by users")
 		for _, restoreName := range restoreList {
 			wg.Add(1)
@@ -3659,6 +3651,8 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		log.InfoD("Cleaning up users")
 		err = backup.DeleteUser(userName[0])
 		dash.VerifySafely(err, nil, fmt.Sprintf("deleting user %v", userName[0]))
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
