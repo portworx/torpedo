@@ -699,6 +699,9 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 				resp, err := pdslib.DeleteDeployment(deployment.GetId())
 				log.FailOnError(err, "Error while deleting data services")
 				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				log.InfoD("Getting all PV and associated PVCs and deleting them")
+				err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
 			}
 		}()
 	})
@@ -758,17 +761,6 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 				}
 			}
 		})
-
-		Step("Delete Deployments", func() {
-			log.InfoD("Deleting DataService")
-			resp, err := pdslib.DeleteDeployment(deployment.GetId())
-			log.FailOnError(err, "Error while deleting data services")
-			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			log.InfoD("Getting all PV and associated PVCs and deleting them")
-			err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
-			log.FailOnError(err, "Error while deleting PV and PVCs")
-		})
-
 	})
 }
 
