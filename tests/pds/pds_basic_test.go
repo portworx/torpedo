@@ -1,6 +1,11 @@
 package tests
 
 import (
+	"github.com/portworx/torpedo/drivers/pds/controlplane"
+	"github.com/portworx/torpedo/drivers/pds/dataservice"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	"github.com/portworx/torpedo/drivers/pds/parameters"
+	"github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"os"
 	"testing"
 
@@ -9,7 +14,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	pds2 "github.com/portworx/torpedo/drivers/pds/dataservice"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -23,6 +28,15 @@ func TestDataService(t *testing.T) {
 
 }
 
+//imports based on functionalities
+var (
+	dsTest        *pds2.DataserviceType
+	k8sTest       *targetcluster.K8sType
+	customParams  *parameters.Customparams
+	targetCluster *targetcluster.TargetCluster
+	cp            *controlplane.ControlPlane
+)
+
 var _ = BeforeSuite(func() {
 	steplog := "Get prerequisite params to run the pds tests"
 	log.InfoD(steplog)
@@ -32,20 +46,30 @@ var _ = BeforeSuite(func() {
 		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
 		pdsLabels["pds"] = "true"
+
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
-		params, err = pdslib.ReadParams(pdsparams)
+		params, err = customParams.ReadParams(pdsparams)
 		log.FailOnError(err, "Failed to read params from json file")
 		infraParams := params.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
-		accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
+		k8sTest, err = targetcluster.K8sInit(params.InfraToTest.ControlPlaneURL)
+		log.FailOnError(err, "Error while initializing k8s package")
+		dsTest, err = dataservice.DataserviceInit(params.InfraToTest.ControlPlaneURL)
+		log.FailOnError(err, "Error while initializing dataservice package")
+
+		err = pdslib.InitializeApiComponents(params.InfraToTest.ControlPlaneURL)
+		log.FailOnError(err, "Failed to Initialize Api components")
+
+		accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = dsTest.SetupPDSTest(infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
 		log.FailOnError(err, "Failed on SetupPDSTest method")
+
 	})
 
 	steplog = "Check and Register Target Cluster to ControlPlane"
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		err = pdslib.RegisterClusterToControlPlane(params, tenantID, false)
+		err = targetCluster.RegisterClusterToControlPlane(params, tenantID, false)
 		log.FailOnError(err, "Target Cluster Registeration failed")
 	})
 
@@ -53,16 +77,17 @@ var _ = BeforeSuite(func() {
 	Step(steplog, func() {
 		log.InfoD(steplog)
 		log.Infof("cluster id %v and tenant id %v", clusterID, tenantID)
-		deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
+		deploymentTargetID, err = dataservice.GetDeploymentTargetID(clusterID, tenantID)
 		log.FailOnError(err, "Failed to get the deployment TargetID")
 		dash.VerifyFatal(deploymentTargetID != "", true, "Verifying deployment target is registerd to control plane")
 		log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
+
 	})
 
 	steplog = "Get StorageTemplateID and Replicas"
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
+		storageTemplateID, err = dataservice.GetStorageTemplate(tenantID)
 		log.FailOnError(err, "Failed while getting storage template ID")
 		log.InfoD("storageTemplateID %v", storageTemplateID)
 	})
@@ -70,10 +95,10 @@ var _ = BeforeSuite(func() {
 	Step(steplog, func() {
 		log.InfoD(steplog)
 		namespace = params.InfraToTest.Namespace
-		_, isavailable, err := pdslib.CreatePDSNamespace(namespace)
+		_, isavailable, err := k8sTest.CreatePDSNamespace(namespace)
 		log.FailOnError(err, "Error while Create/Get Namespaces")
 		dash.VerifyFatal(bool(true), isavailable, "Verifying if Namespace not available for pds to deploy data services")
-		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
+		namespaceID, err = k8sTest.GetnameSpaceID(namespace, deploymentTargetID)
 		log.FailOnError(err, "Error while getting namespace id")
 		dash.VerifyFatal(namespaceID != "", true, "validating namespace ID")
 	})

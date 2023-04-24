@@ -215,6 +215,7 @@ var (
 var (
 	components    *pdsapi.Components
 	deployment    *pds.ModelsDeployment
+	controlplane  *pdscontrolplane.ControlPlane
 	apiClient     *pds.APIClient
 	ns            *corev1.Namespace
 	pdsAgentpod   corev1.Pod
@@ -755,6 +756,23 @@ func WaitForPDSDeploymentToBeUp(deployment *pds.ModelsDeployment, maxtimeInterva
 
 	})
 	return err
+}
+
+func InitializeApiComponents(ControlPlaneURL string) error {
+	log.InfoD("Initializing Api components")
+	apiConf := pds.NewConfiguration()
+	endpointURL, err := url.Parse(ControlPlaneURL)
+	if err != nil {
+		return err
+	}
+	apiConf.Host = endpointURL.Host
+	apiConf.Scheme = endpointURL.Scheme
+
+	apiClient = pds.NewAPIClient(apiConf)
+	components = pdsapi.NewComponents(apiClient)
+	controlplane = pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
+
+	return nil
 }
 
 // ValidateDataServiceDeployment checks if deployment is healthy and running

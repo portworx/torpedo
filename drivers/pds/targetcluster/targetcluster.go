@@ -2,7 +2,11 @@ package targetcluster
 
 import (
 	"fmt"
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
+	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -43,6 +47,7 @@ var (
 	}
 	k8sCore = core.Instance()
 	k8sApps = apps.Instance()
+	k8      *K8sType
 )
 
 // TargetCluster struct
@@ -165,8 +170,8 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 
 }
 
-// isReachbale verify if the control plane is accessable.
-func isReachbale(url string) (bool, error) {
+// isReachable verify if the control plane is accessable.
+func (targetCluster *TargetCluster) IsReachable(url string) (bool, error) {
 	timeout := time.Duration(15 * time.Second)
 	client := http.Client{
 		Timeout: timeout,
@@ -245,6 +250,69 @@ func (targetCluster *TargetCluster) SetConfig() error {
 	}
 	k8sCore.SetConfig(config)
 	k8sApps.SetConfig(config)
+	return nil
+}
+
+// RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane
+func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.Parameter, tenantId string, installOldVersion bool) error {
+	log.InfoD("Test control plane url connectivity.")
+	var helmChartversion string
+	var components *pdsapi.Components
+	var serviceAccId string
+
+	controlPlaneUrl := infraParams.InfraToTest.ControlPlaneURL
+	clusterType := infraParams.InfraToTest.ClusterType
+
+	apiConf := pds.NewConfiguration()
+	endpointURL, err := url.Parse(controlPlaneUrl)
+	apiConf.Host = endpointURL.Host
+	apiConf.Scheme = endpointURL.Scheme
+	apiClient := pds.NewAPIClient(apiConf)
+	components = pdsapi.NewComponents(apiClient)
+
+	_, err = tc.IsReachable(controlPlaneUrl)
+	if err != nil {
+		return fmt.Errorf("unable to reach the control plane with following error - %v", err)
+	}
+
+	if installOldVersion {
+		helmChartversion = infraParams.PDSHelmVersions.PreviousHelmVersion
+		log.InfoD("Deregister PDS and Install Old Version")
+
+	} else {
+		helmChartversion, err = components.APIVersion.GetHelmChartVersion()
+		log.Debugf("helm chart version %v", helmChartversion)
+		if err != nil {
+			return fmt.Errorf("error while getting helm version - %v", helmChartversion)
+		}
+	}
+
+	log.InfoD("Listing service account")
+	listServiceAccounts, err := components.ServiceAccount.ListServiceAccounts(tenantId)
+	if err != nil {
+		return err
+	}
+	for _, acc := range listServiceAccounts {
+		log.Infof(*acc.Name)
+		if *acc.Name == "Default-AgentWriter" {
+			serviceAccId = *acc.Id
+			break
+		}
+	}
+
+	log.InfoD("Getting service account token")
+	serviceAccToken, err := components.ServiceAccount.GetServiceAccountToken(serviceAccId)
+	if err != nil {
+		return err
+	}
+	bearerToken := *serviceAccToken.Token
+
+	ctx := k8.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+	target := NewTargetCluster(ctx)
+	err = target.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType)
+	if err != nil {
+		return fmt.Errorf("target cluster registeration failed with the error: %v", err)
+	}
 	return nil
 }
 
