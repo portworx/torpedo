@@ -454,12 +454,15 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 	//dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 	log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
+	namespaceID, err := k8.GetnameSpaceID(namespace, testParams.DeploymentTargetId)
+	log.FailOnError(err, "Error while getting namespace id")
+
 	log.InfoD("Deploying DataService %v ", ds.Name)
 	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err = d.DeployDS(ds.Name, projectID,
 		testParams.DeploymentTargetId,
 		testParams.DnsZone,
 		deploymentName,
-		testParams.NamespaceId,
+		namespaceID,
 		dataServiceDefaultAppConfigID,
 		int32(ds.Replicas),
 		serviceType,

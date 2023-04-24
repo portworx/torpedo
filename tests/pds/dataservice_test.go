@@ -719,7 +719,7 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 		log.InfoD("Deploying DataService %v ", dataservice)
-		deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
+		deployment, _, dataServiceVersionBuildMap, err = dsTest.DeployDS(dataservice, projectID,
 			deploymentTargetID,
 			dnsZone,
 			deploymentName,
@@ -1115,9 +1115,10 @@ var _ = Describe("{DeployAllDataServices}", func() {
 
 func DeployandValidateDataServices(ds pds2.PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	log.InfoD("Data Service Deployment Triggered")
+	log.InfoD("Deploying ds in namespace %v", namespace)
 	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, namespace, tenantID, projectID, false,
-		pds2.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
-	Step("Validate Data Service Configurations", func() {
+		pds2.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
+	Step("Validate Data Service Deployments", func() {
 		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 	})
@@ -1145,7 +1146,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 
 		log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 		log.InfoD("Deploying DataService %v ", dataservice)
-		deployment, _, dataServiceVersionBuildMap, err = pdslib.DeployDataServices(dataservice, projectID,
+		deployment, _, dataServiceVersionBuildMap, err = dsTest.DeployDS(dataservice, projectID,
 			deploymentTargetID,
 			dnsZone,
 			deploymentName,
