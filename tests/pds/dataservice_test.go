@@ -1123,7 +1123,7 @@ func DeployandValidateDataServices(ds pds2.PDSDataService, namespace, tenantID, 
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 	})
 	Step("Validate Storage Configurations", func() {
-		dataServiceDefaultResourceTemplateID, err = pds2.GetResourceTemplate(tenantID, ds.Name)
+		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 		log.FailOnError(err, "Error while getting resource template")
 		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)

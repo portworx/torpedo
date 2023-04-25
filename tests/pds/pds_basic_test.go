@@ -1,8 +1,6 @@
 package tests
 
 import (
-	"github.com/portworx/torpedo/drivers/pds/controlplane"
-	"github.com/portworx/torpedo/drivers/pds/dataservice"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/pds/targetcluster"
@@ -33,7 +31,6 @@ var (
 	dsTest        *pds2.DataserviceType
 	customParams  *parameters.Customparams
 	targetCluster *targetcluster.TargetCluster
-	cp            *controlplane.ControlPlane
 )
 
 var _ = BeforeSuite(func() {
@@ -52,7 +49,7 @@ var _ = BeforeSuite(func() {
 		infraParams := params.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
-		dsTest, err = dataservice.DataserviceInit(params.InfraToTest.ControlPlaneURL)
+		dsTest, err = pds2.DataserviceInit(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Error while initializing dataservice package")
 
 		err = pdslib.InitializeApiComponents(params.InfraToTest.ControlPlaneURL)
@@ -85,7 +82,7 @@ var _ = BeforeSuite(func() {
 	steplog = "Get StorageTemplateID and Replicas"
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		storageTemplateID, err = dataservice.GetStorageTemplate(tenantID)
+		storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
 		log.FailOnError(err, "Failed while getting storage template ID")
 		log.InfoD("storageTemplateID %v", storageTemplateID)
 	})

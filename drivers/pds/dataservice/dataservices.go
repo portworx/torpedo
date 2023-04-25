@@ -75,92 +75,6 @@ type PDSDataService struct {
 	OldImage      string "json:\"OldImage\""
 }
 
-// GetResourceTemplate get the resource template id
-func GetResourceTemplate(tenantID string, supportedDataService string) (string, error) {
-	log.Infof("Get the resource template for each data services")
-	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
-	if err != nil {
-		return "", err
-	}
-	isavailable = false
-	isTemplateavailable = false
-	for i := 0; i < len(resourceTemplates); i++ {
-		if resourceTemplates[i].GetName() == resourceTemplateName {
-			isTemplateavailable = true
-			dataService, err := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
-			if err != nil {
-				return "", err
-			}
-			if dataService.GetName() == supportedDataService {
-				log.Infof("Data service name: %v", dataService.GetName())
-				log.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
-					resourceTemplates[i].GetName(),
-					resourceTemplates[i].GetId(),
-					resourceTemplates[i].GetDataServiceId(),
-					resourceTemplates[i].GetStorageRequest(),
-					resourceTemplates[i].GetMemoryRequest())
-
-				isavailable = true
-				resourceTemplateID = resourceTemplates[i].GetId()
-			}
-		}
-	}
-	if !(isavailable && isTemplateavailable) {
-		log.Errorf("Template with Name %v does not exis", resourceTemplateName)
-	}
-	return resourceTemplateID, nil
-}
-
-// GetStorageTemplate return the storage template id
-func GetStorageTemplate(tenantID string) (string, error) {
-	log.InfoD("Get the storage template")
-	storageTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
-	if err != nil {
-		return "", err
-	}
-	isStorageTemplateAvailable = false
-	for i := 0; i < len(storageTemplates); i++ {
-		if storageTemplates[i].GetName() == storageTemplateName {
-			isStorageTemplateAvailable = true
-			log.InfoD("Storage template details -----> Name %v,Repl %v , Fg %v , Fs %v",
-				storageTemplates[i].GetName(),
-				storageTemplates[i].GetRepl(),
-				storageTemplates[i].GetFg(),
-				storageTemplates[i].GetFs())
-			storageTemplateID = storageTemplates[i].GetId()
-		}
-	}
-	if !isStorageTemplateAvailable {
-		log.Fatalf("storage template %v is not available ", storageTemplateName)
-	}
-	return storageTemplateID, nil
-}
-
-// GetAppConfTemplate returns the app config template id
-func GetAppConfTemplate(tenantID string, supportedDataService string) (string, error) {
-	appConfigs, err := components.AppConfigTemplate.ListTemplates(tenantID)
-	var d DataserviceType
-	if err != nil {
-		return "", err
-	}
-	isavailable = false
-	isTemplateavailable = false
-	dataServiceId := d.GetDataServiceID(supportedDataService)
-	for i := 0; i < len(appConfigs); i++ {
-		if appConfigs[i].GetName() == appConfigTemplateName {
-			isTemplateavailable = true
-			if dataServiceId == appConfigs[i].GetDataServiceId() {
-				appConfigTemplateID = appConfigs[i].GetId()
-				isavailable = true
-			}
-		}
-	}
-	if !(isavailable && isTemplateavailable) {
-		log.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
-	}
-	return appConfigTemplateID, nil
-}
-
 // GetVersionsImage returns the required Image of dataservice version
 func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (string, string, map[string][]string, error) {
 	var versions []pds.ModelsVersion
@@ -296,12 +210,12 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 	}
 
 	log.InfoD("Getting Resource Template ID")
-	dataServiceDefaultResourceTemplateID, err = GetResourceTemplate(tenantID, ds.Name)
+	dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 	log.FailOnError(err, "Error while getting resource template")
 	log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 	log.InfoD("Getting App Template ID")
-	dataServiceDefaultAppConfigID, err = GetAppConfTemplate(tenantID, ds.Name)
+	dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
 	log.FailOnError(err, "Error while getting app configuration template")
 	log.InfoD("dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
@@ -367,7 +281,7 @@ func (d *DataserviceType) DeployDataservicesAndCreateContext() ([]*scheduler.Con
 	log.InfoD("NamespaceId %s ", namespaceId)
 	testparams.NamespaceId = namespaceId
 
-	storageTemplateID, err = GetStorageTemplate(tenantID)
+	storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
 	log.FailOnError(err, "Failed while getting storage template ID")
 	log.InfoD("storageTemplateID %v", storageTemplateID)
 	testparams.StorageTemplateId = storageTemplateID
