@@ -309,7 +309,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 
 	It(steplog, func() {
 		testTimeOut := 2 * time.Hour
-		tesTimeInterval := 30 * time.Second
+		tesTimeInterval := 100 * time.Millisecond
 		for _, ds := range params.DataServiceToTest {
 			Step("Deploy and validate data service", func() {
 				isDeploymentsDeleted = false
