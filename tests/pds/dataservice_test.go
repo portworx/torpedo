@@ -308,8 +308,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 	})
 
 	It(steplog, func() {
-		testTimeOut := 2 * time.Hour
-		tesTimeInterval := 100 * time.Millisecond
+		tesTimeInterval := 50 * time.Millisecond
 		for _, ds := range params.DataServiceToTest {
 			Step("Deploy and validate data service", func() {
 				isDeploymentsDeleted = false
@@ -343,14 +342,14 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				go func() {
 					defer wg.Done()
 					log.InfoD("Validating the data service pod status in PDS Control Plane")
-					err = pdslib.WaitForPDSDeploymentToBeDown(deployment, tesTimeInterval, testTimeOut)
+					err = pdslib.WaitForPDSDeploymentToBeDown(deployment, tesTimeInterval, timeOut)
 					log.FailOnError(err, "Error while validating the pds pods")
 
 				}()
 				wg.Wait()
 
 				log.InfoD("Validating if the data service pods are back to healthy state")
-				err = pdslib.WaitForPDSDeploymentToBeUp(deployment, tesTimeInterval, testTimeOut)
+				err = pdslib.WaitForPDSDeploymentToBeUp(deployment, tesTimeInterval, timeOut)
 				log.FailOnError(err, "Error while validating the pds deployment pods")
 
 				Step("Delete Deployments", func() {
