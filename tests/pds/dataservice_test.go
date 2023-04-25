@@ -1273,7 +1273,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 
 			log.InfoD("List of created deployments")
 			for _, dep := range cleanupall {
-				log.InfoD("%v ", dep.ClusterResourceName)
+				log.InfoD("%v ", *dep.ClusterResourceName)
 			}
 
 			Step("Delete created deployments", func() {

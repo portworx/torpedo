@@ -3,32 +3,22 @@ package dataservice
 import (
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/apiextensions"
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
-	"github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
-	corev1 "k8s.io/api/core/v1"
 	"net/url"
-	"strings"
-	"time"
 )
 
 // PDS vars
 var (
-	components    *pdsapi.Components
-	deployment    *pds.ModelsDeployment
-	controlplane  *pdscontrolplane.ControlPlane
-	apiClient     *pds.APIClient
-	ns            *corev1.Namespace
-	pdsAgentpod   corev1.Pod
-	ApiComponents *pdsapi.Components
+	components   *pdsapi.Components
+	deployment   *pds.ModelsDeployment
+	controlplane *pdscontrolplane.ControlPlane
+	apiClient    *pds.APIClient
 
 	err                                   error
 	isavailable                           bool
@@ -41,87 +31,27 @@ var (
 	appConfigTemplateID                   string
 	versionID                             string
 	imageID                               string
-	serviceAccId                          string
-	accountID                             string
-	projectID                             string
-	tenantID                              string
-	istargetclusterAvailable              bool
-	isAccountAvailable                    bool
 	isStorageTemplateAvailable            bool
-	dnsZone                               string
 	dataServiceDefaultResourceTemplateID  string
 	dataServiceDefaultAppConfigID         string
-	dash                                  *aetosutil.Dashboard
-
-	dataServiceDefaultResourceTemplateIDMap = make(map[string]string)
-	dataServiceNameIDMap                    = make(map[string]string)
-	dataServiceNameVersionMap               = make(map[string][]string)
-	dataServiceIDImagesMap                  = make(map[string][]string)
-	dataServiceNameDefaultAppConfigMap      = make(map[string]string)
-	deploymentsMap                          = make(map[string][]*pds.ModelsDeployment)
-	namespaceNameIDMap                      = make(map[string]string)
-	dataServiceVersionBuildMap              = make(map[string][]string)
-	dataServiceImageMap                     = make(map[string][]string)
+	dataServiceVersionBuildMap            = make(map[string][]string)
+	dataServiceImageMap                   = make(map[string][]string)
 )
-
-type PDS_Health_Status string
 
 // PDS const
 const (
-	PDS_Health_Status_DOWN     PDS_Health_Status = "Down"
-	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
-	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
-
-	defaultCommandRetry          = 5 * time.Second
-	defaultCommandTimeout        = 1 * time.Minute
-	storageTemplateName          = "QaDefault"
-	resourceTemplateName         = "Small"
-	appConfigTemplateName        = "QaDefault"
-	defaultRetryInterval         = 10 * time.Minute
-	duration                     = 900
-	timeOut                      = 30 * time.Minute
-	timeInterval                 = 10 * time.Second
-	maxtimeInterval              = 30 * time.Second
-	resiliencyInterval           = 1 * time.Second
-	defaultTestConnectionTimeout = 15 * time.Minute
-	defaultWaitRebootRetry       = 10 * time.Second
-	envDsVersion                 = "DS_VERSION"
-	envDsBuild                   = "DS_BUILD"
-	zookeeper                    = "ZooKeeper"
-	redis                        = "Redis"
-	consul                       = "Consul"
-	cassandraStresImage          = "scylladb/scylla:4.1.11"
-	postgresqlStressImage        = "portworx/torpedo-pgbench:pdsloadTest"
-	consulBenchImage             = "pwxbuild/consul-bench-0.1.1"
-	consulAgentImage             = "pwxbuild/consul-agent-0.1.1"
-	esRallyImage                 = "elastic/rally"
-	cbloadImage                  = "portworx/pds-loadtests:couchbase-0.0.2"
-	pdsTpccImage                 = "portworx/torpedo-tpcc-automation:v1"
-	redisStressImage             = "redis:latest"
-	rmqStressImage               = "pivotalrabbitmq/perf-test:latest"
-	postgresql                   = "PostgreSQL"
-	cassandra                    = "Cassandra"
-	elasticSearch                = "Elasticsearch"
-	couchbase                    = "Couchbase"
-	rabbitmq                     = "RabbitMQ"
-	mysql                        = "MySQL"
-	pxLabel                      = "pds.portworx.com/available"
-	defaultParams                = "../drivers/pds/parameters/pds_default_parameters.json"
-	pdsParamsConfigmap           = "pds-params"
-	configmapNamespace           = "default"
-	deploymentName               = "qa"
+	storageTemplateName   = "QaDefault"
+	resourceTemplateName  = "Small"
+	appConfigTemplateName = "QaDefault"
+	zookeeper             = "ZooKeeper"
+	redis                 = "Redis"
+	deploymentName        = "qa"
 )
 
 // K8s/PDS Instances
 var (
-	k8sCore       = core.Instance()
-	k8sApps       = apps.Instance()
-	apiExtentions = apiextensions.Instance()
-	serviceType   = "LoadBalancer"
-	customparams  *parameters.Customparams
-	k8            *targetcluster.K8sType
-	cp            *pdscontrolplane.ControlPlane
-	//cc            pdscontext.PdsContextCreation
+	serviceType  = "LoadBalancer"
+	customparams *parameters.Customparams
 )
 
 type DataserviceType struct{}
@@ -229,25 +159,6 @@ func GetAppConfTemplate(tenantID string, supportedDataService string) (string, e
 		log.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
 	}
 	return appConfigTemplateID, nil
-}
-
-func GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
-	log.InfoD("Get the Target cluster details")
-	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
-	if err != nil {
-		return "", fmt.Errorf("error while listing deployments: %v", err)
-	}
-	if targetClusters == nil {
-		return "", fmt.Errorf("target cluster passed is not available to the account/tenant %v", err)
-	}
-	for i := 0; i < len(targetClusters); i++ {
-		if targetClusters[i].GetClusterId() == clusterID {
-			deploymentTargetID = targetClusters[i].GetId()
-			log.Infof("deploymentTargetID %v", deploymentTargetID)
-			log.InfoD("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
-		}
-	}
-	return deploymentTargetID, nil
 }
 
 // GetVersionsImage returns the required Image of dataservice version
@@ -368,64 +279,6 @@ func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, d
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, nil
 }
 
-func (d *DataserviceType) DeployDataservicesAndCreateContext() ([]*scheduler.Context, error) {
-	log.InfoD("*************************Deployment called from schedule applications**************************")
-	var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
-	var pdsApps []*pds.ModelsDeployment
-	contexts := make([]*scheduler.Context, 0)
-	var testparams TestParams
-
-	pdsParams := k8.GetAndExpectStringEnvVar("PDS_PARAM_CM")
-	params, err := customparams.ReadParams(pdsParams)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read pds params %v", err)
-	}
-	infraParams := params.InfraToTest
-	namespace := params.InfraToTest.Namespace
-
-	_, isAvailable, err := k8.CreatePDSNamespace(namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create pds namespace %v", err)
-	}
-	if !isAvailable {
-		return nil, fmt.Errorf("pdsnamespace %v is not available to deploy apps", namespace)
-	}
-	_, tenantID, dnsZone, projectID, _, clusterID, err := d.SetupPDSTest(infraParams.ClusterType,
-		infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
-	if err != nil {
-		return nil, fmt.Errorf("Failed on SetupPDSTest method %v", err)
-	}
-	testparams.DnsZone = dnsZone
-
-	deploymentTargetID, err = GetDeploymentTargetID(clusterID, tenantID)
-	log.FailOnError(err, "Failed to get the deployment TargetID")
-	log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
-	testparams.DeploymentTargetId = deploymentTargetID
-
-	namespaceId, err := k8.GetnameSpaceID(namespace, deploymentTargetID)
-	log.FailOnError(err, "Failed to get the namespace Id")
-	log.InfoD("NamespaceId %s ", namespaceId)
-	testparams.NamespaceId = namespaceId
-
-	storageTemplateID, err = GetStorageTemplate(tenantID)
-	log.FailOnError(err, "Failed while getting storage template ID")
-	log.InfoD("storageTemplateID %v", storageTemplateID)
-	testparams.StorageTemplateId = storageTemplateID
-
-	for _, ds := range params.DataServiceToTest {
-		deployment, _, _, err := d.TriggerDeployDataService(ds, namespace, tenantID, projectID, false, testparams)
-		if err != nil {
-			return nil, fmt.Errorf("failed to deploy pds apps %v", err)
-		}
-		deployments[ds] = deployment
-		pdsApps = append(pdsApps, deployment)
-	}
-
-	log.InfoD("Creating Context for PDS Apps")
-	contexts = d.CreateAppContext(pdsApps)
-	return contexts, nil
-}
-
 func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace, tenantID,
 	projectID string, deployOldVersion bool, testParams TestParams) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	log.InfoD("Going to start %v app deployment", ds.Name)
@@ -451,10 +304,8 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 	dataServiceDefaultAppConfigID, err = GetAppConfTemplate(tenantID, ds.Name)
 	log.FailOnError(err, "Error while getting app configuration template")
 	log.InfoD("dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
-	//dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
-	log.InfoD(" dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
-	namespaceID, err := k8.GetnameSpaceID(namespace, testParams.DeploymentTargetId)
+	namespaceID, err := pdslib.GetnameSpaceID(namespace, testParams.DeploymentTargetId)
 	log.FailOnError(err, "Error while getting namespace id")
 
 	log.InfoD("Deploying DataService %v ", ds.Name)
@@ -477,71 +328,62 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
 }
 
-// SetupPDSTest returns few params required to run the test
-func (d *DataserviceType) SetupPDSTest(ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, string, error) {
+func (d *DataserviceType) DeployDataservicesAndCreateContext() ([]*scheduler.Context, error) {
+	log.InfoD("Deployment of pds apps called from schedule applications")
+	var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+	var pdsApps []*pds.ModelsDeployment
+	contexts := make([]*scheduler.Context, 0)
+	var testparams TestParams
 
-	acc := components.Account
-	accounts, err := acc.GetAccountsList()
+	pdsParams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
+	params, err := customparams.ReadParams(pdsParams)
 	if err != nil {
-		return "", "", "", "", "", "", err
+		return nil, fmt.Errorf("failed to read pds params %v", err)
 	}
+	infraParams := params.InfraToTest
+	namespace := params.InfraToTest.Namespace
 
-	isAccountAvailable = false
-	for i := 0; i < len(accounts); i++ {
-		log.InfoD("Account Name: %v", accounts[i].GetName())
-		if accounts[i].GetName() == AccountName {
-			isAccountAvailable = true
-			accountID = accounts[i].GetId()
-			break
-		}
-	}
-	if !isAccountAvailable {
-		return "", "", "", "", "", "", fmt.Errorf("account %v is not available", AccountName)
-	}
-	log.InfoD("Account Detail- Name: %s, UUID: %s ", AccountName, accountID)
-	tnts := components.Tenant
-	tenants, _ := tnts.GetTenantsList(accountID)
-	for _, tenant := range tenants {
-		if tenant.GetName() == TenantName {
-			tenantID = tenant.GetId()
-			break
-		}
-
-	}
-	log.InfoD("Tenant Details- Name: %s, UUID: %s ", TenantName, tenantID)
-
-	if strings.EqualFold(ClusterType, "onprem") || strings.EqualFold(ClusterType, "ocp") {
-		serviceType = "ClusterIP"
-	}
-	log.InfoD("Deployment service type %s", serviceType)
-
-	dnsZone, err := controlplane.GetDNSZone(tenantID)
+	_, isAvailable, err := pdslib.CreatePDSNamespace(namespace)
 	if err != nil {
-		return "", "", "", "", "", "", err
+		return nil, fmt.Errorf("failed to create pds namespace %v", err)
 	}
-	log.InfoD("DNSZone: %s, tenantName: %s, accountName: %s", dnsZone, TenantName, AccountName)
-	projcts := components.Project
-	projects, _ := projcts.GetprojectsList(tenantID)
-	for _, project := range projects {
-		if project.GetName() == ProjectName {
-			projectID = project.GetId()
-			break
-		}
+	if !isAvailable {
+		return nil, fmt.Errorf("pdsnamespace %v is not available to deploy apps", namespace)
 	}
-	log.InfoD("Project Details- Name: %s, UUID: %s ", ProjectName, projectID)
-
-	ns, err = k8sCore.GetNamespace("kube-system")
+	_, tenantID, dnsZone, projectID, _, clusterID, err := pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType,
+		infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
 	if err != nil {
-		return "", "", "", "", "", "", err
+		return nil, fmt.Errorf("Failed on SetupPDSTest method %v", err)
 	}
-	clusterID := string(ns.GetObjectMeta().GetUID())
-	if len(clusterID) > 0 {
-		log.InfoD("clusterID %v", clusterID)
-	} else {
-		return "", "", "", "", "", "", fmt.Errorf("unable to get the clusterID")
+	testparams.DnsZone = dnsZone
+
+	deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
+	log.FailOnError(err, "Failed to get the deployment TargetID")
+	log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
+	testparams.DeploymentTargetId = deploymentTargetID
+
+	namespaceId, err := pdslib.GetnameSpaceID(namespace, deploymentTargetID)
+	log.FailOnError(err, "Failed to get the namespace Id")
+	log.InfoD("NamespaceId %s ", namespaceId)
+	testparams.NamespaceId = namespaceId
+
+	storageTemplateID, err = GetStorageTemplate(tenantID)
+	log.FailOnError(err, "Failed while getting storage template ID")
+	log.InfoD("storageTemplateID %v", storageTemplateID)
+	testparams.StorageTemplateId = storageTemplateID
+
+	for _, ds := range params.DataServiceToTest {
+		deployment, _, _, err := d.TriggerDeployDataService(ds, namespace, tenantID, projectID, false, testparams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deploy pds apps %v", err)
+		}
+		deployments[ds] = deployment
+		pdsApps = append(pdsApps, deployment)
 	}
 
-	return accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err
+	log.InfoD("Creating Context for PDS Apps")
+	contexts = d.CreateAppContext(pdsApps)
+	return contexts, nil
 }
 
 func (d *DataserviceType) CreateAppContext(pdsApps []*pds.ModelsDeployment) []*scheduler.Context {
@@ -562,12 +404,6 @@ func (d *DataserviceType) CreateAppContext(pdsApps []*pds.ModelsDeployment) []*s
 	}
 	return Contexts
 }
-
-//func init() {
-//	//dsType := &DataserviceType{}
-//	err = pds2.Register("dataservice", &DataserviceType{})
-//	log.FailOnError(err, "Error while Registering pds dataservice type driver")
-//}
 
 func DataserviceInit(ControlPlaneURL string) (*DataserviceType, error) {
 	apiConf := pds.NewConfiguration()

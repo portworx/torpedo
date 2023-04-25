@@ -31,7 +31,6 @@ func TestDataService(t *testing.T) {
 //imports based on functionalities
 var (
 	dsTest        *pds2.DataserviceType
-	k8sTest       *targetcluster.K8sType
 	customParams  *parameters.Customparams
 	targetCluster *targetcluster.TargetCluster
 	cp            *controlplane.ControlPlane
@@ -53,15 +52,14 @@ var _ = BeforeSuite(func() {
 		infraParams := params.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
-		k8sTest, err = targetcluster.K8sInit(params.InfraToTest.ControlPlaneURL)
-		log.FailOnError(err, "Error while initializing k8s package")
 		dsTest, err = dataservice.DataserviceInit(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Error while initializing dataservice package")
 
 		err = pdslib.InitializeApiComponents(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Failed to Initialize Api components")
 
-		accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = dsTest.SetupPDSTest(infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
+		accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = pdslib.SetupPDSTest(
+			infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
 		log.FailOnError(err, "Failed on SetupPDSTest method")
 
 	})
@@ -77,7 +75,7 @@ var _ = BeforeSuite(func() {
 	Step(steplog, func() {
 		log.InfoD(steplog)
 		log.Infof("cluster id %v and tenant id %v", clusterID, tenantID)
-		deploymentTargetID, err = dataservice.GetDeploymentTargetID(clusterID, tenantID)
+		deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
 		log.FailOnError(err, "Failed to get the deployment TargetID")
 		dash.VerifyFatal(deploymentTargetID != "", true, "Verifying deployment target is registerd to control plane")
 		log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
@@ -95,10 +93,10 @@ var _ = BeforeSuite(func() {
 	Step(steplog, func() {
 		log.InfoD(steplog)
 		namespace = params.InfraToTest.Namespace
-		_, isavailable, err := k8sTest.CreatePDSNamespace(namespace)
+		_, isavailable, err := pdslib.CreatePDSNamespace(namespace)
 		log.FailOnError(err, "Error while Create/Get Namespaces")
 		dash.VerifyFatal(bool(true), isavailable, "Verifying if Namespace not available for pds to deploy data services")
-		namespaceID, err = k8sTest.GetnameSpaceID(namespace, deploymentTargetID)
+		namespaceID, err = pdslib.GetnameSpaceID(namespace, deploymentTargetID)
 		log.FailOnError(err, "Error while getting namespace id")
 		dash.VerifyFatal(namespaceID != "", true, "validating namespace ID")
 	})

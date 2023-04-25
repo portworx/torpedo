@@ -4,6 +4,7 @@ import (
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"net/http"
 	"net/url"
@@ -47,7 +48,6 @@ var (
 	}
 	k8sCore = core.Instance()
 	k8sApps = apps.Instance()
-	k8      *K8sType
 )
 
 // TargetCluster struct
@@ -307,7 +307,7 @@ func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.P
 	}
 	bearerToken := *serviceAccToken.Token
 
-	ctx := k8.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+	ctx := pdslib.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
 	target := NewTargetCluster(ctx)
 	err = target.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType)
 	if err != nil {
