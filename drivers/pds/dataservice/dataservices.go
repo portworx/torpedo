@@ -15,47 +15,41 @@ import (
 
 // PDS vars
 var (
-	components   *pdsapi.Components
-	deployment   *pds.ModelsDeployment
-	controlplane *pdscontrolplane.ControlPlane
-	apiClient    *pds.APIClient
+	components *pdsapi.Components
+	deployment *pds.ModelsDeployment
+	apiClient  *pds.APIClient
 
-	err                                   error
-	isavailable                           bool
-	isTemplateavailable                   bool
-	isVersionAvailable                    bool
-	isBuildAvailable                      bool
-	currentReplicas                       int32
-	deploymentTargetID, storageTemplateID string
-	resourceTemplateID                    string
-	appConfigTemplateID                   string
-	versionID                             string
-	imageID                               string
-	isStorageTemplateAvailable            bool
-	dataServiceDefaultResourceTemplateID  string
-	dataServiceDefaultAppConfigID         string
-	dataServiceVersionBuildMap            = make(map[string][]string)
-	dataServiceImageMap                   = make(map[string][]string)
+	err                                  error
+	isVersionAvailable                   bool
+	isBuildAvailable                     bool
+	currentReplicas                      int32
+	deploymentTargetID                   string
+	storageTemplateID                    string
+	versionID                            string
+	imageID                              string
+	dataServiceDefaultResourceTemplateID string
+	dataServiceDefaultAppConfigID        string
+
+	dataServiceVersionBuildMap = make(map[string][]string)
+	dataServiceImageMap        = make(map[string][]string)
 )
 
 // PDS const
 const (
-	storageTemplateName   = "QaDefault"
-	resourceTemplateName  = "Small"
-	appConfigTemplateName = "QaDefault"
-	zookeeper             = "ZooKeeper"
-	redis                 = "Redis"
-	deploymentName        = "qa"
+	zookeeper      = "ZooKeeper"
+	redis          = "Redis"
+	deploymentName = "qa"
 )
 
-// K8s/PDS Instances
+// PDS packages
 var (
-	serviceType  = "LoadBalancer"
 	customparams *parameters.Customparams
+	controlplane *pdscontrolplane.ControlPlane
 )
 
 type DataserviceType struct{}
 
+//TestParams has the prereqs for deploying pds dataservices
 type TestParams struct {
 	DeploymentTargetId string
 	DnsZone            string
@@ -63,6 +57,7 @@ type TestParams struct {
 	NamespaceId        string
 	TenantId           string
 	ProjectId          string
+	ServiceType        string
 }
 
 type PDSDataService struct {
@@ -230,7 +225,7 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 		namespaceID,
 		dataServiceDefaultAppConfigID,
 		int32(ds.Replicas),
-		serviceType,
+		testParams.ServiceType,
 		dataServiceDefaultResourceTemplateID,
 		testParams.StorageTemplateId,
 		dsVersion,
@@ -264,8 +259,9 @@ func (d *DataserviceType) DeployDataservicesAndCreateContext() ([]*scheduler.Con
 	if !isAvailable {
 		return nil, fmt.Errorf("pdsnamespace %v is not available to deploy apps", namespace)
 	}
-	_, tenantID, dnsZone, projectID, _, clusterID, err := pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType,
+	_, tenantID, dnsZone, projectID, serviceType, clusterID, err := pdslib.SetupPDSTest(infraParams.ControlPlaneURL, infraParams.ClusterType,
 		infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
+	testparams.ServiceType = serviceType
 	if err != nil {
 		return nil, fmt.Errorf("Failed on SetupPDSTest method %v", err)
 	}

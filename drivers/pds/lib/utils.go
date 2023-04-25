@@ -1348,17 +1348,17 @@ func IsReachable(url string) (bool, error) {
 // SetupPDSTest returns few params required to run the test
 func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, string, error) {
 	var err error
-	apiConf := pds.NewConfiguration()
-	endpointURL, err := url.Parse(ControlPlaneURL)
-	if err != nil {
-		return "", "", "", "", "", "", err
-	}
-	apiConf.Host = endpointURL.Host
-	apiConf.Scheme = endpointURL.Scheme
-
-	apiClient = pds.NewAPIClient(apiConf)
-	components = pdsapi.NewComponents(apiClient)
-	controlplane := pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
+	//apiConf := pds.NewConfiguration()
+	//endpointURL, err := url.Parse(ControlPlaneURL)
+	//if err != nil {
+	//	return "", "", "", "", "", "", err
+	//}
+	//apiConf.Host = endpointURL.Host
+	//apiConf.Scheme = endpointURL.Scheme
+	//
+	//apiClient = pds.NewAPIClient(apiConf)
+	//components = pdsapi.NewComponents(apiClient)
+	//controlplane := pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
 
 	if strings.EqualFold(ClusterType, "onprem") || strings.EqualFold(ClusterType, "ocp") {
 		serviceType = "ClusterIP"
