@@ -333,6 +333,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				wg.Add(2)
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					log.InfoD("Deleting the first data service pod %s", pdsPods[0].GetName())
 					err = k8sCore.DeletePod(pdsPods[0].GetName(), params.InfraToTest.Namespace, true)
 					log.FailOnError(err, "Error while deleting pod %s", pdsPods[0].GetName())
@@ -341,6 +342,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 
 				go func() {
 					defer wg.Done()
+					defer GinkgoRecover()
 					log.InfoD("Validating the data service pod status in PDS Control Plane")
 					err = pdslib.WaitForPDSDeploymentToBeDown(deployment, tesTimeInterval, timeOut)
 					log.FailOnError(err, "Error while validating the pds pods")
