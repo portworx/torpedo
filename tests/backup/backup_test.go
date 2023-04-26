@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -296,6 +297,115 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
 		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+// MultipleVolumeBackupAtOnce takes backup of multiple volumes/application at once
+var _ = Describe("{MultipleVolumeBackupAtOnce}", func() {
+	var (
+		cloudCredName     string
+		cloudCredUID      string
+		bkpLocationName   string
+		backupLocationUID string
+		srcClusterUid     string
+		backupName        string
+		appNamespaces     []string
+		restoreName       string
+
+		contexts          []*scheduler.Context
+		appContexts       []*scheduler.Context
+		srcClusterStatus  api.ClusterInfo_StatusInfo_Status
+		destClusterStatus api.ClusterInfo_StatusInfo_Status
+	)
+	labelSelectors := make(map[string]string)
+	numberOfBackups, _ := strconv.Atoi(getEnv(multipleBackupsToBeCreated, "50"))
+	backupLocationMap := make(map[string]string)
+	JustBeforeEach(func() {
+		StartTorpedoTest("MultipleVolumeBackupAtOnce",
+			"Take backup of multiple volume at once", nil, 55816)
+		log.InfoD("Deploying applications required for the testcase")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < numberOfBackups; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+			}
+		}
+		log.Infof("The list of namespaces are %v", appNamespaces)
+	})
+	It("Take backup of multiple volume at once", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		Step("Validating the deployed applications", func() {
+			log.InfoD("Validating the deployed applications")
+			ValidateApplications(contexts)
+		})
+
+		Step("Adding cloud credential and backup location", func() {
+			log.InfoD("Adding cloud credential and backup location")
+			providers := getProviders()
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID,
+					getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+
+		Step("Registering source and destination clusters for backup", func() {
+			log.InfoD("Registering source and destination clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
+			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			destClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(destClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Taking backup of multiple applications/volumes at once", func() {
+			log.InfoD("Taking backup of multiple applications/volumes at once")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
+				appNamespaces, labelSelectors, orgID, srcClusterUid, "", "", "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of multiple applications at once", backupName))
+		})
+
+		Step("Restoring the backed up volumes", func() {
+			log.InfoD("Restoring the backed up volumes")
+			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+			err = CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring:%s the backup:%s", restoreName, backupName))
+		})
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(contexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Infof("Deleting the deployed applications")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		ValidateAndDestroy(contexts, opts)
+		log.Infof("Deleting the restore taken")
+		err = DeleteRestore(restoreName, orgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restoreName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })

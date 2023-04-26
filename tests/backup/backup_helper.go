@@ -83,6 +83,7 @@ const (
 	podStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
+	multipleBackupsToBeCreated                = "MULTIPLES_BACKUPS"
 )
 
 var (
