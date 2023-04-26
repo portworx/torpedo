@@ -2,12 +2,10 @@ package targetcluster
 
 import (
 	"fmt"
-	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -263,12 +261,10 @@ func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.P
 	controlPlaneUrl := infraParams.InfraToTest.ControlPlaneURL
 	clusterType := infraParams.InfraToTest.ClusterType
 
-	apiConf := pds.NewConfiguration()
-	endpointURL, err := url.Parse(controlPlaneUrl)
-	apiConf.Host = endpointURL.Host
-	apiConf.Scheme = endpointURL.Scheme
-	apiClient := pds.NewAPIClient(apiConf)
-	components = pdsapi.NewComponents(apiClient)
+	_, components, _, err := pdslib.InitializeApiComponents(controlPlaneUrl)
+	if err != nil {
+		return fmt.Errorf("error while initializing api components - %v", err)
+	}
 
 	_, err = tc.IsReachable(controlPlaneUrl)
 	if err != nil {

@@ -10,7 +10,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/log"
-	"net/url"
 )
 
 // PDS vars
@@ -105,19 +104,18 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	return versionID, imageID, dataServiceVersionBuildMap, nil
 }
 
-func (d *DataserviceType) GetDataServiceID(ds string) string {
+func (d *DataserviceType) GetDataServiceID(ds string) (string, error) {
 	var dataServiceID string
 	dsModel, err := components.DataService.ListDataServices()
 	if err != nil {
-		log.Errorf("An Error Occured while listing dataservices %v", err)
-		return ""
+		return "", fmt.Errorf("An Error Occured while listing dataservices %v", err)
 	}
 	for _, v := range dsModel {
 		if *v.Name == ds {
 			dataServiceID = *v.Id
 		}
 	}
-	return dataServiceID
+	return dataServiceID, nil
 }
 
 // DeployDS deploys dataservices its internally used function
@@ -128,10 +126,9 @@ func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, d
 	currentReplicas = replicas
 
 	log.Infof("dataService: %v ", ds)
-	id := d.GetDataServiceID(ds)
+	id, err := d.GetDataServiceID(ds)
 	if id == "" {
-		log.Errorf("dataservice ID is empty")
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("dataservice ID is empty %v", err)
 	}
 	log.Infof(`Request params:
 				projectID- %v deploymentTargetID - %v,
@@ -142,6 +139,7 @@ func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, d
 		projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceDefaultAppConfigID,
 		replicas, serviceType, dataServiceDefaultResourceTemplateID, storageTemplateID)
 
+	//TODO: Fail the tests with replicas are not passed as expected(PA-911)
 	if ds == zookeeper && replicas != 3 {
 		log.Warnf("Zookeeper replicas cannot be %v, it should be 3", replicas)
 		currentReplicas = 3
@@ -181,8 +179,7 @@ func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, d
 		storageTemplateID)
 
 	if err != nil {
-		log.Warnf("An Error Occured while creating deployment %v", err)
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("An Error Occured while creating deployment %v", err)
 	}
 
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, nil
@@ -206,16 +203,22 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 
 	log.InfoD("Getting Resource Template ID")
 	dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
-	log.FailOnError(err, "Error while getting resource template")
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error while getting resource template ID %v", err)
+	}
 	log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
 	log.InfoD("Getting App Template ID")
 	dataServiceDefaultAppConfigID, err = pdslib.GetAppConfTemplate(tenantID, ds.Name)
-	log.FailOnError(err, "Error while getting app configuration template")
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error while getting app configuration template %v", err)
+	}
 	log.InfoD("dataServiceDefaultAppConfigID %v ", dataServiceDefaultAppConfigID)
 
 	namespaceID, err := pdslib.GetnameSpaceID(namespace, testParams.DeploymentTargetId)
-	log.FailOnError(err, "Error while getting namespace id")
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error while getting namespace id %v", err)
+	}
 
 	log.InfoD("Deploying DataService %v ", ds.Name)
 	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err = d.DeployDS(ds.Name, projectID,
@@ -232,16 +235,18 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 		dsImage,
 		namespace,
 	)
-	log.FailOnError(err, "Error while deploying data services")
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error while deploying data services %v", err)
+	}
 
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
 }
 
-func (d *DataserviceType) DeployDataservicesAndCreateContext() ([]*scheduler.Context, error) {
+//DeployPDSDataservices method will be used to deploy ds and run common px tests
+func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, error) {
 	log.InfoD("Deployment of pds apps called from schedule applications")
 	var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 	var pdsApps []*pds.ModelsDeployment
-	contexts := make([]*scheduler.Context, 0)
 	var testparams TestParams
 
 	pdsParams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
@@ -268,17 +273,23 @@ func (d *DataserviceType) DeployDataservicesAndCreateContext() ([]*scheduler.Con
 	testparams.DnsZone = dnsZone
 
 	deploymentTargetID, err = pdslib.GetDeploymentTargetID(clusterID, tenantID)
-	log.FailOnError(err, "Failed to get the deployment TargetID")
+	if err != nil {
+		return nil, fmt.Errorf("error while getting deployment Target ID %v", err)
+	}
 	log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
 	testparams.DeploymentTargetId = deploymentTargetID
 
 	namespaceId, err := pdslib.GetnameSpaceID(namespace, deploymentTargetID)
-	log.FailOnError(err, "Failed to get the namespace Id")
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get the namespace Id %v", err)
+	}
 	log.InfoD("NamespaceId %s ", namespaceId)
 	testparams.NamespaceId = namespaceId
 
 	storageTemplateID, err = pdslib.GetStorageTemplate(tenantID)
-	log.FailOnError(err, "Failed while getting storage template ID")
+	if err != nil {
+		return nil, fmt.Errorf("error while getting storage template ID %v", err)
+	}
 	log.InfoD("storageTemplateID %v", storageTemplateID)
 	testparams.StorageTemplateId = storageTemplateID
 
@@ -291,12 +302,10 @@ func (d *DataserviceType) DeployDataservicesAndCreateContext() ([]*scheduler.Con
 		pdsApps = append(pdsApps, deployment)
 	}
 
-	log.InfoD("Creating Context for PDS Apps")
-	contexts = d.CreateAppContext(pdsApps)
-	return contexts, nil
+	return pdsApps, nil
 }
 
-func (d *DataserviceType) CreateAppContext(pdsApps []*pds.ModelsDeployment) []*scheduler.Context {
+func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.ModelsDeployment) []*scheduler.Context {
 	var specObjects []interface{}
 	var Contexts []*scheduler.Context
 	var ctx *scheduler.Context
@@ -316,17 +325,10 @@ func (d *DataserviceType) CreateAppContext(pdsApps []*pds.ModelsDeployment) []*s
 }
 
 func DataserviceInit(ControlPlaneURL string) (*DataserviceType, error) {
-	apiConf := pds.NewConfiguration()
-	endpointURL, err := url.Parse(ControlPlaneURL)
+	apiClient, components, controlplane, err = pdslib.InitializeApiComponents(ControlPlaneURL)
 	if err != nil {
 		return nil, err
 	}
-	apiConf.Host = endpointURL.Host
-	apiConf.Scheme = endpointURL.Scheme
-
-	apiClient = pds.NewAPIClient(apiConf)
-	components = pdsapi.NewComponents(apiClient)
-	controlplane = pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
 
 	return &DataserviceType{}, nil
 }

@@ -757,12 +757,12 @@ func WaitForPDSDeploymentToBeUp(deployment *pds.ModelsDeployment, maxtimeInterva
 	return err
 }
 
-func InitializeApiComponents(ControlPlaneURL string) error {
+func InitializeApiComponents(ControlPlaneURL string) (*pds.APIClient, *pdsapi.Components, *pdscontrolplane.ControlPlane, error) {
 	log.InfoD("Initializing Api components")
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
 	apiConf.Host = endpointURL.Host
 	apiConf.Scheme = endpointURL.Scheme
@@ -771,7 +771,7 @@ func InitializeApiComponents(ControlPlaneURL string) error {
 	components = pdsapi.NewComponents(apiClient)
 	controlplane = pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
 
-	return nil
+	return apiClient, components, controlplane, nil
 }
 
 // ValidateDataServiceDeployment checks if deployment is healthy and running
@@ -1348,22 +1348,16 @@ func IsReachable(url string) (bool, error) {
 // SetupPDSTest returns few params required to run the test
 func SetupPDSTest(ControlPlaneURL, ClusterType, AccountName, TenantName, ProjectName string) (string, string, string, string, string, string, error) {
 	var err error
-	//apiConf := pds.NewConfiguration()
-	//endpointURL, err := url.Parse(ControlPlaneURL)
-	//if err != nil {
-	//	return "", "", "", "", "", "", err
-	//}
-	//apiConf.Host = endpointURL.Host
-	//apiConf.Scheme = endpointURL.Scheme
-	//
-	//apiClient = pds.NewAPIClient(apiConf)
-	//components = pdsapi.NewComponents(apiClient)
-	//controlplane := pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
 
 	if strings.EqualFold(ClusterType, "onprem") || strings.EqualFold(ClusterType, "ocp") {
 		serviceType = "ClusterIP"
 	}
 	log.InfoD("Deployment service type %s", serviceType)
+
+	_, _, _, err = InitializeApiComponents(ControlPlaneURL)
+	if err != nil {
+		return "", "", "", "", "", "", err
+	}
 
 	acc := components.Account
 	accounts, err := acc.GetAccountsList()

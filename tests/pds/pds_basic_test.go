@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	pds2 "github.com/portworx/torpedo/drivers/pds/dataservice"
+	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -28,7 +28,7 @@ func TestDataService(t *testing.T) {
 
 //imports based on functionalities
 var (
-	dsTest        *pds2.DataserviceType
+	dsTest        *dataservices.DataserviceType
 	customParams  *parameters.Customparams
 	targetCluster *targetcluster.TargetCluster
 )
@@ -49,11 +49,8 @@ var _ = BeforeSuite(func() {
 		infraParams := params.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
-		dsTest, err = pds2.DataserviceInit(params.InfraToTest.ControlPlaneURL)
+		dsTest, err = dataservices.DataserviceInit(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Error while initializing dataservice package")
-
-		err = pdslib.InitializeApiComponents(params.InfraToTest.ControlPlaneURL)
-		log.FailOnError(err, "Failed to Initialize Api components")
 
 		accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = pdslib.SetupPDSTest(
 			infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
