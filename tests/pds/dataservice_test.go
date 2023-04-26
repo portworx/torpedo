@@ -3,7 +3,7 @@ package tests
 import (
 	"errors"
 	"fmt"
-	pds2 "github.com/portworx/torpedo/drivers/pds/dataservice"
+	dataservice "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"math/rand"
 	"net/http"
 	"os"
@@ -1113,11 +1113,12 @@ var _ = Describe("{DeployAllDataServices}", func() {
 	})
 })
 
-func DeployandValidateDataServices(ds pds2.PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	log.InfoD("Data Service Deployment Triggered")
 	log.InfoD("Deploying ds in namespace %v", namespace)
 	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, namespace, tenantID, projectID, false,
-		pds2.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
+		dataservice.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone})
+	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
 	Step("Validate Data Service Deployments", func() {
 		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
