@@ -692,19 +692,7 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 		}
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
-
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-				log.InfoD("Getting all PV and associated PVCs and deleting them")
-				err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
-				log.FailOnError(err, "Error while deleting PV and PVCs")
-			}
-		}()
+		EndTorpedoTest()
 	})
 })
 
@@ -761,6 +749,15 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 					dash.VerifyFatal(tpccRunResult, true, "Validating if MySQL TPCC Run was successful or not")
 				}
 			}
+		})
+		Step("Delete Deployments", func() {
+			log.InfoD("Deleting DataService")
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			log.InfoD("Getting all PV and associated PVCs and deleting them")
+			err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
+			log.FailOnError(err, "Error while deleting PV and PVCs")
 		})
 	})
 }
