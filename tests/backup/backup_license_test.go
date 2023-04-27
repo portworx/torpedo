@@ -139,31 +139,18 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 	})
 })
 
-// LicensingCountBeforeAndAfterBackupPodRestart verifies the license count before and after the backup pod restarts
+// LicensingCountBeforeAndAfterBackupPodRestart verifies the license count before and after the backup pods restart
 var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 	var (
-		bkpNamespaces                 []string
+		pxbNamespace                  string
 		sourceClusterWorkerNodes      []node.Node
 		destinationClusterWorkerNodes []node.Node
 		totalNumberOfWorkerNodes      []node.Node
 		contexts                      []*scheduler.Context
-		appContexts                   []*scheduler.Context
 	)
 	JustBeforeEach(func() {
 		StartTorpedoTest("LicensingCountBeforeAndAfterBackupPodRestart",
 			"Verifies the license count before and after the backup pod restarts", nil, 82956)
-		log.InfoD("Deploy applications needed for taking backup")
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
-			appContexts = ScheduleApplications(taskName)
-			contexts = append(contexts, appContexts...)
-			for _, ctx := range appContexts {
-				ctx.ReadinessTimeout = appReadinessTimeout
-				namespace := GetAppNamespace(ctx, taskName)
-				bkpNamespaces = append(bkpNamespaces, namespace)
-			}
-		}
 	})
 
 	It("Verify the license count before and after the backup pod restarts", func() {
@@ -171,10 +158,8 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Adding source and destination clusters for backup", func() {
 			log.InfoD("Adding source and destination clusters for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
-			log.FailOnError(err, fmt.Sprintf("Registering source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
+			log.FailOnError(err, fmt.Sprintf("Adding source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
 		})
 		Step("Getting the total number of worker nodes in source and destination cluster", func() {
 			log.InfoD("Getting the total number of worker nodes in source and destination cluster")
@@ -194,23 +179,29 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 		})
 		Step("Verifying the license count after adding source and destination clusters", func() {
 			log.InfoD("Verifying the license count after adding source and destination clusters")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the license count when source cluster with %d worker nodes and destination cluster with %d worker nodes are added to backup", len(sourceClusterWorkerNodes), len(destinationClusterWorkerNodes)))
 		})
 		Step("Verify worker nodes on application cluster with label portworx.io/nobackup=true is not counted for licensing before pod restart", func() {
-			log.InfoD("Applying label portworx.io/nobackup=true to one of the worker node on source cluster and destination cluster and verifying the license count")
+			log.InfoD("Applying label portworx.io/nobackup=true to one of the worker node on source cluster")
 			err := Inst().S.AddLabelOnNode(sourceClusterWorkerNodes[0], "portworx.io/nobackup", "true")
 			log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to worker node %v", sourceClusterWorkerNodes[0].Name))
+			log.InfoD("Switching cluster context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			log.InfoD("Applying label portworx.io/nobackup=true to one of the worker node on destination cluster")
 			err = Inst().S.AddLabelOnNode(destinationClusterWorkerNodes[0], "portworx.io/nobackup", "true")
 			log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to worker node %v", destinationClusterWorkerNodes[0].Name))
+			log.InfoD("Switching cluster context to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			log.InfoD("Verify worker nodes with label portworx.io/nobackup=true is not counted for licensing")
 			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)-2))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to node %v", sourceClusterWorkerNodes[0].Name))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to 2 worker nodes"))
 		})
 		Step("Restart all the backup pod and wait for it to come up", func() {
-			pxbNamespace, err := backup.GetPxBackupNamespace()
-			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
+			pxbNamespace, err = backup.GetPxBackupNamespace()
+			log.FailOnError(err, "Getting px-backup namespace")
 			err = DeletePodWithLabelInNamespace(pxbNamespace, nil)
 			dash.VerifyFatal(err, nil, "Restart all the backup pods")
 			log.InfoD("Validate if all the backup pods are up")
@@ -221,25 +212,29 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 				log.FailOnError(err, fmt.Sprintf("Failed to validate pod [%s]", pod.GetName()))
 			}
 		})
-		Step("Verify the license count after pod restart", func() {
+		Step("Verify the license count after backup pods restart", func() {
 			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)-2))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to node %v", sourceClusterWorkerNodes[0].Name))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after backup pods restart should be same as before pod restart"))
 		})
-		Step("Label all the remaining worker nodes after pod restart", func() {
+		Step("Label all the remaining worker nodes on source and destination cluster after pod restart", func() {
 			log.InfoD("Applying label portworx.io/nobackup=true to all the remaining worker nodes on source cluster after pod restart")
 			for _, workerNode := range sourceClusterWorkerNodes[1:] {
 				err := Inst().S.AddLabelOnNode(workerNode, "portworx.io/nobackup", "true")
 				log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to source cluster worker node %v", workerNode.Name))
 			}
+			log.InfoD("Switching cluster context to destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
 			log.InfoD("Applying label portworx.io/nobackup=true to all the remaining worker nodes on destination cluster after pod restart")
-			for _, workerNode := range sourceClusterWorkerNodes[1:] {
+			for _, workerNode := range destinationClusterWorkerNodes[1:] {
 				err := Inst().S.AddLabelOnNode(workerNode, "portworx.io/nobackup", "true")
-				log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to source cluster worker node %v", workerNode.Name))
+				log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to destination cluster worker node %v", workerNode.Name))
 			}
+			log.InfoD("Switching cluster context to source cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 		})
 		Step("Restart all the backup pod again and wait for it to come up", func() {
-			pxbNamespace, err := backup.GetPxBackupNamespace()
-			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
 			err = DeletePodWithLabelInNamespace(pxbNamespace, nil)
 			dash.VerifyFatal(err, nil, "Restart all the backup pods")
 			log.InfoD("Validate if all the backup pods are up")
@@ -252,7 +247,7 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 		})
 		Step("Verify the license count again after pod restart with all the worker nodes labelled portworx.io/nobackup=true", func() {
 			err = VerifyLicenseConsumedCount(ctx, orgID, 0)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to node %v", sourceClusterWorkerNodes[0].Name))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to all the worker node"))
 		})
 		Step("Removing label portworx.io/nobackup=true from all the worker nodes from both source and destination cluster", func() {
 			log.InfoD("Removing label from all worker nodes on source cluster")
@@ -270,13 +265,10 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count when no worker nodes are labelled portworx.io/nobackup=true"))
 		})
-
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
-		err = SetDestinationKubeConfig()
+		err := SetDestinationKubeConfig()
 		dash.VerifySafely(err, nil, "Switching context to destination cluster")
 		log.InfoD("Removing label portworx.io/nobackup=true from all worker nodes on destination cluster if present")
 		for _, workerNode := range destinationClusterWorkerNodes {
@@ -291,6 +283,8 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
 			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode))
 		}
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 	})
 })
