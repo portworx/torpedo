@@ -127,11 +127,8 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 			return err
 		}
 		if !isLatest {
-			//helm upgrade --create-namespace --namespace=pds-system pds pds-target --repo=https://portworx.github.io/pds-charts --version=1.16.0
 			log.InfoD("Upgrading PDS helm chart to %v", helmChartversion)
 			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s", PDSNamespace, PDSChartRepo, helmChartversion)
-			//cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s --set tenantId=%s "+
-			//	"--set bearerToken=%s --set apiEndpoint=%s", PDSNamespace, PDSChartRepo, helmChartversion, tenantId, bearerToken, apiEndpoint)
 		}
 		isRegistered = true
 	}
