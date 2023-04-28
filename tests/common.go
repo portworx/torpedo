@@ -6622,16 +6622,6 @@ func AddMetadataDisk(n node.Node) error {
 
 }
 
-// generateRandomString Creates a random string of length n and returns it
-func generateRandomString(n int) string {
-	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	randomString := make([]rune, n)
-	for i := range randomString {
-		randomString[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(randomString)
-}
-
 // createNamespaces Create N number of namespaces and return namespace list
 func createNamespaces(numberOfNamespaces int) ([]string, error) {
 
@@ -6665,12 +6655,13 @@ func createConfigMaps(namespaces []string, numberOfConfigmap int, numberOfEntrie
 	// Create random data to add in ConfigMap
 	var randomData = make(map[string]string)
 	for i := 0; i < numberOfEntries; i++ {
-		randomString := generateRandomString(80)
+		randomString := RandomString(80)
 		randomStringWithTimeStamp := fmt.Sprintf("%v.%v", randomString, time.Now().Unix())
 		randomData[randomStringWithTimeStamp] = randomString
 	}
 
 	// create the number of configmaps needed
+	k8sCore = core.Instance()
 	for _, namespace := range namespaces {
 		for i := 0; i < numberOfConfigmap; i++ {
 			name := fmt.Sprintf("configmap-%s-%d-%v", namespace, i, time.Now().Unix())
@@ -6684,7 +6675,6 @@ func createConfigMaps(namespaces []string, numberOfConfigmap int, numberOfEntrie
 				Data:       randomData,
 			}
 
-			k8sCore = core.Instance()
 			_, err := k8sCore.CreateConfigMap(obj)
 			if err != nil {
 				return err
@@ -6700,12 +6690,13 @@ func createSecrets(namespaces []string, numberOfSecrets int, numberOfEntries int
 	// Create random data to add in ConfigMap
 	var randomData = make(map[string]string)
 	for i := 0; i < numberOfEntries; i++ {
-		randomString := generateRandomString(80)
+		randomString := RandomString(80)
 		randomStringWithTimeStamp := fmt.Sprintf("%v.%v", randomString, time.Now().Unix())
 		randomData[randomStringWithTimeStamp] = randomString
 	}
 
 	// create the number of configmaps needed
+	k8sCore = core.Instance()
 	for _, namespace := range namespaces {
 		for i := 0; i < numberOfSecrets; i++ {
 			name := fmt.Sprintf("secret-%s-%d-%v", namespace, i, time.Now().Unix())
@@ -6719,7 +6710,6 @@ func createSecrets(namespaces []string, numberOfSecrets int, numberOfEntries int
 				StringData: randomData,
 			}
 
-			k8sCore = core.Instance()
 			_, err := k8sCore.CreateSecret(obj)
 			if err != nil {
 				return err
@@ -6732,8 +6722,8 @@ func createSecrets(namespaces []string, numberOfSecrets int, numberOfEntries int
 // deleteNamespaces Deletes all the namespaces given in a list of namespaces and return error if any
 func deleteNamespaces(namespaces []string) error {
 	// Delete a list of namespaces given
+	k8sCore = core.Instance()
 	for _, namespace := range namespaces {
-		k8sCore = core.Instance()
 		err := k8sCore.DeleteNamespace(namespace)
 		if err != nil {
 			return err
