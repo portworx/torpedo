@@ -394,11 +394,8 @@ const (
 	AsyncDRVolumeOnly = "asyncdrvolumeonly"
 	// AutoFsTrimAsyncDR runs Async DR of volumes with FSTRIM=true parameter and validates it exists on DR as well
 	AutoFsTrimAsyncDR = "autofstrimasyncdr"
-<<<<<<< HEAD
 	// IopsBwAsyncDR runs Async DR of volumes with volumes having iothrottle set
 	IopsBwAsyncDR = "iopsbwasyncdr"
-=======
->>>>>>> 89eebaf61c52305bcfafc08f4663868720ee4798
 	// stork application backup runs stork backups for applications
 	StorkApplicationBackup = "storkapplicationbackup"
 	// stork application backup volume resize runs stork backups for applications and inject volume resize in between
