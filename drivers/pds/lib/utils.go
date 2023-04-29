@@ -190,7 +190,7 @@ const (
 	pdsTpccImage                 = "portworx/torpedo-tpcc-automation:v1"
 	redisStressImage             = "redis:latest"
 	rmqStressImage               = "pivotalrabbitmq/perf-test:latest"
-	mysqlBenchImage              = "18jyotikagliwal/jyoti_px_1:mysqlbenchV1"
+	mysqlBenchImage              = "18jyotikagliwal/jyoti_px_1:mysqlbenchV2"
 	postgresql                   = "PostgreSQL"
 	cassandra                    = "Cassandra"
 	elasticSearch                = "Elasticsearch"
