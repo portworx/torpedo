@@ -2316,8 +2316,7 @@ func ValidatePodByLabel(label map[string]string, namespace string, timeout time.
 	for _, pod := range pods.Items {
 		err = core.Instance().ValidatePod(&pod, timeout, retryInterval)
 		if err != nil {
-			log.Errorf("Failed to validate pod [%s]", pod.GetName())
-			return err
+			return fmt.Errorf("failed to validate pod [%s] with error - %s", pod.GetName(), err.Error())
 		}
 	}
 	return nil
