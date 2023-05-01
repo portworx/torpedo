@@ -1001,6 +1001,11 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		})
 		Step("Check if restore is successful after MongoDB statefulset is scaled back to original replica", func() {
 			log.InfoD("Check if restore is successful after MongoDB statefulset is scaled back to original replica")
+			backupPodLabel := map[string]string{
+				"app": "px-backup",
+			}
+			err = ValidatePodByLabel(backupPodLabel, pxBackupNS, 5*time.Minute, 30*time.Second)
+			log.FailOnError(err, "Checking if px-backup pod is in running state")
 			ctx, err = backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, restoreName := range restoreNames {
