@@ -190,7 +190,7 @@ const (
 	pdsTpccImage                 = "portworx/torpedo-tpcc-automation:v1"
 	redisStressImage             = "redis:latest"
 	rmqStressImage               = "pivotalrabbitmq/perf-test:latest"
-	mysqlBenchImage              = "18jyotikagliwal/jyoti_px_1:mysqlbenchV2"
+	mysqlBenchImage              = "18jyotikagliwal/jyoti_px_1:mysqlbenchv3"
 	postgresql                   = "PostgreSQL"
 	cassandra                    = "Cassandra"
 	elasticSearch                = "Elasticsearch"
@@ -1851,62 +1851,65 @@ func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassw
 }
 
 // Create MySql Workload (Non-TPCC)
-func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string, command string) (*corev1.Pod, error) {
+func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string, command string, deploymentName string) (*v1.Deployment, error) {
 	log.Debug("******** Preparing mysqlbench pod spec *********")
 	log.Debugf("Host is - %v\n", dnsEndpoint)
 	log.Debugf("pwd is - %v\n", pdsPassword)
 	log.Debugf("command is - %v\n", command)
+	var replicas int32 = 1
 	var value []string
-	podSpec := &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Pod",
-			APIVersion: "v1",
-		},
+	deploymentSpec := &v1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "mysql-bench-",
+			GenerateName: deploymentName + "-",
 			Namespace:    namespace,
 		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "mysqlbench",
-					Image:   mysqlBenchImage,
-					Command: []string{"/bin/sh", "-c"},
-					Args:    []string{command},
-					Env:     make([]corev1.EnvVar, 3),
+		Spec: v1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": deploymentName},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": deploymentName},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    deploymentName,
+							Image:   mysqlBenchImage,
+							Command: []string{"/bin/sh", "-c"},
+							Env:     make([]corev1.EnvVar, 3),
+							Args:    []string{command},
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyAlways,
 				},
 			},
-			RestartPolicy: corev1.RestartPolicyOnFailure,
 		},
 	}
-
-	value = append(value, "pds")
 	value = append(value, dnsEndpoint)
+	value = append(value, "pds")
 	value = append(value, pdsPassword)
 
 	for index := range env {
-		podSpec.Spec.Containers[0].Env[index].Name = env[index]
-		podSpec.Spec.Containers[0].Env[index].Value = value[index]
+		deploymentSpec.Spec.Template.Spec.Containers[0].Env[index].Name = env[index]
+		deploymentSpec.Spec.Template.Spec.Containers[0].Env[index].Value = value[index]
 	}
-
-	log.Debugf("****** CREATED POD SPEC IS - %v\n", podSpec)
-
-	pod, err := k8sCore.CreatePod(podSpec)
+	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
-		log.Errorf("An Error Occured while creating %v", err)
+		log.Errorf("An Error Occured while creating deployment %v", err)
 		return nil, err
 	}
-
-	err = k8sCore.ValidatePod(pod, timeOut, timeInterval)
+	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
 	if err != nil {
 		log.Errorf("An Error Occured while validating the pod %v", err)
 		return nil, err
 	}
 
 	//TODO: Remove static sleep and verify the injected data
-	time.Sleep(1 * time.Minute)
+	time.Sleep(2 * time.Minute)
 
-	return pod, nil
+	return deployment, err
 }
 
 // CreateRmqWorkload generate workloads for rmq
@@ -2095,8 +2098,9 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 	case mysql:
 		log.Debug("####### Entered into mysql workload case.....")
 		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS"}
-		command := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS}")
-		pod, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, command)
+		mysqlcmd := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS}")
+		//pod, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, command)
+		dep, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, mysqlcmd, params.DeploymentName)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
 		}
