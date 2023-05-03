@@ -6854,12 +6854,12 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
 		err := asyncdr.WriteKubeconfigToFiles()
 		if err != nil {
-			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, fmt.Errorf("Failed to write kubeconfig: %v", err))
 			return
 		}
 		err = SetSourceKubeConfig()
 		if err != nil {
-			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, fmt.Errorf("Failed to Set source kubeconfig: %v", err))
 			return
 		}
 
@@ -6887,7 +6887,7 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 						return
 					}
 					if cVol.Spec.IoThrottle == nil {
-						log.Errorf("iothrottle value should present in volume %v for this test, please use spec which use volumes with iothrottle", vol.Name)
+						UpdateOutcome(event, fmt.Errorf("iothrottle value should present in volume %v for this test, please use spec which use volumes with iothrottle", vol.Name))
 						return
 					}
 					expected_iot = cVol.Spec.IoThrottle
@@ -6934,10 +6934,12 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 			UpdateOutcome(event, fmt.Errorf("error inspecting volume %v, err is %v", vol.Name, err))
 		}
 		actual_iot := cVol.Spec.IoThrottle
-		dash.VerifyFatal(actual_iot.ReadBwMbytes, expected_iot.ReadBwMbytes, fmt.Sprintf(
-			"read bw on volume %v, expected: %v, got: %v", vol.Name, expected_iot.ReadBwMbytes, actual_iot.ReadBwMbytes))
-		dash.VerifyFatal(actual_iot.WriteIops, expected_iot.WriteIops, fmt.Sprintf(
-			"write iops on volume %v, expected: %v, got: %v", vol.Name, expected_iot.WriteIops, actual_iot.WriteIops))
+		if actual_iot.ReadBwMbytes != expected_iot.ReadBwMbytes {
+			UpdateOutcome(event, fmt.Errorf("read bw on volume %v, expected: %v, got: %v", vol.Name, expected_iot.ReadBwMbytes, actual_iot.ReadBwMbytes))
+			if actual_iot.WriteIops != expected_iot.WriteIops {
+				UpdateOutcome(event, fmt.Errorf("write iops on volume %v, expected: %v, got: %v", vol.Name, expected_iot.WriteIops, actual_iot.WriteIops))
+			}
+		}
 	}
 	err = SetSourceKubeConfig()
 	if err != nil {
