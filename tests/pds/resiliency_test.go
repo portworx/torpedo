@@ -116,8 +116,8 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 		}()
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		pdslib.CloseResiliencyChannel()
+		EndTorpedoTest()
+
 	})
 })
 
@@ -164,7 +164,7 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		pdslib.CloseResiliencyChannel()
+
 		if !isDeploymentsDeleted {
 			Step("Delete created deployments")
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
@@ -296,8 +296,7 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 		}()
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		pdslib.CloseResiliencyChannel()
+		EndTorpedoTest()
 	})
 
 })
@@ -342,7 +341,7 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		pdslib.CloseResiliencyChannel()
+
 		if !isDeploymentsDeleted {
 			Step("Delete created deployments")
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
@@ -395,7 +394,7 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		pdslib.CloseResiliencyChannel()
+
 		if !isDeploymentsDeleted {
 			Step("Delete created deployments")
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
@@ -447,7 +446,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		pdslib.CloseResiliencyChannel()
+
 		if !isDeploymentsDeleted {
 			Step("Delete created deployments")
 			resp, err := pdslib.DeleteDeployment(deployment.GetId())
@@ -505,7 +504,6 @@ var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		pdslib.CloseResiliencyChannel()
+		EndTorpedoTest()
 	})
 })
