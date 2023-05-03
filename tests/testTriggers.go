@@ -6936,9 +6936,9 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 		actual_iot := cVol.Spec.IoThrottle
 		if actual_iot.ReadBwMbytes != expected_iot.ReadBwMbytes {
 			UpdateOutcome(event, fmt.Errorf("read bw on volume %v, expected: %v, got: %v", vol.Name, expected_iot.ReadBwMbytes, actual_iot.ReadBwMbytes))
-			if actual_iot.WriteIops != expected_iot.WriteIops {
-				UpdateOutcome(event, fmt.Errorf("write iops on volume %v, expected: %v, got: %v", vol.Name, expected_iot.WriteIops, actual_iot.WriteIops))
-			}
+		}
+		if actual_iot.WriteIops != expected_iot.WriteIops {
+			UpdateOutcome(event, fmt.Errorf("write iops on volume %v, expected: %v, got: %v", vol.Name, expected_iot.WriteIops, actual_iot.WriteIops))
 		}
 	}
 	err = SetSourceKubeConfig()
