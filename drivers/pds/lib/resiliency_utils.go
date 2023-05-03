@@ -185,7 +185,7 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 	return err
 }
 
-func RestartPXDuringDSScaleUp(ns string) error {
+func RestartPXDuringDSScaleUp(ns string, deployment *pds.ModelsDeployment) error {
 	// Get StatefulSet Object
 	var ss *v1.StatefulSet
 	var testError error
@@ -245,7 +245,7 @@ func RestartPXDuringDSScaleUp(ns string) error {
 	return testError
 }
 
-func NodeRebootDurinAppVersionUpdate(ns string) error {
+func NodeRebootDurinAppVersionUpdate(ns string, deployment *pds.ModelsDeployment) error {
 	// Get StatefulSet Object
 	var ss *v1.StatefulSet
 	var testError error
@@ -303,7 +303,7 @@ func NodeRebootDurinAppVersionUpdate(ns string) error {
 }
 
 // Reboot the Active Node onto which the application pod is coming up
-func RebootActiveNodeDuringDeployment(ns string) error {
+func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeployment) error {
 	// Get StatefulSet Object
 	var ss *v1.StatefulSet
 	var testError error
@@ -372,7 +372,7 @@ func RebootActiveNodeDuringDeployment(ns string) error {
 }
 
 // Reboot All Worker Nodes while deployment is ongoing
-func RebootWorkerNodesDuringDeployment(ns string) error {
+func RebootWorkerNodesDuringDeployment(ns string, deployment *pds.ModelsDeployment) error {
 	// Waiting till atleast first pod have a node assigned
 	var pods []corev1.Pod
 	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
@@ -460,7 +460,7 @@ func KillPodsInNamespace(ns string, podName string) error {
 	return testError
 }
 
-func RestartApplicationDuringResourceUpdate(ns string) error {
+func RestartApplicationDuringResourceUpdate(ns string, deployment *pds.ModelsDeployment) error {
 	var ss *v1.StatefulSet
 	ss, testError := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
 	if testError != nil {

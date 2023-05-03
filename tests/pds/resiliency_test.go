@@ -49,7 +49,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				failuretype := pdslib.TypeOfFailure{
 					Type: RestartPxDuringDSScaleUp,
 					Method: func() error {
-						return pdslib.RestartPXDuringDSScaleUp(params.InfraToTest.Namespace)
+						return pdslib.RestartPXDuringDSScaleUp(params.InfraToTest.Namespace, deployment)
 					},
 				}
 				pdslib.DefineFailureType(failuretype)
@@ -61,7 +61,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 
 				dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
 				log.FailOnError(err, "Error while getting resource setting template")
-				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+				dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
 
 				updatedDeployment, err := pdslib.UpdateDataServices(deployment.GetId(),
 					dataServiceDefaultAppConfigID, deployment.GetImageId(),
@@ -133,20 +133,28 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
 					pdslib.MarkResiliencyTC(true, true)
-					// Type of failure that this TC needs to cover
-					failuretype := pdslib.TypeOfFailure{
-						Type: ActiveNodeRebootDuringDeployment,
-						Method: func() error {
-							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace)
-						},
-					}
-					pdslib.DefineFailureType(failuretype)
+
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
 					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
+
+					// Type of failure that this TC needs to cover
+					failuretype := pdslib.TypeOfFailure{
+						Type: ActiveNodeRebootDuringDeployment,
+						Method: func() error {
+							return pdslib.RebootActiveNodeDuringDeployment(params.InfraToTest.Namespace, deployment)
+						},
+					}
+					pdslib.DefineFailureType(failuretype)
+
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot test for data service %v", *deployment.ClusterResourceName))
+
+					dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+					log.FailOnError(err, "Error while getting resource setting template")
+					dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
+
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
@@ -210,14 +218,6 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 
 		Step("Update Data Service Version and reboot node", func() {
 			for ds, deployment := range deployments {
-				// Type of failure that this TC needs to cover
-				failuretype := pdslib.TypeOfFailure{
-					Type: RebootNodeDuringAppVersionUpdate,
-					Method: func() error {
-						return pdslib.NodeRebootDurinAppVersionUpdate(params.InfraToTest.Namespace)
-					},
-				}
-				pdslib.DefineFailureType(failuretype)
 
 				log.Infof("Version/Build: %v %v", ds.Version, ds.Image)
 				updatedDeployment, err := pdslib.UpdateDataServiceVerison(deployment.GetDataServiceId(), deployment.GetId(),
@@ -225,6 +225,15 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 					int32(ds.Replicas), dataServiceDefaultResourceTemplateID, ds.Image, ds.Version)
 				log.FailOnError(err, "Error while updating data services")
 				log.InfoD("data service %v update triggered", ds.Name)
+
+				// Type of failure that this TC needs to cover
+				failuretype := pdslib.TypeOfFailure{
+					Type: RebootNodeDuringAppVersionUpdate,
+					Method: func() error {
+						return pdslib.NodeRebootDurinAppVersionUpdate(params.InfraToTest.Namespace, deployment)
+					},
+				}
+				pdslib.DefineFailureType(failuretype)
 
 				err = pdslib.InduceFailureAfterWaitingForCondition(updatedDeployment, namespace, params.ResiliencyTest.CheckTillReplica)
 				log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot test for data service %v", *deployment.ClusterResourceName))
@@ -319,6 +328,11 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 					log.FailOnError(err, "Error while deploying data services")
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Deployment Controller test for data service %v", *deployment.ClusterResourceName))
+
+					dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+					log.FailOnError(err, "Error while getting resource template")
+					log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
@@ -349,21 +363,29 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 				Step("Start deployment, Reboot multiple nodes on which deployment is coming up and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
-					pdslib.MarkResiliencyTC(true, true)
-					// Type of failure that this TC needs to cover
-					failuretype := pdslib.TypeOfFailure{
-						Type: RebootNodesDuringDeployment,
-						Method: func() error {
-							return pdslib.RebootWorkerNodesDuringDeployment(params.InfraToTest.Namespace)
-						},
-					}
-					pdslib.DefineFailureType(failuretype)
+					pdslib.MarkResiliencyTC(true, false)
+
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
 					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
+
+					// Type of failure that this TC needs to cover
+					failuretype := pdslib.TypeOfFailure{
+						Type: RebootNodesDuringDeployment,
+						Method: func() error {
+							return pdslib.RebootWorkerNodesDuringDeployment(params.InfraToTest.Namespace, deployment)
+						},
+					}
+					pdslib.DefineFailureType(failuretype)
+
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot all worker nodes test for data service %v", *deployment.ClusterResourceName))
+
+					dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+					log.FailOnError(err, "Error while getting resource setting template")
+					dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
+
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
@@ -407,10 +429,17 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
+
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Agent Pod test for data service %v", *deployment.ClusterResourceName))
+
+					dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+					log.FailOnError(err, "Error while getting resource template")
+					log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+
 					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dataServiceVersionBuildMap)
 				})
 			}
@@ -462,7 +491,7 @@ var _ = Describe("{RestartAppDuringResourceUpdate}", func() {
 				failureType := pdslib.TypeOfFailure{
 					Type: RestartAppDuringResourceUpdate,
 					Method: func() error {
-						return pdslib.RestartApplicationDuringResourceUpdate(params.InfraToTest.Namespace)
+						return pdslib.RestartApplicationDuringResourceUpdate(params.InfraToTest.Namespace, deployment)
 					},
 				}
 				pdslib.DefineFailureType(failureType)
