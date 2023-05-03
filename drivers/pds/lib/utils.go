@@ -1852,10 +1852,6 @@ func CreateRedisWorkload(name string, image string, dnsEndpoint string, pdsPassw
 
 // Create MySql Workload (Non-TPCC)
 func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string, command string, deploymentName string) (*v1.Deployment, error) {
-	log.Debug("******** Preparing mysqlbench pod spec *********")
-	log.Debugf("Host is - %v\n", dnsEndpoint)
-	log.Debugf("pwd is - %v\n", pdsPassword)
-	log.Debugf("command is - %v\n", command)
 	var replicas int32 = 1
 	var value []string
 	deploymentSpec := &v1.Deployment{
@@ -2096,10 +2092,8 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 			return nil, nil, fmt.Errorf("error occured while creating Consul workload, Err: %v", err)
 		}
 	case mysql:
-		log.Debug("####### Entered into mysql workload case.....")
 		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS"}
 		mysqlcmd := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS}")
-		//pod, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, command)
 		dep, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, mysqlcmd, params.DeploymentName)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
