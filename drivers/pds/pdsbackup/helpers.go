@@ -35,7 +35,7 @@ type gcpStorageClient struct {
 	projectId string
 }
 
-func (awsObj *awsStorageClient) createBucket(bucketName string) error {
+func (awsObj *awsStorageClient) createBucket() error {
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(awsObj.region),
@@ -100,7 +100,36 @@ func (awsObj *awsStorageClient) deleteBucket(bucketName string) error {
 	return nil
 }
 
-func (azObj *azureStorageClient) createBucket(containerName string) error {
+func (awsObj *awsStorageClient) ListFolders(time time.Time) ([]string, error) {
+	var folders []string
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Region:      aws.String(awsObj.region),
+			Credentials: credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize new session: %v", err)
+	}
+	svc := s3.New(sess)
+	resp, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error while listing the folders in S3 bucket")
+	}
+	for _, obj := range resp.Contents {
+		if obj.LastModified.After(time) {
+			parts := strings.Split(*obj.Key, "/")
+			if len(parts) >= 1 {
+				folders = append(folders, parts[0])
+			}
+		}
+	}
+	return folders, nil
+}
+
+func (azObj *azureStorageClient) createBucket() error {
 	cred, err := azblob.NewSharedKeyCredential(azObj.accountName, azObj.accountKey)
 	if err != nil {
 		return err
@@ -110,18 +139,18 @@ func (azObj *azureStorageClient) createBucket(containerName string) error {
 		return fmt.Errorf("error -> %v", err.Error())
 	}
 
-	_, err = client.CreateContainer(context.TODO(), containerName, nil)
+	_, err = client.CreateContainer(context.TODO(), bucketName, nil)
 	if err != nil && strings.Contains(err.Error(), "ContainerAlreadyExists") {
-		log.Infof("Container: %s, already exists.", containerName)
+		log.Infof("Container: %s, already exists.", bucketName)
 	} else if err != nil && !strings.Contains(err.Error(), "ContainerAlreadyExists") {
 		return fmt.Errorf("error while creating azure container. Error - %v", err)
 	} else {
-		log.Infof("[Azure]Successfully created the container: %s", containerName)
+		log.Infof("[Azure]Successfully created the container: %s", bucketName)
 	}
 	return nil
 }
 
-func (azObj *azureStorageClient) deleteBucket(containerName string) error {
+func (azObj *azureStorageClient) deleteBucket() error {
 	cred, err := azblob.NewSharedKeyCredential(azObj.accountName, azObj.accountKey)
 	if err != nil {
 		return fmt.Errorf("error -> %v", err.Error())
@@ -130,18 +159,18 @@ func (azObj *azureStorageClient) deleteBucket(containerName string) error {
 	if err != nil {
 		return fmt.Errorf("error -> %v", err.Error())
 	}
-	_, err = client.DeleteContainer(context.TODO(), containerName, nil)
+	_, err = client.DeleteContainer(context.TODO(), bucketName, nil)
 	if err != nil && strings.Contains(err.Error(), "not found") {
-		log.Infof("[Azure]Container: %s not found!!", containerName)
+		log.Infof("[Azure]Container: %s not found!!", bucketName)
 	} else if err != nil && !strings.Contains(err.Error(), "not found") {
 		return fmt.Errorf("error while creating azure container. Error - %v", err)
 	} else {
-		log.Infof("[Azure]Container: %s deleted successfully!!", containerName)
+		log.Infof("[Azure]Container: %s deleted successfully!!", bucketName)
 	}
 	return nil
 }
 
-func (gcpObj *gcpStorageClient) createBucket(bucketName string) error {
+func (gcpObj *gcpStorageClient) createBucket() error {
 	err := gcpObj.setGcpJsonPath()
 	if err != nil {
 		return err
@@ -207,7 +236,7 @@ func (gcpObj *gcpStorageClient) createGcpJsonFile(path string) error {
 	return nil
 }
 
-func (gcpObj *gcpStorageClient) deleteBucket(bucketName string) error {
+func (gcpObj *gcpStorageClient) deleteBucket() error {
 	ctx := context.Background()
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/json")
 	client, err := storage.NewClient(context.Background())
