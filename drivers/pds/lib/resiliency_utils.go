@@ -42,6 +42,7 @@ var (
 	CapturedErrors            = make(chan error, 10)
 	checkTillReplica          int32
 	ResiliencyCondition       = make(chan bool)
+	isInitDone                = false
 )
 
 // Struct Definition for kind of Failure the framework needs to trigger
@@ -70,8 +71,9 @@ func ExecuteInParallel(functions ...func()) {
 // Function to enable Resiliency Test
 func MarkResiliencyTC(resiliency bool, node_ops bool) {
 	ResiliencyFlag = resiliency
-	if node_ops {
+	if node_ops && !isInitDone {
 		tests.InitInstance()
+		isInitDone = true
 	}
 }
 
@@ -450,6 +452,7 @@ func KillPodsInNamespace(ns string, podName string) error {
 	}
 	// Kill All Deployment Controller Pods
 	for _, pod := range Pods {
+		log.InfoD("Deleting Pod: %s", pod.Name)
 		testError = DeleteK8sPods(pod.Name, ns)
 		if testError != nil {
 			CapturedErrors <- testError

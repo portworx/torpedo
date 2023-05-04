@@ -325,6 +325,7 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 					deployment, _, _, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
+
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Deployment Controller test for data service %v", *deployment.ClusterResourceName))
 
