@@ -190,7 +190,7 @@ const (
 	pdsTpccImage                 = "portworx/torpedo-tpcc-automation:v1"
 	redisStressImage             = "redis:latest"
 	rmqStressImage               = "pivotalrabbitmq/perf-test:latest"
-	mysqlBenchImage              = "pwxbuild/pds-mysqlbench:v1"
+	mysqlBenchImage              = "portworx/pds-mysqlbench:v1"
 	postgresql                   = "PostgreSQL"
 	cassandra                    = "Cassandra"
 	elasticSearch                = "Elasticsearch"
@@ -1893,12 +1893,10 @@ func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, 
 	}
 	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
-		log.Errorf("An Error Occured while creating deployment %v", err)
 		return nil, err
 	}
 	err = k8sApps.ValidateDeployment(deployment, timeOut, timeInterval)
 	if err != nil {
-		log.Errorf("An Error Occured while validating the pod %v", err)
 		return nil, err
 	}
 
@@ -2093,6 +2091,7 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		}
 	case mysql:
 		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS"}
+		// ToDo: Move the python command to the docker container/ Part of image.
 		mysqlcmd := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS}")
 		dep, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, mysqlcmd, params.DeploymentName)
 		if err != nil {
