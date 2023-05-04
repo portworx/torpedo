@@ -3470,6 +3470,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 			for _, backupName := range backupnames {
 				err = CreateRestore(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore from duplicate backup [%s]", restoreName))
+				restoreNames = append(restoreNames, restoreName)
 			}
 		})
 	})
