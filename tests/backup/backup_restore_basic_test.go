@@ -3342,6 +3342,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		numDeployments     int
 		backupnames        []string
 		srcClusterUid      string
+		restoreNames       []string
 	)
 
 	JustBeforeEach(func() {
@@ -3481,8 +3482,10 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		log.Infof("Deleting backup schedule policy")
 		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{schedulePolicyName}))
-		err = DeleteRestore(restoreName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		ValidateAndDestroy(contexts, opts)
