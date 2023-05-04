@@ -5606,8 +5606,9 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
 	createdVolIDs := make(map[string]string)
 	defer wg.Done()
+	timeString := time.Now().Format(time.RFC1123)
 	for count > 0 {
-		volName := fmt.Sprintf("%s-%d", VolumeCreatePxRestart, count)
+		volName := fmt.Sprintf("%s-%d-%s", VolumeCreatePxRestart, count, timeString)
 		log.Infof("Creating volume : %s", volName)
 		volCreateRequest := &opsapi.SdkVolumeCreateRequest{
 			Name: volName,

@@ -22,7 +22,6 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"container/ring"
-
 	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	"github.com/onsi/ginkgo"
 
@@ -272,6 +271,7 @@ func UpdateOutcome(event *EventRecord, err error) {
 
 	if err != nil && event != nil {
 		Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
+		log.Errorf("Event [%s] failed with error: %v", event.Event.Type, err)
 		dash.VerifySafely(err, nil, fmt.Sprintf("verify if error occured for event %s", event.Event.Type))
 		er := fmt.Errorf(err.Error() + "<br>")
 		Inst().M.IncrementGaugeMetricsUsingAdditionalLabel(FailedTestAlert, event.Event.Type, err.Error())
@@ -621,7 +621,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 				return cVol, true, err
 			}
 
-			_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+			_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second)
 			if err != nil {
 				UpdateOutcome(event, err)
 			} else {
@@ -1471,8 +1471,12 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
+		selectedNodes := make([]string, len(nodesToReboot))
+		for _, n := range nodesToReboot {
+			selectedNodes = append(selectedNodes, n.Name)
+		}
 		// Reboot node and check driver status
-		stepLog = fmt.Sprintf("reboot the node(s): %v", nodesToReboot)
+		stepLog = fmt.Sprintf("reboot the node(s): %v", selectedNodes)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var wg sync.WaitGroup
@@ -1522,12 +1526,6 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 						UpdateOutcome(event, err)
 					})
 
-					stepLog = fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name)
-					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						err := Inst().V.WaitDriverDownOnNode(n)
-						UpdateOutcome(event, err)
-					})
 					stepLog = fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
 						Inst().S.String(), Inst().V.String())
 					Step(stepLog, func() {
@@ -1589,7 +1587,7 @@ func randIntn(n, maxNo int) []int {
 
 func getNodesByChaosLevel(triggerType string) []node.Node {
 	t := ChaosMap[triggerType]
-	stNodes := node.GetStorageNodes()
+	stNodes := node.GetStorageDriverNodes()
 	stNodesLen := len(stNodes)
 	nodes := make([]node.Node, 0)
 	var nodeLen float32
@@ -2397,7 +2395,8 @@ func TriggerEmailReporter() {
 	// emailRecords stores events to be notified
 
 	emailData := emailData{}
-	log.Infof("Generating email report: %s", time.Now().Format(time.RFC1123))
+	timeString := time.Now().Format(time.RFC1123)
+	log.Infof("Generating email report: %s", timeString)
 
 	var masterNodeList []string
 	var pxStatus string
@@ -2476,6 +2475,13 @@ func TriggerEmailReporter() {
 	if err := emailDetails.SendEmail(); err != nil {
 		log.Errorf("Failed to send out email, Err: %q", err)
 	}
+
+	filePath := fmt.Sprintf("%s/%s-%s.html", Inst().LogLoc, EmailSubject, timeString)
+
+	if err := os.WriteFile(filePath, []byte(content), 0664); err != nil {
+		log.Errorf("Failed to create html report, Err: %q", err)
+	}
+
 }
 
 // TriggerBackupApps takes backups of all namespaces of deployed apps
@@ -4155,7 +4161,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: PoolResizeDisk,
+			Type: PoolAddDisk,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -5053,15 +5059,11 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					log.InfoD("Error while rejoining the node. error: %v", err)
 					UpdateOutcome(event, err)
 				} else {
-					isNodeExist := false
+
 					log.InfoD("Waiting for node to rejoin and refresh inventory")
 					time.Sleep(90 * time.Second)
+					var rejoinedNode *opsapi.StorageNode
 					t := func() (interface{}, bool, error) {
-						err = Inst().S.RefreshNodeRegistry()
-						if err != nil {
-							log.Errorf("Error refreshing node registry, Error : %v", err)
-							return "", true, err
-						}
 						latestNodes, err := Inst().V.GetDriverNodes()
 						if err != nil {
 							log.Errorf("Error getting px nodes, Error : %v", err)
@@ -5069,9 +5071,9 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						}
 
 						for _, latestNode := range latestNodes {
-							log.InfoD("Inspecting Node: %v", latestNode.Hostname)
+							log.Infof("Inspecting Node: %v", latestNode.Hostname)
 							if latestNode.Hostname == decommissionedNode.Hostname {
-								isNodeExist = true
+								rejoinedNode = latestNode
 								return "", false, nil
 							}
 						}
@@ -5079,12 +5081,33 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					}
 					_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
 
-					if !isNodeExist {
+					if rejoinedNode == nil {
 						err = fmt.Errorf("node %v rejoin failed,Error: %v", decommissionedNode.Hostname, err)
 						log.Error(err.Error())
 						UpdateOutcome(event, err)
 					} else {
-						log.InfoD("node %v rejoin is successful ", decommissionedNode.Hostname)
+						err = Inst().S.RefreshNodeRegistry()
+						UpdateOutcome(event, err)
+						err = Inst().V.RefreshDriverEndpoints()
+						UpdateOutcome(event, err)
+						nodeWithNewID := node.Node{}
+
+						for _, n := range node.GetStorageDriverNodes() {
+							if n.Name == rejoinedNode.Hostname {
+								nodeWithNewID = n
+								break
+							}
+						}
+
+						if nodeWithNewID.Hostname != "" {
+							err = Inst().V.WaitDriverUpOnNode(nodeWithNewID, 10*time.Minute)
+							UpdateOutcome(event, err)
+							if err == nil {
+								log.InfoD("node %v rejoin is successful ", decommissionedNode.Hostname)
+							}
+						} else {
+							err = fmt.Errorf("node [%s] not found in the node registry after rejoining", decommissionedNode.Hostname)
+						}
 					}
 				}
 			})
@@ -5408,10 +5431,15 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 			allhealthy := validateKVDBMembers(event, kvdbMembers, false)
 
 			if allhealthy {
+				kvdbNodeIDMap := make(map[string]string, len(kvdbMembers))
+				for id, m := range kvdbMembers {
+					kvdbNodeIDMap[id] = m.Name
+				}
+
 				nodeMap := node.GetNodesByVoDriverNodeID()
 
-				for id := range kvdbMembers {
-					kvdbNode := nodeMap[id]
+				for kvdbID, nodeID := range kvdbNodeIDMap {
+					kvdbNode := nodeMap[nodeID]
 					errorChan := make(chan error, errorChannelSize)
 					StopVolDriverAndWait([]node.Node{kvdbNode}, &errorChan)
 					for err := range errorChan {
@@ -5428,7 +5456,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 							log.Error(err.Error())
 
 						}
-						m, ok := newKvdbMembers[id]
+						m, ok := newKvdbMembers[kvdbID]
 
 						if !ok && len(newKvdbMembers) > 0 {
 							log.InfoD("node %v is no longer kvdb member", kvdbNode.Name)
@@ -5436,20 +5464,17 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 						}
 						if ok && !m.IsHealthy {
-							log.InfoD("kvdb node %v isHealthy?: %v", id, m.IsHealthy)
+							log.InfoD("kvdb node %v isHealthy?: %v", nodeID, m.IsHealthy)
 							isKvdbStatusUpdated = true
 						} else {
 							log.InfoD("Waiting for kvdb node %v health status to update to false after PX is stopped", kvdbNode.Name)
 							time.Sleep(1 * time.Minute)
 						}
-
 						waitTime--
-
 					}
 					if err != nil {
 						log.Error(err.Error())
 						UpdateOutcome(event, err)
-
 					}
 
 					waitTime = 15
@@ -5462,7 +5487,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 							log.Error(err.Error())
 						}
 
-						_, ok := newKvdbMembers[id]
+						_, ok := newKvdbMembers[kvdbID]
 						if ok {
 							log.InfoD("Node %v still exist as a KVDB member. Waiting for failover to happen", kvdbNode.Name)
 							time.Sleep(2 * time.Minute)

@@ -1016,16 +1016,17 @@ func (d *portworx) UpdatePoolIOPriority(n node.Node, poolUUID string, IOPriority
 func (d *portworx) EnterMaintenance(n node.Node) error {
 	t := func() (interface{}, bool, error) {
 		if err := d.maintenanceOp(n, enterMaintenancePath); err != nil {
+
 			return nil, true, err
 		}
 		return nil, false, nil
 	}
-	log.Infof("waiting for 3 mins allowing node to completely transition to maintenance mode")
-	time.Sleep(3 * time.Minute)
 
 	if _, err := task.DoRetryWithTimeout(t, maintenanceOpTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
+	log.Infof("waiting for 3 mins allowing node to completely transition to maintenance mode")
+	time.Sleep(3 * time.Minute)
 	t = func() (interface{}, bool, error) {
 		apiNode, err := d.GetDriverNode(&n)
 		if err != nil {
@@ -1435,7 +1436,7 @@ func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
 }
 
 func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) error {
-	nodes := node.GetWorkerNodes()
+	nodes := node.GetStorageDriverNodes()
 	cmd := fmt.Sprintf("%s --io_priority %s  %s", pxctlVolumeUpdate, priorityType, volumeName)
 	_, err := d.nodeDriver.RunCommandWithNoRetry(
 		nodes[0],
@@ -2208,7 +2209,8 @@ func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStora
 			ResizeFactor: &api.SdkStoragePoolResizeRequest_Percentage{
 				Percentage: percentage,
 			},
-			OperationType: e,
+			OperationType:           e,
+			SkipWaitForCleanVolumes: true,
 		})
 		if err != nil {
 			return nil, true, err
@@ -3085,7 +3087,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	log.Infof("Waiting for a minute for node [%s] to transistion to maintenece mode", n.Name)
+	log.Infof("Waiting for a minute for node [%s] to transition to maintenance mode", n.Name)
 	time.Sleep(1 * time.Minute)
 
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
