@@ -3514,6 +3514,48 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 	return nil
 }
 
+func CreateSourceCluster(orgID string, cloudName string, uid string, ctx context1.Context) error {
+	// TODO: Add support for adding multiple clusters from
+	// comma separated list of kubeconfig files
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
+	if len(kubeconfigList) != 2 {
+		return fmt.Errorf("2 kubeconfigs are required for source and destination cluster")
+	}
+	err := dumpKubeConfigs(configMapName, kubeconfigList)
+	if err != nil {
+		return err
+	}
+	// Register source cluster with backup driver
+	log.InfoD("Create cluster [%s] in org [%s]", SourceClusterName, orgID)
+	srcClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
+	sourceClusterStatus := func() (interface{}, bool, error) {
+		err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
+		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+			return "", true, err
+		}
+		srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+		if err != nil {
+			return "", true, err
+		}
+		if srcClusterStatus == api.ClusterInfo_StatusInfo_Online {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
+	}
+	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CreateBackupLocation creates backup location
 func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string) error {
 	var err error
