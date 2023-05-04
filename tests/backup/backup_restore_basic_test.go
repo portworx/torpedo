@@ -3478,10 +3478,6 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
-		log.Infof("Deleting backup schedule policy")
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{schedulePolicyName}))
 		for _, restoreName := range restoreNames {
 			err = DeleteRestore(restoreName, orgID, ctx)
