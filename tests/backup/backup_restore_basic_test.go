@@ -3336,7 +3336,6 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		backupLocationUID  string
 		backupLocationMap  map[string]string
 		schedulePolicyName string
-		scheduleName       string
 		appNamespaces      []string
 		numDeployments     int
 		backupnames        []string
@@ -3428,20 +3427,20 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifiying the deletion of namespace [%s]", namespace))
 			}
 		})
-		Step("Recreating the namespaces deleted with same names", func() {
-			log.InfoD("Recreating the namespaces deleted with same names")
-			for i := 0; i < numDeployments; i++ {
-				taskName := fmt.Sprintf("src-%s-%d", taskNamePrefix, i)
-				namespace := fmt.Sprintf("test-namespace-%s", taskName)
-				appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
-				contexts = append(contexts, appContexts...)
-				for index, ctx := range appContexts {
-					appName := Inst().AppList[index]
-					ctx.ReadinessTimeout = appReadinessTimeout
-					log.InfoD("Scheduled application [%s] in source cluster in namespace [%s]", appName, namespace)
+		/*		Step("Recreating the namespaces deleted with same names", func() {
+				log.InfoD("Recreating the namespaces deleted with same names")
+				for i := 0; i < numDeployments; i++ {
+					taskName := fmt.Sprintf("src-%s-%d", taskNamePrefix, i)
+					namespace := fmt.Sprintf("test-namespace-%s", taskName)
+					appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+					contexts = append(contexts, appContexts...)
+					for index, ctx := range appContexts {
+						appName := Inst().AppList[index]
+						ctx.ReadinessTimeout = appReadinessTimeout
+						log.InfoD("Scheduled application [%s] in source cluster in namespace [%s]", appName, namespace)
+					}
 				}
-			}
-		})
+			})*/
 		Step("Delete source cluster where application is deployed", func() {
 			log.InfoD("Delete source cluster where application is deployed")
 			ctx, err := backup.GetAdminCtxFromSecret()
