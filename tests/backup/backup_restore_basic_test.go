@@ -3337,7 +3337,6 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		backupLocationMap  map[string]string
 		schedulePolicyName string
 		scheduleName       string
-		restoreName        string
 		appNamespaces      []string
 		numDeployments     int
 		backupnames        []string
@@ -3468,8 +3467,9 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, backupName := range backupnames {
+				restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
 				err = CreateRestore(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string))
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore from duplicate backup [%s]", restoreName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore from backup [%s]", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
