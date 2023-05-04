@@ -93,7 +93,7 @@ var (
 	accountID                               string
 )
 
-var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul}
+var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul, mysql}
 var dataServicePodWorkloads = []string{redis, rabbitmq, couchbase}
 
 func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, deployment *pds.ModelsDeployment, namespace string) (*corev1.Pod, *v1.Deployment, error) {
