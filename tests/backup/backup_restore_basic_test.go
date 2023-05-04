@@ -3326,7 +3326,7 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 	})
 })
 
-// ScheduleBackupDeleteAndRecreateNS Validates schedule backups when namespaces are deleted and recreated
+// DeleteNSDeleteClusterRestore Validates deleted namespace is restored when the application cluster is removed and re-added
 var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 	var (
 		contexts           []*scheduler.Context
@@ -3335,16 +3335,15 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		backupLocationName string
 		backupLocationUID  string
 		backupLocationMap  map[string]string
-		schedulePolicyName string
 		appNamespaces      []string
 		numDeployments     int
-		backupnames        []string
+		backupNames        []string
 		srcClusterUid      string
 		restoreNames       []string
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteNSDeleteClusterRestore", "Delete namespace from application cluster delete cluster and add it back and restore", nil, 59894)
+		StartTorpedoTest("DeleteNSDeleteClusterRestore", "Delete namespace from application cluster and delete cluster and add it back and restore deleted namespace", nil, 59894)
 		numDeployments = Inst().GlobalScaleFactor
 		if len(Inst().AppList) == 1 && numDeployments < 2 {
 			numDeployments = 2
@@ -3364,7 +3363,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		}
 	})
 
-	It("Validates schedule backups when namespaces are deleted and recreated", func() {
+	It("Validates deleted namespace is restored when the application cluster is removed and re-added", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(contexts)
@@ -3410,14 +3409,14 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 			log.Infof("Cluster [%s] uid: [%s]", destinationClusterName, dstClusterUid)
 		})
 		Step("Taking backup of applications ", func() {
-			log.InfoD("Taking backup of applications and duplicating it")
+			log.InfoD("Taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, namespace := range appNamespaces {
 				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 				err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace}, nil, orgID, srcClusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s creation", backupName))
-				backupnames = append(backupnames, backupName)
+				backupNames = append(backupNames, backupName)
 			}
 		})
 		Step("Delete the App namespaces created", func() {
@@ -3427,20 +3426,6 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifiying the deletion of namespace [%s]", namespace))
 			}
 		})
-		/*		Step("Recreating the namespaces deleted with same names", func() {
-				log.InfoD("Recreating the namespaces deleted with same names")
-				for i := 0; i < numDeployments; i++ {
-					taskName := fmt.Sprintf("src-%s-%d", taskNamePrefix, i)
-					namespace := fmt.Sprintf("test-namespace-%s", taskName)
-					appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
-					contexts = append(contexts, appContexts...)
-					for index, ctx := range appContexts {
-						appName := Inst().AppList[index]
-						ctx.ReadinessTimeout = appReadinessTimeout
-						log.InfoD("Scheduled application [%s] in source cluster in namespace [%s]", appName, namespace)
-					}
-				}
-			})*/
 		Step("Delete source cluster where application is deployed", func() {
 			log.InfoD("Delete source cluster where application is deployed")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -3453,7 +3438,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, destinationClusterName)
 			err = CreateSourceCluster(orgID, "", "", ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with px-central-admin ctx", SourceClusterName))
 			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
@@ -3465,7 +3450,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 			log.InfoD("Restoring  backup on source cluster")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			for _, backupName := range backupnames {
+			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
 				err = CreateRestore(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore from backup [%s]", restoreName))
@@ -3477,7 +3462,6 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		defer EndPxBackupTorpedoTest(contexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{schedulePolicyName}))
 		for _, restoreName := range restoreNames {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
