@@ -32,18 +32,6 @@ const (
 	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
-var _ = Describe("{TestCreateContextMethod}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("TestCreateContextMethod", "deploy pds apps and create flag", pdsLabels, 0)
-	})
-	It("Call Schedule applications", func() {
-		var errChan []*chan error
-		ScheduleApplications("pdsApps", errChan...)
-		//var cc pdscontext.PdsContextCreation
-		//cc.CreateAppContext()
-	})
-})
-
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)
