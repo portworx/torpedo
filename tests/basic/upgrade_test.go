@@ -13,10 +13,11 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
+	
 )
 
 var storkLabel = map[string]string{"name": "stork"}
@@ -102,6 +103,22 @@ var _ = Describe("{UpgradeStork}", func() {
 	})
 })
 
+func getUpgradeStatPayload(fromVersion string, toVersion string, duration int) aetosutil.Stat {
+	statData := make(map[string]string)
+	statData["toVersion"] = toVersion
+	statData["time"] = fmt.Sprintf("%d", duration)
+	statData["testSetId"] = fmt.Sprintf("%d",dash.TestSetID)
+
+	stat := aetosutil.Stat{
+		Name:      "UpgradeStat",
+		Product:   dash.TestSet.Product,
+		StatsType: "UpgradeTime",
+		Version:   fromVersion,
+		Data:      statData,
+	}
+	return stat
+}
+
 // UpgradeVolumeDriver test performs upgrade hops of volume driver based on a given list of upgradeEndpoints
 var _ = Describe("{UpgradeVolumeDriver}", func() {
 	JustBeforeEach(func() {
@@ -164,6 +181,8 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
 				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
 				dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
+				stat := getUpgradeStatPayload(currPXVersion, upgradeHop, durationInMins)
+				dash.RecordStat(stat)
 				upgradeStatus := "PASS"
 				if durationInMins <= expectedUpgradeTime {
 					log.InfoD("Upgrade successfully completed in %d minutes which is within %d minutes", durationInMins, expectedUpgradeTime)

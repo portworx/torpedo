@@ -73,6 +73,14 @@ type Dashboard struct {
 	testCaseStartTime time.Time
 }
 
+type Stat struct {
+	Name      string `json:"name"`
+	Product   string `json:"product"`
+	StatsType string `json:"statsType"`
+	Version   string `json:"version"`
+	Data      map[string]string `json:"data"`
+}
+
 // TestSet struct
 type TestSet struct {
 	CommitID    string            `json:"commitId"`
@@ -400,6 +408,19 @@ func (d *Dashboard) VerifySafely(actual, expected interface{}, description strin
 	}
 	if d.IsEnabled {
 		d.verify(res)
+	}
+}
+
+func (d *Dashboard) RecordStat(stat Stat) {
+	if d.IsEnabled {
+		statUrl := fmt.Sprintf("%s/stats", DashBoardBaseURL)
+
+		resp, respStatusCode, err := rest.POST(statUrl, statUrl, nil, nil)
+		if err != nil {
+			logrus.Errorf("Error in making call to post stat, Cause: %v", err)
+		} else if respStatusCode != http.StatusOK {
+			logrus.Errorf("Error adding stat, resp : %s", string(resp))
+		}
 	}
 }
 
