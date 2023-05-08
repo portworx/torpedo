@@ -144,7 +144,7 @@ const (
 // PDS params
 const (
 	deployPDSAppsFlag = "deploy-pds-apps"
-	pdsDriveCliFlag   = "pdsdriver"
+	pdsDriveCliFlag   = "pds-driver"
 )
 
 const (
@@ -441,9 +441,7 @@ func InitInstance() {
 	log.FailOnError(err, "Error occured while monitor Initialization")
 
 	if Inst().Pds != nil {
-		log.InfoD("Initializing PDS dataservice methods")
-	} else {
-		log.InfoD("Inst().Pds is coming as nil")
+		log.Infof("PDS Dataservice Initialised")
 	}
 
 	if Inst().Backup != nil {
