@@ -3514,42 +3514,43 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 	return nil
 }
 
-func CreateSourceCluster(orgID string, cloudName string, uid string, ctx context1.Context) error {
-	// TODO: Add support for adding multiple clusters from
-	// comma separated list of kubeconfig files
+func RegisterCluster(orgID string, clusterName string, cloudName string, uid string, ctx context1.Context) error {
+	var ConfigPath string
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
-	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
-	if len(kubeconfigList) != 2 {
-		return fmt.Errorf("2 kubeconfigs are required for source and destination cluster")
-	}
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
 	if err != nil {
 		return err
 	}
-	// Register source cluster with backup driver
-	log.InfoD("Create cluster [%s] in org [%s]", SourceClusterName, orgID)
-	srcClusterConfigPath, err := GetSourceClusterConfigPath()
+	// Register cluster with backup driver
+	log.InfoD("Create cluster [%s] in org [%s]", clusterName, orgID)
+	if clusterName == SourceClusterName {
+		ConfigPath, err = GetSourceClusterConfigPath()
+	} else if clusterName == destinationClusterName {
+		ConfigPath, err = GetDestinationClusterConfigPath()
+	} else {
+		return errors.New(fmt.Sprintf("registering %s cluster not implemented", clusterName))
+	}
 	if err != nil {
 		return err
 	}
-	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
-	sourceClusterStatus := func() (interface{}, bool, error) {
-		err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
+	log.Infof("Save cluster %s kubeconfig to %s", clusterName, ConfigPath)
+	ClusterStatus := func() (interface{}, bool, error) {
+		err = CreateCluster(clusterName, ConfigPath, orgID, cloudName, uid, ctx)
 		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
 			return "", true, err
 		}
-		srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+		srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, clusterName, ctx)
 		if err != nil {
 			return "", true, err
 		}
 		if srcClusterStatus == api.ClusterInfo_StatusInfo_Online {
 			return "", false, nil
 		}
-		return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
+		return "", true, fmt.Errorf("the %s cluster state is not Online yet", clusterName)
 	}
-	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
+	_, err = task.DoRetryWithTimeout(ClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
