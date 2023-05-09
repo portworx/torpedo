@@ -2381,6 +2381,17 @@ func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string
 	return nil
 }
 
+// AddLabelsToMultipleNamespaces add labels to multiple namespace
+func DeleteLabelsFromMultipleNamespaces(labels map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.RemoveNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GenerateRandomLabels creates random label
 func GenerateRandomLabels(number int) map[string]string {
 	labels := make(map[string]string)
