@@ -3516,10 +3516,10 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 
 func RegisterCluster(orgID string, clusterName string, cloudName string, uid string, ctx context1.Context) error {
 	var ConfigPath string
-	kubeconfigs := os.Getenv("KUBECONFIGS")
-	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
-	kubeconfigList := strings.Split(kubeconfigs, ",")
-	err := dumpKubeConfigs(configMapName, kubeconfigList)
+	kubeConfigs := os.Getenv("KUBECONFIGS")
+	dash.VerifyFatal(kubeConfigs != "", true, "Getting KUBECONFIGS Environment variable")
+	kubeConfigsList := strings.Split(kubeConfigs, ",")
+	err := dumpKubeConfigs(configMapName, kubeConfigsList)
 	if err != nil {
 		return err
 	}
