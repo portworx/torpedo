@@ -3343,7 +3343,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteNSDeleteClusterRestore", "Delete namespace from application cluster and delete cluster and add it back and restore deleted namespace", nil, 5)
+		StartTorpedoTest("DeleteNSDeleteClusterRestore", "Delete namespace from application cluster and delete cluster and add it back then restore for last backup", nil, 58061)
 		numDeployments = Inst().GlobalScaleFactor
 		if len(Inst().AppList) == 1 && numDeployments < 2 {
 			numDeployments = 2
@@ -3433,10 +3433,10 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 		})
 		Step("Add source cluster back with px-central-admin ctx", func() {
-			log.InfoD("Adding source and destination clusters with px-central-admin ctx")
+			log.InfoD("Adding source clusters with px-central-admin ctx")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, destinationClusterName)
+			log.Infof("Creating source [%s] cluster", SourceClusterName)
 			err = RegisterCluster(orgID, SourceClusterName, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with px-central-admin ctx", SourceClusterName))
 			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
