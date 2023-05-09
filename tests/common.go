@@ -3514,6 +3514,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 	return nil
 }
 
+// RegisterCluster register the cluster in px-backup based on the provided cluster name
 func RegisterCluster(orgID string, clusterName string, cloudName string, uid string, ctx context1.Context) error {
 	var ConfigPath string
 	kubeConfigs := os.Getenv("KUBECONFIGS")

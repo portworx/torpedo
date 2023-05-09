@@ -3468,7 +3468,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		}
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		ValidateAndDestroy(contexts, opts)
+		DestroyApps(contexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
