@@ -423,6 +423,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 
 	It("Deploy Dataservices", func() {
 		Step("Deploy Data Services", func() {
+			var dsVersionBuildMap = make(map[string][]string)
 			for _, ds := range params.DataServiceToTest {
 				Step("Start deployment, Kill Agent Pod while deployment is ongoing and validate data service", func() {
 					isDeploymentsDeleted = false
@@ -437,7 +438,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 					}
 					pdslib.DefineFailureType(failuretype)
 					// Deploy and Validate this Data service after injecting the type of failure we want to catch
-					deployment, _, dsVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
 
