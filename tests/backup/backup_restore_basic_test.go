@@ -1435,6 +1435,9 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 			err := DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
 		}
+		log.InfoD("Deleting labels from namespaces - %v", bkpNamespaces)
+		err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, bkpNamespaces)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] to namespaces [%v]", nsLabelsMap, bkpNamespaces))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
