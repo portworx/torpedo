@@ -255,7 +255,6 @@ const (
 const (
 	oneMegabytes                          = 1024 * 1024
 	defaultScheduler                      = "k8s"
-	defaultPdsDriver                      = "pds"
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
@@ -4494,7 +4493,7 @@ type Torpedo struct {
 func ParseFlags() {
 	var err error
 
-	var s, m, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, pdsDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -4519,7 +4518,6 @@ func ParseFlags() {
 	var enableDash bool
 	var pxPodRestartCheck bool
 	var deployPDSApps bool
-	var pdsDriverName string
 
 	// TODO: We rely on the customAppConfig map to be passed into k8s.go and stored there.
 	// We modify this map from the tests and expect that the next RescanSpecs will pick up the new custom configs.
@@ -4611,6 +4609,7 @@ func ParseFlags() {
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
+	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, "", "Name of the pdsdriver to use")
 	flag.Parse()
 
 	log.SetLoglevel(logLevel)
@@ -4694,6 +4693,16 @@ func ParseFlags() {
 				log.Infof("Backup driver found %v", backupDriver)
 			}
 		}
+
+		log.Infof("Pds driver name %s", pdsDriverName)
+		if pdsDriverName != "" {
+			if pdsDriver, err = pds.Get(pdsDriverName); err != nil {
+				log.Fatalf("cannot find pds driver for %s. Err: %v\n", pdsDriverName, err)
+			} else {
+				log.Infof("Pds driver found")
+			}
+		}
+
 		dash = aetosutil.Get()
 		if enableDash && !isDashboardReachable() {
 			enableDash = false
@@ -4818,8 +4827,6 @@ func ParseFlags() {
 				JobType:                             torpedoJobType,
 				PortworxPodRestartCheck:             pxPodRestartCheck,
 				IsPDSApps:                           deployPDSApps,
-				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
-				AnthosInstPath:                      anthosInstPath,
 			}
 		})
 	}
@@ -5665,7 +5672,6 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	createdVolIDs := make(map[string]string)
 	defer wg.Done()
 	timeString := time.Now().Format(time.RFC1123)
-	timeString = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(timeString, "_")
 	for count > 0 {
 		volName := fmt.Sprintf("%s-%d-%s", VolumeCreatePxRestart, count, timeString)
 		log.Infof("Creating volume : %s", volName)

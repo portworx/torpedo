@@ -18,12 +18,12 @@ var (
 
 // Get returns a registered scheduler test provider.
 func Get(name string) (Driver, error) {
-	if m, ok := pdsschedulers[name]; ok {
-		return m, nil
+	if d, ok := pdsschedulers[name]; ok {
+		return d, nil
 	}
 	return nil, &errors.ErrNotFound{
 		ID:   name,
-		Type: "Monitor",
+		Type: "PdsDriver",
 	}
 }
 
