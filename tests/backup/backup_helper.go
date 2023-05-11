@@ -2381,7 +2381,7 @@ func AddLabelsToMultipleNamespaces(labels map[string]string, namespaces []string
 	return nil
 }
 
-// AddLabelsToMultipleNamespaces add labels to multiple namespace
+// DeleteLabelsFromMultipleNamespaces delete labels from multiple namespace
 func DeleteLabelsFromMultipleNamespaces(labels map[string]string, namespaces []string) error {
 	for _, namespace := range namespaces {
 		err := Inst().S.RemoveNamespaceLabel(namespace, labels)
