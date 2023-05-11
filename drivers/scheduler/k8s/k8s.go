@@ -2600,7 +2600,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 
 	isPodTerminating := func() (interface{}, bool, error) {
 		var terminatingPods []string
-		pods, err := k.getPodsForApp(ctx)
+		pods, err := k.GetPodsForApp(ctx)
 		// ignore error if no pods are found; retry for other cases
 		if err == schederrors.ErrPodsNotFound {
 			return nil, false, nil
@@ -2997,7 +2997,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 	fn := "DeleteTasks"
 	deleteTasks := func() error {
 		k8sOps := k8sCore
-		pods, err := k.getPodsForApp(ctx)
+		pods, err := k.GetPodsForApp(ctx)
 		if err != nil {
 			return &scheduler.ErrFailedToDeleteTasks{
 				App:   ctx.App,
@@ -3822,7 +3822,7 @@ func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace 
 // GetNodesForApp get the node for the app
 func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	t := func() (interface{}, bool, error) {
-		pods, err := k.getPodsForApp(ctx)
+		pods, err := k.GetPodsForApp(ctx)
 		if err != nil {
 			return nil, false, &scheduler.ErrFailedToGetNodesForApp{
 				App:   ctx.App,
@@ -3876,7 +3876,7 @@ func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	return nodes.([]node.Node), nil
 }
 
-func (k *K8s) getPodsForApp(ctx *scheduler.Context) ([]corev1.Pod, error) {
+func (k *K8s) GetPodsForApp(ctx *scheduler.Context) ([]corev1.Pod, error) {
 	k8sOps := k8sApps
 	var pods []corev1.Pod
 
@@ -3910,7 +3910,7 @@ func (k *K8s) GetPodLog(ctx *scheduler.Context, sinceSeconds int64, containerNam
 	if sinceSeconds > 0 {
 		sinceSecondsArg = &sinceSeconds
 	}
-	pods, err := k.getPodsForApp(ctx)
+	pods, err := k.GetPodsForApp(ctx)
 	if err != nil {
 		return nil, err
 	}

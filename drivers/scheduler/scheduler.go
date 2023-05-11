@@ -227,6 +227,10 @@ type Driver interface {
 	// GetPodsForPVC returns pods using the pvc
 	GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error)
 
+	// GetPodsForApp returns pods for the current application in the provided context.
+	// Currently handles pods for statelfulsets and deployments only.
+	GetPodsForApp(*Context) ([]corev1.Pod, error)
+
 	// GetPodLog returns logs for all the pods in the specified context
 	GetPodLog(ctx *Context, sinceSeconds int64, containerName string) (map[string]string, error)
 
