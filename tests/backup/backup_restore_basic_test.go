@@ -1437,7 +1437,7 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 		}
 		log.InfoD("Deleting labels from namespaces - %v", bkpNamespaces)
 		err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, bkpNamespaces)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] to namespaces [%v]", nsLabelsMap, bkpNamespaces))
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", nsLabelsMap, bkpNamespaces))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
@@ -1783,7 +1783,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 		}
 		log.InfoD("Deleting labels from namespaces - %v", bkpNamespaces)
 		err = DeleteLabelsFromMultipleNamespaces(labelMap, bkpNamespaces)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", labelMap, bkpNamespaces))
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", labelMap, bkpNamespaces))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
