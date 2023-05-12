@@ -3341,3 +3341,21 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+var _ = Describe("{BackupMultipleNsWithResourceLabel}", func() {
+	var (
+		err         error
+		nsLabelsMap map[string]string
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("BackupMultipleNsWithResourceLabel", "Taking backup and restoring multiple namespace having same labels", nil, 84851)
+	})
+	It("Taking backup and restoring multiple namespace having same labels", func() {
+		Step("Adding labels to all namespaces", func() {
+			log.InfoD("Adding labels to all namespaces")
+			nsLabelsMap = GenerateRandomLabels(3)
+			err = Inst().S.AddLabelToPvc("nsLabelsMap", nsLabelsMap)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, "bkpNamespaces"))
+		})
+	})
+})

@@ -401,6 +401,9 @@ type Driver interface {
 
 	// GetNamespaceLabel gets the labels on given namespace
 	GetNamespaceLabel(namespace string) (map[string]string, error)
+
+	// AddNamespaceLabel adds a label key=value on the given namespace
+	AddLabelToPvc(namespace string, labelMap map[string]string) error
 }
 
 var (

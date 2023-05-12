@@ -6940,3 +6940,17 @@ func ClusterVersion() (string, error) {
 	}
 	return strings.TrimLeft(ver.String(), "v"), nil
 }
+
+// AddLabelToPvc adds a label key=value on the given pvc
+func (k *K8s) AddLabelToPvc(namespace string, labelMap map[string]string) error {
+	pvc, err := k8sCore.GetPersistentVolumeClaim("pxc-mongodb-data-pxc-backup-mongodb-0", "central")
+	if err != nil {
+		return err
+	}
+	newLabels := MergeMaps(pvc.Labels, labelMap)
+	pvc.SetLabels(newLabels)
+	if _, err := k8sCore.UpdatePersistentVolumeClaim(pvc); err == nil {
+		return nil
+	}
+	return err
+}
