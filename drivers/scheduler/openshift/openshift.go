@@ -39,11 +39,11 @@ const (
 	// OpenshiftMirror is the mirror we use do download ocp client
 	OpenshiftMirror             = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
 	mdFileName                  = "changelog.md"
-	defaultCmdTimeout           = 5 * time.Minute
+	defaultCmdTimeout           = 10 * time.Minute
 	driverUpTimeout             = 10 * time.Minute
 	generationNumberWaitTime    = 10 * time.Minute
 	defaultCmdRetry             = 15 * time.Second
-	defaultUpgradeTimeout       = 4 * time.Hour
+	defaultUpgradeTimeout       = 12 * time.Hour
 	defaultUpgradeRetryInterval = 5 * time.Minute
 	ocPath                      = " -c oc"
 )
@@ -530,7 +530,7 @@ func waitNodesToBeReady() error {
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 15*time.Second)
+	_, err = task.DoRetryWithTimeout(t, 600*time.Minute, 30*time.Second)
 	return err
 }
 
@@ -679,11 +679,18 @@ func ackAPIRemoval(version string) error {
 	}
 	// this issue happens on OCP 4.9
 	parsedVersion49, _ := semver.Parse("4.9.0")
-
+	parsedVersion412, _ := semver.Parse("4.12.0")
+	//oc -n openshift-config patch cm admin-acks --patch '{"data":{"ack-4.11-kube-1.25-api-removals-in-4.12":"true"}}' --type=merge
 	if parsedVersion.GTE(parsedVersion49) {
+		var patchData = ""
+		if parsedVersion.GTE(parsedVersion412) {
+			patchData = "{\"data\":{\"ack-4.11-kube-1.25-api-removals-in-4.12\":\"true\"}}"
+		} else {
+			patchData = "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
+		}
+		log.Info(string(patchData))
 		t := func() (interface{}, bool, error) {
 			var output []byte
-			patchData := "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
 			args := []string{"-n", "openshift-config", "patch", "cm", "admin-acks", "--type=merge", "--patch", patchData}
 			if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
 				return nil, true, fmt.Errorf("failed to ack API removal due to %s. cause: %v", string(output), err)
