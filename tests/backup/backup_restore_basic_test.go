@@ -3342,13 +3342,13 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 	})
 })
 
-var _ = Describe("{BackupMultipleNsWithResourceLabel}", func() {
+var _ = Describe("{BackupWithResourceLabel}", func() {
 	var (
 		err         error
 		nsLabelsMap map[string]string
 	)
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupMultipleNsWithResourceLabel", "Taking backup and restoring multiple namespace having same labels", nil, 84851)
+		StartTorpedoTest("BackupWithResourceLabel", "Taking backup and restoring multiple namespace having same labels", nil, 84851)
 	})
 	It("Taking backup and restoring multiple namespace having same labels", func() {
 		Step("Adding labels to all namespaces", func() {
