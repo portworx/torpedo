@@ -3358,6 +3358,7 @@ var _ = Describe("{BackupWithResourceLabel}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to pvc [%v]", nsLabelsMap, "bkpNamespaces"))
 			//err = Inst().S.AddLabelToSecret("nsLabelsMap", nsLabelsMap)
 			//dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to secret [%v]", nsLabelsMap, "bkpNamespaces"))
+			nsLabelsMap = GenerateRandomLabels(3)
 			err = Inst().S.AddLabelToConfigMap("nsLabelsMap", nsLabelsMap)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to configmap [%v]", nsLabelsMap, "bkpNamespaces"))
 			time.Sleep(time.Minute * 3)
