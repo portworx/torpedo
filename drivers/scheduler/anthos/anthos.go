@@ -22,60 +22,60 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type gcp struct {
+type Gcp struct {
 	ComponentAccessServiceAccountKeyPath string `yaml:"componentAccessServiceAccountKeyPath"`
 }
 
-type hostConfig struct {
-	ip      string   `yaml:"ip"`
-	gateway string   `yaml:"gateway"`
-	netmask string   `yaml:"netmask"`
-	dns     []string `yaml:"dns"`
+type HostConfig struct {
+	Ip      string   `yaml:"ip"`
+	Gateway string   `yaml:"gateway"`
+	Netmask string   `yaml:"netmask"`
+	Dns     []string `yaml:"dns"`
 }
 
 type Network struct {
-	ipAllocationMode string     `yaml:"ipAllocationMode"`
-	hostConfig       hostConfig `yaml:"hostconfig"`
+	IpAllocationMode string     `yaml:"ipAllocationMode"`
+	HostConfig       HostConfig `yaml:"hostconfig"`
 }
 
 type Workstation struct {
-	cpus         int     `yaml:"cpus"`
-	diskGB       int     `yaml:"diskGB"`
-	dataDiskMB   int     `yaml:"dataDiskMB"`
-	dataDiskName string  `yaml:"dataDiskName"`
-	memoryMB     int     `yaml:"memoryMB"`
-	name         string  `yaml:"name"`
-	network      Network `yaml:"network"`
-	ntpServer    string  `yaml:"ntpServer"`
-	proxyUrl     string  `yaml:"proxyUrl"`
+	Cpus         int     `yaml:"cpus"`
+	DiskGB       int     `yaml:"diskGB"`
+	DataDiskMB   int     `yaml:"dataDiskMB"`
+	DataDiskName string  `yaml:"dataDiskName"`
+	MemoryMB     int     `yaml:"memoryMB"`
+	Name         string  `yaml:"name"`
+	Network      Network `yaml:"network"`
+	NtpServer    string  `yaml:"ntpServer"`
+	ProxyUrl     string  `yaml:"proxyUrl"`
 }
 
 type FileRef struct {
-	entry string `yaml:"entry"`
-	path  string `yaml:"path"`
+	Entry string `yaml:"entry"`
+	Path  string `yaml:"path"`
 }
 
-type credentials struct {
-	address string  `yaml:"address"`
-	fileRef FileRef `yaml:"fileRef"`
+type Credentials struct {
+	Address string  `yaml:"address"`
+	FileRef FileRef `yaml:"fileRef"`
 }
 
-type VCenter struct {
-	caCertPath   string      `yaml:"caCertPath"`
-	cluster      string      `yaml:"cluster"`
-	credentials  credentials `yaml:"credentials"`
-	datacenter   string      `yaml:"datacenter"`
-	datastore    string      `yaml:"datastore"`
-	folder       string      `yaml:"folder"`
-	network      string      `yaml:"network"`
-	resourcePool string      `yaml:"resourcePool"`
+type vCenter struct {
+	CaCertPath   string      `yaml:"caCertPath"`
+	Cluster      string      `yaml:"cluster"`
+	Credentials  Credentials `yaml:"credentials"`
+	Datacenter   string      `yaml:"datacenter"`
+	Datastore    string      `yaml:"datastore"`
+	Folder       string      `yaml:"folder"`
+	Network      string      `yaml:"network"`
+	ResourcePool string      `yaml:"resourcePool"`
 }
 
 type AdminWorkstation struct {
-	adminWorkstation Workstation `yaml:"adminWorkstation"`
-	gcp              gcp         `yaml:"gcp"`
-	proxyUrl         string      `yaml:"proxyUrl"`
-	vCenter          VCenter     `yaml:"vCenter"`
+	AdminWorkstation Workstation `yaml:"adminWorkstation"`
+	Gcp              Gcp         `yaml:"gcp"`
+	ProxyUrl         string      `yaml:"proxyUrl"`
+	VCenter          vCenter     `yaml:"vCenter"`
 }
 
 const (
@@ -254,10 +254,11 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	}
 	timeTaken := time.Since(startTime)
 	log.Infof("Anthos user cluster took: %v time to complete the upgrade", timeTaken)
-	if err := anth.RefreshNodeRegistry(); err != nil {
+	if err := anth.invokeUpgradeAdminCluster(version); err != nil {
 		return err
 	}
-	if err := anth.invokeUpgradeAdminCluster(version); err != nil {
+	// Update node registry after admin cluster upgrade
+	if err := anth.RefreshNodeRegistry(); err != nil {
 		return err
 	}
 	return nil
@@ -271,7 +272,7 @@ func (anth *anthos) invokeUpgradeAdminCluster(version string) error {
 		return err
 	}
 	timeTaken := time.Since(initTime)
-	log.Infof("Anthos upgrade took: %v time to complete upgrade from % to %s version",
+	log.Infof("Anthos upgrade took: %v time to complete upgrade from %s to %s version",
 		timeTaken, anth.version, version)
 	if err := anth.updateNodeInstance(); err != nil {
 		return err
@@ -491,9 +492,9 @@ func (anth *anthos) updateAdminWorkstationNode() error {
 	if err != nil {
 		return err
 	}
-	admWSObj.gcp.ComponentAccessServiceAccountKeyPath = path.Join(anth.instPath, gcpAccessFile)
-	admWSObj.vCenter.credentials.fileRef.path = path.Join(anth.confPath, vcenterCredFile)
-	admWSObj.vCenter.caCertPath = path.Join(anth.confPath, vcenterCrtFile)
+	admWSObj.Gcp.ComponentAccessServiceAccountKeyPath = path.Join(anth.instPath, gcpAccessFile)
+	admWSObj.VCenter.Credentials.FileRef.Path = path.Join(anth.confPath, vcenterCredFile)
+	admWSObj.VCenter.CaCertPath = path.Join(anth.confPath, vcenterCrtFile)
 	out, err := yaml.Marshal(&admWSObj)
 	if err != nil {
 		return err
