@@ -1612,10 +1612,6 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	}()
 	var contexts []*scheduler.Context
 	var taskName string
-	//IsPDS, err := strconv.ParseBool(Inst().IsPDSApps)
-	//if err != nil {
-	//	processError(err, errChan...)
-	//}
 	var err error
 	Step("schedule applications", func() {
 		if Inst().IsPDSApps {
