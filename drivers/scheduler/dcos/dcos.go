@@ -990,15 +990,15 @@ func (d *dcos) GetNamespaceLabel(namespace string) (map[string]string, error) {
 	}
 }
 
-func (d *dcos) AddLabelToPvc(namespace string) (map[string]string, error) {
-	// GetNamespaceLabel is not supported
-	return nil, &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "AddLabelToPvc()",
-	}
-}
-
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)
+}
+
+func (d *dcos) AddLabelToPvc(namespace string, labelMap map[string]string) error {
+	// AddNamespaceLabel is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddLabelToPvc()",
+	}
 }
