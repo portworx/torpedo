@@ -466,7 +466,7 @@ spec:
             "--",
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
-            "--deploy-pds-apps", "$DEPLOY_PDS_APPS",
+            "--deploy-pds-apps=$DEPLOY_PDS_APPS",
             "--pds-driver", "$PDS_DRIVER",
             "--secure-apps", "$SECURE_APP_LIST",
             "--repl1-apps", "$REPL1_APP_LIST",
