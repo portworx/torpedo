@@ -1436,33 +1436,34 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 				continue specloop
 			}
 
-			if name == "" || kind == "" {
-				err := fmt.Errorf("error: GetSpecNameKindNamepace returned values with Spec Name: [%s], Kind: [%s], Namespace: [%s], in local Context (NS): [%s], where some of the values are empty, so this spec will be ignored", name, kind, ns, scheduledAppContextNamespace)
-				errors = append(errors, err)
-				continue specloop
-			}
-
-			if kind == "StorageClass" || kind == "VolumeSnapshot" {
-				// we don't backup "StorageClass"s and "VolumeSnapshot"s
-				continue specloop
-			}
-
-			if len(resourceTypesFilter) > 0 && !Contains(resourceTypesFilter, kind) {
-				log.Infof("kind: [%s] is not in resourceTypes [%v], so spec (name: [%s], kind: [%s], namespace: [%s]) in scheduledAppContext [%s] will not be checked for in backup [%s]", kind, resourceTypesFilter, name, kind, ns, scheduledAppContextNamespace, backupName)
-				continue specloop
-			}
-
 			// we only validate namespace level resource
 			if ns != "" {
+				if name == "" || kind == "" {
+					err := fmt.Errorf("error: GetSpecNameKindNamepace returned values with Spec Name: [%s], Kind: [%s], Namespace: [%s], in local Context (NS): [%s], where some of the values are empty, so this object will be ignored", name, kind, ns, scheduledAppContextNamespace)
+					errors = append(errors, err)
+					continue specloop
+				}
+
+				if kind == "StorageClass" || kind == "VolumeSnapshot" {
+					// we don't backup "StorageClass"s and "VolumeSnapshot"s
+					continue specloop
+				}
+
+				if len(resourceTypesFilter) > 0 && !Contains(resourceTypesFilter, kind) {
+					log.Infof("kind: [%s] is not in resourceTypes [%v], so spec (name: [%s], kind: [%s], namespace: [%s]) in scheduledAppContext [%s] will not be checked for in backup [%s]", kind, resourceTypesFilter, name, kind, ns, scheduledAppContextNamespace, backupName)
+					continue specloop
+				}
+
 				for _, backupObj := range resourceInfoBackupObjs {
 					if name == backupObj.GetName() && kind == backupObj.GetKind() {
+						log.Infof("the object (name: [%s], kind: [%s], namespace: [%s]) found in the scheduledAppContext [%s] was also found in the backup [%s]", name, kind, ns, scheduledAppContextNamespace, backupName)
 						continue specloop
 					}
 				}
 
 				// The following error means that something was NOT backed up,
 				// OR it wasn't supposed to be backed up, and we forgot to exclude the check.
-				err := fmt.Errorf("the spec (name: [%s], kind: [%s], namespace: [%s]) found in the scheduledAppContext [%s], is not in the backup [%s]", name, kind, ns, scheduledAppContextNamespace, backupName)
+				err := fmt.Errorf("the object (name: [%s], kind: [%s], namespace: [%s]) found in the scheduledAppContext [%s], is NOT in the backup [%s]", name, kind, ns, scheduledAppContextNamespace, backupName)
 				errors = append(errors, err)
 				continue specloop
 			}
