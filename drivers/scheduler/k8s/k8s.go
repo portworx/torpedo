@@ -7001,7 +7001,7 @@ func (k *K8s) RemoveLabelFromSecret(namespace string, labelMap map[string]string
 
 // AddLabelToConfigMap adds a label key=value on the given pvc
 func (k *K8s) AddLabelToConfigMap(namespace string, labelMap map[string]string) error {
-	cm, err := k8sCore.GetConfigMap("px-backup-config", "central")
+	cm, err := k8sCore.GetConfigMap("pxcentral-ui-configmap", "central")
 	if err != nil {
 		return err
 	}
@@ -7015,7 +7015,7 @@ func (k *K8s) AddLabelToConfigMap(namespace string, labelMap map[string]string) 
 
 // RemoveLabelFromConfigMap removes the label with key on given pvc
 func (k *K8s) RemoveLabelFromConfigMap(namespace string, labelMap map[string]string) error {
-	cm, err := k8sCore.GetConfigMap("px-backup-config", "central")
+	cm, err := k8sCore.GetConfigMap("pxcentral-ui-configmap", "central")
 	if err != nil {
 		return err
 	}
