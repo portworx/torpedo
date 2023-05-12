@@ -179,6 +179,52 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 	return contexts, nil
 }
 
+// ScheduleWithCustomAppSpecs Schedules the application with custom app specs
+func (k *openshift) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+	var contexts []*scheduler.Context
+	oldOptionsNamespace := options.Namespace
+	for _, app := range apps {
+
+		appNamespace := app.GetID(instanceID)
+		if options.Namespace != "" {
+			appNamespace = options.Namespace
+		} else {
+			options.Namespace = appNamespace
+		}
+
+		// Update security context for namespace and user
+		if err := k.updateSecurityContextConstraints(appNamespace); err != nil {
+			return nil, err
+		}
+
+		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
+		if err != nil {
+			return nil, err
+		}
+
+		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
+		if err != nil {
+			return nil, err
+		}
+
+		specObjects = append(specObjects, helmSpecObjects...)
+		ctx := &scheduler.Context{
+			UID: instanceID,
+			App: &spec.AppSpec{
+				Key:      app.Key,
+				SpecList: specObjects,
+				Enabled:  app.Enabled,
+			},
+			ScheduleOptions: options,
+		}
+
+		contexts = append(contexts, ctx)
+		options.Namespace = oldOptionsNamespace
+	}
+
+	return contexts, nil
+}
+
 func (k *openshift) SaveSchedulerLogsToFile(n node.Node, location string) error {
 	driver, _ := node.Get(k.K8s.NodeDriverName)
 
@@ -680,7 +726,6 @@ func ackAPIRemoval(version string) error {
 	// this issue happens on OCP 4.9
 	parsedVersion49, _ := semver.Parse("4.9.0")
 	parsedVersion412, _ := semver.Parse("4.12.0")
-	//oc -n openshift-config patch cm admin-acks --patch '{"data":{"ack-4.11-kube-1.25-api-removals-in-4.12":"true"}}' --type=merge
 	if parsedVersion.GTE(parsedVersion49) {
 		var patchData = ""
 		if parsedVersion.GTE(parsedVersion412) {
