@@ -1010,3 +1010,35 @@ func (d *dcos) RemoveLabelFromPvc(namespace string, labelMap map[string]string) 
 		Operation: "RemoveLabelFromPvc()",
 	}
 }
+
+func (d *dcos) AddLabelToSecret(namespace string, labelMap map[string]string) error {
+	// AddNamespaceLabel is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddLabelToSecret()",
+	}
+}
+
+func (d *dcos) RemoveLabelFromSecret(namespace string, labelMap map[string]string) error {
+	// AddNamespaceLabel is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveLabelFromSecret()",
+	}
+}
+
+func (d *dcos) AddLabelToConfigMap(namespace string, labelMap map[string]string) error {
+	// AddNamespaceLabel is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddLabelToConfigMap()",
+	}
+}
+
+func (d *dcos) RemoveLabelFromConfigMap(namespace string, labelMap map[string]string) error {
+	// AddNamespaceLabel is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveLabelFromConfigMap()",
+	}
+}

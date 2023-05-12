@@ -402,11 +402,23 @@ type Driver interface {
 	// GetNamespaceLabel gets the labels on given namespace
 	GetNamespaceLabel(namespace string) (map[string]string, error)
 
-	// AddNamespaceLabel adds a label key=value on the given pvc
+	// AddLabelToConfigMap adds a label key=value on the given ConfigMap
 	AddLabelToPvc(namespace string, labelMap map[string]string) error
 
-	// RemoveLabeFromPvc deletes a label key=value on the given pvc
+	// RemoveLabelFromConfigMap deletes a label key=value on the given ConfigMap
 	RemoveLabelFromPvc(namespace string, labelMap map[string]string) error
+
+	// AddLabelToSecret adds a label key=value on the given secret
+	AddLabelToSecret(namespace string, labelMap map[string]string) error
+
+	// RemoveLabelFromSecret deletes a label key=value on the given secret
+	RemoveLabelFromSecret(namespace string, labelMap map[string]string) error
+
+	// AddLabelToConfigMap adds a label key=value on the given ConfigMap
+	AddLabelToConfigMap(namespace string, labelMap map[string]string) error
+
+	// RemoveLabelFromConfigMap deletes a label key=value on the given ConfigMap
+	RemoveLabelFromConfigMap(namespace string, labelMap map[string]string) error
 }
 
 var (

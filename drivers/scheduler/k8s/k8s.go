@@ -6955,7 +6955,7 @@ func (k *K8s) AddLabelToPvc(namespace string, labelMap map[string]string) error 
 	return err
 }
 
-// RemoveNamespaceLabel removes the label with key on given pvc
+// RemoveLabelFromPvc removes the label with key on given pvc
 func (k *K8s) RemoveLabelFromPvc(namespace string, labelMap map[string]string) error {
 	pvc, err := k8sCore.GetPersistentVolumeClaim("pxc-mongodb-data-pxc-backup-mongodb-0", "central")
 	if err != nil {
@@ -6965,6 +6965,64 @@ func (k *K8s) RemoveLabelFromPvc(namespace string, labelMap map[string]string) e
 		delete(pvc.Labels, key)
 	}
 	if _, err = k8sCore.UpdatePersistentVolumeClaim(pvc); err == nil {
+		return nil
+	}
+	return err
+}
+
+// AddLabelToSecret adds a label key=value on the given pvc
+func (k *K8s) AddLabelToSecret(namespace string, labelMap map[string]string) error {
+	secret, err := k8sCore.GetSecret("px-backup-admin-secret", "central")
+	if err != nil {
+		return err
+	}
+	newLabels := MergeMaps(secret.Labels, labelMap)
+	secret.SetLabels(newLabels)
+	if _, err := k8sCore.UpdateSecret(secret); err == nil {
+		return nil
+	}
+	return err
+}
+
+// RemoveLabelFromSecret removes the label with key on given pvc
+func (k *K8s) RemoveLabelFromSecret(namespace string, labelMap map[string]string) error {
+	secret, err := k8sCore.GetSecret("px-backup-admin-secret", "central")
+	if err != nil {
+		return err
+	}
+	for key := range labelMap {
+		delete(secret.Labels, key)
+	}
+	if _, err = k8sCore.UpdateSecret(secret); err == nil {
+		return nil
+	}
+	return err
+}
+
+// AddLabelToConfigMap adds a label key=value on the given pvc
+func (k *K8s) AddLabelToConfigMap(namespace string, labelMap map[string]string) error {
+	cm, err := k8sCore.GetConfigMap("px-backup-config", "central")
+	if err != nil {
+		return err
+	}
+	newLabels := MergeMaps(cm.Labels, labelMap)
+	cm.SetLabels(newLabels)
+	if _, err := k8sCore.UpdateConfigMap(cm); err == nil {
+		return nil
+	}
+	return err
+}
+
+// RemoveLabelFromConfigMap removes the label with key on given pvc
+func (k *K8s) RemoveLabelFromConfigMap(namespace string, labelMap map[string]string) error {
+	cm, err := k8sCore.GetConfigMap("px-backup-config", "central")
+	if err != nil {
+		return err
+	}
+	for key := range labelMap {
+		delete(cm.Labels, key)
+	}
+	if _, err = k8sCore.UpdateConfigMap(cm); err == nil {
 		return nil
 	}
 	return err
