@@ -91,6 +91,10 @@ if [ -z "${IS_PURE_VOLUMES}" ]; then
     IS_PURE_VOLUMES=false
 fi
 
+if [ -z "${DEPLOY_PDS_APPS}" ]; then
+    DEPLOY_PDS_APPS=false
+fi
+
 if [ -z "${PURE_FA_CLONE_MANY_TEST}" ]; then
     PURE_FA_CLONE_MANY_TEST=false
 fi
@@ -193,11 +197,11 @@ if [ -z "$AWS_REGION" ]; then
     echo "Using default AWS_REGION of ${AWS_REGION}"
 fi
 
-if [ -z "$TORPEDO_JOB_TYPE"]; then
+if [ -z "$TORPEDO_JOB_TYPE" ]; then
     TORPEDO_JOB_TYPE="functional"
 fi
 
-if [ -z "$TORPEDO_JOB_NAME"]; then
+if [ -z "$TORPEDO_JOB_NAME" ]; then
     TORPEDO_JOB_NAME="torpedo-daily-job"
 fi
 

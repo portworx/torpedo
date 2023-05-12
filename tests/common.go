@@ -1611,11 +1611,13 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 		}
 	}()
 	var contexts []*scheduler.Context
-	var err error
 	var taskName string
-
+	IsPDS, err := strconv.ParseBool(Inst().IsPDSApps)
+	if err != nil {
+		processError(err, errChan...)
+	}
 	Step("schedule applications", func() {
-		if Inst().IsPDSApps {
+		if IsPDS {
 			log.InfoD("Scheduling PDS Apps...")
 			pdsapps, err := Inst().Pds.DeployPDSDataservices()
 			if err != nil {
@@ -4484,7 +4486,7 @@ type Torpedo struct {
 	JobName                             string
 	JobType                             string
 	PortworxPodRestartCheck             bool
-	IsPDSApps                           bool
+	IsPDSApps                           string
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
 }
@@ -4517,7 +4519,7 @@ func ParseFlags() {
 	var hyperConverged bool
 	var enableDash bool
 	var pxPodRestartCheck bool
-	var deployPDSApps bool
+	var deployPDSApps string
 
 	// TODO: We rely on the customAppConfig map to be passed into k8s.go and stored there.
 	// We modify this map from the tests and expect that the next RescanSpecs will pick up the new custom configs.
@@ -4605,7 +4607,7 @@ func ParseFlags() {
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
 	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
-	flag.BoolVar(&deployPDSApps, deployPDSAppsFlag, false, "To deploy pds apps and return scheduler context for pds apps")
+	flag.StringVar(&deployPDSApps, deployPDSAppsFlag, "", "To deploy pds apps and return scheduler context for pds apps")
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, "", "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")

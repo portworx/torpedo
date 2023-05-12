@@ -52,7 +52,7 @@ var (
 
 type DataserviceType struct{}
 
-//TestParams has the prereqs for deploying pds dataservices
+// TestParams has the prereqs for deploying pds dataservices
 type TestParams struct {
 	DeploymentTargetId string
 	DnsZone            string
@@ -246,7 +246,7 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
 }
 
-//DeployPDSDataservices method will be used to deploy ds and run common px tests
+// DeployPDSDataservices method will be used to deploy ds and run common px tests
 func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, error) {
 	log.InfoD("Deployment of pds apps called from schedule applications")
 	var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
@@ -341,7 +341,6 @@ func init() {
 	if err != nil {
 		log.Errorf("Error while Registering pds dataservice type driver: %v", err)
 	}
-
 }
 
 func DataserviceInit(ControlPlaneURL string) (*DataserviceType, error) {
