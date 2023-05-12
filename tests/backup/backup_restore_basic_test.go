@@ -3354,7 +3354,7 @@ var _ = Describe("{BackupWithResourceLabel}", func() {
 		Step("Adding labels to all namespaces", func() {
 			log.InfoD("Adding labels to all namespaces")
 			nsLabelsMap = GenerateRandomLabels(3)
-			err = Inst().S.AddLabelToPvc("nsLabelsMap", nsLabelsMap)
+			err = Inst().S.RemoveLabelFromPvc("nsLabelsMap", nsLabelsMap)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, "bkpNamespaces"))
 		})
 	})

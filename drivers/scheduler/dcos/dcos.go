@@ -1002,3 +1002,11 @@ func (d *dcos) AddLabelToPvc(namespace string, labelMap map[string]string) error
 		Operation: "AddLabelToPvc()",
 	}
 }
+
+func (d *dcos) RemoveLabelFromPvc(namespace string, labelMap map[string]string) error {
+	// AddNamespaceLabel is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveLabelFromPvc()",
+	}
+}

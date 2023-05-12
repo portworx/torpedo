@@ -6954,3 +6954,18 @@ func (k *K8s) AddLabelToPvc(namespace string, labelMap map[string]string) error 
 	}
 	return err
 }
+
+// RemoveNamespaceLabel removes the label with key on given pvc
+func (k *K8s) RemoveLabelFromPvc(namespace string, labelMap map[string]string) error {
+	pvc, err := k8sCore.GetPersistentVolumeClaim("pxc-mongodb-data-pxc-backup-mongodb-0", "central")
+	if err != nil {
+		return err
+	}
+	for key := range labelMap {
+		delete(pvc.Labels, key)
+	}
+	if _, err = k8sCore.UpdatePersistentVolumeClaim(pvc); err == nil {
+		return nil
+	}
+	return err
+}
