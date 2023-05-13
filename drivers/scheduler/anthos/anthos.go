@@ -257,7 +257,6 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	if err := anth.invokeUpgradeAdminCluster(version); err != nil {
 		return err
 	}
-	// Update node registry after admin cluster upgrade
 	if err := anth.RefreshNodeRegistry(); err != nil {
 		return err
 	}
