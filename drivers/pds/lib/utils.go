@@ -2067,6 +2067,7 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating postgresql workload, Err: %v", err)
 		}
+		CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
 
 	case rabbitmq:
 		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
@@ -2075,6 +2076,7 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating rabbitmq workload, Err: %v", err)
 		}
+		CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
 
 	case redis:
 		var command string
@@ -2087,6 +2089,7 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
 		}
+		CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
 
 	case cassandra:
 		cassCommand := fmt.Sprintf("%s write no-warmup n=1000000 cl=ONE -mode user=pds password=%s native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node %s -port native=9042 -rate auto -log file=/tmp/%s.load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/%s.load.data", params.DeploymentName, pdsPassword, dnsEndpoint, params.DeploymentName, params.DeploymentName)
@@ -2094,12 +2097,14 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating cassandra workload, Err: %v", err)
 		}
+		CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
 	case elasticSearch:
 		esCommand := fmt.Sprintf("while true; do esrally race --track=geonames --target-hosts=%s --pipeline=benchmark-only --test-mode --kill-running-processes --client-options=\"timeout:%s,use_ssl:%s,verify_certs:%s,basic_auth_user:%s,basic_auth_password:'%s'\"; done", dnsEndpoint, params.TimeOut, params.UseSSL, params.VerifyCerts, params.User, pdsPassword)
 		dep, err = CreateDeploymentWorkloads(esCommand, params.DeploymentName, esRallyImage, params.Namespace)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating elasticSearch workload, Err: %v", err)
 		}
+		CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
 
 	case couchbase:
 		env := []string{"HOST", "PDS_USER", "PASSWORD", "COUNT"}
@@ -2112,12 +2117,14 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating couchbase workload, Err: %v", err)
 		}
+		CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
 
 	case consul:
 		dep, err = RunConsulBenchWorkload(params.DeploymentName, params.Namespace)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating Consul workload, Err: %v", err)
 		}
+		CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
 	case mysql:
 		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS"}
 		// ToDo: Move the python command to the docker container/ Part of image.
