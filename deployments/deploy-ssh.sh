@@ -655,6 +655,8 @@ spec:
       value: "${TARGET_PXBACKUP_VERSION}"
     - name: TARGET_STORK_VERSION
       value: "${TARGET_STORK_VERSION}"
+    - name: PX_BACKUP_HELM_REPO_BRANCH
+      value: "${PX_BACKUP_HELM_REPO_BRANCH}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
