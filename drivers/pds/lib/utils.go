@@ -1906,6 +1906,34 @@ func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, namespace string, 
 	return deployment, err
 }
 
+// Collect and log Workload generator pod logs in case of Error
+func CollectPodLogsandValidateWorkloads(deploymentName string, namespace string) error {
+	pods, err := k8sCore.GetPods(namespace, nil)
+	if err != nil {
+		log.Errorf("An Error occured while getting pods")
+	}
+	failure_messages := []string{"Name or service not known", "could not translate host name", "Connection refused", "Can't connect to"}
+	for _, pod := range pods.Items {
+		if strings.Contains(pod.Name, "load") {
+			log.Debugf("Generated workload pod name contains %v", pod.Name)
+			status := pod.Status.Phase
+			podlogs, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{})
+			if err != nil {
+				log.Errorf("An Error occured while getting pod logs, Error occurred is- %v\n and the WorloadPOD status is - %v", err, status)
+			}
+			log.InfoD("Logging begins for Workload POD %v/n", pod.Name)
+			log.InfoD(podlogs)
+			for _, messages := range failure_messages {
+				if strings.Contains(podlogs, messages) {
+					log.Errorf("Workload Geneartion has terminated due to %v/n", messages)
+				}
+			}
+			break
+		}
+	}
+	return err
+}
+
 // CreateRmqWorkload generate workloads for rmq
 func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string, command string) (*corev1.Pod, error) {
 	var value []string
@@ -2020,6 +2048,7 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *v1.Deployment, error) {
 	var dep *v1.Deployment
 	var pod *corev1.Pod
+	params.DeploymentName = params.DeploymentName + "-load"
 
 	dnsEndpoint, err := GetDeploymentConnectionInfo(params.DeploymentID)
 	if err != nil {
@@ -2097,6 +2126,7 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
 		}
+		CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
 	}
 	return pod, dep, nil
 }
