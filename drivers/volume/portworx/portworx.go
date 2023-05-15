@@ -36,6 +36,7 @@ import (
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
@@ -54,6 +55,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -94,6 +96,7 @@ const (
 	refreshEndpointParam                      = "refresh-endpoint"
 	defaultPXAPITimeout                       = 5 * time.Minute
 	envSkipPXServiceEndpoint                  = "SKIP_PX_SERVICE_ENDPOINT"
+	envSkipPxOperatorUpgrade                  = "SKIP_PX_OPERATOR_UPGRADE"
 	pureKey                                   = "backend"
 	pureBlockValue                            = "pure_block"
 	clusterIDFile                             = "/etc/pwx/cluster_uuid"
@@ -121,6 +124,8 @@ const (
 	validateStoragePoolSizeInterval   = 30 * time.Second
 	validateRebalanceJobsTimeout      = 30 * time.Minute
 	validateRebalanceJobsInterval     = 30 * time.Second
+	validateDeploymentTimeout         = 3 * time.Minute
+	validateDeploymentInterval        = 5 * time.Second
 	getNodeTimeout                    = 3 * time.Minute
 	getNodeRetryInterval              = 5 * time.Second
 	stopDriverTimeout                 = 5 * time.Minute
@@ -206,6 +211,7 @@ type portworx struct {
 	refreshEndpoint       bool
 	token                 string
 	skipPXSvcEndpoint     bool
+	skipPxOperatorUpgrade bool
 	DiagsFile             string
 }
 
@@ -358,6 +364,11 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 
 	if skipStr := os.Getenv(envSkipPXServiceEndpoint); skipStr != "" {
 		d.skipPXSvcEndpoint, _ = strconv.ParseBool(skipStr)
+	}
+
+	// If true, will skip upgrade of PX Operator along with PX during upgrade hops
+	if skipStr := os.Getenv(envSkipPxOperatorUpgrade); skipStr != "" {
+		d.skipPxOperatorUpgrade, _ = strconv.ParseBool(skipStr)
 	}
 
 	d.token = token
@@ -1016,16 +1027,17 @@ func (d *portworx) UpdatePoolIOPriority(n node.Node, poolUUID string, IOPriority
 func (d *portworx) EnterMaintenance(n node.Node) error {
 	t := func() (interface{}, bool, error) {
 		if err := d.maintenanceOp(n, enterMaintenancePath); err != nil {
+
 			return nil, true, err
 		}
 		return nil, false, nil
 	}
-	log.Infof("waiting for 3 mins allowing node to completely transition to maintenance mode")
-	time.Sleep(3 * time.Minute)
 
 	if _, err := task.DoRetryWithTimeout(t, maintenanceOpTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
+	log.Infof("waiting for 3 mins allowing node to completely transition to maintenance mode")
+	time.Sleep(3 * time.Minute)
 	t = func() (interface{}, bool, error) {
 		apiNode, err := d.GetDriverNode(&n)
 		if err != nil {
@@ -1435,7 +1447,7 @@ func (d *portworx) ValidateCreateSnapshotUsingPxctl(volumeName string) error {
 }
 
 func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) error {
-	nodes := node.GetWorkerNodes()
+	nodes := node.GetStorageDriverNodes()
 	cmd := fmt.Sprintf("%s --io_priority %s  %s", pxctlVolumeUpdate, priorityType, volumeName)
 	_, err := d.nodeDriver.RunCommandWithNoRetry(
 		nodes[0],
@@ -2215,7 +2227,7 @@ func (d *portworx) ValidateRebalanceJobs() error {
 }
 
 func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStoragePool_ResizeOperationType, percentage uint64) error {
-	log.Infof("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
+	log.InfoD("Initiating pool %v resize by %v with operationtype %v", poolUUID, percentage, e.String())
 
 	// Start a task to check if pool  resize is done
 	t := func() (interface{}, bool, error) {
@@ -2224,13 +2236,14 @@ func (d *portworx) ResizeStoragePoolByPercentage(poolUUID string, e api.SdkStora
 			ResizeFactor: &api.SdkStoragePoolResizeRequest_Percentage{
 				Percentage: percentage,
 			},
-			OperationType: e,
+			OperationType:           e,
+			SkipWaitForCleanVolumes: true,
 		})
 		if err != nil {
 			return nil, true, err
 		}
 		if jobListResp.String() != "" {
-			log.Debugf("Resize respone: %v", jobListResp.String())
+			log.Debugf("Resize response: %v", jobListResp.String())
 		}
 		return nil, false, nil
 	}
@@ -2279,10 +2292,9 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 func (d *portworx) GetAutoFsTrimStatus(endpoint string) (map[string]api.FilesystemTrim_FilesystemTrimStatus, error) {
 	sdkport, _ := d.getSDKPort()
 	pxEndpoint := net.JoinHostPort(endpoint, strconv.Itoa(int(sdkport)))
-	newConn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
+	newConn, err := grpc.Dial(pxEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to set the connection endpoint [%s], Err: %v", endpoint, err)
-
 	}
 	d.autoFsTrimManager = api.NewOpenStorageFilesystemTrimClient(newConn)
 
@@ -2823,41 +2835,17 @@ func (d *portworx) UpgradeDriver(endpointVersion string) error {
 	// If PX Operator based install, perform PX StorageCluster upgrade
 	isOperatorBasedInstall, _ := d.IsOperatorBasedInstall()
 	if isOperatorBasedInstall {
-		log.InfoD("Upgrading Portworx StorageCluster")
-		var k8sCore = core.Instance()
-		k8sVersion, err := k8sCore.GetVersion()
-		if err != nil {
-			return err
-		}
-
-		imageList, err := optest.GetImagesFromVersionURL(specGenUrl, k8sVersion.String())
-		if err != nil {
-			return fmt.Errorf("failed to get image list from version URL [%s], Err: %v", specGenUrl, err)
-		}
-
-		// Get PX StorageCluster
-		cluster, err := d.GetDriver()
-		if err != nil {
-			return err
-		}
-
-		// Update PX Image and Env vars if needed
-		updateParamFunc := func(cluster *v1.StorageCluster) *v1.StorageCluster {
-			// Set oci-mon version
-			cluster.Spec.Image = imageList["version"]
-			var envVars []corev1.EnvVar
-			// Add Release Manifest URL incase of edge spec
-			envVars, err := configurePxReleaseManifestEnvVars(cluster.Spec.Env, specGenUrl)
-			if err != nil {
-				return nil
+		log.Debugf("Env var SKIP_PX_OPERATOR_UPGRADE is set to [%v]", d.skipPxOperatorUpgrade)
+		if !d.skipPxOperatorUpgrade {
+			log.InfoD("Will upgrade PX Operator, if new version is availabe for given PX endpoint [%s]", specGenUrl)
+			if err := d.upgradePortworxOperator(specGenUrl); err != nil {
+				return fmt.Errorf("failed to upgrade PX Operator, Err: %v", err)
 			}
-			cluster.Spec.Env = envVars
-			return cluster
 		}
 
-		// Update and validate PX StorageCluster
-		if _, err := d.updateAndValidateStorageCluster(cluster, updateParamFunc, specGenUrl, false); err != nil {
-			return err
+		log.InfoD("Will upgrade Portworx StorageCluster")
+		if err := d.upgradePortworxStorageCluster(specGenUrl); err != nil {
+			return fmt.Errorf("failed to upgrade PX StorageCluster, Err: %v", err)
 		}
 	} else {
 		log.InfoD("Upgrading Portworx DaemonSet")
@@ -2967,6 +2955,107 @@ func (d *portworx) upgradePortworxDaemonset(specGenUrl string) error {
 	return nil
 }
 
+// upgradePortworxStorageCluster upgrades PX StorageCluster based on the given Spec Generator URL
+func (d *portworx) upgradePortworxStorageCluster(specGenUrl string) error {
+	log.InfoD("Upgrading Portworx StorageCluster")
+
+	// Get k8s version
+	k8sVersion, err := k8sCore.GetVersion()
+	if err != nil {
+		return err
+	}
+
+	// Get images from version URL
+	imageList, err := optest.GetImagesFromVersionURL(specGenUrl, k8sVersion.String())
+	if err != nil {
+		return fmt.Errorf("failed to get image list from version URL [%s], Err: %v", specGenUrl, err)
+	}
+
+	// Get PX StorageCluster
+	cluster, err := d.GetDriver()
+	if err != nil {
+		return err
+	}
+
+	// Update PX Image and Env vars if needed
+	updateParamFunc := func(cluster *v1.StorageCluster) *v1.StorageCluster {
+		// Set oci-mon version
+		cluster.Spec.Image = imageList["version"]
+		var envVars []corev1.EnvVar
+		// Add Release Manifest URL incase of edge spec
+		envVars, err := configurePxReleaseManifestEnvVars(cluster.Spec.Env, specGenUrl)
+		if err != nil {
+			return nil
+		}
+		cluster.Spec.Env = envVars
+		return cluster
+	}
+
+	// Update and validate PX StorageCluster
+	if _, err := d.updateAndValidateStorageCluster(cluster, updateParamFunc, specGenUrl, false); err != nil {
+		return err
+	}
+
+	log.Infof("Successfully upgraded Portworx StorageCluster [%s]", cluster.Name)
+	return nil
+}
+
+// upgradePortworxOperator upgrades PX Operator based on the given Spec Generator URL
+func (d *portworx) upgradePortworxOperator(specGenUrl string) error {
+	log.InfoD("Upgrading Portworx Operator")
+
+	pxOperatorSpecFileName := "/px-operator.yaml"
+
+	// Get k8s version
+	kubeVersion, err := d.schedOps.GetKubernetesVersion()
+	if err != nil {
+		return err
+	}
+
+	// Getting PX Operator spec
+	u, err := url.Parse(specGenUrl)
+	if err != nil {
+		return fmt.Errorf("failed to parse URL [%s], Err: %v", specGenUrl, err)
+	}
+	q := u.Query()
+	q.Set("kbver", kubeVersion.String())
+	q.Set("comp", "pxoperator")
+	q.Set("ns", d.namespace)
+	u.RawQuery = q.Encode()
+	pxOperatorSpecGenUrl := u.String()
+	log.Debugf("Getting PX Operator spec from URL [%s]", pxOperatorSpecGenUrl)
+	if err := osutils.Wget(pxOperatorSpecGenUrl, pxOperatorSpecFileName, true); err != nil {
+		return err
+	}
+
+	// Getting context of the file
+	if _, err := osutils.Cat(pxOperatorSpecFileName); err != nil {
+		return err
+	}
+
+	// Apply PX Operator spec
+	log.Info("Applying PX Operator spec")
+	cmdArgs := []string{"apply", "-f", pxOperatorSpecFileName}
+	if err := osutils.Kubectl(cmdArgs); err != nil {
+		return err
+	}
+
+	// TODO: Temporary workaround, need to rewrite Operator validation functions to be able to use it here
+	// Validate PX Operator deployment
+	pxOperatorDeployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "portworx-operator",
+			Namespace: d.namespace,
+		},
+	}
+	if err := apps.Instance().ValidateDeployment(pxOperatorDeployment, validateDeploymentTimeout, validateDeploymentInterval); err != nil {
+		return err
+	}
+
+	log.Info("Successfully upgraded Portworx Operator")
+	return nil
+}
+
 // UpgradeStork upgrades Stork based on the given Spec Generator URL
 func (d *portworx) UpgradeStork(specGenUrl string) error {
 	storkSpecFileName := "/stork.yaml"
@@ -3000,7 +3089,7 @@ func (d *portworx) UpgradeStork(specGenUrl string) error {
 	// Getting stork spec
 	u, err := url.Parse(specGenUrl)
 	if err != nil {
-		fmt.Printf("failed to parse URL [%s], Err: %v", specGenUrl, err)
+		return fmt.Errorf("failed to parse URL [%s], Err: %v", specGenUrl, err)
 	}
 	q := u.Query()
 	q.Set("kbver", kubeVersion.String())
@@ -3102,7 +3191,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	log.Infof("Waiting for a minute for node [%s] to transistion to maintenece mode", n.Name)
+	log.Infof("Waiting for a minute for node [%s] to transition to maintenance mode", n.Name)
 	time.Sleep(1 * time.Minute)
 
 	nodeResp, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
@@ -4954,16 +5043,25 @@ func waitForAddDriveToComplete(n node.Node, drivePath string, d *portworx) error
 // GetPoolsUsedSize returns map of pool id and current used size
 func (d *portworx) GetPoolsUsedSize(n *node.Node) (map[string]string, error) {
 	cmd := fmt.Sprintf("%s sv pool show -j | grep -e uuid -e '\"Used\"'", d.getPxctlPath(*n))
+	log.Infof("Running command [%s] on node [%s]", cmd, n.Name)
 
-	out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
-		Timeout:         2 * time.Minute,
-		TimeBeforeRetry: 10 * time.Second,
-	})
+	t := func() (interface{}, bool, error) {
+		out, err := d.nodeDriver.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil {
+			return "", true, err
+		}
+		return out, false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 
 	if err != nil {
 		return nil, err
 	}
-	outLines := strings.Split(out, "\n")
+	outLines := strings.Split(out.(string), "\n")
 
 	poolsData := make(map[string]string)
 	var poolId string
