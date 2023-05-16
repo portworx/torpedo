@@ -2092,6 +2092,7 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		}
 	case mysql:
 		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS", "PDS_PORT"}
+		// ToDo: Fetch the port number dynamically
 		pdsPort := "6446"
 		// ToDo: Move the python command to the docker container/ Part of image.
 		mysqlcmd := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS} -port ${PDS_PORT}")
