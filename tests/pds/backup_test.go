@@ -17,6 +17,7 @@ var (
 	bkpClient                                     *pdsbkp.BackupClient
 	awsBkpTargets, azureBkpTargets, gcpBkpTargets []*pds.ModelsBackupTarget
 	bkpTargetName                                 = "bkptarget-automation"
+	bucket                                        = "pds-qa-automation"
 )
 
 var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
@@ -59,7 +60,7 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 })
 
 var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
-	bkpTargetName = bkpTargetName + randString(5)
+	bkpTargetName = bkpTargetName + randString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteDataServiceAndValidateBackupAtObjectStore", "Delete the PDS data service should not delete the backups in backend", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
@@ -86,13 +87,13 @@ var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
 					continue
 				}
+				currentTimestamp := time.Now().UTC()
 				stepLog = "Deploy and validate data service"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
-				currentTimestamp := time.Now().UTC()
 				stepLog = "Perform adhoc backup and validate them"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
@@ -123,7 +124,7 @@ var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
+		EndTorpedoTest()
 	})
 })
 

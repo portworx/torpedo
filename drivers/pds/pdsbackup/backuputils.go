@@ -19,8 +19,8 @@ const (
 	bucketName           = "pds-qa-automation"
 	awsS3endpoint        = "s3.amazonaws.com"
 	bkpTimeOut           = 30 * time.Minute
-	bkpTimeInterval      = 10 * time.Second
-	bkpMaxtimeInterval   = 60 * time.Second
+	bkpTimeInterval      = 20 * time.Second
+	bkpMaxtimeInterval   = 10 * time.Minute
 	BACKUP_JOB_SUCCEEDED = "Succeeded"
 )
 
@@ -51,6 +51,7 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	}
 	log.Infof("Adding backup target {Name: %v} to PDS.", name)
 	backupTarget, err := backupClient.Components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, region, "s3")
+	time.Sleep(bkpTimeInterval)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
 	}
@@ -127,6 +128,11 @@ func (backupClient *BackupClient) CreateGcpBackupCredsAndTarget(tenantId, name s
 
 // DeleteAwsS3BackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId string) error {
+	log.Info("Delete S3 bucket from AWS cloud.")
+	err := backupClient.AWSStorageClient.DeleteBucket(bucketName)
+	if err != nil {
+		return fmt.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
+	}
 	log.Info("Removing S3 backup creadentials and target from PDS.")
 	backupTarget, err := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 	if err != nil {
@@ -138,7 +144,7 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 	if err != nil {
 		return fmt.Errorf("Failed to delete AWS S3 backup target, Err: %v ", err)
 	}
-	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
+	waitErr := wait.Poll(bkpTimeInterval, bkpTimeOut, func() (bool, error) {
 		model, bkpErr := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 		if model != nil {
 			log.Info(model.GetName())
@@ -156,16 +162,16 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 	if err != nil {
 		return fmt.Errorf("Failed to delete AWS S3 backup credentials, Err: %v ", err)
 	}
-	log.Info("Delete S3 bucket from AWS cloud.")
-	err = backupClient.AWSStorageClient.deleteBucket(bucketName)
-	if err != nil {
-		return fmt.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
-	}
 	return nil
 }
 
 // DeleteAzureBackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId string) error {
+	log.Info("Delete Azure blob storage")
+	err := backupClient.AzureStorageClient.DeleteBucket()
+	if err != nil {
+		return fmt.Errorf("Failed to delete  azure blob %s, Err: %v ", bucketName, err)
+	}
 	log.Info("Removing Azure backup credentials and target from PDS.")
 	backupTarget, err := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 	if err != nil {
@@ -195,17 +201,16 @@ func (backupClient *BackupClient) DeleteAzureBackupCredsAndTarget(backupTargetId
 	if err != nil {
 		return fmt.Errorf("Failed to delete Azure backup credentials, Err: %v ", err)
 	}
-
-	log.Info("Delete Azure blob storage")
-	err = backupClient.AzureStorageClient.deleteBucket()
-	if err != nil {
-		return fmt.Errorf("Failed to delete  azure blob %s, Err: %v ", bucketName, err)
-	}
 	return nil
 }
 
 // DeleteGoogleBackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteGoogleBackupCredsAndTarget(backupTargetId string) error {
+	log.Info("Deleting google storage.")
+	err := backupClient.GCPStorageClient.DeleteBucket()
+	if err != nil {
+		return fmt.Errorf("Failed to delete bucket %s, Err: %v ", bucketName, err)
+	}
 	log.Info("Removing Google backup credentials and target from PDS.")
 	backupTarget, err := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 	if err != nil {
@@ -235,11 +240,6 @@ func (backupClient *BackupClient) DeleteGoogleBackupCredsAndTarget(backupTargetI
 	if err != nil {
 		return fmt.Errorf("Failed to delete Google backup credentials, Err: %v ", err)
 	}
-	log.Info("Deleting google storage.")
-	err = backupClient.GCPStorageClient.deleteBucket()
-	if err != nil {
-		return fmt.Errorf("Failed to delete bucket %s, Err: %v ", bucketName, err)
-	}
 	return nil
 }
 
@@ -265,36 +265,32 @@ func (backupClient *BackupClient) GetAllBackupSupportedDataServices() (map[strin
 
 // TriggerAndValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
 func (backupClient *BackupClient) TriggerAndValidateAdhocBackup(deploymentID string, backupTargetID string, backupType string) error {
-	currentTime := time.Now().UTC()
+	var bkpJobs []pds.ControllersBackupJobStatus
 	bkpObj, err := backupClient.Components.Backup.CreateBackup(deploymentID, backupTargetID, 10, true)
 	if err != nil {
 		return fmt.Errorf("failed while creating adhoc backup. Err: %v", err)
 	}
+	log.Infof("Created adhoc backup. Details: deployment- %v,backup type - %v, backup resource name: %v", bkpObj.GetDeploymentName(), bkpObj.GetBackupType(), bkpObj.GetClusterResourceName())
+
 	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
-		log.Infof("Data service : %v, State: %v", bkpObj.GetClusterResourceName(), bkpObj.GetState())
-		if bkpObj.GetState() != "created" {
-			return false, nil
-		} else if bkpObj.GetState() == "created" {
-			return true, nil
+		bkpJobs, err = backupClient.Components.BackupJob.ListBackupJobs(bkpObj.GetId())
+		if err != nil {
+			return false, err
 		}
-		return false, nil
+		log.Infof("[Backup job: %v] Status: %v", bkpJobs[0].GetName(), bkpJobs[0].GetStatus())
+		if bkpJobs[0].GetStatus() == "Succeeded" {
+			return true, nil
+		} else {
+			return false, nil
+		}
 	})
 	if waitErr != nil {
-		return fmt.Errorf("error occured while polling the backup. Err:%v", waitErr)
+		return fmt.Errorf("error occured while polling the status of backup job object. Err:%v", waitErr)
 	}
-	log.Infof("Created adhoc backup successfully for: %v", bkpObj.GetClusterResourceName())
-	if backupType == "s3" {
-		folders, err := backupClient.AWSStorageClient.ListFolders(currentTime)
-		if err != nil {
-			return err
-		}
-		if len(folders) < 1 {
-			return fmt.Errorf("backup job failed to populate data at the S3 location")
-		}
-		for _, folder := range folders {
-			log.Infof("backup job successfully backup up the data at S3, folder: %v (default encrypted).", folder)
-		}
-	}
+
+	log.Infof("Created adhoc backup successfully for %v,"+
+		" backup job: %v, backup job creation time: %v, backup job completion time: %v",
+		bkpObj.GetClusterResourceName(), bkpJobs[0].GetName(), bkpJobs[0].GetStartTime(), bkpJobs[0].GetCompletionTime())
 	return nil
 }
 

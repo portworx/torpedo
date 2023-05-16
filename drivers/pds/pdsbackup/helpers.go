@@ -68,7 +68,7 @@ func (awsObj *awsStorageClient) createBucket() error {
 	return nil
 }
 
-func (awsObj *awsStorageClient) deleteBucket(bucketName string) error {
+func (awsObj *awsStorageClient) DeleteBucket(bucketName string) error {
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(awsObj.region),
@@ -100,7 +100,7 @@ func (awsObj *awsStorageClient) deleteBucket(bucketName string) error {
 	return nil
 }
 
-func (awsObj *awsStorageClient) ListFolders(time time.Time) ([]string, error) {
+func (awsObj *awsStorageClient) ListFolders(after time.Time) ([]string, error) {
 	var folders []string
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
@@ -119,8 +119,10 @@ func (awsObj *awsStorageClient) ListFolders(time time.Time) ([]string, error) {
 		return nil, fmt.Errorf("error while listing the folders in S3 bucket")
 	}
 	for _, obj := range resp.Contents {
-		if obj.LastModified.After(time) {
+		log.Infof("Last modified status: %v", obj.LastModified.After(after))
+		if obj.LastModified.After(after) {
 			parts := strings.Split(*obj.Key, "/")
+			log.Infof("Parts: %v", parts)
 			if len(parts) >= 1 {
 				folders = append(folders, parts[0])
 			}
@@ -150,7 +152,7 @@ func (azObj *azureStorageClient) createBucket() error {
 	return nil
 }
 
-func (azObj *azureStorageClient) deleteBucket() error {
+func (azObj *azureStorageClient) DeleteBucket() error {
 	cred, err := azblob.NewSharedKeyCredential(azObj.accountName, azObj.accountKey)
 	if err != nil {
 		return fmt.Errorf("error -> %v", err.Error())
@@ -236,7 +238,7 @@ func (gcpObj *gcpStorageClient) createGcpJsonFile(path string) error {
 	return nil
 }
 
-func (gcpObj *gcpStorageClient) deleteBucket() error {
+func (gcpObj *gcpStorageClient) DeleteBucket() error {
 	ctx := context.Background()
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/json")
 	client, err := storage.NewClient(context.Background())
