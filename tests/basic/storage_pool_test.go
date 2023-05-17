@@ -31,7 +31,7 @@ import (
 
 const (
 	replicationUpdateTimeout = 4 * time.Hour
-	poolResizeTimeout        = time.Minute * 360
+	poolResizeTimeout        = time.Minute * 60
 	retryTimeout             = time.Minute * 2
 	addDriveUpTimeOut        = time.Minute * 15
 )
