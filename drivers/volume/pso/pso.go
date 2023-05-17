@@ -50,17 +50,20 @@ func (d *pso) String() string {
 }
 
 func (d *pso) ValidateCreateVolume(name string, params map[string]string) error {
-	log.Warnf("ValidateCreateVolume function has not been implemented for volume driver - %s", PureDriverName)
+	// TODO: Implementation of ValidateCreateVolume will be provided in the coming PRs
+	log.Warnf("ValidateCreateVolume function has not been implemented for volume driver - %s", d.String())
 	return nil
 }
 
 func (d *pso) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
-	log.Warnf("ValidateVolumeSetup function has not been implemented for volume driver - %s", PureDriverName)
+	// TODO: Implementation of ValidateVolumeSetup will be provided in the coming PRs
+	log.Warnf("ValidateVolumeSetup function has not been implemented for volume driver - %s", d.String())
 	return nil
 }
 
 func (d *pso) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
-	log.Warnf("ValidateDeleteVolume function has not been implemented for volume driver - %s", PureDriverName)
+	// TODO: Implementation of ValidateDeleteVolume will be provided in the coming PRs
+	log.Warnf("ValidateDeleteVolume function has not been implemented for volume driver - %s", d.String())
 	return nil
 }
 

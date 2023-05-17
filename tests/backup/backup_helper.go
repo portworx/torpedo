@@ -390,7 +390,7 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 		},
 	}
 
-	if os.Getenv("BACKUP_TYPE") == "Generic" {
+	if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
 		log.Infof("Detected generic backup type")
 		bkpCreateRequest.BackupType = api.BackupCreateRequest_Generic
 		var csiSnapshotClassName string
@@ -1495,7 +1495,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 						}
 
 						var expectedVolumeDriver string
-						if os.Getenv("BACKUP_TYPE") == "Generic" {
+						if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
 							expectedVolumeDriver = "kdmp"
 						} else {
 							expectedVolumeDriver = Inst().V.String()
@@ -2259,6 +2259,17 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 			Uid:  postRuleUid,
 		},
 		NsLabelSelectors: namespaceLabel,
+	}
+
+	if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
+		log.Infof("Detected generic backup type")
+		bkpCreateRequest.BackupType = api.BackupCreateRequest_Generic
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return nil, err
+		}
+		bkpCreateRequest.CsiSnapshotClassName = csiSnapshotClassName
 	}
 	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
