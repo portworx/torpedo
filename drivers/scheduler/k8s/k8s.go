@@ -5917,7 +5917,7 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 			log.Errorf("failed to write data to cloned PVC: %s", err)
 			return err
 		}
-		err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+		err = k.cloneAndVerify(ctx, size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
 		if err != nil {
 			log.Errorf("failed to validate cloned PVC content: %s ", err)
 			return err
@@ -6061,7 +6061,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 
 // cloneAndVerify takes an existing PVC mounted to a pod, clones the PVC and mount it to a new pod, returns an error if
 // the cloned PVC doesn't contain the file content of the original PVC
-func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageClass, clonedPVCName, originalPVC string) error {
+func (k *K8s) cloneAndVerify(ctx *scheduler.Context, size resource.Quantity, data, namespace, storageClass, clonedPVCName, originalPVC string) error {
 	clientset, err := k.getKubeClient("")
 	if err != nil {
 		log.Errorf("Failed to get kube client: %s", err)
@@ -6088,7 +6088,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 
 	if err = k.waitForPodToBeReady(restoredPod.Name, namespace); err != nil {
 		return &scheduler.ErrFailedToSchedulePod{
-			App:   nil,
+			App:   ctx.App,
 			Cause: fmt.Sprintf("restored pod is not ready. Error: %v", err),
 		}
 	}
