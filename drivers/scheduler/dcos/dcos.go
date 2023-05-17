@@ -1000,6 +1000,7 @@ func (d *dcos) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName string, sn
 
 }
 
+// GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
 func (d *dcos) GetAllSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error) {
 	// GetAllSnapshotClasses is not supported
 	return nil, &errors.ErrNotSupported{

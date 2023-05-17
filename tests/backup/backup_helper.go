@@ -188,6 +188,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	return nil
 }
 
+// GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class. Returns the first class if there are multiple
 func GetCsiSnapshotClassName() (string, error) {
 	var snapShotClasses *v1beta1.VolumeSnapshotClassList
 	var err error
