@@ -1930,21 +1930,23 @@ func CollectPodLogsandValidateWorkloads(deploymentName string, namespace string)
 		"Name or service not known"}
 
 	for _, pod := range pods.Items {
-		if strings.Contains(pod.Name, "load") {
+		if strings.Contains(pod.Name, deploymentName) && strings.Contains(pod.Name, "load") {
 			status := pod.Status.Phase
-			log.InfoD(" %v is %v", pod.Name, status)
-			podlogs, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{})
+			workloadPodName := pod.Name
+			log.InfoD("Workload:  %v is %v", workloadPodName, status)
+			podlogs, err := k8sCore.GetPodLog(workloadPodName, pod.Namespace, &corev1.PodLogOptions{})
 			if err != nil {
 				log.Errorf("An Error occured while getting pod logs, Error occurred is- %v\n and the WorloadPod status is - %v", err, status)
 			}
 			for _, line := range strings.Split(strings.TrimRight(podlogs, "\n"), "\n") {
 				for _, errmsg := range failure_messages {
 					if strings.Contains(line, errmsg) {
-						return fmt.Errorf("ERROR while running workload for [%s], Err: %v", pod.Name, errmsg)
+						log.Debugf("Complete Pod logs are: %v\n", podlogs)
+						return fmt.Errorf("ERROR while running workload , Err: %v", errmsg)
 					}
 				}
 			}
-			log.InfoD("Logging begins for Workload POD %v/n", pod.Name)
+			log.InfoD("Logging begins for Workload POD %v/n", workloadPodName)
 			log.Infof(podlogs)
 		}
 	}
