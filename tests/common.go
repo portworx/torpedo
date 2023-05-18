@@ -5062,6 +5062,18 @@ func collectStorkLogs(testCaseName string) {
 	collectLogsFromPods(testCaseName, storkLabel, pxNamespace, "stork")
 }
 
+// collectMongoDBLogs collects MongoDB logs and stores them using the collectLogsFromPods function
+func CollectMongoDBLogs(testCaseName string) {
+	pxbLabel := make(map[string]string)
+	pxbLabel["app.kubernetes.io/component"] = "pxc-backup-mongodb"
+	pxbNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		log.Errorf("Error in getting px-backup namespace. Err: %v", err.Error())
+		return
+	}
+	collectLogsFromPods(testCaseName, pxbLabel, pxbNamespace, "mongodb")
+}
+
 // collectPxBackupLogs collects Px-Backup logs and stores them using the collectLogsFromPods function
 func collectPxBackupLogs(testCaseName string) {
 	pxbLabel := make(map[string]string)
