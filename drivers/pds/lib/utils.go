@@ -1909,6 +1909,57 @@ func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, pdsPort string, na
 	return deployment, err
 }
 
+// Collect and log Workload generator pod logs in case of Error
+func CollectPodLogsandValidateWorkloads(deploymentName string, namespace string) error {
+	log.Debugf("Entered into logging")
+	pods, err := k8sCore.GetPods(namespace, nil)
+	if err != nil {
+		log.Errorf("An Error occured while getting pods")
+	}
+	failure_messages := []string{"Name or service not known",
+		"could not translate host name",
+		"Connection refused",
+		"Can't connect to",
+		" 'caching_sha2_password' is not supported",
+		"UnknownHostException",
+		"client unexpectedly closed TCP connection",
+		"context deadline exceeded",
+		"too many open files",
+		"i/o timeout",
+		"Failed to sync remote state: No cluster leader",
+		"Service Unavailable",
+		"Name or service not known"}
+	log.Debugf("Generated workload pod name contains %v", deploymentName)
+
+	for _, pod := range pods.Items {
+		log.Debugf("Podname is : %v", pod.Name)
+		log.Debugf("deploymentName is : %v", deploymentName)
+		if strings.Contains(pod.Name, "load") {
+			log.Debugf("Generated workload pod name contains %v", pod.Name)
+			status := pod.Status.Phase
+			log.InfoD("workloadpod- %v is in : %v", pod.Name, status)
+			podlogs, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{})
+			if err != nil {
+				log.Errorf("An Error occured while getting pod logs, Error occurred is- %v\n and the WorloadPOD status is - %v", err, status)
+			}
+			for _, line := range strings.Split(strings.TrimRight(podlogs, "\n"), "\n") {
+				fmt.Printf("log line is -----  %v", line)
+				for _, errmsg := range failure_messages {
+					if strings.Contains(line, errmsg) {
+						log.Debugf("string compare output", strings.Contains(line, errmsg))
+						log.Errorf("Workload Geneartion has terminated due to %v/n", line)
+
+						return fmt.Errorf(errmsg, "ERROR while running workload due to")
+					}
+				}
+			}
+			log.InfoD("Logging begins for Workload POD %v/n", pod.Name)
+			log.Infof(podlogs)
+		}
+	}
+	return err
+}
+
 // CreateRmqWorkload generate workloads for rmq
 func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string, env []string, command string) (*corev1.Pod, error) {
 	var value []string
@@ -2023,6 +2074,7 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *v1.Deployment, error) {
 	var dep *v1.Deployment
 	var pod *corev1.Pod
+	params.DeploymentName = params.DeploymentName + "-load"
 
 	dnsEndpoint, err := GetDeploymentConnectionInfo(params.DeploymentID)
 	if err != nil {
@@ -2041,6 +2093,10 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating postgresql workload, Err: %v", err)
 		}
+		err = CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
+		if err != nil {
+			log.FailOnError(err, "Error in running workloads, Please check the workload pod logs")
+		}
 
 	case rabbitmq:
 		env := []string{"AMQP_HOST", "PDS_USER", "PDS_PASS"}
@@ -2048,6 +2104,10 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		pod, err = CreateRmqWorkload(dnsEndpoint, pdsPassword, params.Namespace, env, command)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating rabbitmq workload, Err: %v", err)
+		}
+		err = CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
+		if err != nil {
+			log.FailOnError(err, "Error in running workloads, Please check the workload pod logs")
 		}
 
 	case redis:
@@ -2061,6 +2121,10 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
 		}
+		err = CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
+		if err != nil {
+			log.FailOnError(err, "Error in running workloads, Please check the workload pod logs")
+		}
 
 	case cassandra:
 		cassCommand := fmt.Sprintf("%s write no-warmup n=1000000 cl=ONE -mode user=pds password=%s native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node %s -port native=9042 -rate auto -log file=/tmp/%s.load.data -schema \"replication(factor=3)\" -errors ignore; cat /tmp/%s.load.data", params.DeploymentName, pdsPassword, dnsEndpoint, params.DeploymentName, params.DeploymentName)
@@ -2068,11 +2132,19 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating cassandra workload, Err: %v", err)
 		}
+		err = CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
+		if err != nil {
+			log.FailOnError(err, "Error in running workloads, Please check the workload pod logs")
+		}
 	case elasticSearch:
 		esCommand := fmt.Sprintf("while true; do esrally race --track=geonames --target-hosts=%s --pipeline=benchmark-only --test-mode --kill-running-processes --client-options=\"timeout:%s,use_ssl:%s,verify_certs:%s,basic_auth_user:%s,basic_auth_password:'%s'\"; done", dnsEndpoint, params.TimeOut, params.UseSSL, params.VerifyCerts, params.User, pdsPassword)
 		dep, err = CreateDeploymentWorkloads(esCommand, params.DeploymentName, esRallyImage, params.Namespace)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating elasticSearch workload, Err: %v", err)
+		}
+		err = CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
+		if err != nil {
+			log.FailOnError(err, "Error in running workloads, Please check the workload pod logs")
 		}
 
 	case couchbase:
@@ -2086,11 +2158,19 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating couchbase workload, Err: %v", err)
 		}
+		err = CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
+		if err != nil {
+			log.FailOnError(err, "Error in running workloads, Please check the workload pod logs")
+		}
 
 	case consul:
 		dep, err = RunConsulBenchWorkload(params.DeploymentName, params.Namespace)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error occured while creating Consul workload, Err: %v", err)
+		}
+		err = CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
+		if err != nil {
+			log.FailOnError(err, "Error in running workloads, Please check the workload pod logs")
 		}
 	case mysql:
 		env := []string{"PDS_USER", "MYSQL_HOST", "PDS_PASS", "PDS_PORT"}
@@ -2100,8 +2180,13 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 		mysqlcmd := fmt.Sprintf("python runner.py -user ${PDS_USER} -host ${MYSQL_HOST} -pwd ${PDS_PASS} -port ${PDS_PORT}")
 		dep, err = RunMySqlWorkload(dnsEndpoint, pdsPassword, pdsPort, params.Namespace, env, mysqlcmd, params.DeploymentName)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error occured while creating redis workload, Err: %v", err)
+			return nil, nil, fmt.Errorf("error occured while creating Mysql workload, Err: %v", err)
 		}
+		err = CollectPodLogsandValidateWorkloads(params.DeploymentName, params.Namespace)
+		if err != nil {
+			log.FailOnError(err, "Error in running workloads, Please check the workload pod logs")
+		}
+
 	}
 	return pod, dep, nil
 }
