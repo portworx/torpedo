@@ -5062,7 +5062,7 @@ func collectStorkLogs(testCaseName string) {
 	collectLogsFromPods(testCaseName, storkLabel, pxNamespace, "stork")
 }
 
-// collectMongoDBLogs collects MongoDB logs and stores them using the collectLogsFromPods function
+// CollectMongoDBLogs collects MongoDB logs and stores them using the collectLogsFromPods function
 func CollectMongoDBLogs(testCaseName string) {
 	pxbLabel := make(map[string]string)
 	pxbLabel["app.kubernetes.io/component"] = "pxc-backup-mongodb"
