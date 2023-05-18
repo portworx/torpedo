@@ -2092,6 +2092,10 @@ func ValidateAllPodsInPxBackupNamespace() error {
 		log.Infof("Checking status for pod - %s", pod.GetName())
 		err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
 		if err != nil {
+			// Collect mongoDB logs right after the command
+			ginkgoTest := CurrentGinkgoTestDescription()
+			testCaseName := fmt.Sprintf("%s-error", ginkgoTest.FullTestText)
+			CollectMongoDBLogs(testCaseName)
 			return err
 		}
 	}
