@@ -165,7 +165,7 @@ const (
 
 	defaultCommandRetry          = 5 * time.Second
 	defaultCommandTimeout        = 1 * time.Minute
-	storageTemplateName          = "QaDefault"
+	storageTemplateName          = "temp1"
 	resourceTemplateName         = "Small"
 	appConfigTemplateName        = "QaDefault"
 	defaultRetryInterval         = 10 * time.Minute
@@ -648,7 +648,6 @@ func GetnameSpaceID(namespace string, deploymentTargetID string) (string, error)
 func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (string, string, map[string][]string, error) {
 	var versions []pds.ModelsVersion
 	var images []pds.ModelsImage
-	dsVersionBuildMap := make(map[string][]string)
 
 	versions, err = components.Version.ListDataServiceVersions(dataServiceID)
 	if err != nil {
@@ -656,7 +655,6 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	}
 	isVersionAvailable = false
 	isBuildAvailable = false
-
 	for i := 0; i < len(versions); i++ {
 		log.Debugf("version name %s and is enabled=%t", *versions[i].Name, *versions[i].Enabled)
 		if *versions[i].Name == dsVersion {
@@ -666,7 +664,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 				if *images[j].Build == dsBuild {
 					versionID = versions[i].GetId()
 					imageID = images[j].GetId()
-					dsVersionBuildMap[versions[i].GetName()] = append(dsVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
+					dataServiceVersionBuildMap[versions[i].GetName()] = append(dataServiceVersionBuildMap[versions[i].GetName()], images[j].GetBuild())
 					isBuildAvailable = true
 					break
 				}
@@ -678,7 +676,7 @@ func GetVersionsImage(dsVersion string, dsBuild string, dataServiceID string) (s
 	if !(isVersionAvailable && isBuildAvailable) {
 		return "", "", nil, fmt.Errorf("version/build passed is not available")
 	}
-	return versionID, imageID, dsVersionBuildMap, nil
+	return versionID, imageID, dataServiceVersionBuildMap, nil
 }
 
 // GetAllVersionsImages returns all the versions and Images of dataservice
@@ -1894,6 +1892,7 @@ func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, pdsPort string, na
 		deploymentSpec.Spec.Template.Spec.Containers[0].Env[index].Name = env[index]
 		deploymentSpec.Spec.Template.Spec.Containers[0].Env[index].Value = value[index]
 	}
+	log.Debugf("Deployment Spec generated is: %v", deploymentSpec)
 	deployment, err := k8sApps.CreateDeployment(deploymentSpec, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
@@ -1929,27 +1928,19 @@ func CollectPodLogsandValidateWorkloads(deploymentName string, namespace string)
 		"Failed to sync remote state: No cluster leader",
 		"Service Unavailable",
 		"Name or service not known"}
-	log.Debugf("Generated workload pod name contains %v", deploymentName)
 
 	for _, pod := range pods.Items {
-		log.Debugf("Podname is : %v", pod.Name)
-		log.Debugf("deploymentName is : %v", deploymentName)
 		if strings.Contains(pod.Name, "load") {
-			log.Debugf("Generated workload pod name contains %v", pod.Name)
 			status := pod.Status.Phase
-			log.InfoD("workloadpod- %v is in : %v", pod.Name, status)
+			log.InfoD(" %v is %v", pod.Name, status)
 			podlogs, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &corev1.PodLogOptions{})
 			if err != nil {
-				log.Errorf("An Error occured while getting pod logs, Error occurred is- %v\n and the WorloadPOD status is - %v", err, status)
+				log.Errorf("An Error occured while getting pod logs, Error occurred is- %v\n and the WorloadPod status is - %v", err, status)
 			}
 			for _, line := range strings.Split(strings.TrimRight(podlogs, "\n"), "\n") {
-				fmt.Printf("log line is -----  %v", line)
 				for _, errmsg := range failure_messages {
 					if strings.Contains(line, errmsg) {
-						log.Debugf("string compare output", strings.Contains(line, errmsg))
-						log.Errorf("Workload Geneartion has terminated due to %v/n", line)
-
-						return fmt.Errorf(errmsg, "ERROR while running workload due to")
+						return fmt.Errorf("ERROR while running workload for [%s], Err: %v", pod.Name, errmsg)
 					}
 				}
 			}
