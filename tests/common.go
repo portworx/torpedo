@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"regexp"
 
+
+
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/pkg/aetosutil"
@@ -128,6 +130,9 @@ import (
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
+
+	// import pso driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/pso"
 
 	context1 "context"
 
@@ -4827,6 +4832,8 @@ func ParseFlags() {
 				JobName:                             torpedoJobName,
 				JobType:                             torpedoJobType,
 				PortworxPodRestartCheck:             pxPodRestartCheck,
+				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
+				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
 			}
 		})
