@@ -392,8 +392,6 @@ func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.P
 	}
 	bearerToken := *serviceAccToken.Token
 
-	//ctx := pdslib.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
-	//target := NewTargetCluster(ctx)
 	err = tc.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType)
 	if err != nil {
 		return fmt.Errorf("target cluster registeration failed with the error: %v", err)
