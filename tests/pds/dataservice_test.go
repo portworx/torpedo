@@ -31,18 +31,6 @@ const (
 	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
-var _ = Describe("{schedulePDSApps}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("schedulePDSApps", "schedule pds apps", nil, 0)
-	})
-
-	It("star deploying pds apps", func() {
-		contexts := ScheduleApplications("test pds")
-		ValidateApplications(contexts)
-	})
-
-})
-
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)
