@@ -530,9 +530,6 @@ var _ = Describe("{KillTeleportDuringDeployment}", func() {
 		Step("Deploy Data Services", func() {
 			var dsVersionBuildMap = make(map[string][]string)
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name != postgresql {
-					continue
-				}
 				Step("Start deployment, Kill Teleport Pod while deployment is ongoing and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
