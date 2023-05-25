@@ -350,7 +350,7 @@ func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.P
 	controlPlaneUrl := infraParams.InfraToTest.ControlPlaneURL
 	clusterType := infraParams.InfraToTest.ClusterType
 
-	_, components, _, err = pdsdriver.InitPdsApiComponents(controlPlaneUrl)
+	components, _, err = pdsdriver.InitPdsApiComponents(controlPlaneUrl)
 	if err != nil {
 		return fmt.Errorf("error while initializing api components - %v", err)
 	}
