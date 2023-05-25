@@ -60,7 +60,7 @@ var _ = BeforeSuite(func() {
 		err = pdslib.InitPdsComponents(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Error while initializing pds components in pdslib")
 
-		apiClient, components, controlPlane, err = pdsdriver.InitPdsApiComponents(params.InfraToTest.ControlPlaneURL)
+		components, controlPlane, err = pdsdriver.InitPdsApiComponents(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Error while initializing pds components in pds test")
 
 		dsTest, err = dataservices.DataserviceInit(params.InfraToTest.ControlPlaneURL)

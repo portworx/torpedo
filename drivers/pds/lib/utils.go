@@ -1115,7 +1115,7 @@ func IsReachable(url string) (bool, error) {
 }
 
 func InitPdsComponents(ControlPlaneURL string) error {
-	apiClient, components, controlplane, err = pdsdriver.InitPdsApiComponents(ControlPlaneURL)
+	components, controlplane, err = pdsdriver.InitPdsApiComponents(ControlPlaneURL)
 	if err != nil {
 		return err
 	}

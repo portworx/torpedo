@@ -406,7 +406,7 @@ func init() {
 }
 
 func DataserviceInit(ControlPlaneURL string) (*DataserviceType, error) {
-	apiClient, components, controlplane, err = pdsdriver.InitPdsApiComponents(ControlPlaneURL)
+	components, controlplane, err = pdsdriver.InitPdsApiComponents(ControlPlaneURL)
 	if err != nil {
 		return nil, err
 	}

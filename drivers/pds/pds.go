@@ -20,12 +20,12 @@ var (
 	pdsschedulers = make(map[string]Driver)
 )
 
-func InitPdsApiComponents(ControlPlaneURL string) (*pds.APIClient, *pdsapi.Components, *pdscontrolplane.ControlPlane, error) {
+func InitPdsApiComponents(ControlPlaneURL string) (*pdsapi.Components, *pdscontrolplane.ControlPlane, error) {
 	log.InfoD("Initializing Api components")
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	apiConf.Host = endpointURL.Host
 	apiConf.Scheme = endpointURL.Scheme
@@ -34,7 +34,7 @@ func InitPdsApiComponents(ControlPlaneURL string) (*pds.APIClient, *pdsapi.Compo
 	components := pdsapi.NewComponents(apiClient)
 	controlplane := pdscontrolplane.NewControlPlane(ControlPlaneURL, components)
 
-	return apiClient, components, controlplane, nil
+	return components, controlplane, nil
 }
 
 // Get returns a registered scheduler test provider.
