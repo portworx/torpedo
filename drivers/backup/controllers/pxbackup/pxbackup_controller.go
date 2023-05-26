@@ -69,6 +69,9 @@ func (p *PxBackupController) signInAsFirstTimeUser(username string, password str
 }
 
 func AddPxBackupControllersToMap(pxBackupControllerMap *map[string]*PxBackupController, userCredentials map[string]string) error {
+	if *pxBackupControllerMap == nil {
+		*pxBackupControllerMap = make(map[string]*PxBackupController, 0)
+	}
 	if userCredentials != nil {
 		for username, password := range userCredentials {
 			present, err := backup.IsUserPresent(username)
