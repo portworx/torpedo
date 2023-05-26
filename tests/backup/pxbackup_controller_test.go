@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/torpedo/drivers/backup/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"time"
 )
 
 // This testcase verifies basic backup rule,backup location, cloud setting
@@ -55,14 +56,6 @@ var _ = Describe("{NewBasicBackupCreation}", func() {
 		}
 	})
 	It("Basic Backup Creation Pxb Controller", func() {
-		//Step("Validating applications", func() {
-		//	log.InfoD("Validating applications")
-		//	ValidateApplications(contexts)
-		//})
-		//Step("Setting up px-backup controllers", func() {
-		//	err := pxbackup.SetControllers(&controllers, nil)
-		//	log.FailOnError(err, "Setting up px-backup controllers failed")
-		//})
 		//Step("Creating rules for backup", func() {
 		//	log.InfoD("Creating rules for backup")
 		//	log.InfoD("Creating pre rule for deployed apps")
@@ -84,17 +77,17 @@ var _ = Describe("{NewBasicBackupCreation}", func() {
 		//		}
 		//	}
 		//})
-		//Step("Creating backup location and cloud setting", func() {
-		//	log.InfoD("Creating backup location and cloud setting")
-		//	for _, cloudProvider := range providers {
-		//		cloudCredName := fmt.Sprintf("test-%s-ca-%v", cloudProvider, time.Now().Unix())
-		//		err := controllers["admin"].CloudAccount(cloudCredName, cloudProvider).Add()
-		//		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addtion of cloud account [%s]", cloudCredName))
-		//		bkpLocationName = fmt.Sprintf("test-bl-with-%s-%v", cloudCredName, time.Now().Unix())
-		//		err = controllers["admin"].BackupLocation(bkpLocationName, cloudCredName, getGlobalBucketName(cloudProvider)).Add()
-		//		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addtion of backup location [%s]", bkpLocationName))
-		//	}
-		//})
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			for _, cloudProvider := range utils.GetProvidersFromEnv() {
+				cloudCredName := fmt.Sprintf("test-%s-ca-%v", cloudProvider, time.Now().Unix())
+				err := pxbControllerMap["admin"].CloudAccount(cloudCredName, cloudProvider).Add()
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addtion of cloud account [%s]", cloudCredName))
+				//bkpLocationName = fmt.Sprintf("test-bl-with-%s-%v", cloudCredName, time.Now().Unix())
+				//err = controllers["admin"].BackupLocation(bkpLocationName, cloudCredName, getGlobalBucketName(cloudProvider)).Add()
+				//dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addtion of backup location [%s]", bkpLocationName))
+			}
+		})
 		//Step("Creating backup schedule policies", func() {
 		//	log.InfoD("Creating backup schedule policies")
 		//	log.InfoD("Creating backup interval schedule policy")
