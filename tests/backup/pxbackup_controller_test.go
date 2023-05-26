@@ -163,6 +163,10 @@ var _ = Describe("{NewBasicBackupCreation}", func() {
 		//})
 	})
 	JustAfterEach(func() {
+		for clusterName, clusterController := range clControllerMap {
+			err := clusterController.Cleanup()
+			log.FailOnError(err, "failed to clean up cluster [%s]", clusterName)
+		}
 		//defer EndPxBackupTorpedoTest(contexts)
 		//opts := make(map[string]bool)
 		//opts[SkipClusterScopedObjects] = true
