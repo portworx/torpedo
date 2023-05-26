@@ -530,7 +530,7 @@ var _ = Describe("{KillTeleportDuringDeployment}", func() {
 		Step("Deploy Data Services", func() {
 			var dsVersionBuildMap = make(map[string][]string)
 			for _, ds := range params.DataServiceToTest {
-				Step("Start deployment, Kill Teleport Pod while deployment is ongoing and validate data service", func() {
+				Step("Start deployment, Kill Agent Pod while deployment is ongoing and validate data service", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
 					pdslib.MarkResiliencyTC(true, false)
@@ -546,9 +546,11 @@ var _ = Describe("{KillTeleportDuringDeployment}", func() {
 					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
+
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Teleport Pod test for data service %v", *deployment.ClusterResourceName))
-					dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 					log.FailOnError(err, "Error while getting resource template")
 					log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
