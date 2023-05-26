@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup/utils"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -1213,4 +1214,19 @@ func GetRandomUserFromGroup(groupName string) (string, error) {
 	rand.Seed(time.Now().Unix())
 	userName := users[rand.Intn(len(users))]
 	return userName, nil
+}
+
+func IsUserPresent(username string) (bool, error) {
+	allUsers, err := GetAllUsers()
+	if err != nil {
+		return false, utils.ProcessError(err)
+	}
+	present := false
+	for _, user := range allUsers {
+		if user.Name == username {
+			present = true
+			break
+		}
+	}
+	return present, nil
 }

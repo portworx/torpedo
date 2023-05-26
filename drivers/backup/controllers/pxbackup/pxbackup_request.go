@@ -9,7 +9,7 @@ import (
 	"github.com/portworx/torpedo/tests"
 )
 
-func (p *PxbController) processPxBackupRequest(request interface{}) (response interface{}, err error) {
+func (p *PxBackupController) processPxBackupRequest(request interface{}) (response interface{}, err error) {
 	var ctx context.Context
 	if p.profile.isAdmin {
 		ctx, err = backup.GetAdminCtxFromSecret()

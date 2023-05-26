@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/portworx/torpedo/pkg/log"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 )
@@ -21,12 +19,6 @@ type VariablePair struct {
 	Name  string
 	Value interface{}
 }
-
-const (
-	DefaultConfigMapName       = "kubeconfigs"
-	DefaultKubeconfigDirectory = "/tmp"
-	DefaultConfigMapNamespace  = "default"
-)
 
 var (
 	DefaultCloudProviders = []string{"aws"}
@@ -71,33 +63,6 @@ const (
 // 	preRuleApps  = []string{"cassandra", "postgres"}
 // 	postRuleApps = []string{"cassandra"}
 // )
-
-func GetKubeconfigsFromEnv() []string {
-	kubeconfigs := os.Getenv("KUBECONFIGS")
-	kubeconfigsList := strings.Split(kubeconfigs, ",")
-	return kubeconfigsList
-}
-
-func GetClusterConfigPath(kubeconfigKey, configMapName string, configMapNamespace string) (string, error) {
-	cm, err := core.Instance().GetConfigMap(configMapName, configMapNamespace)
-	if err != nil {
-		return "", fmt.Errorf("error reading config map: %v", err)
-	}
-
-	kubeconfig, ok := cm.Data[kubeconfigKey]
-	if !ok {
-		return "", fmt.Errorf("kubeconfig for %s not found in the config map %s", kubeconfigKey, configMapName)
-	}
-
-	filePath := fmt.Sprintf("%s/%s", DefaultKubeconfigDirectory, kubeconfigKey)
-
-	err = ioutil.WriteFile(filePath, []byte(kubeconfig), 0644)
-	if err != nil {
-		return "", err
-	}
-
-	return filePath, nil
-}
 
 func GetGlobalBucketName(provider string) string {
 	switch provider {

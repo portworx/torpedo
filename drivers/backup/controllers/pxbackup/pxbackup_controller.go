@@ -1,6 +1,10 @@
 package pxbackup
 
-import "github.com/portworx/torpedo/drivers/backup"
+import (
+	"fmt"
+	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/backup/utils"
+)
 
 type Profile struct {
 	isAdmin         bool
@@ -10,29 +14,29 @@ type Profile struct {
 }
 
 type OrganizationObjects struct {
-	cloudAccounts    map[string]*CloudAccountInfo
-	backupLocations  map[string]*BackupLocationInfo
-	clusters         map[string]*ClusterInfo
-	rules            map[string]*RuleInfo
-	backups          map[string]*BackupInfo
-	restores         map[string]*RestoreInfo
-	schedulePolicies map[string]*SchedulePolicyInfo
+	cloudAccounts map[string]*CloudAccountInfo
+	//backupLocations  map[string]*BackupLocationInfo
+	//clusters         map[string]*ClusterInfo
+	//rules            map[string]*RuleInfo
+	//backups          map[string]*BackupInfo
+	//restores         map[string]*RestoreInfo
+	//schedulePolicies map[string]*SchedulePolicyInfo
 }
 
-type PxbController struct {
+type PxBackupController struct {
 	profile       Profile
 	currentOrgId  string
 	organizations map[string]*OrganizationObjects
 }
 
-func (p *PxbController) initializeDefaults() error {
+func (p *PxBackupController) initializeDefaults() error {
 	p.currentOrgId = "default"
 	p.organizations = make(map[string]*OrganizationObjects, 0)
 	p.organizations[p.currentOrgId] = &OrganizationObjects{}
 	return nil
 }
 
-func (p *PxbController) signInAsAdmin() error {
+func (p *PxBackupController) signInAsAdmin() error {
 	p.profile.isAdmin = true
 	p.profile.isFirstTimeUser = false
 	p.profile.username = "admin"
@@ -42,7 +46,7 @@ func (p *PxbController) signInAsAdmin() error {
 	return nil
 }
 
-func (p *PxbController) signInAsExistingUser(username string, password string) error {
+func (p *PxBackupController) signInAsExistingUser(username string, password string) error {
 	p.profile.isAdmin = false
 	p.profile.isFirstTimeUser = false
 	p.profile.username = username
@@ -53,7 +57,7 @@ func (p *PxbController) signInAsExistingUser(username string, password string) e
 	return nil
 }
 
-func (p *PxbController) signInAsFirstTimeUser(username string, password string) error {
+func (p *PxBackupController) signInAsFirstTimeUser(username string, password string) error {
 	p.profile.isAdmin = false
 	p.profile.isFirstTimeUser = true
 	p.profile.username = username
@@ -64,76 +68,40 @@ func (p *PxbController) signInAsFirstTimeUser(username string, password string) 
 	return nil
 }
 
-type RegisterNewUserConfig struct {
-	username  string
-	firstName string
-	lastName  string
-	email     string
-	password  string
-}
-
-func NewUser(username string, password string) *RegisterNewUserConfig {
-	return &RegisterNewUserConfig{
-		username:  username,
-		password:  password,
-		firstName: "first-" + username,
-		lastName:  "last-" + username,
-		email:     username + "@cnbu.com",
-	}
-}
-
-func (c *RegisterNewUserConfig) SetFirstName(firstName string) *RegisterNewUserConfig {
-	c.firstName = firstName
-	return c
-}
-
-func (c *RegisterNewUserConfig) SetLastName(lastName string) *RegisterNewUserConfig {
-	c.lastName = lastName
-	return c
-}
-
-func (c *RegisterNewUserConfig) SetEmail(email string) *RegisterNewUserConfig {
-	c.email = email
-	return c
-}
-
-func (c *RegisterNewUserConfig) GetController() (*PxbController, error) {
-	if err := backup.AddUser(c.username, c.firstName, c.lastName, c.email, c.password); err != nil {
-		return nil, err
-	}
-	userController := &PxbController{}
-	if err := userController.signInAsFirstTimeUser(c.username, c.password); err != nil {
-		return nil, err
-	}
-	return userController, nil
-}
-
-func SetControllers(controllers *map[string]*PxbController, userCredentials map[string]string) error {
+func AddPxBackupControllersToMap(pxBackupControllerMap *map[string]*PxBackupController, userCredentials map[string]string) error {
 	if userCredentials != nil {
 		for username, password := range userCredentials {
-			exists, err := isUserPresent(username)
+			present, err := backup.IsUserPresent(username)
 			if err != nil {
-				return err
+				debugMessage := fmt.Sprintf("username [%s]", username)
+				return utils.ProcessError(err, debugMessage)
 			}
-			if exists {
-				userController := &PxbController{}
-				if err := userController.signInAsExistingUser(username, password); err != nil {
-					return err
-				}
-				(*controllers)[username] = userController
-			} else {
-				userController, err := NewUser(username, password).GetController()
+			userController := &PxBackupController{}
+			if present {
+				err = userController.signInAsExistingUser(username, password)
 				if err != nil {
 					return err
 				}
-				(*controllers)[username] = userController
+			} else {
+				err = NewUser(username, password).Register()
+				if err != nil {
+					debugMessage := fmt.Sprintf("username [%s]", username)
+					return utils.ProcessError(err, debugMessage)
+				}
+				err = userController.signInAsFirstTimeUser(username, password)
+				if err != nil {
+					debugMessage := fmt.Sprintf("username [%s]", username)
+					return utils.ProcessError(err, debugMessage)
+				}
 			}
+			(*pxBackupControllerMap)[username] = userController
 		}
 	}
-	adminController := &PxbController{}
-	if err := adminController.signInAsAdmin(); err != nil {
-		return err
+	adminController := &PxBackupController{}
+	err := adminController.signInAsAdmin()
+	if err != nil {
+		return utils.ProcessError(err)
 	}
-	(*controllers)["admin"] = adminController
+	(*pxBackupControllerMap)["admin"] = adminController
 	return nil
 }

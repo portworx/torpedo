@@ -15,14 +15,14 @@ type CloudAccountInfo struct {
 	provider string
 }
 
-func (p *PxbController) setCloudAccountInfo(cloudAccountName string, cloudAccountInfo *CloudAccountInfo) {
+func (p *PxBackupController) setCloudAccountInfo(cloudAccountName string, cloudAccountInfo *CloudAccountInfo) {
 	if p.organizations[p.currentOrgId].cloudAccounts == nil {
 		p.organizations[p.currentOrgId].cloudAccounts = make(map[string]*CloudAccountInfo, 0)
 	}
 	p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName] = cloudAccountInfo
 }
 
-func (p *PxbController) GetCloudAccountInfo(cloudAccountName string) (*CloudAccountInfo, bool) {
+func (p *PxBackupController) GetCloudAccountInfo(cloudAccountName string) (*CloudAccountInfo, bool) {
 	cloudAccountInfo, ok := p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName]
 	if !ok {
 		return nil, false
@@ -30,15 +30,15 @@ func (p *PxbController) GetCloudAccountInfo(cloudAccountName string) (*CloudAcco
 	return cloudAccountInfo, true
 }
 
-func (p *PxbController) delCloudAccountInfo(cloudAccountName string) {
+func (p *PxBackupController) delCloudAccountInfo(cloudAccountName string) {
 	delete(p.organizations[p.currentOrgId].cloudAccounts, cloudAccountName)
 }
 
 type AddCloudAccountConfig struct {
 	cloudProvider    string
 	cloudAccountName string
-	cloudAccountUid  string         // default
-	controller       *PxbController // fixed
+	cloudAccountUid  string              // default
+	controller       *PxBackupController // fixed
 }
 
 func (c *AddCloudAccountConfig) SetCloudAccountUid(cloudAccountUid string) *AddCloudAccountConfig {
@@ -46,7 +46,7 @@ func (c *AddCloudAccountConfig) SetCloudAccountUid(cloudAccountUid string) *AddC
 	return c
 }
 
-func (p *PxbController) CloudAccount(cloudAccountName string, cloudProvider string) *AddCloudAccountConfig {
+func (p *PxBackupController) CloudAccount(cloudAccountName string, cloudProvider string) *AddCloudAccountConfig {
 	return &AddCloudAccountConfig{
 		cloudAccountName: cloudAccountName,
 		cloudProvider:    cloudProvider,
@@ -124,7 +124,7 @@ func (c *AddCloudAccountConfig) Add() error {
 	return nil
 }
 
-func (p *PxbController) DeleteCloudAccount(cloudAccountName string) error {
+func (p *PxBackupController) DeleteCloudAccount(cloudAccountName string) error {
 	cloudAccountInfo, ok := p.GetCloudAccountInfo(cloudAccountName)
 	if ok {
 		log.Infof("Deleting cloud account [%s] of org [%s]", cloudAccountName, p.currentOrgId)
