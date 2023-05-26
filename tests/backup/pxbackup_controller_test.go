@@ -44,7 +44,7 @@ var _ = Describe("{NewBasicBackupCreation}", func() {
 		log.FailOnError(err, "failed to add px-backup controller to pxb-controller-map")
 
 		for _, appKey := range Inst().AppList {
-			namespace := fmt.Sprintf("%s-%s", appKey, testRailId)
+			namespace := fmt.Sprintf("%s-%d", appKey, testRailId)
 			err := clControllerMap[utils.DefaultSourceClusterName].Application(appKey).ScheduleOnNamespace(namespace)
 			log.FailOnError(err, fmt.Sprintf("failed to schedule application [%s] on [%s]", appKey, utils.DefaultSourceClusterName))
 			appNamespaces = append(appNamespaces, namespace)
