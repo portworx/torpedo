@@ -9,13 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/pds"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"math/rand"
 	"net/http"
 	"regexp"
 
 	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
@@ -125,6 +125,9 @@ import (
 
 	// import driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
+
+	// import driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/pds/dataservice"
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
@@ -290,6 +293,7 @@ const (
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
+	defaultKvdbRetryInterval  = 5 * time.Minute
 )
 
 const (
@@ -442,10 +446,6 @@ func InitInstance() {
 
 	err = Inst().M.Init(Inst().JobName, Inst().JobType)
 	log.FailOnError(err, "Error occured while monitor Initialization")
-
-	if Inst().Pds != nil {
-		log.Infof("PDS Dataservice Initialised")
-	}
 
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
@@ -4704,7 +4704,7 @@ func ParseFlags() {
 			if pdsDriver, err = pds.Get(pdsDriverName); err != nil {
 				log.Fatalf("cannot find pds driver for %s. Err: %v\n", pdsDriverName, err)
 			} else {
-				log.Infof("Pds driver found")
+				log.Infof("Pds driver found %v", pdsDriver)
 			}
 		}
 
@@ -5422,7 +5422,7 @@ func ValidateDriveRebalance(stNode node.Node) error {
 			}, false)
 
 			if err != nil {
-				if strings.Contains(err.Error(), "Device already exists") {
+				if strings.Contains(err.Error(), "Device already exists") || strings.Contains(err.Error(), "Drive already in use") {
 					return "", false, nil
 				}
 				return "", true, err
@@ -6130,7 +6130,7 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 
 	// Delete all the pools present on the Node
 	for i := 0; i < lenPools; i++ {
-		err := Inst().V.DeletePool(n, strconv.Itoa(i))
+		err := Inst().V.DeletePool(n, strconv.Itoa(i), true)
 		if err != nil {
 			return err
 		}
@@ -6417,7 +6417,7 @@ func RandomString(length int) string {
 }
 
 // DeleteGivenPoolInNode deletes pool with given ID in the given node
-func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) {
+func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
 
 	log.InfoD("Setting pools in maintenance on node %s", stNode.Name)
 	if err = Inst().V.EnterPoolMaintenance(stNode); err != nil {
@@ -6475,7 +6475,7 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string) (err error) 
 		}
 
 	}()
-	err = Inst().V.DeletePool(stNode, poolIDToDelete)
+	err = Inst().V.DeletePool(stNode, poolIDToDelete, retry)
 	return err
 }
 func GetPoolUUIDWithMetadataDisk(stNode node.Node) (string, error) {
@@ -6742,6 +6742,25 @@ func GetAllKvdbNodes() ([]KvdbNode, error) {
 	return allKvdbNodes, nil
 }
 
+func GetKvdbMasterNode() (*node.Node, error) {
+	var getKvdbLeaderNode node.Node
+	allkvdbNodes, err := GetAllKvdbNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, each := range allkvdbNodes {
+		if each.Leader {
+			getKvdbLeaderNode, err = node.GetNodeDetailsByNodeID(each.ID)
+			if err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
+	return &getKvdbLeaderNode, nil
+}
+
 // GetKvdbMasterPID returns the PID of KVDB master node
 func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 	var processPid string
@@ -6764,6 +6783,42 @@ func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 		}
 	}
 	return processPid, err
+}
+
+// WaitForKVDBMembers waits till all kvdb members comes up online and healthy
+func WaitForKVDBMembers() error {
+	t := func() (interface{}, bool, error) {
+		allKvdbNodes, err := GetAllKvdbNodes()
+		if len(allKvdbNodes) != 3 {
+			return "", true, err
+		}
+		for _, each := range allKvdbNodes {
+			if each.IsHealthy {
+				return "", false, nil
+			}
+		}
+		return "", true, err
+	}
+	_, err := task.DoRetryWithTimeout(t, defaultKvdbRetryInterval, 20*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// KillKvdbMemberUsingPid return error in case of command failure
+func KillKvdbMemberUsingPid(kvdbNode node.Node) error {
+	pid, err := GetKvdbMasterPID(kvdbNode)
+	if err != nil {
+		return err
+	}
+	command := fmt.Sprintf("kill -9 %s", pid)
+	log.InfoD("killing PID using command [%s]", command)
+	err = runCmd(command, kvdbNode)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // getReplicaNodes returns the list of nodes which has replicas
