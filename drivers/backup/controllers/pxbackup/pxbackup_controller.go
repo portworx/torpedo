@@ -2,6 +2,7 @@ package pxbackup
 
 import (
 	"fmt"
+	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/backup/utils"
 )
@@ -11,6 +12,11 @@ type Profile struct {
 	isFirstTimeUser bool
 	username        string
 	password        string
+}
+
+type CloudAccountInfo struct {
+	*api.CloudCredentialObject
+	provider string
 }
 
 type OrganizationObjects struct {
@@ -66,6 +72,29 @@ func (p *PxBackupController) signInAsFirstTimeUser(username string, password str
 		return err
 	}
 	return nil
+}
+
+func (p *PxBackupController) getCloudAccountInfo(cloudAccountName string) *CloudAccountInfo {
+	cloudAccountInfo, ok := p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName]
+	if !ok {
+		return &CloudAccountInfo{}
+	}
+	return cloudAccountInfo
+}
+
+func (p *PxBackupController) saveCloudAccountInfo(cloudAccountName string, cloudAccountInfo *CloudAccountInfo) {
+	if p.organizations[p.currentOrgId].cloudAccounts == nil {
+		p.organizations[p.currentOrgId].cloudAccounts = make(map[string]*CloudAccountInfo, 0)
+	}
+	p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName] = cloudAccountInfo
+}
+
+func (p *PxBackupController) delCloudAccountInfo(cloudAccountName string) {
+	delete(p.organizations[p.currentOrgId].cloudAccounts, cloudAccountName)
+}
+
+func (p *PxBackupController) isCloudAccountNameRecorded(cloudAccountName string) bool {
+	return false
 }
 
 func AddPxBackupControllersToMap(pxBackupControllerMap *map[string]*PxBackupController, userCredentials map[string]string) error {

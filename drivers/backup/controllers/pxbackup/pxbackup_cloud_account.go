@@ -10,30 +10,6 @@ import (
 	"github.com/portworx/torpedo/tests"
 )
 
-type CloudAccountInfo struct {
-	*api.CloudCredentialObject
-	provider string
-}
-
-func (p *PxBackupController) setCloudAccountInfo(cloudAccountName string, cloudAccountInfo *CloudAccountInfo) {
-	if p.organizations[p.currentOrgId].cloudAccounts == nil {
-		p.organizations[p.currentOrgId].cloudAccounts = make(map[string]*CloudAccountInfo, 0)
-	}
-	p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName] = cloudAccountInfo
-}
-
-func (p *PxBackupController) GetCloudAccountInfo(cloudAccountName string) (*CloudAccountInfo, bool) {
-	cloudAccountInfo, ok := p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName]
-	if !ok {
-		return nil, false
-	}
-	return cloudAccountInfo, true
-}
-
-func (p *PxBackupController) delCloudAccountInfo(cloudAccountName string) {
-	delete(p.organizations[p.currentOrgId].cloudAccounts, cloudAccountName)
-}
-
 type AddCloudAccountConfig struct {
 	cloudProvider    string
 	cloudAccountName string
@@ -117,7 +93,7 @@ func (c *AddCloudAccountConfig) Add() error {
 		return err
 	}
 	cloudAccount := resp.(*api.CloudCredentialInspectResponse).GetCloudCredential()
-	c.controller.setCloudAccountInfo(c.cloudAccountName, &CloudAccountInfo{
+	c.controller.saveCloudAccountInfo(c.cloudAccountName, &CloudAccountInfo{
 		CloudCredentialObject: cloudAccount,
 		provider:              c.cloudProvider,
 	})
@@ -125,18 +101,19 @@ func (c *AddCloudAccountConfig) Add() error {
 }
 
 func (p *PxBackupController) DeleteCloudAccount(cloudAccountName string) error {
-	cloudAccountInfo, ok := p.GetCloudAccountInfo(cloudAccountName)
-	if ok {
-		log.Infof("Deleting cloud account [%s] of org [%s]", cloudAccountName, p.currentOrgId)
-		cloudAccountDeleteReq := &api.CloudCredentialDeleteRequest{
-			Name:  cloudAccountName,
-			OrgId: p.currentOrgId,
-			Uid:   cloudAccountInfo.GetUid(),
-		}
-		if _, err := p.processPxBackupRequest(cloudAccountDeleteReq); err != nil {
-			return err
-		}
-		p.delCloudAccountInfo(cloudAccountName)
-	}
+	//cloudAccountInfo, ok := p.getCloudAccountInfo(cloudAccountName)
+	//if ok {
+	//	log.Infof("Deleting cloud account [%s] of org [%s]", cloudAccountName, p.currentOrgId)
+	//	cloudAccountDeleteReq := &api.CloudCredentialDeleteRequest{
+	//		Name:  cloudAccountName,
+	//		OrgId: p.currentOrgId,
+	//		Uid:   cloudAccountInfo.GetUid(),
+	//	}
+	//	if _, err := p.processPxBackupRequest(cloudAccountDeleteReq); err != nil {
+	//		return err
+	//	}
+	//	p.delCloudAccountInfo(cloudAccountName)
+	//}
+	//return nil
 	return nil
 }
