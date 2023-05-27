@@ -2,39 +2,46 @@ package pxbackup
 
 import (
 	"fmt"
-	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/backup/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/s3utils"
 	"github.com/portworx/torpedo/tests"
 )
 
-type AddCloudAccountConfig struct {
-	cloudProvider    string
+type CloudAccountConfig struct {
 	cloudAccountName string
-	cloudAccountUid  string              // default
-	controller       *PxBackupController // fixed
+	cloudAccountUid  string
+	isRecorded       bool
+	controller       *PxBackupController
 }
 
-func (c *AddCloudAccountConfig) SetCloudAccountUid(cloudAccountUid string) *AddCloudAccountConfig {
-	c.cloudAccountUid = cloudAccountUid
-	return c
-}
-
-func (p *PxBackupController) CloudAccount(cloudAccountName string, cloudProvider string) *AddCloudAccountConfig {
-	return &AddCloudAccountConfig{
-		cloudAccountName: cloudAccountName,
-		cloudProvider:    cloudProvider,
-		cloudAccountUid:  uuid.New(),
-		controller:       p,
+func (c *CloudAccountConfig) validate() error {
+	if c.cloudAccountName == "" {
+		err := fmt.Errorf("cloud-account name cannot be empty")
+		return utils.ProcessError(err)
+	} else if len(c.cloudAccountName) < GlobalMinCloudAccountNameLength {
+		err := fmt.Errorf("cloud-account name [%s] must have a minimum length of [%d] characters", c.cloudAccountName, GlobalMinCloudAccountNameLength)
+		return utils.ProcessError(err)
+	} else if c.cloudAccountUid == "" {
+		err := fmt.Errorf("cloud-account uid cannot be empty")
+		return utils.ProcessError(err)
 	}
+	return nil
 }
 
-func (c *AddCloudAccountConfig) Add() error {
-	log.Infof("Adding cloud account [%s] for org [%s] and provider [%s]", c.cloudAccountName, c.controller.currentOrgId, c.cloudProvider)
+func (c *CloudAccountConfig) Add(cloudProvider string) error {
+	if c.isRecorded {
+		err := fmt.Errorf("already exists")
+		return utils.ProcessError(err)
+	}
+	err := c.validate()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
 	var cloudCredentialCreateReq *api.CloudCredentialCreateRequest
-	switch c.cloudProvider {
+	switch cloudProvider {
 	case drivers.ProviderAws:
 		id, secret, _, _, _ := s3utils.GetAWSDetailsFromEnv()
 		cloudCredentialCreateReq = &api.CloudCredentialCreateRequest{
@@ -76,9 +83,10 @@ func (c *AddCloudAccountConfig) Add() error {
 			},
 		}
 	default:
-		return fmt.Errorf("provider [%s] not supported for adding cloud account; supported providers: %s", c.cloudProvider, []string{drivers.ProviderAws, drivers.ProviderAzure})
+		return fmt.Errorf("provider [%s] not supported for adding cloud-account; supported providers: [%s]", cloudProvider, []string{drivers.ProviderAws, drivers.ProviderAzure})
 	}
-	_, err := c.controller.processPxBackupRequest(cloudCredentialCreateReq)
+	log.Infof("Adding cloud-account [%s] for org [%s] and provider [%s]", c.cloudAccountName, c.controller.currentOrgId, cloudProvider)
+	_, err = c.controller.processPxBackupRequest(cloudCredentialCreateReq)
 	if err != nil {
 		return err
 	}
@@ -95,25 +103,24 @@ func (c *AddCloudAccountConfig) Add() error {
 	cloudAccount := resp.(*api.CloudCredentialInspectResponse).GetCloudCredential()
 	c.controller.saveCloudAccountInfo(c.cloudAccountName, &CloudAccountInfo{
 		CloudCredentialObject: cloudAccount,
-		provider:              c.cloudProvider,
+		provider:              cloudProvider,
 	})
 	return nil
 }
 
-func (p *PxBackupController) DeleteCloudAccount(cloudAccountName string) error {
-	//cloudAccountInfo, ok := p.getCloudAccountInfo(cloudAccountName)
-	//if ok {
-	//	log.Infof("Deleting cloud account [%s] of org [%s]", cloudAccountName, p.currentOrgId)
-	//	cloudAccountDeleteReq := &api.CloudCredentialDeleteRequest{
-	//		Name:  cloudAccountName,
-	//		OrgId: p.currentOrgId,
-	//		Uid:   cloudAccountInfo.GetUid(),
-	//	}
-	//	if _, err := p.processPxBackupRequest(cloudAccountDeleteReq); err != nil {
-	//		return err
-	//	}
-	//	p.delCloudAccountInfo(cloudAccountName)
-	//}
-	//return nil
+func (c *CloudAccountConfig) Delete() error {
+	if !c.isRecorded {
+		err := fmt.Errorf("does not exist")
+		return utils.ProcessError(err)
+	}
+	cloudAccountDeleteReq := &api.CloudCredentialDeleteRequest{
+		Name:  c.cloudAccountName,
+		OrgId: c.controller.currentOrgId,
+		Uid:   c.cloudAccountUid,
+	}
+	if _, err := c.controller.processPxBackupRequest(cloudAccountDeleteReq); err != nil {
+		return err
+	}
+	c.controller.delCloudAccountInfo(c.cloudAccountName)
 	return nil
 }

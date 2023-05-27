@@ -2,9 +2,14 @@ package pxbackup
 
 import (
 	"fmt"
+	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/backup/utils"
+)
+
+const (
+	GlobalMinCloudAccountNameLength = 3
 )
 
 type Profile struct {
@@ -95,6 +100,24 @@ func (p *PxBackupController) delCloudAccountInfo(cloudAccountName string) {
 
 func (p *PxBackupController) isCloudAccountNameRecorded(cloudAccountName string) bool {
 	return false
+}
+
+func (p *PxBackupController) CloudAccount(cloudAccountName string) *CloudAccountConfig {
+	if p.isCloudAccountNameRecorded(cloudAccountName) {
+		cloudAccountInfo := p.getCloudAccountInfo(cloudAccountName)
+		return &CloudAccountConfig{
+			cloudAccountName: cloudAccountName,
+			cloudAccountUid:  cloudAccountInfo.GetUid(),
+			isRecorded:       true,
+			controller:       p,
+		}
+	}
+	return &CloudAccountConfig{
+		cloudAccountName: cloudAccountName,
+		cloudAccountUid:  uuid.New(),
+		isRecorded:       false,
+		controller:       p,
+	}
 }
 
 func AddPxBackupControllersToMap(pxBackupControllerMap *map[string]*PxBackupController, userCredentials map[string]string) error {
