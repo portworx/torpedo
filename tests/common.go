@@ -220,10 +220,10 @@ const (
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
 
-	torpedoJobNameFlag     = "torpedo-job-name"
-	torpedoJobTypeFlag     = "torpedo-job-type"
-	clusterCreationTimeout = 5 * time.Minute
-	ClusterCreationTimeout = 10 * time.Second
+	torpedoJobNameFlag       = "torpedo-job-name"
+	torpedoJobTypeFlag       = "torpedo-job-type"
+	clusterCreationTimeout   = 5 * time.Minute
+	clusterCreationRetryTime = 10 * time.Second
 
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
@@ -3482,7 +3482,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
 	}
-	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, ClusterCreationTimeout)
+	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
@@ -3507,7 +3507,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", true, fmt.Errorf("the %s cluster state is not Online yet", destinationClusterName)
 	}
-	_, err = task.DoRetryWithTimeout(destClusterStatus, clusterCreationTimeout, ClusterCreationTimeout)
+	_, err = task.DoRetryWithTimeout(destClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
