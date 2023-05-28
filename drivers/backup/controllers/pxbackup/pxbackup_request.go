@@ -11,15 +11,15 @@ import (
 
 func (p *PxBackupController) processPxBackupRequest(request interface{}) (response interface{}, err error) {
 	var ctx context.Context
-	if p.profile.isAdmin {
+	if p.isAdmin {
 		ctx, err = backup.GetAdminCtxFromSecret()
 		if err != nil {
 			return nil, utils.ProcessError(err)
 		}
 	} else {
-		ctx, err = backup.GetNonAdminCtx(p.profile.username, p.profile.password)
+		ctx, err = backup.GetNonAdminCtx(p.username, *p.password)
 		if err != nil {
-			debugMessage := fmt.Sprintf("profile: username [%s]", p.profile.username)
+			debugMessage := fmt.Sprintf("userInfo: username [%s]", p.username)
 			return nil, utils.ProcessError(err, debugMessage)
 		}
 	}
@@ -134,7 +134,7 @@ func (p *PxBackupController) processPxBackupRequest(request interface{}) (respon
 		return nil, utils.ProcessError(err)
 	}
 	if err != nil {
-		debugMessage := fmt.Sprintf("request: [%v]; profile: username [%s], is-admin [%t]; context-context: [%v]", request, p.profile.username, p.profile.isAdmin, ctx)
+		debugMessage := fmt.Sprintf("request: [%v]; userInfo: username [%s], is-admin [%t]; context-context: [%v]", request, p.username, p.isAdmin, ctx)
 		return nil, utils.ProcessError(err, debugMessage)
 	}
 	return response, nil

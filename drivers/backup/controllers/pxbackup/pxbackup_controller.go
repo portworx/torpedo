@@ -1,23 +1,19 @@
 package pxbackup
 
 import (
-	"fmt"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/backup/utils"
 )
 
 const (
 	GlobalMinCloudAccountNameLength = 3
+	GlobalAdminUsername             = "admin"
 )
 
-type Profile struct {
-	isAdmin         bool
-	isFirstTimeUser bool
-	username        string
-	password        string
-}
+const (
+	DefaultPxBackupOrganizationId = "default"
+)
 
 type CloudAccountInfo struct {
 	*api.CloudCredentialObject
@@ -35,48 +31,9 @@ type OrganizationObjects struct {
 }
 
 type PxBackupController struct {
-	profile       Profile
+	*UserInfo
 	currentOrgId  string
 	organizations map[string]*OrganizationObjects
-}
-
-func (p *PxBackupController) initializeDefaults() error {
-	p.currentOrgId = "default"
-	p.organizations = make(map[string]*OrganizationObjects, 0)
-	p.organizations[p.currentOrgId] = &OrganizationObjects{}
-	return nil
-}
-
-func (p *PxBackupController) signInAsAdmin() error {
-	p.profile.isAdmin = true
-	p.profile.isFirstTimeUser = false
-	p.profile.username = "admin"
-	if err := p.initializeDefaults(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *PxBackupController) signInAsExistingUser(username string, password string) error {
-	p.profile.isAdmin = false
-	p.profile.isFirstTimeUser = false
-	p.profile.username = username
-	p.profile.password = password
-	if err := p.initializeDefaults(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *PxBackupController) signInAsFirstTimeUser(username string, password string) error {
-	p.profile.isAdmin = false
-	p.profile.isFirstTimeUser = true
-	p.profile.username = username
-	p.profile.password = password
-	if err := p.initializeDefaults(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (p *PxBackupController) getCloudAccountInfo(cloudAccountName string) *CloudAccountInfo {
@@ -120,43 +77,18 @@ func (p *PxBackupController) CloudAccount(cloudAccountName string) *CloudAccount
 	}
 }
 
-func AddPxBackupControllersToMap(pxBackupControllerMap *map[string]*PxBackupController, userCredentials map[string]string) error {
+func AddPxBackupControllersToMap(pxBackupControllerMap *map[string]*PxBackupController, usersInfo []*UserInfo) error {
 	if *pxBackupControllerMap == nil {
 		*pxBackupControllerMap = make(map[string]*PxBackupController, 0)
 	}
-	if userCredentials != nil {
-		for username, password := range userCredentials {
-			present, err := backup.IsUserPresent(username)
-			if err != nil {
-				debugMessage := fmt.Sprintf("username [%s]", username)
-				return utils.ProcessError(err, debugMessage)
-			}
-			userController := &PxBackupController{}
-			if present {
-				err = userController.signInAsExistingUser(username, password)
-				if err != nil {
-					return err
-				}
-			} else {
-				err = NewUser(username, password).Register()
-				if err != nil {
-					debugMessage := fmt.Sprintf("username [%s]", username)
-					return utils.ProcessError(err, debugMessage)
-				}
-				err = userController.signInAsFirstTimeUser(username, password)
-				if err != nil {
-					debugMessage := fmt.Sprintf("username [%s]", username)
-					return utils.ProcessError(err, debugMessage)
-				}
-			}
-			(*pxBackupControllerMap)[username] = userController
+	adminUserInfo := User(GlobalAdminUsername, nil).IsAdmin()
+	usersInfo = append(usersInfo, adminUserInfo)
+	for _, userInfo := range usersInfo {
+		clusterController, err := userInfo.GetController()
+		if err != nil {
+			return utils.ProcessError(err)
 		}
+		(*pxBackupControllerMap)[userInfo.username] = clusterController
 	}
-	adminController := &PxBackupController{}
-	err := adminController.signInAsAdmin()
-	if err != nil {
-		return utils.ProcessError(err)
-	}
-	(*pxBackupControllerMap)["admin"] = adminController
 	return nil
 }

@@ -81,7 +81,7 @@ var _ = Describe("{NewBasicBackupCreation}", func() {
 			log.InfoD("Creating backup location and cloud setting")
 			for _, cloudProvider := range utils.GetProvidersFromEnv() {
 				cloudCredName := fmt.Sprintf("test-%s-ca-%v", cloudProvider, time.Now().Unix())
-				err := pxbControllerMap["admin"].CloudAccount(cloudCredName, cloudProvider).Add()
+				err := pxbControllerMap["admin"].CloudAccount(cloudCredName).Add(cloudProvider)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addtion of cloud account [%s]", cloudCredName))
 				//bkpLocationName = fmt.Sprintf("test-bl-with-%s-%v", cloudCredName, time.Now().Unix())
 				//err = controllers["admin"].BackupLocation(bkpLocationName, cloudCredName, getGlobalBucketName(cloudProvider)).Add()
