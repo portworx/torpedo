@@ -187,7 +187,7 @@ const (
 	backupLocationNameConst              = "tp-blocation"
 	backupScheduleNamePrefix             = "tp-bkp-schedule"
 	backupScheduleScaleName              = "-scale"
-	ConfigMapName                        = "kubeconfigs"
+	configMapName                        = "kubeconfigs"
 	pxNamespace                          = "kube-system"
 
 	pxbackupDeploymentName             = "px-backup"
@@ -220,10 +220,10 @@ const (
 
 	envSkipDiagCollection = "SKIP_DIAG_COLLECTION"
 
-	torpedoJobNameFlag       = "torpedo-job-name"
-	torpedoJobTypeFlag       = "torpedo-job-type"
-	ClusterCreationTimeout   = 5 * time.Minute
-	ClusterCreationRetryTime = 10 * time.Second
+	torpedoJobNameFlag     = "torpedo-job-name"
+	torpedoJobTypeFlag     = "torpedo-job-type"
+	clusterCreationTimeout = 5 * time.Minute
+	ClusterCreationTimeout = 10 * time.Second
 
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
@@ -3457,7 +3457,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 	if len(kubeconfigList) != 2 {
 		return fmt.Errorf("2 kubeconfigs are required for source and destination cluster")
 	}
-	err := DumpKubeConfigs(ConfigMapName, kubeconfigList)
+	err := dumpKubeConfigs(configMapName, kubeconfigList)
 	if err != nil {
 		return err
 	}
@@ -3482,7 +3482,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
 	}
-	_, err = task.DoRetryWithTimeout(sourceClusterStatus, ClusterCreationTimeout, ClusterCreationRetryTime)
+	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, ClusterCreationTimeout)
 	if err != nil {
 		return err
 	}
@@ -3507,7 +3507,7 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", true, fmt.Errorf("the %s cluster state is not Online yet", destinationClusterName)
 	}
-	_, err = task.DoRetryWithTimeout(destClusterStatus, ClusterCreationTimeout, ClusterCreationRetryTime)
+	_, err = task.DoRetryWithTimeout(destClusterStatus, clusterCreationTimeout, ClusterCreationTimeout)
 	if err != nil {
 		return err
 	}
@@ -4403,7 +4403,7 @@ func CreateAzureBucket(bucketName string) {
 		fmt.Sprintf("Failed to create container. Error: [%v]", err))
 }
 
-func DumpKubeConfigs(configObject string, kubeconfigList []string) error {
+func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 	log.Infof("dump kubeconfigs to file system")
 	cm, err := core.Instance().GetConfigMap(configObject, "default")
 	if err != nil {
@@ -4430,8 +4430,8 @@ func DumpKubeConfigs(configObject string, kubeconfigList []string) error {
 
 // DumpKubeconfigs gets kubeconfigs from configmap
 func DumpKubeconfigs(kubeconfigList []string) {
-	err := DumpKubeConfigs(ConfigMapName, kubeconfigList)
-	dash.VerifyFatal(err, nil, fmt.Sprintf("verfiy getting kubeconfigs [%v] from configmap [%s]", kubeconfigList, ConfigMapName))
+	err := dumpKubeConfigs(configMapName, kubeconfigList)
+	dash.VerifyFatal(err, nil, fmt.Sprintf("verfiy getting kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
 }
 
 // Inst returns the Torpedo instances
