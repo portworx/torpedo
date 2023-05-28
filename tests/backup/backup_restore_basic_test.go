@@ -3437,7 +3437,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.Infof("Creating source [%s] cluster", SourceClusterName)
-			err = RegisterCluster(orgID, SourceClusterName, "", "", ctx)
+			err = AddSourceCluster(ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] cluster with px-central-admin ctx", SourceClusterName))
 			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))

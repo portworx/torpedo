@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -2882,6 +2883,66 @@ func DeleteAppNamespace(namespace string) error {
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(namespaceDeleteCheck, namespaceDeleteTimeout, jobDeleteRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// RegisterCluster adds the cluster with the given name
+func RegisterCluster(orgID string, clusterName string, cloudCredName string, ctx context.Context) error {
+	var ConfigPath string
+	kubeConfigs := os.Getenv("KUBECONFIGS")
+	Inst().Dash.VerifyFatal(kubeConfigs != "", true, "Getting KUBECONFIGS Environment variable")
+	kubeConfigsList := strings.Split(kubeConfigs, ",")
+	err := DumpKubeConfigs(ConfigMapName, kubeConfigsList)
+	if err != nil {
+		return err
+	}
+	// Register cluster with backup driver
+	log.InfoD("Create cluster [%s] in org [%s]", clusterName, orgID)
+	if clusterName == SourceClusterName {
+		ConfigPath, err = GetSourceClusterConfigPath()
+	} else if clusterName == destinationClusterName {
+		ConfigPath, err = GetDestinationClusterConfigPath()
+	} else {
+		return errors.New(fmt.Sprintf("registering %s cluster not implemented", clusterName))
+	}
+	if err != nil {
+		return err
+	}
+	log.Infof("Save cluster %s kubeconfig to %s", clusterName, ConfigPath)
+	ClusterStatus := func() (interface{}, bool, error) {
+		err = CreateCluster(clusterName, ConfigPath, orgID, cloudCredName, "", ctx)
+		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
+			return "", true, err
+		}
+		srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, clusterName, ctx)
+		if err != nil {
+			return "", true, err
+		}
+		if srcClusterStatus == api.ClusterInfo_StatusInfo_Online {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("the %s cluster state is not Online yet", clusterName)
+	}
+	_, err = task.DoRetryWithTimeout(ClusterStatus, ClusterCreationTimeout, ClusterCreationRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func AddSourceCluster(ctx context.Context) error {
+	err := RegisterCluster(orgID, SourceClusterName, "", ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func AddDestinationCluster(ctx context.Context) error {
+	err := RegisterCluster(orgID, destinationClusterName, "", ctx)
 	if err != nil {
 		return err
 	}
