@@ -33,7 +33,7 @@ func (c *CloudAccountConfig) validate() error {
 
 func (c *CloudAccountConfig) Add(cloudProvider string) error {
 	if c.isRecorded {
-		err := fmt.Errorf("already exists")
+		err := fmt.Errorf("cloud-account [%s] is already recorded", c.cloudAccountName)
 		return utils.ProcessError(err)
 	}
 	err := c.validate()

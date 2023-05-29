@@ -56,23 +56,23 @@ func (p *PxBackupController) delCloudAccountInfo(cloudAccountName string) {
 }
 
 func (p *PxBackupController) isCloudAccountNameRecorded(cloudAccountName string) bool {
-	return false
+	_, ok := p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName]
+	return ok
 }
 
 func (p *PxBackupController) CloudAccount(cloudAccountName string) *CloudAccountConfig {
-	if p.isCloudAccountNameRecorded(cloudAccountName) {
-		cloudAccountInfo := p.getCloudAccountInfo(cloudAccountName)
+	if !p.isCloudAccountNameRecorded(cloudAccountName) {
 		return &CloudAccountConfig{
 			cloudAccountName: cloudAccountName,
-			cloudAccountUid:  cloudAccountInfo.GetUid(),
-			isRecorded:       true,
+			cloudAccountUid:  uuid.New(),
 			controller:       p,
 		}
 	}
+	cloudAccountInfo := p.getCloudAccountInfo(cloudAccountName)
 	return &CloudAccountConfig{
 		cloudAccountName: cloudAccountName,
-		cloudAccountUid:  uuid.New(),
-		isRecorded:       false,
+		cloudAccountUid:  cloudAccountInfo.GetUid(),
+		isRecorded:       true,
 		controller:       p,
 	}
 }
