@@ -85,6 +85,10 @@ func (d *pso) GetDriverVersion() (string, error) {
 	return psoVersion, nil
 }
 
+func (d *pso) RefreshDriverEndpoints() error {
+	return nil
+}
+
 // GetPsoNamespace returns namespace where PSO is running
 func GetPsoNamespace() (string, error) {
 	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
