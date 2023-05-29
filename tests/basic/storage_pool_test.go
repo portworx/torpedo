@@ -1273,7 +1273,6 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladdvolrz-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		stNodes := node.GetStorageNodes()
 		if len(stNodes) == 0 {
@@ -1323,6 +1322,8 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 				err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
 				log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
 			}
+
+			appsValidateAndDestroy(contexts)
 		})
 
 	})
