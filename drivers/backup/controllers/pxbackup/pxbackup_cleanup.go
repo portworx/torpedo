@@ -10,5 +10,8 @@ func (p *PxBackupController) Cleanup() error {
 			_ = p.CloudAccount(cloudAccountName).Delete()
 		}
 	}
+	if !p.isAdmin && !p.isExisting {
+		_ = p.UserInfo.delete()
+	}
 	return nil
 }

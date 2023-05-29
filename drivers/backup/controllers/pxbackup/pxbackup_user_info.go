@@ -26,13 +26,13 @@ func User(username string, password *string) *UserInfo {
 	}
 }
 
-func (u *UserInfo) IsExisting() *UserInfo {
-	u.isExisting = true
+func (u *UserInfo) IsAdmin() *UserInfo {
+	u.isAdmin, u.isExisting = true, true
 	return u
 }
 
-func (u *UserInfo) IsAdmin() *UserInfo {
-	u.isAdmin, u.isExisting = true, true
+func (u *UserInfo) IsExisting() *UserInfo {
+	u.isExisting = true
 	return u
 }
 
@@ -54,7 +54,8 @@ func (u *UserInfo) DeepCopy() *UserInfo {
 
 func (u *UserInfo) register() error {
 	if u.password == nil {
-		return fmt.Errorf("nil password")
+		err := fmt.Errorf("the password cannot be nil")
+		return utils.ProcessError(err)
 	}
 	err := backup.AddUser(u.username, u.firstName, u.lastName, u.email, *u.password)
 	if err != nil {

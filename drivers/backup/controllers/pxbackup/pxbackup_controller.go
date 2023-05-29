@@ -7,12 +7,12 @@ import (
 )
 
 const (
-	GlobalMinCloudAccountNameLength = 3
-	GlobalAdminUsername             = "admin"
+	GlobalAdminUsername = "admin"
 )
 
 const (
-	DefaultPxBackupOrganizationId = "default"
+	GlobalMinCloudAccountNameLength = 3
+	DefaultPxBackupOrganizationId   = "default"
 )
 
 type CloudAccountInfo struct {
