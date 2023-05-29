@@ -36,16 +36,18 @@ const (
 )
 
 const (
-	// DefaultConfigMapName is the default ConfigMap that stores kubeconfigs data
+	// DefaultConfigMapName is the default config-map that stores kubeconfigs data
 	DefaultConfigMapName = "kubeconfigs"
 	// DefaultConfigMapNamespace is the namespace of the DefaultConfigMapName
 	DefaultConfigMapNamespace = "default"
 )
 
 const (
-	// DefaultSourceClusterName is the default Cluster where the PX-Backup is installed
+	// DefaultInClusterName is the default cluster where the Torpedo is running
+	DefaultInClusterName = "source-cluster"
+	// DefaultSourceClusterName is the default cluster where the PX-Backup is installed
 	DefaultSourceClusterName = "source-cluster"
-	// DefaultDestinationClusterName is the default Cluster where applications are deployed
+	// DefaultDestinationClusterName is the default cluster where applications are installed
 	DefaultDestinationClusterName = "destination-cluster"
 )
 

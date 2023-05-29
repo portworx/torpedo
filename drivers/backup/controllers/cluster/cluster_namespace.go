@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// DestroySchedulerContextConfig holds the necessary configuration to effectively destroy scheduler-context
+type DestroySchedulerContextConfig struct {
+	waitForDestroy             bool
+	waitForResourceLeakCleanup bool
+	skipClusterScopedObjects   bool
+}
+
 // ValidateSchedulerContextConfig holds the necessary configuration to effectively validate scheduler-context
 type ValidateSchedulerContextConfig struct {
 	waitForRunningTimeout       time.Duration
@@ -18,34 +25,29 @@ type ValidateSchedulerContextConfig struct {
 	validateVolumeRetryInterval time.Duration
 }
 
-// DestroySchedulerContextConfig holds the necessary configuration to effectively destroy scheduler-context
-type DestroySchedulerContextConfig struct {
-	waitForDestroy             bool
-	waitForResourceLeakCleanup bool
-	skipClusterScopedObjects   bool
-}
-
 // NamespaceConfig holds the necessary configuration for managing namespaces within a ClusterController
 type NamespaceConfig struct {
-	namespace  string
-	appKey     *string
-	contexts   []*scheduler.Context
-	controller *ClusterController
-	*ValidateSchedulerContextConfig
+	namespace           string
+	isNamespaceRecorded bool
+	contexts            []*scheduler.Context
+	appKey              string
+	isAppKeyRecorded    bool
+	controller          *ClusterController
 	*DestroySchedulerContextConfig
+	*ValidateSchedulerContextConfig
 }
 
-// validateNamespaceConfig validates NamespaceConfig
-func validateNamespaceConfig(c *NamespaceConfig) error {
-	if c.contexts == nil {
-		err := fmt.Errorf("no scheduler-contexts of the namespace [%s] found", c.namespace)
+// validate validates NamespaceConfig
+func (c *NamespaceConfig) validate() error {
+	if !c.isNamespaceRecorded {
+		err := fmt.Errorf("namespace [%s] not recorded", c.namespace)
 		return utils.ProcessError(err)
 	} else if len(c.contexts) == 0 {
-		if c.appKey == nil {
+		if !c.isAppKeyRecorded {
 			err := fmt.Errorf("no scheduler-contexts of the namespace [%s] found", c.namespace)
 			return utils.ProcessError(err)
 		} else {
-			err := fmt.Errorf("no scheduler-contexts of the namespace [%s] with the app-key [%s] found", c.namespace, *c.appKey)
+			err := fmt.Errorf("no scheduler-contexts of the namespace [%s] with the app-key [%s] found", c.namespace, c.appKey)
 			return utils.ProcessError(err)
 		}
 	}
@@ -54,13 +56,14 @@ func validateNamespaceConfig(c *NamespaceConfig) error {
 
 // Application filters the NamespaceConfig to include only the scheduler-contexts associated with the specified appKey
 func (c *NamespaceConfig) Application(appKey string) *NamespaceConfig {
-	if c.contexts == nil {
+	if !c.isNamespaceRecorded {
+		c.isAppKeyRecorded = false
 		return c
 	}
-	c.appKey = &appKey
+	c.appKey = appKey
+	c.isAppKeyRecorded = true
 	appContexts := make([]*scheduler.Context, 0)
 	for _, ctx := range c.contexts {
-		log.Infof("%s -- %s", ctx.App.Key, appKey+"-")
 		if strings.HasPrefix(ctx.App.Key, appKey+"-") {
 			appContexts = append(appContexts, ctx)
 		}
@@ -69,9 +72,67 @@ func (c *NamespaceConfig) Application(appKey string) *NamespaceConfig {
 	return c
 }
 
+// Destroy iterates through each scheduler-context in the NamespaceConfig and destroys it
+func (c *NamespaceConfig) Destroy() error {
+	err := c.validate()
+	if err != nil {
+		debugMessage := fmt.Sprintf("namespace-config:  [%v]", c)
+		return utils.ProcessError(err, debugMessage)
+	}
+	err = c.controller.SwitchContext()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	for _, ctx := range c.contexts {
+		log.Infof("Destroying application [%s]", ctx.App.Key)
+		volumeOptions := &scheduler.VolumeOptions{
+			SkipClusterScopedObjects: true,
+		}
+		volumes, err := tests.Inst().S.DeleteVolumes(ctx, volumeOptions)
+		if err != nil {
+			debugMessage := fmt.Sprintf("scheduler-context: [%v]; volume-options: [%v]", ctx, volumeOptions)
+			return utils.ProcessError(err, debugMessage)
+		}
+		destroyOptions := map[string]bool{
+			tests.SkipClusterScopedObjects:              c.skipClusterScopedObjects,
+			scheduler.OptionsWaitForDestroy:             c.waitForDestroy,
+			scheduler.OptionsWaitForResourceLeakCleanup: c.waitForResourceLeakCleanup,
+		}
+		err = tests.Inst().S.Destroy(ctx, destroyOptions)
+		if err != nil {
+			debugMessage := fmt.Sprintf("scheduler-context: [%v]; destroy-options: [%v]", ctx, destroyOptions)
+			return utils.ProcessError(err, debugMessage)
+		}
+		if !ctx.SkipVolumeValidation {
+			for _, vol := range volumes {
+				err := tests.Inst().V.ValidateDeleteVolume(vol)
+				if err != nil {
+					debugMessage := fmt.Sprintf("volume: [%v]", vol)
+					return utils.ProcessError(err, debugMessage)
+				}
+			}
+		}
+		// because we have already used DeleteVolumes with true
+		if !c.skipClusterScopedObjects {
+			volumeOptions = &scheduler.VolumeOptions{
+				SkipClusterScopedObjects: false,
+			}
+			_, err = tests.Inst().S.DeleteVolumes(ctx, volumeOptions)
+			if err != nil {
+				debugMessage := fmt.Sprintf("scheduler-context: [%v]; volume-options: [%v]", ctx, volumeOptions)
+				return utils.ProcessError(err, debugMessage)
+			}
+		}
+	}
+	namespaceInfo := c.controller.getNamespaceInfo(c.namespace)
+	namespaceInfo.removeContexts(c.contexts)
+	c.controller.saveNamespaceInfo(c.namespace, namespaceInfo)
+	return nil
+}
+
 // Validate iterates through each scheduler-context in the NamespaceConfig and validates it
 func (c *NamespaceConfig) Validate() error {
-	err := validateNamespaceConfig(c)
+	err := c.validate()
 	if err != nil {
 		debugMessage := fmt.Sprintf("namespace-config: [%v]", c)
 		return utils.ProcessError(err, debugMessage)
@@ -141,63 +202,5 @@ func (c *NamespaceConfig) Validate() error {
 			}
 		}
 	}
-	return nil
-}
-
-// Destroy iterates through each scheduler-context in the NamespaceConfig and destroys it
-func (c *NamespaceConfig) Destroy() error {
-	err := validateNamespaceConfig(c)
-	if err != nil {
-		debugMessage := fmt.Sprintf("namespace-config:  [%v]", c)
-		return utils.ProcessError(err, debugMessage)
-	}
-	err = c.controller.SwitchContext()
-	if err != nil {
-		return utils.ProcessError(err)
-	}
-	for _, ctx := range c.contexts {
-		log.Infof("Destroying application [%s]", ctx.App.Key)
-		volumeOptions := &scheduler.VolumeOptions{
-			SkipClusterScopedObjects: true,
-		}
-		volumes, err := tests.Inst().S.DeleteVolumes(ctx, volumeOptions)
-		if err != nil {
-			debugMessage := fmt.Sprintf("scheduler-context: [%v]; volume-options: [%v]", ctx, volumeOptions)
-			return utils.ProcessError(err, debugMessage)
-		}
-		destroyOptions := map[string]bool{
-			tests.SkipClusterScopedObjects:              c.skipClusterScopedObjects,
-			scheduler.OptionsWaitForDestroy:             c.waitForDestroy,
-			scheduler.OptionsWaitForResourceLeakCleanup: c.waitForResourceLeakCleanup,
-		}
-		err = tests.Inst().S.Destroy(ctx, destroyOptions)
-		if err != nil {
-			debugMessage := fmt.Sprintf("scheduler-context: [%v]; destroy-options: [%v]", ctx, destroyOptions)
-			return utils.ProcessError(err, debugMessage)
-		}
-		if !ctx.SkipVolumeValidation {
-			for _, vol := range volumes {
-				err := tests.Inst().V.ValidateDeleteVolume(vol)
-				if err != nil {
-					debugMessage := fmt.Sprintf("volume: [%v]", vol)
-					return utils.ProcessError(err, debugMessage)
-				}
-			}
-		}
-		// because we have already used DeleteVolumes with true
-		if !c.skipClusterScopedObjects {
-			volumeOptions = &scheduler.VolumeOptions{
-				SkipClusterScopedObjects: false,
-			}
-			_, err = tests.Inst().S.DeleteVolumes(ctx, volumeOptions)
-			if err != nil {
-				debugMessage := fmt.Sprintf("scheduler-context: [%v]; volume-options: [%v]", ctx, volumeOptions)
-				return utils.ProcessError(err, debugMessage)
-			}
-		}
-	}
-	namespaceInfo := c.controller.getNamespaceInfo(c.namespace)
-	namespaceInfo.removeContexts(c.contexts)
-	c.controller.saveNamespaceInfo(c.namespace, namespaceInfo)
 	return nil
 }

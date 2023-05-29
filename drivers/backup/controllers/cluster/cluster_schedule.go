@@ -20,6 +20,15 @@ type ScheduleApplicationsConfig struct {
 	controller *ClusterController
 }
 
+// validate validates ScheduleApplicationsConfig
+func (c *ScheduleApplicationsConfig) validate() error {
+	if len(c.Namespace) > GlobalMaxNamespaceCharLimit {
+		err := fmt.Errorf("namespace [%s] exceeds the maximum character limit of [%d]", c.Namespace, GlobalMaxNamespaceCharLimit)
+		return utils.ProcessError(err)
+	}
+	return nil
+}
+
 // getAppsSpec returns the slice of AppSpecs associated with the app-keys defined in the ScheduleApplicationsConfig
 func (c *ScheduleApplicationsConfig) getAppsSpec() ([]*spec.AppSpec, error) {
 	var appsSpec []*spec.AppSpec
@@ -93,11 +102,11 @@ func (c *ScheduleApplicationsConfig) getCustomAppsSpec() ([]*spec.AppSpec, error
 
 // ScheduleOnNamespace schedules applications on the specified namespace
 func (c *ScheduleApplicationsConfig) ScheduleOnNamespace(namespace string) error {
-	if len(c.Namespace) > GlobalMaxNamespaceCharLimit {
-		err := fmt.Errorf("namespace [%s] exceeds the maximum character limit of [%d]", c.Namespace, GlobalMaxNamespaceCharLimit)
+	err := c.validate()
+	if err != nil {
 		return utils.ProcessError(err)
 	}
-	err := c.controller.SwitchContext()
+	err = c.controller.SwitchContext()
 	if err != nil {
 		return utils.ProcessError(err)
 	}

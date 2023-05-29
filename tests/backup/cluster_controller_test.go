@@ -18,16 +18,9 @@ var _ = Describe("{ClusterControllerDemo}", func() {
 	JustBeforeEach(func() {
 		testRailId = 31313
 
-		Step("Add source-cluster controller to cluster-controller-map", func() {
-			// source-cluster controller will help manage the source cluster
-			err := cluster.AddSourceClusterControllerToMap(&clusterControllerMap, testRailId)
-			log.FailOnError(err, "failed to add source-cluster controller to cluster-controller-map")
-		})
-
-		Step("Add destination-cluster controller to cluster-controller-map", func() {
-			// destination-cluster controller will help manage the destination cluster
-			err := cluster.AddDestinationClusterControllerToMap(&clusterControllerMap, testRailId)
-			log.FailOnError(err, "failed to add destination-cluster controller to cluster-controller-map")
+		Step("Add test case cluster controllers to cluster-controller-map", func() {
+			err := cluster.AddTestCaseClusterControllers(&clusterControllerMap, testRailId)
+			log.FailOnError(err, "failed to add test case cluster controllers to cluster-controller-map")
 		})
 	})
 

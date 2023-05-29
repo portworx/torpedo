@@ -52,8 +52,7 @@ func setStorageLessNodes(c *ClusterInfo) error {
 
 // IsInCluster configures the ClusterInfo to represent an in-cluster
 func (c *ClusterInfo) IsInCluster() *ClusterInfo {
-	c.ConfigPath = GlobalInClusterConfigPath
-	c.inCluster = true
+	c.ConfigPath, c.inCluster = GlobalInClusterConfigPath, true
 	return c
 }
 
@@ -63,20 +62,39 @@ func (c *ClusterInfo) IsHyperConverged() *ClusterInfo {
 	return c
 }
 
+// DeepCopy returns a deep copy of ClusterInfo
+func (c *ClusterInfo) DeepCopy() *ClusterInfo {
+	newClusterInfo := &ClusterInfo{
+		inCluster:             c.inCluster,
+		hyperConverged:        c.hyperConverged,
+		storageLessNodeLabels: make(map[string]string),
+		storageLessNodes:      make([]node.Node, len(c.storageLessNodes)),
+	}
+	if c.ClusterMetaData != nil {
+		clusterMetaDataCopy := *c.ClusterMetaData
+		newClusterInfo.ClusterMetaData = &clusterMetaDataCopy
+	}
+	for labelKey, labelValue := range c.storageLessNodeLabels {
+		newClusterInfo.storageLessNodeLabels[labelKey] = labelValue
+	}
+	copy(newClusterInfo.storageLessNodes, c.storageLessNodes)
+	return newClusterInfo
+}
+
 // GetController returns a new ClusterController instance based on the ClusterInfo
 func (c *ClusterInfo) GetController() (*ClusterController, error) {
-	clController := &ClusterController{
-		ClusterInfo:    c,
+	clusterController := &ClusterController{
+		ClusterInfo:    c.DeepCopy(),
 		namespaces:     make(map[string]*NamespaceInfo),
 		appKeyCountMap: make(map[string]int),
 	}
-	if !clController.ClusterInfo.hyperConverged {
+	if !clusterController.ClusterInfo.hyperConverged {
 		setStorageLessLabels(c)
 		err := setStorageLessNodes(c)
 		if err != nil {
-			debugMessage := fmt.Sprintf("cluster-info: [%v]", c)
+			debugMessage := fmt.Sprintf("cluster-info: [%#v]", c)
 			return nil, utils.ProcessError(err, debugMessage)
 		}
 	}
-	return clController, nil
+	return clusterController, nil
 }

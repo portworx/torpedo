@@ -167,8 +167,9 @@ func (c *ClusterController) Namespace(namespace string) *NamespaceConfig {
 	}
 	namespaceInfo := c.getNamespaceInfo(namespace)
 	return &NamespaceConfig{
-		namespace: namespace,
-		contexts:  namespaceInfo.contexts,
+		namespace:           namespace,
+		isNamespaceRecorded: true,
+		contexts:            namespaceInfo.contexts,
 		DestroySchedulerContextConfig: &DestroySchedulerContextConfig{
 			waitForDestroy:             DefaultWaitForDestroy,
 			waitForResourceLeakCleanup: DefaultWaitForResourceLeakCleanup,
@@ -218,38 +219,37 @@ func AddClusterControllersToMap(clusterControllerMap *map[string]*ClusterControl
 	if *clusterControllerMap == nil {
 		*clusterControllerMap = make(map[string]*ClusterController)
 	}
+	inClusterInfo := Cluster(0, utils.DefaultInClusterName, GlobalInClusterConfigPath).IsHyperConverged()
+	clustersInfo = append(clustersInfo, inClusterInfo)
 	for _, clusterInfo := range clustersInfo {
 		clusterController, err := clusterInfo.GetController()
 		if err != nil {
 			debugMessage := fmt.Sprintf("cluster: name [%s], config path [%s]", clusterInfo.Name, clusterInfo.ConfigPath)
 			return utils.ProcessError(err, debugMessage)
 		}
-
 		(*clusterControllerMap)[clusterInfo.Name] = clusterController
 	}
 	return nil
 }
 
-// AddSourceClusterControllerToMap add SourceClusterController to the specified map, using utils.DefaultSourceClusterName as the key
-func AddSourceClusterControllerToMap(clusterControllerMap *map[string]*ClusterController, id int) error {
+// AddTestCaseClusterControllers adds ClusterController instances associated with the specified testRailId for use by a test case
+func AddTestCaseClusterControllers(clusterControllerMap *map[string]*ClusterController, testRailId int) error {
 	sourceClusterConfigPath, err := utils.GetSourceClusterConfigPath()
 	if err != nil {
 		return utils.ProcessError(err)
 	}
-	clustersInfo := []*ClusterInfo{
-		Cluster(id, utils.DefaultSourceClusterName, sourceClusterConfigPath).IsHyperConverged().IsInCluster(),
-	}
-	return AddClusterControllersToMap(clusterControllerMap, clustersInfo)
-}
-
-// AddDestinationClusterControllerToMap add DestinationClusterController to the specified map, using utils.DefaultDestinationClusterName as the key
-func AddDestinationClusterControllerToMap(clusterControllerMap *map[string]*ClusterController, id int) error {
-	destinationClusterConfigPath, err := utils.GetDestinationClusterConfigPath()
-	if err != nil {
-		return utils.ProcessError(err)
-	}
-	clustersInfo := []*ClusterInfo{
-		Cluster(id, utils.DefaultDestinationClusterName, destinationClusterConfigPath).IsHyperConverged(),
+	sourceClusterInfo := Cluster(testRailId, utils.DefaultSourceClusterName, sourceClusterConfigPath).IsHyperConverged().IsInCluster()
+	var clustersInfo []*ClusterInfo
+	switch testRailId {
+	case 0:
+		clustersInfo = []*ClusterInfo{sourceClusterInfo}
+	default:
+		destinationClusterConfigPath, err := utils.GetDestinationClusterConfigPath()
+		if err != nil {
+			return utils.ProcessError(err)
+		}
+		destinationClusterInfo := Cluster(testRailId, utils.DefaultDestinationClusterName, destinationClusterConfigPath).IsHyperConverged()
+		clustersInfo = []*ClusterInfo{sourceClusterInfo, destinationClusterInfo}
 	}
 	return AddClusterControllersToMap(clusterControllerMap, clustersInfo)
 }
