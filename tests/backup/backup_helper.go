@@ -2894,8 +2894,8 @@ func RegisterCluster(orgID string, clusterName string, cloudCredName string, ctx
 	var ConfigPath string
 	kubeConfigs := os.Getenv("KUBECONFIGS")
 	Inst().Dash.VerifyFatal(kubeConfigs != "", true, "Getting KUBECONFIGS Environment variable")
-	kubeConfigsList := strings.Split(kubeConfigs, ",")
-	err := DumpKubeConfigs(ConfigMapName, kubeConfigsList)
+	kubeconfigList := strings.Split(kubeConfigs, ",")
+	err := DumpKubeConfigs(ConfigMapName, kubeconfigList)
 	if err != nil {
 		return err
 	}
