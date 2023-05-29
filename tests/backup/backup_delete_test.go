@@ -790,7 +790,6 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 			log.InfoD("Deleting the backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			dash.VerifyFatal(err, nil, "Unable fetch admin context")
-			log.InfoD("Deleting backup")
 			backupDriver := Inst().Backup
 			for _, backup := range backupNames {
 				backupUID, err := backupDriver.GetBackupUID(ctx, backup, orgID)
