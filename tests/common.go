@@ -4350,7 +4350,6 @@ func IsS3BucketEmpty(bucketName string) (bool, error) {
 		return false, fmt.Errorf("unable to fetch cotents from s3 failing with %s", err)
 	}
 
-	// Debug log to be removed later
 	log.Info(fmt.Sprintf("Result content %d", len(result.Contents)))
 	if len(result.Contents) > 0 {
 		return false, nil
