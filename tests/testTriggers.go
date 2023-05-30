@@ -38,7 +38,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
 	"github.com/portworx/torpedo/drivers/monitor/prometheus"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -2252,7 +2252,7 @@ func TriggerVolumeDelete(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 func createCloudCredential(req *api.CloudCredentialCreateRequest) error {
 	backupDriver := Inst().Backup
-	ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 
 	if err != nil {
 		return err
@@ -2508,7 +2508,7 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	setMetrics(*event)
 
 	Step("Update admin secret", func() {
-		err := backup.UpdatePxBackupAdminSecret()
+		err := Inst().Backup.(*pxbackup.PXBackup).UpdatePxCentralAdminTokenInSecret(true)
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	})
 	backupCounter++
@@ -2544,7 +2544,7 @@ func TriggerBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				continue
 			}
 			Step(fmt.Sprintf("Wait for backup %s to complete", backupName), func() {
-				ctx, err := backup.GetPxCentralAdminCtx()
+				ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 				if err != nil {
 					log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 					bkpNamespaceErrors[namespace] = err
@@ -2589,7 +2589,7 @@ func TriggerScheduledBackupAll(contexts *[]*scheduler.Context, recordChan *chan 
 
 	setMetrics(*event)
 
-	err := backup.UpdatePxBackupAdminSecret()
+	err := Inst().Backup.(*pxbackup.PXBackup).UpdatePxCentralAdminTokenInSecret(true)
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 
 	err = DeleteNamespace()
@@ -2662,7 +2662,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 	setMetrics(*event)
 
 	namespaceResourceMap := make(map[string][]string)
-	err := backup.UpdatePxBackupAdminSecret()
+	err := Inst().Backup.(*pxbackup.PXBackup).UpdatePxCentralAdminTokenInSecret(true)
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	if err != nil {
 		return
@@ -2737,7 +2737,7 @@ func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *c
 			continue
 		}
 		Step(fmt.Sprintf("Wait for backup [%s] to complete", backupName), func() {
-			ctx, err := backup.GetPxCentralAdminCtx()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 			if err != nil {
 				bkpNamespaceErrors[namespace] = err
 				ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
@@ -2808,7 +2808,7 @@ func TriggerInspectBackup(contexts *[]*scheduler.Context, recordChan *chan *Even
 	log.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
-	ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 	ProcessErrorWithMessage(event, err, "InspectBackup failed: Failed to get px-central admin context")
 	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
 	ProcessErrorWithMessage(event, err, "InspectBackup failed: Enumerate backup request failed")
@@ -2853,7 +2853,7 @@ func TriggerInspectRestore(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	log.Infof("Enumerating restores")
 	restoreEnumerateReq := &api.RestoreEnumerateRequest{
 		OrgId: OrgID}
-	ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 	ProcessErrorWithMessage(event, err, "InspectRestore failed: Failed to get px-central admin context")
 	curRestores, err := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
 	ProcessErrorWithMessage(event, err, "InspectRestore failed: Enumerate restore request failed")
@@ -2907,7 +2907,7 @@ func TriggerRestoreNamespace(contexts *[]*scheduler.Context, recordChan *chan *E
 	log.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
-	ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 	ProcessErrorWithMessage(event, err, "Restore namespace failed: Failed to get px-central admin context")
 	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
 	ProcessErrorWithMessage(event, err, "Restore namespace failed: Enumerate backup request failed")
@@ -3004,7 +3004,7 @@ func TriggerDeleteBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 	log.Infof("Enumerating backups")
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
 		OrgId: OrgID}
-	ctx, err := backup.GetPxCentralAdminCtx()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 	ProcessErrorWithMessage(event, err, "DeleteBackup failed: Failed to get px-central admin context")
 	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
 	ProcessErrorWithMessage(event, err, "DeleteBackup failed: Enumerate backup request failed")
@@ -3041,7 +3041,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 
 	setMetrics(*event)
 
-	err := backup.UpdatePxBackupAdminSecret()
+	err := Inst().Backup.(*pxbackup.PXBackup).UpdatePxCentralAdminTokenInSecret(true)
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	if err != nil {
 		return
@@ -3076,7 +3076,7 @@ func TriggerBackupSpecificResourceOnCluster(contexts *[]*scheduler.Context, reco
 		return
 	}
 	Step("Wait for backup to complete", func() {
-		ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 		if err != nil {
 			ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
 		} else {
@@ -3177,7 +3177,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 	setMetrics(*event)
 
-	err := backup.UpdatePxBackupAdminSecret()
+	err := Inst().Backup.(*pxbackup.PXBackup).UpdatePxCentralAdminTokenInSecret(true)
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	if err != nil {
 		return
@@ -3266,7 +3266,7 @@ func TriggerBackupByLabel(contexts *[]*scheduler.Context, recordChan *chan *Even
 		}
 	})
 	Step("Wait for backup to complete", func() {
-		ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 		if err != nil {
 			ProcessErrorWithMessage(event, err, fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
 		} else {
@@ -3323,7 +3323,7 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 
 	setMetrics(*event)
 
-	err := backup.UpdatePxBackupAdminSecret()
+	err := Inst().Backup.(*pxbackup.PXBackup).UpdatePxCentralAdminTokenInSecret(true)
 	ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 
 	bkpNamespaces := make([]string, 0)
@@ -3478,7 +3478,7 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	setMetrics(*event)
 
 	Step("Update admin secret", func() {
-		err := backup.UpdatePxBackupAdminSecret()
+		err := Inst().Backup.(*pxbackup.PXBackup).UpdatePxCentralAdminTokenInSecret(true)
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	})
 	backupCounter++
@@ -3522,7 +3522,7 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		if bkpError {
 			log.Warnf("Skipping waiting for backup [%s] due to error", backupName)
 		} else {
-			ctx, err := backup.GetPxCentralAdminCtx()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 			if err != nil {
 				log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 				UpdateOutcome(event, err)
@@ -3565,7 +3565,7 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 	setMetrics(*event)
 
 	Step("Update admin secret", func() {
-		err := backup.UpdatePxBackupAdminSecret()
+		err := Inst().Backup.(*pxbackup.PXBackup).UpdatePxCentralAdminTokenInSecret(true)
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	})
 	backupCounter++
@@ -3664,7 +3664,7 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 		if bkpError {
 			log.Warnf("Skipping waiting for backup [%s] due to error", backupName)
 		} else {
-			ctx, err := backup.GetPxCentralAdminCtx()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 			if err != nil {
 				log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 				UpdateOutcome(event, err)
@@ -3707,7 +3707,7 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 	setMetrics(*event)
 
 	Step("Update admin secret", func() {
-		err := backup.UpdatePxBackupAdminSecret()
+		err := Inst().Backup.(*pxbackup.PXBackup).UpdatePxCentralAdminTokenInSecret(true)
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	})
 	backupCounter++
@@ -3748,7 +3748,7 @@ func TriggerBackupDeleteBackupPod(contexts *[]*scheduler.Context, recordChan *ch
 	})
 
 	Step("Wait for backup to complete", func() {
-		ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 		if err != nil {
 			log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 			UpdateOutcome(event, err)
@@ -3790,7 +3790,7 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 	setMetrics(*event)
 
 	Step("Update admin secret", func() {
-		err := backup.UpdatePxBackupAdminSecret()
+		err := Inst().Backup.(*pxbackup.PXBackup).UpdatePxCentralAdminTokenInSecret(true)
 		ProcessErrorWithMessage(event, err, "Unable to update PxBackupAdminSecret")
 	})
 	backupCounter++
@@ -3853,7 +3853,7 @@ func TriggerBackupScaleMongo(contexts *[]*scheduler.Context, recordChan *chan *E
 	})
 
 	Step("Wait for backup to complete", func() {
-		ctx, err := backup.GetPxCentralAdminCtx()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtxFromSecret()
 		if err != nil {
 			log.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 			UpdateOutcome(event, err)

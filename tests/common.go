@@ -87,7 +87,8 @@ import (
 	"github.com/portworx/torpedo/drivers/node/ssh"
 
 	// import backup driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/backup/portworx"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
+
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
 	// import gke driver to invoke it's init
@@ -540,16 +541,6 @@ func InitInstance() {
 		log.Infof("PDS Dataservice Initialised")
 	}
 
-	if Inst().Backup != nil {
-		backupOptions := backup.InitOptions{
-			SchedulerDriver: Inst().S,
-			NodeDriver:      Inst().N,
-			VolumeDriver:    Inst().V,
-			Token:           token,
-		}
-		err = Inst().Backup.Init(backupOptions)
-		log.FailOnError(err, "Error occured while Backup Driver Initialization")
-	}
 	SetupTestRail()
 
 	if jiraUserName != "" && jiraToken != "" {
@@ -2706,7 +2697,7 @@ func DeleteCloudCredential(name string, orgID string, cloudCredUID string) error
 		OrgId: orgID,
 		Uid:   cloudCredUID,
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	if err != nil {
 		return err
 	}
@@ -3081,7 +3072,7 @@ func CreateBackupGetErr(backupName string, clusterName string, bLocation string,
 			Namespaces:     namespaces,
 			LabelSelectors: labelSelectors,
 		}
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 				err))
@@ -3123,8 +3114,8 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				},
 			},
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
-		ctx, err = backup.GetAdminCtxFromSecret()
+		//ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
+		ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		if err != nil {
 			return
 		}
@@ -3158,8 +3149,8 @@ func CreateScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 				Uid:  BackupLocationUID,
 			},
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
-		ctx, err = backup.GetAdminCtxFromSecret()
+		//ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
+		ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		if err != nil {
 			return
 		}
@@ -3256,7 +3247,7 @@ func GetBackupCreateRequest(backupName string, clusterName string, bLocation str
 
 // CreateBackupFromRequest creates a backup using a provided request
 func CreateBackupFromRequest(backupName string, orgID string, request *api.BackupCreateRequest) (err error) {
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]", err))
 	backupDriver := Inst().Backup
@@ -3280,8 +3271,8 @@ func InspectBackup(backupName string) (bkpInspectResponse *api.BackupInspectResp
 			OrgId: OrgID,
 			Name:  backupName,
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
-		ctx, err = backup.GetAdminCtxFromSecret()
+		//ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
+		ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		if err != nil {
 			return
 		}
@@ -3302,7 +3293,7 @@ func WaitForScheduledBackup(backupScheduleName string, retryInterval time.Durati
 		log.Infof("Enumerating backups")
 		bkpEnumerateReq := &api.BackupEnumerateRequest{
 			OrgId: OrgID}
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		if err != nil {
 			return nil, true, err
 		}
@@ -3348,8 +3339,8 @@ func InspectScheduledBackup(backupScheduleName, backupScheduleUID string) (bkpSc
 			Name:  backupScheduleNamePrefix + backupScheduleName,
 			Uid:   backupScheduleUID,
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
-		ctx, err = backup.GetAdminCtxFromSecret()
+		//ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
+		ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		if err != nil {
 			return
 		}
@@ -3395,7 +3386,7 @@ func DeleteLabelFromResource(spec interface{}, key string) {
 
 // DeleteBackupAndDependencies deletes backup and dependent backups
 func DeleteBackupAndDependencies(backupName string, backupUID string, orgID string, clusterName string) error {
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 
 	backupDeleteRequest := &api.BackupDeleteRequest{
 		Name:    backupName,
@@ -3493,7 +3484,7 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 		DeleteBackups: DeleteExistingBackups,
 		Uid:           backupLocationUID,
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	if err != nil {
 		return err
 	}
@@ -3748,7 +3739,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 		},
 	}
 
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	if err != nil {
 		return err
 	}
@@ -3815,7 +3806,7 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 			Type: api.BackupLocationInfo_Azure,
 		},
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	if err != nil {
 		return err
 	}
@@ -3849,7 +3840,7 @@ func CreateOrganization(orgID string) {
 				Name: orgID,
 			},
 		}
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		expect(err).NotTo(haveOccurred(),
 			fmt.Sprintf("Failed to fetch px-central-admin ctx: [%v]",
 				err))
@@ -3886,8 +3877,7 @@ func UpdateScheduledBackup(schedulePolicyName, schedulePolicyUID string, Schedul
 				},
 			},
 		}
-		//ctx, err = backup.GetPxCentralAdminCtx()
-		ctx, err = backup.GetAdminCtxFromSecret()
+		ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		if err != nil {
 			return
 		}
@@ -3915,7 +3905,7 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 			DeleteBackups: true,
 			Uid:           backupScheduleUID,
 		}
-		ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		if err != nil {
 			return
 		}
@@ -3942,7 +3932,7 @@ func DeleteScheduledBackup(backupScheduleName, backupScheduleUID, schedulePolicy
 			Name:  schedulePolicyName,
 			Uid:   schedulePolicyUID,
 		}
-		ctx, err = backup.GetPxCentralAdminCtx()
+		ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		if err != nil {
 			return
 		}
@@ -4919,7 +4909,7 @@ func ParseFlags() {
 		}
 		log.Infof("Backup driver name %s", backupDriverName)
 		if backupDriverName != "" {
-			if backupDriver, err = backup.Get(backupDriverName); err != nil {
+			if backupDriver, err = backup.GetNewInstance(backupDriverName); err != nil {
 				log.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
 			} else {
 				log.Infof("Backup driver found %v", backupDriver)
@@ -5293,7 +5283,7 @@ func collectStorkLogs(testCaseName string) {
 func collectPxBackupLogs(testCaseName string) {
 	pxbLabel := make(map[string]string)
 	pxbLabel["app"] = "px-backup"
-	pxbNamespace, err := backup.GetPxBackupNamespace()
+	pxbNamespace, err := Inst().Backup.(*pxbackup.PXBackup).GetPxBackupNamespace()
 	if err != nil {
 		log.Errorf("Error in getting px-backup namespace. Err: %v", err.Error())
 		return
@@ -5554,10 +5544,10 @@ func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 }
 
 // ValidateUserRole will validate if a given user has the provided PxBackupRole mapped to it
-func ValidateUserRole(userName string, role backup.PxBackupRole) (bool, error) {
-	roleMapping, err := backup.GetRolesForUser(userName)
+func ValidateUserRole(userName string, role pxbackup.PxBackupRole) (bool, error) {
+	roleMapping, err := Inst().Backup.(*pxbackup.PXBackup).GetRolesForUser(userName)
 	log.FailOnError(err, "Failed to get roles for user")
-	roleID, err := backup.GetRoleID(role)
+	roleID, err := Inst().Backup.(*pxbackup.PXBackup).GetRoleID(role)
 	log.FailOnError(err, "Failed to get role ID")
 	for _, r := range roleMapping {
 		if r.ID == roleID {
