@@ -22,7 +22,6 @@ type CloudAccountInfo struct {
 
 type BackupLocationInfo struct {
 	*api.BackupLocationObject
-	bucketName string
 }
 
 type OrganizationObjects struct {
@@ -32,6 +31,7 @@ type OrganizationObjects struct {
 
 type PxBackupController struct {
 	*UserInfo
+
 	currentOrgId  string
 	organizations map[string]*OrganizationObjects
 }
