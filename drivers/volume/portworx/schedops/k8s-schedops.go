@@ -84,14 +84,6 @@ var (
 	}
 )
 
-var (
-	k8sCore      = core.Instance()
-	k8sBatch     = batch.Instance()
-	k8sRbac      = rbac.Instance()
-	k8sAutopilot = autopilot.Instance()
-	k8sApps      = apps.Instance()
-)
-
 // errLabelPresent error type for a label being present on a node
 type errLabelPresent struct {
 	// label is the label key
@@ -116,22 +108,32 @@ func (e *errLabelAbsent) Error() string {
 	return fmt.Sprintf("label %s is absent on node %s", e.label, e.node)
 }
 
-type k8sSchedOps struct{}
+type k8sSchedOps struct {
+	nodeRegistry *node.NodeRegistry
+
+	// below are pointers (manipulate carefully)
+
+	k8sCore      core.Ops
+	k8sApps      apps.Ops
+	k8sAutopilot autopilot.Ops
+	k8sBatch     batch.Ops
+	k8sRbac      rbac.Ops
+}
 
 func (k *k8sSchedOps) GetKubernetesVersion() (*version.Info, error) {
-	return k8sCore.GetVersion()
+	return k.k8sCore.GetVersion()
 }
 
 func (k *k8sSchedOps) StopPxOnNode(n node.Node) error {
-	return k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStop)
+	return k.k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStop)
 }
 
 func (k *k8sSchedOps) StartPxOnNode(n node.Node) error {
-	return k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStart)
+	return k.k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStart)
 }
 
 func (k *k8sSchedOps) RestartPxOnNode(n node.Node) error {
-	return k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationRestart)
+	return k.k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationRestart)
 }
 
 func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
@@ -150,10 +152,10 @@ func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []*api.StorageNode, vol *ap
 	var missingLabelNodes []string
 	for _, rs := range replicaNodes {
 		t := func() (interface{}, bool, error) {
-			n, err := k8sCore.GetNodeByName(rs.Id)
+			n, err := k.k8sCore.GetNodeByName(rs.Id)
 			if err != nil || n == nil {
 				addrs := []string{rs.DataIp, rs.MgmtIp}
-				n, err = k8sCore.SearchNodeByAddresses(addrs)
+				n, err = k.k8sCore.SearchNodeByAddresses(addrs)
 				if err != nil || n == nil {
 					return nil, true, fmt.Errorf("failed to locate node using id: %s and addresses: %v",
 						rs.Id, addrs)
@@ -190,9 +192,9 @@ func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []*api.StorageNode, vol *ap
 func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 	pvcLabel := vol.Name
 	var staleLabelNodes []string
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range k.nodeRegistry.GetWorkerNodes() {
 		t := func() (interface{}, bool, error) {
-			nodeLabels, err := k8sCore.GetLabelsOnNode(n.Name)
+			nodeLabels, err := k.k8sCore.GetLabelsOnNode(n.Name)
 			if err != nil {
 				return nil, true, err
 			}
@@ -232,7 +234,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 	}
 
 	t := func() (interface{}, bool, error) {
-		pods, err := k8sCore.GetPodsUsingPV(pvName)
+		pods, err := k.k8sCore.GetPodsUsingPV(pvName)
 		printStatus(k, pods...)
 		if err != nil {
 			return nil, true, err
@@ -250,14 +252,14 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 			for _, ownerref := range pods[0].OwnerReferences {
 				switch ownerref.Kind {
 				case "ReplicaSet":
-					rs, err := k8sApps.GetReplicaSet(ownerref.Name, pods[0].Namespace)
+					rs, err := k.k8sApps.GetReplicaSet(ownerref.Name, pods[0].Namespace)
 					if err != nil {
 						log.Errorf("failed to get replicaset %s. cause: %v", ownerref.Name, err)
 						return nil, true, err
 					}
 					lenExpectedPods = int(*rs.Spec.Replicas)
 				case "StatefulSet":
-					st, err := k8sApps.GetStatefulSet(ownerref.Name, pods[0].Namespace)
+					st, err := k.k8sApps.GetStatefulSet(ownerref.Name, pods[0].Namespace)
 					if err != nil {
 						log.Errorf("failed to get statefulset %s. cause: %v", ownerref.Name, err)
 						return nil, true, err
@@ -291,10 +293,10 @@ func (k *k8sSchedOps) validateMountsInPods(
 	d node.Driver) ([]string, error) {
 
 	validatedMountPods := make([]string, 0)
-	nodes := node.GetNodesByName()
+	nodes := k.nodeRegistry.GetNodesByName()
 PodLoop:
 	for _, p := range pods {
-		pod, err := k8sCore.GetPodByName(p.Name, p.Namespace)
+		pod, err := k.k8sCore.GetPodByName(p.Name, p.Namespace)
 		if err != nil && err == k8serrors.ErrPodsNotFound {
 			log.Warnf("pod %s not found. probably it got rescheduled", p.Name)
 			continue
@@ -302,7 +304,7 @@ PodLoop:
 			// pod is being terminated, skip
 			log.Warnf("pod %s/%s is being terminated, not validating the mounts...", p.Namespace, p.Name)
 			continue
-		} else if !k8sCore.IsPodReady(*pod) {
+		} else if !k.k8sCore.IsPodReady(*pod) {
 			// if pod is not ready, delay the check
 			printStatus(k, *pod)
 			continue
@@ -314,7 +316,7 @@ PodLoop:
 		containerPaths := getContainerPVCMountMap(*pod)
 		skipHostMountCheck := false
 		for containerName, paths := range containerPaths {
-			output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
+			output, err := k.k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
 			if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
 				// if pod is not found or in completed state so delay the check and move to next pod
 				log.Warnf("Failed to execute command in pod. Cause %v", err)
@@ -463,13 +465,13 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 		Name:           "*portworx-volume",
 	}
 
-	for _, n := range node.GetStorageDriverNodes() {
+	for _, n := range k.nodeRegistry.GetStorageDriverNodes() {
 		volDirList, _ := d.FindFiles(k8sPodsRootDir, n, listVolOpts)
 		nodeToPodsMap[n.Name] = separateFilePaths(volDirList)
 		nodeMap[n.Name] = n
 	}
 
-	existingPods, _ := k8sCore.GetPods("", nil)
+	existingPods, _ := k.k8sCore.GetPods("", nil)
 
 	orphanPodsMap := make(map[string][]string)
 	dirtyVolPodsMap := make(map[string][]string)
@@ -554,7 +556,7 @@ func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
 	if namespace, err = k.GetPortworxNamespace(); err != nil {
 		return "", err
 	}
-	return k8sCore.GetServiceEndpoint(PXServiceName, namespace)
+	return k.k8sCore.GetServiceEndpoint(PXServiceName, namespace)
 }
 
 func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error {
@@ -577,7 +579,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 			Name: "cluster-admin",
 		},
 	}
-	binding, err = k8sRbac.CreateClusterRoleBinding(binding)
+	binding, err = k.k8sRbac.CreateClusterRoleBinding(binding)
 	if err != nil {
 		return err
 	}
@@ -588,7 +590,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 			Namespace: namespace,
 		},
 	}
-	account, err = k8sCore.CreateServiceAccount(account)
+	account, err = k.k8sCore.CreateServiceAccount(account)
 	if err != nil {
 		return err
 	}
@@ -630,35 +632,35 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 		},
 	}
 
-	job, err = k8sBatch.CreateJob(job)
+	job, err = k.k8sBatch.CreateJob(job)
 	if err != nil {
 		return err
 	}
 
-	numNodes, err := k8sCore.GetNodes()
+	numNodes, err := k.k8sCore.GetNodes()
 	if err != nil {
 		return err
 	}
 
 	jobTimeout := time.Duration(len(numNodes.Items)) * 10 * time.Minute
 
-	err = k8sBatch.ValidateJob(job.Name, job.Namespace, jobTimeout)
+	err = k.k8sBatch.ValidateJob(job.Name, job.Namespace, jobTimeout)
 	if err != nil {
 		return err
 	}
 
 	// cleanup
-	err = k8sBatch.DeleteJob(job.Name, job.Namespace)
+	err = k.k8sBatch.DeleteJob(job.Name, job.Namespace)
 	if err != nil {
 		return err
 	}
 
-	err = k8sRbac.DeleteClusterRoleBinding(binding.Name)
+	err = k.k8sRbac.DeleteClusterRoleBinding(binding.Name)
 	if err != nil {
 		return err
 	}
 
-	err = k8sCore.DeleteServiceAccount(account.Name, account.Namespace)
+	err = k.k8sCore.DeleteServiceAccount(account.Name, account.Namespace)
 	if err != nil {
 		return err
 	}
@@ -676,14 +678,14 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 		log.Errorf("Failed to get portworx namespace. Error : %v", err)
 		return false
 	}
-	pxPods, err := k8sCore.GetPodsByNode(n.Name, namespace)
+	pxPods, err := k.k8sCore.GetPodsByNode(n.Name, namespace)
 	if err != nil {
 		log.Errorf("Failed to get apps on node %s. Error : %v", n.Name, err)
 		return false
 	}
 	// Need to make sure if px pod is present or not
 	for _, pod := range pxPods.Items {
-		if pod.Labels["name"] == PXDaemonSet && !k8sCore.IsPodReady(pod) {
+		if pod.Labels["name"] == PXDaemonSet && !k.k8sCore.IsPodReady(pod) {
 			printStatus(k, pod)
 			return false
 		}
@@ -696,7 +698,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 			for _, containerStatus := range containersStatuses {
 				n.PxPodRestartCount += containerStatus.RestartCount
 			}
-			if err = node.UpdateNode(n); err != nil {
+			if err = k.nodeRegistry.UpdateNode(n); err != nil {
 				log.Errorf("Failed to update node %s.Error: %v", n.Name, err)
 				return false
 			}
@@ -709,7 +711,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 // IsPXEnabled returns true  if px is enabled on given node
 func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	t := func() (interface{}, bool, error) {
-		node, err := k8sCore.GetNodeByName(n.Name)
+		node, err := k.k8sCore.GetNodeByName(n.Name)
 		if err != nil {
 			log.Errorf("Failed to get node %v", err)
 			return nil, true, err
@@ -862,7 +864,7 @@ func getPXNodes(k *k8sSchedOps, destKubeConfig string) ([]corev1.Node, error) {
 
 // CreateAutopilotRule creates the AutopilotRule object
 func (k *k8sSchedOps) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
-	k8sOps := k8sAutopilot
+	k8sOps := k.k8sAutopilot
 	apRule.Labels = map[string]string{
 		"creator": "torpedo",
 	}
@@ -881,7 +883,7 @@ func (k *k8sSchedOps) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.Au
 }
 
 func (k *k8sSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
-	k8sOps := k8sAutopilot
+	k8sOps := k.k8sAutopilot
 	listAutopilotRules, err := k8sOps.ListAutopilotRules()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get list of autopilotrules. Err: %v", err)
@@ -893,7 +895,7 @@ func (k *k8sSchedOps) GetPortworxNamespace() (string, error) {
 	var allServices *corev1.ServiceList
 	var err error
 
-	if allServices, err = k8sCore.ListServices("", metav1.ListOptions{}); err != nil {
+	if allServices, err = k.k8sCore.ListServices("", metav1.ListOptions{}); err != nil {
 		return "", fmt.Errorf("Failed to get list of services. Err: %v", err)
 	}
 	for _, svc := range allServices.Items {
@@ -937,6 +939,17 @@ func init() {
 	Register("k8s", k)
 }
 
-func (k *k8sSchedOps) Init() {
+// Init initializes k8s schedops node driver
+func (k *k8sSchedOps) DeepCopy() Driver {
+	out := *k
+	return &out
+}
 
+func (k *k8sSchedOps) Init(schedopsOpts InitOptions) {
+	k.nodeRegistry = schedopsOpts.NodeRegistry
+	k.k8sCore = schedopsOpts.K8sCore
+	k.k8sApps = schedopsOpts.K8sApps
+	k.k8sAutopilot = schedopsOpts.K8sAutopilot
+	k.k8sBatch = schedopsOpts.K8sBatch
+	k.k8sRbac = schedopsOpts.K8sRbac
 }

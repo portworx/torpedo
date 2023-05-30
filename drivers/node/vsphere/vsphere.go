@@ -47,11 +47,9 @@ type vsphere struct {
 	vsphereHostIP   string
 	ctx             context.Context
 	cancel          context.CancelFunc
+	nodeRegistry    *node.NodeRegistry
+	vmMap           map[string]*object.VirtualMachine
 }
-
-var (
-	vmMap = make(map[string]*object.VirtualMachine)
-)
 
 func (v *vsphere) String() string {
 	return DriverName
@@ -84,6 +82,8 @@ func (v *vsphere) Init(nodeOpts node.InitOptions) error {
 	if err != nil {
 		return err
 	}
+	v.nodeRegistry = nodeOpts.NodeRegistry
+	v.vmMap = make(map[string]*object.VirtualMachine)
 	return nil
 }
 
@@ -91,10 +91,10 @@ func (v *vsphere) Init(nodeOpts node.InitOptions) error {
 func (v *vsphere) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
 	log.Infof("Testing vsphere driver connection by checking state of the VMs in the vsphere")
-	if _, ok := vmMap[n.Name]; !ok {
+	if _, ok := v.vmMap[n.Name]; !ok {
 		return fmt.Errorf("Failed to get VM: %s", n.Name)
 	}
-	vm := vmMap[n.Name]
+	vm := v.vmMap[n.Name]
 	cmd := "hostname"
 	t := func() (interface{}, bool, error) {
 		powerState, err := vm.PowerState(v.ctx)
@@ -160,20 +160,19 @@ func (v *vsphere) connect() error {
 	if err != nil {
 		return err
 	}
-	// vmMap Reset to get the new valid VMs info.
-	vmMap = make(map[string]*object.VirtualMachine)
+	// v.vmMap Reset to get the new valid VMs info.
+	v.vmMap = make(map[string]*object.VirtualMachine)
 	// Find virtual machines in datacenter
 	vms, err := f.VirtualMachineList(v.ctx, "*")
 	if err != nil {
 		return fmt.Errorf("Failed to find any virtual machines on %s: %v", v.vsphereHostIP, err)
 	}
 
-	nodes := node.GetNodes()
 	for _, vm := range vms {
-		for _, n := range nodes {
+		for _, n := range v.nodeRegistry.GetNodes() {
 			if vm.Name() == n.Name {
-				if _, ok := vmMap[vm.Name()]; !ok {
-					vmMap[vm.Name()] = vm
+				if _, ok := v.vmMap[vm.Name()]; !ok {
+					v.vmMap[vm.Name()] = vm
 				}
 			}
 		}
@@ -181,11 +180,11 @@ func (v *vsphere) connect() error {
 	return nil
 }
 
-// AddVM adds a new VM object to vmMap
+// AddVM adds a new VM object to v.vmMap
 func (v *vsphere) AddMachine(vmName string) error {
 	var f *find.Finder
 
-	log.Infof("Adding VM: %s into vmMap  ", vmName)
+	log.Infof("Adding VM: %s into v.vmMap  ", vmName)
 
 	f, err := v.getVMFinder()
 	if err != nil {
@@ -197,18 +196,18 @@ func (v *vsphere) AddMachine(vmName string) error {
 		return err
 	}
 
-	vmMap[vm.Name()] = vm
+	v.vmMap[vm.Name()] = vm
 	return nil
 }
 
 // RebootVM reboots vsphere VM
 func (v *vsphere) RebootNode(n node.Node, options node.RebootNodeOpts) error {
-	if _, ok := vmMap[n.Name]; !ok {
+	if _, ok := v.vmMap[n.Name]; !ok {
 		return fmt.Errorf("could not fetch VM for node: %s", n.Name)
 	}
 	//Reestblish connection to avoid session timeout.
 	v.connect()
-	vm := vmMap[n.Name]
+	vm := v.vmMap[n.Name]
 	log.Infof("Rebooting VM: %s  ", vm.Name())
 	err := vm.RebootGuest(v.ctx)
 	if err != nil {
@@ -246,7 +245,7 @@ func (v *vsphere) powerOnVM(vm *object.VirtualMachine) error {
 // PowerOnVM powers on the VM if not already on
 func (v *vsphere) PowerOnVM(n node.Node) error {
 	var err error
-	vm := vmMap[n.Name]
+	vm := v.vmMap[n.Name]
 
 	log.Infof("Powering on VM: %s  ", vm.Name())
 	if err = v.powerOnVM(vm); err != nil {
@@ -261,9 +260,9 @@ func (v *vsphere) PowerOnVM(n node.Node) error {
 
 // PowerOnVMByName powers on VM by using name
 func (v *vsphere) PowerOnVMByName(vmName string) error {
-	// Make sure vmName is part of vmMap before using this method
+	// Make sure vmName is part of v.vmMap before using this method
 	var err error
-	vm := vmMap[vmName]
+	vm := v.vmMap[vmName]
 
 	log.Infof("Powering on VM: %s  ", vm.Name())
 	if err = v.powerOnVM(vm); err != nil {
@@ -275,7 +274,7 @@ func (v *vsphere) PowerOnVMByName(vmName string) error {
 // PowerOffVM powers off the VM if not already off
 func (v *vsphere) PowerOffVM(n node.Node) error {
 	var err error
-	vm := vmMap[n.Name]
+	vm := v.vmMap[n.Name]
 
 	log.Infof("\nPowering off VM: %s  ", vm.Name())
 	tsk, err := vm.PowerOff(v.ctx)
@@ -294,11 +293,11 @@ func (v *vsphere) PowerOffVM(n node.Node) error {
 
 // ShutdownNode shutsdown the vsphere VM
 func (v *vsphere) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
-	if _, ok := vmMap[n.Name]; !ok {
+	if _, ok := v.vmMap[n.Name]; !ok {
 		return fmt.Errorf("Could not fetch VM for node: %s", n.Name)
 	}
 
-	vm := vmMap[n.Name]
+	vm := v.vmMap[n.Name]
 
 	log.Infof("Shutting down VM: %s  ", vm.Name())
 	err := vm.ShutdownGuest(v.ctx)

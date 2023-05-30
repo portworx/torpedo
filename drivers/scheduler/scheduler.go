@@ -82,13 +82,8 @@ type AppConfig struct {
 
 // InitOptions initialization options
 type InitOptions struct {
-
 	// SpecDir app spec directory
 	SpecDir string
-	// VolDriverName volume driver name
-	VolDriverName string
-	// NodeDriverName node driver name
-	NodeDriverName string
 	// MonitorDriverName monitor driver name
 	MonitorDriverName string
 	// ConfigMap  identifies what config map should be used to
@@ -97,8 +92,10 @@ type InitOptions struct {
 	HelmValuesConfigMapName string
 	// CustomAppConfig custom settings for apps
 	CustomAppConfig map[string]AppConfig
-	// StorageProvisioner name
-	StorageProvisioner string
+	// VolumeDriverName that is used to provision volumes
+	VolumeDriverName string
+	// NodeDriverType is the name of the node driver to be used
+	NodeDriverType string
 	// SecretType secret used for encryption keys
 	SecretType string
 	// VaultAddress vault api address
@@ -117,6 +114,10 @@ type InitOptions struct {
 	AnthosAdminWorkStationNodeIP string
 	// AnthosInstancePath needed for anthos scheduler
 	AnthosInstancePath string
+	// KubeConfigPath is the path to the yaml kubeconfig file
+	KubeConfigPath string
+	// This is used to maintain backwards compatibility with code that uses global schedops instances
+	UseGlobalSchedopsInstances bool
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
@@ -126,7 +127,7 @@ type ScheduleOptions struct {
 	// Nodes restricts the applications to get scheduled only on these nodes (Optional)
 	Nodes []node.Node
 	// StorageProvisioner identifies what storage provider should be used
-	StorageProvisioner string
+	StorageProvisioner volume.StorageProvisioner
 	// ConfigMap  identifies what config map should be used to
 	ConfigMap string
 	// AutopilotRule identifies options for autopilot (Optional)
@@ -404,6 +405,9 @@ type Driver interface {
 
 	// GetNamespaceLabel gets the labels on given namespace
 	GetNamespaceLabel(namespace string) (map[string]string, error)
+
+	// DeepCopy creates a deepcopy of the driver
+	DeepCopy() Driver
 }
 
 var (
@@ -463,7 +467,7 @@ func Register(name string, d Driver) error {
 // Get returns a registered scheduler test provider.
 func Get(name string) (Driver, error) {
 	if d, ok := schedulers[name]; ok {
-		return d, nil
+		return d.DeepCopy(), nil
 	}
 	return nil, &errors.ErrNotFound{
 		ID:   name,

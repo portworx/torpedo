@@ -115,5 +115,11 @@ func init() {
 	Register("dcos", d)
 }
 
-func (d *dcosSchedOps) Init() {
+func (d *dcosSchedOps) Init(schedopsOpts InitOptions) {
+}
+
+// Init initializes k8s schedops node driver
+func (d *dcosSchedOps) DeepCopy() Driver {
+	out := *d
+	return &out
 }

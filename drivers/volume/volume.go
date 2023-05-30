@@ -8,6 +8,13 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/autopilot"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/sched-ops/k8s/rbac"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -66,13 +73,31 @@ type Options struct {
 	ValidateReplicationUpdateTimeout time.Duration
 }
 
+// InitOptions initialization options
+type InitOptions struct {
+	NodeRegistry              *node.NodeRegistry
+	NodeDriver                node.Driver
+	SchedulerDriverName       string
+	Token                     string
+	StorageProvisionerType    StorageProvisionerType
+	CsiGenericDriverConfigMap string
+
+	K8sCore          core.Ops
+	K8sApps          apps.Ops
+	K8sAutopilot     autopilot.Ops
+	K8sBatch         batch.Ops
+	K8sRbac          rbac.Ops
+	K8sApiExtensions apiextensions.Ops
+	PxOperator       operator.Ops
+}
+
 // Driver defines an external volume driver interface that must be implemented
 // by any external storage provider that wants to qualify their product with
 // Torpedo.  The functions defined here are meant to be destructive and illustrative
 // of failure scenarios that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string, nodeDriver string, token string, storageProvisioner string, csiGenericConfigMap string) error
+	Init(volOpts InitOptions) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -455,30 +480,38 @@ type Driver interface {
 
 	// GetAlertsUsingResourceTypeBySeverity returns all the alerts by resource type filtered by severity
 	GetAlertsUsingResourceTypeBySeverity(resourceType api.ResourceType, severity api.SeverityType) (*api.SdkAlertsEnumerateWithFiltersResponse, error)
+
+	// DeepCopy creates a deepcopy of the driver
+	DeepCopy() Driver
+
+	// GetStorageDriver gets storage driver name
+	GetStorageDriver() string
+
+	// GetStorageProvisioner gets storage provsioner name
+	GetStorageProvisioner() string
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
 type StorageProvisionerType string
 
+// StorageProvisioner is the string found in K8s specs
+type StorageProvisioner string
+
 const (
-	// DefaultStorageProvisioner default storage provisioner name
-	DefaultStorageProvisioner StorageProvisionerType = "portworx"
+	// DefaultStorageProvisionerType default storage provisioner name
+	DefaultStorageProvisionerType StorageProvisionerType = "portworx"
 )
 
 var (
-	volDrivers   = make(map[string]Driver)
-	provisioners = make([]string, 0)
-	// StorageDriver to be used to store name of the storage driver
-	StorageDriver string
-	// StorageProvisioner to be used to store name of the storage provisioner
-	StorageProvisioner StorageProvisionerType
+	volDrivers          = make(map[string]Driver)
+	storageProvisioners = make(map[StorageProvisionerType]StorageProvisioner)
 )
 
 // Register registers the given volume driver
-func Register(name string, driverProvisioners map[StorageProvisionerType]StorageProvisionerType, d Driver) error {
+func Register(name string, driverProvisioners map[StorageProvisionerType]StorageProvisioner, d Driver) error {
 	// Add provisioners supported by driver to slice
-	for provisioner := range driverProvisioners {
-		provisioners = append(provisioners, string(provisioner))
+	for k, v := range driverProvisioners {
+		storageProvisioners[k] = v
 	}
 
 	if _, ok := volDrivers[name]; !ok {
@@ -490,27 +523,17 @@ func Register(name string, driverProvisioners map[StorageProvisionerType]Storage
 	return nil
 }
 
-// Get an external storage provider to be used with Torpedo.
+// Get an external storage provider to be used with Torpedo. After `get`ting, run `Init`
 func Get(name string) (Driver, error) {
 	d, ok := volDrivers[name]
 	if ok {
-		return d, nil
+		return d.DeepCopy(), nil
 	}
 
 	return nil, &errors.ErrNotFound{
 		ID:   name,
 		Type: "VolumeDriver",
 	}
-}
-
-// GetStorageProvisioner storage provsioner name to be used with Torpedo
-func GetStorageProvisioner() string {
-	return string(StorageProvisioner)
-}
-
-// GetStorageDriver storage driver name to be used with Torpedo
-func GetStorageDriver() string {
-	return string(StorageDriver)
 }
 
 // GetVolumeDrivers returns list of supported volume drivers
@@ -522,13 +545,9 @@ func GetVolumeDrivers() []string {
 	return voldrivers
 }
 
-// GetVolumeProvisioners returns list of supported volume provisioners
-func GetVolumeProvisioners() []string {
-	var volumeProvisioners []string
-	for _, v := range provisioners {
-		volumeProvisioners = append(volumeProvisioners, v)
-	}
-	return volumeProvisioners
+// GetStorageProvisionerForType returns the VolumeProvisioner. fn (provisionerType StorageProvisionerType) StorageProvisioner
+func GetStorageProvisionerForType(provisionerType string) string {
+	return string(storageProvisioners[StorageProvisionerType(provisionerType)])
 }
 
 func (v *Volume) String() string {

@@ -32,13 +32,53 @@ const (
 	defaultTimeout = 5 * time.Minute
 )
 
-type dcos struct {
-	dockerClient  *docker.Client
-	specFactory   *spec.Factory
-	volDriverName string
+type Dcos struct {
+	dockerClient   *docker.Client
+	specFactory    *spec.Factory
+	marathonClient *marathonOps
+	NodeRegistry   *node.NodeRegistry
+
+	// volume driver must be set after it has been initialized. It is not set during Init
+	VolumeDriver volume.Driver
 }
 
-func (d *dcos) Init(schedOpts scheduler.InitOptions) error {
+// DeepCopy create a copy of Context
+func (d *Dcos) DeepCopy() scheduler.Driver {
+	if d == nil {
+		return nil
+	}
+	out := *d
+
+	if d.NodeRegistry != nil {
+		out.NodeRegistry = &node.NodeRegistry{
+			Nodes: make(map[string]node.Node),
+		}
+		for _, node := range d.NodeRegistry.GetNodes() {
+			out.NodeRegistry.AddNode(node)
+		}
+	}
+
+	if d.specFactory != nil {
+		specFactory := *d.specFactory
+		out.specFactory = &specFactory
+	}
+
+	if d.dockerClient != nil {
+		dockerClient := *d.dockerClient
+		out.dockerClient = &dockerClient
+	}
+
+	if d.marathonClient != nil {
+		marathonClient := *d.marathonClient
+		out.marathonClient = &marathonClient
+	}
+	// ISSUE: this is not useful as client is built from env vars, which are always the same
+	// ISSUE: mesos client alos has above problem, hence not deepcopied
+
+	return &out
+}
+
+func (d *Dcos) Init(schedOpts scheduler.InitOptions) error {
 	privateAgents, err := MesosClient().GetPrivateAgentNodes()
 	if err != nil {
 		return err
@@ -49,12 +89,12 @@ func (d *dcos) Init(schedOpts scheduler.InitOptions) error {
 		if err := d.IsNodeReady(newNode); err != nil {
 			return err
 		}
-		if err := node.AddNode(newNode); err != nil {
+		if err := d.NodeRegistry.AddNode(newNode); err != nil {
 			return err
 		}
 	}
 
-	d.specFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolDriverName, d)
+	d.specFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolumeDriverName, d)
 	if err != nil {
 		return err
 	}
@@ -64,11 +104,10 @@ func (d *dcos) Init(schedOpts scheduler.InitOptions) error {
 		return err
 	}
 
-	d.volDriverName = schedOpts.VolDriverName
 	return nil
 }
 
-func (d *dcos) parseMesosNode(n AgentNode) node.Node {
+func (d *Dcos) parseMesosNode(n AgentNode) node.Node {
 	return node.Node{
 		Name:      n.ID,
 		Addresses: []string{n.Hostname},
@@ -76,17 +115,17 @@ func (d *dcos) parseMesosNode(n AgentNode) node.Node {
 	}
 }
 
-func (d *dcos) String() string {
+func (d *Dcos) String() string {
 	return SchedName
 }
 
 // GetEvents dumps events from event storage
-func (d *dcos) GetEvents() map[string][]scheduler.Event {
+func (d *Dcos) GetEvents() map[string][]scheduler.Event {
 	return nil
 }
 
 // ValidateAutopilotEvents validates events for PVCs injected by autopilot
-func (d *dcos) ValidateAutopilotEvents(ctx *scheduler.Context) error {
+func (d *Dcos) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateAutopilotEvents()",
@@ -94,7 +133,7 @@ func (d *dcos) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 }
 
 // ValidateAutopilotRuleObjects validates autopilot rule objects
-func (d *dcos) ValidateAutopilotRuleObjects() error {
+func (d *Dcos) ValidateAutopilotRuleObjects() error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateAutopilotRuleObjects()",
@@ -102,7 +141,7 @@ func (d *dcos) ValidateAutopilotRuleObjects() error {
 }
 
 // GetSnapShotData retruns given snapshots
-func (d *dcos) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
+func (d *Dcos) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateSnapShot()",
@@ -110,7 +149,7 @@ func (d *dcos) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNam
 }
 
 // DeleteSnapshots  delete the snapshots
-func (d *dcos) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) error {
+func (d *Dcos) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeleteSnapShot()",
@@ -118,7 +157,7 @@ func (d *dcos) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotName
 }
 
 // GetSnapshotsInNameSpace get the snapshots list for the namespace
-func (d *dcos) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
+func (d *Dcos) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
 
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -126,7 +165,7 @@ func (d *dcos) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace
 	}
 }
 
-func (d *dcos) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
+func (d *Dcos) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
 	fileList := []string{}
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
 		if !f.IsDir() {
@@ -155,16 +194,16 @@ func (d *dcos) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, er
 	return specs, nil
 }
 
-func (d *dcos) IsNodeReady(n node.Node) error {
+func (d *Dcos) IsNodeReady(n node.Node) error {
 	// TODO: Implement this method
 	return nil
 }
 
-func (d *dcos) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
+func (d *Dcos) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	var tasks []marathon.Task
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
-			appTasks, err := MarathonClient().GetApplicationTasks(obj.ID)
+			appTasks, err := d.marathonClient.GetApplicationTasks(obj.ID)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetNodesForApp{
 					App:   ctx.App,
@@ -178,7 +217,7 @@ func (d *dcos) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	}
 
 	var result []node.Node
-	nodeMap := node.GetNodesByName()
+	nodeMap := d.NodeRegistry.GetNodesByName()
 
 	for _, task := range tasks {
 		n, ok := nodeMap[task.SlaveID]
@@ -189,7 +228,7 @@ func (d *dcos) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 			}
 		}
 
-		if node.Contains(result, n) {
+		if d.NodeRegistry.Contains(result, n) {
 			continue
 		}
 		result = append(result, n)
@@ -198,7 +237,7 @@ func (d *dcos) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	return result, nil
 }
 
-func (d *dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+func (d *Dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var apps []*spec.AppSpec
 	if len(options.AppKeys) > 0 {
 		for _, key := range options.AppKeys {
@@ -223,7 +262,7 @@ func (d *dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([
 						Cause: err.Error(),
 					}
 				}
-				obj, err := MarathonClient().CreateApplication(application)
+				obj, err := d.marathonClient.CreateApplication(application)
 				if err != nil {
 					return nil, &scheduler.ErrFailedToScheduleApp{
 						App:   app,
@@ -253,7 +292,7 @@ func (d *dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([
 }
 
 // ScheduleWithCustomAppSpecs Schedules the application with custom app specs
-func (d *dcos) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+func (d *Dcos) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var contexts []*scheduler.Context
 	for _, app := range apps {
 		var specObjects []interface{}
@@ -265,7 +304,7 @@ func (d *dcos) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID strin
 						Cause: err.Error(),
 					}
 				}
-				obj, err := MarathonClient().CreateApplication(application)
+				obj, err := d.marathonClient.CreateApplication(application)
 				if err != nil {
 					return nil, &scheduler.ErrFailedToScheduleApp{
 						App:   app,
@@ -295,7 +334,7 @@ func (d *dcos) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID strin
 }
 
 // AddTasks adds tasks to an existing context
-func (d *dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
+func (d *Dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
 	if ctx == nil {
 		return fmt.Errorf("Context to add tasks to cannot be nil")
 	}
@@ -322,7 +361,7 @@ func (d *dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOption
 						Cause: err.Error(),
 					}
 				}
-				obj, err := MarathonClient().CreateApplication(application)
+				obj, err := d.marathonClient.CreateApplication(application)
 				if err != nil {
 					return &scheduler.ErrFailedToScheduleApp{
 						App:   app,
@@ -341,7 +380,7 @@ func (d *dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOption
 }
 
 // ScheduleUninstall uninstalls tasks from an existing context
-func (d *dcos) ScheduleUninstall(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
+func (d *Dcos) ScheduleUninstall(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -350,7 +389,7 @@ func (d *dcos) ScheduleUninstall(ctx *scheduler.Context, options scheduler.Sched
 }
 
 // RemoveAppSpecsByName removes certain specs from list to avoid validation
-func (d *dcos) RemoveAppSpecsByName(ctx *scheduler.Context, removeSpecs []interface{}) error {
+func (d *Dcos) RemoveAppSpecsByName(ctx *scheduler.Context, removeSpecs []interface{}) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -358,7 +397,7 @@ func (d *dcos) RemoveAppSpecsByName(ctx *scheduler.Context, removeSpecs []interf
 	}
 }
 
-func (d *dcos) UpdateTasksID(ctx *scheduler.Context, id string) error {
+func (d *Dcos) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -366,26 +405,21 @@ func (d *dcos) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	}
 }
 
-func (d *dcos) randomizeVolumeNames(application *marathon.Application) error {
-	volDriver, err := volume.Get(d.volDriverName)
-	if err != nil {
-		return err
-	}
-
+func (d *Dcos) randomizeVolumeNames(application *marathon.Application) error {
 	params := *application.Container.Docker.Parameters
 	for i := range params {
 		p := &params[i]
 		if p.Key == "volume" {
-			p.Value = volDriver.RandomizeVolumeName(p.Value)
+			p.Value = d.VolumeDriver.RandomizeVolumeName(p.Value)
 		}
 	}
 	return nil
 }
 
-func (d *dcos) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+func (d *Dcos) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
-			if err := MarathonClient().WaitForApplicationStart(obj.ID); err != nil {
+			if err := d.marathonClient.WaitForApplicationStart(obj.ID); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate Application: %v. Err: %v", obj.ID, err),
@@ -399,10 +433,10 @@ func (d *dcos) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval tim
 	return nil
 }
 
-func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
+func (d *Dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
-			if err := MarathonClient().DeleteApplication(obj.ID); err != nil {
+			if err := d.marathonClient.DeleteApplication(obj.ID); err != nil {
 				return &scheduler.ErrFailedToDestroyApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy Application: %v. Err: %v", obj.ID, err),
@@ -428,10 +462,10 @@ func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	return nil
 }
 
-func (d *dcos) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) error {
+func (d *Dcos) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
-			if err := MarathonClient().WaitForApplicationTermination(obj.ID); err != nil {
+			if err := d.marathonClient.WaitForApplicationTermination(obj.ID); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy Application: %v. Err: %v", obj.ID, err),
@@ -448,21 +482,21 @@ func (d *dcos) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) err
 
 // SelectiveWaitForTermination waits for application pods to be terminated except on the nodes
 // provided in the exclude list
-func (d *dcos) SelectiveWaitForTermination(ctx *scheduler.Context, timeout time.Duration, excludeList []node.Node) error {
+func (d *Dcos) SelectiveWaitForTermination(ctx *scheduler.Context, timeout time.Duration, excludeList []node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SelectiveWaitForTermination",
 	}
 }
 
-func (d *dcos) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOptions) error {
+func (d *Dcos) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOptions) error {
 	if opts != nil {
 		log.Warnf("DCOS driver doesn't yet support delete task options")
 	}
 
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
-			if err := MarathonClient().KillApplicationTasks(obj.ID); err != nil {
+			if err := d.marathonClient.KillApplicationTasks(obj.ID); err != nil {
 				return &scheduler.ErrFailedToDeleteTasks{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("failed to delete tasks for application: %v. %v", obj.ID, err),
@@ -475,7 +509,7 @@ func (d *dcos) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOp
 	return nil
 }
 
-func (d *dcos) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string]string, error) {
+func (d *Dcos) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string]string, error) {
 	result := make(map[string]map[string]string)
 	populateParamsFunc := func(volName string, volParams map[string]string) error {
 		result[volName] = volParams
@@ -488,7 +522,7 @@ func (d *dcos) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[strin
 	return result, nil
 }
 
-func (d *dcos) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration,
+func (d *Dcos) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration,
 	options *scheduler.VolumeOptions) error {
 	inspectDockerVolumeFunc := func(volName string, _ map[string]string) error {
 		t := func() (interface{}, bool, error) {
@@ -508,7 +542,7 @@ func (d *dcos) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval ti
 	return d.volumeOperation(ctx, inspectDockerVolumeFunc)
 }
 
-func (d *dcos) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) ([]*volume.Volume, error) {
+func (d *Dcos) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 
 	deleteDockerVolumeFunc := func(volName string, _ map[string]string) error {
@@ -532,7 +566,7 @@ func (d *dcos) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOp
 	return vols, nil
 }
 
-func (d *dcos) GetVolumeDriverVolumeName(name string, namespace string) (string, error) {
+func (d *Dcos) GetVolumeDriverVolumeName(name string, namespace string) (string, error) {
 	// TODO: Add implementation
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
@@ -540,7 +574,7 @@ func (d *dcos) GetVolumeDriverVolumeName(name string, namespace string) (string,
 	}
 }
 
-func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
+func (d *Dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -548,7 +582,7 @@ func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	}
 }
 
-func (d *dcos) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*volume.Volume, error) {
+func (d *Dcos) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*volume.Volume, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -556,7 +590,7 @@ func (d *dcos) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*vo
 	}
 }
 
-func (d *dcos) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
+func (d *Dcos) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -565,7 +599,7 @@ func (d *dcos) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
 }
 
 // GetPodLog returns logs for all the pods in the specified context
-func (d *dcos) GetPodLog(ctx *scheduler.Context, sinceSeconds int64, containerName string) (map[string]string, error) {
+func (d *Dcos) GetPodLog(ctx *scheduler.Context, sinceSeconds int64, containerName string) (map[string]string, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -573,7 +607,7 @@ func (d *dcos) GetPodLog(ctx *scheduler.Context, sinceSeconds int64, containerNa
 	}
 }
 
-func (d *dcos) ResizeVolume(cxt *scheduler.Context, configMap string) ([]*volume.Volume, error) {
+func (d *Dcos) ResizeVolume(cxt *scheduler.Context, configMap string) ([]*volume.Volume, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -581,7 +615,7 @@ func (d *dcos) ResizeVolume(cxt *scheduler.Context, configMap string) ([]*volume
 	}
 }
 
-func (d *dcos) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
+func (d *Dcos) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -589,13 +623,9 @@ func (d *dcos) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) 
 	}
 }
 
-func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string]string) error) error {
+func (d *Dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string]string) error) error {
 	// DC/OS does not have volume objects like Kubernetes. We get the volume information from
 	// the app spec and get the options parsed from the respective volume driver
-	volDriver, err := volume.Get(d.volDriverName)
-	if err != nil {
-		return err
-	}
 
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
@@ -603,7 +633,7 @@ func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string
 			params := *obj.Container.Docker.Parameters
 			for _, p := range params {
 				if p.Key == "volume" {
-					volName, volParams, err := volDriver.ExtractVolumeInfo(p.Value)
+					volName, volParams, err := d.VolumeDriver.ExtractVolumeInfo(p.Value)
 					if err != nil {
 						return &scheduler.ErrFailedToGetVolumeParameters{
 							App:   ctx.App,
@@ -623,7 +653,7 @@ func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string
 	return nil
 }
 
-func (d *dcos) SetConfig(configPath string) error {
+func (d *Dcos) SetConfig(configPath string) error {
 	// TODO: Implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -631,7 +661,7 @@ func (d *dcos) SetConfig(configPath string) error {
 	}
 }
 
-func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {
+func (d *Dcos) Describe(ctx *scheduler.Context) (string, error) {
 	// TODO: Implement this method
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
@@ -639,7 +669,7 @@ func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {
 	}
 }
 
-func (d *dcos) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
+func (d *Dcos) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -647,7 +677,7 @@ func (d *dcos) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[strin
 	}
 }
 
-func (d *dcos) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error) {
+func (d *Dcos) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -655,7 +685,7 @@ func (d *dcos) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, erro
 	}
 }
 
-func (d *dcos) StopSchedOnNode(node node.Node) error {
+func (d *Dcos) StopSchedOnNode(node node.Node) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -663,14 +693,14 @@ func (d *dcos) StopSchedOnNode(node node.Node) error {
 	}
 }
 
-func (d *dcos) StartSchedOnNode(node node.Node) error {
+func (d *Dcos) StartSchedOnNode(node node.Node) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "StartSchedOnNode()",
 	}
 }
-func (d *dcos) RescanSpecs(specDir, storageDriver string) error {
+func (d *Dcos) RescanSpecs(specDir, storageDriver string) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -678,7 +708,7 @@ func (d *dcos) RescanSpecs(specDir, storageDriver string) error {
 	}
 }
 
-func (d *dcos) PrepareNodeToDecommission(n node.Node, provisioner string) error {
+func (d *Dcos) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -686,7 +716,7 @@ func (d *dcos) PrepareNodeToDecommission(n node.Node, provisioner string) error 
 	}
 }
 
-func (d *dcos) EnableSchedulingOnNode(n node.Node) error {
+func (d *Dcos) EnableSchedulingOnNode(n node.Node) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -694,7 +724,7 @@ func (d *dcos) EnableSchedulingOnNode(n node.Node) error {
 	}
 }
 
-func (d *dcos) DisableSchedulingOnNode(n node.Node) error {
+func (d *Dcos) DisableSchedulingOnNode(n node.Node) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -702,21 +732,21 @@ func (d *dcos) DisableSchedulingOnNode(n node.Node) error {
 	}
 }
 
-func (d *dcos) RefreshNodeRegistry() error {
+func (d *Dcos) RefreshNodeRegistry() error {
 	// TODO implement this method
 	return nil
 }
 
-func (d *dcos) IsScalable(spec interface{}) bool {
+func (d *Dcos) IsScalable(spec interface{}) bool {
 	// TODO implement this method
 	return false
 }
 
-func (d *dcos) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart time.Time) error {
+func (d *Dcos) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart time.Time) error {
 	return fmt.Errorf("not implemenented")
 }
 
-func (d *dcos) GetTokenFromConfigMap(string) (string, error) {
+func (d *Dcos) GetTokenFromConfigMap(string) (string, error) {
 	// TODO implement this method
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
@@ -724,7 +754,7 @@ func (d *dcos) GetTokenFromConfigMap(string) (string, error) {
 	}
 }
 
-func (d *dcos) AddLabelOnNode(n node.Node, lKey string, lValue string) error {
+func (d *Dcos) AddLabelOnNode(n node.Node, lKey string, lValue string) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -732,7 +762,7 @@ func (d *dcos) AddLabelOnNode(n node.Node, lKey string, lValue string) error {
 	}
 }
 
-func (d *dcos) RemoveLabelOnNode(n node.Node, lKey string) error {
+func (d *Dcos) RemoveLabelOnNode(n node.Node, lKey string) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -740,17 +770,17 @@ func (d *dcos) RemoveLabelOnNode(n node.Node, lKey string) error {
 	}
 }
 
-func (d *dcos) IsAutopilotEnabledForVolume(*volume.Volume) bool {
+func (d *Dcos) IsAutopilotEnabledForVolume(*volume.Volume) bool {
 	// TODO implement this method
 	return false
 }
 
-func (d *dcos) GetSpecAppEnvVar(ctx *scheduler.Context, key string) string {
+func (d *Dcos) GetSpecAppEnvVar(ctx *scheduler.Context, key string) string {
 	// TODO implement this method
 	return ""
 }
 
-func (d *dcos) SaveSchedulerLogsToFile(n node.Node, location string) error {
+func (d *Dcos) SaveSchedulerLogsToFile(n node.Node, location string) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -759,12 +789,12 @@ func (d *dcos) SaveSchedulerLogsToFile(n node.Node, location string) error {
 }
 
 // GetWorkloadSizeFromAppSpec gets workload size from an application spec
-func (d *dcos) GetWorkloadSizeFromAppSpec(ctx *scheduler.Context) (uint64, error) {
+func (d *Dcos) GetWorkloadSizeFromAppSpec(ctx *scheduler.Context) (uint64, error) {
 	// TODO: not implemented
 	return 0, nil
 }
 
-func (d *dcos) GetAutopilotNamespace() (string, error) {
+func (d *Dcos) GetAutopilotNamespace() (string, error) {
 	// TODO implement this method
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
@@ -773,7 +803,7 @@ func (d *dcos) GetAutopilotNamespace() (string, error) {
 }
 
 // GetIOBandwidth returns the IO bandwidth for the given pod name and namespace
-func (d *dcos) GetIOBandwidth(string, string) (int, error) {
+func (d *Dcos) GetIOBandwidth(string, string) (int, error) {
 	// TODO implement this method
 	return 0, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -781,7 +811,7 @@ func (d *dcos) GetIOBandwidth(string, string) (int, error) {
 	}
 }
 
-func (d *dcos) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+func (d *Dcos) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -789,7 +819,7 @@ func (d *dcos) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.Autopilot
 	}
 }
 
-func (d *dcos) GetAutopilotRule(name string) (*apapi.AutopilotRule, error) {
+func (d *Dcos) GetAutopilotRule(name string) (*apapi.AutopilotRule, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -797,7 +827,7 @@ func (d *dcos) GetAutopilotRule(name string) (*apapi.AutopilotRule, error) {
 	}
 }
 
-func (d *dcos) UpdateAutopilotRule(*apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+func (d *Dcos) UpdateAutopilotRule(*apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -805,7 +835,7 @@ func (d *dcos) UpdateAutopilotRule(*apapi.AutopilotRule) (*apapi.AutopilotRule, 
 	}
 }
 
-func (d *dcos) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
+func (d *Dcos) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -813,7 +843,7 @@ func (d *dcos) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	}
 }
 
-func (d *dcos) DeleteAutopilotRule(name string) error {
+func (d *Dcos) DeleteAutopilotRule(name string) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -821,7 +851,7 @@ func (d *dcos) DeleteAutopilotRule(name string) error {
 	}
 }
 
-func (d *dcos) GetActionApproval(namespace, name string) (*apapi.ActionApproval, error) {
+func (d *Dcos) GetActionApproval(namespace, name string) (*apapi.ActionApproval, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -829,7 +859,7 @@ func (d *dcos) GetActionApproval(namespace, name string) (*apapi.ActionApproval,
 	}
 }
 
-func (d *dcos) UpdateActionApproval(namespace string, actionApproval *apapi.ActionApproval) (*apapi.ActionApproval, error) {
+func (d *Dcos) UpdateActionApproval(namespace string, actionApproval *apapi.ActionApproval) (*apapi.ActionApproval, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -837,7 +867,7 @@ func (d *dcos) UpdateActionApproval(namespace string, actionApproval *apapi.Acti
 	}
 }
 
-func (d *dcos) DeleteActionApproval(namespace, name string) error {
+func (d *Dcos) DeleteActionApproval(namespace, name string) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -845,7 +875,7 @@ func (d *dcos) DeleteActionApproval(namespace, name string) error {
 	}
 }
 
-func (d *dcos) ListActionApprovals(namespace string) (*apapi.ActionApprovalList, error) {
+func (d *Dcos) ListActionApprovals(namespace string) (*apapi.ActionApprovalList, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -853,7 +883,7 @@ func (d *dcos) ListActionApprovals(namespace string) (*apapi.ActionApprovalList,
 	}
 }
 
-func (d *dcos) UpgradeScheduler(version string) error {
+func (d *Dcos) UpgradeScheduler(version string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -861,7 +891,7 @@ func (d *dcos) UpgradeScheduler(version string) error {
 	}
 }
 
-func (d *dcos) CreateSecret(namespace, name, dataField, secretDataString string) error {
+func (d *Dcos) CreateSecret(namespace, name, dataField, secretDataString string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -869,7 +899,7 @@ func (d *dcos) CreateSecret(namespace, name, dataField, secretDataString string)
 	}
 }
 
-func (d *dcos) GetSecretData(namespace, name, dataField string) (string, error) {
+func (d *Dcos) GetSecretData(namespace, name, dataField string) (string, error) {
 	// TODO: Add implementation
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
@@ -877,7 +907,7 @@ func (d *dcos) GetSecretData(namespace, name, dataField string) (string, error) 
 	}
 }
 
-func (d *dcos) DeleteSecret(namespace, name string) error {
+func (d *Dcos) DeleteSecret(namespace, name string) error {
 	// TODO: Add implementation
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -885,7 +915,7 @@ func (d *dcos) DeleteSecret(namespace, name string) error {
 	}
 }
 
-func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
+func (d *Dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -893,7 +923,7 @@ func (d *dcos) ParseCharts(chartDir string) (*scheduler.HelmRepo, error) {
 	}
 }
 
-func (d *dcos) RecycleNode(n node.Node) error {
+func (d *Dcos) RecycleNode(n node.Node) error {
 	//Recycle is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -901,7 +931,7 @@ func (d *dcos) RecycleNode(n node.Node) error {
 	}
 }
 
-func (d *dcos) ValidateTopologyLabel(ctx *scheduler.Context) error {
+func (d *Dcos) ValidateTopologyLabel(ctx *scheduler.Context) error {
 	//ValidateTopologyLabel is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -909,7 +939,7 @@ func (d *dcos) ValidateTopologyLabel(ctx *scheduler.Context) error {
 	}
 }
 
-func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
+func (d *Dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
 	//CreateCsiSnapshotClass is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -917,7 +947,7 @@ func (d *dcos) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string
 	}
 }
 
-func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
+func (d *Dcos) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
 	//CreateCsiSanpshot is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -925,7 +955,7 @@ func (d *dcos) CreateCsiSnapshot(name string, namespace string, class string, pv
 	}
 }
 
-func (d *dcos) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*v1beta1.VolumeSnapshot, error) {
+func (d *Dcos) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*v1beta1.VolumeSnapshot, error) {
 	//CreateCsiSnapsForVolumes is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -933,7 +963,7 @@ func (d *dcos) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string
 	}
 }
 
-func (d *dcos) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRequest) error {
+func (d *Dcos) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRequest) error {
 	//CSICloneTest is not supported for DCOS
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -941,7 +971,7 @@ func (d *dcos) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRe
 	}
 }
 
-func (d *dcos) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
+func (d *Dcos) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
 	//CSISnapshotTest is not supported for DCOS
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -949,7 +979,7 @@ func (d *dcos) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnap
 	}
 }
 
-func (d *dcos) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
+func (d *Dcos) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
 	//CSISnapshotAndRestoreMany is not supported for DCOS
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -957,7 +987,7 @@ func (d *dcos) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedul
 	}
 }
 
-func (d *dcos) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.VolumeSnapshot, error) {
+func (d *Dcos) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.VolumeSnapshot, error) {
 	// GetCsiSnapshots is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -965,7 +995,7 @@ func (d *dcos) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.Vol
 	}
 }
 
-func (d *dcos) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMa map[string]*v1beta1.VolumeSnapshot) error {
+func (d *Dcos) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMa map[string]*v1beta1.VolumeSnapshot) error {
 	// ValidateCsiSnapshots is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -973,7 +1003,7 @@ func (d *dcos) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMa map[string
 	}
 }
 
-func (d *dcos) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scList map[string]*storageapi.StorageClass) (map[string]corev1.PersistentVolumeClaim, error) {
+func (d *Dcos) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scList map[string]*storageapi.StorageClass) (map[string]corev1.PersistentVolumeClaim, error) {
 	// RestoreCsiSnapAndValidate is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -982,7 +1012,7 @@ func (d *dcos) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scList map[stri
 
 }
 
-func (d *dcos) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) error {
+func (d *Dcos) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) error {
 	// DeleteCsiSnapsForVolumes is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -991,7 +1021,7 @@ func (d *dcos) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int)
 
 }
 
-func (d *dcos) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName string, snapshotNameSpace string) error {
+func (d *Dcos) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName string, snapshotNameSpace string) error {
 	// DeleteCsiSnapshot is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -1000,7 +1030,7 @@ func (d *dcos) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName string, sn
 
 }
 
-func (d *dcos) GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error) {
+func (d *Dcos) GetPodsRestartCount(namespace string, label map[string]string) (map[*corev1.Pod]int32, error) {
 	// GetPodsRestartCount is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -1008,7 +1038,7 @@ func (d *dcos) GetPodsRestartCount(namespace string, label map[string]string) (m
 	}
 }
 
-func (d *dcos) AddNamespaceLabel(namespace string, labelMap map[string]string) error {
+func (d *Dcos) AddNamespaceLabel(namespace string, labelMap map[string]string) error {
 	// AddNamespaceLabel is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -1016,7 +1046,7 @@ func (d *dcos) AddNamespaceLabel(namespace string, labelMap map[string]string) e
 	}
 }
 
-func (d *dcos) RemoveNamespaceLabel(namespace string, labelMap map[string]string) error {
+func (d *Dcos) RemoveNamespaceLabel(namespace string, labelMap map[string]string) error {
 	// RemoveNamespaceLabel is not supported
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -1024,7 +1054,7 @@ func (d *dcos) RemoveNamespaceLabel(namespace string, labelMap map[string]string
 	}
 }
 
-func (d *dcos) GetNamespaceLabel(namespace string) (map[string]string, error) {
+func (d *Dcos) GetNamespaceLabel(namespace string) (map[string]string, error) {
 	// GetNamespaceLabel is not supported
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -1033,6 +1063,8 @@ func (d *dcos) GetNamespaceLabel(namespace string) (map[string]string, error) {
 }
 
 func init() {
-	d := &dcos{}
+	d := &Dcos{}
+	d.marathonClient = &marathonOps{}
+
 	scheduler.Register(SchedName, d)
 }

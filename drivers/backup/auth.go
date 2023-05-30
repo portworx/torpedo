@@ -82,10 +82,6 @@ const (
 	pxbServiceName = "px-backup"
 )
 
-var (
-	k8sCore = core.Instance()
-)
-
 // KeycloakRoleRepresentation role repsetaton struct
 type KeycloakRoleRepresentation struct {
 	ID          string                       `json:"id"`
@@ -228,7 +224,7 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 
 // GetPxBackupNamespace returns namespace of px-backup deployment.
 func GetPxBackupNamespace() (string, error) {
-	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to get list of services. Err: %v", err)
 	}

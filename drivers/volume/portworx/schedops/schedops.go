@@ -2,18 +2,35 @@ package schedops
 
 import (
 	"fmt"
+
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/autopilot"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
 	"k8s.io/apimachinery/pkg/version"
 )
 
+// InitOptions initialization options
+type InitOptions struct {
+	NodeRegistry *node.NodeRegistry
+
+	K8sCore      core.Ops
+	K8sApps      apps.Ops
+	K8sAutopilot autopilot.Ops
+	K8sBatch     batch.Ops
+	K8sRbac      rbac.Ops
+}
+
 // Driver is the interface for portworx operations under various schedulers
 type Driver interface {
 	// Init initializes the sched-ops
-	Init()
+	Init(schedopsOpts InitOptions)
 	//GetKubernetesVersion returns kubernetes version
 	GetKubernetesVersion() (*version.Info, error)
 	// StartPxOnNode enables portworx service on given node
@@ -53,6 +70,8 @@ type Driver interface {
 	CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error)
 	// ListAutopilotRules lists AutopilotRules
 	ListAutopilotRules() (*apapi.AutopilotRuleList, error)
+	// DeepCopy creates a deepcopy of the driver
+	DeepCopy() Driver
 }
 
 var (
@@ -70,11 +89,11 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
-// Get a driver to perform portworx operations for the given scheduler
+// Get a driver to perform portworx operations for the given scheduler. After `get`ting, run `Init`
 func Get(name string) (Driver, error) {
 	d, ok := schedOpsRegistry[name]
 	if ok {
-		return d, nil
+		return d.DeepCopy(), nil
 	}
 
 	return nil, &errors.ErrNotFound{

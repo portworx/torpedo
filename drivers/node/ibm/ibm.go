@@ -3,10 +3,11 @@ package ibm
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/pkg/osutils"
 	"os"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/pkg/osutils"
 
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -110,6 +111,12 @@ func (i *ibm) Init(nodeOpts node.InitOptions) error {
 	i.clusterConfig = *clusterInfo
 
 	return nil
+}
+
+// Init initializes SSH node driver
+func (i *ibm) DeepCopy() node.Driver {
+	out := *i
+	return &out
 }
 
 func (i *ibm) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {

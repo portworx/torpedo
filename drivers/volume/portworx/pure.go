@@ -3,9 +3,11 @@ package portworx
 import (
 	"context"
 	"fmt"
-	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/pkg/log"
 	"strconv"
+
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -19,8 +21,8 @@ type pure struct {
 	portworx
 }
 
-func (p *pure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	return p.portworx.init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, PureDriverName)
+func (p *pure) Init(volOpts volume.InitOptions) error {
+	return p.portworx.Init(volOpts)
 }
 
 func (p *pure) String() string {

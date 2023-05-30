@@ -3,8 +3,8 @@ package aws
 import (
 	"fmt"
 
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -16,12 +16,11 @@ const (
 )
 
 // Provisioners types of supported provisioners
-var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
+var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisioner{
 	AwsStorage: "kubernetes.io/aws-ebs",
 }
 
 type aws struct {
-	schedOps schedops.Driver
 	torpedovolume.DefaultDriver
 }
 
@@ -37,20 +36,26 @@ func (d *aws) RefreshDriverEndpoints() error {
 	return nil
 }
 
-func (d *aws) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	log.Infof("Using the AWS EBS volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
-	torpedovolume.StorageDriver = DriverName
+func (d *aws) Init(volOpts volume.InitOptions) error {
+	log.Infof("Using the AWS EBS volume driver with provisioner %s under scheduler: %v", volOpts.StorageProvisionerType, volOpts.SchedulerDriverName)
+	d.StorageDriver = DriverName
 	// Set provisioner for torpedo
-	if storageProvisioner != "" {
-		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
-			torpedovolume.StorageProvisioner = p
+	if volOpts.StorageProvisionerType != "" {
+		if p, ok := provisioners[volOpts.StorageProvisionerType]; ok {
+			d.StorageProvisioner = p
 		} else {
-			torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
+			d.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisionerType]
 		}
 	} else {
 		return fmt.Errorf("Provisioner is empty for volume driver: %s", DriverName)
 	}
 	return nil
+}
+
+// Init initializes volume.driver
+func (d *aws) DeepCopy() volume.Driver {
+	out := *d
+	return &out
 }
 
 func init() {

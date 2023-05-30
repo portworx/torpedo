@@ -6,6 +6,9 @@ import (
 	"time"
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 )
@@ -27,6 +30,14 @@ const (
 	Saturday          = "Sat"
 	Sunday            = "Sun"
 )
+
+// InitOptions initialization options
+type InitOptions struct {
+	SchedulerDriver scheduler.Driver
+	NodeDriver      node.Driver
+	VolumeDriver    volume.Driver
+	Token           string
+}
 
 // Driver for backup
 type Driver interface {
@@ -54,7 +65,7 @@ type Driver interface {
 	Version
 
 	// Init initializes the backup driver under a given scheduler
-	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
+	Init(backupDriverOpts InitOptions) error
 
 	// WaitForBackupRunning waits for backup to start running.
 	WaitForBackupRunning(ctx context.Context, req *api.BackupInspectRequest, timeout, retryInterval time.Duration) error

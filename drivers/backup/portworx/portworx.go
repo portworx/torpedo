@@ -114,26 +114,15 @@ func getKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, err
 	return coreInst, storkInst, nil
 }
 
-func (p *portworx) Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error {
+func (p *portworx) Init(backupDriverOpts backup.InitOptions) error {
 	var err error
 
 	log.Infof("using portworx backup driver under scheduler: %v", schedulerDriverName)
 
-	p.nodeDriver, err = node.Get(nodeDriverName)
-	if err != nil {
-		return err
-	}
-	p.token = token
-
-	p.schedulerDriver, err = scheduler.Get(schedulerDriverName)
-	if err != nil {
-		return fmt.Errorf("Error getting scheduler driver %v: %v", schedulerDriverName, err)
-	}
-
-	p.volumeDriver, err = volume.Get(volumeDriverName)
-	if err != nil {
-		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
-	}
+	p.nodeDriver = backupDriverOpts.NodeDriver
+	p.schedulerDriver = backupDriverOpts.SchedulerDriver
+	p.volumeDriver = backupDriverOpts.VolumeDriver
+	p.token = backupDriverOpts.Token
 
 	pxbNamespace, err := backup.GetPxBackupNamespace()
 	if err != nil {

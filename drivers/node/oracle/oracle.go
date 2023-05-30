@@ -2,9 +2,10 @@ package oracle
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/portworx/torpedo/drivers/node/ssh"
 
@@ -46,6 +47,12 @@ func (o *oracle) Init(nodeOpts node.InitOptions) error {
 	o.ops = ops
 
 	return nil
+}
+
+// Init initializes SSH node driver
+func (o *oracle) DeepCopy() node.Driver {
+	out := *o
+	return &out
 }
 
 // SetASGClusterSize sets node count per zone

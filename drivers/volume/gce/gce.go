@@ -5,8 +5,8 @@ import (
 
 	"github.com/portworx/torpedo/pkg/log"
 
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 )
 
 const (
@@ -17,12 +17,11 @@ const (
 )
 
 // Provisioners types of supported provisioners
-var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
+var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisioner{
 	GceStorage: "kubernetes.io/gce-pd",
 }
 
 type gce struct {
-	schedOps schedops.Driver
 	torpedovolume.DefaultDriver
 }
 
@@ -30,20 +29,26 @@ func (d *gce) String() string {
 	return string(GceStorage)
 }
 
-func (d *gce) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	log.Infof("Using the GCE volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
-	torpedovolume.StorageDriver = DriverName
+func (d *gce) Init(volOpts volume.InitOptions) error {
+	log.Infof("Using the GCE volume driver with provisioner %s under scheduler: %v", volOpts.StorageProvisionerType, volOpts.SchedulerDriverName)
+	d.StorageDriver = DriverName
 	// Set provisioner for torpedo
-	if storageProvisioner != "" {
-		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
-			torpedovolume.StorageProvisioner = p
+	if volOpts.StorageProvisionerType != "" {
+		if p, ok := provisioners[volOpts.StorageProvisionerType]; ok {
+			d.StorageProvisioner = p
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, storageProvisioner)
+			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, volOpts.StorageProvisionerType)
 		}
 	} else {
 		return fmt.Errorf("Provisioner is empty for volume driver: %s", DriverName)
 	}
 	return nil
+}
+
+// Init initializes volume.driver
+func (d *gce) DeepCopy() volume.Driver {
+	out := *d
+	return &out
 }
 
 func init() {

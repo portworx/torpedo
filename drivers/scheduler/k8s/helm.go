@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -13,9 +11,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/log"
+	"gopkg.in/yaml.v2"
+
 	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s/parser"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 
 	"helm.sh/helm/v3/pkg/action"
@@ -28,8 +30,6 @@ import (
 	"helm.sh/helm/v3/pkg/repo"
 	"helm.sh/helm/v3/pkg/strvals"
 )
-
-var settings *cli.EnvSettings
 
 // constants for helm ConfigMap fields
 const (
@@ -57,7 +57,7 @@ func (k *K8s) HelmSchedule(app *spec.AppSpec, appNamespace string, options sched
 			}
 
 			var yamlBuf bytes.Buffer
-			settings = cli.New()
+			k.settings = cli.New()
 
 			// Add helm repo
 			err = k.RepoAdd(repoInfo)
@@ -94,7 +94,7 @@ func (k *K8s) HelmSchedule(app *spec.AppSpec, appNamespace string, options sched
 
 			// Parse the manifest which is a yaml to get the k8s spec objects
 			yamlBuf.WriteString(manifest)
-			specs, err := k.ParseSpecsFromYamlBuf(&yamlBuf)
+			specs, err := parser.ParseSpecsFromYamlBuf(&yamlBuf)
 			if err != nil {
 				return nil, err
 			}
@@ -107,7 +107,7 @@ func (k *K8s) HelmSchedule(app *spec.AppSpec, appNamespace string, options sched
 
 // SetHelmParams will set RepoInfo fields of the app from k8s ConfigMap
 func (k *K8s) SetHelmParams(appKey string, helmRepo *scheduler.HelmRepo, options scheduler.ScheduleOptions) error {
-	configMap, err := k8sCore.GetConfigMap(appKey, "default")
+	configMap, err := k.K8sCore.GetConfigMap(appKey, "default")
 	if err != nil {
 		return fmt.Errorf("failed to get config map: %v", err)
 	}
@@ -150,27 +150,11 @@ func (k *K8s) SetHelmParams(appKey string, helmRepo *scheduler.HelmRepo, options
 	return nil
 }
 
-// ParseCharts parses the application spec file having helm repo info
-func (k *K8s) ParseCharts(fileName string) (interface{}, error) {
-	file, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	repoInfo := scheduler.HelmRepo{}
-	err = yaml.Unmarshal(file, &repoInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	return &repoInfo, nil
-}
-
 // RepoAdd adds repo with given name and url
 func (k *K8s) RepoAdd(repoInfo *scheduler.HelmRepo) error {
 	name := repoInfo.RepoName
 	url := repoInfo.URL
-	repoFile := settings.RepositoryConfig
+	repoFile := k.settings.RepositoryConfig
 
 	//Ensure the file directory exists as it is required for file locking
 	err := os.MkdirAll(filepath.Dir(repoFile), os.ModePerm)
@@ -210,7 +194,7 @@ func (k *K8s) RepoAdd(repoInfo *scheduler.HelmRepo) error {
 		URL:  url,
 	}
 
-	r, err := repo.NewChartRepository(&c, getter.All(settings))
+	r, err := repo.NewChartRepository(&c, getter.All(k.settings))
 	if err != nil {
 		return err
 	}
@@ -231,7 +215,7 @@ func (k *K8s) RepoAdd(repoInfo *scheduler.HelmRepo) error {
 
 // RepoUpdate updates charts for all helm repos
 func (k *K8s) RepoUpdate() error {
-	repoFile := settings.RepositoryConfig
+	repoFile := k.settings.RepositoryConfig
 
 	f, err := repo.LoadFile(repoFile)
 	if os.IsNotExist(errors.Cause(err)) || len(f.Repositories) == 0 {
@@ -239,7 +223,7 @@ func (k *K8s) RepoUpdate() error {
 	}
 	var repos []*repo.ChartRepository
 	for _, cfg := range f.Repositories {
-		r, err := repo.NewChartRepository(cfg, getter.All(settings))
+		r, err := repo.NewChartRepository(cfg, getter.All(k.settings))
 		if err != nil {
 			return err
 		}
@@ -267,7 +251,7 @@ func (k *K8s) RepoUpdate() error {
 // InstallChart will install the helm chart
 func (k *K8s) InstallChart(repoInfo *scheduler.HelmRepo) (string, error) {
 	actionConfig := new(action.Configuration)
-	if err := actionConfig.Init(settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
+	if err := actionConfig.Init(k.settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
 		return "", err
 	}
 	client := action.NewInstall(actionConfig)
@@ -276,14 +260,14 @@ func (k *K8s) InstallChart(repoInfo *scheduler.HelmRepo) (string, error) {
 		client.Version = ">0.0.0-0"
 	}
 	client.ReleaseName = repoInfo.ReleaseName
-	cp, err := client.ChartPathOptions.LocateChart(fmt.Sprintf("%s/%s", repoInfo.RepoName, repoInfo.ChartName), settings)
+	cp, err := client.ChartPathOptions.LocateChart(fmt.Sprintf("%s/%s", repoInfo.RepoName, repoInfo.ChartName), k.settings)
 	if err != nil {
 		return "", err
 	}
 
 	log.Debugf("chart install path: %s", cp)
 
-	p := getter.All(settings)
+	p := getter.All(k.settings)
 	valueOpts := &values.Options{}
 	vals, err := valueOpts.MergeValues(p)
 	if err != nil {
@@ -318,8 +302,8 @@ func (k *K8s) InstallChart(repoInfo *scheduler.HelmRepo) (string, error) {
 					Keyring:          client.ChartPathOptions.Keyring,
 					SkipUpdate:       false,
 					Getters:          p,
-					RepositoryConfig: settings.RepositoryConfig,
-					RepositoryCache:  settings.RepositoryCache,
+					RepositoryConfig: k.settings.RepositoryConfig,
+					RepositoryCache:  k.settings.RepositoryCache,
 				}
 				if err := man.Update(); err != nil {
 					return "", err
@@ -349,7 +333,7 @@ func isChartInstallable(ch *chart.Chart) (bool, error) {
 // UpgradeChart will upgrade the release
 func (k *K8s) UpgradeChart(repoInfo *scheduler.HelmRepo) (string, error) {
 	actionConfig := new(action.Configuration)
-	if err := actionConfig.Init(settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
+	if err := actionConfig.Init(k.settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
 		return "", err
 	}
 
@@ -357,13 +341,13 @@ func (k *K8s) UpgradeChart(repoInfo *scheduler.HelmRepo) (string, error) {
 	if client.Version == "" && client.Devel {
 		client.Version = ">0.0.0-0"
 	}
-	cp, err := client.ChartPathOptions.LocateChart(fmt.Sprintf("%s/%s", repoInfo.RepoName, repoInfo.ChartName), settings)
+	cp, err := client.ChartPathOptions.LocateChart(fmt.Sprintf("%s/%s", repoInfo.RepoName, repoInfo.ChartName), k.settings)
 	if err != nil {
 		return "", err
 	}
 	log.Debugf("chart upgrade path: %s", cp)
 
-	p := getter.All(settings)
+	p := getter.All(k.settings)
 	valueOpts := &values.Options{}
 	vals, err := valueOpts.MergeValues(p)
 	if err != nil {
@@ -407,7 +391,7 @@ func (k *K8s) UpgradeChart(repoInfo *scheduler.HelmRepo) (string, error) {
 // GetChartValues gets existing helm values for current installed release
 func (k *K8s) GetChartValues(repoInfo *scheduler.HelmRepo) (map[string]interface{}, error) {
 	actionConfig := new(action.Configuration)
-	if err := actionConfig.Init(settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
+	if err := actionConfig.Init(k.settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
 		return nil, err
 	}
 
@@ -424,7 +408,7 @@ func (k *K8s) GetChartValues(repoInfo *scheduler.HelmRepo) (map[string]interface
 func (k *K8s) UnInstallHelmChart(repoInfo *scheduler.HelmRepo) ([]interface{}, error) {
 	var err error
 	actionConfig := new(action.Configuration)
-	if err = actionConfig.Init(settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
+	if err = actionConfig.Init(k.settings.RESTClientGetter(), repoInfo.Namespace, os.Getenv("HELM_DRIVER"), debug); err != nil {
 		return nil, err
 	}
 
@@ -438,7 +422,7 @@ func (k *K8s) UnInstallHelmChart(repoInfo *scheduler.HelmRepo) ([]interface{}, e
 	// Parse the manifest which is a yaml to get the k8s spec objects
 	var yamlBuf bytes.Buffer
 	yamlBuf.WriteString(response.Release.Manifest)
-	specs, err := k.ParseSpecsFromYamlBuf(&yamlBuf)
+	specs, err := parser.ParseSpecsFromYamlBuf(&yamlBuf)
 	if err != nil {
 		return nil, err
 	}
