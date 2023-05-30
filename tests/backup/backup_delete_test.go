@@ -794,7 +794,11 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 			for _, backup := range backupNames {
 				backupUID, err := backupDriver.GetBackupUID(ctx, backup, orgID)
 				dash.VerifySafely(err, nil, fmt.Sprintf("trying to get backup UID for backup %s", backup))
-				err = DeleteBackupAndDependencies(backup, backupUID, orgID, SourceClusterName)
+				_, err = DeleteBackup(backup, backupUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backup))
+			}
+			for _, backup := range backupNames {
+				err := DeleteBackupAndWait(backup, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backup))
 			}
 		})

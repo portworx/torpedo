@@ -4335,12 +4335,12 @@ func IsS3BucketEmpty(bucketName string) (bool, error) {
 		Region:           aws.String(s3Region),
 		DisableSSL:       aws.Bool(disableSSLBool),
 		S3ForcePathStyle: aws.Bool(true),
-	},
-	)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
-	S3Client := s3.New(sess)
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to get S3 session to create bucket with %s", err)
+	}
 
+	S3Client := s3.New(sess)
 	input := &s3.ListObjectsInput{
 		Bucket: aws.String(bucketName),
 	}
