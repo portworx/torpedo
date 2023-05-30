@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -2894,7 +2893,7 @@ func DeleteAppNamespace(namespace string) error {
 // RegisterCluster adds the cluster with the given name
 func RegisterCluster(clusterName string, cloudCredName string, orgID string, ctx context.Context) error {
 	var kubeconfigPath string
-	err := errors.New("")
+	var err error
 	kubeConfigs := os.Getenv("KUBECONFIGS")
 	if kubeConfigs == "" {
 		return fmt.Errorf("unable to get KUBECONFIGS from Environment variable")
