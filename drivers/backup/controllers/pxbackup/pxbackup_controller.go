@@ -20,6 +20,11 @@ type CloudAccountInfo struct {
 	provider string
 }
 
+type BackupLocationInfo struct {
+	*api.BackupLocationObject
+	bucketName string
+}
+
 type OrganizationObjects struct {
 	cloudAccounts map[string]*CloudAccountInfo
 }
