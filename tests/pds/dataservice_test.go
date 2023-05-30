@@ -1558,7 +1558,7 @@ var _ = Describe("{RollingRebootNodes}", func() {
 
 				Step("Reboot nodes", func() {
 					dash.Info("Rebooting all the nodes in rolling fashion.")
-					nodesToReboot := node.GetWorkerNodes()
+					nodesToReboot := Inst().N.GetNodeRegistry().GetWorkerNodes()
 					for _, n := range nodesToReboot {
 						log.InfoD("reboot node: %s", n.Name)
 						err = Inst().N.RebootNode(n, node.RebootNodeOpts{
