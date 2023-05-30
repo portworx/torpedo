@@ -27,7 +27,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -113,7 +113,7 @@ var (
 
 type userRoleAccess struct {
 	user     string
-	roles    backup.PxBackupRole
+	roles    pxbackup.PxBackupRole
 	accesses BackupAccess
 	context  context.Context
 }
@@ -462,7 +462,7 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 	log.Infof("Backup UID for %s - %s", backupName, bkpUid)
 
 	for _, groupName := range groupNames {
-		groupID, err := backup.FetchIDOfGroup(groupName)
+		groupID, err := Inst().Backup.(*pxbackup.PXBackup).FetchIDOfGroup(groupName)
 		if err != nil {
 			return err
 		}
@@ -470,7 +470,7 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 	}
 
 	for _, userName := range userNames {
-		userID, err := backup.FetchIDOfUser(userName)
+		userID, err := Inst().Backup.(*pxbackup.PXBackup).FetchIDOfUser(userName)
 		if err != nil {
 			return err
 		}
@@ -525,7 +525,7 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 	}
 
 	for _, groupName := range groupNames {
-		groupID, err := backup.FetchIDOfGroup(groupName)
+		groupID, err := Inst().Backup.(*pxbackup.PXBackup).FetchIDOfGroup(groupName)
 		if err != nil {
 			return err
 		}
@@ -533,7 +533,7 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 	}
 
 	for _, userName := range userNames {
-		userID, err := backup.FetchIDOfUser(userName)
+		userID, err := Inst().Backup.(*pxbackup.PXBackup).FetchIDOfUser(userName)
 		if err != nil {
 			return err
 		}
@@ -614,7 +614,7 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 func GetAllBackupsForUser(username, password string) ([]string, error) {
 	backupNames := make([]string, 0)
 	backupDriver := Inst().Backup
-	ctx, err := backup.GetNonAdminCtx(username, password)
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralNonAdminCtx(username, password)
 	if err != nil {
 		return nil, err
 	}
@@ -883,7 +883,7 @@ func createUsers(numberOfUsers int) []string {
 		go func(userName, firstName, lastName, email string) {
 			defer GinkgoRecover()
 			defer wg.Done()
-			err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
+			err := Inst().Backup.(*pxbackup.PXBackup).AddUser(userName, firstName, lastName, email, commonPassword)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Creating user - %s", userName))
 			users = append(users, userName)
 		}(userName, firstName, lastName, email)
@@ -937,9 +937,9 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 // AddRoleAndAccessToUsers return map whose key is userRoleAccess and value is backup for each user
 func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRoleAccess]string, error) {
 	var access BackupAccess
-	var role backup.PxBackupRole
+	var role pxbackup.PxBackupRole
 	roleAccessUserBackupContext := make(map[userRoleAccess]string)
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	if err != nil {
 		return nil, err
 	}
@@ -948,42 +948,42 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 		switch userIndex {
 		case 0:
 			access = ViewOnlyAccess
-			role = backup.ApplicationOwner
+			role = pxbackup.ApplicationOwner
 		case 1:
 			access = RestoreAccess
-			role = backup.ApplicationOwner
+			role = pxbackup.ApplicationOwner
 		case 2:
 			access = FullAccess
-			role = backup.ApplicationOwner
+			role = pxbackup.ApplicationOwner
 		case 3:
 			access = ViewOnlyAccess
-			role = backup.ApplicationUser
+			role = pxbackup.ApplicationUser
 		case 4:
 			access = RestoreAccess
-			role = backup.ApplicationUser
+			role = pxbackup.ApplicationUser
 		case 5:
 			access = FullAccess
-			role = backup.ApplicationUser
+			role = pxbackup.ApplicationUser
 		case 6:
 			access = ViewOnlyAccess
-			role = backup.InfrastructureOwner
+			role = pxbackup.InfrastructureOwner
 		case 7:
 			access = RestoreAccess
-			role = backup.InfrastructureOwner
+			role = pxbackup.InfrastructureOwner
 		case 8:
 			access = FullAccess
-			role = backup.InfrastructureOwner
+			role = pxbackup.InfrastructureOwner
 		default:
 			access = ViewOnlyAccess
-			role = backup.ApplicationOwner
+			role = pxbackup.ApplicationOwner
 		}
-		ctxNonAdmin, err := backup.GetNonAdminCtx(users[i], commonPassword)
+		ctxNonAdmin, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralNonAdminCtx(users[i], commonPassword)
 		if err != nil {
 			return nil, err
 		}
 		userRoleAccessContext := userRoleAccess{users[i], role, access, ctxNonAdmin}
 		roleAccessUserBackupContext[userRoleAccessContext] = backupNames[i]
-		err = backup.AddRoleToUser(users[i], role, "Adding role to user")
+		err = Inst().Backup.(*pxbackup.PXBackup).AddRoleToUser(users[i], role, "Adding role to user")
 		if err != nil {
 			err = fmt.Errorf("failed to add role %s to user %s with err %v", role, users[i], err)
 			return nil, err
@@ -997,9 +997,9 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 	return roleAccessUserBackupContext, nil
 }
 func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName string, restoreName string) {
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-	userCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+	userCtx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralNonAdminCtx(user, commonPassword)
 	Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching %s user ctx", user))
 	log.InfoD("Registering Source and Destination clusters from user context")
 	err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
@@ -1080,7 +1080,7 @@ func ShareBackupWithUsersAndAccessAssignment(backupNames []string, users []strin
 		if err != nil {
 			return accessUserBackupContext, fmt.Errorf("unable to share backup %s with user %s Error: %v", backupNames[i], user, err)
 		}
-		ctxNonAdmin, err = backup.GetNonAdminCtx(users[i], commonPassword)
+		ctxNonAdmin, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralNonAdminCtx(users[i], commonPassword)
 		if err != nil {
 			return accessUserBackupContext, fmt.Errorf("unable to get user context: %v", err)
 		}
@@ -1095,7 +1095,7 @@ func GetAllBackupsAdmin() ([]string, error) {
 	var bkp *api.BackupObject
 	backupNames := make([]string, 0)
 	backupDriver := Inst().Backup
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	if err != nil {
 		return nil, err
 	}
@@ -1115,7 +1115,7 @@ func GetAllBackupsAdmin() ([]string, error) {
 func GetAllRestoresAdmin() ([]string, error) {
 	restoreNames := make([]string, 0)
 	backupDriver := Inst().Backup
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	if err != nil {
 		return restoreNames, err
 	}
@@ -2160,7 +2160,7 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 
 // GetPxBackupVersion return the version of Px Backup as a VersionInfo struct
 func GetPxBackupVersion() (*api.VersionInfo, error) {
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	if err != nil {
 		return nil, err
 	}
@@ -2192,7 +2192,7 @@ func GetPxBackupVersionSemVer() (string, error) {
 
 // GetPxBackupBuildDate returns the Px Backup build date
 func GetPxBackupBuildDate() (string, error) {
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	if err != nil {
 		return "", err
 	}
@@ -2230,7 +2230,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 
 	// Getting Px Backup Namespace
-	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	pxBackupNamespace, err := Inst().Backup.(*pxbackup.PXBackup).GetPxBackupNamespace()
 	if err != nil {
 		return err
 	}
@@ -2369,7 +2369,7 @@ func deleteJobAndWait(job batchv1.Job) error {
 }
 
 func ValidateAllPodsInPxBackupNamespace() error {
-	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	pxBackupNamespace, err := Inst().Backup.(*pxbackup.PXBackup).GetPxBackupNamespace()
 	allPods, err := core.Instance().GetPods(pxBackupNamespace, nil)
 	for _, pod := range allPods.Items {
 		if strings.Contains(pod.Name, pxCentralPostInstallHookJobName) ||

@@ -10,8 +10,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/backup/portworx"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -68,7 +67,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -86,7 +85,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 
 		Step("Register clusters for backup", func() {
 			log.InfoD("Register clusters for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -99,7 +98,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
@@ -111,7 +110,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 
 		Step("Restoring the backed up application", func() {
 			log.InfoD("Restoring the backed up application")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
 			err = CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx, make(map[string]string))
@@ -122,7 +121,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.Infof("Deleting backup, restore and backup location, cloud account")
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		err = DeleteRestore(restoreName, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
@@ -180,7 +179,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
 			providers := getProviders()
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -192,7 +191,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		})
 
 		Step("Register cluster for backup", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -217,7 +216,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		})
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
@@ -250,7 +249,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 
 		Step("Restoring the backed up application", func() {
 			log.InfoD("Restoring the backed up application")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				for _, backupName := range backupNames {
@@ -274,7 +273,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
@@ -318,12 +317,12 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
+				if _, ok := pxbackup.AppParameters[appList[i]]["post_action_list"]; ok {
 					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
 				}
 			}
 			if Contains(preRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["pre_action_list"]; ok {
+				if _, ok := pxbackup.AppParameters[appList[i]]["pre_action_list"]; ok {
 					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
 				}
 			}
@@ -366,7 +365,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -391,7 +390,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		})
 
 		Step("Register cluster for backup", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -404,7 +403,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 
 		Step("Start backup of application to bucket", func() {
 			for _, namespace := range bkpNamespaces {
-				ctx, err := backup.GetAdminCtxFromSecret()
+				ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
@@ -417,7 +416,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		})
 
 		Step("Restoring the backed up application", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				backupName := backupNamespaceMap[namespace]
@@ -470,7 +469,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx)
 	})
@@ -527,7 +526,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		BackupLocation1UID = uuid.New()
 		encryptionKey := "px-b@ckup-@utomat!on"
 		CreateBucket(providers[0], encryptionBucketName)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		err = CreateCloudCredential(providers[0], CredName, CloudCredUID, orgID, ctx)
 		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", CredName, orgID, providers[0]))
@@ -544,7 +543,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 
 		Step("Register cluster for backup", func() {
 			log.InfoD("Register clusters for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -560,7 +559,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNames = append(backupNames, backupName)
-				ctx, err := backup.GetAdminCtxFromSecret()
+				ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationNames[0], BackupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
@@ -576,7 +575,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			log.InfoD("Restoring encrypted and no-encrypted backups")
 			restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupNames[0], time.Now().Unix())
 			restoreNames = append(restoreNames, restoreName)
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateRestore(restoreName, backupNames[0], nil, destinationClusterName, orgID, ctx, make(map[string]string))
 			log.FailOnError(err, "%s restore failed", restoreName)
@@ -590,13 +589,13 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		log.InfoD("Deleting Restores, Backups and Backup locations, cloud account")
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, restore := range restoreNames {
 			err = DeleteRestore(restore, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
 		}
-		ctx, err = backup.GetAdminCtxFromSecret()
+		ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, backupName := range backupNames {
 			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
@@ -647,12 +646,12 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
+				if _, ok := pxbackup.AppParameters[appList[i]]["post_action_list"]; ok {
 					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
 				}
 			}
 			if Contains(preRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["pre_action_list"]; ok {
+				if _, ok := pxbackup.AppParameters[appList[i]]["pre_action_list"]; ok {
 					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
 				}
 			}
@@ -690,7 +689,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		})
 		Step("Creating cloud credentials and backup location", func() {
 			log.InfoD("Creating cloud credentials and backup location")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -711,7 +710,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		})
 		Step("Configure source and destination clusters with px-central-admin ctx", func() {
 			log.InfoD("Configuring source and destination clusters with px-central-admin ctx")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
@@ -739,7 +738,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 				})
 				Step("Create schedule policy", func() {
 					log.InfoD("Create schedule policy")
-					ctx, err := backup.GetAdminCtxFromSecret()
+					ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 					periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 					periodicSchedulePolicyNames = append(periodicSchedulePolicyNames, periodicSchedulePolicyName)
@@ -780,7 +779,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 				})
 				Step("Create schedule backup immediately after initiating volume resize", func() {
 					log.InfoD("Create schedule backup after initiating volume resize")
-					ctx, err := backup.GetAdminCtxFromSecret()
+					ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 
 					scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
@@ -812,7 +811,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 				})
 				Step("Verifying backup success after initializing volume resize", func() {
 					log.InfoD("Verifying backup success after initializing volume resize")
-					ctx, err := backup.GetAdminCtxFromSecret()
+					ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 
 					firstScheduleBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
@@ -847,7 +846,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 				})
 				Step("Restoring application from first schedule backup", func() {
 					log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", firstScheduleBackupName))
-					ctx, err := backup.GetAdminCtxFromSecret()
+					ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", namespace, time.Now().Unix())
 					restoreNames = append(restoreNames, restoreName)
@@ -856,7 +855,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 				})
 				Step("Restoring application from recent backup", func() {
 					log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", nextScheduleBackupName))
-					ctx, err := backup.GetAdminCtxFromSecret()
+					ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore-recent-backup", namespace, time.Now().Unix())
 					restoreNames = append(restoreNames, restoreName)
@@ -869,7 +868,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
 		for i := 0; i < len(scheduleNames); i++ {
 			err = DeleteSchedule(scheduleNames[i], SourceClusterName, orgID, ctx)

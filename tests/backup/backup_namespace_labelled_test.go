@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -84,7 +84,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		})
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -100,7 +100,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		})
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Register source and destination cluster for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			log.FailOnError(err, "Creating source and destination cluster")
@@ -116,7 +116,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		// While taking namespace labelled backup, we are expecting that backup will be taken of only labelled namespaces, not all
 		Step("Taking namespace labelled backup for each user", func() {
 			log.InfoD("Taking namespace labelled backup for each user")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
 			for i := 0; i < numberOfUsers; i++ {
@@ -136,7 +136,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		})
 		Step("Verifying that correct namespaces are backed up for the namespace labelled backup taken and correct labels are applied to the backup", func() {
 			log.InfoD("Verifying that correct namespaces are backed up for the namespace labelled backup taken and correct labels are applied to the backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
 				err = NamespaceLabelBackupSuccessCheck(backupName, ctx, listOfLabelledNamespaces, MapToKeyValueString(labels))
@@ -145,7 +145,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		})
 		Step("Share backup with users with different access level", func() {
 			log.InfoD("Share backup with users with different access level")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			accessUserBackupContext, err = ShareBackupWithUsersAndAccessAssignment(backupNames, users, ctx)
 			log.FailOnError(err, fmt.Sprintf("Sharing backup %s with users %v", backupNames, users))
@@ -166,7 +166,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 	JustAfterEach(func() {
 		var wg sync.WaitGroup
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting labels from namespaces - %v", listOfLabelledNamespaces)
 		err = DeleteLabelsFromMultipleNamespaces(labels, listOfLabelledNamespaces)
@@ -176,7 +176,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		DestroyApps(scheduledAppContexts, opts)
 		log.Infof("Generating user context")
 		for _, userName := range users {
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
+			ctxNonAdmin, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralNonAdminCtx(userName, commonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
 			userContextsList = append(userContextsList, ctxNonAdmin)
 		}
@@ -194,7 +194,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 			wg.Add(1)
 			go func(userName string) {
 				defer wg.Done()
-				err := backup.DeleteUser(userName)
+				err := Inst().Backup.(*pxbackup.PXBackup).DeleteUser(userName)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user %v", userName))
 			}(userName)
 		}

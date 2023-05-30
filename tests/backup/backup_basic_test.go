@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/anthos"
@@ -173,15 +174,18 @@ func BackupInitInstance() {
 		openshiftScheduler.VolumeDriver = Inst().V
 	}
 
-	if Inst().Backup != nil {
-		backupOptions := backup.InitOptions{
-			SchedulerDriver: Inst().S,
-			NodeDriver:      Inst().N,
-			VolumeDriver:    Inst().V,
-		}
-		err = Inst().Backup.Init(backupOptions)
-		log.FailOnError(err, "Error occured while Backup Driver Initialization")
+	backupOptions := backup.InitOptions{}
+	if k8sScheduler, ok := Inst().S.(*k8s.K8s); ok {
+		backupOptions.K8sCore = k8sScheduler.K8sCore
+	} else if rkeScheduler, ok := Inst().S.(*rke.Rke); ok {
+		backupOptions.K8sCore = rkeScheduler.K8sCore
+	} else if anthosScheduler, ok := Inst().S.(*anthos.Anthos); ok {
+		backupOptions.K8sCore = anthosScheduler.K8sCore
+	} else if openshiftScheduler, ok := Inst().S.(*openshift.Openshift); ok {
+		backupOptions.K8sCore = openshiftScheduler.K8sCore
 	}
+	err = Inst().Backup.Init(backupOptions)
+	log.FailOnError(err, "Error occured while Backup Driver Initialization")
 
 	SetupTestRail()
 
@@ -206,7 +210,9 @@ func BackupInitInstance() {
 	Inst().Dash.TestSetUpdate(t)
 
 	// Setting the common password
-	commonPassword = backup.PxCentralAdminPwd + RandomString(4)
+	pxCentralAdminPwd, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminPwd()
+	log.FailOnError(err, "Error in pxbackup.GetPxCentralAdminPwd()")
+	commonPassword = pxCentralAdminPwd + RandomString(4)
 
 	// Dumping source and destination kubeconfig to file system path
 	log.Infof("Dumping source and destination kubeconfig to file system path")
@@ -282,24 +288,24 @@ var _ = AfterSuite(func() {
 	defer EndTorpedoTest()
 
 	// Cleanup all non admin users
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	log.FailOnError(err, "Fetching px-central-admin ctx")
-	allUsers, err := backup.GetAllUsers()
+	allUsers, err := Inst().Backup.(*pxbackup.PXBackup).GetAllUsers()
 	dash.VerifySafely(err, nil, "Verifying cleaning up of all users from keycloak")
 	for _, user := range allUsers {
 		if !strings.Contains(user.Name, "admin") {
-			err = backup.DeleteUser(user.Name)
+			err = Inst().Backup.(*pxbackup.PXBackup).DeleteUser(user.Name)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying user [%s] deletion", user.Name))
 		} else {
 			log.Infof("User %s was not deleted", user.Name)
 		}
 	}
 	// Cleanup all non admin groups
-	allGroups, err := backup.GetAllUsers()
+	allGroups, err := Inst().Backup.(*pxbackup.PXBackup).GetAllUsers()
 	dash.VerifySafely(err, nil, "Verifying cleaning up of all groups from keycloak")
 	for _, group := range allGroups {
 		if !strings.Contains(group.Name, "admin") && !strings.Contains(group.Name, "app") {
-			err = backup.DeleteGroup(group.Name)
+			err = Inst().Backup.(*pxbackup.PXBackup).DeleteGroup(group.Name)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying group [%s] deletion", group.Name))
 		} else {
 			log.Infof("Group %s was not deleted", group.Name)

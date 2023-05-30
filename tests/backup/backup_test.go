@@ -9,6 +9,7 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -42,34 +43,34 @@ var _ = Describe("{UserGroupManagement}", func() {
 	})
 	It("User and group role mappings", func() {
 		Step("Create Users", func() {
-			err := backup.AddUser("testuser1", "test", "user1", "testuser1@localhost.com", commonPassword)
+			err := Inst().Backup.(*pxbackup.PXBackup).AddUser("testuser1", "test", "user1", "testuser1@localhost.com", commonPassword)
 			log.FailOnError(err, "Failed to create user")
 		})
 		Step("Create Groups", func() {
-			err := backup.AddGroup("testgroup1")
+			err := Inst().Backup.(*pxbackup.PXBackup).AddGroup("testgroup1")
 			log.FailOnError(err, "Failed to create group")
 		})
 		Step("Add users to group", func() {
-			err := backup.AddGroupToUser("testuser1", "testgroup1")
+			err := Inst().Backup.(*pxbackup.PXBackup).AddGroupToUser("testuser1", "testgroup1")
 			log.FailOnError(err, "Failed to assign group to user")
 		})
 		Step("Assign role to groups", func() {
-			err := backup.AddRoleToGroup("testgroup1", backup.ApplicationOwner, "testing from torpedo")
+			err := Inst().Backup.(*pxbackup.PXBackup).AddRoleToGroup("testgroup1", pxbackup.ApplicationOwner, "testing from torpedo")
 			log.FailOnError(err, "Failed to assign group to user")
 		})
 		Step("Verify Application Owner role permissions for user", func() {
-			isUserRoleMapped, err := ValidateUserRole("testuser1", backup.ApplicationOwner)
+			isUserRoleMapped, err := ValidateUserRole("testuser1", pxbackup.ApplicationOwner)
 			log.FailOnError(err, "User does not contain the expected role")
 			dash.VerifyFatal(isUserRoleMapped, true, "Verifying the user role mapping")
 		})
 		Step("Update role to groups", func() {
-			err := backup.DeleteRoleFromGroup("testgroup1", backup.ApplicationOwner, "removing role from testgroup1")
+			err := Inst().Backup.(*pxbackup.PXBackup).DeleteRoleFromGroup("testgroup1", pxbackup.ApplicationOwner, "removing role from testgroup1")
 			log.FailOnError(err, "Failed to delete role from group")
-			err = backup.AddRoleToGroup("testgroup1", backup.ApplicationUser, "testing from torpedo")
+			err = Inst().Backup.(*pxbackup.PXBackup).AddRoleToGroup("testgroup1", pxbackup.ApplicationUser, "testing from torpedo")
 			log.FailOnError(err, "Failed to add role to group")
 		})
 		Step("Verify Application User role permissions for user", func() {
-			isUserRoleMapped, err := ValidateUserRole("testuser1", backup.ApplicationUser)
+			isUserRoleMapped, err := ValidateUserRole("testuser1", pxbackup.ApplicationUser)
 			log.FailOnError(err, "User does not contain the expected role")
 			dash.VerifyFatal(isUserRoleMapped, true, "Verifying the user role mapping")
 		})
@@ -77,9 +78,9 @@ var _ = Describe("{UserGroupManagement}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("Cleanup started")
-		err := backup.DeleteUser("testuser1")
+		err := Inst().Backup.(*pxbackup.PXBackup).DeleteUser("testuser1")
 		dash.VerifySafely(err, nil, "Delete user testuser1")
-		err = backup.DeleteGroup("testgroup1")
+		err = Inst().Backup.(*pxbackup.PXBackup).DeleteGroup("testgroup1")
 		dash.VerifySafely(err, nil, "Delete group testgroup1")
 		log.Infof("Cleanup done")
 	})
@@ -168,7 +169,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -208,7 +209,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Registering cluster for backup", func() {
 			log.InfoD("Registering cluster for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
@@ -228,7 +229,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Taking backup of application from source cluster", func() {
 			log.InfoD("taking backup of applications")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			backupNames = make([]string, 0)
@@ -244,7 +245,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Restoring the backed up namespaces", func() {
 			log.InfoD("Restoring the backed up namespaces")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for i, appCtx := range scheduledAppContexts {
 				scheduledNamespace := appCtx.ScheduleOptions.Namespace
@@ -270,7 +271,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		}()
 
 		policyList := []string{intervalName, dailyName, weeklyName, monthlyName}
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		if len(preRuleNameList) > 0 {
 			for _, ruleName := range preRuleNameList {

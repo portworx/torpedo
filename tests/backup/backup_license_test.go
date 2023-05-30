@@ -8,7 +8,7 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
@@ -33,7 +33,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 	It("Verify worker node on application cluster with label portworx.io/nobackup=true is not counted for licensing", func() {
 		Step("Adding source and destination cluster for backup", func() {
 			log.InfoD("Adding source and destination cluster for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			log.FailOnError(err, fmt.Sprintf("Creating source cluster %s and destination cluster %s", SourceClusterName, destinationClusterName))
@@ -62,7 +62,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		})
 		Step("Verifying the license count after adding source and destination clusters", func() {
 			log.InfoD("Verifying the license count after adding source and destination clusters")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the license count when source cluster with %d worker nodes and destination cluster with %d worker nodes are added to backup", len(sourceClusterWorkerNodes), len(destinationClusterWorkerNodes)))
@@ -71,7 +71,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 			log.InfoD("Applying label portworx.io/nobackup=true to one of the worker node on source cluster and verifying the license count")
 			err := Inst().S.AddLabelOnNode(sourceClusterWorkerNodes[0], "portworx.io/nobackup", "true")
 			log.FailOnError(err, fmt.Sprintf("Failed to apply label portworx.io/nobackup=true to worker node %v", sourceClusterWorkerNodes[0].Name))
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)-1))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to node %v", sourceClusterWorkerNodes[0].Name))
@@ -91,7 +91,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 			log.InfoD("Removing label from worker node on source cluster on which label was applied earlier and verifying the license count")
 			err := Inst().S.RemoveLabelOnNode(sourceClusterWorkerNodes[0], "portworx.io/nobackup")
 			log.FailOnError(err, fmt.Sprintf("Failed to remove label portworx.io/nobackup=true from worker node %v", sourceClusterWorkerNodes[0].Name))
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = VerifyLicenseConsumedCount(ctx, orgID, int64(len(totalNumberOfWorkerNodes)-1))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after removing label portworx.io/nobackup=true from node %v", sourceClusterWorkerNodes[0].Name))
@@ -125,7 +125,7 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
 			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode.Name))
 		}
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 	})
@@ -166,7 +166,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 	})
 
 	It("Label the application cluster nodes before adding to backup and verify the license count", func() {
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Removing any cluster if present", func() {
 			clusterEnumerateReq := &api.ClusterEnumerateRequest{
@@ -307,7 +307,7 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
 			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode.Name))
 		}
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the restore taken")
 		err = DeleteRestore(restoreName, orgID, ctx)
@@ -331,7 +331,7 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 	})
 
 	It("Verify the license count before and after the backup pod restarts", func() {
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Adding source and destination clusters for backup", func() {
 			log.InfoD("Adding source and destination clusters for backup")
@@ -377,7 +377,7 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying license count after applying label portworx.io/nobackup=true to 2 worker nodes"))
 		})
 		Step("Restart all the backup pod and wait for it to come up", func() {
-			pxbNamespace, err = backup.GetPxBackupNamespace()
+			pxbNamespace, err = Inst().Backup.(*pxbackup.PXBackup).GetPxBackupNamespace()
 			log.FailOnError(err, "Getting px-backup namespace")
 			err = DeletePodWithLabelInNamespace(pxbNamespace, nil)
 			dash.VerifyFatal(err, nil, "Restart all the backup pods")
@@ -466,7 +466,7 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 			err = RemoveLabelFromNodesIfPresent(workerNode, "portworx.io/nobackup")
 			dash.VerifySafely(err, nil, fmt.Sprintf("Removing label portworx.io/nobackup=true from worker node %s", workerNode.Name))
 		}
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(nil, "", "", ctx)
 	})
