@@ -24,6 +24,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -1469,6 +1471,54 @@ func DeletePDSCRDs(pdsApiGroups []string) error {
 	return nil
 }
 
+// // Check the DS related PV usage and resize in case of 90% full
+// func GetPVCtoFullConditionAndResize(deploymentName string, namespace string, context []*scheduler.Context) error {
+// 	// 1. keep polling for the volume with pxctl command till 90%
+// 	// 2. resize once full
+// 	// 3. check volume size increasing again with pxctl command . (shud be less than 90 after resize)
+// 	// 4. Check workload and DS pod status
+// 	log.Debugf("Start polling the pvc consumption for the DS %v", deploymentName)
+// 	// threshold := 90
+// 	for _, ctx := range context {
+// 		vols, err := tests.Inst().S.GetVolumes(ctx)
+// 		log.Debugf("Volumes found are: %v", vols)
+// 		if err != nil {
+// 			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
+// 		}
+// 		for _, vol := range vols {
+// 			log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
+// 			appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+// 			log.Debugf("THE VOL DESC IS ----- %v", appVol)
+// 			if err != nil {
+// 				return fmt.Errorf("unable to inspect volumes due to : %v", err)
+// 			}
+// 			usedBytes := appVol.GetUsage()
+// 			log.Debugf("USED IBYTES IS ---- %v", usedBytes)
+// 			// pvcCapacity, err := GetConfigMap()
+// 			pvcUsed := (usedBytes / 107374182400) * 100
+// 			log.Debugf("PVC USED IS ---- %v", pvcUsed)
+// 			// if pvcUsed >= threshold.uint64 {
+// 			// 	return nil
+// 			// }
+// 		}
+// 		return nil
+// 	}
+// 	return nil
+// }
+
+// Increase PVC by 1 gig
+func IncreasePVCby1Gig(context []*scheduler.Context) error {
+	log.Debugf("Entered into resize of pvc %v", context)
+	for _, ctx := range context {
+		appVolumes, err := tests.Inst().S.ResizeVolume(ctx, "")
+		log.Debugf("APP VOLUMES AFTER RESIZE : %v", appVolumes)
+		log.FailOnError(err, "Volume resize successful ?")
+		log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+			ctx.App.Key, appVolumes))
+	}
+	return nil
+}
+
 // Check if a deployment specific PV and associated PVC is still present. If yes then delete both of them
 func DeletePvandPVCs(resourceName string, delPod bool) error {
 	log.Debugf("Starting to delete the PV and PVCs for resource %v\n", resourceName)
@@ -1885,8 +1935,8 @@ func RunMySqlWorkload(dnsEndpoint string, pdsPassword string, pdsPort string, na
 			},
 		},
 	}
-	value = append(value, dnsEndpoint)
 	value = append(value, "pds")
+	value = append(value, dnsEndpoint)
 	value = append(value, pdsPassword)
 	value = append(value, pdsPort)
 

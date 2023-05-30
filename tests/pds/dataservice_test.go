@@ -1098,6 +1098,28 @@ var _ = Describe("{DeployAllDataServices}", func() {
 func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	log.InfoD("Data Service Deployment Triggered")
 	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespace, serviceType)
+	// StorageTemplateId, err = pdslib.GetStorageTemplate(tenantID,"getpvcfull-PDS-st")
+	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, namespace, tenantID, projectID, false,
+		dataservice.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
+	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
+	Step("Validate Data Service Deployments", func() {
+		err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
+	})
+	Step("Validate Storage Configurations", func() {
+		dataServiceDefaultResourceTemplateID, err = pdslib.GetResourceTemplate(tenantID, ds.Name)
+		log.FailOnError(err, "Error while getting resource template")
+		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+		ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+	})
+	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
+}
+
+func DeployandValidateDataServicesCustomTemplates(ds dataservice.PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+	log.InfoD("Data Service Deployment Triggered")
+	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespace, serviceType)
 	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, namespace, tenantID, projectID, false,
 		dataservice.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
@@ -1665,5 +1687,83 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 
 	JustAfterEach(func() {
 		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{GetPvcToFullCondition}", func() {
+
+	JustBeforeEach(func() {
+		InitInstance()
+		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once trhreshold is met", pdsLabels, 0)
+	})
+
+	It("Deploy Dataservices", func() {
+		// var generateWorkloads = make(map[string]string)
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var dsVersions = make(map[string]map[string][]string)
+		var depList []*pds.ModelsDeployment
+
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				if ds.Name == zookeeper {
+					log.Warnf("Scaling of nodes is not supported for %v dataservice ", ds.Name)
+					continue
+				}
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+					dsVersions[ds.Name] = dataServiceVersionBuildMap
+					depList = append(depList, deployment)
+				})
+			}
+
+			// defer func() {
+			// 	for _, newDeployment := range deployments {
+			// 		Step("Delete created deployments")
+			// 		resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+			// 		log.FailOnError(err, "Error while deleting data services")
+			// 		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			// 	}
+			// }()
+
+			// Step("Running Workloads before scaling up of dataservices ", func() {
+			// 	for ds, deployment := range deployments {
+			// 		if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+			// 			log.InfoD("Running Workloads on DataService %v ", ds.Name)
+			// 			var params pdslib.WorkloadGenerationParams
+			// 			pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+			// 			log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+			// 			if dep == nil {
+			// 				generateWorkloads[ds.Name] = pod.Name
+			// 			} else {
+			// 				generateWorkloads[ds.Name] = dep.Name
+			// 			}
+			// 			for dsName, workloadContainer := range generateWorkloads {
+			// 				log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+			// 			}
+			// 		}
+			// 	}
+			// })
+
+			Step("Validate Deployments before scale up", func() {
+				for ds, deployment := range deployments {
+					err = pdslib.ValidateDataServiceDeployment(deployment, namespace)
+					log.FailOnError(err, "Error while validating dataservices")
+					log.InfoD("Data-service: %v is up and healthy", ds.Name)
+				}
+			})
+
+			Step("Checking the PVC usage", func() {
+				ctx := dsTest.CreateSchedulerContextForPDSApps(depList)
+				err = GetPVCtoFullConditionAndResize(*deployment.ClusterResourceName, namespace, ctx)
+				// err = pdslib.IncreasePVCby1Gig(ctx)
+				log.FailOnError(err, "Failing while Increasing the PVC name...")
+			})
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })

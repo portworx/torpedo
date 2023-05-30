@@ -873,13 +873,17 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
+	log.Debugf("entered the inspect function")
+	log.Debugf("VOLUME ID IS %v", name)
 	ctx, cancel := context.WithTimeout(context.Background(), inspectVolumeTimeout)
 	defer cancel()
-
-	response, err := d.getVolDriver().Inspect(ctx, &api.SdkVolumeInspectRequest{VolumeId: name})
+	volDriver := d.getVolDriver()
+	log.Debugf("Volume driver is %v", volDriver)
+	response, err := volDriver.Inspect(ctx, &api.SdkVolumeInspectRequest{VolumeId: name})
 	if err != nil {
 		return nil, err
 	}
+	log.Debugf("PRINT THE RESP %v", response)
 
 	return response.Volume, nil
 }
@@ -2683,6 +2687,8 @@ func areRepSetsFinal(vol *api.Volume, replFactor int64) bool {
 }
 
 func (d *portworx) setDriver() error {
+	log.Debugf("I M INTO SETDRIVER")
+	log.Debugf("wat is %v", d.skipPXSvcEndpoint)
 	if !d.skipPXSvcEndpoint {
 		// Try portworx-service first
 		endpoint, err := d.schedOps.GetServiceEndpoint()
@@ -3363,9 +3369,11 @@ func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
 }
 
 func (d *portworx) getVolDriver() api.OpenStorageVolumeClient {
+	log.Debugf("wat is d*portwox %v", d.refreshEndpoint)
 	if d.refreshEndpoint {
 		d.setDriver()
 	}
+	log.Debug("print %v", d.volDriver)
 	return d.volDriver
 }
 
