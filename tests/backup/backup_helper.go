@@ -94,6 +94,9 @@ const (
 	storkPodReadyTimeout                      = 15 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
+	configMapName                             = "kubeconfigs"
+	clusterCreationTimeout                    = 5 * time.Minute
+	clusterCreationRetryTime                  = 10 * time.Second
 )
 
 var (
@@ -2892,13 +2895,11 @@ func DeleteAppNamespace(namespace string) error {
 // RegisterCluster adds the cluster with the given name
 func RegisterCluster(orgID string, clusterName string, cloudCredName string, ctx context.Context) error {
 	var ConfigPath string
+	err := errors.New("")
 	kubeConfigs := os.Getenv("KUBECONFIGS")
 	Inst().Dash.VerifyFatal(kubeConfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeConfigs, ",")
-	err := DumpKubeConfigs(ConfigMapName, kubeconfigList)
-	if err != nil {
-		return err
-	}
+	DumpKubeconfigs(kubeconfigList)
 	// Register cluster with backup driver
 	log.InfoD("Create cluster [%s] in org [%s]", clusterName, orgID)
 	if clusterName == SourceClusterName {
@@ -2926,7 +2927,7 @@ func RegisterCluster(orgID string, clusterName string, cloudCredName string, ctx
 		}
 		return "", true, fmt.Errorf("the %s cluster state is not Online yet", clusterName)
 	}
-	_, err = task.DoRetryWithTimeout(ClusterStatus, ClusterCreationTimeout, ClusterCreationRetryTime)
+	_, err = task.DoRetryWithTimeout(ClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
