@@ -18,11 +18,11 @@ const (
 // pure is essentially the same as the portworx volume driver, just different in name. This way,
 // we can have separate specs for pure volumes vs. normal portworx ones
 type pure struct {
-	portworx
+	Portworx
 }
 
 func (p *pure) Init(volOpts volume.InitOptions) error {
-	return p.portworx.Init(volOpts)
+	return p.Portworx.Init(volOpts)
 }
 
 func (p *pure) String() string {

@@ -88,7 +88,7 @@ type InitOptions struct {
 	K8sBatch         batch.Ops
 	K8sRbac          rbac.Ops
 	K8sApiExtensions apiextensions.Ops
-	PxOperator       operator.Ops
+	K8sOperator      operator.Ops
 }
 
 // Driver defines an external volume driver interface that must be implemented

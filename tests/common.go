@@ -15,8 +15,6 @@ import (
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -492,7 +490,7 @@ func InitInstance() {
 		volOptions.K8sBatch = k8sScheduler.K8sBatch
 		volOptions.K8sRbac = k8sScheduler.K8sRbac
 		volOptions.K8sApiExtensions = k8sScheduler.K8sApiExtensions
-		volOptions.PxOperator = k8sScheduler.K8sOperator
+		volOptions.K8sOperator = k8sScheduler.K8sOperator
 		volOptions.K8sCore = k8sScheduler.K8sCore
 	} else if rkeScheduler, ok := Inst().S.(*rke.Rke); ok {
 		volOptions.NodeRegistry = rkeScheduler.NodeRegistry
@@ -501,7 +499,7 @@ func InitInstance() {
 		volOptions.K8sBatch = rkeScheduler.K8sBatch
 		volOptions.K8sRbac = rkeScheduler.K8sRbac
 		volOptions.K8sApiExtensions = rkeScheduler.K8sApiExtensions
-		volOptions.PxOperator = rkeScheduler.K8sOperator
+		volOptions.K8sOperator = rkeScheduler.K8sOperator
 		volOptions.K8sCore = rkeScheduler.K8sCore
 	} else if dcosScheduler, ok := Inst().S.(*dcos.Dcos); ok {
 		volOptions.NodeRegistry = dcosScheduler.NodeRegistry
@@ -512,7 +510,7 @@ func InitInstance() {
 		volOptions.K8sBatch = anthosScheduler.K8sBatch
 		volOptions.K8sRbac = anthosScheduler.K8sRbac
 		volOptions.K8sApiExtensions = anthosScheduler.K8sApiExtensions
-		volOptions.PxOperator = anthosScheduler.K8sOperator
+		volOptions.K8sOperator = anthosScheduler.K8sOperator
 		volOptions.K8sCore = anthosScheduler.K8sCore
 	} else if openshiftScheduler, ok := Inst().S.(*openshift.Openshift); ok {
 		volOptions.NodeRegistry = openshiftScheduler.NodeRegistry
@@ -521,7 +519,7 @@ func InitInstance() {
 		volOptions.K8sBatch = openshiftScheduler.K8sBatch
 		volOptions.K8sRbac = openshiftScheduler.K8sRbac
 		volOptions.K8sApiExtensions = openshiftScheduler.K8sApiExtensions
-		volOptions.PxOperator = openshiftScheduler.K8sOperator
+		volOptions.K8sOperator = openshiftScheduler.K8sOperator
 		volOptions.K8sCore = openshiftScheduler.K8sCore
 	}
 	err = Inst().V.Init(volOptions)
@@ -4595,7 +4593,7 @@ func InitTorpedoDriversForKubeconfigs(kubeconfigList []string) ([]string, error)
 				volOptions.K8sBatch = k8sScheduler.K8sBatch
 				volOptions.K8sRbac = k8sScheduler.K8sRbac
 				volOptions.K8sApiExtensions = k8sScheduler.K8sApiExtensions
-				volOptions.PxOperator = k8sScheduler.K8sOperator
+				volOptions.K8sOperator = k8sScheduler.K8sOperator
 				volOptions.K8sCore = k8sScheduler.K8sCore
 			} else if rkeScheduler, ok := schedulerDriver.(*rke.Rke); ok {
 				volOptions.NodeRegistry = rkeScheduler.NodeRegistry
@@ -4604,7 +4602,7 @@ func InitTorpedoDriversForKubeconfigs(kubeconfigList []string) ([]string, error)
 				volOptions.K8sBatch = rkeScheduler.K8sBatch
 				volOptions.K8sRbac = rkeScheduler.K8sRbac
 				volOptions.K8sApiExtensions = rkeScheduler.K8sApiExtensions
-				volOptions.PxOperator = rkeScheduler.K8sOperator
+				volOptions.K8sOperator = rkeScheduler.K8sOperator
 				volOptions.K8sCore = rkeScheduler.K8sCore
 			} else if dcosScheduler, ok := schedulerDriver.(*dcos.Dcos); ok {
 				volOptions.NodeRegistry = dcosScheduler.NodeRegistry
@@ -4615,7 +4613,7 @@ func InitTorpedoDriversForKubeconfigs(kubeconfigList []string) ([]string, error)
 				volOptions.K8sBatch = anthosScheduler.K8sBatch
 				volOptions.K8sRbac = anthosScheduler.K8sRbac
 				volOptions.K8sApiExtensions = anthosScheduler.K8sApiExtensions
-				volOptions.PxOperator = anthosScheduler.K8sOperator
+				volOptions.K8sOperator = anthosScheduler.K8sOperator
 				volOptions.K8sCore = anthosScheduler.K8sCore
 			} else if openshiftScheduler, ok := schedulerDriver.(*openshift.Openshift); ok {
 				volOptions.NodeRegistry = openshiftScheduler.NodeRegistry
@@ -4624,7 +4622,7 @@ func InitTorpedoDriversForKubeconfigs(kubeconfigList []string) ([]string, error)
 				volOptions.K8sBatch = openshiftScheduler.K8sBatch
 				volOptions.K8sRbac = openshiftScheduler.K8sRbac
 				volOptions.K8sApiExtensions = openshiftScheduler.K8sApiExtensions
-				volOptions.PxOperator = openshiftScheduler.K8sOperator
+				volOptions.K8sOperator = openshiftScheduler.K8sOperator
 				volOptions.K8sCore = openshiftScheduler.K8sCore
 			}
 			err = volumeDriver.Init(volOptions)
@@ -5294,7 +5292,7 @@ func collectStorkLogs(testCaseName string) {
 func CollectMongoDBLogs(testCaseName string) {
 	pxbLabel := make(map[string]string)
 	pxbLabel["app.kubernetes.io/component"] = mongodbStatefulset
-	pxbNamespace, err := backup.GetPxBackupNamespace()
+	pxbNamespace, err := Inst().Backup.(*pxbackup.PXBackup).GetPxBackupNamespace()
 	if err != nil {
 		log.Errorf("Error in getting px-backup namespace. Err: %v", err.Error())
 		return
@@ -6980,7 +6978,7 @@ func GetKvdbMasterNode() (*node.Node, error) {
 
 	for _, each := range allkvdbNodes {
 		if each.Leader {
-			getKvdbLeaderNode, err = node.GetNodeDetailsByNodeID(each.ID)
+			getKvdbLeaderNode, err = Inst().N.GetNodeRegistry().GetNodeDetailsByNodeID(each.ID)
 			if err != nil {
 				return nil, err
 			}

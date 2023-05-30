@@ -89,8 +89,8 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
-// Get a driver to perform portworx operations for the given scheduler. After `get`ting, run `Init`
-func Get(name string) (Driver, error) {
+// GetNewInstance return deep copy of driver to perform portworx operations for the given scheduler. Initialize it as deep copy may still have references to the original
+func GetNewInstance(name string) (Driver, error) {
 	d, ok := schedOpsRegistry[name]
 	if ok {
 		return d.DeepCopy(), nil

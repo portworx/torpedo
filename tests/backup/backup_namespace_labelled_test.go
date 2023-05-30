@@ -296,7 +296,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		})
 		Step("Creating cloud credentials and backup location", func() {
 			log.InfoD("Creating cloud credentials and registering backup location")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
@@ -314,7 +314,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		})
 		Step("Add source and destination clusters with px-central-admin ctx", func() {
 			log.InfoD("Adding source and destination clusters with px-central-admin ctx")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters", SourceClusterName, destinationClusterName))
@@ -329,7 +329,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		Step("Create schedule policy", func() {
 			log.InfoD("Creating a schedule policy")
 			scheduleInterval = 15
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			periodicSchPolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchPolicyUid = uuid.New()
@@ -341,7 +341,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		})
 		Step("Creating a schedule backup using namespace label and resource label", func() {
 			log.InfoD("Creating a schedule backup using namespace label and resource label")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			err = CreateScheduleBackupWithNamespaceLabel(scheduleName, SourceClusterName, backupLocationName, backupLocationUID,
@@ -385,7 +385,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		})
 		Step("Verify new application namespaces with same namespace label are included in next schedule backup", func() {
 			log.InfoD("Verifying new applications namespace new application namespaces with same namespace label are included in next schedule backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			schBackupAfterAddingNS, err = GetNextPeriodicScheduleBackupName(scheduleName, time.Duration(scheduleInterval), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup", schBackupAfterAddingNS))
@@ -396,7 +396,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		})
 		Step("Restoring scheduled backups", func() {
 			log.InfoD("Restoring scheduled backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			allScheduleBackupNames, err = Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching names of all schedule backups of schedule named [%s]", scheduleName))
@@ -410,7 +410,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(contexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
 		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))

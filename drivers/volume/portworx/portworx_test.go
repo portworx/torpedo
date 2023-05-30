@@ -14,7 +14,7 @@ import (
 )
 
 func TestCalculateAutopilotObjectSize(t *testing.T) {
-	inst := &portworx{}
+	inst := &Portworx{}
 
 	type testCase struct {
 		rule           apapi.AutopilotRule
@@ -194,7 +194,7 @@ func getTestNode(poolSize, totalDisks uint64, medium api.StorageMedium) node.Nod
 }
 
 func TestEstimatedVolumeSize(t *testing.T) {
-	driver := portworx{}
+	driver := Portworx{}
 	testCases := []struct {
 		rule                   apapi.AutopilotRule
 		initialSize            uint64

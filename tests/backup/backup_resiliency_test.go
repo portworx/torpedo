@@ -1239,7 +1239,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		})
 		Step("Reboot 2 worker nodes on application cluster when backup is in progress", func() {
 			log.InfoD("Reboot 2 worker node on application cluster when backup is in progress")
-			listOfStorageDriverNodes = node.GetStorageDriverNodes()
+			listOfStorageDriverNodes = Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 			for i := 0; i < 2; i++ {
 				err := Inst().N.RebootNode(listOfStorageDriverNodes[i], node.RebootNodeOpts{
 					Force: true,

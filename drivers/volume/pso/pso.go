@@ -2,13 +2,14 @@ package pso
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 const (
@@ -18,56 +19,63 @@ const (
 )
 
 // Provisioners types of supported provisioners
-var provisionersForPure = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
+var provisionersForPure = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisioner{
 	PureDriverName: "pure-csi",
 }
 
 // pure is essentially the same as the portworx volume driver, just different in name. This way,
 // we can have separate specs for pure volumes vs. normal portworx ones
-type pso struct {
+type Pso struct {
 	schedOps schedops.Driver
 	torpedovolume.DefaultDriver
 }
 
-func (d *pso) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	log.Infof("Using the Pure volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
-	torpedovolume.StorageDriver = PureDriverName
+func (d *Pso) Init(volOpts volume.InitOptions) error {
+	log.Infof("Using the Pure volume driver with provisioner %s under scheduler: %v", volOpts.StorageProvisionerType, volOpts.SchedulerDriverName)
+
+	d.StorageDriver = PureDriverName
 	// Set provisioner for torpedo
-	if storageProvisioner != "" {
-		if p, ok := provisionersForPure[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
-			torpedovolume.StorageProvisioner = p
+	if volOpts.StorageProvisionerType != "" {
+		if p, ok := provisionersForPure[volOpts.StorageProvisionerType]; ok {
+			d.StorageProvisioner = p
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner %s", portworx.DriverName, storageProvisioner)
+			return fmt.Errorf("driver %s, does not support provisioner corresponding to type [%s]", PureDriverName, volOpts.StorageProvisionerType)
 		}
 	} else {
-		return fmt.Errorf("Provisioner is empty for volume driver: %s", portworx.DriverName)
+		return fmt.Errorf("Provisioner is empty for volume driver: %s", PureDriverName)
 	}
 	return nil
 }
 
-func (d *pso) String() string {
+func (d *Pso) DeepCopy() volume.Driver {
+	out := *d
+	//FIX: I'm unsure if this is a truly deep or shallow copy
+	return &out
+}
+
+func (d *Pso) String() string {
 	return PureDriverName
 }
 
-func (d *pso) ValidateCreateVolume(name string, params map[string]string) error {
+func (d *Pso) ValidateCreateVolume(name string, params map[string]string) error {
 	// TODO: Implementation of ValidateCreateVolume will be provided in the coming PRs
 	log.Warnf("ValidateCreateVolume function has not been implemented for volume driver - %s", d.String())
 	return nil
 }
 
-func (d *pso) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
+func (d *Pso) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
 	// TODO: Implementation of ValidateVolumeSetup will be provided in the coming PRs
 	log.Warnf("ValidateVolumeSetup function has not been implemented for volume driver - %s", d.String())
 	return nil
 }
 
-func (d *pso) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
+func (d *Pso) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 	// TODO: Implementation of ValidateDeleteVolume will be provided in the coming PRs
 	log.Warnf("ValidateDeleteVolume function has not been implemented for volume driver - %s", d.String())
 	return nil
 }
 
-func (d *pso) GetDriverVersion() (string, error) {
+func (d *Pso) GetDriverVersion() (string, error) {
 	labelSelectors := map[string]string{
 		"app": "pso-csi-node",
 	}
@@ -101,5 +109,5 @@ func GetPsoNamespace() (string, error) {
 
 func init() {
 	log.Infof("Registering pso driver")
-	torpedovolume.Register(PureDriverName, provisionersForPure, &pso{})
+	torpedovolume.Register(PureDriverName, provisionersForPure, &Pso{})
 }
