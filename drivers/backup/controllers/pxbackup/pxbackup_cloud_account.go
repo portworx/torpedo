@@ -29,7 +29,7 @@ func (p *PxBackupController) delCloudAccountInfo(cloudAccountName string) {
 	delete(p.organizations[p.currentOrgId].cloudAccounts, cloudAccountName)
 }
 
-func (p *PxBackupController) isCloudAccountNameRecorded(cloudAccountName string) bool {
+func (p *PxBackupController) isCloudAccountRecorded(cloudAccountName string) bool {
 	_, ok := p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName]
 	return ok
 }

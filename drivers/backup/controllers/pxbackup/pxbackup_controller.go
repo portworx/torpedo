@@ -26,7 +26,8 @@ type BackupLocationInfo struct {
 }
 
 type OrganizationObjects struct {
-	cloudAccounts map[string]*CloudAccountInfo
+	cloudAccounts   map[string]*CloudAccountInfo
+	backupLocations map[string]*BackupLocationInfo
 }
 
 type PxBackupController struct {
@@ -46,7 +47,7 @@ func User(username string, password *string) *UserInfo {
 }
 
 func (p *PxBackupController) CloudAccount(cloudAccountName string) *CloudAccountConfig {
-	if !p.isCloudAccountNameRecorded(cloudAccountName) {
+	if !p.isCloudAccountRecorded(cloudAccountName) {
 		return &CloudAccountConfig{
 			cloudAccountName: cloudAccountName,
 			cloudAccountUid:  uuid.New(),
@@ -59,6 +60,15 @@ func (p *PxBackupController) CloudAccount(cloudAccountName string) *CloudAccount
 		cloudAccountUid:  cloudAccountInfo.GetUid(),
 		isRecorded:       true,
 		controller:       p,
+	}
+}
+
+func (p *PxBackupController) BackupLocation(backupLocationName string) *BackupLocationConfig {
+	return &BackupLocationConfig{
+		backupLocationName: backupLocationName,
+		backupLocationUid:  uuid.New(),
+		encryptionKey:      "torpedo",
+		controller:         p,
 	}
 }
 
