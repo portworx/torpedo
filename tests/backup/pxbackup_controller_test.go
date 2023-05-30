@@ -34,23 +34,19 @@ var _ = Describe("{NewBasicBackupCreation}", func() {
 
 	JustBeforeEach(func() {
 		testRailId = 31313
+		StartTorpedoTest("NewBasicBackupCreation", "Basic Backup Creation", nil, testRailId)
+		Step("Add px-backup and cluster controllers", func() {
+			err := pxbackup.AddPxBackupControllersToMap(&pxbControllerMap, nil)
+			log.FailOnError(err, "failed to add px-backup controller to pxb-controller-map")
 
-		StartTorpedoTest("NewBasicBackupCreation", "Basic Backup Creation", nil, 0)
-
-		err := cluster.AddSourceClusterControllerToMap(&clControllerMap, testRailId)
-		log.FailOnError(err, fmt.Sprintf("failed to add [%s] controller to cl-controller-map", utils.DefaultSourceClusterName))
-
-		err = pxbackup.AddPxBackupControllersToMap(&pxbControllerMap, nil)
-		log.FailOnError(err, "failed to add px-backup controller to pxb-controller-map")
-
+			err = cluster.AddTestCaseClusterControllers(&clControllerMap, testRailId)
+			log.FailOnError(err, "failed to add test case cluster controllers to cl-controller-map")
+		})
 		for _, appKey := range Inst().AppList {
 			namespace := fmt.Sprintf("%s-%d", appKey, testRailId)
 			err := clControllerMap[utils.DefaultSourceClusterName].Application(appKey).ScheduleOnNamespace(namespace)
 			log.FailOnError(err, fmt.Sprintf("failed to schedule application [%s] on [%s]", appKey, utils.DefaultSourceClusterName))
 			appNamespaces = append(appNamespaces, namespace)
-		}
-
-		for _, namespace := range appNamespaces {
 			err = clControllerMap[utils.DefaultSourceClusterName].Namespace(namespace).Validate()
 			log.FailOnError(err, fmt.Sprintf("failed to validate namespace [%s] on [%s]", namespace, utils.DefaultSourceClusterName))
 		}
@@ -163,10 +159,10 @@ var _ = Describe("{NewBasicBackupCreation}", func() {
 		//})
 	})
 	JustAfterEach(func() {
-		for clusterName, clusterController := range clControllerMap {
-			err := clusterController.Cleanup()
-			log.FailOnError(err, "failed to clean up cluster [%s]", clusterName)
-		}
+		//for clusterName, clusterController := range clControllerMap {
+		//	err := clusterController.Cleanup()
+		//	log.FailOnError(err, "failed to clean up cluster [%s]", clusterName)
+		//}
 		//defer EndPxBackupTorpedoTest(contexts)
 		//opts := make(map[string]bool)
 		//opts[SkipClusterScopedObjects] = true
