@@ -2893,41 +2893,43 @@ func DeleteAppNamespace(namespace string) error {
 }
 
 // RegisterCluster adds the cluster with the given name
-func RegisterCluster(orgID string, clusterName string, cloudCredName string, ctx context.Context) error {
-	var ConfigPath string
+func RegisterCluster(clusterName string, cloudCredName string, orgID string, ctx context.Context) error {
+	var kubeconfigPath string
 	err := errors.New("")
 	kubeConfigs := os.Getenv("KUBECONFIGS")
-	Inst().Dash.VerifyFatal(kubeConfigs != "", true, "Getting KUBECONFIGS Environment variable")
+	if kubeConfigs == "" {
+		return fmt.Errorf("unable to get KUBECONFIGS from Environment variable")
+	}
 	kubeconfigList := strings.Split(kubeConfigs, ",")
 	DumpKubeconfigs(kubeconfigList)
 	// Register cluster with backup driver
 	log.InfoD("Create cluster [%s] in org [%s]", clusterName, orgID)
 	if clusterName == SourceClusterName {
-		ConfigPath, err = GetSourceClusterConfigPath()
+		kubeconfigPath, err = GetSourceClusterConfigPath()
 	} else if clusterName == destinationClusterName {
-		ConfigPath, err = GetDestinationClusterConfigPath()
+		kubeconfigPath, err = GetDestinationClusterConfigPath()
 	} else {
-		return errors.New(fmt.Sprintf("registering %s cluster not implemented", clusterName))
+		return fmt.Errorf("registering %s cluster not implemented", clusterName)
 	}
 	if err != nil {
 		return err
 	}
-	log.Infof("Save cluster %s kubeconfig to %s", clusterName, ConfigPath)
-	ClusterStatus := func() (interface{}, bool, error) {
-		err = CreateCluster(clusterName, ConfigPath, orgID, cloudCredName, "", ctx)
+	log.Infof("Save cluster %s kubeconfig to %s", clusterName, kubeconfigPath)
+	clusterStatus := func() (interface{}, bool, error) {
+		err = CreateCluster(clusterName, kubeconfigPath, orgID, cloudCredName, "", ctx)
 		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
 			return "", true, err
 		}
-		srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, clusterName, ctx)
+		createClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, clusterName, ctx)
 		if err != nil {
 			return "", true, err
 		}
-		if srcClusterStatus == api.ClusterInfo_StatusInfo_Online {
+		if createClusterStatus == api.ClusterInfo_StatusInfo_Online {
 			return "", false, nil
 		}
 		return "", true, fmt.Errorf("the %s cluster state is not Online yet", clusterName)
 	}
-	_, err = task.DoRetryWithTimeout(ClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
+	_, err = task.DoRetryWithTimeout(clusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}

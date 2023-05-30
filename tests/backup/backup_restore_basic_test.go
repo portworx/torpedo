@@ -3329,17 +3329,17 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 // DeleteNSDeleteClusterRestore Validates deleted namespace is restored when the application cluster is removed and re-added
 var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 	var (
-		contexts           []*scheduler.Context
-		cloudCredUID       string
-		cloudCredName      string
-		backupLocationName string
-		backupLocationUID  string
-		backupLocationMap  map[string]string
-		appNamespaces      []string
-		numDeployments     int
-		backupNames        []string
-		srcClusterUid      string
-		restoreNames       []string
+		scheduledAppContexts []*scheduler.Context
+		cloudCredUID         string
+		cloudCredName        string
+		backupLocationName   string
+		backupLocationUID    string
+		backupLocationMap    map[string]string
+		appNamespaces        []string
+		numDeployments       int
+		backupNames          []string
+		srcClusterUid        string
+		restoreNames         []string
 	)
 
 	JustBeforeEach(func() {
@@ -3354,7 +3354,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 			namespace := fmt.Sprintf("test-namespace-%s", taskName)
 			appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
 			appNamespaces = append(appNamespaces, namespace)
-			contexts = append(contexts, appContexts...)
+			scheduledAppContexts = append(scheduledAppContexts, appContexts...)
 			for index, ctx := range appContexts {
 				appName := Inst().AppList[index]
 				ctx.ReadinessTimeout = appReadinessTimeout
@@ -3366,7 +3366,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 	It("Validates deleted namespace is restored when the application cluster is removed and re-added", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(contexts)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
@@ -3414,7 +3414,8 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, namespace := range appNamespaces {
 				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-				err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace}, nil, orgID, srcClusterUid, "", "", "", "", ctx)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, srcClusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s creation", backupName))
 				backupNames = append(backupNames, backupName)
 			}
@@ -3459,7 +3460,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(contexts)
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, restoreName := range restoreNames {
@@ -3468,7 +3469,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		}
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(contexts, opts)
+		DestroyApps(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
