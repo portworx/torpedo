@@ -149,7 +149,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 
 		Step(fmt.Sprintf("Restart volume driver nodes starts"), func() {
 			log.InfoD("Restart PX on nodes")
-			storageNodes := node.GetWorkerNodes()
+			storageNodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 			for index := range storageNodes {
 				// Just restart storage driver on one of the node where volume backup is in progress
 				err := Inst().V.RestartDriver(storageNodes[index], nil)
@@ -1179,7 +1179,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 			log.InfoD("Switching cluster context to application[destination] cluster")
 			err := SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
-			listOfWorkerNodes = node.GetWorkerNodes()
+			listOfWorkerNodes = Inst().N.GetNodeRegistry().GetWorkerNodes()
 			err = Inst().N.RebootNode(listOfWorkerNodes[0], node.RebootNodeOpts{
 				Force: true,
 				ConnectionOpts: node.ConnectionOpts{
@@ -1198,7 +1198,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		})
 		Step("Check if the rebooted node on application cluster is up now", func() {
 			log.InfoD("Check if the rebooted node on application cluster is up now")
-			listOfWorkerNodes = node.GetWorkerNodes()
+			listOfWorkerNodes = Inst().N.GetNodeRegistry().GetWorkerNodes()
 			nodeReadyStatus := func() (interface{}, bool, error) {
 				err := Inst().S.IsNodeReady(listOfWorkerNodes[0])
 				if err != nil {
@@ -1234,7 +1234,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		})
 		Step("Reboot 2 worker nodes on application cluster when backup is in progress", func() {
 			log.InfoD("Reboot 2 worker node on application cluster when backup is in progress")
-			listOfWorkerNodes = node.GetWorkerNodes()
+			listOfWorkerNodes = Inst().N.GetNodeRegistry().GetWorkerNodes()
 			for i := 0; i < 2; i++ {
 				err := Inst().N.RebootNode(listOfWorkerNodes[i], node.RebootNodeOpts{
 					Force: true,
@@ -1255,7 +1255,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		})
 		Step("Check if the rebooted nodes on application cluster are up now", func() {
 			log.InfoD("Check if the rebooted nodes on application cluster are up now")
-			listOfWorkerNodes = node.GetWorkerNodes()
+			listOfWorkerNodes = Inst().N.GetNodeRegistry().GetWorkerNodes()
 			for i := 0; i < 2; i++ {
 				nodeReadyStatus := func() (interface{}, bool, error) {
 					err := Inst().S.IsNodeReady(listOfWorkerNodes[i])
@@ -1282,7 +1282,7 @@ var _ = Describe("{RebootNodesWhenBackupsAreInProgress}", func() {
 		log.Infof("Switching cluster context to destination cluster")
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
-		listOfWorkerNodes = node.GetWorkerNodes()
+		listOfWorkerNodes = Inst().N.GetNodeRegistry().GetWorkerNodes()
 		for _, node := range listOfWorkerNodes {
 			nodeReadyStatus := func() (interface{}, bool, error) {
 				err := Inst().S.IsNodeReady(node)

@@ -2684,21 +2684,14 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 		})
 		Step("Fetching destination cluster kubernetes version", func() {
 			log.InfoD("Fetching destination cluster kubernetes version")
-			err := SetDestinationKubeConfig()
-			log.FailOnError(err, "Unable to switch context to destination cluster %s", destinationClusterName)
-			version, err := k8s.ClusterVersion()
+			version, err := Inst().SchedulerDrivers[DestinationClusterConfigPath].(*k8s.K8s).ClusterVersion() //TODO: check error
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching destination cluster version %v", version))
 			destVersion, err = semver.Make(version)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching destination cluster version %v", destVersion))
 		})
-		Step("Switching context to source cluster for backup creation", func() {
-			log.InfoD("Switching context to source cluster for backup creation")
-			err := SetSourceKubeConfig()
-			log.FailOnError(err, "Unable to switch context to source cluster %s", SourceClusterName)
-		})
 		Step("Fetching source cluster kubernetes version", func() {
 			log.InfoD("Fetching source cluster kubernetes version")
-			version, err := k8s.ClusterVersion()
+			version, err := Inst().SchedulerDrivers[SourceClusterConfigPath].(*k8s.K8s).ClusterVersion() //TODO: check error
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching source cluster version %v", version))
 			srcVersion, err = semver.Make(version)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching source cluster version %v", srcVersion))
@@ -2748,8 +2741,6 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 			log.InfoD("Restoring duplicate backup on destination cluster with different kubernetes version")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
-			err = SetDestinationKubeConfig()
-			log.FailOnError(err, "Unable to switch context to destination cluster %s", destinationClusterName)
 			for duplicateBackupName, namespace := range duplicateBackupNameMap {
 				restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, duplicateBackupName, time.Now().Unix())
 				restoreNames = append(restoreNames, restoreName)
@@ -2854,7 +2845,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 				err = Inst().S.SetConfig(sourceClusterConfigPath)
 				log.FailOnError(err, "failed to switch to context to source cluster [%v]", sourceClusterConfigPath)
 
-				ver, err := k8s.ClusterVersion()
+				ver, err := Inst().SchedulerDrivers[SourceClusterConfigPath].(*k8s.K8s).ClusterVersion() //TODO: check error
 				log.FailOnError(err, "failed to get source cluster version")
 				srcVer, err = semver.Make(ver)
 				log.FailOnError(err, "failed to get source cluster version")
@@ -2869,7 +2860,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 				err = Inst().S.SetConfig(destinationClusterConfigPath)
 				log.FailOnError(err, "failed to switch to context to destination cluster [%v]", destinationClusterConfigPath)
 
-				ver, err := k8s.ClusterVersion()
+				ver, err := Inst().SchedulerDrivers[DestinationClusterConfigPath].(*k8s.K8s).ClusterVersion() //TODO: check error
 				log.FailOnError(err, "failed to get destination cluster version")
 				destVer, err = semver.Make(ver)
 				log.FailOnError(err, "failed to get destination cluster version")

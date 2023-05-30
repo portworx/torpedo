@@ -329,3 +329,47 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// This testcase verifies basic backup rule,backup location, cloud setting
+var _ = Describe("{BasicBackupCreation2}", func() {
+	var (
+		sourceScheduledAppContexts []*scheduler.Context
+		destScheduledAppContexts   []*scheduler.Context
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
+	})
+
+	It("Basic Backup Creation", func() {
+		Step("Schedule source applications", func() {
+			log.InfoD("scheduling src applications")
+			sourceScheduledAppContexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				appContexts := ScheduleApplicationsOnCluster(SourceClusterConfigPath, taskName)
+				for _, appCtx := range appContexts {
+					appCtx.ReadinessTimeout = appReadinessTimeout
+					sourceScheduledAppContexts = append(sourceScheduledAppContexts, appCtx)
+				}
+			}
+		})
+
+		Step("Schedule destination applications", func() {
+			log.InfoD("scheduling dest applications")
+			destScheduledAppContexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+				appContexts := ScheduleApplicationsOnCluster(DestinationClusterConfigPath, taskName)
+				for _, appCtx := range appContexts {
+					appCtx.ReadinessTimeout = appReadinessTimeout
+					destScheduledAppContexts = append(destScheduledAppContexts, appCtx)
+				}
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(nil)
+	})
+})

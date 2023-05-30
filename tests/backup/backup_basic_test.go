@@ -14,6 +14,12 @@ import (
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/anthos"
+	"github.com/portworx/torpedo/drivers/scheduler/dcos"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -63,25 +69,118 @@ func TestBasic(t *testing.T) {
 // BackupInitInstance initialises instances required for backup
 func BackupInitInstance() {
 	var err error
-	var token string
-	log.Infof("Inside BackupInitInstance")
-	err = Inst().S.Init(scheduler.InitOptions{
-		SpecDir:            Inst().SpecDir,
-		VolDriverName:      Inst().V.String(),
-		StorageProvisioner: Inst().Provisioner,
-		NodeDriverName:     Inst().N.String(),
-	})
 
-	log.FailOnError(err, "Error occurred while Scheduler Driver Initialization")
-	err = Inst().N.Init(node.InitOptions{
-		SpecDir: Inst().SpecDir,
-	})
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
-	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
+	// Initialization of Scheduler Driver
+	schedulerOptions := scheduler.InitOptions{
+		SpecDir:                    Inst().SpecDir,
+		NodeDriverType:             Inst().N.String(),
+		VolumeDriverName:           Inst().V.String(),
+		UseGlobalSchedopsInstances: true,
+	}
+	err = Inst().S.Init(schedulerOptions)
+	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
+
+	// Initialization of Node Driver
+	nodeOptions := node.InitOptions{
+		SpecDir:          Inst().SpecDir,
+		VolumeDriverName: Inst().V.String(),
+	}
+	if k8sScheduler, ok := Inst().S.(*k8s.K8s); ok {
+		nodeOptions.NodeRegistry = k8sScheduler.NodeRegistry
+		nodeOptions.K8sCore = k8sScheduler.K8sCore
+		nodeOptions.K8sApps = k8sScheduler.K8sApps
+	} else if rkeScheduler, ok := Inst().S.(*rke.Rke); ok {
+		nodeOptions.NodeRegistry = rkeScheduler.NodeRegistry
+		nodeOptions.K8sCore = rkeScheduler.K8sCore
+		nodeOptions.K8sApps = rkeScheduler.K8sApps
+	} else if dcosScheduler, ok := Inst().S.(*dcos.Dcos); ok {
+		nodeOptions.NodeRegistry = dcosScheduler.NodeRegistry
+	} else if anthosScheduler, ok := Inst().S.(*anthos.Anthos); ok {
+		nodeOptions.NodeRegistry = anthosScheduler.NodeRegistry
+		nodeOptions.K8sCore = anthosScheduler.K8sCore
+		nodeOptions.K8sApps = anthosScheduler.K8sApps
+	} else if openshiftScheduler, ok := Inst().S.(*openshift.Openshift); ok {
+		nodeOptions.NodeRegistry = openshiftScheduler.NodeRegistry
+		nodeOptions.K8sCore = openshiftScheduler.K8sCore
+		nodeOptions.K8sApps = openshiftScheduler.K8sApps
+	}
+	err = Inst().N.Init(nodeOptions)
+	log.FailOnError(err, "Error occured while Node Driver Initialization")
+
+	// Initialization of Volume Driver
+	volOptions := volume.InitOptions{
+		NodeDriver:                Inst().N,
+		SchedulerDriverName:       Inst().S.String(),
+		StorageProvisionerType:    volume.StorageProvisionerType(Inst().ProvisionerType),
+		CsiGenericDriverConfigMap: Inst().CsiGenericDriverConfigMap,
+	}
+	if k8sScheduler, ok := Inst().S.(*k8s.K8s); ok {
+		volOptions.NodeRegistry = k8sScheduler.NodeRegistry
+		volOptions.K8sApps = k8sScheduler.K8sApps
+		volOptions.K8sAutopilot = k8sScheduler.K8sAutopilot
+		volOptions.K8sBatch = k8sScheduler.K8sBatch
+		volOptions.K8sRbac = k8sScheduler.K8sRbac
+		volOptions.K8sApiExtensions = k8sScheduler.K8sApiExtensions
+		volOptions.PxOperator = k8sScheduler.PxOperator
+		volOptions.K8sCore = k8sScheduler.K8sCore
+	} else if rkeScheduler, ok := Inst().S.(*rke.Rke); ok {
+		volOptions.NodeRegistry = rkeScheduler.NodeRegistry
+		volOptions.K8sApps = rkeScheduler.K8sApps
+		volOptions.K8sAutopilot = rkeScheduler.K8sAutopilot
+		volOptions.K8sBatch = rkeScheduler.K8sBatch
+		volOptions.K8sRbac = rkeScheduler.K8sRbac
+		volOptions.K8sApiExtensions = rkeScheduler.K8sApiExtensions
+		volOptions.PxOperator = rkeScheduler.PxOperator
+		volOptions.K8sCore = rkeScheduler.K8sCore
+	} else if dcosScheduler, ok := Inst().S.(*dcos.Dcos); ok {
+		volOptions.NodeRegistry = dcosScheduler.NodeRegistry
+	} else if anthosScheduler, ok := Inst().S.(*anthos.Anthos); ok {
+		volOptions.NodeRegistry = anthosScheduler.NodeRegistry
+		volOptions.K8sApps = anthosScheduler.K8sApps
+		volOptions.K8sAutopilot = anthosScheduler.K8sAutopilot
+		volOptions.K8sBatch = anthosScheduler.K8sBatch
+		volOptions.K8sRbac = anthosScheduler.K8sRbac
+		volOptions.K8sApiExtensions = anthosScheduler.K8sApiExtensions
+		volOptions.PxOperator = anthosScheduler.PxOperator
+		volOptions.K8sCore = anthosScheduler.K8sCore
+	} else if openshiftScheduler, ok := Inst().S.(*openshift.Openshift); ok {
+		volOptions.NodeRegistry = openshiftScheduler.NodeRegistry
+		volOptions.K8sApps = openshiftScheduler.K8sApps
+		volOptions.K8sAutopilot = openshiftScheduler.K8sAutopilot
+		volOptions.K8sBatch = openshiftScheduler.K8sBatch
+		volOptions.K8sRbac = openshiftScheduler.K8sRbac
+		volOptions.K8sApiExtensions = openshiftScheduler.K8sApiExtensions
+		volOptions.PxOperator = openshiftScheduler.PxOperator
+		volOptions.K8sCore = openshiftScheduler.K8sCore
+	}
+	err = Inst().V.Init(volOptions)
+	log.FailOnError(err, "Error occured while Volume Driver Initialization")
+
+	// finish setting up scheduler
+	if k8sScheduler, ok := Inst().S.(*k8s.K8s); ok {
+		k8sScheduler.NodeDriver = Inst().N
+		k8sScheduler.VolumeDriver = Inst().V
+	} else if rkeScheduler, ok := Inst().S.(*rke.Rke); ok {
+		rkeScheduler.NodeDriver = Inst().N
+		rkeScheduler.VolumeDriver = Inst().V
+	} else if dcosScheduler, ok := Inst().S.(*dcos.Dcos); ok {
+		dcosScheduler.VolumeDriver = Inst().V
+	} else if anthosScheduler, ok := Inst().S.(*anthos.Anthos); ok {
+		anthosScheduler.NodeDriver = Inst().N
+		anthosScheduler.VolumeDriver = Inst().V
+	} else if openshiftScheduler, ok := Inst().S.(*openshift.Openshift); ok {
+		openshiftScheduler.NodeDriver = Inst().N
+		openshiftScheduler.VolumeDriver = Inst().V
+	}
 
 	if Inst().Backup != nil {
-		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
-		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
+		backupOptions := backup.InitOptions{
+			SchedulerDriver: Inst().S,
+			NodeDriver:      Inst().N,
+			VolumeDriver:    Inst().V,
+		}
+		err = Inst().Backup.Init(backupOptions)
+		log.FailOnError(err, "Error occured while Backup Driver Initialization")
 	}
 
 	SetupTestRail()
@@ -108,13 +207,28 @@ func BackupInitInstance() {
 
 	// Setting the common password
 	commonPassword = backup.PxCentralAdminPwd + RandomString(4)
+
 	// Dumping source and destination kubeconfig to file system path
 	log.Infof("Dumping source and destination kubeconfig to file system path")
 	kubeconfigs := os.Getenv("KUBECONFIGS")
-	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
+	if kubeconfigs == "" {
+		log.FailOnError(fmt.Errorf("Getting KUBECONFIGS Environment variable"), "")
+	}
 	kubeconfigList := strings.Split(kubeconfigs, ",")
-	dash.VerifyFatal(len(kubeconfigList), 2, "2 kubeconfigs are required for source and destination cluster")
-	DumpKubeconfigs(kubeconfigList)
+	if len(kubeconfigList) != 2 {
+		log.FailOnError(fmt.Errorf("2 kubeconfigs are required for source and destination cluster"), "")
+	}
+	// The way Backup tests use schedulers is:
+	// 1. Inst().S - default scheduler is for PX-Backup
+	// 2. Inst().SchedulerDrivers[kubeconfigsPaths[0]] - scheduler for source
+	// 3. Inst().SchedulerDrivers[kubeconfigsPaths[1]] - scheduler for destination
+	kubeconfigsPaths, err := InitTorpedoDriversForKubeconfigs(kubeconfigList)
+	dash.VerifyFatal(err, nil, fmt.Sprintf("Initialization of drivers using kubeconfigs [%v]", kubeconfigList))
+	KubeconfigsPaths[0] = kubeconfigsPaths[0]
+	KubeconfigsPaths[1] = kubeconfigsPaths[1]
+	// redundant variables (easy to use)
+	SourceClusterConfigPath = kubeconfigsPaths[0]
+	DestinationClusterConfigPath = kubeconfigsPaths[1]
 }
 
 var dash *aetosutil.Dashboard

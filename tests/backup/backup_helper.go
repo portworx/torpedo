@@ -1889,7 +1889,7 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 	restoreAppContext.App = &app
 
 	// we're having to do this as we're under the assumption that `ScheduleOptions.Namespace` will always contain the namespace of the scheduled app
-	options := CreateScheduleOptions("")
+	options := CreateScheduleOptions("", "")
 	if namespace, ok := namespaceMapping[appContextNamespace]; ok {
 		options.Namespace = namespace
 	} else {
