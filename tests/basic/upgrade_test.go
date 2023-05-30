@@ -2,16 +2,16 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/pkg/osutils"
 	"strings"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/pkg/osutils"
 
 	"github.com/portworx/torpedo/pkg/log"
 
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 
 	. "github.com/onsi/ginkgo"
@@ -117,8 +117,8 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		log.InfoD("upgrade volume driver and ensure everything is running fine")
 		contexts = make([]*scheduler.Context, 0)
 
-		storageNodes := node.GetStorageNodes()
-		numOfNodes := len(node.GetStorageDriverNodes())
+		storageNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
+		numOfNodes := len(Inst().N.GetNodeRegistry().GetStorageDriverNodes())
 
 		//AddDrive is added to test to Vsphere Cloud drive upgrades when kvdb-device is part of storage in non-kvdb nodes
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
@@ -162,7 +162,7 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				dash.VerifyFatal(err, nil, "Volume driver upgrade successful?")
 
 				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
-				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+				expectedUpgradeTime := 9 * len(Inst().N.GetNodeRegistry().GetStorageDriverNodes())
 				dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
 				upgradeStatus := "PASS"
 				if durationInMins <= expectedUpgradeTime {
@@ -223,8 +223,8 @@ var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
-		storageNodes := node.GetStorageNodes()
-		numOfNodes := len(node.GetStorageDriverNodes())
+		storageNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
+		numOfNodes := len(Inst().N.GetNodeRegistry().GetStorageDriverNodes())
 
 		log.InfoD("Scheduling applications and validating")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -316,7 +316,7 @@ var _ = Describe("{UpgradeVolumeDriverFromCatalog}", func() {
 				timeAfterUpgrade = time.Now()
 
 				durationInMins := int(timeAfterUpgrade.Sub(timeBeforeUpgrade).Minutes())
-				expectedUpgradeTime := 9 * len(node.GetStorageDriverNodes())
+				expectedUpgradeTime := 9 * len(Inst().N.GetNodeRegistry().GetStorageDriverNodes())
 				dash.VerifySafely(durationInMins <= expectedUpgradeTime, true, "Verify volume drive upgrade within expected time")
 
 				upgradeStatus := "PASS"

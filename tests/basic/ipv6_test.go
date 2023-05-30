@@ -24,7 +24,7 @@ var _ = Describe("{IPv6PxctlFunctional}", func() {
 
 	BeforeEach(func() {
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		nodes = node.GetWorkerNodes()
+		nodes = Inst().N.GetNodeRegistry().GetWorkerNodes()
 		numNodes = len(nodes)
 		tags := map[string]string{
 			"ipv6": "true",

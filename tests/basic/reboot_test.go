@@ -48,7 +48,7 @@ var _ = Describe("{RebootOneNode}", func() {
 
 		Step("get all nodes and reboot one by one", func() {
 			log.InfoD("get all nodes and reboot one by one")
-			nodesToReboot := node.GetStorageDriverNodes()
+			nodesToReboot := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 
 			// Reboot node and check driver status
 			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
@@ -282,7 +282,7 @@ var _ = Describe("{ClusterPxRestart}", func() {
 			log.InfoD(stepLog)
 
 			Step("get all PX nodes and restart PX one by one", func() {
-				nodesToPXRestart := node.GetStorageDriverNodes()
+				nodesToPXRestart := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 				loc, _ := time.LoadLocation("UTC")
 				t1 := time.Now().In(loc)
 

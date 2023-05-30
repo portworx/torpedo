@@ -4,18 +4,19 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/osutils"
 	. "github.com/portworx/torpedo/tests"
 	appsapi "k8s.io/api/apps/v1"
@@ -79,7 +80,7 @@ func installPxcentral(centralOptions, lsOptions, monitorOptions *scheduler.Sched
 	if lsOptions != nil {
 		Step("Install px-license-server then validate", func() {
 			// label px/ls=true on 2 worker nodes
-			for i, node := range node.GetWorkerNodes() {
+			for i, node := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 				if i == 2 {
 					break
 				}
@@ -100,7 +101,7 @@ func installPxcentral(centralOptions, lsOptions, monitorOptions *scheduler.Sched
 		Step("Install px-monitor then validate", func() {
 			var endpoint, oidcSecret string
 			Step("Getting px-backup UI endpoint IP:PORT", func() {
-				endpointIP := node.GetNodes()[0].GetMgmtIp()
+				endpointIP := Inst().N.GetNodeRegistry().GetNodes()[0].GetMgmtIp()
 
 				serviceObj, err := core.Instance().GetService("px-backup-ui", context.ScheduleOptions.Namespace)
 				Expect(err).NotTo(HaveOccurred())
@@ -350,7 +351,7 @@ var _ = Describe("{InstallCentral}", func() {
 		centralApp := "px-central"
 		centralOptions := scheduler.ScheduleOptions{
 			AppKeys:            []string{centralApp},
-			StorageProvisioner: Inst().Provisioner,
+			StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 			Namespace:          "px-backup",
 		}
 
@@ -404,7 +405,7 @@ var _ = Describe("{UpgradeCentralSingle}", func() {
 		centralApp := "px-central"
 		centralOptions := scheduler.ScheduleOptions{
 			AppKeys:            []string{centralApp},
-			StorageProvisioner: Inst().Provisioner,
+			StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 			// Due to a known helm SDK bug, resources could be created in default namespace
 			// During helm upgrade k8s resources could be installed into default ns due to a helm SDK known bug:
 			// https://github.com/helm/helm/issues/8780
@@ -512,7 +513,7 @@ var _ = Describe("{InstallCentralWithoutBackup}", func() {
 		centralApp := "px-central"
 		centralOptions := scheduler.ScheduleOptions{
 			AppKeys:            []string{centralApp},
-			StorageProvisioner: Inst().Provisioner,
+			StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 		}
 
 		Step("Install px-central with px-backup disabled then validate", func() {

@@ -2,11 +2,11 @@ package tests
 
 import (
 	"fmt"
+
 	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	. "github.com/portworx/torpedo/tests"
@@ -42,12 +42,12 @@ var _ = Describe("{RecycleOCPNode}", func() {
 			storagelessNodes, err := Inst().V.GetStoragelessNodes()
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to get storageless nodes. Error: [%v]", err))
 			if storagelessNodes != nil {
-				delNode, err := node.GetNodeByName(storagelessNodes[0].Hostname)
+				delNode, err := Inst().N.GetNodeRegistry().GetNodeByName(storagelessNodes[0].Hostname)
 				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to get node object using Name. Error: [%v]", err))
 				Step(
 					fmt.Sprintf("Listing all nodes before recycling a storageless node %s", delNode.Name),
 					func() {
-						workerNodes := node.GetWorkerNodes()
+						workerNodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 						for x, wNode := range workerNodes {
 							log.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
 						}
@@ -63,7 +63,7 @@ var _ = Describe("{RecycleOCPNode}", func() {
 				Step(
 					fmt.Sprintf("Listing all nodes after recycle a storageless node %s", delNode.Name),
 					func() {
-						workerNodes := node.GetWorkerNodes()
+						workerNodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 						for x, wNode := range workerNodes {
 							log.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
 						}
@@ -71,7 +71,7 @@ var _ = Describe("{RecycleOCPNode}", func() {
 			}
 			// Validating the apps after recycling the StorageLess node
 			ValidateApplications(contexts)
-			workerNodes := node.GetStorageDriverNodes()
+			workerNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 			delNode := workerNodes[0]
 			Step(
 				fmt.Sprintf("Recycle a storage node: [%s] and validating the drives", delNode.Name),
@@ -81,7 +81,7 @@ var _ = Describe("{RecycleOCPNode}", func() {
 						fmt.Sprintf("Failed to recycle a node [%s]. Error: [%v]", delNode.Name, err))
 				})
 			Step(fmt.Sprintf("Listing all nodes after recycling a storage node %s", delNode.Name), func() {
-				workerNodes := node.GetWorkerNodes()
+				workerNodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 				for x, wNode := range workerNodes {
 					log.Infof("WorkerNode[%d] is: [%s] and volDriverID is [%s]", x, wNode.Name, wNode.VolDriverNodeID)
 				}

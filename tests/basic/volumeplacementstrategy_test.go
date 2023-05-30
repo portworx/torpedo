@@ -258,7 +258,7 @@ func (m *mongoVPSReplicaAffinity) getNodeLabels() map[string]string {
 }
 
 func (m *mongoVPSReplicaAffinity) DeployVPS() error {
-	storageNodes := node.GetStorageDriverNodes()
+	storageNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 	m.deployedNode = storageNodes[rand.Intn(len(storageNodes))]
 
 	err := putNodeLabels(m.deployedNode, m.getNodeLabels())
@@ -318,7 +318,7 @@ func (m *mongoVPSReplicaAntiAffinity) getNodeLabels() map[string]string {
 }
 
 func (m *mongoVPSReplicaAntiAffinity) DeployVPS() error {
-	storageNodes := node.GetStorageDriverNodes()
+	storageNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 	m.deployedNode = storageNodes[rand.Intn(len(storageNodes))]
 
 	for _, labeledNode := range storageNodes {
@@ -358,7 +358,7 @@ func (m *mongoVPSReplicaAntiAffinity) ValidateVPSDeployment(contexts []*schedule
 }
 
 func (m *mongoVPSReplicaAntiAffinity) DestroyVPSDeployment() error {
-	storageNodes := node.GetStorageDriverNodes()
+	storageNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 
 	for _, labeledNode := range storageNodes {
 		if labeledNode.Name != m.deployedNode.Name {

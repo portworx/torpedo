@@ -599,7 +599,7 @@ func nodePoolsExpansion(testName string) {
 		pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
 		log.FailOnError(err, "Failed to list storage pools")
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 
 		//getting the eligible pools of the node to initiate expansion
 		for _, stNode := range stNodes {
@@ -752,7 +752,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 
 		volSelected, err = getVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
@@ -866,7 +866,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "error refreshing driver end points")
 			nodeName := nodeSelected.Name
-			nodeSelected, err = node.GetNodeByName(nodeSelected.Name)
+			nodeSelected, err = Inst().N.GetNodeRegistry().GetNodeByName(nodeSelected.Name)
 			log.FailOnError(err, "error getting node using name [%s]", nodeName)
 			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
@@ -1275,7 +1275,7 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -1419,7 +1419,7 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		slNodes := node.GetStorageLessNodes()
+		slNodes := Inst().N.GetNodeRegistry().GetStorageLessNodes()
 		if len(slNodes) == 0 {
 			dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
 		}
@@ -1438,7 +1438,7 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 		log.FailOnError(err, "error adding cloud drive")
 		err = Inst().V.RefreshDriverEndpoints()
 		log.FailOnError(err, "error refreshing end points")
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		var stNode node.Node
 		for _, n := range stNodes {
 			if n.Id == slNode.Id {
@@ -1706,7 +1706,7 @@ func getPoolWithLeastSize() *api.StoragePool {
 }
 
 func getNodeWithLeastSize() *node.Node {
-	stNodes := node.GetStorageNodes()
+	stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 	var selectedNode node.Node
 	var currLowestSize uint64
 	currLowestSize = 54975581388800 / units.GiB
@@ -1770,7 +1770,7 @@ var _ = Describe("{PoolResizeMul}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -1855,7 +1855,7 @@ var _ = Describe("{PoolResizeDiskDiff}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -1952,7 +1952,7 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -2047,7 +2047,7 @@ var _ = Describe("{MultiDriveResizeDisk}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -2255,7 +2255,7 @@ var _ = Describe("{ResizeDiskVolUpdate}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -2358,7 +2358,7 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -2482,7 +2482,7 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -2591,7 +2591,7 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -2850,7 +2850,7 @@ var _ = Describe("{MulPoolsAddDisk}", func() {
 
 		var poolsToBeResized []*api.StoragePool
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 
 		elMap := make(map[string]bool, 0)
 		for _, stNode := range stNodes {
@@ -3007,7 +3007,7 @@ var _ = Describe("{PoolExpandWhileIOAndPXRestart}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -3083,7 +3083,7 @@ var _ = Describe("{ResizeNodeMaintenanceCycle}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -3165,7 +3165,7 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -3244,7 +3244,7 @@ var _ = Describe("{ResizePoolMaintenanceCycle}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -3323,7 +3323,7 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -3406,7 +3406,7 @@ var _ = Describe("{NodeMaintenanceResize}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -3525,7 +3525,7 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -3641,7 +3641,7 @@ var _ = Describe("{PoolMaintenanceModeResize}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -3750,7 +3750,7 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -3858,7 +3858,7 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -3978,7 +3978,7 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -4093,7 +4093,7 @@ var _ = Describe("{ResizePoolMaintenanceMode}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -4205,7 +4205,7 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -4442,7 +4442,7 @@ var _ = Describe("{PoolExpandPendingUntilVolClean}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
@@ -4542,7 +4542,7 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 		log.InfoD(stepLog)
 		selectedNode := getNodeWithLeastSize()
 		log.Infof(fmt.Sprintf("Node %s is marked for repl 1", selectedNode.Name))
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		var secondReplNode node.Node
 		for _, stNode := range stNodes {
 			if stNode.Name != selectedNode.Name {
@@ -4769,7 +4769,7 @@ var _ = Describe("{StorageFullPoolResize}", func() {
 		log.InfoD(stepLog)
 		selectedNode := getNodeWithLeastSize()
 
-		stNodes := node.GetStorageDriverNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 		var secondReplNode node.Node
 		for _, stNode := range stNodes {
 			if stNode.Name != selectedNode.Name {
@@ -4880,7 +4880,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		selectedNode := getNodeWithLeastSize()
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		var secondReplNode node.Node
 		for _, stNode := range stNodes {
 			if stNode.Name != selectedNode.Name {
@@ -5046,7 +5046,7 @@ var _ = Describe("{ResizeClusterNoQuorum}", func() {
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
-		stoageDriverNodes := node.GetStorageDriverNodes()
+		stoageDriverNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 
 		nonKvdbNodes := make([]node.Node, 0)
 		kvdbNodes := make([]node.Node, 0)
@@ -5152,7 +5152,7 @@ var _ = Describe("{StoPoolExpMulPools}", func() {
 		defer appsValidateAndDestroy(contexts)
 
 		// Get all the storage Nodes present in the system
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found!")
 		}
@@ -5716,7 +5716,7 @@ var _ = Describe("{PoolDelete}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		var nodeSelected node.Node
 		var nodePools []node.StoragePool
 		for _, stNode := range stNodes {
@@ -5998,7 +5998,7 @@ var _ = Describe("{VolDeletePoolExpand}", func() {
 			dash.VerifyFatal(isExpansionSuccess, true, fmt.Sprintf("Expected new pool size to be %v or %v, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
 			log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
 			// Get the node to check the pool show output
-			n := node.GetStorageDriverNodes()[0]
+			n := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 			// Below command to change when PWX-28484 is fixed
 			cmd := "pxctl alerts show| grep -e POOL"
 
@@ -6077,7 +6077,7 @@ var _ = Describe("{PoolResizeSameSize}", func() {
 
 		err = Inst().V.RefreshDriverEndpoints()
 		log.FailOnError(err, "error refreshing end points")
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		for _, n := range stNodes {
 			if n.Name == stNode.Name {
 				stNode = n
@@ -6873,7 +6873,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
 
-		storageLessNode := node.GetStorageLessNodes()
+		storageLessNode := Inst().N.GetNodeRegistry().GetStorageLessNodes()
 		// Get random storage less node present in the cluster
 		var pickNode node.Node
 		if len(storageLessNode) == 0 {
@@ -6882,7 +6882,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 			}
 			err := MakeStoragetoStoragelessNode(*nodeDetail)
 			log.FailOnError(err, "failed to mark storage Node to Storage less Node")
-			storageLessNode = node.GetStorageLessNodes()
+			storageLessNode = Inst().N.GetNodeRegistry().GetStorageLessNodes()
 		}
 		randomIndex := rand.Intn(len(storageLessNode))
 		pickNode = storageLessNode[randomIndex]
@@ -7443,7 +7443,7 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		kvdbNodesIDs := make([]string, 0)
 		kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
 		log.FailOnError(err, "Error getting KVDB members")
@@ -7470,7 +7470,7 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 			Step(stepLog, func() {
 				err := Inst().V.RefreshDriverEndpoints()
 				log.FailOnError(err, "error refreshing end points")
-				slNodes := node.GetStorageLessNodes()
+				slNodes := Inst().N.GetNodeRegistry().GetStorageLessNodes()
 				isStorageless := false
 				for _, n := range slNodes {
 					if n.Name == stNode.Name {
@@ -7493,7 +7493,7 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 			log.FailOnError(err, "error adding cloud drive")
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "error refreshing end points")
-			stNodes := node.GetStorageNodes()
+			stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 			isStorageNode := false
 
 			for _, n := range stNodes {
@@ -7544,7 +7544,7 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 			deletePoolAndValidate(stNode, fmt.Sprintf("%d", nodePool.ID))
 			err := Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "error refreshing end points")
-			slNodes := node.GetStorageLessNodes()
+			slNodes := Inst().N.GetNodeRegistry().GetStorageLessNodes()
 			isStorageless := false
 
 			for _, n := range slNodes {
@@ -7930,7 +7930,7 @@ var _ = Describe("{MulPoolsUpMetaPoolFullAndResize}", func() {
 		log.InfoD(stepLog)
 		existingAppList := Inst().AppList
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		var selectedNode, secondReplNode node.Node
 
 		for _, n := range stNodes {
@@ -8130,7 +8130,7 @@ var _ = Describe("{DiffPoolExpansionFromMaintenanceNode}", func() {
 			log.InfoD(stepLog)
 			selectedNode, err = GetNodeWithGivenPoolID(selectedPoolID)
 			log.FailOnError(err, "error getting node with pool UUID [%s]", selectedPoolID)
-			stNodes := node.GetStorageNodes()
+			stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 			for _, n := range stNodes {
 				if n.Name != selectedNode.Name {
 					maintenanceNode = n
@@ -8425,17 +8425,17 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 		stepLog = fmt.Sprintf("killing node [%s]", stNode.Name)
 		Step(stepLog, func() {
 			//Storing existing node details before terminating an instance
-			storageDriverNodes := node.GetStorageDriverNodes()
+			storageDriverNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 			stDrvNodesNames := make([]string, len(storageDriverNodes))
 			for _, sn := range storageDriverNodes {
 				stDrvNodesNames = append(stDrvNodesNames, sn.Name)
 			}
-			slNodes := node.GetStorageLessNodes()
+			slNodes := Inst().N.GetNodeRegistry().GetStorageLessNodes()
 			slNodesNames := make([]string, len(slNodes))
 			for _, sn := range slNodes {
 				slNodesNames = append(slNodesNames, sn.Name)
 			}
-			stNodes := node.GetStorageNodes()
+			stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 			stNodesNames := make([]string, len(stNodes))
 			for _, sn := range stNodes {
 				stNodesNames = append(stNodesNames, sn.Name)
@@ -8443,9 +8443,9 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 
 			err = AsgKillNode(*stNode)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("verify terminating node [%s]", stNode.Name))
-			newStorageDriverNodes := node.GetStorageDriverNodes()
+			newStorageDriverNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 			dash.VerifyFatal(len(storageDriverNodes), len(newStorageDriverNodes), "verify new storage driver node is created")
-			dash.VerifyFatal(len(slNodes), len(node.GetStorageLessNodes()), "verify storageless nodes count is same")
+			dash.VerifyFatal(len(slNodes), len(Inst().N.GetNodeRegistry().GetStorageLessNodes()), "verify storageless nodes count is same")
 
 			var newNode node.Node
 			var nodeToValidate node.Node
@@ -8460,7 +8460,7 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 				nodeToValidate = newNode
 			} else {
 				log.InfoD("new node [%s] created as storageless node", newNode.Name)
-				for _, n := range node.GetStorageNodes() {
+				for _, n := range Inst().N.GetNodeRegistry().GetStorageNodes() {
 					if Contains(slNodesNames, n.Name) {
 						log.InfoD("node [%s] is converted to storage node", n.Name)
 						nodeToValidate = n

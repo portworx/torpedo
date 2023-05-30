@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -69,7 +70,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 					apRule.Spec.ActionsCoolDownPeriod = int64(60)
 					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 						AppKeys:            Inst().AppList,
-						StorageProvisioner: Inst().Provisioner,
+						StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 						AutopilotRule:      apRule,
 						Labels:             labels,
 					})
@@ -143,7 +144,7 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 					apRule.Spec.ActionsCoolDownPeriod = int64(60)
 					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 						AppKeys:            Inst().AppList,
-						StorageProvisioner: Inst().Provisioner,
+						StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 						AutopilotRule:      apRule,
 						Labels:             labels,
 					})
@@ -161,7 +162,7 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 		})
 
 		Step("get nodes bounce volume driver", func() {
-			for _, appNode := range node.GetStorageDriverNodes() {
+			for _, appNode := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 				Step(
 					fmt.Sprintf("stop volume driver %s on node: %s",
 						Inst().V.String(), appNode.Name),
@@ -221,7 +222,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 
 		testName := strings.ToLower(fmt.Sprintf("%sRestartAutopilot", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "adddisk"}
-		storageNodes := node.GetStorageDriverNodes()
+		storageNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
 		}
@@ -328,7 +329,7 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
 
 		testName := strings.ToLower(fmt.Sprintf("%sUpgradeAutopilot", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "adddisk"}
-		storageNodes := node.GetStorageDriverNodes()
+		storageNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
 		}
@@ -436,7 +437,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 			"resizeFixedSizeLabel":  {"autopilot": "resizefixedsize"},
 		}
 
-		storageNodes := node.GetStorageDriverNodes()
+		storageNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 
 		testCases := []testCase{
 			{
@@ -540,7 +541,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName)
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandRestartVolDriver", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "adddisk"}
-		storageNode := node.GetStorageDriverNodes()[2]
+		storageNode := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[2]
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNode)/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
 		}
@@ -611,7 +612,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 		testName := strings.ToLower(fmt.Sprintf("%sPvcAndPoolExpand", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "adddisk"}
 		pvcLabel := map[string]string{"autopilot": "pvc-expand"}
-		storageNodes := node.GetStorageDriverNodes()
+		storageNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 		pvcApRules := []apapi.AutopilotRule{
 			//aututils.PVCRuleByUsageCapacity(50, 50, ""),
 			aututils.PVCRuleByTotalSize(10, 100, ""),
@@ -634,7 +635,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 					apRule.Spec.ActionsCoolDownPeriod = int64(60)
 					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 						AppKeys:            Inst().AppList,
-						StorageProvisioner: Inst().Provisioner,
+						StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 						AutopilotRule:      apRule,
 						Labels:             pvcLabel,
 					})
@@ -720,7 +721,7 @@ var _ = Describe(fmt.Sprintf("{%sEvents}", testSuiteName), func() {
 					apRule.Spec.ActionsCoolDownPeriod = int64(60)
 					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 						AppKeys:            Inst().AppList,
-						StorageProvisioner: Inst().Provisioner,
+						StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 						AutopilotRule:      apRule,
 						Labels:             pvcLabel,
 						PvcSize:            volumeSize,
@@ -769,7 +770,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
 
 		testName := strings.ToLower(fmt.Sprintf("%sPoolResizeFailure", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "adddisk"}
-		storageNodes := node.GetStorageDriverNodes()
+		storageNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 		// below rule will lead to the failure of resizing the pool due to large scale
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 100*16, aututils.RuleScaleTypeAddDisk, poolLabel),
@@ -848,7 +849,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
 		}
 
 		// pick up the first storage node and schedule all volumes to the node's pool
-		storageNode := node.GetStorageDriverNodes()[0]
+		storageNode := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 		numberOfVolumes := 3
 		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
 		volumeSize := getVolumeSizeByProvisionedPercentage(storageNode, numberOfVolumes, 0.35)
@@ -918,7 +919,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
 			apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
 		}
 
-		storageNode := node.GetStorageDriverNodes()[0]
+		storageNode := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 		numberOfVolumes := 3
 
 		Step("schedule apps with autopilot rules", func() {
@@ -1029,7 +1030,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), fu
 
 		defer sched.Instance().Cancel(id)
 
-		storageNode := node.GetStorageDriverNodes()[0]
+		storageNode := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 		numberOfVolumes := 3
 		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
 		volumeSize := getVolumeSizeByProvisionedPercentage(storageNode, numberOfVolumes, 0.35)
@@ -1097,7 +1098,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func
 			rebalanceApRules[i].Spec.ActionsCoolDownPeriod = int64(60)
 		}
 
-		workerNode := node.GetWorkerNodes()[0]
+		workerNode := Inst().N.GetNodeRegistry().GetWorkerNodes()[0]
 		numberOfVolumes := 3
 		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
 		volumeSize := getVolumeSizeByProvisionedPercentage(workerNode, numberOfVolumes, 0.35)
@@ -1122,7 +1123,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func
 					apRule.Spec.ActionsCoolDownPeriod = int64(60)
 					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 						AppKeys:            Inst().AppList,
-						StorageProvisioner: Inst().Provisioner,
+						StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 						AutopilotRule:      apRule,
 						Labels:             labels,
 						PvcNodesAnnotation: []string{workerNode.Id},
@@ -1192,7 +1193,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%srebalance", testSuiteName))
 		poolLabel := map[string]string{"autopilot": "adddisk"}
-		storageNodes := node.GetStorageDriverNodes()
+		storageNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 		// check if we have enough storage nodes to run the test
 		Expect(len(storageNodes)).Should(BeNumerically(">=", 4))
 
@@ -1285,7 +1286,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), func()
 		}
 
 		Step("schedule applications for pool rebalance", func() {
-			workerNode := node.GetWorkerNodes()[0]
+			workerNode := Inst().N.GetNodeRegistry().GetWorkerNodes()[0]
 			numberOfVolumes := 3
 			// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
 			volumeSize := getVolumeSizeByProvisionedPercentage(workerNode, numberOfVolumes, 0.35)
@@ -1355,7 +1356,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), func()
 		apRule := aututils.PoolRuleRebalanceByProvisionedMean([]string{"-50", "20"}, true)
 		apRule.Spec.ActionsCoolDownPeriod = int64(10)
 
-		workerNode := node.GetWorkerNodes()[0]
+		workerNode := Inst().N.GetNodeRegistry().GetWorkerNodes()[0]
 		numberOfVolumes := 3
 		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
 		volumeSize := getVolumeSizeByProvisionedPercentage(workerNode, numberOfVolumes, 0.35)
@@ -1476,7 +1477,7 @@ func scheduleAppsWithAutopilot(testName string, testScaleFactor int, apRules []a
 
 				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 					AppKeys:            Inst().AppList,
-					StorageProvisioner: Inst().Provisioner,
+					StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 					PvcNodesAnnotation: options.PvcNodesAnnotation,
 					PvcSize:            options.PvcSize,
 				})
@@ -1506,7 +1507,7 @@ func scheduleAppsWithAutopilot(testName string, testScaleFactor int, apRules []a
 func getTheSmallestPoolSize() uint64 {
 	// find the smallest pool and create a rule with size cap above that
 	var smallestPoolSize uint64
-	for _, node := range node.GetWorkerNodes() {
+	for _, node := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 		for _, p := range node.StoragePools {
 			if smallestPoolSize == 0 {
 				smallestPoolSize = p.TotalSize

@@ -114,7 +114,7 @@ var _ = Describe("{DiagsTelemetryPxctlHealthyStatus}", func() {
 		contexts = make([]*scheduler.Context, 0)
 		telemetryNodeStatus := make(map[string]bool)
 
-		for _, currNode := range node.GetWorkerNodes() {
+		for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 			Step(fmt.Sprintf("run pxctl status to check telemetry status on node %v", currNode.Name), func() {
 				telemetryNodeStatus[currNode.Name] = TelemetryEnabled(currNode)
 			})
@@ -147,7 +147,7 @@ var _ = Describe("{DiagsBasic}", func() {
 
 		ValidateApplications(contexts)
 		// One node at a time, collect diags and verify in S3
-		for _, currNode := range node.GetWorkerNodes() {
+		for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 			Step(fmt.Sprintf("collect diags on node: %s | %s", currNode.Name, currNode.Type), func() {
 
 				config := &torpedovolume.DiagRequestConfig{
@@ -191,7 +191,7 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 	It("has to setup, validate, try to get diags on nodes and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
 		// One node at a time, collect diags and verify in S3
-		for _, currNode := range node.GetWorkerNodes() {
+		for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 			Step(fmt.Sprintf("collect diags on node: %s | %s", currNode.Name, currNode.Type), func() {
 
 				config := &torpedovolume.DiagRequestConfig{
@@ -258,7 +258,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		// Collect diags and verify in S3 on each worker node
-		for _, currNode := range node.GetWorkerNodes() {
+		for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 			pxInstalled, err = Inst().V.IsDriverInstalled(currNode)
 			log.FailOnError(err, "failed to check if PX is installed on node [%s]", currNode.Name)
 
@@ -401,7 +401,7 @@ var _ = Describe("{DiagsClusterWide}", func() {
 	It("has to collect diags on entire cluster, validate diags on S3", func() {
 		contexts = make([]*scheduler.Context, 0)
 		// One node at a time, collect diags and verify in S3
-		for _, currNode := range node.GetWorkerNodes() {
+		for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 			Step(fmt.Sprintf("run pxctl sv diags to collect cluster wide diags  %v", currNode.Name), func() {
 				_, err := runPxctlCommand("sv diags -a -c", currNode, nil)
 				Expect(err).NotTo(HaveOccurred(), "Error running diags on Node: %s", currNode.Name)
@@ -453,7 +453,7 @@ var _ = Describe("{DiagsAsyncBasic}", func() {
 		ValidateApplications(contexts)
 
 		// One node at a time, collect diags and verify in S3
-		for _, currNode := range node.GetWorkerNodes() {
+		for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 			Step(fmt.Sprintf("collect diags on node: %s", currNode.Name), func() {
 
 				config := &torpedovolume.DiagRequestConfig{
@@ -513,7 +513,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 
 		for pxProcessNm = range testProcNmsTestRailIDs {
 			Step(fmt.Sprintf("Reset portworx for auto diags collect test after '%s' crash\n", pxProcessNm), func() {
-				for _, currNode := range node.GetWorkerNodes() {
+				for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 					// Restart portworx to reset auto diags interval
 					err := Inst().V.StopDriver([]node.Node{currNode}, false, nil)
 					Expect(err).NotTo(HaveOccurred(), "'%s' reset: failed to stop node %v", pxProcessNm, currNode.Name)
@@ -525,7 +525,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 				}
 			})
 			// One node at a time, collect diags and verify in S3
-			for _, currNode := range node.GetWorkerNodes() {
+			for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 				Step(fmt.Sprintf("'%s': Check latest auto diags on node %v", pxProcessNm, currNode.Name), func() {
 					_, err = telemetryRunCmd("ls -d /var/cores/auto", currNode, nil)
 					if err == nil {
@@ -624,14 +624,14 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		Step(fmt.Sprintf("Stop portworx on all nodes..."), func() {
-			for _, currNode := range node.GetWorkerNodes() {
+			for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 				// Stop portworx
 				err := Inst().V.StopDriver([]node.Node{currNode}, false, nil)
 				Expect(err).NotTo(HaveOccurred(), "failed to stop node %v", currNode.Name)
 			}
 		})
 
-		for _, currNode := range node.GetWorkerNodes() {
+		for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 			Step(fmt.Sprintf("collect diags on node: %s | %s", currNode.Name, currNode.Type), func() {
 
 				config := &torpedovolume.DiagRequestConfig{
@@ -649,7 +649,7 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 		}
 
 		Step(fmt.Sprintf("Restart portworx on all the nodes..."), func() {
-			for _, currNode := range node.GetWorkerNodes() {
+			for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 				// Start portworx
 				err := Inst().V.StartDriver(currNode)
 				Expect(err).NotTo(HaveOccurred(), "failed to stop node %v", currNode.Name)
@@ -661,7 +661,7 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 		Expect(diagsValErr).NotTo(HaveOccurred(), "diags not validated on S3")
 
 		Step(fmt.Sprintf("Check portworx restart on all the nodes..."), func() {
-			for _, currNode := range node.GetWorkerNodes() {
+			for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 				log.Infof("Wait for driver to start on %v...", currNode.Name)
 				err := Inst().V.WaitDriverUpOnNode(currNode, Inst().DriverStartTimeout)
 				Expect(err).NotTo(HaveOccurred())
@@ -699,7 +699,7 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 
 	It("has to collect diags on specific node from another node, validate diags on S3", func() {
 		contexts = make([]*scheduler.Context, 0)
-		nodes := node.GetWorkerNodes()
+		nodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 		currNode := nodes[0]
 		diagNode := nodes[1]
 

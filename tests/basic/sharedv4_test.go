@@ -46,7 +46,7 @@ var _ = Describe("{Sharedv4Functional}", func() {
 		if len(testSharedV4Contexts) == 0 {
 			Skip("No test-sharedv4 apps were found")
 		}
-		workers = node.GetWorkerNodes()
+		workers = Inst().N.GetNodeRegistry().GetWorkerNodes()
 		numPods = len(workers)
 
 		Step("scale the test-sharedv4 apps so that one pod runs on each worker node", func() {
