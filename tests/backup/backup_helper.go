@@ -2936,7 +2936,7 @@ func RegisterCluster(clusterName string, cloudCredName string, orgID string, ctx
 }
 
 func AddSourceCluster(ctx context.Context) error {
-	err := RegisterCluster(orgID, SourceClusterName, "", ctx)
+	err := RegisterCluster(SourceClusterName, "", orgID, ctx)
 	if err != nil {
 		return err
 	}
@@ -2944,7 +2944,7 @@ func AddSourceCluster(ctx context.Context) error {
 }
 
 func AddDestinationCluster(ctx context.Context) error {
-	err := RegisterCluster(orgID, destinationClusterName, "", ctx)
+	err := RegisterCluster(destinationClusterName, "", orgID, ctx)
 	if err != nil {
 		return err
 	}
