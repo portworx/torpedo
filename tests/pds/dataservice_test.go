@@ -1666,3 +1666,39 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 		EndTorpedoTest()
 	})
 })
+var _ = Describe("{GetPvcToFullCondition}", func() {
+
+	JustBeforeEach(func() {
+		InitInstance()
+		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once trhreshold is met", pdsLabels, 0)
+	})
+
+	It("Deploy Dataservices", func() {
+		// var generateWorkloads = make(map[string]string)
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var dsVersions = make(map[string]map[string][]string)
+		var depList []*pds.ModelsDeployment
+
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+					dsVersions[ds.Name] = dataServiceVersionBuildMap
+					depList = append(depList, deployment)
+				})
+			}
+			Step("Checking the PVC usage", func() {
+				ctx := dsTest.CreateSchedulerContextForPDSApps(depList)
+				err = GetPVCtoFullConditionAndResize(*deployment.ClusterResourceName, namespace, ctx)
+				// err = pdslib.IncreasePVCby1Gig(ctx)
+				log.FailOnError(err, "Failing while Increasing the PVC name...")
+			})
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})

@@ -886,10 +886,13 @@ func (d *portworx) CreateSnapshot(volumeID string, snapName string) (*api.SdkVol
 }
 
 func (d *portworx) InspectVolume(name string) (*api.Volume, error) {
+	log.Debugf("entered the inspect function")
+	log.Debugf("VOLUME ID IS %v", name)
 	ctx, cancel := context.WithTimeout(context.Background(), inspectVolumeTimeout)
 	defer cancel()
 
 	response, err := d.getVolDriver().Inspect(ctx, &api.SdkVolumeInspectRequest{VolumeId: name})
+	log.Debugf("Volume driver is %v", response)
 	if err != nil {
 		return nil, err
 	}
@@ -2696,6 +2699,8 @@ func areRepSetsFinal(vol *api.Volume, replFactor int64) bool {
 }
 
 func (d *portworx) setDriver() error {
+	log.Debugf("I M INTO SETDRIVER")
+	log.Debugf("wat is  skipPXSvcEndpoint %v", d.skipPXSvcEndpoint)
 	if !d.skipPXSvcEndpoint {
 		// Try portworx-service first
 		endpoint, err := d.schedOps.GetServiceEndpoint()
