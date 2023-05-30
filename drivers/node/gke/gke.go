@@ -45,7 +45,7 @@ func (g *gke) Init(nodeOpts node.InitOptions) error {
 	return nil
 }
 
-// Init initializes SSH node driver
+// DeepCopy deep copies the driver instance
 func (g *gke) DeepCopy() node.Driver {
 	out := *g
 	return &out

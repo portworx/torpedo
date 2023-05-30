@@ -234,7 +234,7 @@ type K8s struct {
 	VolumeDriver volume.Driver
 }
 
-// DeepCopy create a deepcopy of K8s and sets all sched-ops instances to default
+// DeepCopy create a deepcopy of the driver
 func (k *K8s) DeepCopy() scheduler.Driver {
 	if k == nil {
 		return nil

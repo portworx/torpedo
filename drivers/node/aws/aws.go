@@ -75,7 +75,7 @@ func (a *aws) Init(nodeOpts node.InitOptions) error {
 	return nil
 }
 
-// Init initializes SSH node driver
+// DeepCopy deep copies the driver instance
 func (a *aws) DeepCopy() node.Driver {
 	out := *a
 	//FIX: this creates a shallow copy, not deep copy

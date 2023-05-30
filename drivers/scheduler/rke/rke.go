@@ -19,7 +19,7 @@ type Rke struct {
 	kube.K8s
 }
 
-// DeepCopy create a deepcopy of rke and sets all sched-ops instances to default
+// DeepCopy create a deepcopy of the driver
 func (k *Rke) DeepCopy() scheduler.Driver {
 	if k == nil {
 		return nil

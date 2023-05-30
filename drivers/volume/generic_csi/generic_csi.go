@@ -53,12 +53,12 @@ func (d *genericCsi) Init(volOpts volume.InitOptions) error {
 			d.StorageProvisioner = torpedovolume.StorageProvisioner(p)
 		}
 	} else {
-		return fmt.Errorf("Invalid provisioner %s for volume driver: %s", volOpts.StorageProvisionerType, DriverName)
+		return fmt.Errorf("Invalid provisioner [%s] for volume driver [%s]", volOpts.StorageProvisionerType, DriverName)
 	}
 	return nil
 }
 
-// Init initializes volume.driver
+// DeepCopy deep copies the driver instance
 func (d *genericCsi) DeepCopy() volume.Driver {
 	out := *d
 	return &out

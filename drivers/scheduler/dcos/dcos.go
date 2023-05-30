@@ -42,7 +42,7 @@ type Dcos struct {
 	VolumeDriver volume.Driver
 }
 
-// DeepCopy create a copy of Context
+// DeepCopy deep copies the driver instance
 func (d *Dcos) DeepCopy() scheduler.Driver {
 	if d == nil {
 		return nil

@@ -52,7 +52,7 @@ func (d *aws) Init(volOpts volume.InitOptions) error {
 	return nil
 }
 
-// Init initializes volume.driver
+// DeepCopy deep copies the driver instance
 func (d *aws) DeepCopy() volume.Driver {
 	out := *d
 	return &out

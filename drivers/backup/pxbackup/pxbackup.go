@@ -66,7 +66,7 @@ func (p *PXBackup) String() string {
 	return driverName
 }
 
-// Init initializes SSH node driver
+// DeepCopy deep copies the driver instance
 func (p *PXBackup) DeepCopy() backup.Driver {
 	out := *p
 	return &out

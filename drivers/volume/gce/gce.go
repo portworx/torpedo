@@ -37,7 +37,7 @@ func (d *gce) Init(volOpts volume.InitOptions) error {
 		if p, ok := provisioners[volOpts.StorageProvisionerType]; ok {
 			d.StorageProvisioner = p
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, volOpts.StorageProvisionerType)
+			return fmt.Errorf("volume driver [%s], does not support provisioner corresponding to type [%s]", DriverName, volOpts.StorageProvisionerType)
 		}
 	} else {
 		return fmt.Errorf("Provisioner is empty for volume driver: %s", DriverName)
@@ -45,7 +45,7 @@ func (d *gce) Init(volOpts volume.InitOptions) error {
 	return nil
 }
 
-// Init initializes volume.driver
+// DeepCopy deep copies the driver instance
 func (d *gce) DeepCopy() volume.Driver {
 	out := *d
 	return &out

@@ -113,7 +113,7 @@ func (i *ibm) Init(nodeOpts node.InitOptions) error {
 	return nil
 }
 
-// Init initializes SSH node driver
+// DeepCopy deep copies the driver instance
 func (i *ibm) DeepCopy() node.Driver {
 	out := *i
 	return &out

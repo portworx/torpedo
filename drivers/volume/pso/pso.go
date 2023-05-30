@@ -47,6 +47,7 @@ func (d *Pso) Init(volOpts volume.InitOptions) error {
 	return nil
 }
 
+// DeepCopy deep copies the driver instance
 func (d *Pso) DeepCopy() volume.Driver {
 	out := *d
 	//FIX: I'm unsure if this is a truly deep or shallow copy

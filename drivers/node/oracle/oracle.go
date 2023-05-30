@@ -49,7 +49,7 @@ func (o *oracle) Init(nodeOpts node.InitOptions) error {
 	return nil
 }
 
-// Init initializes SSH node driver
+// DeepCopy deep copies the driver instance
 func (o *oracle) DeepCopy() node.Driver {
 	out := *o
 	return &out

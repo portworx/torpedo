@@ -213,7 +213,7 @@ func (s *SSH) RefreshDriver() error {
 	return s.updateDriver()
 }
 
-// Init initializes SSH node driver
+// DeepCopy deep copies the driver instance
 func (s *SSH) DeepCopy() node.Driver {
 	out := *s
 

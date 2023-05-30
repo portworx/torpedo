@@ -157,7 +157,7 @@ type Anthos struct {
 	confPath          string
 }
 
-// DeepCopy create a copy anthos
+// DeepCopy deep copies the driver instance
 func (anth *Anthos) DeepCopy() scheduler.Driver {
 	if anth == nil {
 		return nil

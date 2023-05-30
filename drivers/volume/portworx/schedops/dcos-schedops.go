@@ -118,7 +118,7 @@ func init() {
 func (d *dcosSchedOps) Init(schedopsOpts InitOptions) {
 }
 
-// Init initializes k8s schedops node driver
+// DeepCopy deep copies the driver instance
 func (d *dcosSchedOps) DeepCopy() Driver {
 	out := *d
 	return &out

@@ -454,7 +454,7 @@ func (d *Portworx) Init(volOpts volume.InitOptions) error {
 		if p, ok := provisioners[volOpts.StorageProvisionerType]; ok {
 			d.StorageProvisioner = p
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner corresponding to type [%s]", DriverName, volOpts.StorageProvisionerType)
+			return fmt.Errorf("volume driver [%s], does not support provisioner corresponding to type [%s]", DriverName, volOpts.StorageProvisionerType)
 		}
 	} else {
 		d.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisionerType]
@@ -462,7 +462,7 @@ func (d *Portworx) Init(volOpts volume.InitOptions) error {
 	return nil
 }
 
-// Init initializes volume.driver
+// DeepCopy deep copies the driver instance
 func (d *Portworx) DeepCopy() volume.Driver {
 	out := *d
 	//FIX: I'm unsure if this is a truly deep or shallow copy

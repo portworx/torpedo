@@ -62,11 +62,12 @@ func (d *linstor) Init(volOpts volume.InitOptions) error {
 	d.cli = client
 
 	// Set provisioner for torpedo
+	d.StorageDriver = string(LinstorStorage)
 	if volOpts.StorageProvisionerType != "" {
 		if p, ok := provisioners[volOpts.StorageProvisionerType]; ok {
 			d.StorageProvisioner = p
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, volOpts.StorageProvisionerType)
+			return fmt.Errorf("volume driver [%s], does not support provisioner corresponding to type [%s]", DriverName, volOpts.StorageProvisionerType)
 		}
 	} else {
 		return fmt.Errorf("Provisioner is empty for volume driver: %s", DriverName)
@@ -125,7 +126,7 @@ func (d *linstor) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 	return nil
 }
 
-// Init initializes volume.driver
+// DeepCopy deep copies the driver instance
 func (d *linstor) DeepCopy() volume.Driver {
 	out := *d
 	//FIX: shallow created, not deep copy

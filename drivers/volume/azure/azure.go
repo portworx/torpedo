@@ -44,7 +44,7 @@ func (d *azure) Init(volOpts volume.InitOptions) error {
 		if p, ok := provisioners[volOpts.StorageProvisionerType]; ok {
 			d.StorageProvisioner = p
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, volOpts.StorageProvisionerType)
+			return fmt.Errorf("volume driver %s, does not support provisioner corresponding to type [%s]", DriverName, volOpts.StorageProvisionerType)
 		}
 	} else {
 		d.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisionerType]
@@ -52,7 +52,7 @@ func (d *azure) Init(volOpts volume.InitOptions) error {
 	return nil
 }
 
-// Init initializes volume.driver
+// DeepCopy deep copies the driver instance
 func (d *azure) DeepCopy() volume.Driver {
 	out := *d
 	return &out

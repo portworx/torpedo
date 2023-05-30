@@ -939,7 +939,7 @@ func init() {
 	Register("k8s", k)
 }
 
-// Init initializes k8s schedops node driver
+// DeepCopy deep copies the k8s schedops node driver instance
 func (k *k8sSchedOps) DeepCopy() Driver {
 	out := *k
 	return &out

@@ -73,7 +73,7 @@ func (k *Openshift) Init(schedOpts scheduler.InitOptions) error {
 	return err
 }
 
-// DeepCopy create a deepcopy of openshift and sets all sched-ops instances to default
+// DeepCopy create a deepcopy of the driver
 func (k *Openshift) DeepCopy() scheduler.Driver {
 	if k == nil {
 		return nil
