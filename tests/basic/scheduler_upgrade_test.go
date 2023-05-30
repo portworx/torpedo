@@ -118,7 +118,7 @@ func waitForIKSMasterUpdate(schedVersion string) error {
 
 	t := func() (interface{}, bool, error) {
 
-		iksCluster, err := ibm.GetCluster()
+		iksCluster, err := Inst().N.(*ibm.Ibm).GetCluster()
 		if err != nil {
 			return nil, false, err
 		}
@@ -143,7 +143,7 @@ func upgradeIKSWorkerNodes(schedVersion string) error {
 	storageDriverNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 	for _, sNode := range storageDriverNodes {
 
-		if err := ibm.ReplaceWorkerNodeWithUpdate(sNode); err != nil {
+		if err := Inst().N.(*ibm.Ibm).ReplaceWorkerNodeWithUpdate(sNode); err != nil {
 			return err
 		}
 
@@ -157,7 +157,7 @@ func upgradeIKSWorkerNodes(schedVersion string) error {
 
 	}
 
-	workers, err := ibm.GetWorkers()
+	workers, err := Inst().N.(*ibm.Ibm).GetWorkers()
 	if err != nil {
 		return err
 	}

@@ -283,7 +283,7 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 
 func waitForIBMNodeTODeploy() error {
 
-	workers, err := ibm.GetWorkers()
+	workers, err := Inst().N.(*ibm.Ibm).GetWorkers()
 	if err != nil {
 		return err
 	}
