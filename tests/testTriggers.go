@@ -23,6 +23,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"container/ring"
+
 	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
 	"github.com/onsi/ginkgo"
 
@@ -445,7 +446,7 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	context("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
-			nodes := node.GetStorageDriverNodes()
+			nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 			dash.VerifyFatal(len(nodes) > 0, true, "Nodes registered?")
 			log.Infof("len nodes: %v", len(nodes))
 			for _, n := range nodes {
@@ -568,7 +569,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 
-		stNodes := node.GetStorageNodes()
+		stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 		index := randIntn(1, len(stNodes))[0]
 
 		selectedNode := stNodes[index]
@@ -1078,7 +1079,7 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	stepLog := "crash volume driver in all nodes"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		for _, appNode := range node.GetStorageDriverNodes() {
+		for _, appNode := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 			stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
 				Inst().V.String(), appNode.Name)
 			Step(stepLog,
@@ -1120,7 +1121,7 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 	stepLog := "get nodes bounce volume driver"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		for _, appNode := range node.GetStorageDriverNodes() {
+		for _, appNode := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 			stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
 				Inst().V.String(), appNode.Name)
 			Step(stepLog,
@@ -1293,7 +1294,7 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 	setMetrics(*event)
 	stepLog := "get kvdb nodes bounce volume driver"
 	Step(stepLog, func() {
-		for _, appNode := range node.GetMetadataNodes() {
+		for _, appNode := range Inst().N.GetNodeRegistry().GetMetadataNodes() {
 			stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
 				Inst().V.String(), appNode.Name)
 			Step(stepLog,
@@ -1371,7 +1372,7 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	stepLog := "get all nodes and reboot one by one"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		nodesToReboot := node.GetStorageDriverNodes()
+		nodesToReboot := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 
 		// Reboot node and check driver status
 		stepLog = fmt.Sprintf("reboot node one at a time")
@@ -1588,7 +1589,7 @@ func randIntn(n, maxNo int) []int {
 
 func getNodesByChaosLevel(triggerType string) []node.Node {
 	t := ChaosMap[triggerType]
-	stNodes := node.GetStorageDriverNodes()
+	stNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 	stNodesLen := len(stNodes)
 	nodes := make([]node.Node, 0)
 	var nodeLen float32
@@ -1643,7 +1644,7 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	stepLog := "get all nodes and crash one by one"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		nodesToCrash := node.GetStorageDriverNodes()
+		nodesToCrash := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 
 		// Crash node and check driver status
 		stepLog = fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash)
@@ -2402,12 +2403,12 @@ func TriggerEmailReporter() {
 	var masterNodeList []string
 	var pxStatus string
 	emailData.MailSubject = EmailSubject
-	for _, n := range node.GetMasterNodes() {
+	for _, n := range Inst().N.GetNodeRegistry().GetMasterNodes() {
 		masterNodeList = append(masterNodeList, n.Addresses...)
 	}
 	emailData.MasterIP = masterNodeList
 
-	for _, n := range node.GetStorageDriverNodes() {
+	for _, n := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 		k8sNode, err := core.Instance().GetNodeByName(n.Name)
 		k8sNodeStatus := "False"
 
@@ -3346,11 +3347,11 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 	}
 
 	for _, ctx := range *contexts {
-		Step(fmt.Sprintf("scale up app: %s by %d ", ctx.App.Key, len(node.GetWorkerNodes())), func() {
+		Step(fmt.Sprintf("scale up app: %s by %d ", ctx.App.Key, len(Inst().N.GetNodeRegistry().GetWorkerNodes())), func() {
 			applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 			UpdateOutcome(event, err)
 			for name, scale := range applicationScaleUpMap {
-				applicationScaleUpMap[name] = scale + int32(len(node.GetWorkerNodes()))
+				applicationScaleUpMap[name] = scale + int32(len(Inst().N.GetNodeRegistry().GetWorkerNodes()))
 			}
 			err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
 			UpdateOutcome(event, err)
@@ -3401,11 +3402,11 @@ func TriggerScheduledBackupScale(contexts *[]*scheduler.Context, recordChan *cha
 	}
 
 	for _, ctx := range *contexts {
-		Step(fmt.Sprintf("scale down app %s by %d", ctx.App.Key, len(node.GetWorkerNodes())), func() {
+		Step(fmt.Sprintf("scale down app %s by %d", ctx.App.Key, len(Inst().N.GetNodeRegistry().GetWorkerNodes())), func() {
 			applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
 			UpdateOutcome(event, err)
 			for name, scale := range applicationScaleDownMap {
-				applicationScaleDownMap[name] = scale - int32(len(node.GetWorkerNodes()))
+				applicationScaleDownMap[name] = scale - int32(len(Inst().N.GetNodeRegistry().GetWorkerNodes()))
 			}
 			err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
 			UpdateOutcome(event, err)
@@ -3507,7 +3508,7 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	})
 
 	Step("Restart Portworx", func() {
-		nodes := node.GetStorageDriverNodes()
+		nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 		nodeIndex := rand.Intn(len(nodes))
 		log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[nodeIndex].Name)
 		StopVolDriverAndWait([]node.Node{nodes[nodeIndex]})
@@ -3595,7 +3596,7 @@ func TriggerBackupRestartNode(contexts *[]*scheduler.Context, recordChan *chan *
 	})
 
 	Step("Restart a Portworx node", func() {
-		nodes := node.GetStorageDriverNodes()
+		nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 		// Choose a random node to reboot
 		nodeIndex := rand.Intn(len(nodes))
 		Step(fmt.Sprintf("reboot node: %s", nodes[nodeIndex].Name), func() {
@@ -3961,7 +3962,7 @@ func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 }
 
 func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
-	stNodes := node.GetStorageNodes()
+	stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 	expectedCapacity := (len(stNodes) / 2) + 1
 	poolsToExpand := make([]*opsapi.StoragePool, 0)
 	for _, stNode := range stNodes {
@@ -4307,7 +4308,7 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 		Step("Create autopilot rule", func() {
 			log.InfoD("Creating autopilot rule ; %+v", apRule)
 
-			storageNodes := node.GetStorageDriverNodes()
+			storageNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 			maxUsed := uint64(0)
 			for _, sNode := range storageNodes {
 				totalSize := uint64(0)
@@ -4494,7 +4495,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			func() {
 				log.InfoD(stepLog)
 				if !isAutoFsTrimEnabled {
-					currNode := node.GetStorageDriverNodes()[0]
+					currNode := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 					err := Inst().V.SetClusterOpts(currNode, map[string]string{
 						"--auto-fstrim": "on",
 					})
@@ -4794,7 +4795,7 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					currNode := node.GetStorageDriverNodes()[0]
+					currNode := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
 						"--volume-expiration-minutes": "600",
 					})
@@ -4812,7 +4813,7 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 		} else {
 			var trashcanVols []string
 			var err error
-			node := node.GetStorageDriverNodes()[0]
+			node := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 			stepLog = "Validating trashcan"
 			Step(stepLog,
 				func() {
@@ -4886,7 +4887,7 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					currNode := node.GetStorageDriverNodes()[0]
+					currNode := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
 						"--relaxedreclaim-delete-seconds": "600",
 					})
@@ -4906,7 +4907,7 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					nodes := node.GetStorageDriverNodes()
+					nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 					totalDeleted := 0
 					totalPending := 0
 					totalSkipped := 0
@@ -4964,13 +4965,13 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 	stepLog := "Decommission a random node"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		workerNodes = node.GetStorageDriverNodes()
+		workerNodes = Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 		index := rand.Intn(len(workerNodes))
 		nodeToDecomm = workerNodes[index]
 		stepLog = fmt.Sprintf("decommission node %s", nodeToDecomm.Name)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err := Inst().S.PrepareNodeToDecommission(nodeToDecomm, Inst().Provisioner)
+			err := Inst().S.PrepareNodeToDecommission(nodeToDecomm, Inst().ProvisionerType)
 			if err != nil {
 				UpdateOutcome(event, err)
 			} else {
@@ -5095,7 +5096,7 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						UpdateOutcome(event, err)
 						nodeWithNewID := node.Node{}
 
-						for _, n := range node.GetStorageDriverNodes() {
+						for _, n := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 							if n.Name == rejoinedNode.Hostname {
 								nodeWithNewID = n
 								break
@@ -5374,7 +5375,7 @@ func createLongevityJiraIssue(event *EventRecord, err error) {
 
 		var masterNodeIps []string
 
-		for _, n := range node.GetMasterNodes() {
+		for _, n := range Inst().N.GetNodeRegistry().GetMasterNodes() {
 			masterNodeIps = append(masterNodeIps, n.Addresses...)
 		}
 
@@ -5419,7 +5420,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 		stepLog = "Get KVDB nodes and perform failover"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			nodes := node.GetStorageDriverNodes()
+			nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 
 			kvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
 
@@ -5439,7 +5440,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 					kvdbNodeIDMap[id] = m.Name
 				}
 
-				nodeMap := node.GetNodesByVoDriverNodeID()
+				nodeMap := Inst().N.GetNodeRegistry().GetNodesByVoDriverNodeID()
 
 				for kvdbID, nodeID := range kvdbNodeIDMap {
 					kvdbNode := nodeMap[nodeID]
@@ -5649,7 +5650,7 @@ func TriggerValidateDeviceMapperCleanup(contexts *[]*scheduler.Context, recordCh
 			UpdateOutcome(event, err)
 		}
 
-		for _, n := range node.GetStorageDriverNodes() {
+		for _, n := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 			log.InfoD("Validating the node: %v", n.Name)
 			expectedDevMapperCount := 0
 			storageNode, err := Inst().V.GetDriverNode(&n)
@@ -5702,7 +5703,7 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 	stepLog := fmt.Sprintf("Perform add drive on all the worker nodes")
 	Step(stepLog, func() {
 
-		storageNodes := node.GetStorageNodes()
+		storageNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 
 		isCloudDrive, err := IsCloudDriveInitialised(storageNodes[0])
 		UpdateOutcome(event, err)
@@ -6315,7 +6316,7 @@ func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan
 						}
 						log.Infof("Aggregation level is: %v\n", currAggr)
 						if currAggr > 1 {
-							MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
+							MaxRF = int64(len(Inst().N.GetNodeRegistry().GetWorkerNodes())) / currAggr
 						}
 						currRep, err := Inst().V.GetReplicationFactor(v)
 						if err != nil {
@@ -6436,7 +6437,7 @@ func TriggerStorkAppBkpPxRestart(contexts *[]*scheduler.Context, recordChan *cha
 				bkp_start_err := applicationbackup.WaitForAppBackupToStart(bkp.Name, bkp.Namespace, timeout)
 				if bkp_start_err == nil {
 					Step("Restart Portworx", func() {
-						nodes := node.GetStorageDriverNodes()
+						nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 						nodeIndex := rand.Intn(len(nodes))
 						log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[nodeIndex].Name)
 						StopVolDriverAndWait([]node.Node{nodes[nodeIndex]})

@@ -9,10 +9,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"math/rand"
 	"net/http"
 	"regexp"
+
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/pds"
@@ -103,8 +104,12 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 
 	// import scheduler drivers to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler/anthos"
+	"github.com/portworx/torpedo/drivers/scheduler/dcos"
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
@@ -153,7 +158,7 @@ const (
 	schedulerCliFlag                     = "scheduler"
 	nodeDriverCliFlag                    = "node-driver"
 	monitorDriverCliFlag                 = "monitor-driver"
-	storageDriverCliFlag                 = "storage-driver"
+	volumeDriverCliFlag                  = "storage-driver"
 	backupCliFlag                        = "backup-driver"
 	specDirCliFlag                       = "spec-dir"
 	appListCliFlag                       = "app-list"
@@ -257,7 +262,7 @@ const (
 	defaultScheduler                      = "k8s"
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
-	defaultStorageDriver                  = "pxd"
+	defaultVolumeDriver                   = "pxd"
 	defaultLogLocation                    = "/testresults/"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
@@ -266,7 +271,7 @@ const (
 	defaultChaosLevel                     = 5
 	defaultStorageUpgradeEndpointURL      = "https://install.portworx.com"
 	defaultStorageUpgradeEndpointVersion  = "2.1.1"
-	defaultStorageProvisioner             = "portworx"
+	defaultStorageProvisionerType         = "portworx"
 	defaultStorageNodesPerAZ              = 2
 	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
 	specObjAppWorkloadSizeEnvVar          = "SIZE"
@@ -350,12 +355,12 @@ var (
 	SchedulePolicyScaleUID               string
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
+	SourceClusterConfigPath              string
+	DestinationClusterConfigPath         string
 	CurrentClusterConfigPath             = ""
-)
-
-var (
 	// ClusterConfigPathMap maps cluster name registered in px-backup to the path to the kubeconfig
 	ClusterConfigPathMap = make(map[string]string, 2)
+	KubeconfigsPaths     = make([]string, 2)
 )
 
 var (
@@ -402,14 +407,14 @@ func InitInstance() {
 	var err error
 	var token string
 
-	err = Inst().S.Init(scheduler.InitOptions{
+	// Initialization of Scheduler Driver
+	schedulerOptions := scheduler.InitOptions{
 		SpecDir:                          Inst().SpecDir,
-		VolDriverName:                    Inst().V.String(),
-		NodeDriverName:                   Inst().N.String(),
+		NodeDriverType:                   Inst().N.String(),
 		MonitorDriverName:                Inst().M.String(),
 		SecretConfigMapName:              Inst().ConfigMap,
 		CustomAppConfig:                  Inst().CustomAppConfig,
-		StorageProvisioner:               Inst().Provisioner,
+		VolumeDriverName:                 Inst().V.String(),
 		SecretType:                       Inst().SecretType,
 		VaultAddress:                     Inst().VaultAddress,
 		VaultToken:                       Inst().VaultToken,
@@ -420,8 +425,9 @@ func InitInstance() {
 		SecureApps:                       Inst().SecureAppList,
 		AnthosAdminWorkStationNodeIP:     Inst().AnthosAdminWorkStationNodeIP,
 		AnthosInstancePath:               Inst().AnthosInstPath,
-	})
-
+		UseGlobalSchedopsInstances:       true,
+	}
+	err = Inst().S.Init(schedulerOptions)
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
 
 	if Inst().ConfigMap != "" {
@@ -433,13 +439,99 @@ func InitInstance() {
 		token = ""
 	}
 
-	err = Inst().N.Init(node.InitOptions{
-		SpecDir: Inst().SpecDir,
-	})
+	// Initialization of Node Driver
+	nodeOptions := node.InitOptions{
+		SpecDir:          Inst().SpecDir,
+		VolumeDriverName: Inst().V.String(),
+	}
+	if k8sScheduler, ok := Inst().S.(*k8s.K8s); ok {
+		nodeOptions.NodeRegistry = k8sScheduler.NodeRegistry
+		nodeOptions.K8sCore = k8sScheduler.K8sCore
+		nodeOptions.K8sApps = k8sScheduler.K8sApps
+	} else if rkeScheduler, ok := Inst().S.(*rke.Rke); ok {
+		nodeOptions.NodeRegistry = rkeScheduler.NodeRegistry
+		nodeOptions.K8sCore = rkeScheduler.K8sCore
+		nodeOptions.K8sApps = rkeScheduler.K8sApps
+	} else if dcosScheduler, ok := Inst().S.(*dcos.Dcos); ok {
+		nodeOptions.NodeRegistry = dcosScheduler.NodeRegistry
+	} else if anthosScheduler, ok := Inst().S.(*anthos.Anthos); ok {
+		nodeOptions.NodeRegistry = anthosScheduler.NodeRegistry
+		nodeOptions.K8sCore = anthosScheduler.K8sCore
+		nodeOptions.K8sApps = anthosScheduler.K8sApps
+	} else if openshiftScheduler, ok := Inst().S.(*openshift.Openshift); ok {
+		nodeOptions.NodeRegistry = openshiftScheduler.NodeRegistry
+		nodeOptions.K8sCore = openshiftScheduler.K8sCore
+		nodeOptions.K8sApps = openshiftScheduler.K8sApps
+	}
+	err = Inst().N.Init(nodeOptions)
 	log.FailOnError(err, "Error occured while Node Driver Initialization")
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
+	// Initialization of Volume Driver
+	volOptions := volume.InitOptions{
+		NodeDriver:                Inst().N,
+		SchedulerDriverName:       Inst().S.String(),
+		Token:                     token,
+		StorageProvisionerType:    volume.StorageProvisionerType(Inst().ProvisionerType),
+		CsiGenericDriverConfigMap: Inst().CsiGenericDriverConfigMap,
+	}
+	if k8sScheduler, ok := Inst().S.(*k8s.K8s); ok {
+		volOptions.NodeRegistry = k8sScheduler.NodeRegistry
+		volOptions.K8sApps = k8sScheduler.K8sApps
+		volOptions.K8sAutopilot = k8sScheduler.K8sAutopilot
+		volOptions.K8sBatch = k8sScheduler.K8sBatch
+		volOptions.K8sRbac = k8sScheduler.K8sRbac
+		volOptions.K8sApiExtensions = k8sScheduler.K8sApiExtensions
+		volOptions.PxOperator = k8sScheduler.PxOperator
+		volOptions.K8sCore = k8sScheduler.K8sCore
+	} else if rkeScheduler, ok := Inst().S.(*rke.Rke); ok {
+		volOptions.NodeRegistry = rkeScheduler.NodeRegistry
+		volOptions.K8sApps = rkeScheduler.K8sApps
+		volOptions.K8sAutopilot = rkeScheduler.K8sAutopilot
+		volOptions.K8sBatch = rkeScheduler.K8sBatch
+		volOptions.K8sRbac = rkeScheduler.K8sRbac
+		volOptions.K8sApiExtensions = rkeScheduler.K8sApiExtensions
+		volOptions.PxOperator = rkeScheduler.PxOperator
+		volOptions.K8sCore = rkeScheduler.K8sCore
+	} else if dcosScheduler, ok := Inst().S.(*dcos.Dcos); ok {
+		volOptions.NodeRegistry = dcosScheduler.NodeRegistry
+	} else if anthosScheduler, ok := Inst().S.(*anthos.Anthos); ok {
+		volOptions.NodeRegistry = anthosScheduler.NodeRegistry
+		volOptions.K8sApps = anthosScheduler.K8sApps
+		volOptions.K8sAutopilot = anthosScheduler.K8sAutopilot
+		volOptions.K8sBatch = anthosScheduler.K8sBatch
+		volOptions.K8sRbac = anthosScheduler.K8sRbac
+		volOptions.K8sApiExtensions = anthosScheduler.K8sApiExtensions
+		volOptions.PxOperator = anthosScheduler.PxOperator
+		volOptions.K8sCore = anthosScheduler.K8sCore
+	} else if openshiftScheduler, ok := Inst().S.(*openshift.Openshift); ok {
+		volOptions.NodeRegistry = openshiftScheduler.NodeRegistry
+		volOptions.K8sApps = openshiftScheduler.K8sApps
+		volOptions.K8sAutopilot = openshiftScheduler.K8sAutopilot
+		volOptions.K8sBatch = openshiftScheduler.K8sBatch
+		volOptions.K8sRbac = openshiftScheduler.K8sRbac
+		volOptions.K8sApiExtensions = openshiftScheduler.K8sApiExtensions
+		volOptions.PxOperator = openshiftScheduler.PxOperator
+		volOptions.K8sCore = openshiftScheduler.K8sCore
+	}
+	err = Inst().V.Init(volOptions)
 	log.FailOnError(err, "Error occured while Volume Driver Initialization")
+
+	// finish setting up scheduler
+	if k8sScheduler, ok := Inst().S.(*k8s.K8s); ok {
+		k8sScheduler.NodeDriver = Inst().N
+		k8sScheduler.VolumeDriver = Inst().V
+	} else if rkeScheduler, ok := Inst().S.(*rke.Rke); ok {
+		rkeScheduler.NodeDriver = Inst().N
+		rkeScheduler.VolumeDriver = Inst().V
+	} else if dcosScheduler, ok := Inst().S.(*dcos.Dcos); ok {
+		dcosScheduler.VolumeDriver = Inst().V
+	} else if anthosScheduler, ok := Inst().S.(*anthos.Anthos); ok {
+		anthosScheduler.NodeDriver = Inst().N
+		anthosScheduler.VolumeDriver = Inst().V
+	} else if openshiftScheduler, ok := Inst().S.(*openshift.Openshift); ok {
+		openshiftScheduler.NodeDriver = Inst().N
+		openshiftScheduler.VolumeDriver = Inst().V
+	}
 
 	err = Inst().M.Init(Inst().JobName, Inst().JobType)
 	log.FailOnError(err, "Error occured while monitor Initialization")
@@ -449,7 +541,13 @@ func InitInstance() {
 	}
 
 	if Inst().Backup != nil {
-		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
+		backupOptions := backup.InitOptions{
+			SchedulerDriver: Inst().S,
+			NodeDriver:      Inst().N,
+			VolumeDriver:    Inst().V,
+			Token:           token,
+		}
+		err = Inst().Backup.Init(backupOptions)
 		log.FailOnError(err, "Error occured while Backup Driver Initialization")
 	}
 	SetupTestRail()
@@ -596,7 +694,7 @@ func ValidatePureCloudDriveTopologies() error {
 	if err != nil {
 		return err
 	}
-	nodesMap := node.GetNodesByName()
+	nodesMap := Inst().N.GetNodeRegistry().GetNodesByName()
 
 	driverNamespace, err := Inst().V.GetVolumeDriverNamespace()
 	if err != nil {
@@ -1568,7 +1666,7 @@ func GetAppStorageClasses(appCtx *scheduler.Context) (*[]string, error) {
 // CreateScheduleOptions uses the current Context (kubeconfig) to generate schedule options
 // NOTE: When using a ScheduleOption that was created during a context (kubeconfig)
 // that is different from the current context, make sure to re-generate ScheduleOptions
-func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.ScheduleOptions {
+func CreateScheduleOptions(kubeconfigPath, namespace string, errChan ...*chan error) scheduler.ScheduleOptions {
 	log.Infof("Creating ScheduleOptions")
 
 	//if not hyper converged set up deploy apps only on storageless nodes
@@ -1576,13 +1674,13 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 		var err error
 
 		log.Infof("ScheduleOptions: Scheduling apps only on storageless nodes")
-		storagelessNodes := node.GetStorageLessNodes()
+		storagelessNodes := Inst().N.GetNodeRegistry().GetStorageLessNodes()
 		if len(storagelessNodes) == 0 {
 			log.Info("ScheduleOptions: No storageless nodes available in the PX Cluster. Setting HyperConverges as true")
 			Inst().IsHyperConverged = true
 		}
 		for _, storagelessNode := range storagelessNodes {
-			if err = Inst().S.AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {
+			if err = Inst().SchedulerDrivers[kubeconfigPath].AddLabelOnNode(storagelessNode, "storage", "NO"); err != nil {
 				err = fmt.Errorf("ScheduleOptions: failed to add label key [%s] and value [%s] in node [%s]. Error:[%v]",
 					"storage", "NO", storagelessNode.Name, err)
 				processError(err, errChan...)
@@ -1593,7 +1691,7 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 
 		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
-			StorageProvisioner: Inst().Provisioner,
+			StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 			Nodes:              storagelessNodes,
 			Labels:             storageLessNodeLabels,
 			Namespace:          namespace,
@@ -1603,7 +1701,7 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 	} else {
 		options := scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
-			StorageProvisioner: Inst().Provisioner,
+			StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 			Namespace:          namespace,
 		}
 		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged")
@@ -1611,8 +1709,13 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 	}
 }
 
-// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
+// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace) on the current cluster. NOTE: does not wait for applications
 func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.Context {
+	return ScheduleApplicationsOnCluster("", testname, errChan...)
+}
+
+// ScheduleApplicationsOnCluster schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace) on a given cluster. NOTE: does not wait for applications
+func ScheduleApplicationsOnCluster(kubeconfigPath, testname string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
 			close(*errChan[0])
@@ -1630,9 +1733,9 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 			}
 			contexts = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
 		} else {
-			options := CreateScheduleOptions("", errChan...)
+			options := CreateScheduleOptions(kubeconfigPath, "", errChan...)
 			taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-			contexts, err = Inst().S.Schedule(taskName, options)
+			contexts, err = Inst().SchedulerDrivers[kubeconfigPath].Schedule(taskName, options)
 			// Need to check err != nil before calling processError
 			if err != nil {
 				processError(err, errChan...)
@@ -1657,7 +1760,7 @@ func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan 
 	var err error
 
 	Step("schedule applications", func() {
-		options := CreateScheduleOptions(namespace, errChan...)
+		options := CreateScheduleOptions("", namespace, errChan...)
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, options)
 		// Need to check err != nil before calling processError
@@ -1686,7 +1789,7 @@ func ScheduleAppsInTopologyEnabledCluster(
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
-			StorageProvisioner: Inst().Provisioner,
+			StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 			TopologyLabels:     labels,
 		})
 		processError(err, errChan...)
@@ -1880,7 +1983,7 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 		}
 
 		// update each storage pool with the app workload sizes
-		nodes := node.GetWorkerNodes()
+		nodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 		expect(nodes).NotTo(beEmpty())
 		for _, n := range nodes {
 			for id, sPool := range n.StoragePools {
@@ -1890,7 +1993,7 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 
 				log.Debugf("pool: %s InitialSize: %d WorkloadSize: %d", sPool.Uuid, sPool.StoragePoolAtInit.TotalSize, n.StoragePools[id].WorkloadSize)
 			}
-			err = node.UpdateNode(n)
+			err = Inst().N.GetNodeRegistry().UpdateNode(n)
 			expect(err).NotTo(haveOccurred())
 		}
 	}
@@ -1905,7 +2008,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 	context("Validating portworx pods restart count ...", func() {
 		Step("Getting current restart counts for portworx pods and matching", func() {
 			pxLabel := make(map[string]string)
-			pxLabel[labelNameKey] = defaultStorageProvisioner
+			pxLabel[labelNameKey] = defaultStorageProvisionerType
 			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
 			//Using fatal verification will abort longevity runs
 			if err != nil {
@@ -1914,7 +2017,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 
 			// Validate portworx pod restart count after test
 			for pod, value := range pxPodRestartCountMap {
-				n, err := node.GetNodeByIP(pod.Status.HostIP)
+				n, err := Inst().N.GetNodeRegistry().GetNodeByIP(pod.Status.HostIP)
 				log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
 				if n.PxPodRestartCount != value {
 					log.Warnf("Portworx pods restart count not matches, expected %d actual %d", value, n.PxPodRestartCount)
@@ -1993,7 +2096,7 @@ func ValidateClusterSize(count int64) {
 func GetStorageNodes() ([]node.Node, error) {
 
 	storageNodes := []node.Node{}
-	nodes := node.GetStorageDriverNodes()
+	nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 
 	for _, node := range nodes {
 		devices, err := Inst().V.GetStorageDevices(node)
@@ -2018,7 +2121,7 @@ func CollectSupport() {
 				return
 			}
 		}
-		nodes := node.GetWorkerNodes()
+		nodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 		dash.VerifyFatal(len(nodes) > 0, true, "Worker nodes found ?")
 
 		for _, n := range nodes {
@@ -2099,7 +2202,7 @@ func PerformSystemCheck() {
 		log.Info("checking for core files...")
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
-			nodes := node.GetNodes()
+			nodes := Inst().N.GetNodeRegistry().GetNodes()
 			dash.VerifyFatal(len(nodes) > 0, true, "verify nodes list is not empty")
 			coreNodes := make([]string, 0)
 			for _, n := range nodes {
@@ -2689,7 +2792,7 @@ func SetClusterContext(clusterConfigPath string) error {
 	}
 
 	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
-		err = ssh.RefreshDriver(sshNodeDriver)
+		err = sshNodeDriver.RefreshDriver()
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
@@ -3104,7 +3207,7 @@ func CreateNamespace(appKeys []string) error {
 
 	contexts, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 		AppKeys:            appKeys,
-		StorageProvisioner: Inst().Provisioner,
+		StorageProvisioner: volume.StorageProvisioner(volume.GetStorageProvisionerForType(Inst().ProvisionerType)),
 	})
 	if err != nil {
 		return err
@@ -3449,28 +3552,12 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
 func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx context1.Context) error {
-	// TODO: Add support for adding multiple clusters from
-	// comma separated list of kubeconfig files
-	kubeconfigs := os.Getenv("KUBECONFIGS")
-	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
-	kubeconfigList := strings.Split(kubeconfigs, ",")
-	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
-	if len(kubeconfigList) != 2 {
-		return fmt.Errorf("2 kubeconfigs are required for source and destination cluster")
-	}
-	err := dumpKubeConfigs(configMapName, kubeconfigList)
-	if err != nil {
-		return err
-	}
 	// Register source cluster with backup driver
 	log.InfoD("Create cluster [%s] in org [%s]", SourceClusterName, orgID)
-	srcClusterConfigPath, err := GetSourceClusterConfigPath()
-	if err != nil {
-		return err
-	}
+	srcClusterConfigPath := KubeconfigsPaths[0]
 	log.Infof("Save cluster %s kubeconfig to %s", SourceClusterName, srcClusterConfigPath)
 	sourceClusterStatus := func() (interface{}, bool, error) {
-		err = CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
+		err := CreateCluster(SourceClusterName, srcClusterConfigPath, orgID, cloudName, uid, ctx)
 		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
 			return "", true, err
 		}
@@ -3483,20 +3570,17 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 		}
 		return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
 	}
-	_, err = task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
+	_, err := task.DoRetryWithTimeout(sourceClusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
 	ClusterConfigPathMap[SourceClusterName] = srcClusterConfigPath
 	// Register destination cluster with backup driver
 	log.InfoD("Create cluster [%s] in org [%s]", destinationClusterName, orgID)
-	dstClusterConfigPath, err := GetDestinationClusterConfigPath()
-	if err != nil {
-		return err
-	}
+	dstClusterConfigPath := KubeconfigsPaths[1]
 	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
 	destClusterStatus := func() (interface{}, bool, error) {
-		err = CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloudName, uid, ctx)
+		err := CreateCluster(destinationClusterName, dstClusterConfigPath, orgID, cloudName, uid, ctx)
 		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
 			return "", true, err
 		}
@@ -4285,7 +4369,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 }
 
 func AddFastPathLabel(ctx *scheduler.Context) (*node.Node, error) {
-	sNodes := node.GetStorageDriverNodes()
+	sNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 	appNodes, err := Inst().S.GetNodesForApp(ctx)
 	if err == nil {
 		appNode := appNodes[0]
@@ -4406,35 +4490,172 @@ func CreateAzureBucket(bucketName string) {
 		fmt.Sprintf("Failed to create container. Error: [%v]", err))
 }
 
-func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
+func dumpKubeConfigs(configObject string, kubeconfigList []string) ([]string, error) {
 	log.Infof("dump kubeconfigs to file system")
 	cm, err := core.Instance().GetConfigMap(configObject, "default")
 	if err != nil {
 		log.Errorf("Error reading config map: %v", err)
-		return err
+		return nil, err
 	}
 	log.Infof("Get over kubeconfig list %v", kubeconfigList)
+	kubeconfigPaths := make([]string, 0)
 	for _, kubeconfig := range kubeconfigList {
 		config := cm.Data[kubeconfig]
 		if len(config) == 0 {
 			configErr := fmt.Sprintf("Error reading kubeconfig: found empty %s in config map %s",
 				kubeconfig, configObject)
-			return fmt.Errorf(configErr)
+			return nil, fmt.Errorf(configErr)
 		}
 		filePath := fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfig)
 		log.Infof("Save kubeconfig to %s", filePath)
 		err := ioutil.WriteFile(filePath, []byte(config), 0644)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		kubeconfigPaths = append(kubeconfigPaths, filePath)
 	}
-	return nil
+	return kubeconfigPaths, nil
 }
 
 // DumpKubeconfigs gets kubeconfigs from configmap
 func DumpKubeconfigs(kubeconfigList []string) {
-	err := dumpKubeConfigs(configMapName, kubeconfigList)
+	_, err := dumpKubeConfigs(configMapName, kubeconfigList)
 	dash.VerifyFatal(err, nil, fmt.Sprintf("verfiy getting kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
+}
+
+// InitSchedulerDriversFromKubeconfigs gets kubeconfigs from configmap and initializes schedulers for each of them
+func InitTorpedoDriversForKubeconfigs(kubeconfigList []string) ([]string, error) {
+	kubeconfigsPaths, err := dumpKubeConfigs(configMapName, kubeconfigList)
+	if err != nil {
+		return nil, err
+	}
+	for _, kubeconfigsPath := range kubeconfigsPaths {
+		log.Infof("Creating Torpedo Drivers for kubeconfig [%s]", kubeconfigsPath)
+		if schedulerDriver, err := scheduler.Get(Inst().S.String()); err != nil {
+			return nil, fmt.Errorf("Cannot find scheduler driver. Err: {%v}", err)
+		} else if volumeDriver, err := volume.Get(Inst().V.String()); err != nil {
+			return nil, fmt.Errorf("Cannot find volume driver. Err: {%v}", err)
+		} else if nodeDriver, err := node.Get(Inst().N.String()); err != nil {
+			return nil, fmt.Errorf("Cannot find node driver. Err: {%v}", err)
+		} else {
+			var err error
+
+			// Initialization of Scheduler Driver
+			schedulerOptions := scheduler.InitOptions{
+				SpecDir:                    Inst().SpecDir,
+				NodeDriverType:             nodeDriver.String(),
+				VolumeDriverName:           Inst().V.String(),
+				UseGlobalSchedopsInstances: false,
+				KubeConfigPath:             kubeconfigsPath,
+			}
+			err = schedulerDriver.Init(schedulerOptions)
+			if err != nil {
+				return nil, fmt.Errorf("Error occured while Scheduler Driver Initialization. Err: {%v}", err)
+			}
+
+			// Initialization of Node Driver
+			nodeOptions := node.InitOptions{
+				SpecDir:          Inst().SpecDir,
+				VolumeDriverName: Inst().V.String(),
+			}
+			if k8sScheduler, ok := schedulerDriver.(*k8s.K8s); ok {
+				nodeOptions.NodeRegistry = k8sScheduler.NodeRegistry
+				nodeOptions.K8sCore = k8sScheduler.K8sCore
+				nodeOptions.K8sApps = k8sScheduler.K8sApps
+			} else if rkeScheduler, ok := schedulerDriver.(*rke.Rke); ok {
+				nodeOptions.NodeRegistry = rkeScheduler.NodeRegistry
+				nodeOptions.K8sCore = rkeScheduler.K8sCore
+				nodeOptions.K8sApps = rkeScheduler.K8sApps
+			} else if dcosScheduler, ok := schedulerDriver.(*dcos.Dcos); ok {
+				nodeOptions.NodeRegistry = dcosScheduler.NodeRegistry
+			} else if anthosScheduler, ok := schedulerDriver.(*anthos.Anthos); ok {
+				nodeOptions.NodeRegistry = anthosScheduler.NodeRegistry
+				nodeOptions.K8sCore = anthosScheduler.K8sCore
+				nodeOptions.K8sApps = anthosScheduler.K8sApps
+			} else if openshiftScheduler, ok := schedulerDriver.(*openshift.Openshift); ok {
+				nodeOptions.NodeRegistry = openshiftScheduler.NodeRegistry
+				nodeOptions.K8sCore = openshiftScheduler.K8sCore
+				nodeOptions.K8sApps = openshiftScheduler.K8sApps
+			}
+			err = nodeDriver.Init(nodeOptions)
+			if err != nil {
+				return nil, fmt.Errorf("Error occured while Node Driver Initialization. Err: {%v}", err)
+			}
+
+			// Initialization of Volume Driver
+			volOptions := volume.InitOptions{
+				NodeDriver:                nodeDriver,
+				SchedulerDriverName:       schedulerDriver.String(),
+				StorageProvisionerType:    volume.StorageProvisionerType(Inst().ProvisionerType),
+				CsiGenericDriverConfigMap: Inst().CsiGenericDriverConfigMap,
+			}
+			if k8sScheduler, ok := schedulerDriver.(*k8s.K8s); ok {
+				volOptions.NodeRegistry = k8sScheduler.NodeRegistry
+				volOptions.K8sApps = k8sScheduler.K8sApps
+				volOptions.K8sAutopilot = k8sScheduler.K8sAutopilot
+				volOptions.K8sBatch = k8sScheduler.K8sBatch
+				volOptions.K8sRbac = k8sScheduler.K8sRbac
+				volOptions.K8sApiExtensions = k8sScheduler.K8sApiExtensions
+				volOptions.PxOperator = k8sScheduler.PxOperator
+				volOptions.K8sCore = k8sScheduler.K8sCore
+			} else if rkeScheduler, ok := schedulerDriver.(*rke.Rke); ok {
+				volOptions.NodeRegistry = rkeScheduler.NodeRegistry
+				volOptions.K8sApps = rkeScheduler.K8sApps
+				volOptions.K8sAutopilot = rkeScheduler.K8sAutopilot
+				volOptions.K8sBatch = rkeScheduler.K8sBatch
+				volOptions.K8sRbac = rkeScheduler.K8sRbac
+				volOptions.K8sApiExtensions = rkeScheduler.K8sApiExtensions
+				volOptions.PxOperator = rkeScheduler.PxOperator
+				volOptions.K8sCore = rkeScheduler.K8sCore
+			} else if dcosScheduler, ok := schedulerDriver.(*dcos.Dcos); ok {
+				volOptions.NodeRegistry = dcosScheduler.NodeRegistry
+			} else if anthosScheduler, ok := schedulerDriver.(*anthos.Anthos); ok {
+				volOptions.NodeRegistry = anthosScheduler.NodeRegistry
+				volOptions.K8sApps = anthosScheduler.K8sApps
+				volOptions.K8sAutopilot = anthosScheduler.K8sAutopilot
+				volOptions.K8sBatch = anthosScheduler.K8sBatch
+				volOptions.K8sRbac = anthosScheduler.K8sRbac
+				volOptions.K8sApiExtensions = anthosScheduler.K8sApiExtensions
+				volOptions.PxOperator = anthosScheduler.PxOperator
+				volOptions.K8sCore = anthosScheduler.K8sCore
+			} else if openshiftScheduler, ok := schedulerDriver.(*openshift.Openshift); ok {
+				volOptions.NodeRegistry = openshiftScheduler.NodeRegistry
+				volOptions.K8sApps = openshiftScheduler.K8sApps
+				volOptions.K8sAutopilot = openshiftScheduler.K8sAutopilot
+				volOptions.K8sBatch = openshiftScheduler.K8sBatch
+				volOptions.K8sRbac = openshiftScheduler.K8sRbac
+				volOptions.K8sApiExtensions = openshiftScheduler.K8sApiExtensions
+				volOptions.PxOperator = openshiftScheduler.PxOperator
+				volOptions.K8sCore = openshiftScheduler.K8sCore
+			}
+			err = volumeDriver.Init(volOptions)
+			if err != nil {
+				return nil, fmt.Errorf("Error occured while Volume Driver Initialization. Err: {%v}", err)
+			}
+
+			// finish setting up scheduler
+			if k8sScheduler, ok := schedulerDriver.(*k8s.K8s); ok {
+				k8sScheduler.NodeDriver = nodeDriver
+				k8sScheduler.VolumeDriver = volumeDriver
+			} else if rkeScheduler, ok := schedulerDriver.(*rke.Rke); ok {
+				rkeScheduler.NodeDriver = nodeDriver
+				rkeScheduler.VolumeDriver = volumeDriver
+			} else if dcosScheduler, ok := schedulerDriver.(*dcos.Dcos); ok {
+				dcosScheduler.VolumeDriver = volumeDriver
+			} else if anthosScheduler, ok := schedulerDriver.(*anthos.Anthos); ok {
+				anthosScheduler.NodeDriver = nodeDriver
+				anthosScheduler.VolumeDriver = volumeDriver
+			} else if openshiftScheduler, ok := schedulerDriver.(*openshift.Openshift); ok {
+				openshiftScheduler.NodeDriver = nodeDriver
+				openshiftScheduler.VolumeDriver = volumeDriver
+			}
+
+			Inst().SchedulerDrivers[kubeconfigsPath] = schedulerDriver
+			Inst().VolumeDrivers[kubeconfigsPath] = volumeDriver
+			Inst().NodeDrivers[kubeconfigsPath] = nodeDriver
+		}
+	}
+	return kubeconfigsPaths, nil
 }
 
 // Inst returns the Torpedo instances
@@ -4448,9 +4669,12 @@ var once sync.Once
 // Torpedo is the torpedo testsuite
 type Torpedo struct {
 	InstanceID                          string
-	S                                   scheduler.Driver
-	V                                   volume.Driver
-	N                                   node.Driver
+	S                                   scheduler.Driver            // default scheduler.Driver (= SchedulerDrivers[""])
+	SchedulerDrivers                    map[string]scheduler.Driver // map[clusterName]scheduler.Driver
+	V                                   volume.Driver               // default volume.Driver (= VolumeDrivers[""])
+	VolumeDrivers                       map[string]volume.Driver    // map[clusterName]volume.Driver
+	N                                   node.Driver                 // default node.Driver (= NodeDrivers[""])
+	NodeDrivers                         map[string]node.Driver      // map[clusterName]node.Driver
 	M                                   monitor.Driver
 	Pds                                 pds.Driver
 	SpecDir                             string
@@ -4466,7 +4690,7 @@ type Torpedo struct {
 	EnableStorkUpgrade                  bool
 	MinRunTimeMins                      int
 	ChaosLevel                          int
-	Provisioner                         string
+	ProvisionerType                     string
 	MaxStorageNodesPerAZ                int
 	DestroyAppTimeout                   time.Duration
 	DriverStartTimeout                  time.Duration
@@ -4502,7 +4726,7 @@ type Torpedo struct {
 func ParseFlags() {
 	var err error
 
-	var s, m, n, v, backupDriverName, pdsDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, provisionerName, configMapName string
+	var s, m, n, v, backupDriverName, pdsDriverName, specDir, logLoc, logLevel, appListCSV, secureAppsCSV, repl1AppsCSV, provisionerType, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -4554,7 +4778,7 @@ func ParseFlags() {
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&m, monitorDriverCliFlag, defaultMonitorDriver, "Name of the prometheus driver to use")
-	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
+	flag.StringVar(&v, volumeDriverCliFlag, defaultVolumeDriver, "Name of the storage (volume) driver to use")
 	flag.StringVar(&torpedoJobName, torpedoJobNameFlag, defaultTorpedoJob, "Name of the torpedo job")
 	flag.StringVar(&torpedoJobType, torpedoJobTypeFlag, defaultTorpedoJobType, "Type of torpedo job")
 	flag.StringVar(&backupDriverName, backupCliFlag, "", "Name of the backup driver to use")
@@ -4574,7 +4798,7 @@ func ParseFlags() {
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
 	flag.StringVar(&repl1AppsCSV, repl1AppsCliFlag, "", "Comma-separated list of apps to deploy with repl 1 volumes. The names should match directories in the spec dir.")
-	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
+	flag.StringVar(&provisionerType, provisionerFlag, defaultStorageProvisionerType, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultDriverStartTimeout, "Maximum wait volume driver startup")
@@ -4792,8 +5016,11 @@ func ParseFlags() {
 			instance = &Torpedo{
 				InstanceID:                          time.Now().Format("01-02-15h04m05s"),
 				S:                                   schedulerDriver,
+				SchedulerDrivers:                    map[string]scheduler.Driver{"": schedulerDriver},
 				V:                                   volumeDriver,
+				VolumeDrivers:                       map[string]volume.Driver{"": volumeDriver},
 				N:                                   nodeDriver,
+				NodeDrivers:                         map[string]node.Driver{"": nodeDriver},
 				M:                                   monitorDriver,
 				Pds:                                 pdsDriver,
 				SpecDir:                             specDir,
@@ -4809,7 +5036,7 @@ func ParseFlags() {
 				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
 				SecureAppList:                       secureAppList,
-				Provisioner:                         provisionerName,
+				ProvisionerType:                     provisionerType,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
 				DriverStartTimeout:                  driverStartTimeout,
@@ -4978,7 +5205,7 @@ func CreateJiraIssueWithLogs(issueDescription, issueSummary string) {
 
 func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 	isIssueDirCreated := false
-	for _, currNode := range node.GetWorkerNodes() {
+	for _, currNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 		err := runCmd("pwd", currNode)
 		if err == nil {
 			log.Infof("Creating directors logs in the node %v", currNode.Name)
@@ -5028,7 +5255,7 @@ func collectLogsFromPods(testCaseName string, podLabel map[string]string, namesp
 		log.Errorf("Error in getting pods for the [%s] logs of test case [%s], Err: %v", logLabel, testCaseName, err.Error())
 		return
 	}
-	masterNode := node.GetMasterNodes()[0]
+	masterNode := Inst().N.GetNodeRegistry().GetMasterNodes()[0]
 	err = runCmd("pwd", masterNode)
 	if err != nil {
 		log.Errorf("Error in running [pwd] command in node [%s] for the [%s] logs of test case [%s]", masterNode.Name, logLabel, testCaseName)
@@ -5076,7 +5303,7 @@ func collectPxBackupLogs(testCaseName string) {
 
 // compressSubDirectories compresses all subdirectories within the specified directory on the master node
 func compressSubDirectories(dirPath string) {
-	masterNode := node.GetMasterNodes()[0]
+	masterNode := Inst().N.GetNodeRegistry().GetMasterNodes()[0]
 	log.Infof("Compressing sub-directories in the directory [%s] in node [%s]", dirPath, masterNode.Name)
 	err := runCmdWithNoSudo(fmt.Sprintf("find %s -mindepth 1 -depth -type d -exec sh -c 'tar czf \"${1%%/}.tar.gz\" -C \"$(dirname \"$1\")\" \"$(basename \"$1\")\" && rm -rf \"$1\"' sh {} \\;", dirPath), masterNode)
 	if err != nil {
@@ -5103,7 +5330,7 @@ func collectAndCopyStorkLogs(issueKey string) {
 			}
 			logsByPodName[p.Name] = output
 		}
-		masterNode := node.GetMasterNodes()[0]
+		masterNode := Inst().N.GetNodeRegistry().GetMasterNodes()[0]
 		err = runCmd("pwd", masterNode)
 		if err == nil {
 			log.Infof("Creating directors logs in the node %v", masterNode.Name)
@@ -5142,7 +5369,7 @@ func collectAndCopyOperatorLogs(issueKey string) {
 			}
 			logsByPodName[p.Name] = output
 		}
-		masterNode := node.GetMasterNodes()[0]
+		masterNode := Inst().N.GetNodeRegistry().GetMasterNodes()[0]
 		err = runCmd("pwd", masterNode)
 		if err == nil {
 			for k, v := range logsByPodName {
@@ -5176,7 +5403,7 @@ func collectAndCopyAutopilotLogs(issueKey string) {
 			}
 			logsByPodName[p.Name] = output
 		}
-		masterNode := node.GetMasterNodes()[0]
+		masterNode := Inst().N.GetNodeRegistry().GetMasterNodes()[0]
 
 		err = runCmd("pwd", masterNode)
 		if err == nil {
@@ -5366,7 +5593,7 @@ func ValidateDriveRebalance(stNode node.Node) error {
 			return nil, true, err
 		}
 
-		stNode, err = node.GetNodeByName(stNode.Name)
+		stNode, err = Inst().N.GetNodeRegistry().GetNodeByName(stNode.Name)
 		if err != nil {
 			return nil, true, err
 		}
@@ -5539,7 +5766,7 @@ func updatePxRuntimeOpts() error {
 			optArr := strings.Split(opt, "=")
 			optionsMap[optArr[0]] = optArr[1]
 		}
-		currNode := node.GetWorkerNodes()[0]
+		currNode := Inst().N.GetNodeRegistry().GetWorkerNodes()[0]
 		return Inst().V.SetClusterRunTimeOpts(currNode, optionsMap)
 	} else {
 		log.Info("No run time options provided to update")
@@ -5599,7 +5826,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 		tags = make(map[string]string, 0)
 	}
 	tags["apps"] = strings.Join(Inst().AppList, ",")
-	tags["storageProvisioner"] = Inst().Provisioner
+	tags["storageProvisioner"] = Inst().ProvisionerType
 	tags["pureVolume"] = fmt.Sprintf("%t", Inst().PureVolumes)
 	tags["pureSANType"] = Inst().PureSANType
 	dash.TestCaseBegin(testName, testDescription, strconv.Itoa(testRepoID), tags)
@@ -5611,7 +5838,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 
 // enableAutoFSTrim on supported PX version.
 func EnableAutoFSTrim() {
-	nodes := node.GetWorkerNodes()
+	nodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 	var isPXNodeAvailable bool
 	for _, pxNode := range nodes {
 		isPxInstalled, err := Inst().V.IsDriverInstalled(pxNode)
@@ -5663,7 +5890,7 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		if len(matches) > 1 {
 			testCaseName = matches[1]
 		}
-		masterNode := node.GetMasterNodes()[0]
+		masterNode := Inst().N.GetNodeRegistry().GetMasterNodes()[0]
 		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
 		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
 		if err != nil {
@@ -5739,7 +5966,7 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 			return "", err
 		}
 
-		node := node.GetStorageDriverNodes()[0]
+		node := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 		for _, vol := range vols {
 			appVol, err := Inst().V.InspectVolume(vol.ID)
 			if err != nil {
@@ -6011,7 +6238,7 @@ func ExitFromMaintenanceMode(n node.Node) error {
 // Checks for all the storage nodes present in the cluster, in case if any node is in maintenance mode
 // Function will attempt bringing back the node out of maintenance
 func ExitNodesFromMaintenanceMode() error {
-	Nodes := node.GetStorageNodes()
+	Nodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 	for _, eachNode := range Nodes {
 		nodeState, err := Inst().V.IsNodeInMaintenance(eachNode)
 		if err == nil && nodeState == true {
@@ -6028,11 +6255,11 @@ func ExitNodesFromMaintenanceMode() error {
 func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
 	var poolDetails []*opsapi.StoragePool
 
-	if node.IsStorageNode(n) == false {
+	if Inst().N.GetNodeRegistry().IsStorageNode(n) == false {
 		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
 	}
 
-	nodes := node.GetStorageNodes()
+	nodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 
 	for _, eachNode := range nodes {
 		if eachNode.Id == n.Id {
@@ -6094,7 +6321,7 @@ func GetSubsetOfSlice[T any](items []T, length int) ([]T, error) {
 
 // MakeStoragetoStoragelessNode returns true on converting Storage Node to Storageless Node
 func MakeStoragetoStoragelessNode(n node.Node) error {
-	storageLessNodeBeforePoolDelete := node.GetStorageLessNodes()
+	storageLessNodeBeforePoolDelete := Inst().N.GetNodeRegistry().GetStorageLessNodes()
 	// Get total list of pools present on the node
 	poolList, err := GetPoolsDetailsOnNode(n)
 	if err != nil {
@@ -6140,7 +6367,7 @@ func MakeStoragetoStoragelessNode(n node.Node) error {
 		return fmt.Errorf("node %s pools are not in status %s. Err:[%v]", n.Name, expectedStatus, err)
 	}
 
-	storageLessNodeAfterPoolDelete := node.GetStorageLessNodes()
+	storageLessNodeAfterPoolDelete := Inst().N.GetNodeRegistry().GetStorageLessNodes()
 	if len(storageLessNodeBeforePoolDelete) <= len(storageLessNodeAfterPoolDelete) {
 		return fmt.Errorf("making storage node to storagelessnode failed")
 	}
@@ -6248,7 +6475,7 @@ func WaitForPoolOffline(n node.Node) error {
 }
 
 func GetPoolIDFromPoolUUID(poolUuid string) (int32, error) {
-	nodesPresent := node.GetStorageNodes()
+	nodesPresent := Inst().N.GetNodeRegistry().GetStorageNodes()
 	for _, each := range nodesPresent {
 		poolsPresent, err := GetPoolsDetailsOnNode(each)
 		if err != nil {
@@ -6528,7 +6755,7 @@ func SetupTestRail() {
 
 // AsgKillNode terminates the given node
 func AsgKillNode(nodeToKill node.Node) error {
-	initNodes := node.GetStorageDriverNodes()
+	initNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 	initNodeNames := make([]string, len(initNodes))
 	var err error
 	for _, iNode := range initNodes {
@@ -6569,7 +6796,7 @@ func AsgKillNode(nodeToKill node.Node) error {
 				return "", true, err
 			}
 
-			newNodesList := node.GetStorageDriverNodes()
+			newNodesList := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 
 			for _, nNode := range newNodesList {
 				if !Contains(initNodeNames, nNode.Name) {
@@ -6686,7 +6913,7 @@ type KvdbNode struct {
 // GetAllKvdbNodes returns list of all kvdb nodes present in the cluster
 func GetAllKvdbNodes() ([]KvdbNode, error) {
 	type kvdbNodes []map[string]KvdbNode
-	storageNodes := node.GetStorageNodes()
+	storageNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 	randomIndex := rand.Intn(len(storageNodes))
 	randomNode := storageNodes[randomIndex]
 
