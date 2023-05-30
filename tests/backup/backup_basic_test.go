@@ -72,6 +72,7 @@ func BackupInitInstance() {
 	var err error
 
 	// Initialization of Scheduler Driver
+	log.InfoD("Initializing Scheduler Driver")
 	schedulerOptions := scheduler.InitOptions{
 		SpecDir:                    Inst().SpecDir,
 		NodeDriverType:             Inst().N.String(),
@@ -82,6 +83,7 @@ func BackupInitInstance() {
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
 
 	// Initialization of Node Driver
+	log.InfoD("Initializing Node Driver")
 	nodeOptions := node.InitOptions{
 		SpecDir:          Inst().SpecDir,
 		VolumeDriverName: Inst().V.String(),
@@ -109,6 +111,7 @@ func BackupInitInstance() {
 	log.FailOnError(err, "Error occured while Node Driver Initialization")
 
 	// Initialization of Volume Driver
+	log.InfoD("Initializing Volume Driver")
 	volOptions := volume.InitOptions{
 		NodeDriver:                Inst().N,
 		SchedulerDriverName:       Inst().S.String(),
@@ -174,6 +177,7 @@ func BackupInitInstance() {
 		openshiftScheduler.VolumeDriver = Inst().V
 	}
 
+	log.InfoD("Initializing Backup Driver")
 	backupOptions := backup.InitOptions{}
 	if k8sScheduler, ok := Inst().S.(*k8s.K8s); ok {
 		backupOptions.K8sCore = k8sScheduler.K8sCore
@@ -187,6 +191,7 @@ func BackupInitInstance() {
 	err = Inst().Backup.Init(backupOptions)
 	log.FailOnError(err, "Error occured while Backup Driver Initialization")
 
+	log.InfoD("Setting up Testrail")
 	SetupTestRail()
 
 	// Getting Px version info
@@ -215,6 +220,7 @@ func BackupInitInstance() {
 	commonPassword = pxCentralAdminPwd + RandomString(4)
 
 	// Dumping source and destination kubeconfig to file system path
+	log.InfoD("Initializing Drivers for all clusters")
 	log.Infof("Dumping source and destination kubeconfig to file system path")
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	if kubeconfigs == "" {
@@ -241,11 +247,12 @@ var dash *aetosutil.Dashboard
 var _ = BeforeSuite(func() {
 	dash = Inst().Dash
 	dash.TestSetBegin(dash.TestSet)
+	StartTorpedoTest("Initializing Torpedo", "Initializing Torpedo for PX-Backup Tests", nil, 0)
 	log.Infof("Backup Init instance")
 	BackupInitInstance()
-	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
 	// Create the first bucket from the list to be used as generic bucket
+	log.InfoD("Setup buckets: Creating one generic bucket to be used in all cases")
 	providers := getProviders()
 	bucketNameSuffix := getBucketNameSuffix()
 	for _, provider := range providers {

@@ -4520,7 +4520,7 @@ func InitTorpedoDriversForKubeconfigs(kubeconfigList []string) ([]string, error)
 		return nil, err
 	}
 	for _, kubeconfigsPath := range kubeconfigsPaths {
-		log.Infof("Creating Torpedo Drivers for kubeconfig [%s]", kubeconfigsPath)
+		log.InfoD("Creating Torpedo Drivers for kubeconfig [%s]", kubeconfigsPath)
 		if schedulerDriver, err := scheduler.Get(Inst().S.String()); err != nil {
 			return nil, fmt.Errorf("Cannot find scheduler driver. Err: {%v}", err)
 		} else if volumeDriver, err := volume.Get(Inst().V.String()); err != nil {
@@ -4531,6 +4531,7 @@ func InitTorpedoDriversForKubeconfigs(kubeconfigList []string) ([]string, error)
 			var err error
 
 			// Initialization of Scheduler Driver
+			log.InfoD("Initializing Scheduler Driver for kubeconfig [%s]", kubeconfigsPath)
 			schedulerOptions := scheduler.InitOptions{
 				SpecDir:                    Inst().SpecDir,
 				NodeDriverType:             nodeDriver.String(),
@@ -4544,6 +4545,7 @@ func InitTorpedoDriversForKubeconfigs(kubeconfigList []string) ([]string, error)
 			}
 
 			// Initialization of Node Driver
+			log.InfoD("Initializing Node Driver for kubeconfig [%s]", kubeconfigsPath)
 			nodeOptions := node.InitOptions{
 				SpecDir:          Inst().SpecDir,
 				VolumeDriverName: Inst().V.String(),
@@ -4573,6 +4575,7 @@ func InitTorpedoDriversForKubeconfigs(kubeconfigList []string) ([]string, error)
 			}
 
 			// Initialization of Volume Driver
+			log.InfoD("Initializing Volume Driver for kubeconfig [%s]", kubeconfigsPath)
 			volOptions := volume.InitOptions{
 				NodeDriver:                nodeDriver,
 				SchedulerDriverName:       schedulerDriver.String(),
