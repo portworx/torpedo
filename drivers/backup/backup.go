@@ -6,11 +6,8 @@ import (
 	"time"
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/log"
 )
 
 // Image Generic struct
@@ -33,10 +30,9 @@ const (
 
 // InitOptions initialization options
 type InitOptions struct {
-	SchedulerDriver scheduler.Driver
-	NodeDriver      node.Driver
-	VolumeDriver    volume.Driver
-	Token           string
+	Token string
+
+	K8sCore core.Ops
 }
 
 // Driver for backup
@@ -374,6 +370,9 @@ type Rule interface {
 
 	// GetRuleUid fetches uid for the given rule
 	GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error)
+
+	// DeepCopy creates a deepcopy of the driver
+	DeepCopy() Driver
 }
 
 var backupDrivers = make(map[string]Driver)
@@ -389,23 +388,15 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
-// Get backup driver name
-func Get(name string) (Driver, error) {
+// GetNewInstance backup driver name
+func GetNewInstance(name string) (Driver, error) {
 	d, ok := backupDrivers[name]
 	if ok {
-		return d, nil
+		return d.DeepCopy(), nil
 	}
 
 	return nil, &errors.ErrNotFound{
 		ID:   name,
 		Type: "BackupDriver",
 	}
-}
-
-func init() {
-	str, err := GetPxCentralAdminPwd()
-	if err != nil {
-		log.Errorf("Error fetching password from secret: %v", err)
-	}
-	PxCentralAdminPwd = str
 }

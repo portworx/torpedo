@@ -1,4 +1,4 @@
-package portworx
+package pxbackup
 
 import (
 	"context"
@@ -17,10 +17,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -47,7 +43,12 @@ const (
 	defaultTimeout        = 5 * time.Minute
 )
 
-type portworx struct {
+type PXBackup struct {
+	PXBAuth
+
+	refreshEndpoint bool
+	token           string
+
 	clusterManager         api.ClusterClient
 	backupLocationManager  api.BackupLocationClient
 	cloudCredentialManager api.CloudCredentialClient
@@ -60,17 +61,16 @@ type portworx struct {
 	healthManager          api.HealthClient
 	ruleManager            api.RulesClient
 	versionManager         api.VersionClient
-
-	schedulerDriver scheduler.Driver
-	nodeDriver      node.Driver
-	volumeDriver    volume.Driver
-	schedOps        schedops.Driver
-	refreshEndpoint bool
-	token           string
 }
 
-func (p *portworx) String() string {
+func (p *PXBackup) String() string {
 	return driverName
+}
+
+// Init initializes SSH node driver
+func (p *PXBackup) DeepCopy() backup.Driver {
+	out := *p
+	return &out
 }
 
 func getKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error) {
@@ -114,33 +114,36 @@ func getKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, err
 	return coreInst, storkInst, nil
 }
 
-func (p *portworx) Init(backupDriverOpts backup.InitOptions) error {
+func (p *PXBackup) Init(backupDriverOpts backup.InitOptions) error {
 	var err error
 
 	log.Infof("using portworx backup driver under scheduler: %v", schedulerDriverName)
 
-	p.nodeDriver = backupDriverOpts.NodeDriver
-	p.schedulerDriver = backupDriverOpts.SchedulerDriver
-	p.volumeDriver = backupDriverOpts.VolumeDriver
+	p.k8sCore = backupDriverOpts.K8sCore
 	p.token = backupDriverOpts.Token
 
-	pxbNamespace, err := backup.GetPxBackupNamespace()
+	err = p.SetPxCentralAdminPwd()
+	if err != nil {
+		return fmt.Errorf("error setting PxCentralAdmin password: %v", err)
+	}
+
+	pxbNamespace, err := p.GetPxBackupNamespace()
 	if err != nil {
 		return err
 	}
 	if err = p.setDriver(pxbServiceName, pxbNamespace); err != nil {
-		return fmt.Errorf("Error setting px-backup endpoint: %v", err)
+		return fmt.Errorf("error setting px-backup endpoint: %v", err)
 	}
 
 	return err
 
 }
 
-func (p *portworx) constructURL(ip string) string {
+func (p *PXBackup) constructURL(ip string) string {
 	return net.JoinHostPort(ip, strconv.Itoa(int(defaultPxbServicePort)))
 }
 
-func (p *portworx) testAndSetEndpoint(endpoint string) error {
+func (p *PXBackup) testAndSetEndpoint(endpoint string) error {
 	pxEndpoint := os.Getenv(backup_api_endpoint)
 	// This condition is added for cases when torpedo is not running as a pod in the cluster
 	// Since gRPC calls to backup pod would fail while running from a VM or local machine using ginkgo CLI
@@ -177,15 +180,15 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	return err
 }
 
-func (p *portworx) GetServiceEndpoint(serviceName string, namespace string) (string, error) {
-	svc, err := core.Instance().GetService(serviceName, namespace)
+func (p *PXBackup) GetServiceEndpoint(serviceName string, namespace string) (string, error) {
+	svc, err := p.k8sCore.GetService(serviceName, namespace)
 	if err == nil {
 		return svc.Spec.ClusterIP, nil
 	}
 	return "", err
 }
 
-func (p *portworx) setDriver(serviceName string, namespace string) error {
+func (p *PXBackup) setDriver(serviceName string, namespace string) error {
 	var err error
 	var endpoint string
 
@@ -198,65 +201,65 @@ func (p *portworx) setDriver(serviceName string, namespace string) error {
 	return fmt.Errorf("failed to get endpoint for portworx backup driver: %v", err)
 }
 
-func (p *portworx) CreateOrganization(ctx context.Context, req *api.OrganizationCreateRequest) (*api.OrganizationCreateResponse, error) {
+func (p *PXBackup) CreateOrganization(ctx context.Context, req *api.OrganizationCreateRequest) (*api.OrganizationCreateResponse, error) {
 	return p.organizationManager.Create(ctx, req)
 }
 
-func (p *portworx) EnumerateOrganization(ctx context.Context) (*api.OrganizationEnumerateResponse, error) {
+func (p *PXBackup) EnumerateOrganization(ctx context.Context) (*api.OrganizationEnumerateResponse, error) {
 	return p.organizationManager.Enumerate(ctx, &api.OrganizationEnumerateRequest{})
 }
 
-func (p *portworx) CreateCloudCredential(ctx context.Context, req *api.CloudCredentialCreateRequest) (*api.CloudCredentialCreateResponse, error) {
+func (p *PXBackup) CreateCloudCredential(ctx context.Context, req *api.CloudCredentialCreateRequest) (*api.CloudCredentialCreateResponse, error) {
 	return p.cloudCredentialManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateCloudCredential(ctx context.Context, req *api.CloudCredentialUpdateRequest) (*api.CloudCredentialUpdateResponse, error) {
+func (p *PXBackup) UpdateCloudCredential(ctx context.Context, req *api.CloudCredentialUpdateRequest) (*api.CloudCredentialUpdateResponse, error) {
 	return p.cloudCredentialManager.Update(ctx, req)
 }
 
-func (p *portworx) InspectCloudCredential(ctx context.Context, req *api.CloudCredentialInspectRequest) (*api.CloudCredentialInspectResponse, error) {
+func (p *PXBackup) InspectCloudCredential(ctx context.Context, req *api.CloudCredentialInspectRequest) (*api.CloudCredentialInspectResponse, error) {
 	return p.cloudCredentialManager.Inspect(ctx, req)
 }
 
-func (p *portworx) EnumerateCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error) {
+func (p *PXBackup) EnumerateCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error) {
 	return p.cloudCredentialManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) DeleteCloudCredential(ctx context.Context, req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error) {
+func (p *PXBackup) DeleteCloudCredential(ctx context.Context, req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error) {
 	return p.cloudCredentialManager.Delete(ctx, req)
 }
 
-func (p *portworx) UpdateOwnershipCloudCredential(ctx context.Context, req *api.CloudCredentialOwnershipUpdateRequest) (*api.CloudCredentialOwnershipUpdateResponse, error) {
+func (p *PXBackup) UpdateOwnershipCloudCredential(ctx context.Context, req *api.CloudCredentialOwnershipUpdateRequest) (*api.CloudCredentialOwnershipUpdateResponse, error) {
 	return p.cloudCredentialManager.UpdateOwnership(ctx, req)
 }
 
-func (p *portworx) CreateCluster(ctx context.Context, req *api.ClusterCreateRequest) (*api.ClusterCreateResponse, error) {
+func (p *PXBackup) CreateCluster(ctx context.Context, req *api.ClusterCreateRequest) (*api.ClusterCreateResponse, error) {
 	return p.clusterManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateCluster(ctx context.Context, req *api.ClusterUpdateRequest) (*api.ClusterUpdateResponse, error) {
+func (p *PXBackup) UpdateCluster(ctx context.Context, req *api.ClusterUpdateRequest) (*api.ClusterUpdateResponse, error) {
 	return p.clusterManager.Update(ctx, req)
 }
 
-func (p *portworx) InspectCluster(ctx context.Context, req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error) {
+func (p *PXBackup) InspectCluster(ctx context.Context, req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error) {
 	return p.clusterManager.Inspect(ctx, req)
 }
 
-func (p *portworx) EnumerateCluster(ctx context.Context, req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error) {
+func (p *PXBackup) EnumerateCluster(ctx context.Context, req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error) {
 	return p.clusterManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error) {
+func (p *PXBackup) DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error) {
 	return p.clusterManager.Delete(ctx, req)
 }
 
-func (p *portworx) ClusterUpdateBackupShare(ctx context.Context, req *api.ClusterBackupShareUpdateRequest) (*api.ClusterBackupShareUpdateResponse, error) {
+func (p *PXBackup) ClusterUpdateBackupShare(ctx context.Context, req *api.ClusterBackupShareUpdateRequest) (*api.ClusterBackupShareUpdateResponse, error) {
 	return p.clusterManager.UpdateBackupShare(ctx, req)
 }
 
 // WaitForClusterDeletion waits for cluster to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForClusterDeletion(
+func (p *PXBackup) WaitForClusterDeletion(
 	ctx context.Context,
 	clusterName,
 	orgID string,
@@ -291,7 +294,7 @@ func (p *portworx) WaitForClusterDeletion(
 	return nil
 }
 
-func (p *portworx) GetClusterUID(ctx context.Context, orgID string, clusterName string) (string, error) {
+func (p *PXBackup) GetClusterUID(ctx context.Context, orgID string, clusterName string) (string, error) {
 	clusterEnumerateReq := &api.ClusterEnumerateRequest{
 		OrgId: orgID,
 	}
@@ -307,7 +310,7 @@ func (p *portworx) GetClusterUID(ctx context.Context, orgID string, clusterName 
 	return "", fmt.Errorf("cluster with name '%s' not found for org '%s'", clusterName, orgID)
 }
 
-func (p *portworx) GetClusterName(ctx context.Context, orgID string, clusterUid string) (string, error) {
+func (p *PXBackup) GetClusterName(ctx context.Context, orgID string, clusterUid string) (string, error) {
 	clusterEnumerateReq := &api.ClusterEnumerateRequest{
 		OrgId: orgID,
 	}
@@ -323,7 +326,7 @@ func (p *portworx) GetClusterName(ctx context.Context, orgID string, clusterUid 
 	return "", fmt.Errorf("cluster with uid '%s' not found for org '%s'", clusterUid, orgID)
 }
 
-func (p *portworx) GetClusterStatus(orgID string, clusterName string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, error) {
+func (p *PXBackup) GetClusterStatus(orgID string, clusterName string, ctx context.Context) (api.ClusterInfo_StatusInfo_Status, error) {
 	clusterEnumerateReq := &api.ClusterEnumerateRequest{
 		OrgId: orgID,
 	}
@@ -339,37 +342,37 @@ func (p *portworx) GetClusterStatus(orgID string, clusterName string, ctx contex
 	return api.ClusterInfo_StatusInfo_Invalid, fmt.Errorf("cluster with name '%s' not found for org '%s'", clusterName, orgID)
 }
 
-func (p *portworx) CreateBackupLocation(ctx context.Context, req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error) {
+func (p *PXBackup) CreateBackupLocation(ctx context.Context, req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error) {
 	return p.backupLocationManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateBackupLocation(ctx context.Context, req *api.BackupLocationUpdateRequest) (*api.BackupLocationUpdateResponse, error) {
+func (p *PXBackup) UpdateBackupLocation(ctx context.Context, req *api.BackupLocationUpdateRequest) (*api.BackupLocationUpdateResponse, error) {
 	return p.backupLocationManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error) {
+func (p *PXBackup) EnumerateBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error) {
 	return p.backupLocationManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectBackupLocation(ctx context.Context, req *api.BackupLocationInspectRequest) (*api.BackupLocationInspectResponse, error) {
+func (p *PXBackup) InspectBackupLocation(ctx context.Context, req *api.BackupLocationInspectRequest) (*api.BackupLocationInspectResponse, error) {
 	return p.backupLocationManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteBackupLocation(ctx context.Context, req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error) {
+func (p *PXBackup) DeleteBackupLocation(ctx context.Context, req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error) {
 	return p.backupLocationManager.Delete(ctx, req)
 }
 
-func (p *portworx) ValidateBackupLocation(ctx context.Context, req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error) {
+func (p *PXBackup) ValidateBackupLocation(ctx context.Context, req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error) {
 	return p.backupLocationManager.Validate(ctx, req)
 }
 
-func (p *portworx) UpdateOwnershipBackupLocation(ctx context.Context, req *api.BackupLocationOwnershipUpdateRequest) (*api.BackupLocationOwnershipUpdateResponse, error) {
+func (p *PXBackup) UpdateOwnershipBackupLocation(ctx context.Context, req *api.BackupLocationOwnershipUpdateRequest) (*api.BackupLocationOwnershipUpdateResponse, error) {
 	return p.backupLocationManager.UpdateOwnership(ctx, req)
 }
 
 // WaitForBackupLocationDeletion waits for backup location to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForBackupLocationDeletion(
+func (p *PXBackup) WaitForBackupLocationDeletion(
 	ctx context.Context,
 	backupLocationName,
 	UID,
@@ -412,32 +415,32 @@ func (p *portworx) WaitForBackupLocationDeletion(
 	return nil
 }
 
-func (p *portworx) CreateBackup(ctx context.Context, req *api.BackupCreateRequest) (*api.BackupCreateResponse, error) {
+func (p *PXBackup) CreateBackup(ctx context.Context, req *api.BackupCreateRequest) (*api.BackupCreateResponse, error) {
 	return p.backupManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateBackup(ctx context.Context, req *api.BackupUpdateRequest) (*api.BackupUpdateResponse, error) {
+func (p *PXBackup) UpdateBackup(ctx context.Context, req *api.BackupUpdateRequest) (*api.BackupUpdateResponse, error) {
 	return p.backupManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateBackup(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error) {
+func (p *PXBackup) EnumerateBackup(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error) {
 	return p.backupManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectBackup(ctx context.Context, req *api.BackupInspectRequest) (*api.BackupInspectResponse, error) {
+func (p *PXBackup) InspectBackup(ctx context.Context, req *api.BackupInspectRequest) (*api.BackupInspectResponse, error) {
 	return p.backupManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteBackup(ctx context.Context, req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error) {
+func (p *PXBackup) DeleteBackup(ctx context.Context, req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error) {
 	return p.backupManager.Delete(ctx, req)
 }
 
-func (p *portworx) UpdateBackupShare(ctx context.Context, req *api.BackupShareUpdateRequest) (*api.BackupShareUpdateResponse, error) {
+func (p *PXBackup) UpdateBackupShare(ctx context.Context, req *api.BackupShareUpdateRequest) (*api.BackupShareUpdateResponse, error) {
 	return p.backupManager.UpdateBackupShare(ctx, req)
 }
 
 // GetVolumeBackupIDs returns backup IDs of volumes
-func (p *portworx) GetVolumeBackupIDs(
+func (p *PXBackup) GetVolumeBackupIDs(
 	ctx context.Context,
 	backupName string,
 	namespace string,
@@ -514,7 +517,7 @@ func (p *portworx) GetVolumeBackupIDs(
 
 // WaitForBackupCompletion waits for backup to complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForBackupCompletion(
+func (p *PXBackup) WaitForBackupCompletion(
 	ctx context.Context,
 	backupName,
 	orgID string,
@@ -568,7 +571,7 @@ func (p *portworx) WaitForBackupCompletion(
 
 // WaitForBackupDeletion waits for backup to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForBackupDeletion(
+func (p *PXBackup) WaitForBackupDeletion(
 	ctx context.Context,
 	backupName,
 	orgID string,
@@ -626,7 +629,7 @@ func (p *portworx) WaitForBackupDeletion(
 
 // WaitForBackupDeletion waits for restore to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry
-func (p *portworx) WaitForRestoreDeletion(
+func (p *PXBackup) WaitForRestoreDeletion(
 	ctx context.Context,
 	restoreName,
 	orgID string,
@@ -677,7 +680,7 @@ func (p *portworx) WaitForRestoreDeletion(
 }
 
 // WaitForDeletePending checking if a given backup object is in delete pending state
-func (p *portworx) WaitForDeletePending(
+func (p *PXBackup) WaitForDeletePending(
 	ctx context.Context,
 	backupName,
 	orgID string,
@@ -724,29 +727,29 @@ func (p *portworx) WaitForDeletePending(
 	return nil
 }
 
-func (p *portworx) CreateRestore(ctx context.Context, req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error) {
+func (p *PXBackup) CreateRestore(ctx context.Context, req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error) {
 	return p.restoreManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateRestore(ctx context.Context, req *api.RestoreUpdateRequest) (*api.RestoreUpdateResponse, error) {
+func (p *PXBackup) UpdateRestore(ctx context.Context, req *api.RestoreUpdateRequest) (*api.RestoreUpdateResponse, error) {
 	return p.restoreManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
+func (p *PXBackup) EnumerateRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
 	return p.restoreManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectRestore(ctx context.Context, req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error) {
+func (p *PXBackup) InspectRestore(ctx context.Context, req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error) {
 	return p.restoreManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteRestore(ctx context.Context, req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error) {
+func (p *PXBackup) DeleteRestore(ctx context.Context, req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error) {
 	return p.restoreManager.Delete(ctx, req)
 }
 
 // WaitForRestoreCompletion waits for restore to complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForRestoreCompletion(
+func (p *PXBackup) WaitForRestoreCompletion(
 	ctx context.Context,
 	restoreName,
 	orgID string,
@@ -792,53 +795,53 @@ func (p *portworx) WaitForRestoreCompletion(
 	return nil
 }
 
-func (p *portworx) CreateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error) {
+func (p *PXBackup) CreateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error) {
 	return p.schedulePolicyManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyUpdateRequest) (*api.SchedulePolicyUpdateResponse, error) {
+func (p *PXBackup) UpdateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyUpdateRequest) (*api.SchedulePolicyUpdateResponse, error) {
 	return p.schedulePolicyManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
+func (p *PXBackup) EnumerateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
 	return p.schedulePolicyManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectSchedulePolicy(ctx context.Context, req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error) {
+func (p *PXBackup) InspectSchedulePolicy(ctx context.Context, req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error) {
 	return p.schedulePolicyManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteSchedulePolicy(ctx context.Context, req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error) {
+func (p *PXBackup) DeleteSchedulePolicy(ctx context.Context, req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error) {
 	return p.schedulePolicyManager.Delete(ctx, req)
 }
 
-func (p *portworx) UpdateOwnershiSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error) {
+func (p *PXBackup) UpdateOwnershiSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error) {
 	return p.schedulePolicyManager.UpdateOwnership(ctx, req)
 }
 
-func (p *portworx) CreateBackupSchedule(ctx context.Context, req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error) {
+func (p *PXBackup) CreateBackupSchedule(ctx context.Context, req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error) {
 	return p.backupScheduleManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateBackupSchedule(ctx context.Context, req *api.BackupScheduleUpdateRequest) (*api.BackupScheduleUpdateResponse, error) {
+func (p *PXBackup) UpdateBackupSchedule(ctx context.Context, req *api.BackupScheduleUpdateRequest) (*api.BackupScheduleUpdateResponse, error) {
 	return p.backupScheduleManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateBackupSchedule(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error) {
+func (p *PXBackup) EnumerateBackupSchedule(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error) {
 	return p.backupScheduleManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectBackupSchedule(ctx context.Context, req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error) {
+func (p *PXBackup) InspectBackupSchedule(ctx context.Context, req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error) {
 	return p.backupScheduleManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteBackupSchedule(ctx context.Context, req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error) {
+func (p *PXBackup) DeleteBackupSchedule(ctx context.Context, req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error) {
 	return p.backupScheduleManager.Delete(ctx, req)
 }
 
 // BackupScheduleWaitForNBackupsCompletion waits for given number of backup to be complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) BackupScheduleWaitForNBackupsCompletion(
+func (p *PXBackup) BackupScheduleWaitForNBackupsCompletion(
 	ctx context.Context,
 	name,
 	orgID string,
@@ -893,7 +896,7 @@ func (p *portworx) BackupScheduleWaitForNBackupsCompletion(
 // WaitForBackupScheduleDeleteWithDeleteFlag waits for backupschedule to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 // This wait function is for the backupschedule deletion with delete-backup option set.
-func (p *portworx) WaitForBackupScheduleDeletion(
+func (p *PXBackup) WaitForBackupScheduleDeletion(
 	ctx context.Context,
 	backupScheduleName,
 	namespace,
@@ -972,7 +975,7 @@ func (p *portworx) WaitForBackupScheduleDeletion(
 }
 
 // WaitForBackupRunning wait for backup to start running
-func (p *portworx) WaitForBackupRunning(
+func (p *PXBackup) WaitForBackupRunning(
 	ctx context.Context,
 	req *api.BackupInspectRequest,
 	timeout,
@@ -1015,7 +1018,7 @@ func (p *portworx) WaitForBackupRunning(
 }
 
 // WaitForRestoreRunning wait for backup to start running
-func (p *portworx) WaitForRestoreRunning(
+func (p *PXBackup) WaitForRestoreRunning(
 	ctx context.Context,
 	req *api.RestoreInspectRequest,
 	timeout,
@@ -1056,15 +1059,15 @@ func (p *portworx) WaitForRestoreRunning(
 	return nil
 }
 
-func (p *portworx) ActivateLicense(ctx context.Context, req *api.LicenseActivateRequest) (*api.LicenseActivateResponse, error) {
+func (p *PXBackup) ActivateLicense(ctx context.Context, req *api.LicenseActivateRequest) (*api.LicenseActivateResponse, error) {
 	return p.licenseManager.Activate(ctx, req)
 }
 
-func (p *portworx) InspectLicense(ctx context.Context, req *api.LicenseInspectRequest) (*api.LicenseInspectResponse, error) {
+func (p *PXBackup) InspectLicense(ctx context.Context, req *api.LicenseInspectRequest) (*api.LicenseInspectResponse, error) {
 	return p.licenseManager.Inspect(ctx, req)
 }
 
-func (p *portworx) WaitForLicenseActivation(ctx context.Context, req *api.LicenseInspectRequest, timeout, retryInterval time.Duration) error {
+func (p *PXBackup) WaitForLicenseActivation(ctx context.Context, req *api.LicenseInspectRequest, timeout, retryInterval time.Duration) error {
 	var licenseErr error
 
 	t := func() (interface{}, bool, error) {
@@ -1099,35 +1102,35 @@ func (p *portworx) WaitForLicenseActivation(ctx context.Context, req *api.Licens
 	return nil
 }
 
-func (p *portworx) CreateRule(ctx context.Context, req *api.RuleCreateRequest) (*api.RuleCreateResponse, error) {
+func (p *PXBackup) CreateRule(ctx context.Context, req *api.RuleCreateRequest) (*api.RuleCreateResponse, error) {
 	return p.ruleManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateRule(ctx context.Context, req *api.RuleUpdateRequest) (*api.RuleUpdateResponse, error) {
+func (p *PXBackup) UpdateRule(ctx context.Context, req *api.RuleUpdateRequest) (*api.RuleUpdateResponse, error) {
 	return p.ruleManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error) {
+func (p *PXBackup) EnumerateRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error) {
 	return p.ruleManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectRule(ctx context.Context, req *api.RuleInspectRequest) (*api.RuleInspectResponse, error) {
+func (p *PXBackup) InspectRule(ctx context.Context, req *api.RuleInspectRequest) (*api.RuleInspectResponse, error) {
 	return p.ruleManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteRule(ctx context.Context, req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error) {
+func (p *PXBackup) DeleteRule(ctx context.Context, req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error) {
 	return p.ruleManager.Delete(ctx, req)
 }
 
-func (p *portworx) UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error) {
+func (p *PXBackup) UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error) {
 	return p.ruleManager.UpdateOwnership(ctx, req)
 }
 
-func (p *portworx) GetPxBackupVersion(ctx context.Context, req *api.VersionGetRequest) (*api.VersionGetResponse, error) {
+func (p *PXBackup) GetPxBackupVersion(ctx context.Context, req *api.VersionGetRequest) (*api.VersionGetResponse, error) {
 	return p.versionManager.Get(ctx, req)
 }
 
-func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error) {
+func (p *PXBackup) GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error) {
 	var totalBackups int
 	bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: orgID}
 	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
@@ -1153,7 +1156,7 @@ func (p *portworx) GetBackupUID(ctx context.Context, backupName string, orgID st
 	return "", fmt.Errorf("backup with name '%s' not found for org '%s'", backupName, orgID)
 }
 
-func (p *portworx) GetBackupName(ctx context.Context, backupUid string, orgID string) (string, error) {
+func (p *PXBackup) GetBackupName(ctx context.Context, backupUid string, orgID string) (string, error) {
 	var totalBackups int
 	bkpEnumerateReq := &api.BackupEnumerateRequest{OrgId: orgID}
 	bkpEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
@@ -1179,7 +1182,7 @@ func (p *portworx) GetBackupName(ctx context.Context, backupUid string, orgID st
 	return "", fmt.Errorf("backup with uid '%s' not found for org '%s'", backupUid, orgID)
 }
 
-func (p *portworx) GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
+func (p *PXBackup) GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
 	var scheduleBackupNames []string
 	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
 		OrgId: orgID,
@@ -1197,7 +1200,7 @@ func (p *portworx) GetAllScheduleBackupNames(ctx context.Context, scheduleName s
 	return scheduleBackupNames, nil
 }
 
-func (p *portworx) GetAllScheduleBackupUIDs(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
+func (p *PXBackup) GetAllScheduleBackupUIDs(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
 	var scheduleBackupUIDs []string
 	scheduleBackupNames, err := p.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
 	if err != nil {
@@ -1247,7 +1250,7 @@ var (
 	}
 )
 
-func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error) {
+func (p *PXBackup) CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error) {
 	var podSelector []map[string]string
 	var actionValue []string
 	var container []string
@@ -1314,7 +1317,7 @@ func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag
 		},
 		RulesInfo: &rulesInfo,
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := p.GetPxCentralAdminCtx()
 	if err != nil {
 		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 		return false, ruleName, err
@@ -1349,7 +1352,7 @@ func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag
 	return true, ruleName, nil
 }
 
-func (p *portworx) CreateIntervalSchedulePolicy(retain int64, min int64, incrCount uint64) *api.SchedulePolicyInfo {
+func (p *PXBackup) CreateIntervalSchedulePolicy(retain int64, min int64, incrCount uint64) *api.SchedulePolicyInfo {
 	SchedulePolicy := &api.SchedulePolicyInfo{
 		Interval: &api.SchedulePolicyInfo_IntervalPolicy{
 			Retain:  retain,
@@ -1362,7 +1365,7 @@ func (p *portworx) CreateIntervalSchedulePolicy(retain int64, min int64, incrCou
 	return SchedulePolicy
 }
 
-func (p *portworx) CreateDailySchedulePolicy(retain int64, time string, incrCount uint64) *api.SchedulePolicyInfo {
+func (p *PXBackup) CreateDailySchedulePolicy(retain int64, time string, incrCount uint64) *api.SchedulePolicyInfo {
 	SchedulePolicy := &api.SchedulePolicyInfo{
 		Daily: &api.SchedulePolicyInfo_DailyPolicy{
 			Retain: retain,
@@ -1375,7 +1378,7 @@ func (p *portworx) CreateDailySchedulePolicy(retain int64, time string, incrCoun
 	return SchedulePolicy
 }
 
-func (p *portworx) CreateWeeklySchedulePolicy(retain int64, day backup.Weekday, time string, incrCount uint64) *api.SchedulePolicyInfo {
+func (p *PXBackup) CreateWeeklySchedulePolicy(retain int64, day backup.Weekday, time string, incrCount uint64) *api.SchedulePolicyInfo {
 
 	SchedulePolicy := &api.SchedulePolicyInfo{
 		Weekly: &api.SchedulePolicyInfo_WeeklyPolicy{
@@ -1390,7 +1393,7 @@ func (p *portworx) CreateWeeklySchedulePolicy(retain int64, day backup.Weekday, 
 	return SchedulePolicy
 }
 
-func (p *portworx) CreateMonthlySchedulePolicy(retain int64, date int64, time string, incrCount uint64) *api.SchedulePolicyInfo {
+func (p *PXBackup) CreateMonthlySchedulePolicy(retain int64, date int64, time string, incrCount uint64) *api.SchedulePolicyInfo {
 	SchedulePolicy := &api.SchedulePolicyInfo{
 		Monthly: &api.SchedulePolicyInfo_MonthlyPolicy{
 			Retain: retain,
@@ -1404,9 +1407,9 @@ func (p *portworx) CreateMonthlySchedulePolicy(retain int64, date int64, time st
 	return SchedulePolicy
 }
 
-func (p *portworx) BackupSchedulePolicy(name string, uid string, orgId string, schedulePolicyInfo *api.SchedulePolicyInfo) error {
+func (p *PXBackup) BackupSchedulePolicy(name string, uid string, orgId string, schedulePolicyInfo *api.SchedulePolicyInfo) error {
 	log.InfoD("Create Backup Schedule Policy")
-	ctx, err := backup.GetAdminCtxFromSecret()
+	ctx, err := p.GetPxCentralAdminCtx()
 	if err != nil {
 		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 		return err
@@ -1428,7 +1431,7 @@ func (p *portworx) BackupSchedulePolicy(name string, uid string, orgId string, s
 }
 
 // GetSchedulePolicyUid gets the uid for the given schedule policy
-func (p *portworx) GetSchedulePolicyUid(orgID string, ctx context.Context, schPolicyName string) (string, error) {
+func (p *PXBackup) GetSchedulePolicyUid(orgID string, ctx context.Context, schPolicyName string) (string, error) {
 	SchedulePolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
 		OrgId: orgID,
 	}
@@ -1445,7 +1448,7 @@ func (p *portworx) GetSchedulePolicyUid(orgID string, ctx context.Context, schPo
 	return "", fmt.Errorf("Unable to find schedule policy Uid")
 }
 
-func (p *portworx) GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error) {
+func (p *PXBackup) GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error) {
 	RuleEnumerateReq := &api.RuleEnumerateRequest{
 		OrgId: orgID,
 	}
@@ -1463,8 +1466,8 @@ func (p *portworx) GetRuleUid(orgID string, ctx context.Context, ruleName string
 	return "", nil
 }
 
-func (p *portworx) DeleteRuleForBackup(orgID string, ruleName string) error {
-	ctx, err := backup.GetAdminCtxFromSecret()
+func (p *PXBackup) DeleteRuleForBackup(orgID string, ruleName string) error {
+	ctx, err := p.GetPxCentralAdminCtx()
 	if err != nil {
 		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 		return err
@@ -1492,8 +1495,8 @@ func (p *portworx) DeleteRuleForBackup(orgID string, ruleName string) error {
 	return nil
 }
 
-func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string) error {
-	ctx, err := backup.GetAdminCtxFromSecret()
+func (p *PXBackup) DeleteBackupSchedulePolicy(orgID string, policyList []string) error {
+	ctx, err := p.GetPxCentralAdminCtx()
 	if err != nil {
 		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
 		return err
@@ -1525,14 +1528,14 @@ func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string)
 	return nil
 }
 
-func (p *portworx) ValidateBackupCluster() error {
+func (p *PXBackup) ValidateBackupCluster() error {
 	flag := false
 	labelSelectors := map[string]string{"job-name": post_install_hook_pod}
-	ns, err := backup.GetPxBackupNamespace()
+	ns, err := p.GetPxBackupNamespace()
 	if err != nil {
 		return err
 	}
-	pods, err := core.Instance().GetPods(ns, labelSelectors)
+	pods, err := p.k8sCore.GetPods(ns, labelSelectors)
 	if err != nil {
 		err = fmt.Errorf("Unable to fetch pxcentral-post-install-hook pod from backup namespace\n Error : [%v]\n",
 			err)
@@ -1540,7 +1543,7 @@ func (p *portworx) ValidateBackupCluster() error {
 	}
 	for _, pod := range pods.Items {
 		log.Infof("Checking if the pxcentral-post-install-hook pod is in Completed state or not")
-		bkpPod, err := core.Instance().GetPodByName(pod.GetName(), ns)
+		bkpPod, err := p.k8sCore.GetPodByName(pod.GetName(), ns)
 		if err != nil {
 			err = fmt.Errorf("Error: %v Occured while getting the pxcentral-post-install-hook pod details", err)
 			return err
@@ -1559,7 +1562,7 @@ func (p *portworx) ValidateBackupCluster() error {
 		err = fmt.Errorf("pxcentral-post-install-hook pod is not in completed state")
 		return err
 	}
-	bkpPods, err := core.Instance().GetPods(ns, nil)
+	bkpPods, err := p.k8sCore.GetPods(ns, nil)
 	if err != nil {
 		err = fmt.Errorf("Unable to get pods in namespace %s with error %v", ns, err)
 		return err
@@ -1571,12 +1574,12 @@ func (p *portworx) ValidateBackupCluster() error {
 			equal1, _ := regexp.MatchString(full_maintenance_pod, pod.GetName())
 			if !(equal || equal1) {
 				log.Info("Checking if all the containers are up or not")
-				res := core.Instance().IsPodRunning(pod)
+				res := p.k8sCore.IsPodRunning(pod)
 				if !res {
 					err = fmt.Errorf("All the containers of pod %s are not Up", pod.GetName())
 					return err
 				}
-				err = core.Instance().ValidatePod(&pod, defaultTimeout, defaultTimeout)
+				err = p.k8sCore.ValidatePod(&pod, defaultTimeout, defaultTimeout)
 				if err != nil {
 					err = fmt.Errorf("An Error: %v  Occured while validating the pod %s", err, pod.GetName())
 					return err
@@ -1588,5 +1591,5 @@ func (p *portworx) ValidateBackupCluster() error {
 }
 
 func init() {
-	backup.Register(driverName, &portworx{})
+	backup.Register(driverName, &PXBackup{})
 }
