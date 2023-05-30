@@ -4521,11 +4521,11 @@ func InitTorpedoDriversForKubeconfigs(kubeconfigList []string) ([]string, error)
 	}
 	for _, kubeconfigsPath := range kubeconfigsPaths {
 		log.InfoD("Creating Torpedo Drivers for kubeconfig [%s]", kubeconfigsPath)
-		if schedulerDriver, err := scheduler.Get(Inst().S.String()); err != nil {
+		if schedulerDriver, err := scheduler.GetNewInstance(Inst().S.String()); err != nil {
 			return nil, fmt.Errorf("Cannot find scheduler driver. Err: {%v}", err)
-		} else if volumeDriver, err := volume.Get(Inst().V.String()); err != nil {
+		} else if volumeDriver, err := volume.GetNewInstance(Inst().V.String()); err != nil {
 			return nil, fmt.Errorf("Cannot find volume driver. Err: {%v}", err)
-		} else if nodeDriver, err := node.Get(Inst().N.String()); err != nil {
+		} else if nodeDriver, err := node.GetNewInstance(Inst().N.String()); err != nil {
 			return nil, fmt.Errorf("Cannot find node driver. Err: {%v}", err)
 		} else {
 			var err error
@@ -4875,11 +4875,11 @@ func ParseFlags() {
 
 	sched.Init(time.Second)
 
-	if schedulerDriver, err = scheduler.Get(s); err != nil {
+	if schedulerDriver, err = scheduler.GetNewInstance(s); err != nil {
 		log.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
-	} else if volumeDriver, err = volume.Get(v); err != nil {
+	} else if volumeDriver, err = volume.GetNewInstance(v); err != nil {
 		log.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
-	} else if nodeDriver, err = node.Get(n); err != nil {
+	} else if nodeDriver, err = node.GetNewInstance(n); err != nil {
 		log.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
 	} else if monitorDriver, err = monitor.Get(m); err != nil {
 		log.Fatalf("Cannot find monitor driver for %v. Err: %v\n", m, err)

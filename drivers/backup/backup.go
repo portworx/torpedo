@@ -388,7 +388,7 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
-// GetNewInstance backup driver name
+// GetNewInstance returns deep copy of backup driver. Initialize it as deep copy may still have references to the original
 func GetNewInstance(name string) (Driver, error) {
 	d, ok := backupDrivers[name]
 	if ok {

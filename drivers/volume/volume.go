@@ -523,8 +523,8 @@ func Register(name string, driverProvisioners map[StorageProvisionerType]Storage
 	return nil
 }
 
-// Get an external storage provider to be used with Torpedo. After `get`ting, run `Init`
-func Get(name string) (Driver, error) {
+// GetNewInstance return deep copy of external storage provider to be used with Torpedo. Initialize it as deep copy may still have references to the original
+func GetNewInstance(name string) (Driver, error) {
 	d, ok := volDrivers[name]
 	if ok {
 		return d.DeepCopy(), nil

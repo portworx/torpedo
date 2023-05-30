@@ -251,8 +251,8 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
-// Get returns a registered node driver. After `get`ting, run `Init`
-func Get(name string) (Driver, error) {
+// GetNewInstance returns deep copy of a registered node driver. Initialize it as deep copy may still have references to the original
+func GetNewInstance(name string) (Driver, error) {
 	if d, ok := nodeDrivers[name]; ok {
 		return d.DeepCopy(), nil
 	}

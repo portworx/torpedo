@@ -464,8 +464,8 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
-// Get returns a registered scheduler test provider.
-func Get(name string) (Driver, error) {
+// GetNewInstance returns a deep copy of registered scheduler test provider. Initialize it as deep copy may still have references to the original
+func GetNewInstance(name string) (Driver, error) {
 	if d, ok := schedulers[name]; ok {
 		return d.DeepCopy(), nil
 	}
