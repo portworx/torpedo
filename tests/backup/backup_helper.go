@@ -94,7 +94,6 @@ const (
 	storkPodReadyTimeout                      = 15 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
-	configMapName                             = "kubeconfigs"
 	clusterCreationTimeout                    = 5 * time.Minute
 	clusterCreationRetryTime                  = 10 * time.Second
 )
