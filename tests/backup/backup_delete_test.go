@@ -801,7 +801,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 			}
 			for _, backup := range backupNames {
 				err := DeleteBackupAndWait(backup, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backup))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Waiting for the backup %s to be deleted", backup))
 			}
 		})
 		Step("Check if contents are erased from the backup location or not", func() {
@@ -809,7 +809,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 			for _, provider := range providers {
 				result, err := IsS3BucketEmpty(getGlobalBucketName(provider))
 				dash.VerifyFatal(err, nil, "Checking for errors while checking s3 bucket")
-				dash.VerifyFatal(result, true, "Check in bucket is empty or not")
+				dash.VerifyFatal(result, true, "Check if bucket is empty or not")
 			}
 		})
 	})
