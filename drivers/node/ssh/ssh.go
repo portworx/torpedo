@@ -52,8 +52,8 @@ type SSH struct {
 
 	// below are pointers (manipulate carefully)
 
-	k8sCore core.Ops
-	k8sApps apps.Ops
+	K8sCore core.Ops
+	K8sApps apps.Ops
 
 	execPodNamespace string
 	volumeDriverName string
@@ -203,8 +203,8 @@ func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	s.specDir = nodeOpts.SpecDir
 	s.volumeDriverName = nodeOpts.VolumeDriverName
 	s.nodeRegistry = nodeOpts.NodeRegistry
-	s.k8sApps = nodeOpts.K8sApps
-	s.k8sCore = nodeOpts.K8sCore
+	s.K8sApps = nodeOpts.K8sApps
+	s.K8sCore = nodeOpts.K8sCore
 	return s.updateDriver()
 }
 
@@ -229,7 +229,7 @@ func (s *SSH) initExecPod() error {
 	var ds *appsv1_api.DaemonSet
 	var err error
 
-	if ds, err = s.k8sApps.GetDaemonSet(execPodDaemonSetLabel, s.execPodNamespace); ds == nil {
+	if ds, err = s.K8sApps.GetDaemonSet(execPodDaemonSetLabel, s.execPodNamespace); ds == nil {
 		specFactory, err := spec.NewFactory(s.specDir, s.volumeDriverName, &parser.K8sParser{})
 		if err != nil {
 			return fmt.Errorf("Error while loading debug daemonset spec file. Err: %s", err)
@@ -239,12 +239,12 @@ func (s *SSH) initExecPod() error {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
 		dsSpec.SpecList[0].(*appsv1_api.DaemonSet).Namespace = s.execPodNamespace
-		ds, err = s.k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet), metav1.CreateOptions{})
+		ds, err = s.K8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet), metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
 		}
 	}
-	err = s.k8sApps.ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
+	err = s.K8sApps.ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
 	if err != nil {
 		return fmt.Errorf("Error while validating debug daemonset. Err: %s", err)
 	}
@@ -593,14 +593,14 @@ func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignore
 
 func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error) {
 	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
-	allPodsForNode, err := s.k8sCore.GetPodsByNode(n.Name, s.execPodNamespace)
+	allPodsForNode, err := s.K8sCore.GetPodsByNode(n.Name, s.execPodNamespace)
 	if err != nil {
 		log.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 		return "", err
 	}
 	var debugPod *v1.Pod
 	for _, pod := range allPodsForNode.Items {
-		if pod.Labels["name"] == execPodDaemonSetLabel && s.k8sCore.IsPodReady(pod) {
+		if pod.Labels["name"] == execPodDaemonSetLabel && s.K8sCore.IsPodReady(pod) {
 			debugPod = &pod
 			break
 		}
@@ -612,7 +612,7 @@ func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error)
 			Cause: fmt.Sprintf("debug pod not found in node %v", n),
 		}
 	}
-	return s.k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
+	return s.K8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 }
 
 func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
@@ -620,13 +620,13 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 	t := func() (interface{}, bool, error) {
 		if debugPod == nil {
 			log.Debugf("Finding the debug pod to run command on node %s", n.Name)
-			allPodsForNode, err := s.k8sCore.GetPodsByNode(n.Name, s.execPodNamespace)
+			allPodsForNode, err := s.K8sCore.GetPodsByNode(n.Name, s.execPodNamespace)
 			if err != nil {
 				log.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 				return nil, true, err
 			}
 			for _, pod := range allPodsForNode.Items {
-				if pod.Labels["name"] == execPodDaemonSetLabel && s.k8sCore.IsPodReady(pod) {
+				if pod.Labels["name"] == execPodDaemonSetLabel && s.K8sCore.IsPodReady(pod) {
 					debugPod = &pod
 					break
 				}
@@ -640,7 +640,7 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 		}
 		cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
 		log.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
-		output, err := s.k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
+		output, err := s.K8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 		if !ignoreErr && err != nil {
 			return nil, true, &node.ErrFailedToRunCommand{
 				Node: n,
@@ -837,7 +837,7 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 func (s *SSH) setExecPodNamespace() error {
 	var allServices *v1.ServiceList
 	var err error
-	if allServices, err = s.k8sCore.ListServices("", metav1.ListOptions{}); err != nil {
+	if allServices, err = s.K8sCore.ListServices("", metav1.ListOptions{}); err != nil {
 		return err
 	}
 	for _, svc := range allServices.Items {

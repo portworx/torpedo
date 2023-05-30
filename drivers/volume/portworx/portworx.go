@@ -215,6 +215,7 @@ type Portworx struct {
 	StorageProvisioner    torpedovolume.StorageProvisioner
 
 	k8sCore          core.Ops
+	k8sApps          apps.Ops
 	k8sApiExtentions apiextensions.Ops
 	pxOperator       operator.Ops
 }
@@ -380,6 +381,7 @@ func (d *Portworx) Init(volOpts volume.InitOptions) error {
 
 	d.nodeRegistry = volOpts.NodeRegistry
 	d.k8sCore = volOpts.K8sCore
+	d.k8sApps = volOpts.K8sApps
 	d.k8sApiExtentions = volOpts.K8sApiExtensions
 	d.pxOperator = volOpts.K8sOperator
 
@@ -3099,7 +3101,7 @@ func (d *Portworx) upgradePortworxOperator(specGenUrl string) error {
 			Namespace: d.namespace,
 		},
 	}
-	if err := apps.Instance().ValidateDeployment(pxOperatorDeployment, validateDeploymentTimeout, validateDeploymentInterval); err != nil {
+	if err := d.k8sApps.ValidateDeployment(pxOperatorDeployment, validateDeploymentTimeout, validateDeploymentInterval); err != nil {
 		return err
 	}
 

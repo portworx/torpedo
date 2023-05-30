@@ -28,10 +28,15 @@ var provisionersForPure = map[torpedovolume.StorageProvisionerType]torpedovolume
 type Pso struct {
 	schedOps schedops.Driver
 	torpedovolume.DefaultDriver
+
+	// below are pointers (manipulate carefully)
+
+	k8sCore core.Ops
 }
 
 func (d *Pso) Init(volOpts volume.InitOptions) error {
 	log.Infof("Using the Pure volume driver with provisioner %s under scheduler: %v", volOpts.StorageProvisionerType, volOpts.SchedulerDriverName)
+	d.k8sCore = volOpts.K8sCore
 
 	d.StorageDriver = PureDriverName
 	// Set provisioner for torpedo
@@ -80,11 +85,11 @@ func (d *Pso) GetDriverVersion() (string, error) {
 	labelSelectors := map[string]string{
 		"app": "pso-csi-node",
 	}
-	namespace, err := GetPsoNamespace()
+	namespace, err := d.GetPsoNamespace()
 	if err != nil {
 		return "", err
 	}
-	pods, err := core.Instance().GetPods(namespace, labelSelectors)
+	pods, err := d.k8sCore.GetPods(namespace, labelSelectors)
 	if err != nil {
 		return "", err
 	}
@@ -95,8 +100,8 @@ func (d *Pso) GetDriverVersion() (string, error) {
 }
 
 // GetPsoNamespace returns namespace where PSO is running
-func GetPsoNamespace() (string, error) {
-	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
+func (d *Pso) GetPsoNamespace() (string, error) {
+	allServices, err := d.k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to get list of services. Err: %v", err)
 	}

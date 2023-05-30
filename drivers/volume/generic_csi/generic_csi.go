@@ -25,6 +25,10 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 
 type genericCsi struct {
 	torpedovolume.DefaultDriver
+
+	// below are pointers (manipulate carefully)
+
+	k8sCore core.Ops
 }
 
 func (d *genericCsi) String() string {
@@ -41,11 +45,13 @@ func (d *genericCsi) RefreshDriverEndpoints() error {
 
 func (d *genericCsi) Init(volOpts volume.InitOptions) error {
 	log.Infof("Using the generic CSI volume driver with provisioner %s under scheduler: %v", volOpts.StorageProvisionerType, volOpts.SchedulerDriverName)
+	d.k8sCore = volOpts.K8sCore
+
 	d.StorageDriver = DriverName
 	// Set provisioner for torpedo, from
 	if volOpts.StorageProvisionerType == CsiStorage {
 		// Get the provisioner from the config map
-		configMap, err := core.Instance().GetConfigMap(volOpts.CsiGenericDriverConfigMap, "default")
+		configMap, err := d.k8sCore.GetConfigMap(volOpts.CsiGenericDriverConfigMap, "default")
 		if err != nil {
 			return fmt.Errorf("Failed to get config map for volume driver: %s, provisioner: %s", DriverName, volOpts.StorageProvisionerType)
 		}
