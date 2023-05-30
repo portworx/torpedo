@@ -70,6 +70,7 @@ func TestBasic(t *testing.T) {
 // BackupInitInstance initialises instances required for backup
 func BackupInitInstance() {
 	var err error
+	var commitID string
 
 	// Initialization of Scheduler Driver
 	log.InfoD("Initializing Scheduler Driver")
@@ -125,7 +126,7 @@ func BackupInitInstance() {
 		volOptions.K8sBatch = k8sScheduler.K8sBatch
 		volOptions.K8sRbac = k8sScheduler.K8sRbac
 		volOptions.K8sApiExtensions = k8sScheduler.K8sApiExtensions
-		volOptions.PxOperator = k8sScheduler.PxOperator
+		volOptions.PxOperator = k8sScheduler.K8sOperator
 		volOptions.K8sCore = k8sScheduler.K8sCore
 	} else if rkeScheduler, ok := Inst().S.(*rke.Rke); ok {
 		volOptions.NodeRegistry = rkeScheduler.NodeRegistry
@@ -134,7 +135,7 @@ func BackupInitInstance() {
 		volOptions.K8sBatch = rkeScheduler.K8sBatch
 		volOptions.K8sRbac = rkeScheduler.K8sRbac
 		volOptions.K8sApiExtensions = rkeScheduler.K8sApiExtensions
-		volOptions.PxOperator = rkeScheduler.PxOperator
+		volOptions.PxOperator = rkeScheduler.K8sOperator
 		volOptions.K8sCore = rkeScheduler.K8sCore
 	} else if dcosScheduler, ok := Inst().S.(*dcos.Dcos); ok {
 		volOptions.NodeRegistry = dcosScheduler.NodeRegistry
@@ -145,7 +146,7 @@ func BackupInitInstance() {
 		volOptions.K8sBatch = anthosScheduler.K8sBatch
 		volOptions.K8sRbac = anthosScheduler.K8sRbac
 		volOptions.K8sApiExtensions = anthosScheduler.K8sApiExtensions
-		volOptions.PxOperator = anthosScheduler.PxOperator
+		volOptions.PxOperator = anthosScheduler.K8sOperator
 		volOptions.K8sCore = anthosScheduler.K8sCore
 	} else if openshiftScheduler, ok := Inst().S.(*openshift.Openshift); ok {
 		volOptions.NodeRegistry = openshiftScheduler.NodeRegistry
@@ -154,7 +155,7 @@ func BackupInitInstance() {
 		volOptions.K8sBatch = openshiftScheduler.K8sBatch
 		volOptions.K8sRbac = openshiftScheduler.K8sRbac
 		volOptions.K8sApiExtensions = openshiftScheduler.K8sApiExtensions
-		volOptions.PxOperator = openshiftScheduler.PxOperator
+		volOptions.PxOperator = openshiftScheduler.K8sOperator
 		volOptions.K8sCore = openshiftScheduler.K8sCore
 	}
 	err = Inst().V.Init(volOptions)
@@ -197,7 +198,11 @@ func BackupInitInstance() {
 	// Getting Px version info
 	pxVersion, err := Inst().V.GetDriverVersion()
 	log.FailOnError(err, "Error occurred while getting PX version")
-	commitID := strings.Split(pxVersion, "-")[1]
+	if len(strings.Split(pxVersion, "-")) > 1 {
+		commitID = strings.Split(pxVersion, "-")[1]
+	} else {
+		commitID = "NA"
+	}
 	t := Inst().Dash.TestSet
 	t.CommitID = commitID
 	if pxVersion != "" {

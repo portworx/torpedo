@@ -224,7 +224,7 @@ type K8s struct {
 	K8sAdmissionRegistration admissionregistration.Ops
 	K8sApiExtensions         apiextensions.Ops
 	K8sExternalsnap          csisnapshot.Ops // k8sExternalsnap is a instance of csisnapshot instance
-	PxOperator               operator.Ops
+	K8sOperator              operator.Ops
 
 	settings *cli.EnvSettings // for helm commands
 
@@ -323,7 +323,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 		k.K8sAdmissionRegistration = admissionregistration.Instance()
 		k.K8sApiExtensions = apiextensions.Instance()
 		k.K8sExternalsnap = csisnapshot.Instance()
-		k.PxOperator = operator.Instance()
+		k.K8sOperator = operator.Instance()
 	} else {
 		k.GlobalSchedopsInstancesUsed = false
 		k.KubeConfigPath = schedOpts.KubeConfigPath
@@ -464,7 +464,7 @@ func (k *K8s) InitSchedops(kubeconfigPath string) error {
 	if err != nil {
 		return err
 	}
-	pxOperator, err := operator.NewInstanceFromConfigFile(kubeconfigPath)
+	k8sOperator, err := operator.NewInstanceFromConfigFile(kubeconfigPath)
 	if err != nil {
 		return err
 	}
@@ -483,7 +483,7 @@ func (k *K8s) InitSchedops(kubeconfigPath string) error {
 	k.K8sAdmissionRegistration = k8sAdmissionRegistration
 	k.K8sApiExtensions = k8sApiExtensions
 	k.K8sExternalsnap = k8sExternalsnap
-	k.PxOperator = pxOperator
+	k.K8sOperator = k8sOperator
 
 	return nil
 }
@@ -516,7 +516,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k.K8sAdmissionRegistration.SetConfig(config)
 	k.K8sApiExtensions.SetConfig(config)
 	k.K8sExternalsnap.SetConfig(config)
-	k.PxOperator.SetConfig(config)
+	k.K8sOperator.SetConfig(config)
 
 	return nil
 }
@@ -6853,6 +6853,16 @@ func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot v1be
 
 	log.Infof("Successfully validated the snapshot %s", csiSnapshot.Name)
 	return nil
+}
+
+// GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
+func (k *K8s) GetAllSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error) {
+	var snapshotClasses *v1beta1.VolumeSnapshotClassList
+	var err error
+	if snapshotClasses, err = k.K8sExternalsnap.ListSnapshotClasses(); err != nil {
+		return nil, err
+	}
+	return snapshotClasses, nil
 }
 
 // GetPodsRestartCount return map of HostIP and it restart count in given namespace
