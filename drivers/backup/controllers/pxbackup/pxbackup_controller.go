@@ -22,12 +22,6 @@ type CloudAccountInfo struct {
 
 type OrganizationObjects struct {
 	cloudAccounts map[string]*CloudAccountInfo
-	//backupLocations  map[string]*BackupLocationInfo
-	//clusters         map[string]*ClusterInfo
-	//rules            map[string]*RuleInfo
-	//backups          map[string]*BackupInfo
-	//restores         map[string]*RestoreInfo
-	//schedulePolicies map[string]*SchedulePolicyInfo
 }
 
 type PxBackupController struct {
@@ -36,28 +30,14 @@ type PxBackupController struct {
 	organizations map[string]*OrganizationObjects
 }
 
-func (p *PxBackupController) getCloudAccountInfo(cloudAccountName string) *CloudAccountInfo {
-	cloudAccountInfo, ok := p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName]
-	if !ok {
-		return &CloudAccountInfo{}
+func User(username string, password *string) *UserInfo {
+	return &UserInfo{
+		username:  username,
+		password:  password,
+		firstName: "first-" + username,
+		lastName:  username + "-last",
+		email:     username + "@cnbu.com",
 	}
-	return cloudAccountInfo
-}
-
-func (p *PxBackupController) saveCloudAccountInfo(cloudAccountName string, cloudAccountInfo *CloudAccountInfo) {
-	if p.organizations[p.currentOrgId].cloudAccounts == nil {
-		p.organizations[p.currentOrgId].cloudAccounts = make(map[string]*CloudAccountInfo, 0)
-	}
-	p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName] = cloudAccountInfo
-}
-
-func (p *PxBackupController) delCloudAccountInfo(cloudAccountName string) {
-	delete(p.organizations[p.currentOrgId].cloudAccounts, cloudAccountName)
-}
-
-func (p *PxBackupController) isCloudAccountNameRecorded(cloudAccountName string) bool {
-	_, ok := p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName]
-	return ok
 }
 
 func (p *PxBackupController) CloudAccount(cloudAccountName string) *CloudAccountConfig {

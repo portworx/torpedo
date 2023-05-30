@@ -10,6 +10,30 @@ import (
 	"github.com/portworx/torpedo/tests"
 )
 
+func (p *PxBackupController) getCloudAccountInfo(cloudAccountName string) *CloudAccountInfo {
+	cloudAccountInfo, ok := p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName]
+	if !ok {
+		return &CloudAccountInfo{}
+	}
+	return cloudAccountInfo
+}
+
+func (p *PxBackupController) saveCloudAccountInfo(cloudAccountName string, cloudAccountInfo *CloudAccountInfo) {
+	if p.organizations[p.currentOrgId].cloudAccounts == nil {
+		p.organizations[p.currentOrgId].cloudAccounts = make(map[string]*CloudAccountInfo, 0)
+	}
+	p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName] = cloudAccountInfo
+}
+
+func (p *PxBackupController) delCloudAccountInfo(cloudAccountName string) {
+	delete(p.organizations[p.currentOrgId].cloudAccounts, cloudAccountName)
+}
+
+func (p *PxBackupController) isCloudAccountNameRecorded(cloudAccountName string) bool {
+	_, ok := p.organizations[p.currentOrgId].cloudAccounts[cloudAccountName]
+	return ok
+}
+
 type CloudAccountConfig struct {
 	cloudAccountName string
 	cloudAccountUid  string

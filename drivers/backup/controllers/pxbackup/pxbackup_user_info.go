@@ -16,14 +16,9 @@ type UserInfo struct {
 	password   *string
 }
 
-func User(username string, password *string) *UserInfo {
-	return &UserInfo{
-		username:  username,
-		password:  password,
-		firstName: "first-" + username,
-		lastName:  username + "-last",
-		email:     username + "@cnbu.com",
-	}
+func (u *UserInfo) IsExisting() *UserInfo {
+	u.isExisting = true
+	return u
 }
 
 func (u *UserInfo) IsAdmin() *UserInfo {
@@ -31,9 +26,26 @@ func (u *UserInfo) IsAdmin() *UserInfo {
 	return u
 }
 
-func (u *UserInfo) IsExisting() *UserInfo {
-	u.isExisting = true
-	return u
+func (u *UserInfo) register() error {
+	if u.password == nil {
+		err := fmt.Errorf("the password cannot be nil")
+		return utils.ProcessError(err)
+	}
+	err := backup.AddUser(u.username, u.firstName, u.lastName, u.email, *u.password)
+	if err != nil {
+		debugMessage := u.String()
+		return utils.ProcessError(err, debugMessage)
+	}
+	return nil
+}
+
+func (u *UserInfo) delete() error {
+	err := backup.DeleteUser(u.username)
+	if err != nil {
+		debugMessage := u.String()
+		return utils.ProcessError(err, debugMessage)
+	}
+	return nil
 }
 
 func (u *UserInfo) DeepCopy() *UserInfo {
@@ -52,26 +64,10 @@ func (u *UserInfo) DeepCopy() *UserInfo {
 	return &newUserInfo
 }
 
-func (u *UserInfo) register() error {
-	if u.password == nil {
-		err := fmt.Errorf("the password cannot be nil")
-		return utils.ProcessError(err)
-	}
-	err := backup.AddUser(u.username, u.firstName, u.lastName, u.email, *u.password)
-	if err != nil {
-		debugMessage := fmt.Sprintf("username [%s]; first-name [%s]; last-name [%s]; email [%s]", u.username, u.firstName, u.lastName, u.email)
-		return utils.ProcessError(err, debugMessage)
-	}
-	return nil
-}
-
-func (u *UserInfo) delete() error {
-	err := backup.DeleteUser(u.username)
-	if err != nil {
-		debugMessage := fmt.Sprintf("username [%s]", u.username)
-		return utils.ProcessError(err, debugMessage)
-	}
-	return nil
+func (u *UserInfo) String() string {
+	return fmt.Sprintf("user-info: username [%s], first-name [%s], last-name [%s], "+
+		"email [%s], is-existing [%t], is-admin [%t], password [********]",
+		u.username, u.firstName, u.lastName, u.email, u.isExisting, u.isAdmin)
 }
 
 func (u *UserInfo) GetController() (*PxBackupController, error) {
