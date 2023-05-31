@@ -725,7 +725,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 
 		Step("Adding Credentials and Backup Location", func() {
 			log.InfoD("Using pre-provisioned bucket. Creating cloud credentials and backup location.")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
@@ -743,7 +743,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -758,7 +758,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 			log.InfoD("Taking backup of applications")
 			var sem = make(chan struct{}, numberOfSimultaneousBackups)
 			var wg sync.WaitGroup
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Taking %d backups", numberOfBackups)
 			var mutex sync.Mutex
@@ -790,7 +790,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 
 		Step("Delete all the backups taken in the previous step ", func() {
 			log.InfoD("Deleting the backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifyFatal(err, nil, "Unable fetch admin context")
 			backupDriver := Inst().Backup
 			for _, backup := range backupNames {
@@ -820,7 +820,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})

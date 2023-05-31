@@ -3362,7 +3362,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
 			providers := getProviders()
 			backupLocationMap = make(map[string]string)
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
@@ -3380,7 +3380,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		})
 		Step("Add source and destination clusters with px-central-admin ctx", func() {
 			log.InfoD("Adding source and destination clusters with px-central-admin ctx")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, destinationClusterName)
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
@@ -3400,7 +3400,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		})
 		Step("Taking backup of applications ", func() {
 			log.InfoD("Taking backup of applications")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, namespace := range appNamespaces {
 				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
@@ -3419,13 +3419,13 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		})
 		Step("Delete source cluster where application is deployed", func() {
 			log.InfoD("Delete source cluster where application is deployed")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			err = DeleteCluster(SourceClusterName, orgID, ctx)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 		})
 		Step("Add source cluster back with px-central-admin ctx", func() {
 			log.InfoD("Adding source clusters with px-central-admin ctx")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.Infof("Creating source [%s] cluster", SourceClusterName)
 			err = AddSourceCluster(ctx)
@@ -3439,7 +3439,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 		})
 		Step("Restoring backup on source cluster", func() {
 			log.InfoD("Restoring  backup on source cluster")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
@@ -3451,7 +3451,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, restoreName := range restoreNames {
 			err = DeleteRestore(restoreName, orgID, ctx)
