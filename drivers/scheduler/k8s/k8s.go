@@ -3560,6 +3560,9 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	k8sOps := k8sApps
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
+		log.Debugf("====================================")
+		log.Debugf(reflect.TypeOf(specObj).String())
+		log.Debugf("====================================")
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
@@ -3613,7 +3616,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					Shared:    k.isPVCShared(&pvc),
 				})
 			}
-		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+		} else if obj, ok := specObj.(pds.ModelsDeployment); ok {
 			log.Debugf("****************the ns is : %v", obj.Namespace.Name)
 			ss, err := k8sOps.GetStatefulSet(obj.GetClusterResourceName(), "pds-automation")
 			if err != nil {
