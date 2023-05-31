@@ -260,7 +260,12 @@ func (pa *PXBAuth) GetNewToken(userName, password string) (string, error) {
 		return "", err
 	}
 
-	return token.AccessToken, nil
+	accessToken := token.AccessToken
+	if accessToken == "" {
+		return "", fmt.Errorf("AccessToken field was empty in JSON of unmarshalled response")
+	}
+
+	return accessToken, nil
 }
 
 // GetCommonHTTPHeaders populates http header
@@ -1186,7 +1191,14 @@ func processHTTPRequest(
 		}
 	}()
 
-	return ioutil.ReadAll(httpResponse.Body)
+	respBodyBytes, err := ioutil.ReadAll(httpResponse.Body)
+	if err != nil {
+		return nil, err
+	}
+	if httpResponse.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP Response - Status code: [%d], Error message: [%s]", httpResponse.StatusCode, string(respBodyBytes))
+	}
+	return respBodyBytes, nil
 }
 
 func (pa *PXBAuth) GetPxCentralNonAdminCtx(username, password string) (context.Context, error) {
