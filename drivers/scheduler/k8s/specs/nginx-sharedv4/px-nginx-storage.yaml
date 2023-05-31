@@ -34,6 +34,8 @@ spec:
   resources:
     requests:
       storage: 1Gi
+    limits:
+      storage: 2Gi
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -50,4 +52,6 @@ spec:
   - ReadWriteMany
   resources:
     requests:
+      storage: 2Gi
+    limits:
       storage: 2Gi
