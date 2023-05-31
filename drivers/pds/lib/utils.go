@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -13,6 +12,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/tests"
 
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -1241,6 +1244,19 @@ func CheckAndDeleteIndependentPV(name string, delPod bool) error {
 	err = k8sCore.DeletePersistentVolume(name)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// Increase PVC by 1 gig
+func IncreasePVCby1Gig(context []*scheduler.Context) error {
+	log.Debugf("Entered into resize of pvc %v", context)
+	for _, ctx := range context {
+		appVolumes, err := tests.Inst().S.ResizeVolume(ctx, "")
+		log.Debugf("APP VOLUMES AFTER RESIZE : %v", appVolumes)
+		log.FailOnError(err, "Volume resize successful ?")
+		log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+			ctx.App.Key, appVolumes))
 	}
 	return nil
 }
