@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/pds/parameters"
@@ -168,33 +169,33 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 
 // Check the DS related PV usage and resize in case of 90% full
 func GetPVCtoFullConditionAndResize(deploymentName string, namespace string, context []*scheduler.Context) error {
-	// 1. keep polling for the volume with pxctl command till 90%
-	// 2. resize once full
-	// 3. check volume size increasing again with InspectVolumelz func . (shud be less than 90 after resize)
-	// 4. Check workload and DS pod status
 	log.Debugf("Start polling the pvc consumption for the DS %v", deploymentName)
-	// threshold := 90
+	threshold := 90
 	for _, ctx := range context {
 		vols, err := tests.Inst().S.GetVolumes(ctx)
-		log.Debugf("Volumes found are: %v", vols)
 		if err != nil {
 			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
 		}
 		for _, vol := range vols {
 			log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
-			appVol, err := tests.Inst().V.InspectVolume(vol.ID)
-			log.Debugf("THE VOL DESC IS ----- %v", appVol)
-			if err != nil {
-				return fmt.Errorf("unable to inspect volumes due to : %v", err)
+			log.Debugf("Correct volume string match %v", strings.Contains(vol.Name, "datadir"))
+			if strings.Contains(vol.Name, "datadir") {
+				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+				log.Debugf("THE VOL DESC IS ----- %v", appVol)
+				if err != nil {
+					return fmt.Errorf("unable to inspect volumes due to : %v", err)
+				}
+				usedBytes := appVol.GetUsage()
+				log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
+				log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
+				pvcCapacity := appVol.Spec.Size
+				pvcUsed := int((usedBytes / pvcCapacity) * 100)
+				log.Debugf("PVC USED IS ---- %v", pvcUsed)
+				if pvcUsed >= threshold {
+					return nil
+				}
 			}
-			usedBytes := appVol.GetUsage()
-			log.Debugf("USED IBYTES IS ---- %v", usedBytes)
-			// pvcCapacity, err := GetConfigMap()
-			pvcUsed := (usedBytes / 107374182400) * 100
-			log.Debugf("PVC USED IS ---- %v", pvcUsed)
-			// if pvcUsed >= threshold.uint64 {
-			// 	return nil
-			// }
+
 		}
 		return nil
 	}
