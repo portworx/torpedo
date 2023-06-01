@@ -1,22 +1,32 @@
 package bucket
 
-type BucketType int32
-
-const (
-	S3 BucketType = iota
-)
-
 type S3BucketInfo struct {
+	objectLock     bool
+	retainCount    int64
+	objectLockMode string
+}
+
+func (i *S3BucketInfo) setObjectLock(objectLock bool) *S3BucketInfo {
+
+}
+
+func (i *S3BucketInfo) setRetainCount(retainCount int64) *S3BucketInfo {
+
+}
+
+func (i *S3BucketInfo) setObjectLockMode(objectLockMode string) *S3BucketInfo {
+
 }
 
 type BucketController struct {
 	s3Buckets map[string]*S3BucketInfo
 }
 
-func (b *BucketController) getS3BucketInfo(bucketName string) {
-
-}
-
 func (b *BucketController) S3Bucket(bucketName string) *S3BucketConfig {
-	return
+	return &S3BucketConfig{
+		bucketName:     bucketName,
+		objectLock:     false,
+		retainCount:    0,
+		objectLockMode: "",
+	}
 }

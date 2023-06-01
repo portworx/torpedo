@@ -19,6 +19,10 @@ type S3BucketConfig struct {
 	objectLockMode string
 }
 
+func (b *BucketController) getS3BucketInfo(bucketName string) *S3BucketInfo {
+	return nil
+}
+
 func (c *S3BucketConfig) Create() error {
 	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(
