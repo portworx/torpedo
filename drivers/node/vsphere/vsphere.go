@@ -170,6 +170,8 @@ func (v *vsphere) connect() error {
 
 	nodes := node.GetNodes()
 	for _, vm := range vms {
+		log.Infof("VM Name: %s", vm.Name())
+		log.Infof("VM String: %s", vm.String())
 		for _, n := range nodes {
 			if vm.Name() == n.Name {
 				if _, ok := vmMap[vm.Name()]; !ok {

@@ -230,6 +230,8 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
+
+	migrationWorkerPoolCliFlag = "migration-worker-pool"
 )
 
 // Dashboard params
@@ -4793,6 +4795,7 @@ type Torpedo struct {
 	IsPDSApps                           bool
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
+	MigrationWorkerPool                 string
 }
 
 // ParseFlags parses command line flags
@@ -4847,6 +4850,7 @@ func ParseFlags() {
 	var torpedoJobType string
 	var anthosWsNodeIp string
 	var anthosInstPath string
+	var migrationWorkerPool string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -4915,6 +4919,7 @@ func ParseFlags() {
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, "", "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
+	flag.StringVar(&migrationWorkerPool, migrationWorkerPoolCliFlag, "", "worker pool to migrate px nodes")
 	flag.Parse()
 
 	log.SetLoglevel(logLevel)
@@ -5134,6 +5139,7 @@ func ParseFlags() {
 				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
 				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
+				MigrationWorkerPool:                 migrationWorkerPool,
 			}
 		})
 	}

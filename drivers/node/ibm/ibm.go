@@ -24,7 +24,7 @@ const (
 	ibmResourceGroup            = "Portworx-RG"
 	iksClusterInfoConfigMapName = "cluster-info"
 	clusterIDconfigMapField     = "cluster-config.json"
-	iksPXWorkerpool             = "default"
+	IksPXWorkerpool             = "default"
 )
 
 const (
@@ -181,10 +181,10 @@ func (i *ibm) RebalanceWorkerPool() error {
 		return err
 	}
 
-	cmd := fmt.Sprintf("ibmcloud ks worker-pool rebalance -c %s -p %s", i.clusterConfig.ClusterName, iksPXWorkerpool)
+	cmd := fmt.Sprintf("ibmcloud ks worker-pool rebalance -c %s -p %s", i.clusterConfig.ClusterName, IksPXWorkerpool)
 	stdout, stderr, err := osutils.ExecShell(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to rebalance worker pool %s. Error: %v %v %v", iksPXWorkerpool, stderr, err, stdout)
+		return fmt.Errorf("failed to rebalance worker pool %s. Error: %v %v %v", IksPXWorkerpool, stderr, err, stdout)
 	}
 
 	return nil
@@ -263,6 +263,35 @@ func ReplaceWorkerNodeWithUpdate(node node.Node) error {
 	stdout, stderr, err := osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to replace node [%s]. Error: %v %v %v", node.Hostname, stderr, err, stdout)
+	}
+
+	return nil
+
+}
+
+// RemoveWorkerNode delete given node from the cluster
+func RemoveWorkerNode(node node.Node) error {
+
+	err := loginToIBMCloud()
+	if err != nil {
+		return err
+	}
+	cm, err := core.Instance().GetConfigMap(iksClusterInfoConfigMapName, "kube-system")
+	if err != nil {
+		return err
+	}
+
+	clusterInfo := &ClusterConfig{}
+	err = json.Unmarshal([]byte(cm.Data[clusterIDconfigMapField]), clusterInfo)
+	if err != nil {
+		return err
+	}
+	clusterName := clusterInfo.ClusterName
+
+	cmd := fmt.Sprintf("ibmcloud ks worker rm -c %s -w %s -f", clusterName, node.Hostname)
+	stdout, stderr, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to remove node [%s]. Error: %v %v %v", node.Hostname, stderr, err, stdout)
 	}
 
 	return nil

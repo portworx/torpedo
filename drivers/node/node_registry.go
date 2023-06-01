@@ -199,6 +199,16 @@ func GetNodeByName(nodeName string) (Node, error) {
 	return Node{}, fmt.Errorf("failed: Node [%s] not found in node registry", nodeName)
 }
 
+// GetNodeByHostName returns a node which matches with given hostname
+func GetNodeByHostName(hostName string) (Node, error) {
+	for _, n := range nodeRegistry {
+		if n.Hostname == hostName {
+			return n, nil
+		}
+	}
+	return Node{}, fmt.Errorf("failed: Node [%s] not found in node registry", hostName)
+}
+
 // GetNodeByIP return a node which matches with given IP
 func GetNodeByIP(nodeIP string) (Node, error) {
 	for _, n := range nodeRegistry {

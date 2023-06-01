@@ -214,6 +214,11 @@ if [ -n "$ANTHOS_INST_PATH" ]; then
     ANTHOS_INST_PATH="${ANTHOS_INST_PATH}"
 fi
 
+MIGRATION_WORKER_POOL=""
+if [ -n "$MIGRATION_WORKER_POOL" ]; then
+    MIGRATION_WORKER_POOL="${MIGRATION_WORKER_POOL}"
+fi
+
 for i in $@
 do
 case $i in
@@ -504,6 +509,7 @@ spec:
             "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
             "--license_expiry_timeout_hours=$LICENSE_EXPIRY_TIMEOUT_HOURS",
             "--metering_interval_mins=$METERING_INTERVAL_MINS",
+            "--migration-worker-pool=$MIGRATION_WORKER_POOL",
             "--testrail-milestone=$TESTRAIL_MILESTONE",
             "--testrail-run-name=$TESTRAIL_RUN_NAME",
             "--testrail-run-id=$TESTRAIL_RUN_ID",
