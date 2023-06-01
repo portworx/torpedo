@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -270,6 +271,9 @@ var _ = AfterSuite(func() {
 		case drivers.ProviderGke:
 			DeleteBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket deleted - %s", globalGCPBucketName)
+		case drivers.ProviderNfs:
+			DeleteNfsSubPath()
+			log.Infof("NFS subpath deleted - %s", os.Getenv("NFS_SUB_PATH"))
 		}
 	}
 

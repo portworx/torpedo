@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
@@ -666,8 +667,10 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
 		log.InfoD("Delete the local bucket created")
 		for _, provider := range providers {
-			DeleteBucket(provider, localBucketNameMap[provider])
-			log.Infof("local bucket deleted - %s", localBucketNameMap[provider])
+			if provider != "nfs" {
+				DeleteBucket(provider, localBucketNameMap[provider])
+				log.Infof("local bucket deleted - %s", localBucketNameMap[provider])
+			}
 		}
 	})
 })

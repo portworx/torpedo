@@ -9,38 +9,42 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/pds"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"regexp"
-
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/s3utils"
-
-	storageapi "k8s.io/api/storage/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	// import aks driver to invoke it's init
+	// import backup driver to invoke it's init
+	// import aws driver to invoke it's init
+	// import gke driver to invoke it's init
+	// import vsphere driver to invoke it's init
+	// import ibm driver to invoke it's init
+	// import oracle driver to invoke it's init
+	// import ssh driver to invoke it's init
+	// import scheduler drivers to invoke it's init
+	// import scheduler drivers to invoke it's init
+	// import portworx driver to invoke it's init
+	// import gce driver to invoke it's init
+	// import aws driver to invoke it's init
+	// import azure driver to invoke it's init
+	// import generic csi driver to invoke it's init
+	// import driver to invoke it's init
+	// import driver to invoke it's init
+	// import scheduler drivers to invoke it's init
+	// import pso driver to invoke it's init
+	context1 "context"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -50,24 +54,22 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
+	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/monitor"
-	"github.com/portworx/torpedo/drivers/node"
-	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/jirautils"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/pureutils"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"gopkg.in/natefinch/lumberjack.v2"
+	yaml "gopkg.in/yaml.v2"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -77,69 +79,51 @@ import (
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	storageapi "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	// import aks driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/aks"
-	"github.com/portworx/torpedo/drivers/node/ssh"
-
-	// import backup driver to invoke it's init
+	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/backup"
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
-	// import aws driver to invoke it's init
+	"github.com/portworx/torpedo/drivers/monitor"
+	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
+	"github.com/portworx/torpedo/drivers/node"
+	_ "github.com/portworx/torpedo/drivers/node/aks"
 	_ "github.com/portworx/torpedo/drivers/node/aws"
-	// import gke driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/gke"
-	// import vsphere driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/vsphere"
-	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ibm"
-	// import oracle driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/oracle"
-
-	// import ssh driver to invoke it's init
+	"github.com/portworx/torpedo/drivers/node/ssh"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
+	_ "github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/pds"
+	_ "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"github.com/portworx/torpedo/drivers/scheduler"
-
-	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-
-	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
 	_ "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
-
-	// import portworx driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/portworx"
-	// import gce driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/gce"
-	// import aws driver to invoke it's init
+	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	_ "github.com/portworx/torpedo/drivers/volume/aws"
-	// import azure driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/azure"
-
-	// import generic csi driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/gce"
 	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
-
-	// import driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
-
-	// import driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/pds/dataservice"
-
-	// import scheduler drivers to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
-
-	// import pso driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	_ "github.com/portworx/torpedo/drivers/volume/pso"
-
-	context1 "context"
-
-	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	"gopkg.in/natefinch/lumberjack.v2"
-	yaml "gopkg.in/yaml.v2"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/jirautils"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/pureutils"
+	"github.com/portworx/torpedo/pkg/s3utils"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/portworx/torpedo/pkg/units"
 )
 
 const (
@@ -4042,6 +4026,25 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
 }
 
+// GetNfsCredsFromEnv get creds for nfs share.
+func GetNfsCredsFromEnv() (nfsServerAddress, nfsPath, nfsSubPath, nfsMountOptions string) {
+	nfsServerAddress = os.Getenv("NFS_SERVER_ADDR")
+	expect(nfsServerAddress).NotTo(equal(""),
+		"NFS_SERVER_ADDR Environment variable should not be empty")
+
+	nfsPath = os.Getenv("NFS_PATH")
+	expect(nfsPath).NotTo(equal(""),
+		"NFS_PATH Environment variable should not be empty")
+
+	nfsSubPath = os.Getenv("NFS_SUB_PATH")
+	expect(nfsSubPath).NotTo(equal(""),
+		"NFS_SUB_PATH Environment variable should not be empty")
+
+	nfsMountOptions = os.Getenv("NFS_MOUNT_OPTION")
+
+	return nfsServerAddress, nfsPath, nfsSubPath, nfsMountOptions
+}
+
 // SetScheduledBackupInterval sets scheduled backup interval
 func SetScheduledBackupInterval(interval time.Duration, triggerType string) {
 	scheduledBackupInterval := interval
@@ -4116,7 +4119,30 @@ func DeleteAzureBucket(bucketName string) {
 		fmt.Sprintf("Failed to delete container. Error: [%v]", err))
 }
 
-// DeleteBucket deletes bucket from the cloud
+// DeleteNfsSubPath delete subpath from nfs shared path.
+func DeleteNfsSubPath() {
+	// From ENV variables get NFS share details.
+	nfsServerAddress, nfsPath, nfsSubPath, _ := GetNfsCredsFromEnv()
+	// mount the nfs share to master node.
+	masterNode := node.GetMasterNodes()[0]
+	mountCmd := fmt.Sprintf("mkdir -p /tmp/nfsMount ; mount -t nfs %s:%s /tmp/nfsMount", nfsServerAddress, nfsPath)
+	err := runCmd(mountCmd, masterNode)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", mountCmd, masterNode, err))
+	// remove subpath from nfs sharepath.
+	log.Infof("Deleting NFS share subpath:[%s] from path [%s] on server [%s]", nfsSubPath, nfsPath, nfsServerAddress)
+	rmCmd := fmt.Sprintf("cd /tmp/nfsMount ; rm -rf %s", nfsSubPath)
+	err = runCmd(rmCmd, masterNode)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", mountCmd, masterNode, err))
+	// unmount the nfs share from master node.
+	umountCmd := fmt.Sprintf("umount /tmp/nfsMount")
+	err = runCmd(umountCmd, masterNode)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", umountCmd, masterNode, err))
+}
+
+// DeleteBucket deletes bucket from the cloud or shared subpath from NFS server
 func DeleteBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
 		switch provider {
@@ -4125,6 +4151,8 @@ func DeleteBucket(provider string, bucketName string) {
 			DeleteS3Bucket(bucketName)
 		case drivers.ProviderAzure:
 			DeleteAzureBucket(bucketName)
+		case drivers.ProviderNfs:
+			DeleteNfsSubPath()
 		}
 	})
 }
