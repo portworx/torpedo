@@ -6,21 +6,17 @@ const (
 	S3 BucketType = iota
 )
 
-type BucketInfo struct {
+type S3BucketInfo struct {
 }
 
 type BucketController struct {
-	buckets map[string]*BucketInfo
+	s3Buckets map[string]*S3BucketInfo
 }
 
-func (b *BucketController) getBucketInfo(bucketName string) *BucketInfo {
-	bucketInfo, ok := b.buckets[bucketName]
-	if !ok {
-		return &BucketInfo{}
-	}
-	return bucketInfo
+func (b *BucketController) getS3BucketInfo(bucketName string) {
+
 }
 
-func S3Bucket(bucketName string) *S3BucketConfig {
+func (b *BucketController) S3Bucket(bucketName string) *S3BucketConfig {
 	return
 }
