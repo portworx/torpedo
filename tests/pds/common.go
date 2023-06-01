@@ -179,21 +179,20 @@ func GetPVCtoFullConditionAndResize(deploymentName string, namespace string, con
 		for _, vol := range vols {
 			log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
 			log.Debugf("Correct volume string match %v", strings.Contains(vol.Name, "datadir"))
-			if strings.Contains(vol.Name, "datadir") {
-				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
-				log.Debugf("THE VOL DESC IS ----- %v", appVol)
-				if err != nil {
-					return fmt.Errorf("unable to inspect volumes due to : %v", err)
-				}
-				usedBytes := appVol.GetUsage()
-				log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
-				log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
-				pvcCapacity := appVol.Spec.Size
-				pvcUsed := int((usedBytes / pvcCapacity) * 100)
-				log.Debugf("PVC USED IS ---- %v", pvcUsed)
-				if pvcUsed >= threshold {
-					return nil
-				}
+
+			appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+			log.Debugf("THE VOL DESC IS ----- %v", appVol)
+			if err != nil {
+				return fmt.Errorf("unable to inspect volumes due to : %v", err)
+			}
+			usedBytes := appVol.GetUsage()
+			log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
+			log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
+			pvcCapacity := appVol.Spec.Size
+			pvcUsed := int((usedBytes / pvcCapacity) * 100)
+			log.Debugf("PVC USED IS ---- %v", pvcUsed)
+			if pvcUsed >= threshold {
+				return nil
 			}
 
 		}
