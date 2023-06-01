@@ -799,12 +799,12 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Checking size of volume after resize")
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-					for podName, _ := range podListBeforeSizeMap {
+					for podName := range podListBeforeSizeMap {
 						afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the mount size %v from pod %v", afterSize, podName))
 						podListAfterSizeMap[podName] = afterSize
 					}
-					for podName, _ := range podListBeforeSizeMap {
+					for podName := range podListBeforeSizeMap {
 						dash.VerifyFatal(podListAfterSizeMap[podName] > podListBeforeSizeMap[podName], true, fmt.Sprintf("Verifying volume size has increased for pod %s", podName))
 					}
 				})
