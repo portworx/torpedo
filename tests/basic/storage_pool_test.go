@@ -1239,7 +1239,7 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 			}
 			finalPoolCount = len(pools)
 			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
-			dash.VerifyFatal(initialPoolCount == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
+			dash.VerifyFatal(initialPoolCount+1 == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
 		})
 
 	})
@@ -4973,7 +4973,7 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 			if status[selectedPool.Uuid] == "In Maintenance" {
 				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", selectedNode.Name))
 				err = Inst().V.ExitPoolMaintenance(*selectedNode)
-				log.FailOnError(err, fmt.Sprintf("fail to exit pool maintenance mode ib node %s", selectedNode.Name))
+				log.FailOnError(err, fmt.Sprintf("failed to exit pool maintenance mode on node %s", selectedNode.Name))
 			}
 
 			resizedPool, err := GetStoragePoolByUUID(selectedPool.Uuid)
@@ -8821,6 +8821,61 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		for _, eachVol := range volumes {
 			log.FailOnError(waitTillVolumeStatusUp(eachVol), fmt.Sprintf("Volume [%v] is not up after pool expand", eachVol.Name))
 		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{NodeAddDiskToNewPoolWhileAddDiskInProgress}", func() {
+	/*
+	   1.Add disk using add-disk option
+	   2. Add disk again while initial expansion is in-progress
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("NodeAddDiskToNewPoolWhileAddDiskInProgress", "Initiate pool expansion using add-drive while one already in progress", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "should get the existing storage node and expand the pool by adding a drive while one already in progress"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		Inst().AppList = []string{}
+		var ioIntensiveApp = []string{"fio", "fio-writes"}
+
+		for _, eachApp := range ioIntensiveApp {
+			Inst().AppList = append(Inst().AppList, eachApp)
+		}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("replresyncpoolexpand-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "Failed to list storage pools")
+		dash.VerifyFatal(len(pools) > 0, true, "Storage pools exist ?")
+		var initialPoolCount int
+		initialPoolCount = len(pools)
+		log.FailOnError(err, "error getting node using name [%s]", nodeDetail.Name)
+
+		err = addCloudDrive(*nodeDetail, -1)
+		log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeDetail.Name))
+		err = addCloudDrive(*nodeDetail, -1)
+		log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeDetail.Name))
+		var finalPoolCount int
+		pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "error getting pools list")
+		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+		finalPoolCount = len(pools)
+		dash.VerifyFatal(initialPoolCount+2 == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with PX restart Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
 	})
 
 	JustAfterEach(func() {
