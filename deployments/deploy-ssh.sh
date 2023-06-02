@@ -214,10 +214,7 @@ if [ -n "$ANTHOS_INST_PATH" ]; then
     ANTHOS_INST_PATH="${ANTHOS_INST_PATH}"
 fi
 
-MIGRATION_WORKER_POOL=""
-if [ -n "$MIGRATION_WORKER_POOL" ]; then
-    MIGRATION_WORKER_POOL="${MIGRATION_WORKER_POOL}"
-fi
+
 
 for i in $@
 do

@@ -60,8 +60,16 @@ type Worker struct {
 	KubeVersion struct {
 		Actual string `json:"actual"`
 	}
-	PoolID   string `json:"poolID"`
-	PoolName string `json:"poolName"`
+	PoolID            string             `json:"poolID"`
+	PoolName          string             `json:"poolName"`
+	NetworkInterfaces []NetworkInterface `json:"networkInterfaces"`
+}
+
+type NetworkInterface struct {
+	SubnetID  string `json:"subnetID"`
+	IpAddress string `json:"ipAddress"`
+	CIDR      string `json:"cidr"`
+	Primary   bool   `json:"primary"`
 }
 
 type Cluster struct {

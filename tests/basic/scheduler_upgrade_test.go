@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ibm"
@@ -126,13 +127,20 @@ func waitForIKSMasterUpdate(schedVersion string) error {
 		if strings.Contains(iksCluster.MasterKubeVersion, "pending") {
 			return nil, true, fmt.Errorf("waiting for master update to complete.Current status : %s", iksCluster.MasterKubeVersion)
 		}
-		if strings.Contains(iksCluster.MasterKubeVersion, schedVersion) {
+
+		masterMajorVersion := iksCluster.MasterKubeVersion
+		if strings.Contains(schedVersion, "openshift") {
+			masterMajorVersion = strings.Split(iksCluster.MasterKubeVersion, "_")[0]
+			masterMajorVersion = fmt.Sprintf("%s_openshift", masterMajorVersion)
+		}
+
+		if strings.Contains(masterMajorVersion, schedVersion) {
 			return nil, false, nil
 		}
 
 		return nil, false, fmt.Errorf("master update to %s failed", schedVersion)
 	}
-	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 2*time.Minute)
+	_, err := task.DoRetryWithTimeout(t, 60*time.Minute, 2*time.Minute)
 
 	return err
 
@@ -148,7 +156,14 @@ func upgradeIKSWorkerNodes(schedVersion, poolName string) error {
 	for _, worker := range workers {
 
 		if worker.PoolName == poolName {
-			sNode, err := node.GetNodeByHostName(worker.WorkerID)
+
+			sNode, err := node.GetNodeByName(worker.NetworkInterfaces[0].IpAddress)
+			if poolName == Inst().MigrationWorkerPool {
+				//var migNode *api.StorageNode
+				migNode := api.StorageNode{}
+				migNode.Hostname = worker.WorkerID
+				sNode.StorageNode = &migNode
+			}
 			if err != nil {
 				return err
 			}
@@ -191,8 +206,17 @@ func upgradeIKSWorkerNodes(schedVersion, poolName string) error {
 	}
 
 	for _, worker := range workers {
-		if worker.PoolName == poolName && !strings.Contains(worker.KubeVersion.Actual, schedVersion) {
-			return fmt.Errorf("node %s has version %s expected %s", worker.WorkerID, worker.KubeVersion.Actual, schedVersion)
+		if worker.PoolName == poolName {
+			majorVersion := worker.KubeVersion.Actual
+			if strings.Contains(schedVersion, "openshift") {
+				majorVersion = strings.Split(worker.KubeVersion.Actual, "_")[0]
+				majorVersion = fmt.Sprintf("%s_openshift", majorVersion)
+
+			}
+			if !strings.Contains(majorVersion, schedVersion) {
+				return fmt.Errorf("node %s has version %s expected %s", worker.WorkerID, worker.KubeVersion.Actual, schedVersion)
+			}
+
 		}
 	}
 
@@ -299,9 +323,10 @@ var _ = Describe("{MigratePXCluster}", func() {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradescheduler-%d", i))...)
 			}
 
-			for k := range migrationWorkersMap {
-				n, err := node.GetNodeByHostName(k)
-				log.FailOnError(err, fmt.Sprintf("error getting node with hostname %s", k))
+			for _, v := range migrationWorkersMap {
+				hostName := v.NetworkInterfaces[0].IpAddress
+				n, err := node.GetNodeByName(hostName)
+				log.FailOnError(err, fmt.Sprintf("error getting node with hostname %s", hostName))
 				err = Inst().S.RemoveLabelOnNode(n, schedops.PXEnabledLabelKey)
 				log.FailOnError(err, fmt.Sprintf("error removing label %s on node %s", schedops.PXEnabledLabelKey, n.Name))
 				err = Inst().V.WaitDriverUpOnNode(n, 5*time.Minute)
@@ -317,10 +342,10 @@ var _ = Describe("{MigratePXCluster}", func() {
 
 		Step("Initiate worker pool migration", func() {
 
-			for k := range defaultWorkersMap {
-
-				n, err := node.GetNodeByHostName(k)
-				log.FailOnError(err, fmt.Sprintf("error getting node with hostname %s", k))
+			for _, v := range defaultWorkersMap {
+				hostName := v.NetworkInterfaces[0].IpAddress
+				n, err := node.GetNodeByName(hostName)
+				log.FailOnError(err, fmt.Sprintf("error getting node with hostname %s", hostName))
 				err = ibm.RemoveWorkerNode(n)
 				log.FailOnError(err, fmt.Sprintf("error removing node %s", n.Hostname))
 				err = waitForIBMNodeToDelete(n)
