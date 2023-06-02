@@ -1707,7 +1707,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServicesCustom(ds, params.InfraToTest.Namespace, tenantID, projectID, "Qatoosmall")
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServicesCustom(ds, params.InfraToTest.Namespace, tenantID, projectID, "pds-auto-pvcFullCondition")
 					log.FailOnError(err, "Error while deploying data services")
 					deployments[ds] = deployment
 					dsVersions[ds.Name] = dataServiceVersionBuildMap
