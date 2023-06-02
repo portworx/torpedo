@@ -383,8 +383,8 @@ github.com/ghodss/yaml
 # github.com/go-errors/errors v1.0.1
 ## explicit
 github.com/go-errors/errors
-# github.com/go-gorp/gorp/v3 v3.0.2
-## explicit; go 1.13
+# github.com/go-gorp/gorp/v3 v3.1.0
+## explicit; go 1.18
 github.com/go-gorp/gorp/v3
 # github.com/go-logr/logr v1.2.3 => github.com/go-logr/logr v1.2.3
 ## explicit; go 1.16
@@ -399,8 +399,8 @@ github.com/go-openapi/jsonpointer
 ## explicit; go 1.13
 github.com/go-openapi/jsonreference
 github.com/go-openapi/jsonreference/internal
-# github.com/go-openapi/swag v0.19.14
-## explicit; go 1.11
+# github.com/go-openapi/swag v0.22.3
+## explicit; go 1.18
 github.com/go-openapi/swag
 # github.com/gobwas/glob v0.2.3
 ## explicit
@@ -449,13 +449,13 @@ github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
 github.com/golang/protobuf/ptypes/wrappers
-# github.com/golang/snappy v0.0.3
+# github.com/golang/snappy v0.0.4
 ## explicit
 github.com/golang/snappy
 # github.com/google/btree v1.0.1
 ## explicit; go 1.12
 github.com/google/btree
-# github.com/google/gnostic v0.5.7-v3refs
+# github.com/google/gnostic v0.6.9
 ## explicit; go 1.12
 github.com/google/gnostic/compiler
 github.com/google/gnostic/extensions
@@ -520,8 +520,8 @@ github.com/grpc-ecosystem/go-grpc-middleware/util/metautils
 github.com/grpc-ecosystem/grpc-gateway/internal
 github.com/grpc-ecosystem/grpc-gateway/runtime
 github.com/grpc-ecosystem/grpc-gateway/utilities
-# github.com/grpc-ecosystem/grpc-gateway/v2 v2.6.0
-## explicit; go 1.14
+# github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3
+## explicit; go 1.17
 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options
 # github.com/hashicorp/errwrap v1.1.0
 ## explicit
@@ -609,15 +609,16 @@ github.com/josharian/intern
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
-# github.com/klauspost/compress v1.13.6
-## explicit; go 1.15
+# github.com/klauspost/compress v1.15.9
+## explicit; go 1.16
 github.com/klauspost/compress
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
+github.com/klauspost/compress/internal/cpuinfo
 github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
-# github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
+# github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0 => github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 ## explicit; go 1.15
 github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1
 github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1
@@ -625,6 +626,11 @@ github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned
 github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/scheme
 github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/typed/volumesnapshot/v1
 github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/typed/volumesnapshot/v1beta1
+# github.com/kubernetes-csi/external-snapshotter/client/v6 v6.2.0 => github.com/kubernetes-csi/external-snapshotter/client/v6 v6.2.0
+## explicit; go 1.19
+github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1
+github.com/kubernetes-csi/external-snapshotter/client/v6/clientset/versioned/scheme
+github.com/kubernetes-csi/external-snapshotter/client/v6/clientset/versioned/typed/volumesnapshot/v1
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc7 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 ## explicit; go 1.15
 github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1
@@ -646,7 +652,7 @@ github.com/lann/builder
 # github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0
 ## explicit
 github.com/lann/ps
-# github.com/lib/pq v1.10.6
+# github.com/lib/pq v1.10.7
 ## explicit; go 1.13
 github.com/lib/pq
 github.com/lib/pq/oid
@@ -721,7 +727,7 @@ github.com/libopenstorage/operator/pkg/util/test
 # github.com/libopenstorage/secrets v0.0.0-20220413195519-57d1c446c5e9
 ## explicit; go 1.13
 github.com/libopenstorage/secrets/aws/credentials
-# github.com/libopenstorage/stork v1.4.1-0.20230329095542-eefc6837653a => github.com/libopenstorage/stork v1.4.1-0.20230329095542-eefc6837653a
+# github.com/libopenstorage/stork v1.4.1-0.20230601041015-9ce6edc609f4 => github.com/libopenstorage/stork v1.4.1-0.20230601041015-9ce6edc609f4
 ## explicit; go 1.19
 github.com/libopenstorage/stork/drivers
 github.com/libopenstorage/stork/drivers/volume
@@ -743,7 +749,9 @@ github.com/libopenstorage/stork/pkg/objectstore/azure
 github.com/libopenstorage/stork/pkg/objectstore/common
 github.com/libopenstorage/stork/pkg/objectstore/google
 github.com/libopenstorage/stork/pkg/objectstore/s3
+github.com/libopenstorage/stork/pkg/pluralmap
 github.com/libopenstorage/stork/pkg/resourcecollector
+github.com/libopenstorage/stork/pkg/resourceutils
 github.com/libopenstorage/stork/pkg/rule
 github.com/libopenstorage/stork/pkg/schedule
 github.com/libopenstorage/stork/pkg/snapshot/controllers
@@ -753,7 +761,7 @@ github.com/libopenstorage/stork/pkg/version
 # github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de
 ## explicit
 github.com/liggitt/tabwriter
-# github.com/mailru/easyjson v0.7.6
+# github.com/mailru/easyjson v0.7.7
 ## explicit; go 1.12
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
@@ -927,7 +935,7 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 # github.com/portworx/px-backup-api v1.2.2-0.20230302013809-a43e52d727ba
 ## explicit; go 1.19
 github.com/portworx/px-backup-api/pkg/apis/v1
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6 => github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20230602054045-e2d377b36700 => github.com/portworx/sched-ops v1.20.4-rc1.0.20230602054045-e2d377b36700
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -2065,12 +2073,14 @@ sigs.k8s.io/yaml
 # github.com/heptio/ark => github.com/heptio/ark v1.0.0
 # github.com/heptio/velero => github.com/heptio/velero v1.0.0
 # github.com/ktrysmt/go-bitbucket => github.com/portworx/go-bitbucket v0.0.0-20221210015433-3c000e3a8253
+# github.com/kubernetes-csi/external-snapshotter/client/v4 => github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
+# github.com/kubernetes-csi/external-snapshotter/client/v6 => github.com/kubernetes-csi/external-snapshotter/client/v6 v6.2.0
 # github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc10
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc10 => github.com/kubernetes-incubator/external-storage v0.25.1-openstorage-rc1
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 # github.com/libopenstorage/openstorage => github.com/libopenstorage/openstorage v1.0.1-0.20221216200022-d1c57a8ea854
-# github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230329095542-eefc6837653a
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230331045738-90076ccca1b6
+# github.com/libopenstorage/stork => github.com/libopenstorage/stork v1.4.1-0.20230601041015-9ce6edc609f4
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v1.20.4-rc1.0.20230602054045-e2d377b36700
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.10.3
 # k8s.io/api => k8s.io/api v0.25.1
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.1

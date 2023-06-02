@@ -48,13 +48,16 @@ const (
 	// ZoneSeperator zone separator
 	ZoneSeperator = "__"
 	// EbsProvisionerName EBS provisioner name
-	EbsProvisionerName      = "kubernetes.io/aws-ebs"
-	pureCSIProvisioner      = "pure-csi"
-	ocpCephfsProvisioner    = "openshift-storage.cephfs.csi.ceph.com"
-	ocpRbdProvisioner       = "openshift-storage.rbd.csi.ceph.com"
-	vSphereCSIProvisioner   = "csi.vsphere.vmware.com"
-	efsCSIProvisioner       = "efs.csi.aws.com"
-	azureFileCSIProvisioner = "file.csi.azure.com"
+	EbsProvisionerName = "kubernetes.io/aws-ebs"
+	// pvProvisionedByAnnotation is the annotation on PV which has the
+	// provisioner name
+	PvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
+	pureCSIProvisioner        = "pure-csi"
+	ocpCephfsProvisioner      = "openshift-storage.cephfs.csi.ceph.com"
+	ocpRbdProvisioner         = "openshift-storage.rbd.csi.ceph.com"
+	vSphereCSIProvisioner     = "csi.vsphere.vmware.com"
+	efsCSIProvisioner         = "efs.csi.aws.com"
+	azureFileCSIProvisioner   = "file.csi.azure.com"
 
 	azureFileIntreeProvisioner = "kubernetes.io/azure-file"
 	googleFileCSIProvisioner   = "com.google.csi.filestore"
@@ -150,6 +153,7 @@ type Driver interface {
 	ClusterPairPluginInterface
 	// MigratePluginInterface Interface to migrate data between clusters
 	MigratePluginInterface
+	ActionPluginInterface
 	// ClusterDomainsPluginInterface Interface to manage cluster domains
 	ClusterDomainsPluginInterface
 	// BackupRestorePluginInterface Interface to backup and restore volumes
@@ -187,7 +191,7 @@ type ClusterPairPluginInterface interface {
 type MigratePluginInterface interface {
 	// Start migration of volumes specified by the spec. Should only migrate
 	// volumes, not the specs associated with them
-	StartMigration(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error)
+	StartMigration(*storkapi.Migration, []string) ([]*storkapi.MigrationVolumeInfo, error)
 	// Get the status of migration of the volumes specified in the status
 	// for the migration spec
 	GetMigrationStatus(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error)
@@ -196,6 +200,10 @@ type MigratePluginInterface interface {
 	// Update the PVC spec to point to the migrated volume on the destination
 	// cluster
 	UpdateMigratedPersistentVolumeSpec(*v1.PersistentVolume, *storkapi.ApplicationRestoreVolumeInfo, map[string]string) (*v1.PersistentVolume, error)
+}
+
+type ActionPluginInterface interface {
+	Failover(*storkapi.Action) error
 }
 
 // ClusterDomainsPluginInterface Interface to manage cluster domains
@@ -285,6 +293,10 @@ const (
 	NodeOnline NodeStatus = "Online"
 	// NodeOffline Node is Offline
 	NodeOffline NodeStatus = "Offline"
+	// NodeStorageDown Node is Online but storage is down.
+	// The expection from the driver is applications can continue their IO
+	// since the data is replicated to other nodes.
+	NodeStorageDown NodeStatus = "StorageDown"
 	// NodeDegraded Node is in degraded state
 	NodeDegraded NodeStatus = "Degraded"
 )
@@ -418,7 +430,7 @@ func (c *ClusterPairNotSupported) DeletePair(*storkapi.ClusterPair) error {
 type MigrationNotSupported struct{}
 
 // StartMigration returns ErrNotSupported
-func (m *MigrationNotSupported) StartMigration(*storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
+func (m *MigrationNotSupported) StartMigration(*storkapi.Migration, []string) ([]*storkapi.MigrationVolumeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
@@ -437,6 +449,12 @@ func (m *MigrationNotSupported) UpdateMigratedPersistentVolumeSpec(
 	*v1.PersistentVolume,
 ) (*v1.PersistentVolume, error) {
 	return nil, &errors.ErrNotSupported{}
+}
+
+type ActionNotSupported struct{}
+
+func (m *ActionNotSupported) Failover(*storkapi.Action) error {
+	return &errors.ErrNotSupported{}
 }
 
 // GroupSnapshotNotSupported to be used by drivers that don't support group snapshots
@@ -941,6 +959,29 @@ func GetAWSClient() (*ec2.EC2, error) {
 	}
 
 	return ec2.New(s), nil
+}
+
+// GetAWSZones get zones from AWS
+func GetAWSZones(pv *v1.PersistentVolume) ([]string, error) {
+	if pv.Annotations[PvProvisionedByAnnotation] != EbsProvisionerName {
+		return nil, nil
+	}
+	ebsName := GetEBSVolumeID(pv)
+	if ebsName == "" {
+		return nil, fmt.Errorf("AWS EBS info not found in PV %v", pv.Name)
+	}
+
+	client, err := GetAWSClient()
+	if err != nil {
+		return nil, err
+	}
+	ebsVolume, err := GetEBSVolume(ebsName, nil, client)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Tracef("getZones: zone: %v", *ebsVolume.AvailabilityZone)
+
+	return []string{*ebsVolume.AvailabilityZone}, nil
 }
 
 // GetGCPZones get zones from GCP
