@@ -8831,8 +8831,9 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 
 var _ = Describe("{NodeAddDiskToNewPoolWhileAddDiskInProgress}", func() {
 	/*
-	   1.Add disk using add-disk option
-	   2. Add disk again while initial expansion is in-progress
+	   1.Add disk using add-disk option and create new pool
+	   2.Add disk again while initial expansion is in-progress and create another new pool.
+	   3.totally 3 pools will be present after the testcase
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("NodeAddDiskToNewPoolWhileAddDiskInProgress", "Initiate pool expansion using add-drive while one already in progress", nil, 0)
