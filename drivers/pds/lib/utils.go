@@ -413,6 +413,32 @@ func DeletePods(podList []corev1.Pod) error {
 	return nil
 }
 
+// GetStorageTemplate return the storage template id
+func GetCustomStorageTemplateID(tenantID string, templateName string) (string, error) {
+	log.InfoD("Get the storage template")
+	log.Debugf("Storage template used is: %v", templateName)
+	storageTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return "", err
+	}
+	isStorageTemplateAvailable = false
+	for i := 0; i < len(storageTemplates); i++ {
+		if storageTemplates[i].GetName() == templateName {
+			isStorageTemplateAvailable = true
+			log.InfoD("Storage template details -----> Name %v,Repl %v , Fg %v , Fs %v",
+				storageTemplates[i].GetName(),
+				storageTemplates[i].GetRepl(),
+				storageTemplates[i].GetFg(),
+				storageTemplates[i].GetFs())
+			storageTemplateID = storageTemplates[i].GetId()
+		}
+	}
+	if !isStorageTemplateAvailable {
+		log.Fatalf("storage template %v is not available ", templateName)
+	}
+	return storageTemplateID, nil
+}
+
 // GetAllDataserviceResourceTemplate get the resource template id's of supported dataservices and forms supported dataserviceNameIdMap
 func GetAllDataserviceResourceTemplate(tenantID string, supportedDataServices []string) (map[string]string, map[string]string, error) {
 	log.Infof("Get the resource template for each data services")

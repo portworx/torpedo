@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/pds/parameters"
@@ -17,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type PDSDataService struct {
@@ -171,32 +171,39 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 func GetPVCtoFullConditionAndResize(deploymentName string, namespace string, context []*scheduler.Context) error {
 	log.Debugf("Start polling the pvc consumption for the DS %v", deploymentName)
 	threshold := 90
+	isthresholdmet := false
 	for _, ctx := range context {
 		vols, err := tests.Inst().S.GetVolumes(ctx)
 		if err != nil {
 			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
 		}
-		for _, vol := range vols {
-			log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
-			log.Debugf("Correct volume string match %v", strings.Contains(vol.Name, "datadir"))
-
-			appVol, err := tests.Inst().V.InspectVolume(vol.ID)
-			log.Debugf("THE VOL DESC IS ----- %v", appVol)
-			if err != nil {
-				return fmt.Errorf("unable to inspect volumes due to : %v", err)
+		waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
+			for _, vol := range vols {
+				log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
+				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+				log.Debugf("THE VOL DESC IS ----- %v", appVol)
+				if err != nil {
+					return true, err
+				}
+				usedBytes := appVol.GetUsage()
+				log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
+				log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
+				pvcCapacity := appVol.Spec.Size
+				pvcUsed := int((usedBytes / pvcCapacity) * 100)
+				log.Debugf("Threshold achieved ---- %v", pvcUsed)
+				if pvcUsed >= threshold {
+					isthresholdmet = true
+				}
 			}
-			usedBytes := appVol.GetUsage()
-			log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
-			log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
-			pvcCapacity := appVol.Spec.Size
-			pvcUsed := int((usedBytes / pvcCapacity) * 100)
-			log.Debugf("PVC USED IS ---- %v", pvcUsed)
-			if pvcUsed >= threshold {
-				return nil
+			if isthresholdmet {
+				return true, nil
 			}
-
+			return false, nil
+		})
+		if !isthresholdmet {
+			return fmt.Errorf("threshold not met due to : %v", waitErr)
 		}
-		return nil
 	}
-	return nil
+
+	return err
 }

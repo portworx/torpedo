@@ -1116,6 +1116,29 @@ func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, ten
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
 }
 
+func DeployandValidateDataServicesCustom(ds dataservice.PDSDataService, namespace, tenantID, projectID string, CustomStorageTemplate string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+	log.InfoD("Data Service Deployment Triggered")
+	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespace, serviceType)
+	var CustomStorageTemplateId string
+	CustomStorageTemplateId, err = pdslib.GetCustomStorageTemplateID(tenantID, CustomStorageTemplate)
+	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, namespace, tenantID, projectID, false,
+		dataservice.TestParams{StorageTemplateId: CustomStorageTemplateId, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
+	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
+	Step("Validate Data Service Deployments", func() {
+		err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
+	})
+	Step("Validate Storage Configurations", func() {
+		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+		log.FailOnError(err, "Error while getting resource template")
+		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
+		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+		ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+	})
+	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
+}
+
 func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild string, replicas int32, ds PDSDataService) {
 	Step("Deploy, Validate and Update Data Services", func() {
 		isDeploymentsDeleted = false
@@ -1684,7 +1707,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServicesCustom(ds, params.InfraToTest.Namespace, tenantID, projectID, "pds-auto-pvcFullCondition")
 					log.FailOnError(err, "Error while deploying data services")
 					deployments[ds] = deployment
 					dsVersions[ds.Name] = dataServiceVersionBuildMap
