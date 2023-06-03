@@ -1116,13 +1116,15 @@ func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, ten
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
 }
 
-func DeployandValidateDataServicesCustom(ds dataservice.PDSDataService, namespace, tenantID, projectID string, CustomStorageTemplate string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+func DeployandValidateDataServicesCustom(ds dataservice.PDSDataService, namespace, tenantID, projectID string, CustomStorageTemplate string, CustomTemplate string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 	log.InfoD("Data Service Deployment Triggered")
 	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespace, serviceType)
 	var CustomStorageTemplateId string
+	var CustomResourceTemplateID string
 	CustomStorageTemplateId, err = pdslib.GetCustomStorageTemplateID(tenantID, CustomStorageTemplate)
+	CustomResourceTemplateID, err = pdslib.GetCustomResourceTemplateID(tenantID, CustomTemplate, ds.Name)
 	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, namespace, tenantID, projectID, false,
-		dataservice.TestParams{StorageTemplateId: CustomStorageTemplateId, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
+		dataservice.TestParams{StorageTemplateId: CustomStorageTemplateId, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType, ResourceTemplateID: CustomResourceTemplateID})
 	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
 	Step("Validate Data Service Deployments", func() {
 		err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
@@ -1707,7 +1709,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
-					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServicesCustom(ds, params.InfraToTest.Namespace, tenantID, projectID, "pds-auto-pvcFullCondition")
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServicesCustom(ds, params.InfraToTest.Namespace, tenantID, projectID, "pds-auto-pvcFullCondition", "")
 					log.FailOnError(err, "Error while deploying data services")
 					deployments[ds] = deployment
 					dsVersions[ds.Name] = dataServiceVersionBuildMap

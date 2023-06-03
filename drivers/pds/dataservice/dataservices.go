@@ -2,6 +2,10 @@ package dataservice
 
 import (
 	"fmt"
+	state "net/http"
+	"os"
+	"time"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -15,9 +19,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	state "net/http"
-	"os"
-	"time"
 )
 
 // PDS vars
@@ -67,6 +68,7 @@ type TestParams struct {
 	DeploymentTargetId string
 	DnsZone            string
 	StorageTemplateId  string
+	ResourceTemplateID string
 	NamespaceId        string
 	TenantId           string
 	ProjectId          string
