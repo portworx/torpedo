@@ -8828,3 +8828,58 @@ var _ = Describe("{ReplResyncOnPoolExpand}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{PoolAddDriveBeyondMaxSupported}", func() {
+
+	/*
+		Add Drive using legacy add drive feature
+	*/
+	var testrailID = 19170501
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/19170501
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolAddDriveBeyondMaxSupported", "Initiate pool Cloud add-drive beyond permitted and expect error", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the existing storage node and expand the pool by adding a drive"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddrivebeyondmax-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+		stNodes := node.GetStorageNodes()
+		if len(stNodes) == 0 {
+			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
+		}
+		var selectedNode node.Node
+		var selectedPool *api.StoragePool
+		var numberOfDrivesCanBeAdded int
+		for _, stNode := range stNodes {
+			selectedPool, err := GetPoolWithIOsInGivenNode(stNode, contexts)
+			log.FailOnError(err, "error in getting pool with IO with error %s", err)
+			if selectedPool != nil {
+				drvMap, err := Inst().V.GetPoolDrives(&stNode)
+				log.FailOnError(err, "error getting pool drives from node [%s]", stNode.Name)
+				drvs := drvMap[fmt.Sprintf("%d", selectedPool.ID)]
+				numberOfDrivesCanBeAdded = POOL_MAX_CLOUD_DRIVES - len(drvs)
+				selectedNode = stNode
+				break
+			}
+		}
+		for i := 1; i <= numberOfDrivesCanBeAdded; i++ {
+			err := addCloudDrive(selectedNode, selectedPool.ID)
+			if i == numberOfDrivesCanBeAdded {
+				dash.VerifyFatal(err != nil, true, fmt.Sprintf("Error expected as drive added more than allowed per pool"))
+			}
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
