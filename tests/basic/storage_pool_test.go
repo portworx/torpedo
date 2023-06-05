@@ -8860,17 +8860,19 @@ var _ = Describe("{PoolAddDriveBeyondMaxSupported}", func() {
 		var selectedPool *api.StoragePool
 		var numberOfDrivesCanBeAdded int
 		//for _, stNode := range stNodes {
-		selectedPool, err := GetPoolWithIOsInGivenNode(stNodes[0], contexts)
+		stNode, err := GetRandomNodeWithPoolIOs(contexts)
+		log.FailOnError(err, "error identifying node to run test")
+		selectedPool, err = GetPoolWithIOsInGivenNode(stNode, contexts)
 		log.FailOnError(err, "error in getting pool with IO with error %s", err)
 		if selectedPool != nil {
-			drvMap, err := Inst().V.GetPoolDrives(&stNodes[0])
-			log.FailOnError(err, "error getting pool drives from node [%s]", stNodes[0].Name)
+			drvMap, err := Inst().V.GetPoolDrives(&stNode)
+			log.FailOnError(err, "error getting pool drives from node [%s]", stNode.Name)
 			drvs := drvMap[fmt.Sprintf("%d", selectedPool.ID)]
 			numberOfDrivesCanBeAdded = POOL_MAX_CLOUD_DRIVES - len(drvs)
-			selectedNode = stNodes[0]
+			selectedNode = stNode
 			//break
 		} else {
-			log.FailOnError(err, "error getting pool from node [%s]", stNodes[0].Name)
+			log.FailOnError(err, "error getting pool from node [%s]", stNode.Name)
 		}
 		//}
 		for i := 1; i <= numberOfDrivesCanBeAdded; i++ {
