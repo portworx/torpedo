@@ -213,9 +213,9 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 				usedGiB := appVol.GetUsage() / units.GiB
 				log.Debugf("Used vol in GB is : %v", usedGiB)
 				if usedGiB >= pvcCapacity {
-					log.Debugf("The PVC %v is full ", vol.Name)
 					log.Debugf("The PVC capacity is : %v ", pvcCapacity)
 					log.Debugf("The PVC usage is : %v ", usedGiB)
+					log.Debugf("The PVC %v is full ", vol.Name)
 					return nil, true, nil
 				}
 			}
