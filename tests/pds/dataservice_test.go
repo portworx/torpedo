@@ -1713,7 +1713,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 			Step("Checking the PVC usage", func() {
 				ctx := dsTest.CreateSchedulerContextForPDSApps(depList)
-				err = CheckPVCtoFullCondition(*deployment.ClusterResourceName, namespace, ctx)
+				err = CheckPVCtoFullCondition(ctx)
 				log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
 				// err = pdslib.IncreasePVCby1Gig(ctx)
 				// log.FailOnError(err, "Failing while Increasing the PVC name...")

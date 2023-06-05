@@ -11,12 +11,13 @@ import (
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type PDSDataService struct {
@@ -168,42 +169,63 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 }
 
 // Check the DS related PV usage and resize in case of 90% full
-func CheckPVCtoFullCondition(deploymentName string, namespace string, context []*scheduler.Context) error {
-	log.Debugf("Start polling the pvc consumption for the DS %v", deploymentName)
+func CheckPVCtoFullCondition(context []*scheduler.Context) error {
+	log.Infof("Start polling the pvc consumption for the DS")
 	var threshold uint64 = 90
-	isthresholdmet := false
-	for _, ctx := range context {
-		vols, err := tests.Inst().S.GetVolumes(ctx)
-		if err != nil {
-			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
-		}
-		log.Debugf("Volumes to be inspected are : %v", vols)
-		waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
-			log.Debugf("Polling begins for ovc usage calculation")
+	// for _, ctx := range context {
+	// 	vols, err := tests.Inst().S.GetVolumes(ctx)
+	// 	if err != nil {
+	// 		return fmt.Errorf("persistant volumes Not Found due to : %v", err)
+	// 	}
+	// 	log.Debugf("Volumes to be inspected are : %v", vols)
+
+	// 	log.Debugf("Polling begins for ovc usage calculation")
+	// 	for _, vol := range vols {
+	// 		log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
+	// 		appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+	// 		if err != nil {
+	// 			return fmt.Errorf("persistant volumes Not inspected due to : %v", err)
+	// 		}
+	// 		log.Debugf("app vol is: %v", appVol)
+	// 		usedBytes := appVol.GetUsage()
+	// 		log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
+	// 		log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
+	// 		pvcCapacity := appVol.Spec.Size
+	// 		pvcUsed := (usedBytes / pvcCapacity) * 100
+	// 		log.Debugf("Threshold achieved ---- %v", pvcUsed)
+	// 		if pvcUsed >= threshold {
+	// 			log.Debugf("Threshold met, hence exiting the poll.. %v", pvcUsed)
+	// 		}
+	// 	}
+	// }
+	f := func() (interface{}, bool, error) {
+		for _, ctx := range context {
+			vols, err := tests.Inst().S.GetVolumes(ctx)
+			log.Debugf("Volumes found for the DS are : %v", vols)
+			if err != nil {
+				return nil, true, err
+			}
 			for _, vol := range vols {
-				log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
 				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+				log.Debugf("Volume desription is %v\n", appVol)
 				if err != nil {
-					return false, err
+					return nil, true, err
 				}
-				log.Debugf("app vol is: %v", appVol)
-				usedBytes := appVol.GetUsage()
-				log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
-				log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
-				pvcCapacity := appVol.Spec.Size
-				pvcUsed := (usedBytes / pvcCapacity) * 100
-				log.Debugf("Threshold achieved ---- %v", pvcUsed)
-				if pvcUsed >= threshold {
-					isthresholdmet = true
-					log.Debugf("Threshold met, hence exiting the poll.. %v", pvcUsed)
+				pvcCapacity := appVol.Spec.Size / units.GiB
+				log.Debugf("Capacity in GB is %v", pvcCapacity)
+				usedGiB := appVol.GetUsage() / units.GiB
+				log.Debugf("Used vol in GB is : %v", usedGiB)
+				percentageUsage := (usedGiB / pvcCapacity) * 100
+				log.Debugf("Percentage usgae of pvc is : %v", percentageUsage)
+				if percentageUsage >= threshold {
+					log.Debugf("Threshold met for the PV %v", vol.Name)
+					return nil, false, nil
 				}
 			}
-			if isthresholdmet {
-				return true, nil
-			}
-			return false, nil
-		})
-		return waitErr
+		}
+		return nil, true, fmt.Errorf("error getting volume with size atleast %d GiB used", threshold)
 	}
+	_, err := task.DoRetryWithTimeout(f, 60*time.Minute, timeOut)
+
 	return err
 }
