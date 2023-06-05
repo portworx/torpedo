@@ -194,7 +194,7 @@ func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, 
 }
 
 // GetResourceTemplate get the resource template id
-func (cp *ControlPlane) GetResourceTemplate(tenantID string, TemplateName string, supportedDataService string) (string, error) {
+func (cp *ControlPlane) GetResourceTemplate(tenantID string, TemplateName, supportedDataService string) (string, error) {
 	log.Infof("Get the resource template for each data services")
 	resourceTemplates, err := cp.components.ResourceSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
