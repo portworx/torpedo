@@ -232,7 +232,7 @@ func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataServic
 		}
 	}
 	if !(isavailable && isTemplateavailable) {
-		log.Errorf("Template with Name %v does not exis", TemplateName)
+		log.Errorf("Template with Name %v does not exis", resourceTemplateName)
 	}
 	return resourceTemplateID, nil
 }
