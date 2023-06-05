@@ -1131,10 +1131,10 @@ func DeployandValidateDataServicesCustom(ds dataservice.PDSDataService, namespac
 		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 	})
 	Step("Validate Storage Configurations", func() {
-		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+		dataServiceDefaultResourceTemplateID, err = pdslib.GetCustomResourceTemplateID(tenantID, CustomTemplate, ds.Name)
 		log.FailOnError(err, "Error while getting resource template")
 		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
-		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, CustomStorageTemplateId, namespace)
 		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 		ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 	})
