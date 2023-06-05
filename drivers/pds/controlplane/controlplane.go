@@ -26,6 +26,7 @@ var (
 	resourceTemplateID         string
 	appConfigTemplateID        string
 	storageTemplateID          string
+	resourceTemplateName       = "small"
 )
 
 const (
@@ -193,8 +194,15 @@ func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, 
 	return appConfigTemplateID, nil
 }
 
+// update template name with custom name
+func (cp *ControlPlane) UpdateResourceTemplateName(TemplateName string) string {
+	log.Infof("Updating the resource template name with : %v", TemplateName)
+	resourceTemplateName = TemplateName
+	return resourceTemplateName
+}
+
 // GetResourceTemplate get the resource template id
-func (cp *ControlPlane) GetResourceTemplate(tenantID string, TemplateName, supportedDataService string) (string, error) {
+func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataService string) (string, error) {
 	log.Infof("Get the resource template for each data services")
 	resourceTemplates, err := cp.components.ResourceSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
@@ -203,7 +211,7 @@ func (cp *ControlPlane) GetResourceTemplate(tenantID string, TemplateName, suppo
 	isavailable = false
 	isTemplateavailable = false
 	for i := 0; i < len(resourceTemplates); i++ {
-		if resourceTemplates[i].GetName() == TemplateName {
+		if resourceTemplates[i].GetName() == resourceTemplateName {
 			isTemplateavailable = true
 			dataService, err := cp.components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
 			if err != nil {

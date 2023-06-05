@@ -12,10 +12,6 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-const (
-	resourceTemplate = "small"
-)
-
 var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartPXDuringAppScaleUp", "Restart PX on a node during application is scaled up", pdsLabels, 0)
@@ -64,7 +60,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				log.FailOnError(err, "Error while getting app configuration template")
 				dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-				dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, resourceTemplate, ds.Name)
+				dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 				log.FailOnError(err, "Error while getting resource setting template")
 				dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
 
@@ -164,7 +160,7 @@ var _ = Describe("{RebootActiveNodeDuringDeployment}", func() {
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot test for data service %v", *deployment.ClusterResourceName))
 
-					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, resourceTemplate, ds.Name)
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 					log.FailOnError(err, "Error while getting resource setting template")
 					dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
 
@@ -209,7 +205,7 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 				log.FailOnError(err, "Error while validating data service deployment")
 				deployments[ds] = deployment
 
-				dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, resourceTemplate, ds.Name)
+				dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 				log.FailOnError(err, "Error while getting resource template")
 				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
@@ -252,7 +248,7 @@ var _ = Describe("{RebootNodeDuringAppVersionUpdate}", func() {
 				err = pdslib.InduceFailureAfterWaitingForCondition(updatedDeployment, namespace, params.ResiliencyTest.CheckTillReplica)
 				log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot test for data service %v", *deployment.ClusterResourceName))
 
-				dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, resourceTemplate, ds.Name)
+				dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 				log.FailOnError(err, "Error while getting resource template")
 				log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
@@ -344,7 +340,7 @@ var _ = Describe("{KillDeploymentControllerDuringDeployment}", func() {
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Deployment Controller test for data service %v", *deployment.ClusterResourceName))
 
-					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, resourceTemplate, ds.Name)
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 					log.FailOnError(err, "Error while getting resource template")
 					log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
@@ -398,7 +394,7 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot all worker nodes test for data service %v", *deployment.ClusterResourceName))
 
-					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, resourceTemplate, ds.Name)
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 					log.FailOnError(err, "Error while getting resource setting template")
 					dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
 
@@ -450,7 +446,7 @@ var _ = Describe("{KillAgentDuringDeployment}", func() {
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Agent Pod test for data service %v", *deployment.ClusterResourceName))
 
-					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, resourceTemplate, ds.Name)
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 					log.FailOnError(err, "Error while getting resource template")
 					log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 
@@ -555,7 +551,7 @@ var _ = Describe("{KillTeleportDuringDeployment}", func() {
 					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
 					log.FailOnError(err, fmt.Sprintf("Error happened while executing Kill Teleport Pod test for data service %v", *deployment.ClusterResourceName))
 
-					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, resourceTemplate, ds.Name)
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 					log.FailOnError(err, "Error while getting resource template")
 					log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
 

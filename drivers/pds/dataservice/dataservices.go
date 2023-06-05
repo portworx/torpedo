@@ -217,7 +217,7 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 	}
 
 	log.InfoD("Getting Resource Template ID")
-	dataServiceDefaultResourceTemplateID, err = controlplane.GetResourceTemplate(tenantID, testParams.ResourceTemplateName, ds.Name)
+	dataServiceDefaultResourceTemplateID, err = controlplane.GetResourceTemplate(tenantID, ds.Name)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error while getting resource template ID %v", err)
 	}
