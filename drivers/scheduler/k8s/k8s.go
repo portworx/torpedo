@@ -3556,7 +3556,6 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 
 // GetVolumes  Get the volumes
 func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
-	log.Debugf("THE CTX TYPE IS :%v", ctx)
 	k8sOps := k8sApps
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
@@ -3617,7 +3616,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				})
 			}
 		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
-			log.Debugf("****************the ns is %v:", obj.GetNamespace())
+			log.Debugf("****************the ns is %v:", obj.Namespace.GetName())
 			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), "pds-automation")
 			if err != nil {
 				return nil, &scheduler.ErrFailedToResizeStorage{

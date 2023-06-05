@@ -15,7 +15,6 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -211,15 +210,15 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 				if err != nil {
 					return nil, true, err
 				}
-				pvcCapacity := appVol.Spec.Size / units.GiB
+				pvcCapacity := appVol.Spec.Size
 				log.Debugf("Capacity in GB is %v", pvcCapacity)
-				usedGiB := appVol.GetUsage() / units.GiB
-				log.Debugf("Used vol in GB is : %v", usedGiB)
-				percentageUsage := (usedGiB / pvcCapacity) * 100
+				usedBytes := appVol.GetUsage()
+				log.Debugf("Used vol in GB is : %v", usedBytes)
+				percentageUsage := (usedBytes / pvcCapacity) * 100
 				log.Debugf("Percentage usgae of pvc is : %v", percentageUsage)
-				if percentageUsage >= threshold {
+				if percentageUsage >= pvcCapacity {
 					log.Debugf("Threshold met for the PV %v", vol.Name)
-					return nil, false, nil
+					return nil, true, nil
 				}
 			}
 		}
