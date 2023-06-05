@@ -2,14 +2,15 @@ package controlplane
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/api"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/pkg/log"
-	"net/url"
-	"strings"
 )
 
 // ControlPlane PDS
@@ -22,14 +23,12 @@ var (
 	isavailable                bool
 	isTemplateavailable        bool
 	isStorageTemplateAvailable bool
-
-	resourceTemplateID  string
-	appConfigTemplateID string
-	storageTemplateID   string
+	resourceTemplateID         string
+	appConfigTemplateID        string
+	storageTemplateID          string
 )
 
 const (
-	resourceTemplateName  = "Small"
 	appConfigTemplateName = "QaDefault"
 	storageTemplateName   = "QaDefault"
 )
@@ -195,7 +194,7 @@ func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, 
 }
 
 // GetResourceTemplate get the resource template id
-func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataService string) (string, error) {
+func (cp *ControlPlane) GetResourceTemplate(tenantID string, TemplateName string, supportedDataService string) (string, error) {
 	log.Infof("Get the resource template for each data services")
 	resourceTemplates, err := cp.components.ResourceSettingsTemplate.ListTemplates(tenantID)
 	if err != nil {
@@ -204,7 +203,7 @@ func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataServic
 	isavailable = false
 	isTemplateavailable = false
 	for i := 0; i < len(resourceTemplates); i++ {
-		if resourceTemplates[i].GetName() == resourceTemplateName {
+		if resourceTemplates[i].GetName() == TemplateName {
 			isTemplateavailable = true
 			dataService, err := cp.components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
 			if err != nil {
@@ -225,7 +224,7 @@ func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataServic
 		}
 	}
 	if !(isavailable && isTemplateavailable) {
-		log.Errorf("Template with Name %v does not exis", resourceTemplateName)
+		log.Errorf("Template with Name %v does not exis", TemplateName)
 	}
 	return resourceTemplateID, nil
 }

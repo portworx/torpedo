@@ -65,14 +65,14 @@ type DataserviceType struct{}
 
 // TestParams has the prereqs for deploying pds dataservices
 type TestParams struct {
-	DeploymentTargetId string
-	DnsZone            string
-	StorageTemplateId  string
-	ResourceTemplateID string
-	NamespaceId        string
-	TenantId           string
-	ProjectId          string
-	ServiceType        string
+	DeploymentTargetId   string
+	DnsZone              string
+	StorageTemplateId    string
+	ResourceTemplateName string
+	NamespaceId          string
+	TenantId             string
+	ProjectId            string
+	ServiceType          string
 }
 
 type PDSDataService struct {
@@ -217,7 +217,7 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 	}
 
 	log.InfoD("Getting Resource Template ID")
-	dataServiceDefaultResourceTemplateID, err = controlplane.GetResourceTemplate(tenantID, ds.Name)
+	dataServiceDefaultResourceTemplateID, err = controlplane.GetResourceTemplate(tenantID, testParams.ResourceTemplateName, ds.Name)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error while getting resource template ID %v", err)
 	}

@@ -413,67 +413,67 @@ func DeletePods(podList []corev1.Pod) error {
 	return nil
 }
 
-// GetStorageTemplate return the storage template id
-func GetCustomStorageTemplateID(tenantID string, templateName string) (string, error) {
-	log.InfoD("Get the storage template")
-	log.Debugf("Storage template used is: %v", templateName)
-	storageTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
-	if err != nil {
-		return "", err
-	}
-	isStorageTemplateAvailable = false
-	for i := 0; i < len(storageTemplates); i++ {
-		if storageTemplates[i].GetName() == templateName {
-			isStorageTemplateAvailable = true
-			log.InfoD("Storage template details -----> Name %v,Repl %v , Fg %v , Fs %v",
-				storageTemplates[i].GetName(),
-				storageTemplates[i].GetRepl(),
-				storageTemplates[i].GetFg(),
-				storageTemplates[i].GetFs())
-			storageTemplateID = storageTemplates[i].GetId()
-		}
-	}
-	if !isStorageTemplateAvailable {
-		log.Fatalf("storage template %v is not available ", templateName)
-	}
-	return storageTemplateID, nil
-}
+// // GetStorageTemplate return the storage template id
+// func GetCustomStorageTemplateID(tenantID string, templateName string) (string, error) {
+// 	log.InfoD("Get the storage template")
+// 	log.Debugf("Storage template used is: %v", templateName)
+// 	storageTemplates, err := components.StorageSettingsTemplate.ListTemplates(tenantID)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	isStorageTemplateAvailable = false
+// 	for i := 0; i < len(storageTemplates); i++ {
+// 		if storageTemplates[i].GetName() == templateName {
+// 			isStorageTemplateAvailable = true
+// 			log.InfoD("Storage template details -----> Name %v,Repl %v , Fg %v , Fs %v",
+// 				storageTemplates[i].GetName(),
+// 				storageTemplates[i].GetRepl(),
+// 				storageTemplates[i].GetFg(),
+// 				storageTemplates[i].GetFs())
+// 			storageTemplateID = storageTemplates[i].GetId()
+// 		}
+// 	}
+// 	if !isStorageTemplateAvailable {
+// 		log.Fatalf("storage template %v is not available ", templateName)
+// 	}
+// 	return storageTemplateID, nil
+// }
 
-func GetCustomResourceTemplateID(tenantID string, templateName string, dsName string) (string, error) {
-	log.Infof("Get the resource template for each data services")
-	log.Debugf("Custom resource template used is: %v", templateName)
-	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
-	if err != nil {
-		return "", err
-	}
-	isavailable = false
-	isTemplateavailable = false
-	for i := 0; i < len(resourceTemplates); i++ {
-		if resourceTemplates[i].GetName() == templateName {
-			isTemplateavailable = true
-			dataService, err := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
-			if err != nil {
-				return "", err
-			}
-			if dataService.GetName() == dsName {
-				log.Infof("Data service name: %v", dataService.GetName())
-				log.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
-					resourceTemplates[i].GetName(),
-					resourceTemplates[i].GetId(),
-					resourceTemplates[i].GetDataServiceId(),
-					resourceTemplates[i].GetStorageRequest(),
-					resourceTemplates[i].GetMemoryRequest())
+// func GetCustomResourceTemplateID(tenantID string, templateName string, dsName string) (string, error) {
+// 	log.Infof("Get the resource template for each data services")
+// 	log.Debugf("Custom resource template used is: %v", templateName)
+// 	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	isavailable = false
+// 	isTemplateavailable = false
+// 	for i := 0; i < len(resourceTemplates); i++ {
+// 		if resourceTemplates[i].GetName() == templateName {
+// 			isTemplateavailable = true
+// 			dataService, err := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
+// 			if err != nil {
+// 				return "", err
+// 			}
+// 			if dataService.GetName() == dsName {
+// 				log.Infof("Data service name: %v", dataService.GetName())
+// 				log.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
+// 					resourceTemplates[i].GetName(),
+// 					resourceTemplates[i].GetId(),
+// 					resourceTemplates[i].GetDataServiceId(),
+// 					resourceTemplates[i].GetStorageRequest(),
+// 					resourceTemplates[i].GetMemoryRequest())
 
-				isavailable = true
-				resourceTemplateID = resourceTemplates[i].GetId()
-			}
-		}
-	}
-	if !(isavailable && isTemplateavailable) {
-		log.Errorf("Template with Name %v does not exis", resourceTemplateName)
-	}
-	return resourceTemplateID, nil
-}
+// 				isavailable = true
+// 				resourceTemplateID = resourceTemplates[i].GetId()
+// 			}
+// 		}
+// 	}
+// 	if !(isavailable && isTemplateavailable) {
+// 		log.Errorf("Template with Name %v does not exis", resourceTemplateName)
+// 	}
+// 	return resourceTemplateID, nil
+// }
 
 // GetAllDataserviceResourceTemplate get the resource template id's of supported dataservices and forms supported dataserviceNameIdMap
 func GetAllDataserviceResourceTemplate(tenantID string, supportedDataServices []string) (map[string]string, map[string]string, error) {
