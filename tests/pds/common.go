@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/pds/parameters"
@@ -170,6 +171,8 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 // Check the DS related PV usage and resize in case of 90% full
 func CheckPVCtoFullCondition(deploymentName string, namespace string, context []*scheduler.Context) error {
 	log.Debugf("Start polling the pvc consumption for the DS %v", deploymentName)
+	var pvName string
+	var volId string
 	threshold := 90
 	isthresholdmet := false
 	for _, ctx := range context {
@@ -177,31 +180,36 @@ func CheckPVCtoFullCondition(deploymentName string, namespace string, context []
 		if err != nil {
 			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
 		}
+		for _, vol := range vols {
+			if strings.Contains(vol.Name, "datadir") {
+				pvName = vol.Name
+				volId = vol.ID
+				log.Debugf("PVNAME IS : %v", pvName)
+				log.Debugf("VOL ID IS : %v", volId)
+			}
+		}
 		waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
-			for _, vol := range vols {
-				log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
-				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
-				log.Debugf("THE VOL DESC IS ----- %v", appVol)
-				if err != nil {
-					return true, err
-				}
-				usedBytes := appVol.GetUsage()
-				log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
-				log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
-				pvcCapacity := appVol.Spec.Size
-				pvcUsed := int((usedBytes / pvcCapacity) * 100)
-				log.Debugf("Threshold achieved ---- %v", pvcUsed)
-				if pvcUsed >= threshold {
-					isthresholdmet = true
-				}
+			log.Debugf("VOLUME TO BE INSPECTED IS : %v", pvName)
+			appVol, err := tests.Inst().V.InspectVolume(volId)
+			if err != nil {
+				return true, err
+			}
+			usedBytes := appVol.GetUsage()
+			log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
+			log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
+			pvcCapacity := appVol.Spec.Size
+			pvcUsed := int((usedBytes / pvcCapacity) * 100)
+			log.Debugf("Threshold achieved ---- %v", pvcUsed)
+			if pvcUsed >= threshold {
+				isthresholdmet = true
 			}
 			if isthresholdmet {
 				return true, nil
 			}
-			return false, nil
+			return false, err
 		})
 		if !isthresholdmet {
-			return fmt.Errorf("threshold not met due to : %v", waitErr)
+			return waitErr
 		}
 	}
 

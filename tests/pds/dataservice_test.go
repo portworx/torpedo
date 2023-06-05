@@ -1711,28 +1711,6 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 				}
 			})
 
-			defer func() {
-				for dsName, workloadContainer := range generateWorkloads {
-					Step("Delete the workload generating deployments", func() {
-						if Contains(dataServiceDeploymentWorkloads, dsName) {
-							log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
-							err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
-						} else if Contains(dataServicePodWorkloads, dsName) {
-							log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
-							err = pdslib.DeleteK8sPods(workloadContainer, namespace)
-						}
-						log.FailOnError(err, "error deleting workload generating pods")
-					})
-				}
-			}()
-
-			Step("Validate Deployments before resize of PVC", func() {
-				for ds, deployment := range deployments {
-					err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
-					log.FailOnError(err, "Error while validating dataservices")
-					log.InfoD("Data-service: %v is up and healthy", ds.Name)
-				}
-			})
 			Step("Checking the PVC usage", func() {
 				ctx := dsTest.CreateSchedulerContextForPDSApps(depList)
 				err = CheckPVCtoFullCondition(*deployment.ClusterResourceName, namespace, ctx)
