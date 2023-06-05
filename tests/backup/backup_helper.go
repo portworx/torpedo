@@ -1393,10 +1393,11 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		return fmt.Errorf("InspectBackup Err: %v", err)
 	}
 
-	backupStatus := backupInspectResponse.GetBackup().GetStatus().Status
-	if backupStatus != api.BackupInfo_StatusInfo_Success &&
-		backupStatus != api.BackupInfo_StatusInfo_PartialSuccess {
-		return fmt.Errorf("ValidateBackup requires backup [%s] to have a status of Success or PartialSuccess", backupName)
+	backupStatus := backupInspectResponse.GetBackup().GetStatus()
+	backupStatusCode := backupStatus.GetStatus()
+	if backupStatusCode != api.BackupInfo_StatusInfo_Success &&
+		backupStatusCode != api.BackupInfo_StatusInfo_PartialSuccess {
+		return fmt.Errorf("backup [%s] status was [%s] with reason [%s]. Expected status was Success or PartialSuccess", backupName, backupStatusCode, backupStatus.GetReason())
 	}
 
 	var errors []error
@@ -1427,11 +1428,12 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		}
 
 	specloop:
+		// check if every object in SpecList is also in backup
 		for _, spec := range scheduledAppContext.App.SpecList {
 
 			name, kind, ns, err := GetSpecNameKindNamepace(spec)
 			if err != nil {
-				err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
+				err := fmt.Errorf("GetSpecNameKindNamepace - Error: [%s], in namespace (appCtx): [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
 				errors = append(errors, err)
 				continue specloop
 			}
@@ -1469,6 +1471,8 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 			}
 		}
 
+		/// Validation of Volumes ///
+
 		log.InfoD("Validating backed up volumes for the namespace (scheduledAppContext) [%s] in backup [%s]", scheduledAppContextNamespace, backupName)
 
 		// collect the backup resources whose VOLUMES should be present in this scheduledAppContext (namespace)
@@ -1488,21 +1492,22 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		volumeMap := make(map[string]*volume.Volume)
 		scheduledVolumes, err := Inst().S.GetVolumes(scheduledAppContext)
 		if err != nil {
-			err := fmt.Errorf("error in Inst().S.GetVolumes: [%s] in namespace (appCtx) [%s]", err, scheduledAppContextNamespace)
+			err := fmt.Errorf("error in Inst().S.GetVolumes: {%s} for namespace (scheduledAppContext) [%s]", err, scheduledAppContextNamespace)
 			errors = append(errors, err)
 			continue
 		}
 		for _, scheduledVol := range scheduledVolumes {
 			volumeMap[scheduledVol.ID] = scheduledVol
 		}
-		log.Infof("volumes bounded to the PVCs in the context [%s] are [%+v]", scheduledAppContextNamespace, scheduledVolumes)
+		log.Infof("volumes bounded to the PVCs in the namespace (scheduledAppContext) [%s] are [%+v]", scheduledAppContextNamespace, scheduledVolumes)
 
+		// in case of custom backup, PVCs & volumes may have not been backed up. Check for that
 		if len(resourceTypesFilter) == 0 ||
-			(len(resourceTypesFilter) > 0 && Contains(resourceTypesFilter, "PersistentVolumeClaim")) {
-			// Verify if volumes are present
+			(len(resourceTypesFilter) > 0 &&
+				Contains(resourceTypesFilter, "PersistentVolumeClaim")) {
 		volloop:
+			// Obtain volumes corresponding to all PVCs in SpecList and verify properties match up
 			for _, spec := range scheduledAppContext.App.SpecList {
-				// Obtaining the volume from the PVC
 				pvcSpecObj, ok := spec.(*corev1.PersistentVolumeClaim)
 				if !ok {
 					continue volloop
@@ -1515,21 +1520,21 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 
 				updatedSpec, err := sched.GetUpdatedSpec(pvcSpecObj)
 				if err != nil {
-					err := fmt.Errorf("unable to fetch updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Error: %v", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace, err)
+					err := fmt.Errorf("unable to fetch updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Error: {%v}. Cannot acertain if volume (corresponding to aforementioned PVC) is in backup", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace, err)
 					errors = append(errors, err)
 					continue volloop
 				}
 
 				pvcObj, ok := updatedSpec.(*corev1.PersistentVolumeClaim)
 				if !ok {
-					err := fmt.Errorf("unable to fetch updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Error: %v", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace, err)
+					err := fmt.Errorf("failed to cast fetched updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Cannot acertain if volume (corresponding to aforementioned PVC) is in backup", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace)
 					errors = append(errors, err)
 					continue volloop
 				}
 
 				scheduledVol, ok := volumeMap[pvcObj.Spec.VolumeName]
 				if !ok {
-					err := fmt.Errorf("unable to find the volume corresponding to PVC(name: [%s], namespace: [%s]) in the cluster corresponding to the PVC's context, which is [%s]", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace)
+					err := fmt.Errorf("unable to find the volume corresponding to PVC(name: [%s], namespace: [%s]) in the cluster corresponding to the PVC's context [%s]. Cannot acertain if volume is in backup as volume info couldn't be obtained", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace)
 					errors = append(errors, err)
 					continue volloop
 				}
@@ -1539,7 +1544,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 					if backedupVol.GetName() == scheduledVol.ID {
 
 						if backedupVol.Pvc != pvcObj.Name {
-							err := fmt.Errorf("the PVC of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.Pvc, pvcObj.Name)
+							err := fmt.Errorf("the PVC of the volume [%s] as per the backup [%s] is [%s], but the one found in the scheduled namespace is [%s]", backedupVol.GetName(), backupName, backedupVol.Pvc, pvcObj.Name)
 							errors = append(errors, err)
 						}
 
@@ -1551,12 +1556,12 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 						}
 
 						if backedupVol.DriverName != expectedVolumeDriver {
-							err := fmt.Errorf("the Driver Name of the volume as per the backup [%s] is [%s], but the one expected is [%s]", backedupVol.GetName(), backedupVol.DriverName, expectedVolumeDriver)
+							err := fmt.Errorf("the Driver Name of the volume [%s] as per the backup [%s] is [%s], but the expected driver is [%s]", backedupVol.GetName(), backupName, backedupVol.DriverName, expectedVolumeDriver)
 							errors = append(errors, err)
 						}
 
 						if backedupVol.StorageClass != *pvcObj.Spec.StorageClassName {
-							err := fmt.Errorf("the Storage Class of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.StorageClass, *pvcObj.Spec.StorageClassName)
+							err := fmt.Errorf("the Storage Class of the volume [%s] as per the backup [%s] is [%s], but the one found in the namespace (scheduledAppContext) [%s] is [%s]", backedupVol.GetName(), backupName, backedupVol.StorageClass, scheduledAppContextNamespace, *pvcObj.Spec.StorageClassName)
 							errors = append(errors, err)
 						}
 
@@ -1565,7 +1570,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 				}
 
 				// The following error means that something WAS not backed up, OR it wasn't supposed to be backed up, and we forgot to exclude the check.
-				err = fmt.Errorf("the volume [%s] corresponding to PVC(name: [%s], namespace: [%s]) was present in the cluster with the namespace containing that PVC, but the volume was not in the backup [%s]", pvcObj.Spec.VolumeName, pvcObj.GetName(), pvcObj.GetNamespace(), backupName)
+				err = fmt.Errorf("the volume [%s] corresponding to PVC(name: [%s], namespace: [%s]) was present in the cluster with the namespace containing that PVC, but the volume was not in the backup [%s]", scheduledVol.ID, pvcObj.GetName(), pvcObj.GetNamespace(), backupName)
 				errors = append(errors, err)
 			}
 		} else {
@@ -1574,13 +1579,13 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 
 	}
 
+	// consolidate errors and return
 	errStrings := make([]string, 0)
 	for _, err := range errors {
 		if err != nil {
 			errStrings = append(errStrings, err.Error())
 		}
 	}
-
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateBackup Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	} else {
@@ -1697,7 +1702,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 
 	var errors []error
 
-	// check if all the objects in the spec are present in the restore as per what px-backup reports
+	// check if all the objects in the spec are present in the restore
 	for _, expectedRestoredAppContext := range expectedRestoredAppContexts {
 
 		expectedRestoredAppContextNamespace := expectedRestoredAppContext.ScheduleOptions.Namespace
@@ -1716,7 +1721,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 			continue
 		}
 
-		// collect the backup resources whose specs should be present in this expectedRestoredAppContext (namespace)
+		// filter list of restored resources from px-backup API and collect only those which are in the namespace `expectedRestoredAppContextNamespace`
 		restoredObjectsInNS := make([]*api.RestoreInfo_RestoredResource, 0)
 		for _, resource := range restoredResourcesInfo {
 			if resource.GetNamespace() == expectedRestoredAppContextNamespace {
@@ -1725,6 +1730,8 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 		}
 
 	specloop:
+		// check if each spec object in SpecList is in list of resources px-backup restored
+		// and if present, check for presence in restored namespace on cluster
 		for _, specObj := range expectedRestoredAppContext.App.SpecList {
 
 			name, kind, ns, err := GetSpecNameKindNamepace(specObj)
@@ -1752,11 +1759,13 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 					continue specloop
 				}
 
+				// find the spec object in list of restored resources (obtained from per px-backup)
 				for _, restoredObj := range restoredObjectsInNS {
 					if name == restoredObj.Name &&
 						kind == restoredObj.Kind {
 						log.Infof("object (name: [%s], GVK: [%s,%s,%s], namespace: [%s]) was found in restore [%s], as expected by presence in expectedRestoredAppContext [%s]", restoredObj.Name, restoredObj.Group, restoredObj.Version, restoredObj.Kind, restoredObj.Namespace, restoreName, expectedRestoredAppContextNamespace)
 
+						// check status od restored resource (as per px-backup)
 						if restoredObj.Status.Status != api.RestoreInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
 							if restoredObj.Status.Status == api.RestoreInfo_StatusInfo_Retained {
 								if theRestore.ReplacePolicy != api.ReplacePolicy_Retain {
@@ -1769,7 +1778,11 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 							}
 						}
 
+						// here, we *actually* check if the resource was restored by "getting" it
+						// using the k8s scheduler driver. If we fail to get it, we draw the conclusion
+						// that it wasn't restored
 						if k8s, ok := Inst().S.(*k8s.K8s); ok {
+							// `GetUpdatedSpec` is an easy way to check for presence of an object
 							_, err := k8s.GetUpdatedSpec(specObj)
 							if err == nil {
 								log.Infof("object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] was also present on the cluster/namespace [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
@@ -1800,10 +1813,11 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 			}
 		}
 
-		// VALIDATION OF VOLUMES
+		/// VALIDATION OF VOLUMES ///
+
 		log.InfoD("Validating Restored Volumes for the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 
-		// Collect all volumes belonging to a context
+		// Collect volumes belonging to all the PVCs in a namespace (restoredAppContext)
 		log.Infof("getting the volumes bounded to the PVCs in the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 		actualVolumeMap := make(map[string]*volume.Volume)
 		actualRestoredVolumes, err := Inst().S.GetVolumes(expectedRestoredAppContext)
@@ -1853,7 +1867,9 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 			}
 		}
 
-		// VALIDATE APPLICATIONS
+		/// VALIDATE APPLICATIONS ///
+		// This is used to check if everything that was restored is actually working,
+		// which includes checking if pods are up
 		log.InfoD("Validate applications in restored namespace [%s] due to restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 		errorChan := make(chan error, errorChannelSize)
 		ValidateContext(expectedRestoredAppContext, &errorChan)
@@ -1862,13 +1878,13 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 		}
 	}
 
+	// consolidate errors and return
 	errStrings := make([]string, 0)
 	for _, err := range errors {
 		if err != nil {
 			errStrings = append(errStrings, err.Error())
 		}
 	}
-
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateRestore Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	} else {
