@@ -1099,7 +1099,7 @@ func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, ten
 	log.InfoD("Data Service Deployment Triggered")
 	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespace, serviceType)
 	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsTest.TriggerDeployDataService(ds, namespace, tenantID, projectID, false,
-		dataservice.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType, ResourceTemplateName: resourceTemplate})
+		dataservice.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
 	Step("Validate Data Service Deployments", func() {
 		err = dsTest.ValidateDataServiceDeployment(deployment, namespace)

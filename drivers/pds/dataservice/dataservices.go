@@ -65,14 +65,13 @@ type DataserviceType struct{}
 
 // TestParams has the prereqs for deploying pds dataservices
 type TestParams struct {
-	DeploymentTargetId   string
-	DnsZone              string
-	StorageTemplateId    string
-	ResourceTemplateName string
-	NamespaceId          string
-	TenantId             string
-	ProjectId            string
-	ServiceType          string
+	DeploymentTargetId string
+	DnsZone            string
+	StorageTemplateId  string
+	NamespaceId        string
+	TenantId           string
+	ProjectId          string
+	ServiceType        string
 }
 
 type PDSDataService struct {
