@@ -170,8 +170,6 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 // Check the DS related PV usage and resize in case of 90% full
 func CheckPVCtoFullCondition(deploymentName string, namespace string, context []*scheduler.Context) error {
 	log.Debugf("Start polling the pvc consumption for the DS %v", deploymentName)
-	// var pvName string
-	// var volId string
 	var threshold uint64 = 90
 	isthresholdmet := false
 	for _, ctx := range context {
@@ -179,12 +177,14 @@ func CheckPVCtoFullCondition(deploymentName string, namespace string, context []
 		if err != nil {
 			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
 		}
-		for _, vol := range vols {
-			waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
+		log.Debugf("Volumes to be inspected are : %v", vols)
+		waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
+			log.Debugf("Polling begins for ovc usage calculation")
+			for _, vol := range vols {
 				log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
 				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
 				if err != nil {
-					return true, err
+					return false, err
 				}
 				log.Debugf("app vol is: %v", appVol)
 				usedBytes := appVol.GetUsage()
@@ -195,15 +195,15 @@ func CheckPVCtoFullCondition(deploymentName string, namespace string, context []
 				log.Debugf("Threshold achieved ---- %v", pvcUsed)
 				if pvcUsed >= threshold {
 					isthresholdmet = true
+					log.Debugf("Threshold met, hence exiting the poll.. %v", pvcUsed)
 				}
+			}
+			if isthresholdmet {
 				return true, nil
-			})
-			return waitErr
-		}
-		if !isthresholdmet {
-			return err
-		}
+			}
+			return false, nil
+		})
+		return waitErr
 	}
-
 	return err
 }
