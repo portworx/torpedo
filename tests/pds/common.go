@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/pds/parameters"
@@ -15,6 +14,7 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -170,7 +170,6 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 // Check the DS related PV usage and resize in case of 90% full
 func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	log.Infof("Start polling the pvc consumption for the DS")
-	var threshold uint64 = 90
 	// for _, ctx := range context {
 	// 	vols, err := tests.Inst().S.GetVolumes(ctx)
 	// 	if err != nil {
@@ -206,23 +205,22 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 			}
 			for _, vol := range vols {
 				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
-				log.Debugf("Volume desription is %v\n", appVol)
 				if err != nil {
 					return nil, true, err
 				}
-				pvcCapacity := appVol.Spec.Size
+				pvcCapacity := appVol.Spec.Size / units.GiB
 				log.Debugf("Capacity in GB is %v", pvcCapacity)
-				usedBytes := appVol.GetUsage()
-				log.Debugf("Used vol in GB is : %v", usedBytes)
-				percentageUsage := (usedBytes / pvcCapacity) * 100
-				log.Debugf("Percentage usgae of pvc is : %v", percentageUsage)
-				if percentageUsage >= pvcCapacity {
-					log.Debugf("Threshold met for the PV %v", vol.Name)
+				usedGiB := appVol.GetUsage() / units.GiB
+				log.Debugf("Used vol in GB is : %v", usedGiB)
+				if usedGiB >= pvcCapacity {
+					log.Debugf("The PVC %v is full ", vol.Name)
+					log.Debugf("The PVC capacity is : %v ", pvcCapacity)
+					log.Debugf("The PVC usage is : %v ", usedGiB)
 					return nil, true, nil
 				}
 			}
 		}
-		return nil, true, fmt.Errorf("error getting volume with size atleast %d GiB used", threshold)
+		return nil, true, err
 	}
 	_, err := task.DoRetryWithTimeout(f, 60*time.Minute, timeOut)
 
