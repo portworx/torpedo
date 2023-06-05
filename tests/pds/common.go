@@ -170,8 +170,8 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 // Check the DS related PV usage and resize in case of 90% full
 func CheckPVCtoFullCondition(deploymentName string, namespace string, context []*scheduler.Context) error {
 	log.Debugf("Start polling the pvc consumption for the DS %v", deploymentName)
-	var pvName string
-	var volId string
+	// var pvName string
+	// var volId string
 	var threshold uint64 = 90
 	isthresholdmet := false
 	for _, ctx := range context {
