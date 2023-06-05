@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/pds/parameters"
@@ -181,33 +180,28 @@ func CheckPVCtoFullCondition(deploymentName string, namespace string, context []
 			return fmt.Errorf("persistant volumes Not Found due to : %v", err)
 		}
 		for _, vol := range vols {
-			if strings.Contains(vol.Name, "datadir") {
-				pvName = vol.Name
-				volId = vol.ID
-				log.Debugf("PVNAME IS : %v", pvName)
-				log.Debugf("VOL ID IS : %v", volId)
-			}
-		}
-		waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
-			log.Debugf("VOLUME TO BE INSPECTED IS : %v", pvName)
-			appVol, err := tests.Inst().V.InspectVolume(volId)
-			if err != nil {
-				return true, err
-			}
-			log.Debugf("app vol is: %v", appVol)
-			usedBytes := appVol.GetUsage()
-			log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
-			log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
-			pvcCapacity := appVol.Spec.Size
-			pvcUsed := (usedBytes / pvcCapacity) * 100
-			log.Debugf("Threshold achieved ---- %v", pvcUsed)
-			if pvcUsed >= threshold {
-				isthresholdmet = true
-			}
-			return true, err
-		})
-		if !isthresholdmet {
+			waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
+				log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
+				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+				if err != nil {
+					return true, err
+				}
+				log.Debugf("app vol is: %v", appVol)
+				usedBytes := appVol.GetUsage()
+				log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
+				log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
+				pvcCapacity := appVol.Spec.Size
+				pvcUsed := (usedBytes / pvcCapacity) * 100
+				log.Debugf("Threshold achieved ---- %v", pvcUsed)
+				if pvcUsed >= threshold {
+					isthresholdmet = true
+				}
+				return true, nil
+			})
 			return waitErr
+		}
+		if !isthresholdmet {
+			return err
 		}
 	}
 
