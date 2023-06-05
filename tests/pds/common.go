@@ -173,7 +173,7 @@ func CheckPVCtoFullCondition(deploymentName string, namespace string, context []
 	log.Debugf("Start polling the pvc consumption for the DS %v", deploymentName)
 	var pvName string
 	var volId string
-	threshold := 90
+	var threshold uint64 = 90
 	isthresholdmet := false
 	for _, ctx := range context {
 		vols, err := tests.Inst().S.GetVolumes(ctx)
@@ -198,7 +198,7 @@ func CheckPVCtoFullCondition(deploymentName string, namespace string, context []
 			log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
 			log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
 			pvcCapacity := appVol.Spec.Size
-			pvcUsed := int((usedBytes / pvcCapacity) * 100)
+			pvcUsed := (usedBytes / pvcCapacity) * 100
 			log.Debugf("Threshold achieved ---- %v", pvcUsed)
 			if pvcUsed >= threshold {
 				isthresholdmet = true
