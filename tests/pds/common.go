@@ -194,6 +194,7 @@ func CheckPVCtoFullCondition(deploymentName string, namespace string, context []
 			if err != nil {
 				return true, err
 			}
+			log.Debugf("app vol is: %v", appVol)
 			usedBytes := appVol.GetUsage()
 			log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
 			log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
@@ -203,10 +204,7 @@ func CheckPVCtoFullCondition(deploymentName string, namespace string, context []
 			if pvcUsed >= threshold {
 				isthresholdmet = true
 			}
-			if isthresholdmet {
-				return true, nil
-			}
-			return false, err
+			return true, err
 		})
 		if !isthresholdmet {
 			return waitErr
