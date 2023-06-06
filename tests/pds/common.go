@@ -174,7 +174,6 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	f := func() (interface{}, bool, error) {
 		for _, ctx := range context {
 			vols, err := tests.Inst().S.GetVolumes(ctx)
-			log.Debugf("Volumes found for the DS are : %v", vols)
 			if err != nil {
 				return nil, true, err
 			}
@@ -216,6 +215,8 @@ func IncreasePVCby1Gig(context []*scheduler.Context) error {
 		log.InfoD(fmt.Sprintf("validating successful volume size increase on app %s's volumes: %v",
 			ctx.App.Key, appVolumes))
 	}
+	// wait for the resize to take effect
+	time.Sleep(30 * time.Second)
 	newcapacity, err := GetVolumeCapacityInGB(context)
 	log.Debugf("Resized volume storage size is : %v", newcapacity)
 	if err != nil {
