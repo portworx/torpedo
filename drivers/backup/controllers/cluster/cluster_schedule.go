@@ -122,7 +122,7 @@ func (c *ScheduleApplicationsConfig) ScheduleOnNamespace(namespace string) error
 		return utils.ProcessError(err, debugMessage)
 	}
 	for _, ctx := range contexts {
-		c.controller.appendContext(namespace, ctx)
+		c.controller.saveContext(namespace, ctx)
 	}
 	return nil
 }

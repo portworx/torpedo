@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	GlobalDestroyOperationLabel  = "destroy"
-	GlobalCleanupOperationLabel  = "cleanup"
-	GlobalValidateOperationLabel = "validate"
+	GlobalDestroyOperationLabel  = "Destroy"
+	GlobalCleanupOperationLabel  = "Cleanup"
+	GlobalValidateOperationLabel = "Validate"
 )
 
 const (
@@ -69,36 +69,6 @@ func (c *ClusterController) getNamespaceInfo(namespace string) (*NamespaceInfo, 
 	return namespaceInfo, false
 }
 
-type NamespaceResource struct {
-	kind string
-	name string
-}
-
-func (r *NamespaceResource) Map() map[string]string {
-	return map[string]string{r.kind: r.name}
-}
-
-func (c *ClusterController) getNamespaceResources(namespace string) []*NamespaceResource {
-	resources := make([]*NamespaceResource, 0)
-	namespaceInfo, isNew := c.getNamespaceInfo(namespace)
-	if !isNew {
-		for _, ctx := range namespaceInfo.contexts {
-			for _, spec := range ctx.App.SpecList {
-				specType := reflect.ValueOf(spec).Elem()
-				kindField := specType.FieldByName("Kind")
-				nameField := specType.FieldByName("Name")
-				if kindField.IsValid() && nameField.IsValid() {
-					resources = append(resources, &NamespaceResource{
-						kind: kindField.String(),
-						name: nameField.String(),
-					})
-				}
-			}
-		}
-	}
-	return resources
-}
-
 // saveNamespaceInfo saves the NamespaceInfo of the specified namespace in the ClusterController
 func (c *ClusterController) saveNamespaceInfo(namespace string, namespaceInfo *NamespaceInfo) {
 	c.namespaces[namespace] = namespaceInfo
@@ -115,7 +85,7 @@ func (c *ClusterController) isNamespaceRecorded(namespace string) bool {
 	return ok
 }
 
-func (c *ClusterController) appendContext(namespace string, context *scheduler.Context) {
+func (c *ClusterController) saveContext(namespace string, context *scheduler.Context) {
 	namespaceInfo, isNew := c.getNamespaceInfo(namespace)
 	namespaceInfo.appendContext(context)
 	if isNew {
@@ -130,10 +100,30 @@ func (c *ClusterController) forgetContext(namespace string, context *scheduler.C
 	}
 }
 
-func (c *ClusterController) saveExecutionTime(operation string, namespace string, resources map[string]string, startTime time.Time) {
-	namespaceInfo, isNew := c.getNamespaceInfo(namespace)
+func (c *ClusterController) saveExecutionTime(operation string, startTime time.Time, context *scheduler.Context, err error) {
+	resourceMap := make(map[string]string, 0)
+	switch operation {
+	case GlobalDestroyOperationLabel:
+		resourceMap["App"] = context.App.Key
+	case GlobalCleanupOperationLabel:
+		for _, spec := range context.App.SpecList {
+			specType := reflect.ValueOf(spec).Elem()
+			kindField := specType.FieldByName("Kind")
+			nameField := specType.FieldByName("Name")
+			if kindField.IsValid() && nameField.IsValid() {
+				resourceMap[kindField.String()] = nameField.String()
+			}
+		}
+	case GlobalValidateOperationLabel:
+		resourceMap["App"] = context.App.Key
+	}
+	namespaceInfo, isNew := c.getNamespaceInfo(context.ScheduleOptions.Namespace)
 	if !isNew {
-		namespaceInfo.saveExecutionTime(operation, namespace, resources, startTime)
+		operationStatus := "SUCCESS"
+		if err != nil {
+			operationStatus = "FAILED"
+		}
+		namespaceInfo.saveExecutionTime(operation, operationStatus, startTime, context.ScheduleOptions.Namespace, resourceMap)
 	}
 }
 
@@ -147,8 +137,8 @@ func (c *ClusterController) incrementAppKeyCount(appKey string) {
 	c.appKeyCountMap[appKey] += 1
 }
 
-// getAllNamespaces returns a slice of all the namespaces recorded in the ClusterController
-func (c *ClusterController) getAllNamespaces() []string {
+// getNamespaces returns a slice of all the namespaces recorded in the ClusterController
+func (c *ClusterController) getNamespaces() []string {
 	namespaces := make([]string, 0)
 	for namespace := range c.namespaces {
 		namespaces = append(namespaces, namespace)
@@ -221,42 +211,33 @@ func (c *ClusterController) SelectNamespace(namespace string) *NamespaceConfig {
 
 // Cleanup cleans up all the resources created using the ClusterController
 func (c *ClusterController) Cleanup() (err error) {
-	startTime := time.Now()
+	//startTime := time.Now()
 	loopInComplete, loopIndex := true, -1
-	namespaces := c.getAllNamespaces()
+	namespaces := c.getNamespaces()
 	defer func() {
-		err = utils.SwitchClusterContext(GlobalInClusterConfigPath)
 		if loopInComplete && loopIndex != -1 {
-			resources := c.getNamespaceResources(namespaces[loopIndex])
-			resourceMap := make(map[string]string, 0)
-			for _, resource := range resources {
-				if resourceMap[resource.kind] == "" {
-					resourceMap[resource.kind] += resource.name
-				} else {
-					resourceMap[resource.kind] += fmt.Sprintf(",%s", resource.name)
-				}
-			}
-			c.saveExecutionTime(GlobalCleanupOperationLabel, namespaces[loopIndex], resourceMap, startTime)
+			//c.saveExecutionTime(GlobalCleanupOperationLabel, startTime, )
 		}
+		err = utils.SwitchClusterContext(GlobalInClusterConfigPath)
 	}()
 	for index, namespace := range namespaces {
 		loopIndex = index
 		log.Infof("Cleaning up namespace [%s]", namespace)
-		resources := c.getNamespaceResources(namespace)
-		resourceMap := make(map[string]string, 0)
-		for _, resource := range resources {
-			if resourceMap[resource.kind] == "" {
-				resourceMap[resource.kind] += resource.name
-			} else {
-				resourceMap[resource.kind] += fmt.Sprintf(",%s", resource.name)
-			}
-		}
+		//resources := c.getNamespaceResources(namespace)
+		//resourceMap := make(map[string]string, 0)
+		//for _, resource := range resources {
+		//	if resourceMap[resource.kind] == "" {
+		//		resourceMap[resource.kind] += resource.name
+		//	} else {
+		//		resourceMap[resource.kind] += fmt.Sprintf(",%s", resource.name)
+		//	}
+		//}
 		err = c.SelectNamespace(namespace).SkipValidation().Destroy()
 		if err != nil {
 			debugMessage := fmt.Sprintf("namespace: [%s]", namespace)
 			return utils.ProcessError(err, debugMessage)
 		}
-		c.saveExecutionTime(GlobalCleanupOperationLabel, namespace, resourceMap, startTime)
+		//c.saveExecutionTime("Cleanup", namespace, resourceMap, startTime)
 	}
 	loopInComplete = false
 	return nil

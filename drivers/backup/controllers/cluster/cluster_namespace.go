@@ -13,7 +13,7 @@ import (
 type ExecutionTimeRowData struct {
 	operation     string
 	namespace     string
-	resources     map[string]string
+	resourceMap   map[string]string
 	executionTime utils.ExecutionTime
 }
 
@@ -68,13 +68,13 @@ func (i *NamespaceInfo) forgetContext(context *scheduler.Context) {
 	}
 }
 
-func (i *NamespaceInfo) saveExecutionTime(operation string, namespace string, resources map[string]string, startTime time.Time) {
+func (i *NamespaceInfo) saveExecutionTime(operation string, operationStatus string, startTime time.Time, namespace string, resourceMap map[string]string) {
 	endTime := time.Now()
 	executionTime := utils.NewExecutionTime(startTime, endTime)
 	executionTimeRowData := &ExecutionTimeRowData{
 		operation:     operation,
 		namespace:     namespace,
-		resources:     resources,
+		resourceMap:   resourceMap,
 		executionTime: executionTime,
 	}
 	i.executionTimeData = append(i.executionTimeData, executionTimeRowData)
@@ -151,15 +151,15 @@ func (c *NamespaceConfig) SelectApplication(appKey string) *NamespaceConfig {
 }
 
 // Validate iterates through each scheduler-context in the NamespaceConfig and validates it
-func (c *NamespaceConfig) Validate() error {
+func (c *NamespaceConfig) Validate() (err error) {
 	startTime := time.Now()
 	loopInComplete, loopIndex := true, -1
 	defer func() {
 		if loopInComplete && loopIndex != -1 {
-			c.controller.saveExecutionTime(GlobalValidateOperationLabel, c.namespace, map[string]string{"App": c.contexts[loopIndex].App.Key}, startTime)
+			c.controller.saveExecutionTime(GlobalValidateOperationLabel, startTime, c.contexts[loopIndex], err)
 		}
 	}()
-	err := c.validate()
+	err = c.validate()
 	if err != nil {
 		debugMessage := fmt.Sprintf("namespace-config: [%v]", c)
 		return utils.ProcessError(err, debugMessage)
@@ -229,22 +229,22 @@ func (c *NamespaceConfig) Validate() error {
 				}
 			}
 		}
-		c.controller.saveExecutionTime(GlobalValidateOperationLabel, c.namespace, map[string]string{"App": ctx.App.Key}, startTime)
+		c.controller.saveExecutionTime(GlobalValidateOperationLabel, startTime, c.contexts[loopIndex], err)
 	}
 	loopInComplete = false
 	return nil
 }
 
 // Destroy iterates through each scheduler-context in the NamespaceConfig and destroys it
-func (c *NamespaceConfig) Destroy() error {
+func (c *NamespaceConfig) Destroy() (err error) {
 	startTime := time.Now()
 	loopInComplete, loopIndex := true, -1
 	defer func() {
 		if loopInComplete && loopIndex != -1 {
-			c.controller.saveExecutionTime(GlobalDestroyOperationLabel, c.namespace, map[string]string{"App": c.contexts[loopIndex].App.Key}, startTime)
+			c.controller.saveExecutionTime(GlobalValidateOperationLabel, startTime, c.contexts[loopIndex], err)
 		}
 	}()
-	err := c.validate()
+	err = c.validate()
 	if err != nil {
 		debugMessage := fmt.Sprintf("namespace-config: [%v]", c)
 		return utils.ProcessError(err, debugMessage)
@@ -294,7 +294,7 @@ func (c *NamespaceConfig) Destroy() error {
 				return utils.ProcessError(err, debugMessage)
 			}
 		}
-		c.controller.saveExecutionTime(GlobalDestroyOperationLabel, c.namespace, map[string]string{"App": ctx.App.Key}, startTime)
+		c.controller.saveExecutionTime(GlobalValidateOperationLabel, startTime, c.contexts[loopIndex], err)
 		c.controller.forgetContext(c.namespace, ctx)
 	}
 	loopInComplete = false
