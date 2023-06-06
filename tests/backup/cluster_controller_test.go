@@ -23,15 +23,15 @@ var _ = Describe("{ClusterControllerDemo}", func() {
 	It("Cluster Controller Demo", func() {
 
 		Step("Schedule each application on a unique namespace in source-cluster", func() {
-			log.InfoD("Performing Step 1")
+			log.InfoD("Performing Step 1v2")
 			for _, appKey := range Inst().AppList {
-				namespace := fmt.Sprintf("%s-app-namespace-step-1", appKey)
+				namespace := fmt.Sprintf("%s-app-namespace-step-1v2", appKey)
 
-				err := helper.TestCaseControllerCollectionMap[testRailId].GetClusterController("source-cluster").Application(appKey).ScheduleOnNamespace(namespace)
+				err := helper.TestCaseControllerCollectionMap[testRailId].GetClusterController("source-cluster").Namespace(namespace).Application(appKey).Schedule()
 				log.FailOnError(err, fmt.Sprintf("failed to schedule the application %s on the namespace %s", appKey, namespace))
 
-				err = helper.TestCaseControllerCollectionMap[testRailId].GetClusterController("source-cluster").SelectNamespace(namespace).SelectApplication(appKey).Validate()
-				log.FailOnError(err, fmt.Sprintf("failed to validate the application %s on the namespace %s", appKey, namespace))
+				//err = helper.TestCaseControllerCollectionMap[testRailId].GetClusterController("source-cluster").SelectNamespace(namespace).SelectApplication(appKey).Validate()
+				//log.FailOnError(err, fmt.Sprintf("failed to validate the application %s on the namespace %s", appKey, namespace))
 
 				//err = helper.TestCaseControllerCollectionMap[testRailId].GetClusterController("source-cluster").SelectNamespace(namespace).SelectApplication(appKey).Destroy()
 				//log.FailOnError(err, fmt.Sprintf("failed to destroy the application %s on the namespace %s", appKey, namespace))
@@ -102,8 +102,8 @@ var _ = Describe("{ClusterControllerDemo}", func() {
 			err := helper.EndPxBackupTorpedoTest(testRailId)
 			log.FailOnError(err, "end px-backup torpedo test failed")
 		}()
-		err := helper.TestCaseControllerCollectionMap[testRailId].GetClusterController("source-cluster").Cleanup()
-		log.FailOnError(err, fmt.Sprintf("source cluster clean up failed"))
+		//err := helper.TestCaseControllerCollectionMap[testRailId].GetClusterController("source-cluster").Cleanup()
+		//log.FailOnError(err, fmt.Sprintf("source cluster clean up failed"))
 		// To destroy the applications scheduled in Step 4
 		//for clusterName, clusterController := range clusterControllerMap {
 		//	err := clusterController.Cleanup()

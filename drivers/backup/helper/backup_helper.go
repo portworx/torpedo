@@ -2,7 +2,7 @@ package helper
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/backup/controllers/cluster"
+	cluster "github.com/portworx/torpedo/drivers/backup/controllers/clusterv2"
 	"github.com/portworx/torpedo/drivers/backup/utils"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
@@ -100,11 +100,11 @@ func StartPxBackupTorpedoTest(testRailId int, testName string, testDescription s
 // EndPxBackupTorpedoTest ends the specified test and performs cleanup
 func EndPxBackupTorpedoTest(testRailId int) error {
 	if pxBackupTorpedoTestInfo, ok := PxBackupTorpedoTestInfoMap[testRailId]; ok {
-		for clusterName, clusterController := range TestCaseControllerCollectionMap[testRailId].clusterControllerMap {
-			err := clusterController.Cleanup()
-			debugMessage := fmt.Sprintf("cluster-name: %s", clusterName)
-			return utils.ProcessError(err, debugMessage)
-		}
+		//for clusterName, clusterController := range TestCaseControllerCollectionMap[testRailId].clusterControllerMap {
+		//	err := clusterController.Cleanup()
+		//	debugMessage := fmt.Sprintf("cluster-name: %s", clusterName)
+		//	return utils.ProcessError(err, debugMessage)
+		//}
 		tests.CloseLogger(pxBackupTorpedoTestInfo.testLogger)
 		tests.Inst().Dash.TestCaseEnd()
 		if tests.TestRailSetupSuccessful && pxBackupTorpedoTestInfo.testRailID != 0 && pxBackupTorpedoTestInfo.testRunIdForSuite != 0 {
