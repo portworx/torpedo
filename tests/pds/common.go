@@ -169,7 +169,7 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 }
 
 // Check the DS related PV usage and resize in case of 90% full
-func CheckPVCtoFullCondition(context []*scheduler.Context) error {
+func CheckPVCtoFullCondition(context []*scheduler.Context) (bool, error) {
 	log.Infof("Start polling the pvc consumption for the DS")
 	// for _, ctx := range context {
 	// 	vols, err := tests.Inst().S.GetVolumes(ctx)
@@ -197,6 +197,7 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	// 		}
 	// 	}
 	// }
+	var isPvcFull = false
 	f := func() (interface{}, bool, error) {
 		for _, ctx := range context {
 			vols, err := tests.Inst().S.GetVolumes(ctx)
@@ -212,18 +213,21 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 				}
 				pvcCapacity := appVol.Spec.Size / units.GiB
 				log.Debugf("Capacity in GB is %v", pvcCapacity)
+				usedbytes := appVol.Usage
+				log.Debugf("************* usage is : ", usedbytes)
 				usedGiB := appVol.GetUsage() / units.GiB
 				log.Debugf("Used vol in GB is : %v", usedGiB)
 				threshold := pvcCapacity - 1
 				if usedGiB >= threshold {
 					log.Debugf("Threshold met for the PV %v", vol.Name)
+					isPvcFull = true
 					return nil, false, nil
 				}
 			}
 		}
-		return nil, true, fmt.Errorf("error reaching threshold value for the PVC")
+		return nil, true, fmt.Errorf("threshold not achieved for the PVC")
 	}
-	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 30*time.Second)
+	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 15*time.Second)
 
-	return err
+	return isPvcFull, err
 }
