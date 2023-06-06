@@ -1377,7 +1377,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		dep.Kind = "Deployment"
+		dep.GetObjectKind().SetGroupVersionKind(specObj.GetObjectKind().GroupVersionKind())
 
 		return dep, nil
 	} else if specObj, ok := spec.(*appsapi.StatefulSet); ok {
@@ -1388,7 +1388,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		ss.Kind = "StatefulSet"
+		ss.GetObjectKind().SetGroupVersionKind(specObj.GetObjectKind().GroupVersionKind())
 
 		return ss, nil
 	} else if specObj, ok := spec.(*appsapi.DaemonSet); ok {
@@ -1405,7 +1405,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		svc.Kind = "Service"
+		svc.GetObjectKind().SetGroupVersionKind(specObj.GetObjectKind().GroupVersionKind())
 
 		return svc, nil
 	} else if specObj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
@@ -1416,7 +1416,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		pvc.Kind = "PersistentVolumeClaim"
+		pvc.GetObjectKind().SetGroupVersionKind(specObj.GetObjectKind().GroupVersionKind())
 
 		return pvc, nil
 	} else if specObj, ok := spec.(*storageapi.StorageClass); ok {
@@ -1427,7 +1427,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		sc.Kind = "StorageClass"
+		sc.GetObjectKind().SetGroupVersionKind(specObj.GetObjectKind().GroupVersionKind())
 
 		return sc, nil
 	} else if specObj, ok := spec.(*snapv1.VolumeSnapshot); ok {
@@ -1438,7 +1438,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		snap.Kind = "VolumeSnapshot"
+		snap.GetObjectKind().SetGroupVersionKind(specObj.GetObjectKind().GroupVersionKind())
 
 		return snap, nil
 	} else if specObj, ok := spec.(*storkapi.GroupVolumeSnapshot); ok {
@@ -1455,7 +1455,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		secret.Kind = "Secret"
+		secret.GetObjectKind().SetGroupVersionKind(specObj.GetObjectKind().GroupVersionKind())
 
 		return secret, nil
 	} else if specObj, ok := spec.(*corev1.ConfigMap); ok {
@@ -1466,7 +1466,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		cm.Kind = "ConfigMap"
+		cm.GetObjectKind().SetGroupVersionKind(specObj.GetObjectKind().GroupVersionKind())
 
 		return cm, nil
 	} else if specObj, ok := spec.(*storkapi.Rule); ok {
@@ -1783,7 +1783,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
 				// Refer https://github.com/portworx/torpedo/pull/1345
-				sc.Kind = "StorageClass"
+				sc.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 				return sc, nil
 			}
@@ -1797,7 +1797,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		sc.Kind = "StorageClass"
+		sc.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 		log.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
 		return sc, nil
@@ -1849,7 +1849,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
 				// Refer https://github.com/portworx/torpedo/pull/1345
-				pvc.Kind = "PersistentVolumeClaim"
+				pvc.GetObjectKind().SetGroupVersionKind(newPvcObj.GetObjectKind().GroupVersionKind())
 
 				return pvc, nil
 			}
@@ -1863,7 +1863,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		pvc.Kind = "PersistentVolumeClaim"
+		pvc.GetObjectKind().SetGroupVersionKind(newPvcObj.GetObjectKind().GroupVersionKind())
 
 		log.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
 
@@ -1896,7 +1896,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
 				// Refer https://github.com/portworx/torpedo/pull/1345
-				snap.Kind = "VolumeSnapshot"
+				snap.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 				return snap, nil
 			}
@@ -1910,7 +1910,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		snap.Kind = "VolumeSnapshot"
+		snap.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 		log.Infof("[%v] Created Snapshot: %v", app.Key, snap.Metadata.Name)
 		return snap, nil
@@ -2196,7 +2196,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				log.Infof("[%v] Found existing deployment: %v", app.Key, dep.Name)
 				// This is a hack because the `Kind` field is empty due to K8s bug.
 				// Refer https://github.com/portworx/torpedo/pull/1345
-				dep.Kind = "Deployment"
+				dep.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 				return dep, nil
 			}
 		}
@@ -2209,7 +2209,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		dep.Kind = "Deployment"
+		dep.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 		log.Infof("[%v] Created deployment: %v", app.Key, dep.Name)
 		return dep, nil
@@ -2275,7 +2275,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
 				// Refer https://github.com/portworx/torpedo/pull/1345
-				ss.Kind = "StatefulSet"
+				ss.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 				return ss, nil
 			}
@@ -2291,7 +2291,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		ss.Kind = "StatefulSet"
+		ss.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 		return ss, nil
 
@@ -2304,7 +2304,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
 				// Refer https://github.com/portworx/torpedo/pull/1345
-				svc.Kind = "Service"
+				svc.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 				return svc, nil
 			}
@@ -2318,7 +2318,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		svc.Kind = "Service"
+		svc.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 		log.Infof("[%v] Created Service: %v", app.Key, svc.Name)
 		return svc, nil
@@ -2337,7 +2337,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
 				// Refer https://github.com/portworx/torpedo/pull/1345
-				secret.Kind = "Secret"
+				secret.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 				return secret, nil
 			}
@@ -2351,7 +2351,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		secret.Kind = "Secret"
+		secret.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 		log.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
 		return secret, nil
@@ -2416,7 +2416,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
 				// Refer https://github.com/portworx/torpedo/pull/1345
-				configMap.Kind = "ConfigMap"
+				configMap.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 				return configMap, nil
 			}
@@ -2432,7 +2432,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 		// This is a hack because the `Kind` field is empty due to K8s bug.
 		// Refer https://github.com/portworx/torpedo/pull/1345
-		configMap.Kind = "ConfigMap"
+		configMap.GetObjectKind().SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 
 		return configMap, nil
 	} else if obj, ok := spec.(*v1.Endpoints); ok {
