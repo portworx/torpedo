@@ -11,14 +11,26 @@ import (
 )
 
 type ExecutionTimeRowData struct {
-	operation     string
-	namespace     string
-	resourceMap   map[string]string
-	executionTime utils.ExecutionTime
+	operation       string
+	operationStatus string
+	namespace       string
+	resourceMap     map[string]string
+	executionTime   utils.ExecutionTime
 }
 
 type NamespaceStatInfo struct {
 	executionTimeData []*ExecutionTimeRowData
+}
+
+func (i *NamespaceStatInfo) Print() {
+	for index, executionTimeRowData := range i.executionTimeData {
+		log.Infof("index: [%d]", index)
+		log.Infof("operation: [%s]", executionTimeRowData.operation)
+		log.Infof("operation status: [%s]", executionTimeRowData.operationStatus)
+		log.Infof("namespace: [%s]", executionTimeRowData.namespace)
+		log.Infof("resources: [%s]", executionTimeRowData.resourceMap)
+		log.Infof("duration: [%s]", executionTimeRowData.executionTime.TotalDuration)
+	}
 }
 
 // NamespaceInfo holds information related to a namespace within a cluster
@@ -72,10 +84,11 @@ func (i *NamespaceInfo) saveExecutionTime(operation string, operationStatus stri
 	endTime := time.Now()
 	executionTime := utils.NewExecutionTime(startTime, endTime)
 	executionTimeRowData := &ExecutionTimeRowData{
-		operation:     operation,
-		namespace:     namespace,
-		resourceMap:   resourceMap,
-		executionTime: executionTime,
+		operation:       operation,
+		operationStatus: operationStatus,
+		namespace:       namespace,
+		resourceMap:     resourceMap,
+		executionTime:   executionTime,
 	}
 	i.executionTimeData = append(i.executionTimeData, executionTimeRowData)
 }
@@ -97,10 +110,10 @@ type DestroySchedulerContextConfig struct {
 
 // NamespaceConfig represents the configuration for managing namespaces within a ClusterController
 type NamespaceConfig struct {
-	namespace   string
-	appKey      string
-	isAppKeySet bool
+	namespace string
+	appKey    string
 	*NamespaceInfo
+	isAppKeySet    bool
 	skipValidation bool
 	*DestroySchedulerContextConfig
 	*ValidateSchedulerContextConfig

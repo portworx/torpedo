@@ -119,7 +119,7 @@ func (c *ClusterController) saveExecutionTime(operation string, startTime time.T
 	}
 	namespaceInfo, isNew := c.getNamespaceInfo(context.ScheduleOptions.Namespace)
 	if !isNew {
-		operationStatus := "SUCCESS"
+		var operationStatus string
 		if err != nil {
 			operationStatus = "FAILED"
 		}
@@ -218,6 +218,7 @@ func (c *ClusterController) Cleanup() (err error) {
 		if loopInComplete && loopIndex != -1 {
 			//c.saveExecutionTime(GlobalCleanupOperationLabel, startTime, )
 		}
+		c.PrintStats()
 		err = utils.SwitchClusterContext(GlobalInClusterConfigPath)
 	}()
 	for index, namespace := range namespaces {
@@ -241,6 +242,15 @@ func (c *ClusterController) Cleanup() (err error) {
 	}
 	loopInComplete = false
 	return nil
+}
+
+// PrintStats prints the destroyExecutionTime and validateExecutionTime for each namespace
+func (c *ClusterController) PrintStats() {
+	for namespace, namespaceInfo := range c.namespaces {
+		log.Infof("Namespace: %s; Number of contexts: %d and Number of destroyed contexts: %d", namespace, len(namespaceInfo.contexts), len(namespaceInfo.forgottenContexts))
+		namespaceInfo.NamespaceStatInfo.Print()
+	}
+	log.Infof("\n")
 }
 
 // Cluster returns ClusterInfo initialized with specified cluster id, name, and config-path
