@@ -174,23 +174,22 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	f := func() (interface{}, bool, error) {
 		for _, ctx := range context {
 			vols, err := tests.Inst().S.GetVolumes(ctx)
-			log.Debugf("Volumes found for the DS are : %v", vols)
 			if err != nil {
 				return nil, true, err
 			}
 			for _, vol := range vols {
 				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
-				log.Debugf("Volume desription is %v\n", appVol)
 				if err != nil {
 					return nil, true, err
 				}
 				pvcCapacity := appVol.Spec.Size / units.GiB
-				log.Debugf("Capacity in GB is %v", pvcCapacity)
 				usedGiB := appVol.GetUsage() / units.GiB
-				log.Debugf("Used vol in GB is : %v", usedGiB)
 				threshold := pvcCapacity - 1
 				if usedGiB >= threshold {
-					log.Debugf("Threshold met for the PV %v", vol.Name)
+					log.Debugf("Capacity in GB is %v", pvcCapacity)
+					log.Debugf("Used vol in GB is : %v", usedGiB)
+					log.Debugf("Threshold defined for the PV %v is %v", vol.Name, threshold)
+					log.Debugf("Threshold successfulyy met for the PV %v", vol.Name)
 					return nil, false, nil
 				}
 			}
@@ -205,12 +204,48 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 // Increase PVC by 1 gb
 func IncreasePVCby1Gig(context []*scheduler.Context) error {
 	log.Debugf("Entered into resize of pvc %v", context)
+	initialCapacity, err := GetVolumeCapacityInGB(context)
+	log.Debugf("Initial volume storage size is : %v", initialCapacity)
+	if err != nil {
+		return err
+	}
 	for _, ctx := range context {
 		appVolumes, err := tests.Inst().S.ResizeVolume(ctx, "")
-		log.Debugf("APP VOLUMES AFTER RESIZE : %v", appVolumes)
 		log.FailOnError(err, "Volume resize successful ?")
-		log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+		log.InfoD(fmt.Sprintf("validating successful volume size increase on app %s's volumes: %v",
 			ctx.App.Key, appVolumes))
 	}
+	// wait for the resize to take effect
+	time.Sleep(30 * time.Second)
+	newcapacity, err := GetVolumeCapacityInGB(context)
+	log.Debugf("Resized volume storage size is : %v", newcapacity)
+	if err != nil {
+		return err
+	}
+
+	if newcapacity > initialCapacity {
+		log.InfoD("Successfully resized the pvc by 1gb")
+		return nil
+	}
 	return nil
+}
+
+// Get volume capacity
+func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
+	var pvcCapacity uint64
+	for _, ctx := range context {
+		vols, err := tests.Inst().S.GetVolumes(ctx)
+		log.Debugf("Volumes found for the DS are : %v", vols)
+		if err != nil {
+			return 0, err
+		}
+		for _, vol := range vols {
+			appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+			if err != nil {
+				return 0, err
+			}
+			pvcCapacity = appVol.Spec.Size / units.GiB
+		}
+	}
+	return pvcCapacity, err
 }

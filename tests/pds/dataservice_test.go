@@ -1678,47 +1678,52 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var dsVersions = make(map[string]map[string][]string)
 		var depList []*pds.ModelsDeployment
+		var dsName string
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
 					controlPlane.UpdateResourceTemplateName("pds-auto-pvcFullCondition")
-					if ds.Name == postgresql {
-						deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-						log.FailOnError(err, "Error while deploying data services")
-						deployments[ds] = deployment
-						dsVersions[ds.Name] = dataServiceVersionBuildMap
-						depList = append(depList, deployment)
-					}
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+					dsVersions[ds.Name] = dataServiceVersionBuildMap
+					depList = append(depList, deployment)
+					dsName = ds.Name
+
 				})
 			}
-			Step("Running Workloads before scaling up PVC ", func() {
-				for ds, deployment := range deployments {
-					if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
-						log.InfoD("Running Workloads on DataService %v ", ds.Name)
-						var params pdslib.WorkloadGenerationParams
-						pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
-						log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
-						if dep == nil {
-							generateWorkloads[ds.Name] = pod.Name
-						} else {
-							generateWorkloads[ds.Name] = dep.Name
-						}
-						for dsName, workloadContainer := range generateWorkloads {
-							log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+			log.Debugf("Deployment name is : %v", dsName)
+			if dsName == postgresql {
+				Step("Running Workloads before scaling up PVC ", func() {
+					for ds, deployment := range deployments {
+						if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+							log.InfoD("Running Workloads on DataService %v ", ds.Name)
+							var params pdslib.WorkloadGenerationParams
+							pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+							log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+							if dep == nil {
+								generateWorkloads[ds.Name] = pod.Name
+							} else {
+								generateWorkloads[ds.Name] = dep.Name
+							}
+							for dsName, workloadContainer := range generateWorkloads {
+								log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+							}
 						}
 					}
-				}
-			})
+				})
 
-			Step("Checking the PVC usage", func() {
-				ctx := dsTest.CreateSchedulerContextForPDSApps(depList)
-				err = CheckPVCtoFullCondition(ctx)
-				log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
-				err = IncreasePVCby1Gig(ctx)
-				log.FailOnError(err, "Failing while Increasing the PVC name...")
-			})
+				Step("Checking the PVC usage", func() {
+					ctx := dsTest.CreateSchedulerContextForPDSApps(depList)
+					err = CheckPVCtoFullCondition(ctx)
+					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
+					err = IncreasePVCby1Gig(ctx)
+					log.FailOnError(err, "Failing while Increasing the PVC name...")
+				})
+			}
+
 		})
 	})
 	JustAfterEach(func() {
