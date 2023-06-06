@@ -1691,10 +1691,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						deployments[ds] = deployment
 						dsVersions[ds.Name] = dataServiceVersionBuildMap
 						depList = append(depList, deployment)
-					} else {
-						EndTorpedoTest()
 					}
-
 				})
 			}
 			Step("Running Workloads before scaling up PVC ", func() {
