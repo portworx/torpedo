@@ -169,7 +169,7 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 }
 
 // Check the DS related PV usage and resize in case of 90% full
-func CheckPVCtoFullCondition(context []*scheduler.Context) (bool, error) {
+func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	log.Infof("Start polling the pvc consumption for the DS")
 	// for _, ctx := range context {
 	// 	vols, err := tests.Inst().S.GetVolumes(ctx)
@@ -197,7 +197,6 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) (bool, error) {
 	// 		}
 	// 	}
 	// }
-	var isPvcFull = false
 	f := func() (interface{}, bool, error) {
 		for _, ctx := range context {
 			vols, err := tests.Inst().S.GetVolumes(ctx)
@@ -220,7 +219,6 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) (bool, error) {
 				threshold := pvcCapacity - 1
 				if usedGiB >= threshold {
 					log.Debugf("Threshold met for the PV %v", vol.Name)
-					isPvcFull = true
 					return nil, false, nil
 				}
 			}
@@ -229,5 +227,5 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) (bool, error) {
 	}
 	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 15*time.Second)
 
-	return isPvcFull, err
+	return err
 }
