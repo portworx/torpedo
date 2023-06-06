@@ -3614,7 +3614,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
 			ns := (*pds.ModelsDeployment).GetNamespace
-			log.Debugf("****************the ns is %v:", ns)
+			log.Debugf("****************the ns is %v:", &ns)
 			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), "pds-automation")
 			if err != nil {
 				return nil, &scheduler.ErrFailedToResizeStorage{
