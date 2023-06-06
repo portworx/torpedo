@@ -180,17 +180,17 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 			}
 			for _, vol := range vols {
 				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
-				log.Debugf("Volume desription is %v\n", appVol)
 				if err != nil {
 					return nil, true, err
 				}
 				pvcCapacity := appVol.Spec.Size / units.GiB
-				log.Debugf("Capacity in GB is %v", pvcCapacity)
 				usedGiB := appVol.GetUsage() / units.GiB
-				log.Debugf("Used vol in GB is : %v", usedGiB)
 				threshold := pvcCapacity - 1
 				if usedGiB >= threshold {
-					log.Debugf("Threshold met for the PV %v", vol.Name)
+					log.Debugf("Capacity in GB is %v", pvcCapacity)
+					log.Debugf("Used vol in GB is : %v", usedGiB)
+					log.Debugf("Threshold defined for the PV %v is %v", vol.Name, threshold)
+					log.Debugf("Threshold successfulyy met for the PV %v", vol.Name)
 					return nil, false, nil
 				}
 			}
