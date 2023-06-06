@@ -188,6 +188,9 @@ const (
 	// VolumeSnapshotKind type use for restore
 	VolumeSnapshotKind = "VolumeSnapshot"
 )
+const (
+	pdsNamespace = "pds-automation"
+)
 
 var (
 	// use underscore to avoid conflicts to text/template from golang
@@ -3613,9 +3616,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				})
 			}
 		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
-			ns := specObj.(*pds.ModelsDeployment).Namespace.Name
-			log.Debugf("****************the ns is %v:", &ns)
-			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), "pds-automation")
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNamespace)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToResizeStorage{
 					App:   ctx.App,
@@ -3774,7 +3775,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				}
 			}
 		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
-			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), "pds-automation")
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNamespace)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToResizeStorage{
 					App:   ctx.App,

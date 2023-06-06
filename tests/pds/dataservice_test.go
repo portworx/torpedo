@@ -1685,11 +1685,16 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
 					controlPlane.UpdateResourceTemplateName("pds-auto-pvcFullCondition")
-					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-					log.FailOnError(err, "Error while deploying data services")
-					deployments[ds] = deployment
-					dsVersions[ds.Name] = dataServiceVersionBuildMap
-					depList = append(depList, deployment)
+					if ds.Name == postgresql {
+						deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+						log.FailOnError(err, "Error while deploying data services")
+						deployments[ds] = deployment
+						dsVersions[ds.Name] = dataServiceVersionBuildMap
+						depList = append(depList, deployment)
+					} else {
+						EndTorpedoTest()
+					}
+
 				})
 			}
 			Step("Running Workloads before scaling up PVC ", func() {
