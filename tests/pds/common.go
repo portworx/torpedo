@@ -171,32 +171,6 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 // Check the DS related PV usage and resize in case of 90% full
 func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	log.Infof("Start polling the pvc consumption for the DS")
-	// for _, ctx := range context {
-	// 	vols, err := tests.Inst().S.GetVolumes(ctx)
-	// 	if err != nil {
-	// 		return fmt.Errorf("persistant volumes Not Found due to : %v", err)
-	// 	}
-	// 	log.Debugf("Volumes to be inspected are : %v", vols)
-
-	// 	log.Debugf("Polling begins for ovc usage calculation")
-	// 	for _, vol := range vols {
-	// 		log.Debugf("VOLUME TO BE INSPECTED IS : %v", vol)
-	// 		appVol, err := tests.Inst().V.InspectVolume(vol.ID)
-	// 		if err != nil {
-	// 			return fmt.Errorf("persistant volumes Not inspected due to : %v", err)
-	// 		}
-	// 		log.Debugf("app vol is: %v", appVol)
-	// 		usedBytes := appVol.GetUsage()
-	// 		log.Debugf("Capacity in bytes is %v", appVol.Spec.Size)
-	// 		log.Debugf("USED IN BYTES IS ---- %v", usedBytes)
-	// 		pvcCapacity := appVol.Spec.Size
-	// 		pvcUsed := (usedBytes / pvcCapacity) * 100
-	// 		log.Debugf("Threshold achieved ---- %v", pvcUsed)
-	// 		if pvcUsed >= threshold {
-	// 			log.Debugf("Threshold met, hence exiting the poll.. %v", pvcUsed)
-	// 		}
-	// 	}
-	// }
 	f := func() (interface{}, bool, error) {
 		for _, ctx := range context {
 			vols, err := tests.Inst().S.GetVolumes(ctx)
@@ -226,4 +200,17 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 15*time.Second)
 
 	return err
+}
+
+// Increase PVC by 1 gb
+func IncreasePVCby1Gig(context []*scheduler.Context) error {
+	log.Debugf("Entered into resize of pvc %v", context)
+	for _, ctx := range context {
+		appVolumes, err := tests.Inst().S.ResizeVolume(ctx, "")
+		log.Debugf("APP VOLUMES AFTER RESIZE : %v", appVolumes)
+		log.FailOnError(err, "Volume resize successful ?")
+		log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+			ctx.App.Key, appVolumes))
+	}
+	return nil
 }
