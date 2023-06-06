@@ -1679,6 +1679,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var dsVersions = make(map[string]map[string][]string)
 		var depList []*pds.ModelsDeployment
+		var dsName string
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
@@ -1690,11 +1691,12 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					deployments[ds] = deployment
 					dsVersions[ds.Name] = dataServiceVersionBuildMap
 					depList = append(depList, deployment)
+					dsName = ds.Name
 
 				})
 			}
-			log.Debugf("Deployment name is ----- %v", deploymentName)
-			if deploymentName == postgresql {
+			log.Debugf("Deployment name is : %v", dsName)
+			if dsName == postgresql {
 				Step("Running Workloads before scaling up PVC ", func() {
 					for ds, deployment := range deployments {
 						if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
