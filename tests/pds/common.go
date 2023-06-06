@@ -213,7 +213,7 @@ func IncreasePVCby1Gig(context []*scheduler.Context) error {
 	for _, ctx := range context {
 		appVolumes, err := tests.Inst().S.ResizeVolume(ctx, "")
 		log.FailOnError(err, "Volume resize successful ?")
-		log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+		log.InfoD(fmt.Sprintf("validating successful volume size increase on app %s's volumes: %v",
 			ctx.App.Key, appVolumes))
 	}
 	newcapacity, err := GetVolumeStorageDetails(context)
