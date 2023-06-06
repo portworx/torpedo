@@ -241,6 +241,7 @@ func (c *NamespaceConfig) Application(appKey string) *ApplicationConfig {
 			validateVolumeTimeout:       DefaultValidateVolumeTimeout,
 			validateVolumeRetryInterval: DefaultValidateVolumeRetryInterval,
 		},
+		controller: c.controller,
 	}
 }
 
