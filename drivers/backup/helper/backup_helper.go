@@ -2,6 +2,8 @@ package helper
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup/controllers/cluster"
+	"github.com/portworx/torpedo/drivers/backup/utils"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -11,8 +13,17 @@ import (
 	"strings"
 )
 
+type TestCaseControllerCollection struct {
+	clusterControllerMap map[string]*cluster.ClusterController
+}
+
+func (m *TestCaseControllerCollection) GetClusterController(clusterName string) *cluster.ClusterController {
+	return m.clusterControllerMap[clusterName]
+}
+
 var (
-	pxBackupTorpedoTestInfoMap = make(map[int]*PxBackupTorpedoTestInfo, 0)
+	PxBackupTorpedoTestInfoMap      = make(map[int]*PxBackupTorpedoTestInfo, 0)
+	TestCaseControllerCollectionMap = make(map[int]*TestCaseControllerCollection, 0)
 )
 
 // PxBackupTorpedoTestInfo holds information of a particular test
@@ -26,12 +37,30 @@ type PxBackupTorpedoTestInfo struct {
 	testLogger        *lumberjack.Logger
 }
 
+// AddDefaultClusterControllersToMap adds default ClusterController instances associated with the specified testRailId for use by a test case
+func AddDefaultClusterControllersToMap(clusterControllerMap *map[string]*cluster.ClusterController, id int) error {
+	sourceClusterConfigPath, err := utils.GetSourceClusterConfigPath()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	destinationClusterConfigPath, err := utils.GetDestinationClusterConfigPath()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	clustersInfo := []*cluster.ClusterInfo{
+		cluster.Cluster(id, utils.DefaultInClusterName, cluster.GlobalInClusterConfigPath).IsHyperConverged(),         // in-cluster
+		cluster.Cluster(id, utils.DefaultSourceClusterName, sourceClusterConfigPath).IsHyperConverged().IsInCluster(), // source-cluster
+		cluster.Cluster(id, utils.DefaultDestinationClusterName, destinationClusterConfigPath).IsHyperConverged(),     // destination-cluster
+	}
+	return cluster.AddClusterControllersToMap(clusterControllerMap, clustersInfo)
+}
+
 // StartPxBackupTorpedoTest creates a logger, configures the Aetos Dashboard for the specified test, and initializes controllers
 func StartPxBackupTorpedoTest(testRailId int, testName string, testDescription string, testAuthor string, apps []string, tags ...map[string]string) error {
 	if testRailId != 0 {
-		if pxBackupTorpedoTestInfo, ok := pxBackupTorpedoTestInfoMap[testRailId]; ok {
+		if pxBackupTorpedoTestInfo, ok := PxBackupTorpedoTestInfoMap[testRailId]; ok {
 			err := fmt.Errorf("the test [%s] shares the same TestRail id as [%s] and has already been executed", testName, pxBackupTorpedoTestInfo.testName)
-			return err
+			return utils.ProcessError(err)
 		}
 	}
 	testTags := map[string]string{
@@ -59,13 +88,23 @@ func StartPxBackupTorpedoTest(testRailId int, testName string, testDescription s
 		testLogger:        testLogger,
 		testRunIdForSuite: testRunIdForSuite,
 	}
-	pxBackupTorpedoTestInfoMap[testRailId] = pxBackupTorpedoTestInfo
+	PxBackupTorpedoTestInfoMap[testRailId] = pxBackupTorpedoTestInfo
+	TestCaseControllerCollectionMap[testRailId] = &TestCaseControllerCollection{}
+	err := AddDefaultClusterControllersToMap(&TestCaseControllerCollectionMap[testRailId].clusterControllerMap, testRailId)
+	if err != nil {
+		return utils.ProcessError(err)
+	}
 	return nil
 }
 
 // EndPxBackupTorpedoTest ends the specified test and performs cleanup
 func EndPxBackupTorpedoTest(testRailId int) error {
-	if pxBackupTorpedoTestInfo, ok := pxBackupTorpedoTestInfoMap[testRailId]; ok {
+	if pxBackupTorpedoTestInfo, ok := PxBackupTorpedoTestInfoMap[testRailId]; ok {
+		for clusterName, clusterController := range TestCaseControllerCollectionMap[testRailId].clusterControllerMap {
+			err := clusterController.Cleanup()
+			debugMessage := fmt.Sprintf("cluster-name: %s", clusterName)
+			return utils.ProcessError(err, debugMessage)
+		}
 		tests.CloseLogger(pxBackupTorpedoTestInfo.testLogger)
 		tests.Inst().Dash.TestCaseEnd()
 		if tests.TestRailSetupSuccessful && pxBackupTorpedoTestInfo.testRailID != 0 && pxBackupTorpedoTestInfo.testRunIdForSuite != 0 {
@@ -74,7 +113,7 @@ func EndPxBackupTorpedoTest(testRailId int) error {
 		}
 	} else {
 		err := fmt.Errorf("no test has been executed with the TestRail id [%d]", testRailId)
-		return err
+		return utils.ProcessError(err)
 	}
 	return nil
 }
