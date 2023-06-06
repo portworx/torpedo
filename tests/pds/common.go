@@ -223,7 +223,7 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 		}
 		return nil, true, fmt.Errorf("error reaching threshold value for the PVC")
 	}
-	_, err := task.DoRetryWithTimeout(f, 60*time.Minute, timeOut)
+	_, err := task.DoRetryWithTimeout(f, 2*time.Minute, 10*time.Second)
 
 	return err
 }
