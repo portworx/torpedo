@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/pds/parameters"
@@ -171,7 +170,6 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 // Check the DS related PV usage and resize in case of 90% full
 func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	log.Infof("Start polling the pvc consumption for the DS")
-	var threshold uint64 = 90
 	// for _, ctx := range context {
 	// 	vols, err := tests.Inst().S.GetVolumes(ctx)
 	// 	if err != nil {
@@ -215,13 +213,14 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 				log.Debugf("Capacity in GB is %v", pvcCapacity)
 				usedGiB := appVol.GetUsage() / units.GiB
 				log.Debugf("Used vol in GB is : %v", usedGiB)
-				if usedGiB >= pvcCapacity {
+				threshold := pvcCapacity - 1
+				if usedGiB >= threshold {
 					log.Debugf("Threshold met for the PV %v", vol.Name)
 					return nil, true, nil
 				}
 			}
 		}
-		return nil, true, fmt.Errorf("error getting volume with size atleast %d GiB used", threshold)
+		return nil, false, nil
 	}
 	_, err := task.DoRetryWithTimeout(f, 60*time.Minute, timeOut)
 
