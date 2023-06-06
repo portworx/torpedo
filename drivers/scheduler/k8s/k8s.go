@@ -187,6 +187,10 @@ const (
 	// VolumeSnapshotKind type use for restore
 	VolumeSnapshotKind = "VolumeSnapshot"
 )
+const (
+	// ToDo : Fetch ns dynamically
+	pdsNamespace = "pds-automation"
+)
 
 var (
 	// use underscore to avoid conflicts to text/template from golang
@@ -3911,6 +3915,33 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					Shared:    k.isPVCShared(&pvc),
 				})
 			}
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			// ToDo: write common code to get ss and pvc list for pds modelsdeploymenr=t type object
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNamespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				vols = append(vols, &volume.Volume{
+					ID:        pvc.Spec.VolumeName,
+					Name:      pvc.Name,
+					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
+				})
+			}
+
 		}
 	}
 
@@ -4031,6 +4062,35 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				}
 			}
 
+			for _, pvc := range pvcList.Items {
+				shouldResize, err := k.filterPureVolumesIfEnabled(&pvc)
+				if err != nil {
+					return nil, err
+				}
+				if shouldResize {
+					vol, err := k.resizePVCBy1GB(ctx, &pvc)
+					if err != nil {
+						return nil, err
+					}
+					vols = append(vols, vol)
+				}
+			}
+		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNamespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
 			for _, pvc := range pvcList.Items {
 				shouldResize, err := k.filterPureVolumesIfEnabled(&pvc)
 				if err != nil {

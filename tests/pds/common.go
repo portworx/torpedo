@@ -1,16 +1,21 @@
 package tests
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/pds/parameters"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/tests"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -161,4 +166,51 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 
 	return pod, dep, err
 
+}
+
+// Check the DS related PV usage and resize in case of 90% full
+func CheckPVCtoFullCondition(context []*scheduler.Context) error {
+	log.Infof("Start polling the pvc consumption for the DS")
+	f := func() (interface{}, bool, error) {
+		for _, ctx := range context {
+			vols, err := tests.Inst().S.GetVolumes(ctx)
+			log.Debugf("Volumes found for the DS are : %v", vols)
+			if err != nil {
+				return nil, true, err
+			}
+			for _, vol := range vols {
+				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+				log.Debugf("Volume desription is %v\n", appVol)
+				if err != nil {
+					return nil, true, err
+				}
+				pvcCapacity := appVol.Spec.Size / units.GiB
+				log.Debugf("Capacity in GB is %v", pvcCapacity)
+				usedGiB := appVol.GetUsage() / units.GiB
+				log.Debugf("Used vol in GB is : %v", usedGiB)
+				threshold := pvcCapacity - 1
+				if usedGiB >= threshold {
+					log.Debugf("Threshold met for the PV %v", vol.Name)
+					return nil, false, nil
+				}
+			}
+		}
+		return nil, true, fmt.Errorf("threshold not achieved for the PVC")
+	}
+	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 15*time.Second)
+
+	return err
+}
+
+// Increase PVC by 1 gb
+func IncreasePVCby1Gig(context []*scheduler.Context) error {
+	log.Debugf("Entered into resize of pvc %v", context)
+	for _, ctx := range context {
+		appVolumes, err := tests.Inst().S.ResizeVolume(ctx, "")
+		log.Debugf("APP VOLUMES AFTER RESIZE : %v", appVolumes)
+		log.FailOnError(err, "Volume resize successful ?")
+		log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+			ctx.App.Key, appVolumes))
+	}
+	return nil
 }

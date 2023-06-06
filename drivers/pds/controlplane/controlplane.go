@@ -22,14 +22,13 @@ var (
 	isavailable                bool
 	isTemplateavailable        bool
 	isStorageTemplateAvailable bool
-
-	resourceTemplateID  string
-	appConfigTemplateID string
-	storageTemplateID   string
+	resourceTemplateID         string
+	appConfigTemplateID        string
+	storageTemplateID          string
+	resourceTemplateName       = "small"
 )
 
 const (
-	resourceTemplateName  = "Small"
 	appConfigTemplateName = "QaDefault"
 	storageTemplateName   = "QaDefault"
 )
@@ -192,6 +191,13 @@ func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, 
 		log.Errorf("App Config Template with name %v does not exist", appConfigTemplateName)
 	}
 	return appConfigTemplateID, nil
+}
+
+// update template name with custom name
+func (cp *ControlPlane) UpdateResourceTemplateName(TemplateName string) string {
+	log.Infof("Updating the resource template name with : %v", TemplateName)
+	resourceTemplateName = TemplateName
+	return resourceTemplateName
 }
 
 // GetResourceTemplate get the resource template id
