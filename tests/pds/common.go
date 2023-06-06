@@ -212,8 +212,6 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 				}
 				pvcCapacity := appVol.Spec.Size / units.GiB
 				log.Debugf("Capacity in GB is %v", pvcCapacity)
-				usedbytes := appVol.Usage
-				log.Debugf("************* usage is : ", usedbytes)
 				usedGiB := appVol.GetUsage() / units.GiB
 				log.Debugf("Used vol in GB is : %v", usedGiB)
 				threshold := pvcCapacity - 1
