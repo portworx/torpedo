@@ -258,21 +258,11 @@ func (c *ClusterController) Cleanup() (err error) {
 		}
 		c.saveExecutionTime(GlobalCleanupOperationLabel, namespace, resourceMap, startTime)
 	}
-	c.PrintStats()
 	loopInComplete = false
 	return nil
 }
 
-// PrintStats prints the destroyExecutionTime and validateExecutionTime for each namespace
-func (c *ClusterController) PrintStats() {
-	for namespace, namespaceInfo := range c.namespaces {
-		log.Infof("Namespace: %s; Number of contexts: %d and Number of destroyed contexts: %d", namespace, len(namespaceInfo.contexts), len(namespaceInfo.forgottenContexts))
-		namespaceInfo.NamespaceStatInfo.Print()
-	}
-	log.Infof("\n")
-}
-
-// Cluster initializes ClusterInfo with specified cluster id, name, and config-path
+// Cluster returns ClusterInfo initialized with specified cluster id, name, and config-path
 func Cluster(id int, name string, configPath string) *ClusterInfo {
 	return &ClusterInfo{
 		ClusterMetaData: &ClusterMetaData{
@@ -291,8 +281,7 @@ func AddClusterControllersToMap(clusterControllerMap *map[string]*ClusterControl
 	for _, clusterInfo := range clustersInfo {
 		clusterController, err := clusterInfo.NewController()
 		if err != nil {
-			debugMessage := fmt.Sprintf("cluster: name [%s], config path [%s]", clusterInfo.name, clusterInfo.configPath)
-			return utils.ProcessError(err, debugMessage)
+			return utils.ProcessError(err, clusterInfo.String())
 		}
 		(*clusterControllerMap)[clusterInfo.name] = clusterController
 	}

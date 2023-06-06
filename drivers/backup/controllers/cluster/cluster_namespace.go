@@ -21,16 +21,6 @@ type NamespaceStatInfo struct {
 	executionTimeData []*ExecutionTimeRowData
 }
 
-func (i *NamespaceStatInfo) Print() {
-	for index, executionTimeRowData := range i.executionTimeData {
-		log.Infof("index: [%d]", index)
-		log.Infof("operation: [%s]", executionTimeRowData.operation)
-		log.Infof("namespace: [%s]", executionTimeRowData.namespace)
-		log.Infof("resources: [%s]", executionTimeRowData.resources)
-		log.Infof("duration: [%s]", executionTimeRowData.executionTime.TotalDuration)
-	}
-}
-
 // NamespaceInfo holds information related to a namespace within a cluster
 type NamespaceInfo struct {
 	contexts          []*scheduler.Context
@@ -42,7 +32,7 @@ type NamespaceInfo struct {
 func (i *NamespaceInfo) DeepCopy() *NamespaceInfo {
 	newNamespaceInfo := &NamespaceInfo{}
 	for _, ctx := range i.contexts {
-		newNamespaceInfo.contexts = append(newNamespaceInfo.contexts, ctx) // soft-copy
+		newNamespaceInfo.contexts = append(newNamespaceInfo.contexts, ctx) // SoftCopy
 	}
 	return newNamespaceInfo
 }
