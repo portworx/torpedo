@@ -8875,7 +8875,7 @@ var _ = Describe("{PoolAddDriveBeyondMaxSupported}", func() {
 			log.FailOnError(err, "error getting pool from node [%s]", stNode.Name)
 		}
 		//}
-		for i := 1; i <= numberOfDrivesCanBeAdded; i++ {
+		for i := 0; i <= numberOfDrivesCanBeAdded; i++ {
 			err := addCloudDrive(selectedNode, selectedPool.ID)
 			if i == numberOfDrivesCanBeAdded {
 				dash.VerifyFatal(err != nil, true, fmt.Sprintf("Error expected as drive added more than allowed per pool"))
