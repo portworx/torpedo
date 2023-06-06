@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/pds/parameters"
@@ -216,11 +217,11 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 				threshold := pvcCapacity - 1
 				if usedGiB >= threshold {
 					log.Debugf("Threshold met for the PV %v", vol.Name)
-					return nil, true, nil
+					return nil, false, nil
 				}
 			}
 		}
-		return nil, false, nil
+		return nil, true, fmt.Errorf("error reaching threshold value for the PVC")
 	}
 	_, err := task.DoRetryWithTimeout(f, 60*time.Minute, timeOut)
 
