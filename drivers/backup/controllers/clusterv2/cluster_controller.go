@@ -178,11 +178,13 @@ func (c *ClusterController) Namespace(namespace string) *NamespaceConfig {
 	namespaceInfo, isNew := c.getNamespaceInfo(namespace)
 	if isNew {
 		return &NamespaceConfig{
+			namespace:     namespace,
 			NamespaceInfo: namespaceInfo,
 			controller:    c,
 		}
 	}
 	return &NamespaceConfig{
+		namespace:     namespace,
 		NamespaceInfo: namespaceInfo,
 		isRecorded:    true,
 		controller:    c,
