@@ -2,6 +2,11 @@ package dataservice
 
 import (
 	"fmt"
+	state "net/http"
+	"os"
+	"time"
+
+	"github.com/google/martian/v3/log"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -15,9 +20,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	state "net/http"
-	"os"
-	"time"
 )
 
 // PDS vars
@@ -81,6 +83,19 @@ type PDSDataService struct {
 	ScaleReplicas int    "json:\"ScaleReplicas\""
 	OldVersion    string "json:\"OldVersion\""
 	OldImage      string "json:\"OldImage\""
+}
+
+// get pds ns
+func (d *DataserviceType) GetPdsNamespaceName() (string, error) {
+	log.Debugf("Entered into fectching ns")
+	pdsParams := GetAndExpectStringEnvVar("PDS_PARAM_CM")
+	params, err := customparams.ReadParams(pdsParams)
+	if err != nil {
+		return "", err
+	}
+	namespace := params.InfraToTest.Namespace
+	log.Debugf("******* ns fecthed is : %v", namespace)
+	return namespace, err
 }
 
 // GetVersionsImage returns the required Image of dataservice version

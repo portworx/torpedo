@@ -23,6 +23,7 @@ import (
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	pdsDriver "github.com/portworx/torpedo/drivers/pds/dataservice/dataservice"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 
@@ -3858,6 +3859,43 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 	return vols, nil
 }
 
+// Get pds specific volumes
+
+func (k *K8s) GetPdsPVClist(ctx *scheduler.Context) ([]*volume.Volume, error) {
+	var vols []*volume.Volume
+	ns := pdsDriver.GetPdsNamespaceName()
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*pds.ModelsDeployment); ok {
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), ns)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.GetClusterResourceName(), err),
+				}
+			}
+
+			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				vols = append(vols, &volume.Volume{
+					ID:        pvc.Spec.VolumeName,
+					Name:      pvc.Name,
+					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
+				})
+			}
+		}
+	}
+
+	return vols, nil
+}
+
 // GetVolumes  Get the volumes
 func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	k8sOps := k8sApps
@@ -3918,7 +3956,8 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
 			// ToDo: write common code to get ss and pvc list for pds modelsdeployment type object
-			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNamespace)
+			ns := pdsDriver.GetPdsNamespaceName()
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), ns)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToResizeStorage{
 					App:   ctx.App,
@@ -3942,7 +3981,6 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					Shared:    k.isPVCShared(&pvc),
 				})
 			}
-
 		}
 	}
 
