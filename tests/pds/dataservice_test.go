@@ -1694,7 +1694,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 				})
 			}
-			log.Debugf("Deployment name is : %v", dsName)
+			// This testcase is currently applicable only for postgresql deployments
 			if dsName == postgresql {
 				Step("Running Workloads before scaling up PVC ", func() {
 					for ds, deployment := range deployments {

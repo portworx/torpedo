@@ -170,7 +170,7 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 
 // Check the DS related PV usage and resize in case of 90% full
 func CheckPVCtoFullCondition(context []*scheduler.Context) error {
-	log.Infof("Start polling the pvc consumption for the DS")
+	log.Infof("Start polling for the pvc consumption by the DS")
 	f := func() (interface{}, bool, error) {
 		for _, ctx := range context {
 			vols, err := tests.Inst().S.GetVolumes(ctx)
@@ -186,15 +186,15 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 				usedGiB := appVol.GetUsage() / units.GiB
 				threshold := pvcCapacity - 1
 				if usedGiB >= threshold {
-					log.Debugf("Capacity in GB is %v", pvcCapacity)
-					log.Debugf("Used vol in GB is : %v", usedGiB)
-					log.Debugf("Threshold defined for the PV %v is %v", vol.Name, threshold)
-					log.Debugf("Threshold successfulyy met for the PV %v", vol.Name)
+					log.Infof("Capacity in GB is %v", pvcCapacity)
+					log.Infof("Used vol in GB is : %v", usedGiB)
+					log.Infof("Threshold defined for the PVC %v is %v", vol.Name, threshold)
+					log.Infof("Threshold successfulyy met for the PVC %v", vol.Name)
 					return nil, false, nil
 				}
 			}
 		}
-		return nil, true, fmt.Errorf("threshold not achieved for the PVC")
+		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
 	}
 	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 15*time.Second)
 
@@ -203,7 +203,7 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 
 // Increase PVC by 1 gb
 func IncreasePVCby1Gig(context []*scheduler.Context) error {
-	log.Debugf("Entered into resize of pvc %v", context)
+	log.Info("Resizing of the PVC begins ...")
 	initialCapacity, err := GetVolumeCapacityInGB(context)
 	log.Debugf("Initial volume storage size is : %v", initialCapacity)
 	if err != nil {
@@ -218,7 +218,7 @@ func IncreasePVCby1Gig(context []*scheduler.Context) error {
 	// wait for the resize to take effect
 	time.Sleep(30 * time.Second)
 	newcapacity, err := GetVolumeCapacityInGB(context)
-	log.Debugf("Resized volume storage size is : %v", newcapacity)
+	log.Infof("Resized volume storage size is : %v", newcapacity)
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,6 @@ func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
 	var pvcCapacity uint64
 	for _, ctx := range context {
 		vols, err := tests.Inst().S.GetVolumes(ctx)
-		log.Debugf("Volumes found for the DS are : %v", vols)
 		if err != nil {
 			return 0, err
 		}

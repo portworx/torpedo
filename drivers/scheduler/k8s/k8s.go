@@ -3917,7 +3917,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				})
 			}
 		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
-			// ToDo: write common code to get ss and pvc list for pds modelsdeploymenr=t type object
+			// ToDo: write common code to get ss and pvc list for pds modelsdeployment type object
 			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNamespace)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToResizeStorage{
