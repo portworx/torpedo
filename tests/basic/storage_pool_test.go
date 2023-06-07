@@ -5421,21 +5421,22 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 					if err != nil {
 						return err
 					}
-				}
+				} else {
+					// Change Replica sets of each volumes created to 3
+					var (
+						maxReplicaFactor int64
+						nodesToBeUpdated []string
+						poolsToBeUpdated []string
+					)
+					maxReplicaFactor = 3
+					nodesToBeUpdated = nil
+					poolsToBeUpdated = nil
+					err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
+						nodesToBeUpdated, poolsToBeUpdated, true)
+					if err != nil {
+						return err
+					}
 
-				// Change Replica sets of each volumes created to 3
-				var (
-					maxReplicaFactor int64
-					nodesToBeUpdated []string
-					poolsToBeUpdated []string
-				)
-				maxReplicaFactor = 3
-				nodesToBeUpdated = nil
-				poolsToBeUpdated = nil
-				err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
-					nodesToBeUpdated, poolsToBeUpdated, true)
-				if err != nil {
-					return err
 				}
 				return nil
 			}
