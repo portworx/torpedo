@@ -2,7 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/volume"
+	v1 "k8s.io/api/core/v1"
 	"math/rand"
 	"strings"
 	"sync"
@@ -1056,5 +1059,81 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{AppDestoryAndDeploy}", func() {
+	var testrailID = 0
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/54373
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("AppDestoryAndDeploy", "Validate deploy and destroy app", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+
+	stepLog := "has to deploy and destroy app"
+	It(stepLog, func() {
+		stepLog = "Deploy applications"
+		namsp := fmt.Sprintf("bonnie-sv4-svc-%s-%v", "appdestoryanddeploy", Inst().InstanceID)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = make([]*scheduler.Context, 0)
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications("appdestoryanddeploy")...)
+			}
+			ValidateApplications(contexts)
+
+		})
+
+		for {
+
+			stepLog = "Destroy apps"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForDestroy] = false
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = false
+				labels := make(map[string]string)
+				labels["app"] = "bonnie-sv4-svc"
+				err := core.Instance().DeletePodsByLabels(namsp, labels, 40*time.Minute*4)
+				log.FailOnError(err, "error deleting pods")
+				//for _, ctx := range contexts {
+				//	err := Inst().S.Destroy(ctx, opts)
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Validate App %s detroy init", ctx.App.Key))
+				//}
+			})
+			Step("wait for pods to be up", func() {
+
+				checkPods := func() (interface{}, bool, error) {
+					podList, err := core.Instance().GetPods(namsp, nil)
+					if err != nil {
+						log.Errorf("Error getting podlist err is: %v", err)
+
+					}
+					isRunning := true
+					for _, p := range podList.Items {
+						if p.Status.Phase != v1.PodRunning {
+							log.Infof("Pod %s in namespace %s is pending", p.Name, p.Namespace)
+							isRunning = false
+						}
+					}
+					if isRunning {
+						return "", false, nil
+					}
+					return "", true, fmt.Errorf("some pods are still pending")
+				}
+				_, err := task.DoRetryWithTimeout(checkPods, 60*time.Minute, 20*time.Second)
+				log.FailOnError(err, "error pods coming up")
+			})
+		}
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+
 	})
 })
