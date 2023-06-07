@@ -405,6 +405,7 @@ func (d *DataserviceType) GetPdsNamespace() (string, error) {
 		return "", err
 	}
 	namespace := params.InfraToTest.Namespace
+	log.Debugf("Namespce getched is : %v", namespace)
 	return namespace, err
 }
 
