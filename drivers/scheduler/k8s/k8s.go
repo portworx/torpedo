@@ -55,7 +55,6 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/pds/dataservice"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -3915,10 +3914,8 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
 			// ToDo: write common code to get ss and pvc list for pds modelsdeployment type object
-			pdsNs, err := dataservice.GetPdsNamespace()
-			if err != nil {
-				return nil, fmt.Errorf("error getting PDS DS, namespace due to : %s", err)
-			}
+			log.Debugf("******** OBJ OBJECT IS: %#v", *obj)
+			pdsNs := *obj.Namespace.Name
 			log.Debugf("******** PDS NAMESPACE IS: %v", pdsNs)
 			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNs)
 			if err != nil {
@@ -4078,12 +4075,11 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				}
 			}
 		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
-			pdsNs, err := dataservice.GetPdsNamespace()
-			if err != nil {
-				return nil, fmt.Errorf("error getting PDS DS, namespace due to : %s", err)
-			}
+			log.Debugf("******** OBJ OBJECT IS: %#v", *obj)
+			pdsNs := *obj.Namespace.Name
 			log.Debugf("******** PDS NAMESPACE IS: %v", pdsNs)
-			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNamespace)
+			log.Debugf("******** PDS NAMESPACE IS: %v", pdsNs)
+			ss, err := k8sApps.GetStatefulSet(obj.GetClusterResourceName(), pdsNs)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToResizeStorage{
 					App:   ctx.App,
