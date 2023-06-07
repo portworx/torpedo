@@ -383,6 +383,7 @@ func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.Models
 	var ctx *scheduler.Context
 
 	for _, dep := range pdsApps {
+		log.Debugf("DEPL IS : %v", *dep)
 		*dep.Namespace.Name, _ = d.GetPdsNamespace()
 		specObjects = append(specObjects, dep)
 		ctx = &scheduler.Context{
