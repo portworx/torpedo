@@ -5520,7 +5520,8 @@ func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 	if len(pools) == 0 {
 		return nil, fmt.Errorf("Got 0 pools listed")
 	}
-
+	fmt.Printf("pools %s", pools)
+	fmt.Printf("poolUUId %s", poolUUID)
 	pool := pools[poolUUID]
 	if pool == nil {
 		return nil, fmt.Errorf("unable to find pool with given ID: %s", poolUUID)
@@ -6167,7 +6168,7 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	return eligibilityMap, nil
 }
 
-// GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
+// GetPoolMaxCloudDriveLimit identifying the max drives allowed based on type of setup
 func GetPoolMaxCloudDriveLimit(stNode *node.Node) (int32, error) {
 	var err error
 
@@ -6190,6 +6191,33 @@ func GetPoolMaxCloudDriveLimit(stNode *node.Node) (int32, error) {
 		return 0, err
 	}
 	return maxCloudDrives, nil
+}
+
+func GetPoolsinNode(stNode *node.Node) (map[int]string, []int) {
+	type DataPool struct {
+		ID   int
+		UUID string
+	}
+	type DriveResources struct {
+		DataPools []DataPool
+	}
+	poolIDList := make([]int, 0)
+	//var selectedPools DataPool
+	poolIDToUUID := make(map[int]string)
+	var driveresources DriveResources
+	cmd := " -j service pool show"
+	output, err := Inst().V.GetPxctlCmdOutput(*stNode, cmd)
+	log.FailOnError(err, "pool show command failed")
+	out := []byte(output)
+	err = json.Unmarshal(out, &driveresources)
+	log.FailOnError(err, "ERROR of unmarshal: %v", err)
+	dash.VerifyFatal(&driveresources, nil, "Failed to get the drives from node, because driver data pool is nil")
+	for _, pool := range driveresources.DataPools {
+		log.Debugf("Pool.Info.Uuid %s", pool.UUID)
+		poolIDToUUID[pool.ID] = pool.UUID
+		poolIDList = append(poolIDList, pool.ID)
+	}
+	return poolIDToUUID, poolIDList
 }
 
 // WaitTillEnterMaintenanceMode wait until the node enters maintenance mode
@@ -6256,16 +6284,21 @@ func ExitNodesFromMaintenanceMode() error {
 func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
 	var poolDetails []*opsapi.StoragePool
 
-	if node.IsStorageNode(n) == false {
+	if !node.IsStorageNode(n) {
 		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
 	}
 
 	nodes := node.GetStorageNodes()
-
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("nodelist of storagenodes is empty")
+	}
+	fmt.Printf("Nodes %s", nodes)
 	for _, eachNode := range nodes {
 		if eachNode.Id == n.Id {
 			for _, eachPool := range eachNode.Pools {
 				poolInfo, err := GetStoragePoolByUUID(eachPool.Uuid)
+				fmt.Printf("eachPooluuid %s", eachPool.Uuid)
+				fmt.Printf("Nodeuuid %s", poolInfo)
 				if err != nil {
 					return nil, err
 				}
