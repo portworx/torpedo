@@ -415,13 +415,11 @@ func DataserviceInit(ControlPlaneURL string) (*DataserviceType, error) {
 
 // get pds ns
 func GetPdsNamespace() (string, error) {
-	log.Debugf("Entered into fectching ns")
 	pdsParams := GetAndExpectStringEnvVar("PDS_PARAM_CM")
 	params, err := customparams.ReadParams(pdsParams)
 	if err != nil {
 		return "", err
 	}
 	namespace := params.InfraToTest.Namespace
-	log.Debugf("******* ns fecthed is : %v", namespace)
 	return namespace, err
 }
