@@ -383,8 +383,7 @@ func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.Models
 	var ctx *scheduler.Context
 
 	for _, dep := range pdsApps {
-		log.Debugf("dep.Namespace.Name is %v", *dep.Namespace.Name)
-		*dep.Namespace.Name = d.GetPdsNamespace()
+		*dep.Namespace.Name, _ = d.GetPdsNamespace()
 		specObjects = append(specObjects, dep)
 		ctx = &scheduler.Context{
 			UID: dep.GetId(),
@@ -399,15 +398,15 @@ func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.Models
 }
 
 // get pds ns
-func (d *DataserviceType) GetPdsNamespace() string {
+func (d *DataserviceType) GetPdsNamespace() (string, error) {
 	pdsParams := GetAndExpectStringEnvVar("PDS_PARAM_CM")
 	params, err := customparams.ReadParams(pdsParams)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	namespace := params.InfraToTest.Namespace
 	log.Debugf("Namespce fetched is : %v", namespace)
-	return namespace
+	return namespace, err
 }
 
 func init() {

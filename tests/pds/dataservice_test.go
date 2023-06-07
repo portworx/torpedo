@@ -1719,6 +1719,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 				Step("Checking the PVC usage", func() {
 					ctx := dsTest.CreateSchedulerContextForPDSApps(depList)
+					log.Debugf("contxt is ********** : %v", ctx)
 					err = CheckPVCtoFullCondition(ctx)
 					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
 					err = IncreasePVCby1Gig(ctx)
