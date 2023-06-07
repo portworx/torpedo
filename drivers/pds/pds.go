@@ -15,7 +15,6 @@ import (
 type Driver interface {
 	DeployPDSDataservices() ([]*pds.ModelsDeployment, error)
 	CreateSchedulerContextForPDSApps([]*pds.ModelsDeployment) []*scheduler.Context
-	GetPdsNamespace() (string, error)
 }
 
 var (
