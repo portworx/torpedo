@@ -2,18 +2,20 @@ package pds
 
 import (
 	"fmt"
+	"net/url"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
-	"net/url"
 )
 
 type Driver interface {
 	DeployPDSDataservices() ([]*pds.ModelsDeployment, error)
 	CreateSchedulerContextForPDSApps([]*pds.ModelsDeployment) []*scheduler.Context
+	GetPdsNamespace() (string, error)
 }
 
 var (

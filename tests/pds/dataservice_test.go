@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/pds/dataservice"
 	"math/rand"
 	"net/http"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/pds/dataservice"
 
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 
@@ -1664,5 +1665,45 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 
 	JustAfterEach(func() {
 		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{GetTestNS}", func() {
+
+	JustBeforeEach(func() {
+		InitInstance()
+		StartTorpedoTest("GetTestNS", "Deploys and increases the pvc size of DS once trhreshold is met", pdsLabels, 0)
+	})
+
+	It("Deploy Dataservices", func() {
+
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var dsVersions = make(map[string]map[string][]string)
+		var depList []*pds.ModelsDeployment
+
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					controlPlane.UpdateResourceTemplateName("pds-auto-pvcFullCondition")
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+					dsVersions[ds.Name] = dataServiceVersionBuildMap
+					depList = append(depList, deployment)
+
+				})
+			}
+			// This testcase is currently applicable only for postgresql deployments
+			Step("Checking the PVC usage", func() {
+				ctx := dsTest.CreateSchedulerContextForPDSApps(depList)
+				err = CheckPVCtoFullCondition(ctx)
+				log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
+			})
+
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
