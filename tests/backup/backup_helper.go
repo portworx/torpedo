@@ -735,6 +735,52 @@ func CreateRestoreWithReplacePolicyWithValidation(ctx context.Context, restoreNa
 	return nil
 }
 
+// CreateRestoreWithReplacePolicy Creates in-place restore and waits for it to complete
+func CreateRestoreWithReplacePolicy(ctx context.Context, restoreName string, backupName string, namespaceMapping, storageClassMapping map[string]string, replacePolicy ReplacePolicy_Type, clusterName string, orgID string) error {
+	var bkp *api.BackupObject
+	var bkpUid string
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup %s needed to be restored", backupName)
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkpUid = bkp.Uid
+			break
+		}
+	}
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		ReplacePolicy: api.ReplacePolicy_Type(replacePolicy),
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] created", restoreName)
+	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] created successfully", restoreName)
+	return nil
+}
+
 // CreateRestoreWithUIDWithValidation creates restore with UID, waits and checks for success and validates the restore
 func CreateRestoreWithUIDWithValidation(ctx context.Context, restoreName string, backupName string, backupUID string, namespaceMapping map[string]string, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) error {
 	backupDriver := Inst().Backup
