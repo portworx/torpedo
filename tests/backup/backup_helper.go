@@ -1684,6 +1684,8 @@ func restoreSuccessCheckWithValidation(ctx context.Context, restoreName string, 
 }
 
 // restoreSuccessCheckWithReplacePolicyWithValidation inspects restore task status for success as per ReplacePolicy_Type
+func restoreSuccessCheckWithReplacePolicyWithValidation(ctx context.Context, restoreName string, namespaceMapping, storageClassMapping map[string]string, replacePolicy ReplacePolicy_Type, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypesFilter []string, resourceObjectsList []*api.ResourceInfo, retryDuration time.Duration, retryInterval time.Duration) error {
+	log.Infof("Initiating Success Check for Restore [%s]", restoreName)
 	restoreInspectRequest := &api.RestoreInspectRequest{
 		Name:  restoreName,
 		OrgId: orgID,
@@ -1718,6 +1720,39 @@ func restoreSuccessCheckWithValidation(ctx context.Context, restoreName string, 
 		return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s] because of [%s]", restoreName, statusesExpected, actual, reason)
 	}
 	_, err := task.DoRetryWithTimeout(restoreSuccessCheckFunc, retryDuration, retryInterval)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] was successfully created", restoreName)
+	log.Infof("Preparing for Validation of restore [%s]", restoreName)
+	originalClusterConfigPath := CurrentClusterConfigPath
+	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
+		err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
+		return err
+	} else {
+		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
+		err = SetClusterContext(clusterConfigPath)
+		if err != nil {
+			return err
+		}
+	}
+	defer func() {
+		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		err = SetClusterContext(originalClusterConfigPath)
+	}()
+	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+	for _, scheduledAppContext := range scheduledAppContexts {
+		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
+		if err != nil {
+			log.Errorf("TransformAppContextWithMappings: %v", err)
+			continue
+		}
+		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+	}
+	if err != nil {
+		return err
+	}
+	err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, resourceTypesFilter, resourceObjectsList)
 	return err
 }
 
