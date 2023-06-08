@@ -808,38 +808,18 @@ func CreateRestoreWithoutCheck(ctx context.Context, restoreName string, backupNa
 	return resp, nil
 }
 
-// CreateRestoreWithValidation creates restore, waits and checks for success and validates the backup
-func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) (err error) {
-	err = CreateRestore(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping)
+// CreateRestoreWithValidation creates restore, waits and checks for success and validates the restore
+func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) error {
+	_, err := CreateRestoreWithoutCheck(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, nil, clusterName, orgID)
 	if err != nil {
-		return
+		return err
 	}
-	originalClusterConfigPath := CurrentClusterConfigPath
-	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
-		err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
-		return
-	} else {
-		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
-		err = SetClusterContext(clusterConfigPath)
+	err = restoreSuccessCheckWithValidation(ctx, restoreName, namespaceMapping, storageClassMapping, clusterName, orgID, scheduledAppContexts, make([]string, 0), make([]*api.ResourceInfo, 0), maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second)
 		if err != nil {
-			return
+		return err
 		}
-	}
-	defer func() {
-		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
-		err = SetClusterContext(originalClusterConfigPath)
-	}()
-	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
-	for _, scheduledAppContext := range scheduledAppContexts {
-		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
-		if err != nil {
-			log.Errorf("TransformAppContextWithMappings: %v", err)
-			continue
-		}
-		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
-	}
-	err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
-	return
+	log.Infof("Restore [%s] was created and validated", restoreName)
+	return nil
 }
 
 func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string) (int, error) {
