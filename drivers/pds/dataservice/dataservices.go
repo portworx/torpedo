@@ -2,6 +2,10 @@ package dataservice
 
 import (
 	"fmt"
+	state "net/http"
+	"os"
+	"time"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -15,9 +19,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	state "net/http"
-	"os"
-	"time"
 )
 
 // PDS vars
@@ -382,6 +383,11 @@ func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.Models
 	var ctx *scheduler.Context
 
 	for _, dep := range pdsApps {
+		dep.Namespace, err = components.Namespace.GetNamespace(*dep.NamespaceId)
+		if err != nil {
+			log.Errorf("error while getting namespace")
+		}
+		log.Infof("Namespace after assignment %s", *dep.Namespace.Name)
 		specObjects = append(specObjects, dep)
 		ctx = &scheduler.Context{
 			UID: dep.GetId(),

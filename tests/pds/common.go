@@ -170,7 +170,7 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 
 // Check the DS related PV usage and resize in case of 90% full
 func CheckPVCtoFullCondition(context []*scheduler.Context) error {
-	log.Infof("Start polling for the pvc consumption by the DS")
+	log.Infof("Check PVC Usage")
 	f := func() (interface{}, bool, error) {
 		for _, ctx := range context {
 			vols, err := tests.Inst().S.GetVolumes(ctx)
@@ -186,10 +186,7 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 				usedGiB := appVol.GetUsage() / units.GiB
 				threshold := pvcCapacity - 1
 				if usedGiB >= threshold {
-					log.Infof("Capacity in GB is %v", pvcCapacity)
-					log.Infof("Used vol in GB is : %v", usedGiB)
-					log.Infof("Threshold defined for the PVC %v is %v", vol.Name, threshold)
-					log.Infof("Threshold successfulyy met for the PVC %v", vol.Name)
+					log.Infof("The PVC capacity was %vGB , the consumed PVC is %vGB")
 					return nil, false, nil
 				}
 			}
@@ -203,7 +200,7 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 
 // Increase PVC by 1 gb
 func IncreasePVCby1Gig(context []*scheduler.Context) error {
-	log.Info("Resizing of the PVC begins ...")
+	log.Info("Resizing of the PVC begins")
 	initialCapacity, err := GetVolumeCapacityInGB(context)
 	log.Debugf("Initial volume storage size is : %v", initialCapacity)
 	if err != nil {

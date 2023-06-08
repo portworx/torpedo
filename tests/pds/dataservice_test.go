@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/pds/dataservice"
 	"math/rand"
 	"net/http"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/pds/dataservice"
 
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 
@@ -1694,7 +1695,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 				})
 			}
-			// This testcase is currently applicable only for postgresql deployments
+			// This testcase is currently applicable only for postgresql ds deployments
 			if dsName == postgresql {
 				Step("Running Workloads before scaling up PVC ", func() {
 					for ds, deployment := range deployments {
