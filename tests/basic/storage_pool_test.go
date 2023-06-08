@@ -5413,16 +5413,19 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			log.InfoD("setting replication on the volumes")
 			setRepl := func(vol *volume.Volume) error {
 				log.InfoD("setting replication factor of the volume [%v] with ID [%v]", vol.Name, vol.ID)
-				getReplicaSets, err := Inst().V.GetReplicaSets(vol)
+				currRepFactor, err := Inst().V.GetReplicationFactor(vol)
 				log.FailOnError(err, "Failed to get replication factor on the volume")
-				if len(getReplicaSets) == 3 {
-					newRepl := int64(len(getReplicaSets) - 1)
-					err = Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true)
+				log.Infof("Replication factor on the volume [%v] is [%v]", vol.Name, currRepFactor)
+				opts := volume.Options{
+					ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+				}
+				if currRepFactor == 3 {
+					newRepl := currRepFactor - 1
+					err = Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true, opts)
 					if err != nil {
 						return err
 					}
 				}
-
 				// Change Replica sets of each volumes created to 3
 				var (
 					maxReplicaFactor int64
@@ -5433,10 +5436,11 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				nodesToBeUpdated = nil
 				poolsToBeUpdated = nil
 				err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
-					nodesToBeUpdated, poolsToBeUpdated, true)
+					nodesToBeUpdated, poolsToBeUpdated, true, opts)
 				if err != nil {
 					return err
 				}
+
 				return nil
 			}
 
