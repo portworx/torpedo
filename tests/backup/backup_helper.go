@@ -1791,17 +1791,23 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 						ns == restoredObj.Namespace {
 						log.Infof("SpecObject(name: [%s], GVK: [%s,%s,%s], namespace: [%s]) was found in restore [%s], as expected by presence in 'expectedRestoredAppContext' (corresponding to NS [%s])", restoredObj.Name, restoredObjGroup, restoredObj.Version, restoredObj.Kind, restoredObj.Namespace, restoreName, expectedRestoredAppContextNamespace)
 
-						// check status od restored resource (as per px-backup)
+						// check status of restored resource (as per px-backup)
 						if restoredObj.Status.Status != api.RestoreInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
 							if restoredObj.Status.Status == api.RestoreInfo_StatusInfo_Retained {
 								if theRestore.ReplacePolicy != api.ReplacePolicy_Retain {
 									err := fmt.Errorf("SpecObject(name: [%s], GVK: [%s,%s,%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in 'expectedRestoredAppContext' (corresponding to NS [%s])), but status was [Retained], with reason [%s], despite the replace policy being [%s]", name, group, version, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Reason, theRestore.ReplacePolicy)
 									errors = append(errors, err)
+									continue
+								} else {
+									log.Infof("SpecObject(name: [%s], GVK: [%s,%s,%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in 'expectedRestoredAppContext' (corresponding to NS [%s])), and status was [Retained] as the replace policy was [%s]", name, group, version, kind, ns, restoreName, expectedRestoredAppContextNamespace, theRestore.ReplacePolicy)
 								}
 							} else {
 								err := fmt.Errorf("SpecObject(name: [%s], GVK: [%s,%s,%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in 'expectedRestoredAppContext' (corresponding to NS [%s])), but status was [%s], with reason [%s]", name, group, version, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Status, restoredObj.Status.Reason)
 								errors = append(errors, err)
+								continue
 							}
+						} else {
+							log.Infof("SpecObject(name: [%s], GVK: [%s,%s,%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in 'expectedRestoredAppContext' (corresponding to NS [%s])) with status [%s]", name, group, version, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Status)
 						}
 
 						// here, we *actually* check if the resource was restored by "getting" it
@@ -1860,10 +1866,24 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 		// looping over the list of volumes that PX-Backup says it restored, to run some checks
 		for _, restoredVolInfo := range apparentlyRestoredVolumes {
 			if namespaceMappings[restoredVolInfo.SourceNamespace] == expectedRestoredAppContextNamespace {
+
+				// check status of restored volume (as per px-backup)
 				if restoredVolInfo.Status.Status != api.RestoreInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
+					if restoredVolInfo.Status.Status == api.RestoreInfo_StatusInfo_Retained {
+						if theRestore.ReplacePolicy != api.ReplacePolicy_Retain {
+							err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s], despite the replace policy being [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason, theRestore.ReplacePolicy)
+							errors = append(errors, err)
+							continue
+						} else {
+							log.Infof("in restore [%s], the status of the restored volume [%s] was not Success. It was and status was [Retained] as the replace policy was [%s]", restoreName, restoredVolInfo.RestoreVolume, theRestore.ReplacePolicy)
+						}
+					} else {
 					err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
 					errors = append(errors, err)
 					continue
+					}
+				} else {
+					log.Infof("in restore [%s], the status of the restored volume [%s] was [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status)
 				}
 
 				var actualVol *volume.Volume
