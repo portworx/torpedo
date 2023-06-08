@@ -1695,6 +1695,15 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 				})
 			}
+			defer func() {
+				for _, newDeployment := range deployments {
+					Step("Delete created deployments")
+					resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				}
+			}()
+
 			// This testcase is currently applicable only for postgresql ds deployments
 			if dsName == postgresql {
 				Step("Running Workloads before scaling up PVC ", func() {
@@ -1716,12 +1725,35 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					}
 				})
 
+				defer func() {
+					for dsName, workloadContainer := range generateWorkloads {
+						Step("Delete the workload generating deployments", func() {
+							if Contains(dataServiceDeploymentWorkloads, dsName) {
+								log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
+								err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
+							} else if Contains(dataServicePodWorkloads, dsName) {
+								log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
+								err = pdslib.DeleteK8sPods(workloadContainer, namespace)
+							}
+							log.FailOnError(err, "error deleting workload generating pods")
+						})
+					}
+				}()
+
 				Step("Checking the PVC usage", func() {
 					ctx := dsTest.CreateSchedulerContextForPDSApps(depList)
 					err = CheckPVCtoFullCondition(ctx)
 					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
 					err = IncreasePVCby1Gig(ctx)
 					log.FailOnError(err, "Failing while Increasing the PVC name...")
+				})
+
+				Step("Validate Deployments after PVC Resize", func() {
+					for ds, deployment := range deployments {
+						err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
+						log.FailOnError(err, "Error while validating dataservices")
+						log.InfoD("Data-service: %v is up and healthy", ds.Name)
+					}
 				})
 			}
 
