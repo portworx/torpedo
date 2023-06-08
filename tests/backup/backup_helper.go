@@ -2171,87 +2171,18 @@ func IsCloudCredPresent(cloudCredName string, ctx context.Context, orgID string)
 	return false, nil
 }
 
-// CreateCustomRestoreWithPVCs function can be used to deploy custom deployment with it's PVCs. It cannot be used for any other resource type.
-func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
-	orgID string, ctx context.Context, storageClassMapping map[string]string, namespace string) (deploymentName string, err error) {
-
-	var bkpUid string
-	var newResources []*api.ResourceInfo
-	var options metav1.ListOptions
-	var deploymentPvcMap = make(map[string][]string)
-	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup needed to be restored")
-	bkpUid, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+// CreateCustomRestoreWithValidation creates restore with specific resource, waits and checks for success and validates the restore
+func CreateCustomRestoreWithValidation(ctx context.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, resourceObjectsList []*api.ResourceInfo, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) error {
+	_, err := CreateRestoreWithoutCheck(ctx, restoreName, backupName, namespaceMapping, storageClassMapping, resourceObjectsList, clusterName, orgID)
 	if err != nil {
-		return "", fmt.Errorf("unable to get backup UID for %v with error %v", backupName, err)
+		return err
 	}
-	deploymentList, err := apps.Instance().ListDeployments(namespace, options)
+	err = restoreSuccessCheckWithValidation(ctx, restoreName, namespaceMapping, storageClassMapping, clusterName, orgID, scheduledAppContexts, make([]string, 0), resourceObjectsList, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second)
 	if err != nil {
-		return "", fmt.Errorf("unable to list the deployments in namespace %v with error %v", namespace, err)
+		return err
 	}
-	if len(deploymentList.Items) == 0 {
-		return "", fmt.Errorf("deployment list is null")
-	}
-	deployments := deploymentList.Items
-	for _, deployment := range deployments {
-		var pvcs []string
-		for _, vol := range deployment.Spec.Template.Spec.Volumes {
-			pvcName := vol.PersistentVolumeClaim.ClaimName
-			pvcs = append(pvcs, pvcName)
-		}
-		deploymentPvcMap[deployment.Name] = pvcs
-	}
-	// select a random index from the slice of deployment names to be restored
-	randomIndex := rand.Intn(len(deployments))
-	deployment := deployments[randomIndex]
-	log.Infof("selected deployment %v", deployment.Name)
-	pvcs, exists := deploymentPvcMap[deployment.Name]
-	if !exists {
-		return "", fmt.Errorf("deploymentName %v not found in the deploymentPvcMap", deployment.Name)
-	}
-	deploymentStruct := &api.ResourceInfo{
-		Version:   "v1",
-		Group:     "apps",
-		Kind:      "Deployment",
-		Name:      deployment.Name,
-		Namespace: namespace,
-	}
-	pvcsStructs := make([]*api.ResourceInfo, len(pvcs))
-	for i, pvcName := range pvcs {
-		pvcStruct := &api.ResourceInfo{
-			Version:   "v1",
-			Group:     "core",
-			Kind:      "PersistentVolumeClaim",
-			Name:      pvcName,
-			Namespace: namespace,
-		}
-		pvcsStructs[i] = pvcStruct
-	}
-	newResources = append([]*api.ResourceInfo{deploymentStruct}, pvcsStructs...)
-	createRestoreReq := &api.RestoreCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  restoreName,
-			OrgId: orgID,
-		},
-		Backup:              backupName,
-		Cluster:             clusterName,
-		NamespaceMapping:    namespaceMapping,
-		StorageClassMapping: storageClassMapping,
-		BackupRef: &api.ObjectRef{
-			Name: backupName,
-			Uid:  bkpUid,
-		},
-		IncludeResources: newResources,
-	}
-	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
-	if err != nil {
-		return "", fmt.Errorf("fail to create restore with createrestore req %v and error %v", createRestoreReq, err)
-	}
-	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
-	if err != nil {
-		return "", fmt.Errorf("fail to create restore %v with error %v", restoreName, err)
-	}
-	return deployment.Name, nil
+	log.Infof("Restore [%s] was created and validated", restoreName)
+	return nil
 }
 
 // GetOrdinalScheduleBackupName returns the name of the schedule backup at the specified ordinal position for the given schedule
