@@ -2732,7 +2732,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 					namespaceMapping[scheduledNamespace] = restoreNamespace
 
 					log.InfoD("creating Initial Restore [%s] in destination cluster [%s], organization [%s], in namespace [%s]", initialRestoreName, destinationClusterName, orgID, restoreNamespace)
-					_, err = CreateRestoreWithoutCheck(initialRestoreName, backupNames[i], namespaceMapping, destinationClusterName, orgID, ctx)
+					_, err = CreateRestoreWithoutCheck(ctx, initialRestoreName, backupNames[i], namespaceMapping, make(map[string]string, 0), nil, destinationClusterName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("initiation of initial restore [%s]", initialRestoreName))
 					restoreNames = append(restoreNames, initialRestoreName)
 
@@ -2784,7 +2784,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 					namespaceMapping[scheduledNamespace] = restoreLaterNamespace
 
 					log.InfoD("creating Later Restore [%s] in destination cluster [%s], organization [%s], in namespace [%s]", restoreLaterName, destinationClusterName, orgID, restoreLaterNamespace)
-					_, err = CreateRestoreWithoutCheck(restoreLaterName, backupNames[i], namespaceMapping, destinationClusterName, orgID, ctx)
+					_, err = CreateRestoreWithoutCheck(ctx, restoreLaterName, backupNames[i], namespaceMapping, make(map[string]string, 0), nil, destinationClusterName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("initiation of later restore [%s]", restoreLaterName))
 					restoreLaterNames = append(restoreLaterNames, restoreLaterName)
 

@@ -3843,7 +3843,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 				restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, user)
 				restoreNames = append(restoreNames, restoreName)
 				log.Infof("Creating restore %s for user %s", restoreName, user)
-				_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctxNonAdmin)
+				_, err = CreateRestoreWithoutCheck(ctxNonAdmin, restoreName, backupName, namespaceMapping, make(map[string]string, 0), nil, destinationClusterName, orgID)
 				log.FailOnError(err, "Failed to create restore %s for user %s", restoreName, user)
 			}
 		})
