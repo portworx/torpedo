@@ -802,40 +802,33 @@ func CreateRestoreWithUID(restoreName string, backupName string, namespaceMappin
 }
 
 // CreateRestoreWithoutCheck creates restore without waiting for completion
-func CreateRestoreWithoutCheck(restoreName string, backupName string,
-	namespaceMapping map[string]string, clusterName string, orgID string, ctx context.Context) (*api.RestoreInspectResponse, error) {
-
-	var bkp *api.BackupObject
-	var bkpUid string
+func CreateRestoreWithoutCheck(ctx context.Context, restoreName string, backupName string,
+	namespaceMapping map[string]string, storageClassMapping map[string]string, resourceObjectsList []*api.ResourceInfo, clusterName string, orgID string) (*api.RestoreInspectResponse, error) {
 	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup needed to be restored")
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
-	curBackups, _ := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
-	log.Debugf("Enumerate backup response -\n%v", curBackups)
-	for _, bkp = range curBackups.GetBackups() {
-		if bkp.Name == backupName {
-			bkpUid = bkp.Uid
-			break
-		}
+	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get backup UID for %v with error %v", backupName, err)
 	}
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
 			OrgId: orgID,
 		},
-		Backup:           backupName,
-		Cluster:          clusterName,
-		NamespaceMapping: namespaceMapping,
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
 		BackupRef: &api.ObjectRef{
 			Name: backupName,
 			Uid:  bkpUid,
 		},
+		IncludeResources: resourceObjectsList,
 	}
-	_, err := backupDriver.CreateRestore(ctx, createRestoreReq)
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Restore [%s] created", restoreName)
 	backupScheduleInspectRequest := &api.RestoreInspectRequest{
 		OrgId: orgID,
 		Name:  restoreName,
