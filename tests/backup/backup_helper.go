@@ -736,13 +736,9 @@ func CreateRestoreWithReplacePolicy(restoreName string, backupName string, names
 	return nil
 }
 
-// CreateRestoreWithUID creates restore with UID
-func CreateRestoreWithUID(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
-	orgID string, ctx context.Context, storageClassMapping map[string]string, backupUID string) error {
-
+// CreateRestoreWithUIDWithValidation creates restore with UID, waits and checks for success and validates the restore
+func CreateRestoreWithUIDWithValidation(ctx context.Context, restoreName string, backupName string, backupUID string, namespaceMapping map[string]string, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) error {
 	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup needed to be restored")
-
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
@@ -761,11 +757,12 @@ func CreateRestoreWithUID(restoreName string, backupName string, namespaceMappin
 	if err != nil {
 		return err
 	}
-	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	log.Infof("Restore [%s] created", restoreName)
+	err = restoreSuccessCheckWithValidation(ctx, restoreName, namespaceMapping, storageClassMapping, clusterName, orgID, scheduledAppContexts, make([]string, 0), make([]*api.ResourceInfo, 0), maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second)
 	if err != nil {
 		return err
 	}
-	log.Infof("Restore [%s] created successfully", restoreName)
+	log.Infof("Restore [%s] was created and validated", restoreName)
 	return nil
 }
 
