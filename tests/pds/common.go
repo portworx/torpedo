@@ -186,7 +186,7 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 				usedGiB := appVol.GetUsage() / units.GiB
 				threshold := pvcCapacity - 1
 				if usedGiB >= threshold {
-					log.Infof("The PVC capacity was %vGB , the consumed PVC is %vGB")
+					log.Infof("The PVC capacity was %vGB , the consumed PVC is %vGB", pvcCapacity, usedGiB)
 					return nil, false, nil
 				}
 			}
