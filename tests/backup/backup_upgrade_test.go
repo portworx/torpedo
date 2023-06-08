@@ -139,7 +139,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 				scheduleName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				appContextsToBackupMap[scheduleName] = appContextsToBackup
-				err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid)
+				_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, "", "", "", "", periodicPolicyName, schPolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 				scheduleNames = append(scheduleNames, scheduleName)
 			}
@@ -250,7 +250,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("PXBackupEndToEndBackupAndRestoreWithUpgrade", "Validates end-to-end backup and restore operations with PX-Backup upgrade", nil, 0)
+		StartTorpedoTest("PXBackupEndToEndBackupAndRestoreWithUpgrade", "Validates end-to-end backup and restore operations with PX-Backup upgrade", nil, 58021)
 		log.Infof("Scheduling applications")
 		numDeployments = Inst().GlobalScaleFactor
 		if len(Inst().AppList) == 1 && numDeployments < 2 {
