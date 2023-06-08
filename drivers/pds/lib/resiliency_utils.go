@@ -383,7 +383,7 @@ func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeploymen
 				return testError
 			}
 			if num_reboots > 1 {
-				for i := 1; i <= num_reboots; i++ {
+				for index := 1; index <= num_reboots; index++ {
 					log.Infof("wait for node: %s to be back up", nodeToReboot.Name)
 					err = tests.Inst().N.TestConnection(nodeToReboot, node.ConnectionOpts{
 						Timeout:         defaultTestConnectionTimeout,
