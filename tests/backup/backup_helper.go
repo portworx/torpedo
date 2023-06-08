@@ -689,10 +689,8 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 	return nil
 }
 
-// CreateRestoreWithReplacePolicy Creates in-place restore and waits for it to complete
-func CreateRestoreWithReplacePolicy(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
-	orgID string, ctx context.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicy_Type) error {
-
+// CreateRestoreWithReplacePolicyWithValidation Creates in-place restore, waits for it to complete and then validates it
+func CreateRestoreWithReplacePolicyWithValidation(ctx context.Context, restoreName string, backupName string, namespaceMapping, storageClassMapping map[string]string, replacePolicy ReplacePolicy_Type, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) error {
 	var bkp *api.BackupObject
 	var bkpUid string
 	backupDriver := Inst().Backup
@@ -728,11 +726,12 @@ func CreateRestoreWithReplacePolicy(restoreName string, backupName string, names
 	if err != nil {
 		return err
 	}
-	err = restoreSuccessWithReplacePolicy(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx, replacePolicy)
+	log.Infof("Restore [%s] created", restoreName)
+	err = restoreSuccessCheckWithReplacePolicyWithValidation(ctx, restoreName, namespaceMapping, storageClassMapping, replacePolicy, clusterName, orgID, scheduledAppContexts, make([]string, 0), make([]*api.ResourceInfo, 0), maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second)
 	if err != nil {
 		return err
 	}
-	log.Infof("Restore [%s] created successfully", restoreName)
+	log.Infof("Restore [%s] was created and validated", restoreName)
 	return nil
 }
 
@@ -812,9 +811,9 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 		return err
 	}
 	err = restoreSuccessCheckWithValidation(ctx, restoreName, namespaceMapping, storageClassMapping, clusterName, orgID, scheduledAppContexts, make([]string, 0), make([]*api.ResourceInfo, 0), maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second)
-		if err != nil {
+	if err != nil {
 		return err
-		}
+	}
 	log.Infof("Restore [%s] was created and validated", restoreName)
 	return nil
 }
@@ -1910,9 +1909,9 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 							log.Infof("in restore [%s], the status of the restored volume [%s] was not Success. It was and status was [Retained] as the replace policy was [%s]", restoreName, restoredVolInfo.RestoreVolume, theRestore.ReplacePolicy)
 						}
 					} else {
-					err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
-					errors = append(errors, err)
-					continue
+						err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+						errors = append(errors, err)
+						continue
 					}
 				} else {
 					log.Infof("in restore [%s], the status of the restored volume [%s] was [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status)
