@@ -350,6 +350,11 @@ func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, erro
 	namespace := params.InfraToTest.Namespace
 	forceImageID = params.ForceImageID
 
+	_, err = DataserviceInit(infraParams.ControlPlaneURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init api components %v", err)
+	}
+
 	_, isAvailable, err := targetCluster.CreatePDSNamespace(namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pds namespace %v", err)
@@ -456,6 +461,12 @@ func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.Models
 	var ctx *scheduler.Context
 
 	for _, dep := range pdsApps {
+		dep.Namespace, err = components.Namespace.GetNamespace(*dep.NamespaceId)
+		if err != nil {
+			log.Errorf("error while getting namespace")
+		}
+		log.Infof("Application Context Namespace %s", *dep.Namespace.Name)
+
 		specObjects = append(specObjects, dep)
 		ctx = &scheduler.Context{
 			UID: dep.GetId(),
