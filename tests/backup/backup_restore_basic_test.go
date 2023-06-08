@@ -1810,6 +1810,22 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 		StartTorpedoTest("MultipleInPlaceRestoreSameTime",
 			"Issue multiple in-place restores at the same time", nil, 58051)
 		log.InfoD("Deploy applications needed for backup")
+
+		// HACK: this is a hack that allows CreateRestoreWithReplacePolicyWithValidation
+		// to be called in multiple times in parallel. If we switch beforehand, then there is NO
+		// internal switching inside the fuction as the `CurrentClusterConfigPath` is used as cache.
+		//
+		// NOTE:
+		// - It DOES NOT work if the parallel restores are on different cluster
+		// - Instead of switching *just before* restoring, we are switching right now as we are
+		//   working on the assumption that the "default" cluster is the same as "source" cluster
+		//   and we want to avoid switching back and forth between default and source later on
+		//
+		// CurrentClusterConfigPath refers to ""
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "Unable to switch context to source cluster %s", SourceClusterName)
+		// CurrentClusterConfigPath refers to "source-config"
+
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 5; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
@@ -1889,8 +1905,10 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 				go func(bkpNameSpace string, backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err = CreateRestore(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string))
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v into namespce %v with replacing existing resources", backupName, bkpNameSpace))
+
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNameSpace})
+					err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), SourceClusterName, orgID, appContextsToBackup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of Restore [%s] of backup [%s] in namespace [%s] replacing existing resource", restoreName, backupName, bkpNameSpace))
 				}(bkpNameSpace, backupName)
 			}
 			wg.Wait()
@@ -1909,14 +1927,23 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 				go func(bkpNameSpace string, backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), ReplacePolicy_Delete)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v into namespce %v with replacing existing resources", backupName, bkpNameSpace))
+
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNameSpace})
+					err = CreateRestoreWithReplacePolicyWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), ReplacePolicy_Delete, SourceClusterName, orgID, appContextsToBackup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of Restore [%s] of backup [%s] in namespace [%s] replacing existing resource", restoreName, backupName, bkpNameSpace))
 				}(bkpNameSpace, backupName)
 			}
 			wg.Wait()
 		})
 	})
 	JustAfterEach(func() {
+		defer func() {
+			// HACK: reverting the switch we made at the top
+			// CurrentClusterConfigPath refers to "source-config"
+			err := SetClusterContext("")
+			log.FailOnError(err, "Unable to switch context to source cluster %s", SourceClusterName)
+			// CurrentClusterConfigPath refers to ""
+		}()
 		var wg sync.WaitGroup
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
