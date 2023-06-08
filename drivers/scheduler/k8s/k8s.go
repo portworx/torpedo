@@ -29,7 +29,7 @@ import (
 
 	docker_types "github.com/docker/docker/api/types"
 	vaultapi "github.com/hashicorp/vault/api"
-	v1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/units"
@@ -1367,11 +1367,49 @@ func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	return nil
 }
 
-// GetUpdatedSpec takes a spec and returns the latest version of it by `GET`-ing it
+// GetUpdatedSpec gets the updated spec of a K8s Object. Just `name`, and if required `namespace` must be specified on `spec` in order to GET the spec from K8s (if it exists).
 func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
-	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
-		pvc, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+	if specObj, ok := spec.(*appsapi.Deployment); ok {
+		dep, err := k8sApps.GetDeployment(specObj.Name, specObj.Namespace)
+		if err == nil {
+			return nil, err
+		}
 
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		dep.Kind = "Deployment"
+
+		return dep, nil
+	} else if specObj, ok := spec.(*appsapi.StatefulSet); ok {
+		ss, err := k8sApps.GetStatefulSet(specObj.Name, specObj.Namespace)
+		if err == nil {
+			return nil, err
+		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		ss.Kind = "StatefulSet"
+
+		return ss, nil
+	} else if specObj, ok := spec.(*appsapi.DaemonSet); ok {
+		ds, err := k8sApps.GetDaemonSet(specObj.Name, specObj.Namespace)
+		if err == nil {
+			return nil, err
+		}
+		return ds, nil
+	} else if specObj, ok := spec.(*corev1.Service); ok {
+		svc, err := k8sCore.GetService(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		svc.Kind = "Service"
+
+		return svc, nil
+	} else if specObj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+		pvc, err := k8sCore.GetPersistentVolumeClaim(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -1381,6 +1419,248 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		pvc.Kind = "PersistentVolumeClaim"
 
 		return pvc, nil
+	} else if specObj, ok := spec.(*storageapi.StorageClass); ok {
+		sc, err := k8sStorage.GetStorageClass(specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		sc.Kind = "StorageClass"
+
+		return sc, nil
+	} else if specObj, ok := spec.(*snapv1.VolumeSnapshot); ok {
+		snap, err := k8sExternalStorage.GetSnapshot(specObj.Metadata.Name, specObj.Metadata.Namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		snap.Kind = "VolumeSnapshot"
+
+		return snap, nil
+	} else if specObj, ok := spec.(*storkapi.GroupVolumeSnapshot); ok {
+		snap, err := k8sStork.GetGroupSnapshot(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return snap, nil
+	} else if specObj, ok := spec.(*corev1.Secret); ok {
+		secret, err := k8sCore.GetSecret(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		secret.Kind = "Secret"
+
+		return secret, nil
+	} else if specObj, ok := spec.(*corev1.ConfigMap); ok {
+		cm, err := k8sCore.GetConfigMap(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		cm.Kind = "ConfigMap"
+
+		return cm, nil
+	} else if specObj, ok := spec.(*storkapi.Rule); ok {
+		rule, err := k8sStork.GetRule(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return rule, nil
+	} else if specObj, ok := spec.(*corev1.Pod); ok {
+		pod, err := k8sCore.GetPodByName(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return pod, nil
+	} else if specObj, ok := spec.(*storkapi.ClusterPair); ok {
+		cp, err := k8sStork.GetClusterPair(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return cp, nil
+	} else if specObj, ok := spec.(*storkapi.Migration); ok {
+		m, err := k8sStork.GetMigration(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return m, nil
+	} else if specObj, ok := spec.(*storkapi.MigrationSchedule); ok {
+		ms, err := k8sStork.GetMigrationSchedule(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return ms, nil
+	} else if specObj, ok := spec.(*storkapi.BackupLocation); ok {
+		bl, err := k8sStork.GetBackupLocation(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return bl, nil
+	} else if specObj, ok := spec.(*storkapi.ApplicationBackup); ok {
+		ab, err := k8sStork.GetApplicationBackup(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return ab, nil
+	} else if specObj, ok := spec.(*storkapi.SchedulePolicy); ok {
+		sp, err := k8sStork.GetSchedulePolicy(specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		return sp, nil
+	} else if specObj, ok := spec.(*storkapi.ApplicationRestore); ok {
+		ar, err := k8sStork.GetApplicationRestore(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return ar, nil
+	} else if specObj, ok := spec.(*storkapi.ApplicationClone); ok {
+		obj, err := k8sStork.GetApplicationClone(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*storkapi.VolumeSnapshotRestore); ok {
+		obj, err := k8sStork.GetVolumeSnapshotRestore(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*apapi.AutopilotRule); ok {
+		obj, err := k8sAutopilot.GetAutopilotRule(specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*corev1.ServiceAccount); ok {
+		obj, err := k8sCore.GetServiceAccount(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*rbacv1.ClusterRole); ok {
+		obj, err := k8sRbac.GetClusterRole(specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
+		obj, err := k8sRbac.GetClusterRoleBinding(specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*rbacv1.Role); ok {
+		obj, err := k8sRbac.GetRole(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*rbacv1.RoleBinding); ok {
+		obj, err := k8sRbac.GetRoleBinding(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*batchv1beta1.CronJob); ok {
+		obj, err := k8sBatch.GetCronJob(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*batchv1.Job); ok {
+		obj, err := k8sBatch.GetJob(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*corev1.LimitRange); ok {
+		obj, err := k8sCore.GetLimitRange(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*networkingv1beta1.Ingress); ok {
+		obj, err := k8sNetworking.GetIngress(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*monitoringv1.Prometheus); ok {
+		obj, err := k8sMonitoring.GetPrometheus(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*monitoringv1.PrometheusRule); ok {
+		obj, err := k8sMonitoring.GetPrometheusRule(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*monitoringv1.ServiceMonitor); ok {
+		obj, err := k8sMonitoring.GetServiceMonitor(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*corev1.Namespace); ok {
+		obj, err := k8sCore.GetNamespace(specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
+		obj, err := k8sApiExtensions.GetCRD(specObj.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
+		obj, err := k8sApiExtensions.GetCRDV1beta1(specObj.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+		obj, err := k8sPolicy.GetPodDisruptionBudget(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*netv1.NetworkPolicy); ok {
+		obj, err := k8sCore.GetNetworkPolicy(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*corev1.Endpoints); ok {
+		obj, err := k8sCore.GetEndpoints(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*storkapi.ResourceTransformation); ok {
+		obj, err := k8sStork.GetMigrationSchedule(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		obj, err := k8sAdmissionRegistration.GetValidatingWebhookConfiguration(specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(spec))
@@ -1992,6 +2272,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if k8serrors.IsAlreadyExists(err) {
 			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing StatefulSet: %v", app.Key, ss.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				ss.Kind = "StatefulSet"
+
 				return ss, nil
 			}
 		}
@@ -2003,6 +2288,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 
 		log.Infof("[%v] Created StatefulSet: %v", app.Key, ss.Name)
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		ss.Kind = "StatefulSet"
+
 		return ss, nil
 
 	} else if obj, ok := spec.(*corev1.Service); ok {
@@ -2123,6 +2413,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if k8serrors.IsAlreadyExists(err) {
 			if configMap, err = k8sCore.GetConfigMap(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Config Maps: %v", app.Key, configMap.Name)
+
+				// This is a hack because the `Kind` field is empty due to K8s bug.
+				// Refer https://github.com/portworx/torpedo/pull/1345
+				configMap.Kind = "ConfigMap"
+
 				return configMap, nil
 			}
 		}
@@ -2134,6 +2429,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 
 		log.Infof("[%v] Created Config Map: %v", app.Key, configMap.Name)
+
+		// This is a hack because the `Kind` field is empty due to K8s bug.
+		// Refer https://github.com/portworx/torpedo/pull/1345
+		configMap.Kind = "ConfigMap"
+
 		return configMap, nil
 	} else if obj, ok := spec.(*v1.Endpoints); ok {
 		obj.Namespace = ns.Name
@@ -5777,10 +6077,10 @@ func (k *K8s) RecycleNode(n node.Node) error {
 }
 
 // CreateCsiSnapsForVolumes create csi snapshots for Apps
-func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*v1beta1.VolumeSnapshot, error) {
+func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*volsnapv1.VolumeSnapshot, error) {
 	// Only FA (pure_block) volume is supported
 	volTypes := []string{PureBlock}
-	var volSnapMap = make(map[string]*v1beta1.VolumeSnapshot)
+	var volSnapMap = make(map[string]*volsnapv1.VolumeSnapshot)
 
 	for _, specObj := range ctx.App.SpecList {
 
@@ -6420,7 +6720,7 @@ func (k *K8s) ValidateCsiRestore(pvcName string, namespace string, timeout time.
 // restoreCsiSnapshot restore PVC from csiSnapshot
 func (k *K8s) restoreCsiSnapshot(
 	restorePvcName string, pvc corev1.PersistentVolumeClaim,
-	snap *v1beta1.VolumeSnapshot, sc *storageapi.StorageClass,
+	snap *volsnapv1.VolumeSnapshot, sc *storageapi.StorageClass,
 ) (*v1.PersistentVolumeClaim, error) {
 	var resPvc *corev1.PersistentVolumeClaim
 	var dataSource v1.TypedLocalObjectReference
@@ -6464,10 +6764,10 @@ func (k *K8s) restoreCsiSnapshot(
 }
 
 // CreateCsiSnapshotClass creates csi volume snapshot class
-func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
+func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
 	var err error
 	var annotation = make(map[string]string)
-	var volumeSnapClass *v1beta1.VolumeSnapshotClass
+	var volumeSnapClass *volsnapv1.VolumeSnapshotClass
 	annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
 
 	v1obj := metav1.ObjectMeta{
@@ -6475,10 +6775,10 @@ func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string)
 		Annotations: annotation,
 	}
 
-	snapClass := v1beta1.VolumeSnapshotClass{
+	snapClass := volsnapv1.VolumeSnapshotClass{
 		ObjectMeta:     v1obj,
 		Driver:         CsiProvisioner,
-		DeletionPolicy: v1beta1.DeletionPolicy(deleionPolicy),
+		DeletionPolicy: volsnapv1.DeletionPolicy(deleionPolicy),
 	}
 
 	log.Infof("Creating volume snapshot class: %v", snapClassName)
@@ -6493,7 +6793,7 @@ func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string)
 
 // waitForCsiSnapToBeReady wait for snapshot status to be ready
 func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
-	var snap *v1beta1.VolumeSnapshot
+	var snap *volsnapv1.VolumeSnapshot
 	var err error
 	log.Infof("Waiting for snapshot [%s] to be ready in namespace: %s ", snapName, namespace)
 	t := func() (interface{}, bool, error) {
@@ -6572,25 +6872,25 @@ func (k *K8s) waitForRestoredPVCsToBound(pvcNamePrefix string, namespace string)
 }
 
 // CreateCsiSnapshot create snapshot for given pvc
-func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
+func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error) {
 	var err error
-	var snapshot *v1beta1.VolumeSnapshot
+	var snapshot *volsnapv1.VolumeSnapshot
 
 	v1obj := metav1.ObjectMeta{
 		Name:      name,
 		Namespace: namespace,
 	}
 
-	source := v1beta1.VolumeSnapshotSource{
+	source := volsnapv1.VolumeSnapshotSource{
 		PersistentVolumeClaimName: &pvc,
 	}
 
-	spec := v1beta1.VolumeSnapshotSpec{
+	spec := volsnapv1.VolumeSnapshotSpec{
 		VolumeSnapshotClassName: &class,
 		Source:                  source,
 	}
 
-	snap := v1beta1.VolumeSnapshot{
+	snap := volsnapv1.VolumeSnapshot{
 		ObjectMeta: v1obj,
 		Spec:       spec,
 	}
@@ -6611,11 +6911,11 @@ func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc
 }
 
 // GetCsiSnapshots return snapshot list for a pvc
-func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.VolumeSnapshot, error) {
-	var snaplist *v1beta1.VolumeSnapshotList
-	var snap *v1beta1.VolumeSnapshot
+func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*volsnapv1.VolumeSnapshot, error) {
+	var snaplist *volsnapv1.VolumeSnapshotList
+	var snap *volsnapv1.VolumeSnapshot
 	var err error
-	snapshots := make([]*v1beta1.VolumeSnapshot, 0)
+	snapshots := make([]*volsnapv1.VolumeSnapshot, 0)
 
 	if snaplist, err = k8sExternalsnap.ListSnapshots(namespace); err != nil {
 		return nil, &scheduler.ErrFailedToGetSnapshotList{
@@ -6639,7 +6939,7 @@ func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.Volu
 }
 
 // ValidateCsiSnapshots validate all snapshots in the context
-func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string]*v1beta1.VolumeSnapshot) error {
+func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string]*volsnapv1.VolumeSnapshot) error {
 	var pureBlkType = []string{PureBlock}
 
 	for _, specObj := range ctx.App.SpecList {
@@ -6701,8 +7001,8 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 }
 
 // validateCsiSnapshot validates the given snapshot is successfully created or not
-func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot v1beta1.VolumeSnapshot) error {
-	var snap *v1beta1.VolumeSnapshot
+func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot volsnapv1.VolumeSnapshot) error {
+	var snap *volsnapv1.VolumeSnapshot
 	var err error
 
 	if csiSnapshot.Name == "" {
@@ -6741,8 +7041,8 @@ func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot v1be
 }
 
 // GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
-func (k *K8s) GetAllSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error) {
-	var snapshotClasses *v1beta1.VolumeSnapshotClassList
+func (k *K8s) GetAllSnapshotClasses() (*volsnapv1.VolumeSnapshotClassList, error) {
+	var snapshotClasses *volsnapv1.VolumeSnapshotClassList
 	var err error
 	if snapshotClasses, err = k8sExternalsnap.ListSnapshotClasses(); err != nil {
 		return nil, err
