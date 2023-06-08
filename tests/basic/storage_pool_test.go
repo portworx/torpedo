@@ -5413,11 +5413,11 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			log.InfoD("setting replication on the volumes")
 			setRepl := func(vol *volume.Volume) error {
 				log.InfoD("setting replication factor of the volume [%v] with ID [%v]", vol.Name, vol.ID)
-				getReplicaSets, err := Inst().V.GetReplicationFactor(vol)
+				currRepFactor, err := Inst().V.GetReplicationFactor(vol)
 				log.FailOnError(err, "Failed to get replication factor on the volume")
-				log.Infof("Replication factor on the volume [%v] is [%v]", vol.Name, getReplicaSets)
-				if getReplicaSets == 3 {
-					newRepl := getReplicaSets - 1
+				log.Infof("Replication factor on the volume [%v] is [%v]", vol.Name, currRepFactor)
+				if currRepFactor == 3 {
+					newRepl := currRepFactor - 1
 					err = Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true)
 					if err != nil {
 						return err
