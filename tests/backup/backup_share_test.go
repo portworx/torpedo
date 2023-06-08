@@ -3940,6 +3940,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 	var backupUIDList []string
 	var backupName string
 	var scheduledAppContexts []*scheduler.Context
+	var appContextsToBackup []*scheduler.Context
 	var backupLocationUID string
 	var bkpNamespaces []string
 	var clusterUid string
@@ -4035,7 +4036,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				ctx, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
 
-				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+				appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, userBackupLocationMapping[user], backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 
@@ -4068,8 +4069,8 @@ var _ = Describe("{SwapShareBackup}", func() {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(users[1], commonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestoreWithUID(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil, backupUIDList[0])
-			log.FailOnError(err, "Failed to restore %s", restoreName)
+			err = CreateRestoreWithUIDWithValidation(ctxNonAdmin, restoreName, backupName, backupUIDList[0], nil, nil, destinationClusterName, orgID, appContextsToBackup)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of Restore [%s] of backup [%s]", restoreName, backupName))
 		})
 		Step(fmt.Sprintf("Share backup with %s", users[0]), func() {
 			log.InfoD(fmt.Sprintf("Share backup from %s to %s and validate", users[1], users[0]))
@@ -4094,8 +4095,8 @@ var _ = Describe("{SwapShareBackup}", func() {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(users[0], commonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-			err = CreateRestoreWithUID(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil, backupUIDList[1])
-			log.FailOnError(err, "Failed to restore %s", restoreName)
+			err = CreateRestoreWithUIDWithValidation(ctxNonAdmin, restoreName, backupName, backupUIDList[1], nil, nil, destinationClusterName, orgID, appContextsToBackup)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of Restore [%s] of backup [%s]", restoreName, backupName))
 		})
 	})
 	JustAfterEach(func() {
