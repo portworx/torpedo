@@ -597,7 +597,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 					if config.replacePolicy == ReplacePolicy_Retain {
 						err = CreateRestore(restoreName, firstSingleNSScheduleBackupName, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping)
 					} else if config.replacePolicy == ReplacePolicy_Delete {
-						err = CreateRestoreWithReplacePolicy(restoreName, firstSingleNSScheduleBackupName, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping, config.replacePolicy)
+						err = CreateRestoreWithReplacePolicy(ctx, restoreName, firstSingleNSScheduleBackupName, config.namespaceMapping, config.storageClassMapping, config.replacePolicy, destinationClusterName, orgID)
 					}
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of first single namespace schedule backup [%s] in cluster [%s]", restoreName, firstSingleNSScheduleBackupName, restoreName))
 					restoreNames = SafeAppend(&mutex, restoreNames, restoreName).([]string)
@@ -644,7 +644,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 					if config.replacePolicy == ReplacePolicy_Retain {
 						err = CreateRestore(restoreName, nextScheduleBackupName, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping)
 					} else if config.replacePolicy == ReplacePolicy_Delete {
-						err = CreateRestoreWithReplacePolicy(restoreName, nextScheduleBackupName, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping, config.replacePolicy)
+						err = CreateRestoreWithReplacePolicy(ctx, restoreName, nextScheduleBackupName, config.namespaceMapping, config.storageClassMapping, config.replacePolicy, destinationClusterName, orgID)
 					}
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of next single namespace schedule backup [%s] in cluster [%s]", restoreName, nextScheduleBackupName, restoreName))
 					restoreNames = SafeAppend(&mutex, restoreNames, restoreName).([]string)
