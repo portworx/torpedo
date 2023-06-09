@@ -1,12 +1,11 @@
 package tests
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ibm"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
@@ -148,59 +147,24 @@ func waitForIKSMasterUpdate(schedVersion string) error {
 
 func upgradeIKSWorkerNodes(schedVersion, poolName string) error {
 
-	workers, err := ibm.GetWorkers()
-	if err != nil {
-		return err
-	}
+	storageDriverNodes := node.GetStorageDriverNodes()
+	for _, sNode := range storageDriverNodes {
 
-	for _, worker := range workers {
+		if err := ibm.ReplaceWorkerNodeWithUpdate(sNode); err != nil {
+			return err
+		}
 
-		if worker.PoolName == poolName {
+		if err := waitForIBMNodeToDelete(sNode); err != nil {
+			return err
+		}
 
-			sNode, err := node.GetNodeByName(worker.NetworkInterfaces[0].IpAddress)
-			if poolName == Inst().MigrationWorkerPool {
-				//var migNode *api.StorageNode
-				migNode := api.StorageNode{}
-				migNode.Hostname = worker.WorkerID
-				sNode.StorageNode = &migNode
-			}
-			if err != nil {
-				return err
-			}
-			if err = ibm.ReplaceWorkerNodeWithUpdate(sNode); err != nil {
-				return err
-			}
-
-			if err = waitForIBMNodeToDelete(sNode); err != nil {
-				return err
-			}
-
-			if err = waitForIBMNodeTODeploy(); err != nil {
-				return err
-			}
-
+		if err := waitForIBMNodeTODeploy(); err != nil {
+			return err
 		}
 
 	}
 
-	//storageDriverNodes := node.GetStorageDriverNodes()
-	//for _, sNode := range storageDriverNodes {
-	//
-	//	if err := ibm.ReplaceWorkerNodeWithUpdate(sNode); err != nil {
-	//		return err
-	//	}
-	//
-	//	if err := waitForIBMNodeToDelete(sNode); err != nil {
-	//		return err
-	//	}
-	//
-	//	if err := waitForIBMNodeTODeploy(); err != nil {
-	//		return err
-	//	}
-	//
-	//}
-
-	workers, err = ibm.GetWorkers()
+	workers, err := ibm.GetWorkers()
 	if err != nil {
 		return err
 	}
@@ -231,45 +195,23 @@ var _ = Describe("{MigratePXCluster}", func() {
 	})
 	var contexts []*scheduler.Context
 
-	stepLog := "upgrade scheduler, migrate PX  and ensure everything is running fine"
+	stepLog := "Create worker pool, migrate PX  and ensure everything is running fine"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
-		dash.VerifyFatal(Inst().MigrationWorkerPool != "", true, "verify migration ")
-		if Inst().MigrationWorkerPool == "" {
-			log.FailOnError(fmt.Errorf("migration worker pool value not passed"), "migration pool name is mandatory for MigratePXCluster ")
-		}
-		iksWorkers, err := ibm.GetWorkers()
-		log.FailOnError(err, "error getting IBM workers")
-		isWorkerPoolExist := false
-		migrationWorkersMap := make(map[string]ibm.Worker)
-		defaultWorkersMap := make(map[string]ibm.Worker)
-		for _, iksWorker := range iksWorkers {
-			if iksWorker.PoolName == Inst().MigrationWorkerPool {
-				isWorkerPoolExist = true
-				migrationWorkersMap[iksWorker.WorkerID] = iksWorker
-			}
-			if iksWorker.PoolName == ibm.IksPXWorkerpool {
-				defaultWorkersMap[iksWorker.WorkerID] = iksWorker
-			}
-		}
-		dash.VerifyFatal(isWorkerPoolExist, true, fmt.Sprintf("verify worker pool %s exists.", Inst().MigrationWorkerPool))
-
-		intitialNodeCount, err := Inst().N.GetASGClusterSize()
+		initialNodeCount, err := Inst().N.GetASGClusterSize()
 		log.FailOnError(err, "error getting ASG cluster size")
 
 		initialStNodes := node.GetStorageNodes()
 
-		log.InfoD("Validating cluster size before upgrade. Initial Node Count: [%v]", intitialNodeCount)
-		ValidateClusterSize(intitialNodeCount)
+		log.InfoD("Validating cluster size before upgrade. Initial Node Count: [%v]", initialNodeCount)
+		ValidateClusterSize(initialNodeCount)
 
-		ValidateApplications(contexts)
+		migrationHops := strings.Split(Inst().MigrationHops, ",")
+		dash.VerifyFatal(len(migrationHops) > 0, true, "upgrade hops are provided?")
 
-		upgradeHops := strings.Split(Inst().SchedUpgradeHops, ",")
-		dash.VerifyFatal(len(upgradeHops) > 0, true, "upgrade hops are provided?")
-
-		for _, schedVersion := range upgradeHops {
+		for _, schedVersion := range migrationHops {
 			schedVersion = strings.TrimSpace(schedVersion)
 			stepLog = fmt.Sprintf("start the upgrade of scheduler to version [%v]", schedVersion)
 			Step(stepLog, func() {
@@ -284,13 +226,39 @@ var _ = Describe("{MigratePXCluster}", func() {
 					err = waitForIKSMasterUpdate(schedVersion)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("verify IKS master update to version %s", schedVersion))
 				})
-				stepLog = fmt.Sprintf("update IKS cluster worker node to version %s", schedVersion)
-				Step(stepLog, func() {
-					err = upgradeIKSWorkerNodes(schedVersion, Inst().MigrationWorkerPool)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("verify IKS worker nodes update to version %s", schedVersion))
-				})
 
 			}
+
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "Node registry refresh failed")
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "Refresh Driver end points failed")
+
+		}
+
+		initialWorkers, err := ibm.GetWorkers()
+		log.FailOnError(err, "error getting IBM workers")
+		migPoolName := "mig-pool"
+
+		Step("Create a new pool for migration", func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("migratepxcluster-%d", i))...)
+			}
+			Step("validate all apps", func() {
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
+				}
+			})
+
+			zones, err := Inst().N.GetZones()
+			log.FailOnError(err, "Zones empty")
+
+			sizePerZone := initialNodeCount / int64(len(zones))
+
+			err = ibm.AddWorkerPool(migPoolName, sizePerZone)
+			log.FailOnError(err, fmt.Sprintf("error creating worker pool %s", migPoolName))
+
 			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
 				Inst().AutoStorageNodeRecoveryTimeout.String())
 			Step(stepLog, func() {
@@ -304,59 +272,35 @@ var _ = Describe("{MigratePXCluster}", func() {
 
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "Refresh Driver end points failed")
-			stepLog = fmt.Sprintf("validate number of storage nodes after scheduler upgrade to [%s]",
-				schedVersion)
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				ValidateClusterSize(intitialNodeCount)
-			})
-
-			Step("validate all apps after upgrade", func() {
-				for _, ctx := range contexts {
-					ValidateContext(ctx)
-				}
-			})
-		}
-
-		Step("enabling px on migration pool nodes", func() {
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradescheduler-%d", i))...)
-			}
-
-			for _, v := range migrationWorkersMap {
-				hostName := v.NetworkInterfaces[0].IpAddress
-				n, err := node.GetNodeByName(hostName)
-				log.FailOnError(err, fmt.Sprintf("error getting node with hostname %s", hostName))
-				err = Inst().S.RemoveLabelOnNode(n, schedops.PXEnabledLabelKey)
-				log.FailOnError(err, fmt.Sprintf("error removing label %s on node %s", schedops.PXEnabledLabelKey, n.Name))
-				err = Inst().V.WaitDriverUpOnNode(n, 5*time.Minute)
-				log.FailOnError(err, fmt.Sprintf("wait for px up on node %s", n.Name))
-			}
-
-			err = Inst().S.RefreshNodeRegistry()
-			log.FailOnError(err, "Node registry refresh failed")
-
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "Refresh Driver end points failed")
 		})
 
 		Step("Initiate worker pool migration", func() {
 
-			for _, v := range defaultWorkersMap {
-				hostName := v.NetworkInterfaces[0].IpAddress
-				n, err := node.GetNodeByName(hostName)
-				log.FailOnError(err, fmt.Sprintf("error getting node with hostname %s", hostName))
-				err = ibm.RemoveWorkerNode(n)
-				log.FailOnError(err, fmt.Sprintf("error removing node %s", n.Hostname))
-				err = waitForIBMNodeToDelete(n)
-				log.FailOnError(err, fmt.Sprintf("node %s node deleted", n.Hostname))
-				err = Inst().S.RefreshNodeRegistry()
-				log.FailOnError(err, "Node registry refresh failed")
+			for _, worker := range initialWorkers {
+				if worker.PoolName == ibm.IksPXWorkerpool {
 
-				err = Inst().V.RefreshDriverEndpoints()
-				log.FailOnError(err, "Refresh Driver end points failed")
-				newStNodes := node.GetStorageNodes()
-				dash.VerifyFatal(len(initialStNodes), len(newStNodes), fmt.Sprintf("verfiy storage node count after deleteing %s", n.Name))
+					n, err := node.GetNodeByName(worker.NetworkInterfaces[0].IpAddress)
+					log.FailOnError(err, fmt.Sprintf("error getting node with hostname %s", worker.WorkerID))
+					err = ibm.RemoveWorkerNode(n)
+					log.FailOnError(err, fmt.Sprintf("error removing node %s", n.Hostname))
+					err = waitForIBMNodeToDelete(n)
+					log.FailOnError(err, fmt.Sprintf("node %s not deleted", n.Hostname))
+					log.Infof("wait for new node to stabilize")
+					time.Sleep(3 * time.Minute)
+					err = Inst().S.RefreshNodeRegistry()
+					log.FailOnError(err, "Node registry refresh failed")
+
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "Refresh Driver end points failed")
+
+					newStNodes := node.GetStorageNodes()
+					if len(newStNodes) != len(initialStNodes) {
+						log.Infof("st node count not matching.")
+						aJSON, _ := json.Marshal(newStNodes)
+						fmt.Printf("JSON Print - \n%s\n", string(aJSON))
+					}
+					dash.VerifyFatal(len(newStNodes), len(initialStNodes), fmt.Sprintf("verfiy storage node count after deleteing %s", n.Name))
+				}
 
 			}
 
@@ -365,10 +309,10 @@ var _ = Describe("{MigratePXCluster}", func() {
 		stepLog = fmt.Sprintf("validate number of storage nodes after migration")
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			ValidateClusterSize(intitialNodeCount)
+			ValidateClusterSize(initialNodeCount)
 		})
 
-		Step("validate all apps after upgrade", func() {
+		Step("validate all apps after migration", func() {
 			for _, ctx := range contexts {
 				ValidateContext(ctx)
 			}

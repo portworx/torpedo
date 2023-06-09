@@ -230,8 +230,6 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
-
-	migrationWorkerPoolCliFlag = "migration-worker-pool"
 )
 
 // Dashboard params
@@ -2019,8 +2017,7 @@ func ValidateClusterSize(count int64) {
 	} else {
 		expectedStorageNodesPerZone = int(perZoneCount)
 	}
-	storageNodes, err := GetStorageNodes()
-	log.FailOnError(err, "Storage nodes are empty")
+	storageNodes := node.GetStorageNodes()
 
 	log.Infof("List of storage nodes:[%v]", storageNodes)
 	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
@@ -4784,6 +4781,7 @@ type Torpedo struct {
 	VaultAddress                        string
 	VaultToken                          string
 	SchedUpgradeHops                    string
+	MigrationHops                       string
 	AutopilotUpgradeImage               string
 	CsiGenericDriverConfigMap           string
 	HelmValuesConfigMap                 string
@@ -4795,7 +4793,6 @@ type Torpedo struct {
 	IsPDSApps                           bool
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
-	MigrationWorkerPool                 string
 }
 
 // ParseFlags parses command line flags
@@ -4841,6 +4838,7 @@ func ParseFlags() {
 	var vaultAddress string
 	var vaultToken string
 	var schedUpgradeHops string
+	var migrationHops string
 	var autopilotUpgradeImage string
 	var csiGenericDriverConfigMapName string
 	//dashboard fields
@@ -4850,7 +4848,6 @@ func ParseFlags() {
 	var torpedoJobType string
 	var anthosWsNodeIp string
 	var anthosInstPath string
-	var migrationWorkerPool string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -4892,6 +4889,7 @@ func ParseFlags() {
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
+	flag.StringVar(&migrationHops, "migration-hops", "", "Comma separated list of versions for migration pool")
 	flag.StringVar(&autopilotUpgradeImage, autopilotUpgradeImageCliFlag, "", "Autopilot version which will be used for checking version after upgrade autopilot")
 	flag.StringVar(&csiGenericDriverConfigMapName, csiGenericDriverConfigMapFlag, "", "Name of config map that stores provisioner details when CSI generic driver is being used")
 	flag.StringVar(&testrailuttils.MilestoneName, milestoneFlag, "", "Testrail milestone name")
@@ -4919,7 +4917,6 @@ func ParseFlags() {
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, "", "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
-	flag.StringVar(&migrationWorkerPool, migrationWorkerPoolCliFlag, "", "worker pool to migrate px nodes")
 	flag.Parse()
 
 	log.SetLoglevel(logLevel)
@@ -5127,6 +5124,7 @@ func ParseFlags() {
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
 				SchedUpgradeHops:                    schedUpgradeHops,
+				MigrationHops:                       migrationHops,
 				AutopilotUpgradeImage:               autopilotUpgradeImage,
 				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
 				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,
@@ -5139,7 +5137,6 @@ func ParseFlags() {
 				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
 				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
-				MigrationWorkerPool:                 migrationWorkerPool,
 			}
 		})
 	}

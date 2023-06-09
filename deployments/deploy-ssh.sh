@@ -214,8 +214,6 @@ if [ -n "$ANTHOS_INST_PATH" ]; then
     ANTHOS_INST_PATH="${ANTHOS_INST_PATH}"
 fi
 
-
-
 for i in $@
 do
 case $i in
@@ -504,9 +502,9 @@ spec:
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
             "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
+            "--migration-hops=$MIGRATION_HOPS",
             "--license_expiry_timeout_hours=$LICENSE_EXPIRY_TIMEOUT_HOURS",
             "--metering_interval_mins=$METERING_INTERVAL_MINS",
-            "--migration-worker-pool=$MIGRATION_WORKER_POOL",
             "--testrail-milestone=$TESTRAIL_MILESTONE",
             "--testrail-run-name=$TESTRAIL_RUN_NAME",
             "--testrail-run-id=$TESTRAIL_RUN_ID",
