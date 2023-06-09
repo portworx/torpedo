@@ -455,7 +455,7 @@ func (d *DataserviceType) ValidateDataServiceDeployment(deployment *pds.ModelsDe
 	return err
 }
 
-func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.ModelsDeployment) []*scheduler.Context {
+func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.ModelsDeployment) ([]*scheduler.Context, error) {
 	var specObjects []interface{}
 	var Contexts []*scheduler.Context
 	var ctx *scheduler.Context
@@ -463,7 +463,7 @@ func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.Models
 	for _, dep := range pdsApps {
 		dep.Namespace, err = components.Namespace.GetNamespace(*dep.NamespaceId)
 		if err != nil {
-			log.Errorf("error while getting namespace")
+			return nil, err
 		}
 		log.Infof("Application Context Namespace %s", *dep.Namespace.Name)
 
@@ -477,7 +477,7 @@ func (d *DataserviceType) CreateSchedulerContextForPDSApps(pdsApps []*pds.Models
 		}
 		Contexts = append(Contexts, ctx)
 	}
-	return Contexts
+	return Contexts, nil
 }
 
 func init() {

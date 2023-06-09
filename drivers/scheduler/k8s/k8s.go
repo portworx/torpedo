@@ -3680,7 +3680,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			}
 			// Providing the scaling factor in timeout
 			scalingFactor := *ss.Spec.Replicas
-			if *ss.Spec.Replicas > *ss.Spec.Replicas {
+			if *ss.Spec.Replicas > *obj.NodeCount {
 				scalingFactor = int32(*ss.Spec.Replicas - *ss.Spec.Replicas)
 			}
 			if err := k8sApps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(scalingFactor), retryInterval); err != nil {
@@ -3975,7 +3975,6 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 		} else if pdsobj, ok := specObj.(*pds.ModelsDeployment); ok {
 			ss, err := k8sApps.GetStatefulSet(*pdsobj.ClusterResourceName, *pdsobj.Namespace.Name)
 			if err != nil {
-				log.Fatalf("Failed to get statefulset pods %v", err)
 				return nil, &scheduler.ErrFailedToGetStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get StatefulSet: %v , Namespace: %v. Err: %v", pdsobj.GetClusterResourceName(), *pdsobj.Namespace.Name, err),
