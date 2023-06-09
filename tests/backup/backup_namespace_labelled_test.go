@@ -493,18 +493,14 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 				pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching pvc list from namespace [%s]", namespace))
 				for _, pvc := range pvcList.Items {
-					pvcItem, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, namespace)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching pvc pointer %v for pvc %v", pvcItem, pvc))
-					err = AddLabelToResource(pvcItem, labelKey, labelValue)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels %s=%s to resource %v", labelKey, labelValue, pvcItem))
+					err = AddLabelToResource(pvc, labelKey, labelValue)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels %s=%s to resource %s", labelKey, labelValue, pvc.Name))
 				}
 				cmList, err := core.Instance().ListConfigMap(namespace, meta_v1.ListOptions{})
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmap list from namespace [%s]", namespace))
 				for _, cm := range cmList.Items {
-					cmItem, err := core.Instance().GetConfigMap(cm.Name, namespace)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching configmap pointer %v from namespace %s", cmItem, namespace))
-					err = AddLabelToResource(cmItem, labelKey, labelValue)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels %s=%s to resource %v", labelKey, labelValue, cmItem))
+					err = AddLabelToResource(cm, labelKey, labelValue)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels %s=%s to resource %s", labelKey, labelValue, cm.Name))
 				}
 			}
 		})
