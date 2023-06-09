@@ -1713,7 +1713,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 							var params pdslib.WorkloadGenerationParams
 							pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
 							log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
-							generateWorkloads[ds.Name] = pod.Name
+							generateWorkloads[ds.Name] = dep.Name
 							for dsName, workloadContainer := range generateWorkloads {
 								log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
 							}
