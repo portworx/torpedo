@@ -493,6 +493,10 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 				pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching pvc list from namespace [%s]", namespace))
 				for _, pvc := range pvcList.Items {
+					pvcItem, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, namespace)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching pvc pointer %v for pvc %v", pvcItem, pvc))
+					log.Infof("Type of pvc - %T", pvc)
+					log.Infof("Type of pvcItem - %T", pvcItem)
 					err = AddLabelToResource(pvc, labelKey, labelValue)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels %s=%s to resource %s", labelKey, labelValue, pvc.Name))
 				}
