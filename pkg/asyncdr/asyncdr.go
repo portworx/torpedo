@@ -108,15 +108,36 @@ func CreateMigrationSchedule(
 	sp string,
 	suspend *bool,
 	autoSuspend bool,
+	PurgeDeletedResources *bool,
+	SkipServiceUpdate *bool,
+	IncludeNetworkPolicyWithCIDR *bool,
+	Selectors map[string]string,
+	ExcludeSelectors map[string]string,
+	PreExecRule string,
+	PostExecRule string,
+	IncludeOptionalResourceTypes []string,
+	SkipDeletedNamespaces *bool,
+	TransformSpecs []string,
 ) (*storkapi.MigrationSchedule, error) {
 
 	migrationSpec := storkapi.MigrationSpec{
-		ClusterPair:       clusterPair,
-		IncludeVolumes:    includeVolumes,
-		IncludeResources:  includeResources,
-		StartApplications: startApplications,
-		Namespaces:        []string{migrationNamespace},
+		ClusterPair:                  clusterPair,
+		IncludeVolumes:               includeVolumes,
+		IncludeResources:             includeResources,
+		StartApplications:            startApplications,
+		Namespaces:                   []string{migrationNamespace},
+		PurgeDeletedResources:        PurgeDeletedResources,
+		SkipServiceUpdate:            SkipServiceUpdate,
+		IncludeNetworkPolicyWithCIDR: IncludeNetworkPolicyWithCIDR,
+		Selectors:                    Selectors,
+		ExcludeSelectors:             ExcludeSelectors,
+		PreExecRule:                  PreExecRule,
+		PostExecRule:                 PostExecRule,
+		IncludeOptionalResourceTypes: IncludeOptionalResourceTypes,
+		SkipDeletedNamespaces:        SkipDeletedNamespaces,
+		TransformSpecs:               TransformSpecs,
 	}
+
 	TemplateSpec := storkapi.MigrationTemplateSpec{
 		Spec: migrationSpec,
 	}
@@ -133,8 +154,8 @@ func CreateMigrationSchedule(
 			AutoSuspend:        autoSuspend,
 		},
 	}
-	mig_sched, err := storkops.Instance().CreateMigrationSchedule(migrationSchedule)
-	return mig_sched, err
+	migSched, err := storkops.Instance().CreateMigrationSchedule(migrationSchedule)
+	return migSched, err
 }
 
 func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.SchedulePolicy, err error) {
@@ -152,45 +173,41 @@ func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.Schedu
 			}}
 		schedPolicy, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 	} else {
-		log.Infof("schedPolicy is %v already exists", schedPolicy.Name)
+		log.Infof("schedPolicy %v already exists", schedPolicy.Name)
 	}
 	return schedPolicy, err
 }
 
-func WaitForNuOfMigration(sched_name string, sched_namespace string, count int, miginterval int) (map[string]string, error) {
+// WaitForNumOfMigration waits for a certain number of migrations to complete.
+func WaitForNumOfMigration(schedName string, schedNamespace string, count int, miginterval int) (map[string]string, error) {
 	migInterval := time.Minute * time.Duration(miginterval)
 	migTimeout := time.Minute * time.Duration(count*miginterval)
-	expected_migrations := make(map[string]string)
-	checkNuOfMigrations := func() (interface{}, bool, error) {
-		response, err := storkops.Instance().GetMigrationSchedule(sched_name, sched_namespace)
+	expectedMigrations := make(map[string]string)
+	checkNumOfMigrations := func() (interface{}, bool, error) {
+		migSchedule, err := storkops.Instance().GetMigrationSchedule(schedName, schedNamespace)
 		if err != nil {
-			return "", true, fmt.Errorf("failed to get migrationschedule: %v", sched_name)
+			return "", true, fmt.Errorf("failed to get migrationschedule: %v", schedName)
 		}
-		migs := response.Status.Items["Interval"]
-		for _, mig := range migs {
-			var migrations []*storkapi.Migration
-			if _, ok := expected_migrations[mig.Name]; !ok {
-				migration, err := storkops.Instance().GetMigration(mig.Name, sched_namespace)
-				if err != nil {
-					return "", true, fmt.Errorf("failed to get migration: %v", mig.Name)
-				}
-				migrations = append(migrations, migration)
-				err = WaitForMigration(migrations)
-				if err != nil {
-					expected_migrations[mig.Name] = fmt.Sprintf("Migration failed with error: %v", err)
-				} else {
-					expected_migrations[mig.Name] = "Successful"
-				}
+		migrations := migSchedule.Status.Items["Interval"]
+		for _, mig := range migrations {
+			migration, err := storkops.Instance().GetMigration(mig.Name, schedNamespace)
+			if err != nil {
+				return "", true, fmt.Errorf("failed to get migration: %v", mig.Name)
 			}
+			err = WaitForMigration([]*storkapi.Migration{migration})
+			if err != nil {
+				expectedMigrations[migration.Name] = fmt.Sprintf("Migration failed with error: %v", err)
+			}
+			expectedMigrations[migration.Name] = "Successful"
 		}
-		log.InfoD("Waiting to complete %v migrations in %v time, %v completed as of now", count, migrationRetryTimeout, expected_migrations)
-		if len(expected_migrations) == count {
+		log.InfoD("Waiting to complete %v migrations in %v time, %v completed as of now", count, migTimeout, expectedMigrations)
+		if len(expectedMigrations) == count {
 			return "", false, nil
 		}
 		return "", true, fmt.Errorf("some migrations are still pending")
 	}
-	_, err := task.DoRetryWithTimeout(checkNuOfMigrations, migTimeout, migInterval)
-	return expected_migrations, err
+	_, err := task.DoRetryWithTimeout(checkNumOfMigrations, migTimeout, migInterval)
+	return expectedMigrations, err
 }
 
 func DeleteAndWaitForMigrationSchedDeletion(name, namespace string) error {

@@ -7028,8 +7028,6 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 		includeVolumesFlag    = true
 		startApplicationsFlag = false
 		scpolName             = "async-policy"
-		interval              = MigrationInterval
-		migrationCount        = MigrationsCount
 		suspendSched          = false
 		autoSuspend           = false
 		schd_pol              *storkapi.SchedulePolicy
@@ -7070,12 +7068,12 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 	})
 
 	Step("Create Schedule Policy", func() {
-		schd_pol, err = asyncdr.CreateSchedulePolicy(scpolName, interval)
+		schd_pol, err = asyncdr.CreateSchedulePolicy(scpolName, MigrationInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("schedule policy creation error: %v", err))
 			return
 		} else {
-			log.InfoD("Schedule Policy created with %v mins of interval", interval)
+			log.InfoD("schedule Policy created with %v mins of interval", MigrationInterval)
 		}
 	})
 
@@ -7084,35 +7082,36 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 			migrationScheduleName := migrationKey + "schedule-" + fmt.Sprintf("%d", i)
 			currMigSched, createMigSchedErr := asyncdr.CreateMigrationSchedule(
 				migrationScheduleName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag,
-				&includeResourcesFlag, &startApplicationsFlag, schd_pol.Name, &suspendSched, autoSuspend)
+				&includeResourcesFlag, &startApplicationsFlag, schd_pol.Name, &suspendSched, autoSuspend,
+				nil, nil, nil, nil, nil, "", "", nil, nil, nil)
 			if createMigSchedErr != nil {
 				UpdateOutcome(event, fmt.Errorf("failed to create migrationschedule wit error %v", err))
 				return
 			}
 			allMigrationsSched[currMigNamespace] = currMigSched.Name
 			time.Sleep(30 * time.Second)
-			mig_sched_resp, err := storkops.Instance().GetMigrationSchedule(currMigSched.Name, currMigNamespace)
+			migSchedResp, err := storkops.Instance().GetMigrationSchedule(currMigSched.Name, currMigNamespace)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("failed to get migrationschedule, error: %v", err))
 				return
 			}
-			if len(mig_sched_resp.Status.Items) == 0 {
+			if len(migSchedResp.Status.Items) == 0 {
 				UpdateOutcome(event, fmt.Errorf("0 migrations have yet run for the migration schedule"))
 				return
 			}
-			expected_migs, err := asyncdr.WaitForNuOfMigration(mig_sched_resp.Name, currMigNamespace, migrationCount, interval)
+			expectedMigs, err := asyncdr.WaitForNumOfMigration(migSchedResp.Name, currMigNamespace, MigrationsCount, MigrationInterval)
 			if err != nil {
-				UpdateOutcome(event, fmt.Errorf("couldn't complete %v migrations due to error: %v", migrationCount, err))
+				UpdateOutcome(event, fmt.Errorf("couldn't complete %v migrations due to error: %v", MigrationsCount, err))
 				return
 			} else {
-				for mig, status := range expected_migs {
+				for mig, status := range expectedMigs {
 					if status != "Successful" {
 						UpdateOutcome(event, fmt.Errorf("migration [%v] did not complete successfully, All migrations with status are: %v",
-							mig, expected_migs))
+							mig, expectedMigs))
 					}
 				}
 			}
-			storkops.Instance().ValidateMigrationSchedule(mig_sched_resp.Name, currMigNamespace, migrationRetryTimeout, migrationRetryInterval)
+			storkops.Instance().ValidateMigrationSchedule(migSchedResp.Name, currMigNamespace, migrationRetryTimeout, migrationRetryInterval)
 		}
 	})
 
