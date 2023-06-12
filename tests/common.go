@@ -3604,6 +3604,22 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+	case drivers.ProviderNfs:
+		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, true)
+	}
+	return err
+}
+
+// CreateBackupLocationWithContext creates backup location using the given context
+func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string, subPath string, ctx context1.Context) error {
+	var err error
+	switch provider {
+	case drivers.ProviderAws:
+		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx)
+	case drivers.ProviderAzure:
+		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx)
+	case drivers.ProviderNfs:
+		err = CreateNFSBackupLocationWithContext(name, uid, subPath, orgID, encryptionKey, ctx, true)
 	}
 	return err
 }
@@ -3700,6 +3716,9 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				},
 			},
 		}
+	case drivers.ProviderNfs:
+		log.Warnf("provider [%s] does not require creating cloud credential", provider)
+		return nil
 	default:
 		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
 	}
@@ -3755,8 +3774,8 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
-// CreateS3BackupLocationNonAdminUser creates backuplocation for S3
-func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+// CreateS3BackupLocationWithContext creates backup location for S3 using the given context
+func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -3790,7 +3809,7 @@ func CreateS3BackupLocationNonAdminUser(name string, uid, cloudCred string, clou
 	return nil
 }
 
-// CreateAzureBackupLocation creates backuplocation for Azure
+// CreateAzureBackupLocation creates backup location for Azure
 func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
@@ -3817,6 +3836,146 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
+func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_Azure,
+		},
+	}
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// WaitForBackupLocationAddition waits for backup location to be added successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+func WaitForBackupLocationAddition(
+	ctx context1.Context,
+	backupLocationName,
+	UID,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
+	req := &api.BackupLocationInspectRequest{
+		Name:  backupLocationName,
+		Uid:   UID,
+		OrgId: orgID,
+	}
+	f := func() (interface{}, bool, error) {
+		inspectBlResp, err := Inst().Backup.InspectBackupLocation(ctx, req)
+		if err != nil {
+			return "", true, err
+		}
+		actual := inspectBlResp.GetBackupLocation().GetBackupLocationInfo().GetStatus().GetStatus()
+		if actual == api.BackupLocationInfo_StatusInfo_Valid {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("backup location status for [%s] expected was [%s] but got [%s]", backupLocationName, api.BackupLocationInfo_StatusInfo_Valid, actual)
+	}
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for backup location addition. Error:[%v]", err)
+	}
+	return nil
+}
+
+// CreateNFSBackupLocation creates backup location for nfs
+func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, validate bool) error {
+	serverAddr := os.Getenv("NFS_SERVER_ADDR")
+	subPath := os.Getenv("NFS_SUB_PATH")
+	mountOption := os.Getenv("NFS_MOUNT_OPTION")
+	path := os.Getenv("NFS_PATH")
+	backupDriver := Inst().Backup
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Config: &api.BackupLocationInfo_NfsConfig{
+				NfsConfig: &api.NFSConfig{
+					ServerAddr:  serverAddr,
+					SubPath:     subPath,
+					MountOption: mountOption,
+				},
+			},
+			Path:          path,
+			Type:          api.BackupLocationInfo_NFS,
+			EncryptionKey: encryptionKey,
+		},
+	}
+	ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	if validate {
+		err = WaitForBackupLocationAddition(ctx, name, uid, orgID, defaultTimeout, defaultRetryInterval)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateNFSBackupLocationWithContext creates backup location using the given context
+func CreateNFSBackupLocationWithContext(name string, uid string, subPath string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
+	serverAddr := os.Getenv("NFS_SERVER_ADDR")
+	mountOption := os.Getenv("NFS_MOUNT_OPTION")
+	path := os.Getenv("NFS_PATH")
+	backupDriver := Inst().Backup
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Config: &api.BackupLocationInfo_NfsConfig{
+				NfsConfig: &api.NFSConfig{
+					ServerAddr:  serverAddr,
+					SubPath:     subPath,
+					MountOption: mountOption,
+				},
+			},
+			Path:          path,
+			Type:          api.BackupLocationInfo_NFS,
+			EncryptionKey: encryptionKey,
+		},
+	}
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	if validate {
+		err = WaitForBackupLocationAddition(ctx, name, uid, orgID, defaultTimeout, defaultRetryInterval)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -4042,6 +4201,40 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
 }
 
+type NfsInfo struct {
+	NfsServerAddress string
+	NfsPath          string
+	NfsSubPath       string
+	NfsMountOptions  string
+}
+
+// GetNfsInfoFromEnv get information for nfs share.
+func GetNfsInfoFromEnv() *NfsInfo {
+	creds := &NfsInfo{}
+
+	creds.NfsServerAddress = os.Getenv("NFS_SERVER_ADDR")
+	if creds.NfsServerAddress == "" {
+		err := fmt.Errorf("NFS_SERVER_ADDR environment variable should not be empty")
+		log.FailOnError(err, "Fetching NFS server address")
+	}
+
+	creds.NfsPath = os.Getenv("NFS_PATH")
+	if creds.NfsPath == "" {
+		err := fmt.Errorf("NFS_PATH environment variable should not be empty")
+		log.FailOnError(err, "Fetching NFS path")
+	}
+
+	creds.NfsSubPath = os.Getenv("NFS_SUB_PATH")
+	if creds.NfsSubPath == "" {
+		err := fmt.Errorf("NFS_PATH environment variable should not be empty")
+		log.FailOnError(err, "Fetching NFS sub path")
+	}
+
+	creds.NfsMountOptions = os.Getenv("NFS_MOUNT_OPTION")
+
+	return creds
+}
+
 // SetScheduledBackupInterval sets scheduled backup interval
 func SetScheduledBackupInterval(interval time.Duration, triggerType string) {
 	scheduledBackupInterval := interval
@@ -4116,7 +4309,43 @@ func DeleteAzureBucket(bucketName string) {
 		fmt.Sprintf("Failed to delete container. Error: [%v]", err))
 }
 
-// DeleteBucket deletes bucket from the cloud
+// DeleteNfsSubPath delete subpath from nfs shared path.
+func DeleteNfsSubPath() {
+	// Get NFS share details from ENV variables.
+	creds := GetNfsInfoFromEnv()
+	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
+
+	// Mount the NFS share to the master node.
+	masterNode := node.GetMasterNodes()[0]
+	mountCmds := []string{
+		fmt.Sprintf("mkdir -p %s", mountDir),
+		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+	}
+	for _, cmd := range mountCmds {
+		err := runCmd(cmd, masterNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+	}
+
+	defer func() {
+		// Unmount the NFS share from the master node.
+		umountCmds := []string{
+			fmt.Sprintf("umount %s", mountDir),
+			fmt.Sprintf("rm -rf %s", mountDir),
+		}
+		for _, cmd := range umountCmds {
+			err := runCmd(cmd, masterNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+		}
+	}()
+
+	// Remove subpath from NFS share path.
+	log.Infof("Deleting NFS share subpath: [%s] from path: [%s] on server: [%s]", creds.NfsSubPath, creds.NfsPath, creds.NfsServerAddress)
+	rmCmd := fmt.Sprintf("rm -rf %s/%s", mountDir, creds.NfsSubPath)
+	err := runCmd(rmCmd, masterNode)
+	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, masterNode, err))
+}
+
+// DeleteBucket deletes bucket from the cloud or shared subpath from NFS server
 func DeleteBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
 		switch provider {
@@ -4125,6 +4354,8 @@ func DeleteBucket(provider string, bucketName string) {
 			DeleteS3Bucket(bucketName)
 		case drivers.ProviderAzure:
 			DeleteAzureBucket(bucketName)
+		case drivers.ProviderNfs:
+			DeleteNfsSubPath()
 		}
 	})
 }
@@ -7019,6 +7250,23 @@ func GetKvdbMasterNode() (*node.Node, error) {
 	return &getKvdbLeaderNode, nil
 }
 
+// KillKvdbMasterNodeAndFailover kills kvdb master node and returns after failover is complete
+func KillKvdbMasterNodeAndFailover() error {
+	kvdbMaster, err := GetKvdbMasterNode()
+	if err != nil {
+		return err
+	}
+	err = KillKvdbMemberUsingPid(*kvdbMaster)
+	if err != nil {
+		return err
+	}
+	err = WaitForKVDBMembers()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetKvdbMasterPID returns the PID of KVDB master node
 func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 	var processPid string
@@ -7046,14 +7294,19 @@ func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 // WaitForKVDBMembers waits till all kvdb members comes up online and healthy
 func WaitForKVDBMembers() error {
 	t := func() (interface{}, bool, error) {
+		isHealthy := 0
 		allKvdbNodes, err := GetAllKvdbNodes()
 		if len(allKvdbNodes) != 3 {
 			return "", true, err
 		}
 		for _, each := range allKvdbNodes {
 			if each.IsHealthy {
-				return "", false, nil
+				isHealthy += 1
 			}
+		}
+		if isHealthy == 3 {
+			log.InfoD("all 3 kvdb nodes are online and healthy, exiting.")
+			return "", false, nil
 		}
 		return "", true, err
 	}

@@ -547,12 +547,9 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 				appContextsToBackupMap[scheduleName] = appContextsToBackup
 
-				err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+				firstScheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
-
-				schBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
-				log.FailOnError(err, "Getting first schedule backup name")
-				backupNames = append(backupNames, schBackupName)
+				backupNames = append(backupNames, firstScheduleBackupName)
 			}
 		})
 
@@ -666,8 +663,10 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
 		log.InfoD("Delete the local bucket created")
 		for _, provider := range providers {
-			DeleteBucket(provider, localBucketNameMap[provider])
-			log.Infof("local bucket deleted - %s", localBucketNameMap[provider])
+			if provider != "nfs" {
+				DeleteBucket(provider, localBucketNameMap[provider])
+				log.Infof("local bucket deleted - %s", localBucketNameMap[provider])
+			}
 		}
 	})
 })

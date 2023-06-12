@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -71,6 +71,7 @@ const (
 	globalAWSBucketPrefix                     = "global-aws"
 	globalAzureBucketPrefix                   = "global-azure"
 	globalGCPBucketPrefix                     = "global-gcp"
+	globalNFSBucketPrefix                     = "global-nfs"
 	globalAWSLockedBucketPrefix               = "global-aws-locked"
 	globalAzureLockedBucketPrefix             = "global-azure-locked"
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
@@ -109,6 +110,7 @@ var (
 	globalAWSBucketName         string
 	globalAzureBucketName       string
 	globalGCPBucketName         string
+	globalNFSBucketName         string
 	globalAWSLockedBucketName   string
 	globalAzureLockedBucketName string
 	globalGCPLockedBucketName   string
@@ -198,7 +200,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 
 // GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class. Returns the first class if there are multiple
 func GetCsiSnapshotClassName() (string, error) {
-	var snapShotClasses *v1beta1.VolumeSnapshotClassList
+	var snapShotClasses *volsnapv1.VolumeSnapshotClassList
 	var err error
 	if snapShotClasses, err = Inst().S.GetAllSnapshotClasses(); err != nil {
 		return "", err
@@ -344,8 +346,8 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 	return nil
 }
 
-// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, and validates that backup
-func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) error {
+// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
+func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -355,15 +357,15 @@ func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string
 	}
 	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	time.Sleep(1 * time.Minute)
 	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	return backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // CreateBackupByNamespacesWithoutCheck creates backup of provided namespaces without waiting for success.
@@ -868,7 +870,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	}()
 	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
 	for _, scheduledAppContext := range scheduledAppContexts {
-		expectedRestoredAppContext, err := TransformAppContextWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
+		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
 		if err != nil {
 			log.Errorf("TransformAppContextWithMappings: %v", err)
 			continue
@@ -953,20 +955,24 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
-		err := DeleteCloudCredential(credName, orgID, cloudCredUID)
-		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", credName))
-		cloudCredDeleteStatus := func() (interface{}, bool, error) {
-			status, err := IsCloudCredPresent(credName, ctx, orgID)
-			if err != nil {
-				return "", true, fmt.Errorf("cloud cred %s still present with error %v", credName, err)
+		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cloud cred [%s] is present", credName))
+		if status {
+			err = DeleteCloudCredential(credName, orgID, cloudCredUID)
+			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", credName))
+			cloudCredDeleteStatus := func() (interface{}, bool, error) {
+				status, err = IsCloudCredPresent(credName, ctx, orgID)
+				if err != nil {
+					return "", true, fmt.Errorf("cloud cred %s still present with error %v", credName, err)
+				}
+				if status {
+					return "", true, fmt.Errorf("cloud cred %s is not deleted yet", credName)
+				}
+				return "", false, nil
 			}
-			if status {
-				return "", true, fmt.Errorf("cloud cred %s is not deleted yet", credName)
-			}
-			return "", false, nil
+			_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 		}
-		_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
-		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 	}
 	err := DeleteCluster(SourceClusterName, orgID, ctx)
 	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
@@ -1869,8 +1875,8 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 	}
 }
 
-// TransformAppContextWithMappings clones an appContext and transforms it according to the maps provided. When `forRestore` is true, VolumeSnapshots and StorageClasses are ignored. To be used after switching k8s context (cluster) which has the namespace
-func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string, forRestore bool) (*scheduler.Context, error) {
+// CloneAppContextAndTransformWithMappings clones an appContext and transforms it according to the maps provided. Set `forRestore` to true when the transformation is for namespaces restored by px-backup. To be used after switching to k8s context (cluster) which has the restored namespace.
+func CloneAppContextAndTransformWithMappings(appContext *scheduler.Context, namespaceMapping map[string]string, storageClassMapping map[string]string, forRestore bool) (*scheduler.Context, error) {
 	appContextNamespace := appContext.ScheduleOptions.Namespace
 	log.Infof("TransformAppContextWithMappings of appContext [%s] with namespace mapping [%v] and storage Class Mapping [%v]", appContextNamespace, namespaceMapping, storageClassMapping)
 
@@ -1883,7 +1889,7 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 	specObjects := make([]interface{}, 0)
 	for _, appSpecOrig := range appContext.App.SpecList {
 		if forRestore {
-			// if we can transforming to obtain a restored specs, VolumeSnapshot should be ignored
+			// if we are transforming to obtain a restored specs, VolumeSnapshot should be ignored
 			if obj, ok := appSpecOrig.(*snapv1.VolumeSnapshot); ok {
 				log.Infof("TransformAppContextWithMappings is for restore contexts, ignoring transformation of 'VolumeSnapshot' [%s] in appContext [%s]", obj.Metadata.Name, appContextNamespace)
 				continue
@@ -1899,11 +1905,13 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 			errors = append(errors, err)
 			continue
 		}
-		err = TransformToRestoredSpec(appSpec, storageClassMapping)
-		if err != nil {
-			err := fmt.Errorf("failed to TransformToRestoredSpec for %v, with sc map %s. Err: %v", appSpec, storageClassMapping, err)
-			errors = append(errors, err)
-			continue
+		if forRestore {
+			err = TransformToRestoredSpec(appSpec, storageClassMapping)
+			if err != nil {
+				err := fmt.Errorf("failed to TransformToRestoredSpec for %v, with sc map %s. Err: %v", appSpec, storageClassMapping, err)
+				errors = append(errors, err)
+				continue
+			}
 		}
 		err = UpdateNamespace(appSpec, namespaceMapping)
 		if err != nil {
@@ -1936,12 +1944,12 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 	app.SpecList = specObjects
 	restoreAppContext.App = &app
 
-	// we're having to do this as we're under the assumption that `ScheduleOptions.Namespace` will always contain the namespace of the scheduled app
-	options := CreateScheduleOptions("", "")
+	// `CreateScheduleOptions` must be used in order to make it appear as though we scheduled it (rather than it being restored) in order to prove equivalency between scheduling and restoration.
+	var options scheduler.ScheduleOptions
 	if namespace, ok := namespaceMapping[appContextNamespace]; ok {
-		options.Namespace = namespace
+		options = CreateScheduleOptions(namespace)
 	} else {
-		options.Namespace = appContextNamespace
+		options = CreateScheduleOptions(appContextNamespace)
 	}
 	restoreAppContext.ScheduleOptions = options
 
@@ -1953,7 +1961,7 @@ func TransformAppContextWithMappings(appContext *scheduler.Context, namespaceMap
 	return &restoreAppContext, nil
 }
 
-// CloneSpec clones a given spec and returns it. It returns an error if the object (spec) provided is not supported by this function
+// TransformToRestoredSpec transforms a given spec to one expected in case of restoration by px-backup. An error is retuned if any transformation fails. specs with no need for transformation are ignored.
 func TransformToRestoredSpec(spec interface{}, storageClassMapping map[string]string) error {
 	if specObj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		if sc, ok := storageClassMapping[*specObj.Spec.StorageClassName]; ok {
@@ -2696,19 +2704,19 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 	return resp, nil
 }
 
-// CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success, and validates the backup.
-func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) error {
+// CreateScheduleBackupWithNamespaceLabelWithValidation creates a schedule backup with namespace label, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
+func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, scheduledAppContextsExpectedInBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, namespaceLabel string, schPolicyName string, schPolicyUID string) (string, error) {
 	_, err := CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName, clusterName, bkpLocation, bkpLocationUID, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, namespaceLabel, ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	time.Sleep(1 * time.Minute)
 	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	return backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // suspendBackupSchedule will suspend backup schedule
@@ -3276,6 +3284,28 @@ func RegisterCluster(clusterName string, cloudCredName string, orgID string, ctx
 	return nil
 }
 
+// NamespaceExistsInNamespaceMapping checks if namespace is present in map of namespace mapping
+func NamespaceExistsInNamespaceMapping(namespaceMap map[string]string, namespaces []string) bool {
+	for _, namespace := range namespaces {
+		if _, ok := namespaceMap[namespace]; !ok {
+			fmt.Printf("%s is not a present in namespaces %v", namespace, namespaces)
+			return false
+		}
+	}
+	return true
+}
+
+// RemoveNamespaceLabelForMultipleNamespaces removes labels from multiple namespace
+func RemoveNamespaceLabelForMultipleNamespaces(labels map[string]string, namespaces []string) error {
+	for _, namespace := range namespaces {
+		err := Inst().S.RemoveNamespaceLabel(namespace, labels)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func AddSourceCluster(ctx context.Context) error {
 	err := RegisterCluster(SourceClusterName, "", orgID, ctx)
 	if err != nil {
@@ -3290,4 +3320,15 @@ func AddDestinationCluster(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// GenerateRandomLabelsWithMaxChar creates random label with max characters
+func GenerateRandomLabelsWithMaxChar(number int, charLimit int) map[string]string {
+	labels := make(map[string]string)
+	for i := 0; i < number; i++ {
+		key := RandomString(charLimit)
+		value := uuid.New()
+		labels[key] = value
+	}
+	return labels
 }

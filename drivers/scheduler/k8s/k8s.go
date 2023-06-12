@@ -23,7 +23,7 @@ import (
 
 	docker_types "github.com/docker/docker/api/types"
 	vaultapi "github.com/hashicorp/vault/api"
-	v1beta1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/units"
@@ -1191,7 +1191,7 @@ func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	return nil
 }
 
-// GetUpdatedSpec gets the updated spec of a K8s Object. Just `name`, and if required `namespace` must be spcified on `spec` in order to GET the spec from K8s (if it exists).
+// GetUpdatedSpec gets the updated spec of a K8s Object. Just `name`, and if required `namespace` must be specified on `spec` in order to GET the spec from K8s (if it exists).
 func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 	if specObj, ok := spec.(*appsapi.Deployment); ok {
 		dep, err := k.K8sApps.GetDeployment(specObj.Name, specObj.Namespace)
@@ -5892,10 +5892,10 @@ func (k *K8s) RecycleNode(n node.Node) error {
 }
 
 // CreateCsiSnapsForVolumes create csi snapshots for Apps
-func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*v1beta1.VolumeSnapshot, error) {
+func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*volsnapv1.VolumeSnapshot, error) {
 	// Only FA (pure_block) volume is supported
 	volTypes := []string{PureBlock}
-	var volSnapMap = make(map[string]*v1beta1.VolumeSnapshot)
+	var volSnapMap = make(map[string]*volsnapv1.VolumeSnapshot)
 
 	for _, specObj := range ctx.App.SpecList {
 
@@ -6535,7 +6535,7 @@ func (k *K8s) ValidateCsiRestore(pvcName string, namespace string, timeout time.
 // restoreCsiSnapshot restore PVC from csiSnapshot
 func (k *K8s) restoreCsiSnapshot(
 	restorePvcName string, pvc corev1.PersistentVolumeClaim,
-	snap *v1beta1.VolumeSnapshot, sc *storageapi.StorageClass,
+	snap *volsnapv1.VolumeSnapshot, sc *storageapi.StorageClass,
 ) (*v1.PersistentVolumeClaim, error) {
 	var resPvc *corev1.PersistentVolumeClaim
 	var dataSource v1.TypedLocalObjectReference
@@ -6579,10 +6579,10 @@ func (k *K8s) restoreCsiSnapshot(
 }
 
 // CreateCsiSnapshotClass creates csi volume snapshot class
-func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*v1beta1.VolumeSnapshotClass, error) {
+func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error) {
 	var err error
 	var annotation = make(map[string]string)
-	var volumeSnapClass *v1beta1.VolumeSnapshotClass
+	var volumeSnapClass *volsnapv1.VolumeSnapshotClass
 	annotation["snapshot.storage.kubernetes.io/is-default-class"] = "true"
 
 	v1obj := metav1.ObjectMeta{
@@ -6590,10 +6590,10 @@ func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string)
 		Annotations: annotation,
 	}
 
-	snapClass := v1beta1.VolumeSnapshotClass{
+	snapClass := volsnapv1.VolumeSnapshotClass{
 		ObjectMeta:     v1obj,
 		Driver:         CsiProvisioner,
-		DeletionPolicy: v1beta1.DeletionPolicy(deleionPolicy),
+		DeletionPolicy: volsnapv1.DeletionPolicy(deleionPolicy),
 	}
 
 	log.Infof("Creating volume snapshot class: %v", snapClassName)
@@ -6608,7 +6608,7 @@ func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string)
 
 // waitForCsiSnapToBeReady wait for snapshot status to be ready
 func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
-	var snap *v1beta1.VolumeSnapshot
+	var snap *volsnapv1.VolumeSnapshot
 	var err error
 	log.Infof("Waiting for snapshot [%s] to be ready in namespace: %s ", snapName, namespace)
 	t := func() (interface{}, bool, error) {
@@ -6687,25 +6687,25 @@ func (k *K8s) waitForRestoredPVCsToBound(pvcNamePrefix string, namespace string)
 }
 
 // CreateCsiSnapshot create snapshot for given pvc
-func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*v1beta1.VolumeSnapshot, error) {
+func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc string) (*volsnapv1.VolumeSnapshot, error) {
 	var err error
-	var snapshot *v1beta1.VolumeSnapshot
+	var snapshot *volsnapv1.VolumeSnapshot
 
 	v1obj := metav1.ObjectMeta{
 		Name:      name,
 		Namespace: namespace,
 	}
 
-	source := v1beta1.VolumeSnapshotSource{
+	source := volsnapv1.VolumeSnapshotSource{
 		PersistentVolumeClaimName: &pvc,
 	}
 
-	spec := v1beta1.VolumeSnapshotSpec{
+	spec := volsnapv1.VolumeSnapshotSpec{
 		VolumeSnapshotClassName: &class,
 		Source:                  source,
 	}
 
-	snap := v1beta1.VolumeSnapshot{
+	snap := volsnapv1.VolumeSnapshot{
 		ObjectMeta: v1obj,
 		Spec:       spec,
 	}
@@ -6726,11 +6726,11 @@ func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc
 }
 
 // GetCsiSnapshots return snapshot list for a pvc
-func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.VolumeSnapshot, error) {
-	var snaplist *v1beta1.VolumeSnapshotList
-	var snap *v1beta1.VolumeSnapshot
+func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*volsnapv1.VolumeSnapshot, error) {
+	var snaplist *volsnapv1.VolumeSnapshotList
+	var snap *volsnapv1.VolumeSnapshot
 	var err error
-	snapshots := make([]*v1beta1.VolumeSnapshot, 0)
+	snapshots := make([]*volsnapv1.VolumeSnapshot, 0)
 
 	if snaplist, err = k.K8sExternalsnap.ListSnapshots(namespace); err != nil {
 		return nil, &scheduler.ErrFailedToGetSnapshotList{
@@ -6754,7 +6754,7 @@ func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*v1beta1.Volu
 }
 
 // ValidateCsiSnapshots validate all snapshots in the context
-func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string]*v1beta1.VolumeSnapshot) error {
+func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string]*volsnapv1.VolumeSnapshot) error {
 	var pureBlkType = []string{PureBlock}
 
 	for _, specObj := range ctx.App.SpecList {
@@ -6816,8 +6816,8 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 }
 
 // validateCsiSnapshot validates the given snapshot is successfully created or not
-func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot v1beta1.VolumeSnapshot) error {
-	var snap *v1beta1.VolumeSnapshot
+func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot volsnapv1.VolumeSnapshot) error {
+	var snap *volsnapv1.VolumeSnapshot
 	var err error
 
 	if csiSnapshot.Name == "" {
@@ -6856,8 +6856,8 @@ func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot v1be
 }
 
 // GetAllSnapshotClasses returns the list of all volume snapshot classes present in the cluster
-func (k *K8s) GetAllSnapshotClasses() (*v1beta1.VolumeSnapshotClassList, error) {
-	var snapshotClasses *v1beta1.VolumeSnapshotClassList
+func (k *K8s) GetAllSnapshotClasses() (*volsnapv1.VolumeSnapshotClassList, error) {
+	var snapshotClasses *volsnapv1.VolumeSnapshotClassList
 	var err error
 	if snapshotClasses, err = k.K8sExternalsnap.ListSnapshotClasses(); err != nil {
 		return nil, err
