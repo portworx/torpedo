@@ -32,6 +32,22 @@ const (
 	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
+var _ = Describe("{ValidateDNSEndpoint}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateDNSEndpoint", "validate dns endpoitns", pdsLabels, 0)
+	})
+
+	Step("Deploy dataservice, delete and validate pds pods", func() {
+		It("validate dns endpoints", func() {
+			dsTest.ValidateDataServiceDnsEndpoints("es-dns-8t5jx1-pds-automation-0-vip.portworx.pds-dns.io:9200")
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{DeletePDSPods}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeletePDSPods", "delete pds pods and validate if its coming back online and dataserices are not affected", pdsLabels, 0)

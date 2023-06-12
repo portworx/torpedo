@@ -334,6 +334,10 @@ func GetAndExpectStringEnvVar(varName string) string {
 	return varValue
 }
 
+func (d *DataserviceType) ValidateDataServiceDnsEndpoints(dnsEndPoint string) {
+	controlplane.ValidateDNSEndpoint(dnsEndPoint)
+}
+
 // DeployPDSDataservices method will be used to deploy ds and run common px tests
 func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, error) {
 	log.InfoD("Deployment of pds apps called from schedule applications")

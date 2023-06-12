@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"net"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -258,9 +259,18 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 	return token.GetToken(), nil
 }
 
+// ValidateDNSEndpoint
+func (cp *ControlPlane) ValidateDNSEndpoint(dnsZone string) error {
+	_, err := net.Dial("tcp", dnsZone)
+	if err != nil {
+		log.Errorf("Failed to connect to the dns endpoint with err: %v", err)
+		return err
+	}
+	return nil
+}
+
 // GetDNSZone fetches DNS zone for deployment.
 func (cp *ControlPlane) GetDNSZone(tenantID string) (string, error) {
-	log.Debugf("Inside the GetDNSZone function... ")
 	tenantComp := components.Tenant
 	log.Debugf("tenantComp is initialized...")
 	tenant, err := tenantComp.GetTenant(tenantID)
