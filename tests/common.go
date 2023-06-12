@@ -4316,7 +4316,7 @@ func DeleteNfsSubPath() {
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
 
 	// Mount the NFS share to the master node.
-	masterNode := node.GetMasterNodes()[0]
+	masterNode := Inst().N.GetNodeRegistry().GetMasterNodes()[0]
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),

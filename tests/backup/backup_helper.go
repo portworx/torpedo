@@ -1947,9 +1947,9 @@ func CloneAppContextAndTransformWithMappings(appContext *scheduler.Context, name
 	// `CreateScheduleOptions` must be used in order to make it appear as though we scheduled it (rather than it being restored) in order to prove equivalency between scheduling and restoration.
 	var options scheduler.ScheduleOptions
 	if namespace, ok := namespaceMapping[appContextNamespace]; ok {
-		options = CreateScheduleOptions(namespace)
+		options = CreateScheduleOptions("", namespace)
 	} else {
-		options = CreateScheduleOptions(appContextNamespace)
+		options = CreateScheduleOptions("", appContextNamespace)
 	}
 	restoreAppContext.ScheduleOptions = options
 

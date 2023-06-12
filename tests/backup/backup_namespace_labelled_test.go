@@ -515,7 +515,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		})
 		Step("Creating cloud credentials and backup location", func() {
 			log.InfoD("Creating cloud credentials and registering backup location")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
@@ -533,7 +533,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		})
 		Step("Add source and destination clusters with px-central-admin ctx", func() {
 			log.InfoD("Adding source and destination clusters with px-central-admin ctx")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of source [%s] and destination [%s] clusters", SourceClusterName, destinationClusterName))
@@ -549,7 +549,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		})
 		Step("Taking manual backup of applications with namespace label", func() {
 			log.InfoD("Taking manual backup of applications with namespace label")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			backupName = fmt.Sprintf("%s-%v", "backup", time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
@@ -559,7 +559,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		})
 		Step("Restoring manual backup", func() {
 			log.InfoD("Restoring manual backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
 			err = CreateRestore(restoreName, backupName, nil, SourceClusterName, orgID, ctx, nil)
@@ -568,7 +568,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		})
 		Step("Create schedule policy", func() {
 			log.InfoD("Creating a schedule policy")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			periodicSchPolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchPolicyUid = uuid.New()
@@ -581,7 +581,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		})
 		Step("Creating schedule backup with namespace label", func() {
 			log.InfoD("Creating schedule backup with namespace label")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			scheduleBackupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
@@ -591,7 +591,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		})
 		Step("Restoring first scheduled backup", func() {
 			log.InfoD("Restoring first scheduled backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, scheduleBackupName)
 			err = CreateRestore(restoreName, firstScheduleBackupName, nil, destinationClusterName, orgID, ctx, nil)
@@ -601,7 +601,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 		err = DeleteSchedule(scheduleBackupName, SourceClusterName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleBackupName))
@@ -686,7 +686,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Creating cloud credentials and backup location", func() {
 			log.InfoD("Creating cloud credentials and backup location")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
@@ -704,7 +704,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Configure source and destination clusters with px-central-admin ctx", func() {
 			log.InfoD("Adding source and destination clusters with px-central-admin ctx")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of source [%s] and destination [%s] clusters", SourceClusterName, destinationClusterName))
@@ -720,7 +720,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Create schedule policy", func() {
 			log.InfoD("Creating a schedule policy")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			periodicSchPolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchPolicyUid = uuid.New()
@@ -733,7 +733,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Creating schedule backup with namespace label", func() {
 			log.InfoD("Creating schedule backup with namespace label")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
@@ -746,7 +746,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Remove namespace label from namespace and check backup success of next schedule backup", func() {
 			log.InfoD("Remove namespace label from namespace and check backup success of next schedule backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			removedNamespace = bkpNamespaces[:3]
 			err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, removedNamespace)
@@ -756,7 +756,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Restore the backup which was taken before the namespace removal and the namespace should be recovered", func() {
 			log.InfoD("Restore the backup which was taken before the namespace removal and the namespace should be recovered")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			restoreBeforeNamespaceIsRemoved := fmt.Sprintf("%s-%v", restoreNamePrefix, time.Now().Unix())
 			err = CreateRestore(restoreBeforeNamespaceIsRemoved, secondScheduleBackupName, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
@@ -798,7 +798,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Continue next schedule backups", func() {
 			log.InfoD("Continue next schedule backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			scheduleBkpAfterNSRemovalTwo, err := GetNextScheduleBackupName(scheduleName, time.Duration(schPolicyInterval), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup success for %s schedule backup %s", scheduleBkpAfterNSRemovalTwo, scheduleName))
@@ -807,7 +807,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Restore the backup which was taken with less namespaces", func() {
 			log.InfoD("Restore the backup which was taken with less namespaces")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			restoreAfterNamespaceIsRemoved := fmt.Sprintf("%s-%v", restoreNamePrefix, time.Now().Unix())
 			err = CreateRestore(restoreAfterNamespaceIsRemoved, schBackupAfterNSRemoval, namespaceMapping, destinationClusterName, orgID, ctx, make(map[string]string))
@@ -826,7 +826,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
@@ -965,7 +965,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Creating cloud credentials and backup location", func() {
 			log.InfoD("Creating cloud credentials and backup location")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
@@ -983,7 +983,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Add source and destination clusters with px-central-admin ctx", func() {
 			log.InfoD("Adding source and destination clusters with px-central-admin ctx")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of source [%s] and destination [%s] clusters", SourceClusterName, destinationClusterName))
@@ -999,7 +999,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Taking manual backup of single application with namespace label filter", func() {
 			log.InfoD("Taking manual backup of single application with namespace label filter")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			manualBackupSingleNS = fmt.Sprintf("%s-%v", "single-namespace-backup", time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{singleNamespace})
@@ -1011,7 +1011,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Taking manual backup of multiple applications with namespace label filter", func() {
 			log.InfoD("Taking manual backup of multiple applications with namespace label filter")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			manualBackupMultipleNS = fmt.Sprintf("%s-%v", "multiple-namespace-backup", time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, multipleNamespace)
@@ -1023,7 +1023,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Taking manual backup of all applications with namespace label filter", func() {
 			log.InfoD("Taking manual backup of all applications with namespace label filter")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			manualBackupAllNS = fmt.Sprintf("%s-%v", "all-namespace-backup", time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
@@ -1035,7 +1035,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Create schedule policy", func() {
 			log.InfoD("Creating a schedule policy")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			periodicSchPolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchPolicyUid = uuid.New()
@@ -1047,7 +1047,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Creating a schedule backup for single namespace with namespace label filter", func() {
 			log.InfoD("Creating a schedule backup for single namespace with namespace label filter")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			schBackupSingleNS = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{singleNamespace})
@@ -1060,7 +1060,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Creating a schedule backup for multiple applications with namespace label filter", func() {
 			log.InfoD("Creating a schedule backup for multiple applications with namespace label filter")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			schBackupMultipleNS = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, multipleNamespace)
@@ -1073,7 +1073,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Creating a schedule backup for all applications with namespace label filter", func() {
 			log.InfoD("Creating a schedule backup for all applications with namespace label filter")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			schBackupAllNS = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
@@ -1086,7 +1086,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Restoring backup of single application", func() {
 			log.InfoD("Restoring backup of single application")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			restoreName = fmt.Sprintf("%s-%v", manualBackupSingleNS, time.Now().Unix())
 			err = CreateRestore(restoreName, manualBackupSingleNS, nil, destinationClusterName, orgID, ctx, nil)
@@ -1095,7 +1095,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Restoring multiple applications backup", func() {
 			log.InfoD("Restoring multiple applications backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			restoreName = fmt.Sprintf("%s-%v", manualBackupMultipleNS, time.Now().Unix())
 			err = CreateRestore(restoreName, manualBackupMultipleNS, nil, destinationClusterName, orgID, ctx, nil)
@@ -1104,7 +1104,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		})
 		Step("Restoring all applications backup", func() {
 			log.InfoD("Restoring all applications backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			restoreName = fmt.Sprintf("%s-%v", manualBackupAllNS, time.Now().Unix())
 			err = CreateRestore(restoreName, manualBackupAllNS, nil, destinationClusterName, orgID, ctx, nil)
@@ -1114,7 +1114,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		Step("Restoring the incremental scheduled backup of single application", func() {
 			log.InfoD("Restoring the incremental scheduled backup of single application")
 			scheduleRestoreMapping = make(map[string]string)
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			log.InfoD("Waiting for the incremental scheduled backup for single namespace to be triggered")
 			_, err = GetNextPeriodicScheduleBackupName(schBackupSingleNS, 15, ctx)
@@ -1135,7 +1135,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		Step("Restoring the incremental scheduled backup of multiple applications", func() {
 			log.InfoD("Restoring the incremental scheduled backup of multiple applications")
 			scheduleMultipleRestoreMapping = make(map[string]string)
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			log.InfoD("Waiting for the incremental scheduled backup for multiple namespace to be triggered")
 			_, err = GetNextPeriodicScheduleBackupName(schBackupMultipleNS, 15, ctx)
@@ -1158,7 +1158,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		Step("Restoring the incremental scheduled backup of all applications", func() {
 			log.InfoD("Restoring the incremental scheduled backup of all applications")
 			scheduleAllNSRestoreMapping = make(map[string]string)
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			log.InfoD("Waiting for the incremental scheduled backup for all namespace to be triggered")
 			_, err = GetNextPeriodicScheduleBackupName(schBackupAllNS, 15, ctx)
@@ -1182,7 +1182,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 	JustAfterEach(func() {
 		log.InfoD("Deleting test data generated during test execution")
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
@@ -1285,7 +1285,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		})
 		Step("Creating cloud credentials and registering backup location", func() {
 			log.InfoD("Creating cloud credentials and registering backup location")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
@@ -1303,7 +1303,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		})
 		Step("Configure source and destination clusters with px-central-admin ctx", func() {
 			log.InfoD("Configuring source and destination clusters with px-central-admin ctx")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
@@ -1317,7 +1317,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		})
 		Step("Taking a manual backup of single application with namespace label filter", func() {
 			log.InfoD("Taking a manual backup of single application with namespace label filter")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 
 			manualBkpSingleNS = fmt.Sprintf("%s-%v", "backup", time.Now().Unix())
@@ -1330,7 +1330,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		})
 		Step("Taking a manual backup of multiple applications with namespace label filter", func() {
 			log.InfoD("Taking a manual backup of multiple applications with namespace label filter")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 
 			manualBkpMultipleNS = fmt.Sprintf("%s-%v", "multiple-namespace-backup", time.Now().Unix())
@@ -1343,7 +1343,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		})
 		Step("Create schedule policy", func() {
 			log.InfoD("Creating a schedule policy")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchedulePolicyUid = uuid.New()
@@ -1355,7 +1355,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		})
 		Step("Creating a schedule backup for single namespace with namespace label filter", func() {
 			log.InfoD("Creating a schedule backup for single namespace with namespace label filter")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 
 			scheduleBkpSingleNs = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
@@ -1369,7 +1369,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		})
 		Step("Creating a schedule backup for multiple applications with namespace label filter", func() {
 			log.InfoD("Creating a schedule backup for multiple applications with namespace label filter")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 
 			scheduleBkpMultipleNs = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
@@ -1384,7 +1384,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		Step("Restoring manual backup of single application", func() {
 			log.InfoD("Restoring backup of single application")
 			namespaceMapping = make(map[string]string)
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			// Restore backup to default namespace
 			restoreName = fmt.Sprintf("%s-%v", manualBkpSingleNS, time.Now().Unix())
@@ -1403,7 +1403,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		Step("Restoring manual backup of multiple applications backup", func() {
 			log.InfoD("Restoring manual backup of multiple applications backup")
 			multipleRestoreMapping = make(map[string]string)
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			// Restore to default namespace
 			restoreName = fmt.Sprintf("%s-%v", manualBkpMultipleNS, time.Now().Unix())
@@ -1424,7 +1424,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		Step("Restoring the incremental scheduled backup of single namespace", func() {
 			log.InfoD("Restoring the incremental scheduled backup of single namespace")
 			scheduleRestoreMapping = make(map[string]string)
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			log.InfoD("Waiting for the incremental scheduled backup for single namespace to be triggered")
 			secondScheduleBackupName, err = GetNextScheduleBackupName(scheduleBkpSingleNs, time.Duration(15), ctx)
@@ -1451,7 +1451,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 		Step("Restoring the incremental backups for multiple applications", func() {
 			log.InfoD("Restoring he incremental backups for multiple applications")
 			scheduleMultipleRestoreMapping = make(map[string]string)
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			secondScheduleBackupForMultipleNs, err = GetNextScheduleBackupName(scheduleBkpMultipleNs, time.Duration(15), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the second schedule backup [%s]", secondScheduleBackupForMultipleNs))
@@ -1479,7 +1479,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNamespaceLabel}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
