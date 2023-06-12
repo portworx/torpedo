@@ -265,6 +265,8 @@ func (cp *ControlPlane) ValidateDNSEndpoint(dnsZone string) error {
 	if err != nil {
 		log.Errorf("Failed to connect to the dns endpoint with err: %v", err)
 		return err
+	} else {
+		log.Infof("Dns is working")
 	}
 	return nil
 }

@@ -39,7 +39,8 @@ var _ = Describe("{ValidateDNSEndpoint}", func() {
 
 	Step("Deploy dataservice, delete and validate pds pods", func() {
 		It("validate dns endpoints", func() {
-			dsTest.ValidateDataServiceDnsEndpoints("es-dns-8t5jx1-pds-automation-0-vip.portworx.pds-dns.io:9200")
+			err = dsTest.ValidateDataServiceDnsEndpoints("es-dns-8t5jx1-pds-automation-0-vip.portworx.pds-dns.io:9201")
+			log.FailOnError(err, "Failed connecting to endpoint", err)
 		})
 	})
 
