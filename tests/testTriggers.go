@@ -24,7 +24,7 @@ import (
 
 	"container/ring"
 
-	"github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1"
+	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	"github.com/onsi/ginkgo"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
@@ -175,7 +175,7 @@ var isRelaxedReclaimEnabled = false
 var isTrashcanEnabled = false
 
 // volSnapshotClass is snapshot class for FA volumes
-var volSnapshotClass *v1beta1.VolumeSnapshotClass
+var volSnapshotClass *volsnapv1.VolumeSnapshotClass
 
 // pureStorageClassMap is map of pure storage class
 var pureStorageClassMap map[string]*storageapi.StorageClass
@@ -301,6 +301,8 @@ func ProcessErrorWithMessage(event *EventRecord, err error, desc string) {
 const (
 	// DeployApps installs new apps
 	DeployApps = "deployApps"
+	// ValidatePds Apps checks the healthstate of the pds apps
+	ValidatePdsApps = "validatePdsApps"
 	// HAIncrease performs repl-add
 	HAIncrease = "haIncrease"
 	// HADecrease performs repl-reduce
@@ -1358,6 +1360,38 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			}
 		}
 		updateMetrics(*event)
+	})
+}
+
+func TriggerValidatePdsApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(ValidatePdsApps)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ValidatePdsApps,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	Step("validate pds-apps", func() {
+		for _, ctx := range *contexts {
+			stepLog := fmt.Sprintf("RebootNode: validating pds app [%s]", ctx.App.Key)
+			Step(stepLog, func() {
+				errorChan := make(chan error, errorChannelSize)
+				ValidatePDSDataServices(ctx, &errorChan)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+				}
+			})
+		}
 	})
 }
 
@@ -5205,7 +5239,7 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			log.InfoD("Cluster is having: [%v] license. Setting snap retain count to: [%v]", summary.SKU, retainSnapCount)
 		}
 		for _, ctx := range *contexts {
-			var volumeSnapshotMap map[string]*v1beta1.VolumeSnapshot
+			var volumeSnapshotMap map[string]*volsnapv1.VolumeSnapshot
 			var err error
 			stepLog = fmt.Sprintf("Deleting snapshots when retention count limit got exceeded for %s app", ctx.App.Key)
 			Step(stepLog, func() {
