@@ -13,9 +13,6 @@ import (
 	"github.com/blang/semver"
 	"github.com/libopenstorage/openstorage/api"
 	openshiftv1 "github.com/openshift/api/config/v1"
-	"github.com/portworx/sched-ops/k8s/apiextensions"
-	k8s "github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	opnshift "github.com/portworx/sched-ops/k8s/openshift"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -29,6 +26,8 @@ import (
 	"github.com/portworx/torpedo/pkg/osutils"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -49,10 +48,6 @@ const (
 )
 
 var (
-	k8sOpenshift       = opnshift.Instance()
-	k8sCore            = k8s.Instance()
-	crdOps             = apiextensions.Instance()
-	snapshoterOps      = externalsnapshotter.Instance()
 	versionReg         = regexp.MustCompile(`^(stable|candidate|fast)(-\d\.\d+)?$`)
 	volumeSnapshotCRDs = []string{
 		"volumesnapshotclasses.snapshot.storage.k8s.io",
@@ -61,12 +56,78 @@ var (
 	}
 )
 
-type openshift struct {
+type Openshift struct {
 	kube.K8s
+
+	k8sOpenshift opnshift.Ops
 }
 
-func (k *openshift) StopSchedOnNode(n node.Node) error {
-	driver, _ := node.Get(k.K8s.NodeDriverName)
+// Init Initialize the driver
+func (k *Openshift) Init(schedOpts scheduler.InitOptions) error {
+	if schedOpts.UseGlobalSchedopsInstances {
+		k.k8sOpenshift = opnshift.Instance()
+	} else {
+		k.InitSchedops(schedOpts.KubeConfigPath)
+	}
+	err := k.K8s.Init(schedOpts)
+	return err
+}
+
+// DeepCopy create a deepcopy of the driver
+func (k *Openshift) DeepCopy() scheduler.Driver {
+	if k == nil {
+		return nil
+	}
+	out := *k
+
+	s, _ := k.K8s.DeepCopy().(*kube.K8s)
+	out.K8s = *s
+	if !k.GlobalSchedopsInstancesUsed {
+		out.InitSchedops(k.KubeConfigPath)
+	}
+
+	return &out
+}
+
+// InitSchedops created instances of clients with kubeconfig. If kubeconfigPath is empty, then current KUBECONFIG is used
+func (k *Openshift) InitSchedops(kubeconfigPath string) error {
+	var err error
+
+	k8sOpenshift, err := opnshift.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+
+	k.k8sOpenshift = k8sOpenshift
+
+	return nil
+}
+
+// SetConfig sets kubeconfig. If kubeconfigPath == "" then sets to current KUBECONFIG
+func (k *Openshift) SetConfig(kubeconfigPath string) error {
+	var config *rest.Config
+	var err error
+
+	err = k.K8s.SetConfig(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+
+	if kubeconfigPath == "" {
+		config = nil
+	} else {
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	k.k8sOpenshift.SetConfig(config)
+
+	return nil
+}
+
+func (k *Openshift) StopSchedOnNode(n node.Node) error {
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         kube.FindFilesOnWorkerTimeout,
@@ -74,7 +135,7 @@ func (k *openshift) StopSchedOnNode(n node.Node) error {
 		},
 		Action: "stop",
 	}
-	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	err := k.NodeDriver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStopSchedOnNode{
 			Node:          n,
@@ -85,7 +146,7 @@ func (k *openshift) StopSchedOnNode(n node.Node) error {
 	return nil
 }
 
-func (k *openshift) getServiceName(driver node.Driver, n node.Node) (string, error) {
+func (k *Openshift) getServiceName(driver node.Driver, n node.Node) (string, error) {
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         kube.DefaultTimeout,
@@ -101,8 +162,7 @@ func (k *openshift) getServiceName(driver node.Driver, n node.Node) (string, err
 	return kube.SystemdSchedServiceName, nil
 }
 
-func (k *openshift) StartSchedOnNode(n node.Node) error {
-	driver, _ := node.Get(k.K8s.NodeDriverName)
+func (k *Openshift) StartSchedOnNode(n node.Node) error {
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         kube.DefaultTimeout,
@@ -110,7 +170,7 @@ func (k *openshift) StartSchedOnNode(n node.Node) error {
 		},
 		Action: "start",
 	}
-	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	err := k.NodeDriver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStartSchedOnNode{
 			Node:          n,
@@ -121,7 +181,7 @@ func (k *openshift) StartSchedOnNode(n node.Node) error {
 	return nil
 }
 
-func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+func (k *Openshift) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var apps []*spec.AppSpec
 	if len(options.AppKeys) > 0 {
 		for _, key := range options.AppKeys {
@@ -180,7 +240,7 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 }
 
 // ScheduleWithCustomAppSpecs Schedules the application with custom app specs
-func (k *openshift) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+func (k *Openshift) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var contexts []*scheduler.Context
 	oldOptionsNamespace := options.Namespace
 	for _, app := range apps {
@@ -225,18 +285,16 @@ func (k *openshift) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID 
 	return contexts, nil
 }
 
-func (k *openshift) SaveSchedulerLogsToFile(n node.Node, location string) error {
-	driver, _ := node.Get(k.K8s.NodeDriverName)
-
+func (k *Openshift) SaveSchedulerLogsToFile(n node.Node, location string) error {
 	usableServiceName := SystemdSchedServiceName
-	if serviceName, err := k.getServiceName(driver, n); err == nil {
+	if serviceName, err := k.getServiceName(k.NodeDriver, n); err == nil {
 		usableServiceName = serviceName
 	} else {
 		return err
 	}
 
 	cmd := fmt.Sprintf("journalctl -lu %s* > %s/kubelet.log", usableServiceName, location)
-	_, err := driver.RunCommand(n, cmd, node.ConnectionOpts{
+	_, err := k.NodeDriver.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         kube.DefaultTimeout,
 		TimeBeforeRetry: kube.DefaultRetryInterval,
 		Sudo:            true,
@@ -244,9 +302,9 @@ func (k *openshift) SaveSchedulerLogsToFile(n node.Node, location string) error 
 	return err
 }
 
-func (k *openshift) updateSecurityContextConstraints(namespace string) error {
+func (k *Openshift) updateSecurityContextConstraints(namespace string) error {
 	// Get privileged context
-	context, err := k8sOpenshift.GetSecurityContextConstraints("privileged")
+	context, err := k.k8sOpenshift.GetSecurityContextConstraints("privileged")
 	if err != nil {
 		return err
 	}
@@ -255,7 +313,7 @@ func (k *openshift) updateSecurityContextConstraints(namespace string) error {
 	context.Users = append(context.Users, "system:serviceaccount:"+namespace+":default")
 
 	// Update context
-	_, err = k8sOpenshift.UpdateSecurityContextConstraints(context)
+	_, err = k.k8sOpenshift.UpdateSecurityContextConstraints(context)
 	if err != nil {
 		return err
 	}
@@ -263,7 +321,7 @@ func (k *openshift) updateSecurityContextConstraints(namespace string) error {
 	return nil
 }
 
-func (k *openshift) UpgradeScheduler(version string) error {
+func (k *Openshift) UpgradeScheduler(version string) error {
 	var err error
 
 	if err = downloadOCP4Client(version); err != nil {
@@ -284,7 +342,7 @@ func (k *openshift) UpgradeScheduler(version string) error {
 		return err
 	}
 
-	if err := fixOCPClusterStorageOperator(upgradeVersion); err != nil {
+	if err := k.fixOCPClusterStorageOperator(upgradeVersion); err != nil {
 		return err
 	}
 
@@ -292,30 +350,30 @@ func (k *openshift) UpgradeScheduler(version string) error {
 		return err
 	}
 
-	if err := startUpgrade(upgradeVersion); err != nil {
+	if err := k.startUpgrade(upgradeVersion); err != nil {
 		return err
 	}
 
-	if err := waitUpgradeCompletion(clientVersion); err != nil {
+	if err := k.waitUpgradeCompletion(clientVersion); err != nil {
 		return err
 	}
 
 	log.Info("Waiting for all the nodes to become ready...")
-	if err := waitNodesToBeReady(); err != nil {
+	if err := k.waitNodesToBeReady(); err != nil {
 		return err
 	}
-	log.Info(getCluterInfo())
+	log.Info(k.getCluterInfo())
 
 	log.Infof("Cluster is now %s", upgradeVersion)
 	return nil
 }
 
-func getCluterInfo() string {
+func (k *Openshift) getCluterInfo() string {
 	var output interface{}
 	var err error
 
 	t := func() (interface{}, bool, error) {
-		nodeList, err := k8sCore.GetNodes()
+		nodeList, err := k.K8sCore.GetNodes()
 		if err != nil {
 			return "", true, fmt.Errorf("failed to get nodes. cause: %v", err)
 		}
@@ -447,7 +505,7 @@ func getImageSha(ocpVersion string) (string, error) {
 	return "", fmt.Errorf("Failed to find Image sha: in  %s", downloadURL)
 }
 
-func startUpgrade(upgradeVersion string) error {
+func (k *Openshift) startUpgrade(upgradeVersion string) error {
 	var output []byte
 	var err error
 	var shaName string
@@ -491,7 +549,7 @@ func startUpgrade(upgradeVersion string) error {
 		return err
 	}
 	t = func() (interface{}, bool, error) {
-		clusterVersion, err := k8sOpenshift.GetClusterVersion("version")
+		clusterVersion, err := k.k8sOpenshift.GetClusterVersion("version")
 		if err != nil {
 			return nil, true, fmt.Errorf("failed to get cluster version. cause: %v", err)
 		}
@@ -508,11 +566,11 @@ func startUpgrade(upgradeVersion string) error {
 	return err
 }
 
-func waitUpgradeCompletion(upgradeVersion string) error {
+func (k *Openshift) waitUpgradeCompletion(upgradeVersion string) error {
 	var err error
 
 	t := func() (interface{}, bool, error) {
-		clusterVersion, err := k8sOpenshift.GetClusterVersion("version")
+		clusterVersion, err := k.k8sOpenshift.GetClusterVersion("version")
 		if err != nil {
 			return nil, true, fmt.Errorf("failed to get cluster version. cause: %v", err)
 		}
@@ -540,7 +598,7 @@ func waitUpgradeCompletion(upgradeVersion string) error {
 }
 
 // waitNodesToBeReady waits for all nodes to become Ready and using the same k8s version
-func waitNodesToBeReady() error {
+func (k *Openshift) waitNodesToBeReady() error {
 	var err error
 
 	t := func() (interface{}, bool, error) {
@@ -548,7 +606,7 @@ func waitNodesToBeReady() error {
 		var k8sVersions = make(map[string]string)
 		var versionSet = make(map[string]bool)
 
-		nodeList, err := k8sCore.GetNodes()
+		nodeList, err := k.K8sCore.GetNodes()
 		if err != nil {
 			return nil, true, fmt.Errorf("failed to get nodes. cause: %v", err)
 		}
@@ -661,7 +719,7 @@ func downloadOCP4Client(ocpVersion string) error {
 }
 
 // workaround for https://portworx.atlassian.net/browse/PWX-20465
-func fixOCPClusterStorageOperator(version string) error {
+func (k *Openshift) fixOCPClusterStorageOperator(version string) error {
 	parsedVersion, err := getParsedVersion(version)
 	if err != nil {
 		return err
@@ -679,14 +737,14 @@ func fixOCPClusterStorageOperator(version string) error {
 		log.Infof("Found version %s which uses alphav1 version of snapshot", version)
 		log.Warn("This upgrade requires all snapshots to be deleted.")
 
-		namespaces, err := k8sCore.ListNamespaces(nil)
+		namespaces, err := k.K8sCore.ListNamespaces(nil)
 		if err != nil {
 			return err
 		}
 
 		log.Info("Deleting volume snapshots")
 		for _, ns := range namespaces.Items {
-			snaps, err := snapshoterOps.ListSnapshots(ns.Name)
+			snaps, err := k.K8sExternalsnap.ListSnapshots(ns.Name)
 			if k8serrors.IsNotFound(err) {
 				log.Infof("No snapshots found for namespace %s", ns.Name)
 				continue
@@ -695,7 +753,7 @@ func fixOCPClusterStorageOperator(version string) error {
 				return err
 			}
 			for _, snap := range snaps.Items {
-				if err = snapshoterOps.DeleteSnapshot(snap.Name, snap.Namespace); err != nil {
+				if err = k.K8sExternalsnap.DeleteSnapshot(snap.Name, snap.Namespace); err != nil {
 					return err
 				}
 				log.Infof("Deleted snapshot [%s]%s", snap.Namespace, snap.Name)
@@ -704,7 +762,7 @@ func fixOCPClusterStorageOperator(version string) error {
 
 		log.Info("Removing CRDs")
 		for _, crd := range volumeSnapshotCRDs {
-			err = crdOps.DeleteCRD(crd)
+			err = k.K8sApiExtensions.DeleteCRD(crd)
 			if k8serrors.IsNotFound(err) {
 				log.Infof("CRD %s not found", crd)
 				continue
@@ -743,7 +801,7 @@ func ackAPIRemoval(version string) error {
 }
 
 // Check for newly create OCP node and retun OCP node
-func (k *openshift) checkAndGetNewNode() (string, error) {
+func (k *Openshift) checkAndGetNewNode() (string, error) {
 	var err error
 	var newNodeName string
 
@@ -772,12 +830,11 @@ func (k *openshift) checkAndGetNewNode() (string, error) {
 }
 
 // Waits for newly provisioned OCP node to be ready and running
-func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
+func (k *Openshift) getAndWaitMachineToBeReady() (string, error) {
 	var err error
 	var isTriedOnce bool = false
 	var provState string = "Provisioned"
-	var driverName = k.K8s.NodeDriverName
-	log.Info("Using Node Driver: ", driverName)
+	log.Info("Using Node Driver: ", k.NodeDriver.String())
 
 	t := func() (interface{}, bool, error) {
 
@@ -795,13 +852,12 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 		} else if strings.ToLower(result[1]) != "running" {
 			// Observed that OCP unable to power-on VM sometimes for vSphere driver
 			// Trying to power on the new VM once
-			if result[1] == provState && driverName == vsphere.DriverName && !isTriedOnce {
+			if result[1] == provState && k.NodeDriver.String() == vsphere.DriverName && !isTriedOnce {
 				isTriedOnce = true
-				driver, _ := node.Get(driverName)
-				if err = driver.AddMachine(result[0]); err != nil {
+				if err = k.NodeDriver.AddMachine(result[0]); err != nil {
 					return result[0], true, err
 				}
-				if err = driver.PowerOnVMByName(result[0]); err != nil {
+				if err = k.NodeDriver.PowerOnVMByName(result[0]); err != nil {
 					return result[0], true, err
 				}
 			}
@@ -826,9 +882,9 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 }
 
 // Wait for node to join k8s cluster
-func (k *openshift) waitForJoinK8sNode(node string) error {
+func (k *Openshift) waitForJoinK8sNode(node string) error {
 	t := func() (interface{}, bool, error) {
-		if err := k8sCore.IsNodeReady(node); err != nil {
+		if err := k.K8sCore.IsNodeReady(node); err != nil {
 			return "", true, fmt.Errorf(
 				"FAILED: Waiting for new node:[%s] to join k8s cluster. cause: %v", node, err,
 			)
@@ -843,7 +899,7 @@ func (k *openshift) waitForJoinK8sNode(node string) error {
 }
 
 // Delete the OCP node using kubectl command
-func (k *openshift) deleteAMachine(nodeName string) error {
+func (k *Openshift) deleteAMachine(nodeName string) error {
 	var err error
 
 	// Delete the node from machineset using kubectl command
@@ -862,34 +918,30 @@ func (k *openshift) deleteAMachine(nodeName string) error {
 }
 
 // Method to recycling OCP node
-func (k *openshift) RecycleNode(n node.Node) error {
+func (k *Openshift) RecycleNode(n node.Node) error {
 	// Check if node is valid before proceeding for delete a node
-	var worker []node.Node = node.GetWorkerNodes()
+	var worker []node.Node = k.NodeRegistry.GetWorkerNodes()
 	var delNode *api.StorageNode
 	var isStoragelessNode bool = false
-	if node.Contains(worker, n) {
+	if k.NodeRegistry.Contains(worker, n) {
+		var err error
 
 		// Check if node is meta node and set the meta flag
 		isKVDBNode := n.IsMetadataNode
 
 		// Get node info before deleting the node
-		volDriver, err := volume.Get(k.VolDriverName)
-		if err != nil {
-			return err
-		}
-
-		if delNode, err = volDriver.GetDriverNode(&n); err != nil {
+		if delNode, err = k.VolumeDriver.GetDriverNode(&n); err != nil {
 			return err
 		}
 
 		// Get storageless nodes
-		storagelessNodes, err := volDriver.GetStoragelessNodes()
+		storagelessNodes, err := k.VolumeDriver.GetStoragelessNodes()
 		if err != nil {
 			return err
 		}
 
 		// Checking if given node is storageless node
-		if volDriver.Contains(storagelessNodes, delNode) {
+		if k.VolumeDriver.Contains(storagelessNodes, delNode) {
 			log.Infof(
 				"PX node [%s] is storageless node and pool validation is not needed",
 				delNode.Hostname,
@@ -916,10 +968,8 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		log.Infof("Recycling the node [%s] having NodeID: [%s]", n.Name, delNode.Id)
 
 		// PowerOff machine before deleting the machine for vSphere driver
-		var driverName = k.K8s.NodeDriverName
-		if driverName == vsphere.DriverName {
-			driver, _ := node.Get(driverName)
-			driver.PowerOffVM(n)
+		if k.NodeDriver.String() == vsphere.DriverName {
+			k.NodeDriver.PowerOffVM(n)
 		}
 		err = k.deleteAMachine(n.Name)
 		if err != nil {
@@ -928,7 +978,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		}
 
 		// Removing the node from the nodeRegistry
-		err = node.DeleteNode(n)
+		err = k.NodeRegistry.DeleteNode(n)
 		if err != nil {
 			return &scheduler.ErrFailedToUpdateNodeList{
 				Node: n.Name,
@@ -949,13 +999,13 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		}
 
 		// Getting k8s node
-		newNode, err := k8sCore.GetNodeByName(newOCPNode)
+		newNode, err := k.K8sCore.GetNodeByName(newOCPNode)
 		if err != nil {
 			return err
 		}
 
 		//Adding a new node to a nodeRegistry
-		if err = k.AddNewNode(*newNode); err != nil {
+		if err = k.AddNewNode(k.NodeDriver.String(), *newNode); err != nil {
 			return &scheduler.ErrFailedToUpdateNodeList{
 				Node: newOCPNode,
 				Cause: fmt.Sprintf(
@@ -964,39 +1014,39 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		}
 
 		// Getting the node object for a new node
-		newlyProvNode, err := node.GetNodeByName(newOCPNode)
+		newlyProvNode, err := k.NodeRegistry.GetNodeByName(newOCPNode)
 
 		if err != nil {
 			return err
 		}
 
 		// Waits for px pod to be up in new node
-		if err = volDriver.WaitForPxPodsToBeUp(newlyProvNode); err != nil {
+		if err = k.VolumeDriver.WaitForPxPodsToBeUp(newlyProvNode); err != nil {
 			return err
 		}
 
 		// Validation is needed only when deleted node was StorageNode
-		if err = k.validateDrivesAfterNewNodePickUptheID(delNode, volDriver,
+		if err = k.validateDrivesAfterNewNodePickUptheID(delNode, k.VolumeDriver,
 			storagelessNodes, isStoragelessNode,
 		); err != nil {
 			return err
 		}
 
 		// Update the new node object with storage information
-		if err = volDriver.UpdateNodeWithStorageInfo(newlyProvNode, n.Name); err != nil {
+		if err = k.VolumeDriver.UpdateNodeWithStorageInfo(newlyProvNode, n.Name); err != nil {
 			return err
 		}
 		log.Infof("Successfully updated the storage info for new node: [%s] ", newlyProvNode.Name)
 
 		// Getting the new node object after storage info updated
-		newlyProvNode, err = node.GetNodeByName(newlyProvNode.Name)
+		newlyProvNode, err = k.NodeRegistry.GetNodeByName(newlyProvNode.Name)
 		if err != nil {
 			return err
 		}
 
 		log.Infof("Waiting for driver to be come up on node: [%s] ", newlyProvNode.Name)
 		// Waiting and make sure driver to come up successfuly on newly provisoned node
-		if err = volDriver.WaitDriverUpOnNode(newlyProvNode, driverUpTimeout); err != nil {
+		if err = k.VolumeDriver.WaitDriverUpOnNode(newlyProvNode, driverUpTimeout); err != nil {
 			return err
 		}
 		log.Infof("Driver came up successfully on node: [%s] ", newlyProvNode.Name)
@@ -1007,7 +1057,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 	return fmt.Errorf("FAILED: Node is not a worker node")
 }
 
-func (k *openshift) validateDrivesAfterNewNodePickUptheID(delNode *api.StorageNode,
+func (k *Openshift) validateDrivesAfterNewNodePickUptheID(delNode *api.StorageNode,
 	volDriver volume.Driver, storagelessNodes []*api.StorageNode, isStoragelessNode bool) error {
 
 	log.Infof("Validating the pools and drives on new node")
@@ -1036,7 +1086,7 @@ func (k *openshift) validateDrivesAfterNewNodePickUptheID(delNode *api.StorageNo
 }
 
 // String returns the string name of this driver.
-func (k *openshift) String() string {
+func (k *Openshift) String() string {
 	return SchedName
 }
 
@@ -1068,6 +1118,6 @@ func getParsedVersion(version string) (semver.Version, error) {
 }
 
 func init() {
-	k := &openshift{}
+	k := &Openshift{}
 	scheduler.Register(SchedName, k)
 }

@@ -9,8 +9,7 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/backup/portworx"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
@@ -39,12 +38,12 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
+				if _, ok := pxbackup.AppParameters[appList[i]]["post_action_list"]; ok {
 					dash.VerifyFatal(ok, true, fmt.Sprintf("Post Rule details mentioned for the apps %s", appList[i]))
 				}
 			}
 			if Contains(preRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["pre_action_list"]; ok {
+				if _, ok := pxbackup.AppParameters[appList[i]]["pre_action_list"]; ok {
 					dash.VerifyFatal(ok, true, fmt.Sprintf("Pre Rule details mentioned for the apps %s", appList[i]))
 				}
 			}
@@ -87,7 +86,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				CredName := fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -133,7 +132,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		})
 
 		Step("Register cluster for backup", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -147,7 +146,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		Step("Taking backup of application to locked and unlocked bucket", func() {
 			for _, namespace := range bkpNamespaces {
 				for backupLocationUID, backupLocationName := range BackupLocationMap {
-					ctx, err := backup.GetAdminCtxFromSecret()
+					ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
@@ -160,7 +159,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			}
 		})
 		Step("Restoring the backups application", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for range bkpNamespaces {
 				for _, backupName := range backupList {
@@ -189,7 +188,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			err := DeleteCloudCredential(CredName, orgID, CloudCredUID)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", CredName))
 		}
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		log.Infof("Deleting registered clusters for admin context")
@@ -230,12 +229,12 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
+				if _, ok := pxbackup.AppParameters[appList[i]]["post_action_list"]; ok {
 					dash.VerifyFatal(ok, true, "Post Rule details mentioned for the apps")
 				}
 			}
 			if Contains(preRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["pre_action_list"]; ok {
+				if _, ok := pxbackup.AppParameters[appList[i]]["pre_action_list"]; ok {
 					dash.VerifyFatal(ok, true, "Pre Rule details mentioned for the apps")
 				}
 			}
@@ -278,7 +277,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -309,7 +308,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		})
 
 		Step("Register cluster for backup", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -323,7 +322,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		for _, namespace := range bkpNamespaces {
 			for backupLocationUID, backupLocationName := range BackupLocationMap {
 				Step("Taking backup of application to locked bucket", func() {
-					ctx, err := backup.GetAdminCtxFromSecret()
+					ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
@@ -334,7 +333,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				})
 				Step("Restoring the backups application", func() {
-					ctx, err := backup.GetAdminCtxFromSecret()
+					ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
 					err = CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
 					log.FailOnError(err, "%s restore failed", fmt.Sprintf("%s-restore", backupName))
@@ -405,7 +404,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting backup location, cloud creds and clusters")
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx)
 	})
@@ -442,12 +441,12 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
+				if _, ok := pxbackup.AppParameters[appList[i]]["post_action_list"]; ok {
 					dash.VerifyFatal(ok, true, fmt.Sprintf("Post Rule details mentioned for the app %v", appList[i]))
 				}
 			}
 			if Contains(preRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["pre_action_list"]; ok {
+				if _, ok := pxbackup.AppParameters[appList[i]]["pre_action_list"]; ok {
 					dash.VerifyFatal(ok, true, fmt.Sprintf("Pre Rule details mentioned for the app %v", appList[i]))
 				}
 			}
@@ -485,7 +484,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		})
 		Step("Creating cloud credentials", func() {
 			log.InfoD("Creating cloud credentials")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to px-central-admin ctx")
 			for _, provider := range providers {
 				credName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
@@ -513,7 +512,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		})
 		Step("Configure source and destination clusters with px-central-admin ctx", func() {
 			log.InfoD("Configure source and destination clusters with px-central-admin ctx")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -523,7 +522,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		})
 		Step("Create schedule policy", func() {
 			log.InfoD("Create schedule policy")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Unable to px-central-admin ctx")
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
 			periodicSchedulePolicyUid = uuid.New()
@@ -591,7 +590,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 				})
 				Step("Create schedule backup after initializing volume resize", func() {
 					log.InfoD("Create schedule backup after initializing volume resize")
-					ctx, err := backup.GetAdminCtxFromSecret()
+					ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 					log.FailOnError(err, "Unable to px-central-admin ctx")
 					preRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[i])
 					log.FailOnError(err, "Unable to fetch pre rule Uid")
@@ -605,7 +604,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 				})
 				Step("Verifying backup success after initializing volume resize", func() {
 					log.InfoD("Verifying backup success after initializing volume resize")
-					ctx, err := backup.GetAdminCtxFromSecret()
+					ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 					log.FailOnError(err, "Unable to px-central-admin ctx")
 					allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v", allScheduleBackupNames))
@@ -623,7 +622,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Unable to px-central-admin ctx")
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)

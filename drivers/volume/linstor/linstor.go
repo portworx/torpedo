@@ -10,8 +10,8 @@ import (
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -25,24 +25,27 @@ const (
 )
 
 // provisioners types of supported provisioners
-var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
+var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisioner{
 	LinstorStorage: "linstor.csi.linbit.com",
 }
 
-var k8sCore = core.Instance()
-
 type linstor struct {
-	schedOps schedops.Driver
-	cli      *lclient.Client
 	torpedovolume.DefaultDriver
+
+	cli *lclient.Client
+
+	// below are pointers (manipulate carefully)
+
+	k8sCore core.Ops
 }
 
 func (d *linstor) String() string {
 	return string(LinstorStorage)
 }
 
-func (d *linstor) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	log.Infof("Using the LINSTOR volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+func (d *linstor) Init(volOpts volume.InitOptions) error {
+	log.Infof("Using the LINSTOR volume driver with provisioner %s under scheduler: %v", volOpts.StorageProvisionerType, volOpts.SchedulerDriverName)
+	d.k8sCore = volOpts.K8sCore
 
 	// Configuration of linstor client happens via environment variables:
 	// * LS_CONTROLLERS
@@ -59,11 +62,12 @@ func (d *linstor) Init(sched, nodeDriver, token, storageProvisioner, csiGenericD
 	d.cli = client
 
 	// Set provisioner for torpedo
-	if storageProvisioner != "" {
-		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
-			torpedovolume.StorageProvisioner = p
+	d.StorageDriver = string(LinstorStorage)
+	if volOpts.StorageProvisionerType != "" {
+		if p, ok := provisioners[volOpts.StorageProvisionerType]; ok {
+			d.StorageProvisioner = p
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, storageProvisioner)
+			return fmt.Errorf("volume driver [%s], does not support provisioner corresponding to type [%s]", DriverName, volOpts.StorageProvisionerType)
 		}
 	} else {
 		return fmt.Errorf("Provisioner is empty for volume driver: %s", DriverName)
@@ -74,7 +78,7 @@ func (d *linstor) Init(sched, nodeDriver, token, storageProvisioner, csiGenericD
 func (d *linstor) StopDriver(nodes []node.Node, force bool, triggerOpts *driver_api.TriggerOptions) error {
 	stopFn := func() error {
 		for _, n := range nodes {
-			err := k8sCore.RemoveLabelOnNode(n.Name, "linstor.linbit.com/linstor-node")
+			err := d.k8sCore.RemoveLabelOnNode(n.Name, "linstor.linbit.com/linstor-node")
 			if err != nil {
 				return fmt.Errorf("Failed to set label on node %q: %w", n.Name, err)
 			}
@@ -87,7 +91,7 @@ func (d *linstor) StopDriver(nodes []node.Node, force bool, triggerOpts *driver_
 }
 
 func (d *linstor) StartDriver(n node.Node) error {
-	err := k8sCore.AddLabelOnNode(n.Name, "linstor.linbit.com/linstor-node", "true")
+	err := d.k8sCore.AddLabelOnNode(n.Name, "linstor.linbit.com/linstor-node", "true")
 	if err != nil {
 		return fmt.Errorf("Failed to set label on node %q: %w", n.Name, err)
 	}
@@ -120,6 +124,13 @@ func (d *linstor) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 
 	log.Debugf("LINSTOR is fully operational on node: %s", n.Name)
 	return nil
+}
+
+// DeepCopy deep copies the driver instance
+func (d *linstor) DeepCopy() volume.Driver {
+	out := *d
+	//FIX: shallow created, not deep copy
+	return &out
 }
 
 func init() {

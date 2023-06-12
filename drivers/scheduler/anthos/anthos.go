@@ -15,7 +15,6 @@ import (
 	"github.com/hashicorp/go-version"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
@@ -147,26 +146,44 @@ type AnthosInstance struct {
 	Lease        int
 }
 
-type anthos struct {
+type Anthos struct {
 	version string
 	kube.K8s
-	adminWsSSHInstance *ssh.SSH
-	instances          []AnthosInstance
-	adminWsNode        *node.Node
-	adminWsKeyPath     string
-	instPath           string
-	confPath           string
+	adminWsNodeDriver node.Driver
+	instances         []AnthosInstance
+	adminWsNode       *node.Node
+	adminWsKeyPath    string
+	instPath          string
+	confPath          string
+}
+
+// DeepCopy deep copies the driver instance
+func (anth *Anthos) DeepCopy() scheduler.Driver {
+	if anth == nil {
+		return nil
+	}
+	out := *anth
+	//TODO: properly deepcopy lock
+	if anth.adminWsNodeDriver != nil {
+		out.adminWsNodeDriver = anth.adminWsNodeDriver.DeepCopy()
+	}
+	if anth.adminWsNode != nil {
+		adminWsNode := *anth.adminWsNode
+		out.adminWsNode = &adminWsNode
+	}
+
+	return &out
 }
 
 // Init Initialize the driver
-func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
+func (anth *Anthos) Init(schedOpts scheduler.InitOptions) error {
 	if schedOpts.AnthosAdminWorkStationNodeIP == "" {
 		return fmt.Errorf("anthos admin workstation node is must for anthos scheduler")
 	}
 	if schedOpts.AnthosInstancePath == "" {
 		return fmt.Errorf("anthos conf path is needed for anthos scheduler")
 	}
-	anth.adminWsSSHInstance = &ssh.SSH{}
+	// TODO: anth.adminWsNodeDriver =
 	anth.adminWsNode = &node.Node{}
 	anth.instPath = schedOpts.AnthosInstancePath
 	anth.confPath = path.Join(anth.instPath, clusterGrpPath)
@@ -180,7 +197,7 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 	if err := anth.setUserNameAndKey(); err != nil {
 		return err
 	}
-	if err := anth.adminWsSSHInstance.Init(node.InitOptions{SpecDir: schedOpts.SpecDir}); err != nil {
+	if err := anth.adminWsNodeDriver.Init(node.InitOptions{SpecDir: schedOpts.SpecDir}); err != nil {
 		return err
 	}
 	if err := anth.unsetUserNameAndKey(); err != nil {
@@ -193,7 +210,7 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 }
 
 // execOnAdminWSNode execute command on admin workstation node
-func (anth *anthos) execOnAdminWSNode(cmd string) (string, error) {
+func (anth *Anthos) execOnAdminWSNode(cmd string) (string, error) {
 	if err := anth.setUserNameAndKey(); err != nil {
 		return "", err
 	}
@@ -202,7 +219,7 @@ func (anth *anthos) execOnAdminWSNode(cmd string) (string, error) {
 		TimeBeforeRetry: kube.DefaultRetryInterval,
 		Sudo:            true,
 	}
-	out, err := anth.adminWsSSHInstance.RunCommand(*anth.adminWsNode, cmd, connectOpts)
+	out, err := anth.adminWsNodeDriver.RunCommand(*anth.adminWsNode, cmd, connectOpts)
 	if err != nil {
 		return out, err
 	}
@@ -213,7 +230,7 @@ func (anth *anthos) execOnAdminWSNode(cmd string) (string, error) {
 }
 
 // getVersion get anthos current version
-func (anth *anthos) getVersion() error {
+func (anth *Anthos) getVersion() error {
 	cmd := "gkectl version"
 	out, err := anth.execOnAdminWSNode(cmd)
 	if err != nil {
@@ -228,7 +245,7 @@ func (anth *anthos) getVersion() error {
 }
 
 // UpgradeScheduler upgrade anthos scheduler and return time taken by user-cluster to upgrade
-func (anth *anthos) UpgradeScheduler(version string) error {
+func (anth *Anthos) UpgradeScheduler(version string) error {
 	log.Info("Upgrading Anthos user cluster")
 	if !versionReg.MatchString(version) {
 		return fmt.Errorf("incorrect upgrade version: [%s] is provided", version)
@@ -261,7 +278,7 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 }
 
 // invokeUpgradeAdminCluster start admin cluster upgrade
-func (anth *anthos) invokeUpgradeAdminCluster(version string) error {
+func (anth *Anthos) invokeUpgradeAdminCluster(version string) error {
 	log.Info("Upgrading admin cluster")
 	initTime := time.Now()
 	if err := anth.upgradeAdminCluster(version); err != nil {
@@ -280,7 +297,7 @@ func (anth *anthos) invokeUpgradeAdminCluster(version string) error {
 }
 
 // updateNodeInstance will update the host info after upgrade
-func (anth *anthos) updateNodeInstance() error {
+func (anth *Anthos) updateNodeInstance() error {
 	log.Info("Updating node Instance")
 	var startAdminNodeIndex int = 2
 	var lastAdminNodeIndex int = 4
@@ -306,7 +323,7 @@ func (anth *anthos) updateNodeInstance() error {
 }
 
 // saveInstance save the instances.json after upgrade
-func (anth *anthos) saveInstance() error {
+func (anth *Anthos) saveInstance() error {
 	log.Debug("Saving instances.json")
 	b, err := json.MarshalIndent(anth.instances, "", "  ")
 	if err != nil {
@@ -319,7 +336,7 @@ func (anth *anthos) saveInstance() error {
 }
 
 // verifyUpgradeVersion validates that correct version is provided for upgrade or not
-func (anth *anthos) VerifyUpgradeVersion(upgradeVersion string) error {
+func (anth *Anthos) VerifyUpgradeVersion(upgradeVersion string) error {
 	log.Infof("Checking the upgrade from version: [%s] to version: [%s]",
 		anth.version, upgradeVersion)
 	var vReg = regexp.MustCompile(`(^\w).(\w+).(\w+)`)
@@ -359,7 +376,7 @@ func (anth *anthos) VerifyUpgradeVersion(upgradeVersion string) error {
 }
 
 // updateGkeadmUtil update gkeadm version to given version
-func (anth *anthos) updateGkeadmUtil(version string) error {
+func (anth *Anthos) updateGkeadmUtil(version string) error {
 	log.Infof("Updating gkeadm to version: [%s]", version)
 	src := fmt.Sprintf("gs://gke-on-prem-release/gkeadm/%s/linux/gkeadm", version)
 	if out, err := exec.Command(gsUtilCmd, "cp", src, anth.confPath).CombinedOutput(); err != nil {
@@ -373,7 +390,7 @@ func (anth *anthos) updateGkeadmUtil(version string) error {
 }
 
 // upgradeAdminWorkstation upgrade admin work-station node
-func (anth *anthos) upgradeAdminWorkstation(version string) error {
+func (anth *Anthos) upgradeAdminWorkstation(version string) error {
 	log.Infof("upgrading admin workstation node to version: %s", version)
 	var re = regexp.MustCompile(`(?m)ubuntu\@([\d.]+)`)
 	if err := anth.updateGkeadmUtil(version); err != nil {
@@ -409,7 +426,7 @@ func (anth *anthos) upgradeAdminWorkstation(version string) error {
 	if err := anth.setUserNameAndKey(); err != nil {
 		return err
 	}
-	err = anth.adminWsSSHInstance.TestConnection(*anth.adminWsNode, node.ConnectionOpts{
+	err = anth.adminWsNodeDriver.TestConnection(*anth.adminWsNode, node.ConnectionOpts{
 		Timeout:         defaultTestConnectionTimeout,
 		TimeBeforeRetry: defaultWaitUpgradeRetry,
 	})
@@ -425,7 +442,7 @@ func (anth *anthos) upgradeAdminWorkstation(version string) error {
 }
 
 // upgradeUserCluster upgrade user cluster to newer version
-func (anth *anthos) upgradeUserCluster(version string) error {
+func (anth *Anthos) upgradeUserCluster(version string) error {
 	log.Infof("Upgrading user cluster to a newer version: %s", version)
 	var cmd = fmt.Sprintf("%s%s.tgz  --kubeconfig /home/ubuntu/kubeconfig", upgradePrepareCmd, version)
 	if out, err := anth.execOnAdminWSNode(cmd); err != nil {
@@ -441,7 +458,7 @@ func (anth *anthos) upgradeUserCluster(version string) error {
 }
 
 // upgradeAdminCluster upgrades admin cluster
-func (anth *anthos) upgradeAdminCluster(version string) error {
+func (anth *Anthos) upgradeAdminCluster(version string) error {
 	log.Infof("Upgrading admin cluster to a newer version: %s", version)
 	var cmd = fmt.Sprintf("cp /home/ubuntu/%s ~/", vcenterCrtFile)
 	if _, err := anth.execOnAdminWSNode(cmd); err != nil {
@@ -461,7 +478,7 @@ func (anth *anthos) upgradeAdminCluster(version string) error {
 }
 
 // loadInstance load the instances.json file
-func (anth *anthos) loadInstances() error {
+func (anth *Anthos) loadInstances() error {
 	log.Info("Loading the anthos admin instance")
 	var instances []AnthosInstance
 	b, err := ioutil.ReadFile(anth.instPath + "/instances.json")
@@ -476,7 +493,7 @@ func (anth *anthos) loadInstances() error {
 }
 
 // updateAdminWorkstationNode update container paths in admin-ws-config
-func (anth *anthos) updateAdminWorkstationNode() error {
+func (anth *Anthos) updateAdminWorkstationNode() error {
 	log.Info("Updating admin workstation configs")
 	adminWsConfigPath := path.Join(anth.confPath, adminWsConfFile)
 	adminWsConfigYaml, err := os.Open(adminWsConfigPath)
@@ -508,7 +525,7 @@ func (anth *anthos) updateAdminWorkstationNode() error {
 }
 
 // setUserNameAndKey set torpedo username and keypath
-func (anth *anthos) setUserNameAndKey() error {
+func (anth *Anthos) setUserNameAndKey() error {
 	if err := os.Setenv("TORPEDO_SSH_KEY", anth.adminWsKeyPath); err != nil {
 		return err
 	}
@@ -519,7 +536,7 @@ func (anth *anthos) setUserNameAndKey() error {
 }
 
 // unsetUserNameAndKey unset torpedo username and keyPath
-func (anth *anthos) unsetUserNameAndKey() error {
+func (anth *Anthos) unsetUserNameAndKey() error {
 	if err := os.Unsetenv("TORPEDO_SSH_KEY"); err != nil {
 		return err
 	}
@@ -582,6 +599,6 @@ func getExecPath() (string, error) {
 
 // init registering anthos sheduler
 func init() {
-	anthos := &anthos{}
+	anthos := &Anthos{}
 	scheduler.Register(SchedName, anthos)
 }

@@ -78,10 +78,22 @@ type MetadataNode struct {
 
 // DefaultDriver implements defaults for Driver interface
 type DefaultDriver struct {
+	StorageDriver      string
+	StorageProvisioner StorageProvisioner
 }
 
 func (d *DefaultDriver) String() string {
 	return ""
+}
+
+// GetStorageProvisioner storage provsioner name to be used with Torpedo
+func (d *DefaultDriver) GetStorageProvisioner() string {
+	return string(d.StorageProvisioner)
+}
+
+// GetStorageDriver storage driver name to be used with Torpedo
+func (d *DefaultDriver) GetStorageDriver() string {
+	return string(d.StorageDriver)
 }
 
 func (d *DefaultDriver) GetVolumeDriverNamespace() (string, error) {
@@ -93,8 +105,7 @@ func (d *DefaultDriver) GetVolumeDriverNamespace() (string, error) {
 }
 
 // Init initializes the volume driver under the given scheduler
-func (d *DefaultDriver) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	StorageProvisioner = DefaultStorageProvisioner
+func (d *DefaultDriver) Init() error {
 	return nil
 }
 

@@ -1,15 +1,12 @@
 package k8s
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	random "math/rand"
 	"os"
 	"os/exec"
@@ -19,13 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"text/template"
 	"time"
 
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
-
-	yaml2 "gopkg.in/yaml.v2"
 
 	docker_types "github.com/docker/docker/api/types"
 	vaultapi "github.com/hashicorp/vault/api"
@@ -55,6 +49,7 @@ import (
 	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s/parser"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
@@ -79,14 +74,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"helm.sh/helm/v3/pkg/cli"
 )
 
 const (
@@ -113,8 +106,8 @@ const (
 	PureFile = "pure_file"
 	// PureBlock is the parameter in storageclass to represent FA direct access volumes
 	PureBlock = "pure_block"
-	// PortworxStrict provisioner for using same provisioner as provided in the spec
-	PortworxStrict = "strict"
+	// PortworxStrictProvisioner provisioner for using same provisioner as provided in the spec
+	PortworxStrictProvisioner = "strict"
 	// CsiProvisioner is csi provisioner
 	CsiProvisioner = "pxd.portworx.com"
 	//NodeType for enabling specific features
@@ -194,42 +187,17 @@ var (
 	defaultTorpedoLabel = map[string]string{
 		"creator": "torpedo",
 	}
-	k8sCore                  = core.Instance()
-	k8sApps                  = apps.Instance()
-	k8sStork                 = stork.Instance()
-	k8sStorage               = storage.Instance()
-	k8sExternalStorage       = externalstorage.Instance()
-	k8sAutopilot             = autopilot.Instance()
-	k8sRbac                  = rbac.Instance()
-	k8sNetworking            = networking.Instance()
-	k8sBatch                 = batch.Instance()
-	k8sMonitoring            = prometheus.Instance()
-	k8sPolicy                = policy.Instance()
-	k8sAdmissionRegistration = admissionregistration.Instance()
-	k8sApiExtensions         = apiextensions.Instance()
-	k8sOperator              = operator.Instance()
-
-	// k8sExternalsnap is a instance of csisnapshot instance
-	k8sExternalsnap = csisnapshot.Instance()
 	// SnapshotAPIGroup is the group for the resource being referenced.
 	SnapshotAPIGroup = "snapshot.storage.k8s.io"
 )
 
-// CustomResourceObjectYAML	Used as spec object for all CRs
-type CustomResourceObjectYAML struct {
-	Path string
-	// Namespace will only be assigned DURING creation
-	Namespace string
-	Name      string
-}
-
 // K8s  The kubernetes structure
 type K8s struct {
+	parser.K8sParser
+
 	SpecFactory                      *spec.Factory
-	NodeDriverName                   string
-	VolDriverName                    string
+	NodeRegistry                     *node.NodeRegistry
 	secretConfigMapName              string
-	customConfig                     map[string]scheduler.AppConfig
 	eventsStorage                    map[string][]scheduler.Event
 	SecretType                       string
 	VaultAddress                     string
@@ -239,12 +207,84 @@ type K8s struct {
 	RunCSISnapshotAndRestoreManyTest bool
 	helmValuesConfigMapName          string
 	secureApps                       []string
+	GlobalSchedopsInstancesUsed      bool
+	KubeConfigPath                   string
+
+	K8sCore                  core.Ops
+	K8sApps                  apps.Ops
+	K8sStork                 stork.Ops
+	K8sStorage               storage.Ops
+	K8sExternalStorage       externalstorage.Ops
+	K8sAutopilot             autopilot.Ops
+	K8sRbac                  rbac.Ops
+	K8sNetworking            networking.Ops
+	K8sBatch                 batch.Ops
+	K8sMonitoring            prometheus.Ops
+	K8sPolicy                policy.Ops
+	K8sAdmissionRegistration admissionregistration.Ops
+	K8sApiExtensions         apiextensions.Ops
+	K8sExternalsnap          csisnapshot.Ops // k8sExternalsnap is a instance of csisnapshot instance
+	K8sOperator              operator.Ops
+
+	settings *cli.EnvSettings // for helm commands
+
+	// Node driver must be set after it has been initialized. (not set in Init due to circular dep)
+	NodeDriver node.Driver
+	// Volume driver must be set after it has been initialized. (not set in Init due to circular dep)
+	VolumeDriver volume.Driver
+}
+
+// DeepCopy create a deepcopy of the driver
+func (k *K8s) DeepCopy() scheduler.Driver {
+	if k == nil {
+		return nil
+	}
+	out := *k
+	if k.NodeRegistry != nil {
+		out.NodeRegistry = &node.NodeRegistry{
+			Nodes: make(map[string]node.Node),
+		}
+		for _, node := range k.NodeRegistry.GetNodes() {
+			out.NodeRegistry.AddNode(node)
+		}
+	}
+	if k.SpecFactory != nil {
+		specFactory := *k.SpecFactory
+		out.SpecFactory = &specFactory
+	}
+	if k.CustomConfig != nil {
+		out.CustomConfig = make(map[string]scheduler.AppConfig)
+		for k, v := range k.CustomConfig {
+			out.CustomConfig[k] = v
+		}
+	}
+	if k.eventsStorage != nil {
+		out.eventsStorage = make(map[string][]scheduler.Event)
+		for k, v := range k.eventsStorage {
+			nv := make([]scheduler.Event, 0)
+			copy(nv, v)
+			out.eventsStorage[k] = nv
+		}
+	}
+	if k.secureApps != nil {
+		out.secureApps = make([]string, 0)
+		copy(out.secureApps, k.secureApps)
+	}
+	if !k.GlobalSchedopsInstancesUsed {
+		out.InitSchedops(k.KubeConfigPath)
+	}
+	if k.settings != nil {
+		settings := *k.settings
+		out.settings = &settings
+	}
+
+	return &out
 }
 
 // IsNodeReady  Check whether the cluster node is ready
 func (k *K8s) IsNodeReady(n node.Node) error {
 	t := func() (interface{}, bool, error) {
-		if err := k8sCore.IsNodeReady(n.Name); err != nil {
+		if err := k.K8sCore.IsNodeReady(n.Name); err != nil {
 			return "", true, &scheduler.ErrNodeNotReady{
 				Node:  n,
 				Cause: err.Error(),
@@ -267,10 +307,34 @@ func (k *K8s) String() string {
 
 // Init Initialize the driver
 func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
-	k.NodeDriverName = schedOpts.NodeDriverName
-	k.VolDriverName = schedOpts.VolDriverName
+	if schedOpts.UseGlobalSchedopsInstances {
+		k.GlobalSchedopsInstancesUsed = true
+		k.K8sCore = core.Instance()
+		k.K8sApps = apps.Instance()
+		k.K8sStork = stork.Instance()
+		k.K8sStorage = storage.Instance()
+		k.K8sExternalStorage = externalstorage.Instance()
+		k.K8sAutopilot = autopilot.Instance()
+		k.K8sRbac = rbac.Instance()
+		k.K8sNetworking = networking.Instance()
+		k.K8sBatch = batch.Instance()
+		k.K8sMonitoring = prometheus.Instance()
+		k.K8sPolicy = policy.Instance()
+		k.K8sAdmissionRegistration = admissionregistration.Instance()
+		k.K8sApiExtensions = apiextensions.Instance()
+		k.K8sExternalsnap = csisnapshot.Instance()
+		k.K8sOperator = operator.Instance()
+	} else {
+		k.GlobalSchedopsInstancesUsed = false
+		k.KubeConfigPath = schedOpts.KubeConfigPath
+		err := k.InitSchedops(k.KubeConfigPath)
+		if err != nil {
+			return err
+		}
+	}
+
 	k.secretConfigMapName = schedOpts.SecretConfigMapName
-	k.customConfig = schedOpts.CustomAppConfig
+	k.CustomConfig = schedOpts.CustomAppConfig
 	k.SecretType = schedOpts.SecretType
 	k.VaultAddress = schedOpts.VaultAddress
 	k.VaultToken = schedOpts.VaultToken
@@ -280,13 +344,16 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.RunCSISnapshotAndRestoreManyTest = schedOpts.RunCSISnapshotAndRestoreManyTest
 	k.secureApps = schedOpts.SecureApps
 
-	nodes, err := k8sCore.GetNodes()
+	k.NodeRegistry = &node.NodeRegistry{
+		Nodes: make(map[string]node.Node),
+	}
+	nodes, err := k.K8sCore.GetNodes()
 	if err != nil {
 		return err
 	}
 
 	for _, n := range nodes.Items {
-		if err = k.AddNewNode(n); err != nil {
+		if err = k.AddNewNode(schedOpts.NodeDriverType, n); err != nil {
 			return err
 		}
 	}
@@ -304,14 +371,14 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	}
 
 	for pod, value := range pxPodRestartCountMap {
-		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		n, err := k.NodeRegistry.GetNodeByIP(pod.Status.HostIP)
 		if err != nil {
 			log.Fatalf(fmt.Sprintf("%v", err))
 		}
 		n.PxPodRestartCount = value
 	}
 
-	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolDriverName, k)
+	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolumeDriverName, k)
 	if err != nil {
 		return err
 	}
@@ -326,19 +393,102 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 }
 
 // AddNewNode method parse and add node to node registry
-func (k *K8s) AddNewNode(newNode corev1.Node) error {
-	n := k.parseK8SNode(newNode)
+func (k *K8s) AddNewNode(nodeDriverType string, newNode corev1.Node) error {
+	n := k.parseK8SNode(nodeDriverType, newNode)
 	if err := k.IsNodeReady(n); err != nil {
 		return err
 	}
-	if err := node.AddNode(n); err != nil {
+	if err := k.NodeRegistry.AddNode(n); err != nil {
 		return err
 	}
 	return nil
 }
 
-// SetConfig sets kubeconfig. If kubeconfigPath == "" then
-// sets it to inClusterConfig
+// InitSchedops created instances of clients with kubeconfig. If kubeconfigPath is empty, then current KUBECONFIG is used
+func (k *K8s) InitSchedops(kubeconfigPath string) error {
+	var err error
+
+	k8sCore, err := core.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sApps, err := apps.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sStork, err := stork.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sStorage, err := storage.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sExternalStorage, err := externalstorage.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sAutopilot, err := autopilot.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sRbac, err := rbac.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sNetworking, err := networking.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sBatch, err := batch.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sMonitoring, err := prometheus.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sPolicy, err := policy.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sAdmissionRegistration, err := admissionregistration.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sApiExtensions, err := apiextensions.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sExternalsnap, err := csisnapshot.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	k8sOperator, err := operator.NewInstanceFromConfigFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+
+	k.K8sCore = k8sCore
+	k.K8sApps = k8sApps
+	k.K8sStork = k8sStork
+	k.K8sStorage = k8sStorage
+	k.K8sExternalStorage = k8sExternalStorage
+	k.K8sAutopilot = k8sAutopilot
+	k.K8sRbac = k8sRbac
+	k.K8sNetworking = k8sNetworking
+	k.K8sBatch = k8sBatch
+	k.K8sMonitoring = k8sMonitoring
+	k.K8sPolicy = k8sPolicy
+	k.K8sAdmissionRegistration = k8sAdmissionRegistration
+	k.K8sApiExtensions = k8sApiExtensions
+	k.K8sExternalsnap = k8sExternalsnap
+	k.K8sOperator = k8sOperator
+
+	return nil
+}
+
+// SetConfig sets kubeconfig. If kubeconfigPath == "" then sets to current KUBECONFIG
 func (k *K8s) SetConfig(kubeconfigPath string) error {
 	var config *rest.Config
 	var err error
@@ -351,22 +501,22 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 			return err
 		}
 	}
-	k8sCore.SetConfig(config)
-	k8sApps.SetConfig(config)
-	k8sApps.SetConfig(config)
-	k8sStork.SetConfig(config)
-	k8sStorage.SetConfig(config)
-	k8sExternalStorage.SetConfig(config)
-	k8sAutopilot.SetConfig(config)
-	k8sRbac.SetConfig(config)
-	k8sMonitoring.SetConfig(config)
-	k8sPolicy.SetConfig(config)
-	k8sBatch.SetConfig(config)
-	k8sMonitoring.SetConfig(config)
-	k8sAdmissionRegistration.SetConfig(config)
-	k8sExternalsnap.SetConfig(config)
-	k8sApiExtensions.SetConfig(config)
-	k8sOperator.SetConfig(config)
+
+	k.K8sCore.SetConfig(config)
+	k.K8sApps.SetConfig(config)
+	k.K8sStork.SetConfig(config)
+	k.K8sStorage.SetConfig(config)
+	k.K8sExternalStorage.SetConfig(config)
+	k.K8sAutopilot.SetConfig(config)
+	k.K8sRbac.SetConfig(config)
+	k.K8sNetworking.SetConfig(config)
+	k.K8sBatch.SetConfig(config)
+	k.K8sMonitoring.SetConfig(config)
+	k.K8sPolicy.SetConfig(config)
+	k.K8sAdmissionRegistration.SetConfig(config)
+	k.K8sApiExtensions.SetConfig(config)
+	k.K8sExternalsnap.SetConfig(config)
+	k.K8sOperator.SetConfig(config)
 
 	return nil
 }
@@ -384,345 +534,19 @@ func (k *K8s) RescanSpecs(specDir, storageDriver string) error {
 
 // RefreshNodeRegistry update the k8 node list registry
 func (k *K8s) RefreshNodeRegistry() error {
-
-	nodes, err := k8sCore.GetNodes()
+	nodes, err := k.K8sCore.GetNodes()
 	if err != nil {
 		return err
 	}
 
-	node.CleanupRegistry()
+	k.NodeRegistry.CleanupRegistry()
 
 	for _, n := range nodes.Items {
-		if err = k.AddNewNode(n); err != nil {
+		if err = k.AddNewNode(k.NodeDriver.String(), n); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// ParseSpecs parses the application spec file
-func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
-	log.Debugf("ParseSpecs k.CustomConfig = %v", k.customConfig)
-	fileList := make([]string, 0)
-	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
-		if f != nil && !f.IsDir() {
-			if isValidProvider(path, storageProvisioner) {
-				log.Debugf("	add filepath: %s", path)
-				fileList = append(fileList, path)
-			}
-		}
-
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	log.Debugf("fileList: %v", fileList)
-	var specs []interface{}
-
-	splitPath := strings.Split(specDir, "/")
-	appName := splitPath[len(splitPath)-1]
-
-	for _, fileName := range fileList {
-		isHelmChart, err := k.IsAppHelmChartType(fileName)
-		if err != nil {
-			return nil, err
-		}
-
-		splitPath := strings.Split(fileName, "/")
-		if strings.HasPrefix(splitPath[len(splitPath)-1], "cr-") {
-			// TODO: process with templates
-			specObj := &CustomResourceObjectYAML{
-				Path: fileName,
-			}
-			specs = append(specs, specObj)
-			log.Warnf("custom res: %v", specObj) //TODO: remove
-		} else if !isHelmChart {
-			file, err := ioutil.ReadFile(fileName)
-			if err != nil {
-				return nil, err
-			}
-
-			var customConfig scheduler.AppConfig
-			var ok bool
-
-			if customConfig, ok = k.customConfig[appName]; !ok {
-				customConfig = scheduler.AppConfig{}
-			} else {
-				log.Infof("customConfig[%v] = %v", appName, customConfig)
-			}
-			var funcs = template.FuncMap{
-				"Iterate": func(count int) []int {
-					var i int
-					var Items []int
-					for i = 1; i <= (count); i++ {
-						Items = append(Items, i)
-					}
-					return Items
-				},
-				"array": func(arr []string) string {
-					string := "[\""
-					for i, val := range arr {
-						if i != 0 {
-							string += "\", \""
-						}
-						string += val
-					}
-					return string + "\"]"
-				},
-			}
-
-			tmpl, err := template.New("customConfig").Funcs(funcs).Parse(string(file))
-			if err != nil {
-				return nil, err
-			}
-			var processedFile bytes.Buffer
-			err = tmpl.Execute(&processedFile, customConfig)
-			if err != nil {
-				return nil, err
-			}
-
-			reader := bufio.NewReader(&processedFile)
-			specReader := yaml.NewYAMLReader(reader)
-
-			for {
-				specContents, err := specReader.Read()
-				if err == io.EOF {
-					break
-				}
-				if len(bytes.TrimSpace(specContents)) > 0 {
-					obj, err := decodeSpec(specContents)
-					if err != nil {
-						log.Warnf("Error decoding spec from %v: %v", fileName, err)
-						return nil, err
-					}
-
-					specObj, err := validateSpec(obj)
-					if err != nil {
-						log.Warnf("Error parsing spec from %v: %v", fileName, err)
-						return nil, err
-					}
-					substituteImageWithInternalRegistry(specObj)
-					specs = append(specs, specObj)
-				}
-			}
-		} else {
-			repoInfo, err := k.ParseCharts(fileName)
-			if err != nil {
-				return nil, err
-			}
-			specs = append(specs, repoInfo)
-		}
-	}
-	return specs, nil
-}
-
-// IsAppHelmChartType will return true if the specDir has only one file and it has helm repo infos
-// else will return false
-func (k *K8s) IsAppHelmChartType(fileName string) (bool, error) {
-
-	// Parse the files and check for certain keys for helmRepo info
-
-	log.Debugf("Reading file: %s", fileName)
-	file, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return false, err
-	}
-
-	repoInfo := scheduler.HelmRepo{}
-	err = yaml2.Unmarshal(file, &repoInfo)
-	if err != nil {
-		// Ignoring if unmarshalling fails as some app specs (like fio) failed to unmarshall
-		log.Errorf("Ignoring the yaml unmarshalling failure , err: %v", err)
-		return false, nil
-	}
-
-	if repoInfo.RepoName != "" && repoInfo.ChartName != "" && repoInfo.ReleaseName != "" {
-		// If the yaml file with helmRepo info for the app is found, exit here.
-		log.Infof("Helm chart was found in file: [%s]", fileName)
-		return true, nil
-	}
-
-	return false, nil
-
-}
-
-// ParseSpecsFromYamlBuf parses the yaml buf content
-func (k *K8s) ParseSpecsFromYamlBuf(yamlBuf *bytes.Buffer) ([]interface{}, error) {
-
-	var specs []interface{}
-
-	reader := bufio.NewReader(yamlBuf)
-	specReader := yaml.NewYAMLReader(reader)
-
-	for {
-		specContents, err := specReader.Read()
-		if err == io.EOF {
-			break
-		}
-		if len(bytes.TrimSpace(specContents)) > 0 {
-			obj, err := decodeSpec(specContents)
-			if err != nil {
-				log.Warnf("Error decoding spec: %v", err)
-				return nil, err
-			}
-
-			specObj, err := validateSpec(obj)
-			if err != nil {
-				log.Warnf("Error validating spec: %v", err)
-				return nil, err
-			}
-
-			substituteImageWithInternalRegistry(specObj)
-			specs = append(specs, specObj)
-		}
-	}
-
-	return specs, nil
-}
-
-func isValidProvider(specPath, storageProvisioner string) bool {
-	// Skip all storage provisioner specific spec except storageProvisioner
-	for _, driver := range volume.GetVolumeDrivers() {
-		if driver != storageProvisioner && strings.Contains(specPath, "/"+driver+"/") {
-			return false
-		}
-	}
-	// Get the rest of specs
-	return true
-}
-
-func decodeSpec(specContents []byte) (runtime.Object, error) {
-	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
-	if err != nil {
-		schemeObj := runtime.NewScheme()
-		if err := snapv1.AddToScheme(schemeObj); err != nil {
-			return nil, err
-		}
-
-		if err := storkapi.AddToScheme(schemeObj); err != nil {
-			return nil, err
-		}
-
-		if err := apapi.AddToScheme(schemeObj); err != nil {
-			return nil, err
-		}
-
-		if err := monitoringv1.AddToScheme(schemeObj); err != nil {
-			return nil, err
-		}
-
-		if err := apiextensionsv1beta1.AddToScheme(schemeObj); err != nil {
-			return nil, err
-		}
-
-		if err := apiextensionsv1.AddToScheme(schemeObj); err != nil {
-			return nil, err
-		}
-
-		if err := storageapi.AddToScheme(schemeObj); err != nil {
-			return nil, err
-		}
-
-		codecs := serializer.NewCodecFactory(schemeObj)
-		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return obj, nil
-}
-
-func validateSpec(in interface{}) (interface{}, error) {
-	if specObj, ok := in.(*appsapi.Deployment); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*appsapi.StatefulSet); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*appsapi.DaemonSet); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*corev1.Service); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*corev1.PersistentVolumeClaim); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storageapi.StorageClass); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*snapv1.VolumeSnapshot); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.GroupVolumeSnapshot); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*corev1.Secret); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*corev1.ConfigMap); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.Rule); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*corev1.Pod); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.ClusterPair); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.Migration); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.MigrationSchedule); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.BackupLocation); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.ApplicationBackup); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.SchedulePolicy); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.ApplicationRestore); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.ApplicationClone); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.VolumeSnapshotRestore); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*apapi.AutopilotRule); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*corev1.ServiceAccount); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*rbacv1.ClusterRole); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*rbacv1.ClusterRoleBinding); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*rbacv1.Role); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*rbacv1.RoleBinding); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*batchv1beta1.CronJob); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*batchv1.Job); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*corev1.LimitRange); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*networkingv1beta1.Ingress); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*monitoringv1.Prometheus); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*monitoringv1.PrometheusRule); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*monitoringv1.ServiceMonitor); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*corev1.Namespace); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*policyv1beta1.PodDisruptionBudget); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*netv1.NetworkPolicy); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*corev1.Endpoints); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*storkapi.ResourceTransformation); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfigurationList); ok {
-		return specObj, nil
-	}
-
-	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(in))
 }
 
 // filterPureVolumesIfEnabled will return whether or not the given PVC is a Pure
@@ -752,7 +576,7 @@ func (k *K8s) filterPureTypeVolumeIfEnabled(claim *v1.PersistentVolumeClaim, vol
 		return true, nil
 	}
 
-	scForPvc, err := k8sCore.GetStorageClassForPVC(claim)
+	scForPvc, err := k.K8sCore.GetStorageClassForPVC(claim)
 	if err != nil {
 		return false, err
 	}
@@ -780,17 +604,17 @@ func (k *K8s) getAddressesForNode(n corev1.Node) []string {
 }
 
 // parseK8SNode Parse the kubernetes clsuter nodes
-func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
+func (k *K8s) parseK8SNode(nodeDriverType string, n corev1.Node) node.Node {
 	var nodeType node.Type
 	var zone, region string
 
-	if k8sCore.IsNodeMaster(n) && k.NodeDriverName != "ibm" {
+	if k.K8sCore.IsNodeMaster(n) && nodeDriverType != "ibm" {
 		nodeType = node.TypeMaster
 	} else {
 		nodeType = node.TypeWorker
 	}
 
-	nodeLabels, err := k8sCore.GetLabelsOnNode(n.GetName())
+	nodeLabels, err := k.K8sCore.GetLabelsOnNode(n.GetName())
 	if err != nil {
 		log.Warn("failed to get node label for ", n.GetName())
 	}
@@ -925,7 +749,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createMigrationObjects(appSpec, ns, app)
+			obj, err := k.createMigrationObjects(appSpec, ns, app, options)
 			if err != nil {
 				return nil, true, err
 			}
@@ -959,7 +783,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createVolumeSnapshotRestore(appSpec, ns, app)
+			obj, err := k.createVolumeSnapshotRestore(appSpec, ns, app, options)
 			if err != nil {
 				return nil, true, err
 			}
@@ -1127,7 +951,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createAdmissionRegistrationObjects(appSpec, ns, app)
+			obj, err := k.createAdmissionRegistrationObjects(appSpec, ns, app, options)
 			if err != nil {
 				return nil, true, err
 			}
@@ -1370,7 +1194,7 @@ func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
 // GetUpdatedSpec gets the updated spec of a K8s Object. Just `name`, and if required `namespace` must be specified on `spec` in order to GET the spec from K8s (if it exists).
 func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 	if specObj, ok := spec.(*appsapi.Deployment); ok {
-		dep, err := k8sApps.GetDeployment(specObj.Name, specObj.Namespace)
+		dep, err := k.K8sApps.GetDeployment(specObj.Name, specObj.Namespace)
 		if err == nil {
 			return nil, err
 		}
@@ -1381,7 +1205,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		return dep, nil
 	} else if specObj, ok := spec.(*appsapi.StatefulSet); ok {
-		ss, err := k8sApps.GetStatefulSet(specObj.Name, specObj.Namespace)
+		ss, err := k.K8sApps.GetStatefulSet(specObj.Name, specObj.Namespace)
 		if err == nil {
 			return nil, err
 		}
@@ -1392,13 +1216,13 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		return ss, nil
 	} else if specObj, ok := spec.(*appsapi.DaemonSet); ok {
-		ds, err := k8sApps.GetDaemonSet(specObj.Name, specObj.Namespace)
+		ds, err := k.K8sApps.GetDaemonSet(specObj.Name, specObj.Namespace)
 		if err == nil {
 			return nil, err
 		}
 		return ds, nil
 	} else if specObj, ok := spec.(*corev1.Service); ok {
-		svc, err := k8sCore.GetService(specObj.Name, specObj.Namespace)
+		svc, err := k.K8sCore.GetService(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -1409,7 +1233,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		return svc, nil
 	} else if specObj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
-		pvc, err := k8sCore.GetPersistentVolumeClaim(specObj.Name, specObj.Namespace)
+		pvc, err := k.K8sCore.GetPersistentVolumeClaim(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -1420,7 +1244,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		return pvc, nil
 	} else if specObj, ok := spec.(*storageapi.StorageClass); ok {
-		sc, err := k8sStorage.GetStorageClass(specObj.Name)
+		sc, err := k.K8sStorage.GetStorageClass(specObj.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -1431,7 +1255,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		return sc, nil
 	} else if specObj, ok := spec.(*snapv1.VolumeSnapshot); ok {
-		snap, err := k8sExternalStorage.GetSnapshot(specObj.Metadata.Name, specObj.Metadata.Namespace)
+		snap, err := k.K8sExternalStorage.GetSnapshot(specObj.Metadata.Name, specObj.Metadata.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -1442,13 +1266,13 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		return snap, nil
 	} else if specObj, ok := spec.(*storkapi.GroupVolumeSnapshot); ok {
-		snap, err := k8sStork.GetGroupSnapshot(specObj.Name, specObj.Namespace)
+		snap, err := k.K8sStork.GetGroupSnapshot(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return snap, nil
 	} else if specObj, ok := spec.(*corev1.Secret); ok {
-		secret, err := k8sCore.GetSecret(specObj.Name, specObj.Namespace)
+		secret, err := k.K8sCore.GetSecret(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -1459,7 +1283,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		return secret, nil
 	} else if specObj, ok := spec.(*corev1.ConfigMap); ok {
-		cm, err := k8sCore.GetConfigMap(specObj.Name, specObj.Namespace)
+		cm, err := k.K8sCore.GetConfigMap(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -1470,193 +1294,193 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 
 		return cm, nil
 	} else if specObj, ok := spec.(*storkapi.Rule); ok {
-		rule, err := k8sStork.GetRule(specObj.Name, specObj.Namespace)
+		rule, err := k.K8sStork.GetRule(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return rule, nil
 	} else if specObj, ok := spec.(*corev1.Pod); ok {
-		pod, err := k8sCore.GetPodByName(specObj.Name, specObj.Namespace)
+		pod, err := k.K8sCore.GetPodByName(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return pod, nil
 	} else if specObj, ok := spec.(*storkapi.ClusterPair); ok {
-		cp, err := k8sStork.GetClusterPair(specObj.Name, specObj.Namespace)
+		cp, err := k.K8sStork.GetClusterPair(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return cp, nil
 	} else if specObj, ok := spec.(*storkapi.Migration); ok {
-		m, err := k8sStork.GetMigration(specObj.Name, specObj.Namespace)
+		m, err := k.K8sStork.GetMigration(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return m, nil
 	} else if specObj, ok := spec.(*storkapi.MigrationSchedule); ok {
-		ms, err := k8sStork.GetMigrationSchedule(specObj.Name, specObj.Namespace)
+		ms, err := k.K8sStork.GetMigrationSchedule(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return ms, nil
 	} else if specObj, ok := spec.(*storkapi.BackupLocation); ok {
-		bl, err := k8sStork.GetBackupLocation(specObj.Name, specObj.Namespace)
+		bl, err := k.K8sStork.GetBackupLocation(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return bl, nil
 	} else if specObj, ok := spec.(*storkapi.ApplicationBackup); ok {
-		ab, err := k8sStork.GetApplicationBackup(specObj.Name, specObj.Namespace)
+		ab, err := k.K8sStork.GetApplicationBackup(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return ab, nil
 	} else if specObj, ok := spec.(*storkapi.SchedulePolicy); ok {
-		sp, err := k8sStork.GetSchedulePolicy(specObj.Name)
+		sp, err := k.K8sStork.GetSchedulePolicy(specObj.Name)
 		if err != nil {
 			return nil, err
 		}
 		return sp, nil
 	} else if specObj, ok := spec.(*storkapi.ApplicationRestore); ok {
-		ar, err := k8sStork.GetApplicationRestore(specObj.Name, specObj.Namespace)
+		ar, err := k.K8sStork.GetApplicationRestore(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return ar, nil
 	} else if specObj, ok := spec.(*storkapi.ApplicationClone); ok {
-		obj, err := k8sStork.GetApplicationClone(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sStork.GetApplicationClone(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*storkapi.VolumeSnapshotRestore); ok {
-		obj, err := k8sStork.GetVolumeSnapshotRestore(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sStork.GetVolumeSnapshotRestore(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*apapi.AutopilotRule); ok {
-		obj, err := k8sAutopilot.GetAutopilotRule(specObj.Name)
+		obj, err := k.K8sAutopilot.GetAutopilotRule(specObj.Name)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*corev1.ServiceAccount); ok {
-		obj, err := k8sCore.GetServiceAccount(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sCore.GetServiceAccount(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*rbacv1.ClusterRole); ok {
-		obj, err := k8sRbac.GetClusterRole(specObj.Name)
+		obj, err := k.K8sRbac.GetClusterRole(specObj.Name)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
-		obj, err := k8sRbac.GetClusterRoleBinding(specObj.Name)
+		obj, err := k.K8sRbac.GetClusterRoleBinding(specObj.Name)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*rbacv1.Role); ok {
-		obj, err := k8sRbac.GetRole(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sRbac.GetRole(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*rbacv1.RoleBinding); ok {
-		obj, err := k8sRbac.GetRoleBinding(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sRbac.GetRoleBinding(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*batchv1beta1.CronJob); ok {
-		obj, err := k8sBatch.GetCronJob(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sBatch.GetCronJob(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*batchv1.Job); ok {
-		obj, err := k8sBatch.GetJob(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sBatch.GetJob(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*corev1.LimitRange); ok {
-		obj, err := k8sCore.GetLimitRange(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sCore.GetLimitRange(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*networkingv1beta1.Ingress); ok {
-		obj, err := k8sNetworking.GetIngress(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sNetworking.GetIngress(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*monitoringv1.Prometheus); ok {
-		obj, err := k8sMonitoring.GetPrometheus(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sMonitoring.GetPrometheus(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*monitoringv1.PrometheusRule); ok {
-		obj, err := k8sMonitoring.GetPrometheusRule(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sMonitoring.GetPrometheusRule(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*monitoringv1.ServiceMonitor); ok {
-		obj, err := k8sMonitoring.GetServiceMonitor(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sMonitoring.GetServiceMonitor(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*corev1.Namespace); ok {
-		obj, err := k8sCore.GetNamespace(specObj.Name)
+		obj, err := k.K8sCore.GetNamespace(specObj.Name)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
-		obj, err := k8sApiExtensions.GetCRD(specObj.Name, metav1.GetOptions{})
+		obj, err := k.K8sApiExtensions.GetCRD(specObj.Name, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
-		obj, err := k8sApiExtensions.GetCRDV1beta1(specObj.Name, metav1.GetOptions{})
+		obj, err := k.K8sApiExtensions.GetCRDV1beta1(specObj.Name, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
-		obj, err := k8sPolicy.GetPodDisruptionBudget(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sPolicy.GetPodDisruptionBudget(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*netv1.NetworkPolicy); ok {
-		obj, err := k8sCore.GetNetworkPolicy(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sCore.GetNetworkPolicy(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*corev1.Endpoints); ok {
-		obj, err := k8sCore.GetEndpoints(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sCore.GetEndpoints(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*storkapi.ResourceTransformation); ok {
-		obj, err := k8sStork.GetMigrationSchedule(specObj.Name, specObj.Namespace)
+		obj, err := k.K8sStork.GetMigrationSchedule(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		return obj, nil
 	} else if specObj, ok := spec.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
-		obj, err := k8sAdmissionRegistration.GetValidatingWebhookConfiguration(specObj.Name)
+		obj, err := k.K8sAdmissionRegistration.GetValidatingWebhookConfiguration(specObj.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -1667,7 +1491,7 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 }
 
 func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options scheduler.ScheduleOptions) (*corev1.Namespace, error) {
-	k8sOps := k8sCore
+	k8sOps := k.K8sCore
 
 	t := func() (interface{}, bool, error) {
 		metadata := defaultTorpedoLabel
@@ -1726,7 +1550,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	// Add security annotations if running with auth-enabled
 	configMapName := k.secretConfigMapName
 	if configMapName != "" {
-		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+		configMap, err := k.K8sCore.GetConfigMap(configMapName, "default")
 		if err != nil {
 			return nil, &scheduler.ErrFailedToGetConfigMap{
 				Name:  configMapName,
@@ -1734,7 +1558,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 			}
 		}
 
-		err = k.addSecurityAnnotation(spec, configMap, app)
+		err = k.addSecurityAnnotation(spec, configMap, app, options.StorageProvisioner)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add annotations to storage object: %v", err)
 		}
@@ -1757,8 +1581,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		if volume.GetStorageProvisioner() != PortworxStrict {
-			obj.Provisioner = volume.GetStorageProvisioner()
+		if options.StorageProvisioner != PortworxStrictProvisioner {
+			obj.Provisioner = string(options.StorageProvisioner)
 		}
 		log.Infof("Setting provisioner of %v to %v", obj.Name, obj.Provisioner)
 
@@ -1776,9 +1600,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 			}
 		}
 
-		sc, err := k8sStorage.CreateStorageClass(obj)
+		sc, err := k.K8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
+			if sc, err = k.K8sStorage.GetStorageClass(obj.Name); err == nil {
 				log.Infof("[%v] Found existing storage class: %v", app.Key, sc.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
@@ -1842,9 +1666,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				newPvcObj.Spec.Resources.Requests[corev1.ResourceStorage] = newPvcSize
 			}
 		}
-		pvc, err := k8sCore.CreatePersistentVolumeClaim(newPvcObj)
+		pvc, err := k.K8sCore.CreatePersistentVolumeClaim(newPvcObj)
 		if k8serrors.IsAlreadyExists(err) {
-			if pvc, err = k8sCore.GetPersistentVolumeClaim(newPvcObj.Name, newPvcObj.Namespace); err == nil {
+			if pvc, err = k.K8sCore.GetPersistentVolumeClaim(newPvcObj.Name, newPvcObj.Namespace); err == nil {
 				log.Infof("[%v] Found existing PVC: %v", app.Key, pvc.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
@@ -1889,9 +1713,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 	} else if obj, ok := spec.(*snapv1.VolumeSnapshot); ok {
 		obj.Metadata.Namespace = ns.Name
-		snap, err := k8sExternalStorage.CreateSnapshot(obj)
+		snap, err := k.K8sExternalStorage.CreateSnapshot(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if snap, err = k8sExternalStorage.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err == nil {
+			if snap, err = k.K8sExternalStorage.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err == nil {
 				log.Infof("[%v] Found existing snapshot: %v", app.Key, snap.Metadata.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
@@ -1916,9 +1740,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		return snap, nil
 	} else if obj, ok := spec.(*storkapi.GroupVolumeSnapshot); ok {
 		obj.Namespace = ns.Name
-		snap, err := k8sStork.CreateGroupSnapshot(obj)
+		snap, err := k.K8sStork.CreateGroupSnapshot(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if snap, err = k8sStork.GetGroupSnapshot(obj.Name, obj.Namespace); err == nil {
+			if snap, err = k.K8sStork.GetGroupSnapshot(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing group snapshot: %v", app.Key, snap.Name)
 				return snap, nil
 			}
@@ -1947,11 +1771,12 @@ func (k *K8s) substituteNamespaceInPVC(pvc *corev1.PersistentVolumeClaim, ns str
 func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
+	options scheduler.ScheduleOptions,
 ) (interface{}, error) {
 	// Add security annotations if running with auth-enabled
 	configMapName := k.secretConfigMapName
 	if configMapName != "" {
-		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+		configMap, err := k.K8sCore.GetConfigMap(configMapName, "default")
 		if err != nil {
 			return nil, &scheduler.ErrFailedToGetConfigMap{
 				Name:  configMapName,
@@ -1959,7 +1784,7 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 			}
 		}
 
-		err = k.addSecurityAnnotation(specObj, configMap, app)
+		err = k.addSecurityAnnotation(specObj, configMap, app, options.StorageProvisioner)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add annotations to storage object: %v", err)
 		}
@@ -1968,7 +1793,7 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 
 	if obj, ok := specObj.(*storkapi.VolumeSnapshotRestore); ok {
 		obj.Namespace = ns.Name
-		snapRestore, err := k8sStork.CreateVolumeSnapshotRestore(obj)
+		snapRestore, err := k.K8sStork.CreateVolumeSnapshotRestore(obj)
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
@@ -1982,7 +1807,7 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 	return nil, nil
 }
 
-func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMap, app *spec.AppSpec) error {
+func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMap, app *spec.AppSpec, storageProvisioner volume.StorageProvisioner) error {
 	// log.Debugf("Config Map details: %v", configMap.Data)
 
 	secretNameKeyFlag := false
@@ -2010,7 +1835,7 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 					log.Infof("Adding encryption parameter to storage class app %s", app.Key)
 					obj.Parameters[encryptionName] = "true"
 				}
-				if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
+				if strings.Contains(string(storageProvisioner), "pxd") {
 					if secretNameKeyFlag {
 						obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
 						obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
@@ -2171,7 +1996,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 			val, ok := labels[NodeType]
 			if ok {
 				if val == FastpathNodeType {
-					k.AddLabelOnNode(node.GetStorageDriverNodes()[0], NodeType, FastpathNodeType)
+					k.AddLabelOnNode(k.NodeRegistry.GetStorageDriverNodes()[0], NodeType, FastpathNodeType)
 				}
 			}
 
@@ -2190,9 +2015,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if len(options.Nodes) > 0 && len(options.Labels) > 0 {
 			obj.Spec.Template.Spec.NodeSelector = options.Labels
 		}
-		dep, err := k8sApps.CreateDeployment(obj, metav1.CreateOptions{})
+		dep, err := k.K8sApps.CreateDeployment(obj, metav1.CreateOptions{})
 		if k8serrors.IsAlreadyExists(err) {
-			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
+			if dep, err = k.K8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing deployment: %v", app.Key, dep.Name)
 				// This is a hack because the `Kind` field is empty due to K8s bug.
 				// Refer https://github.com/portworx/torpedo/pull/1345
@@ -2218,7 +2043,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		// Add security annotations if running with auth-enabled
 		configMapName := k.secretConfigMapName
 		if configMapName != "" {
-			configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+			configMap, err := k.K8sCore.GetConfigMap(configMapName, "default")
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetConfigMap{
 					Name:  configMapName,
@@ -2226,7 +2051,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				}
 			}
 
-			err = k.addSecurityAnnotation(obj, configMap, app)
+			err = k.addSecurityAnnotation(obj, configMap, app, options.StorageProvisioner)
 			if err != nil {
 				return nil, fmt.Errorf("failed to add annotations to core object: %v", err)
 			}
@@ -2268,9 +2093,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if len(options.Nodes) > 0 && len(options.Labels) > 0 {
 			obj.Spec.Template.Spec.NodeSelector = options.Labels
 		}
-		ss, err := k8sApps.CreateStatefulSet(obj, metav1.CreateOptions{})
+		ss, err := k.K8sApps.CreateStatefulSet(obj, metav1.CreateOptions{})
 		if k8serrors.IsAlreadyExists(err) {
-			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
+			if ss, err = k.K8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing StatefulSet: %v", app.Key, ss.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
@@ -2297,9 +2122,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 
 	} else if obj, ok := spec.(*corev1.Service); ok {
 		obj.Namespace = ns.Name
-		svc, err := k8sCore.CreateService(obj)
+		svc, err := k.K8sCore.CreateService(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if svc, err = k8sCore.GetService(obj.Name, obj.Namespace); err == nil {
+			if svc, err = k.K8sCore.GetService(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Service: %v", app.Key, svc.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
@@ -2330,9 +2155,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 				return nil, err
 			}
 		}
-		secret, err := k8sCore.CreateSecret(obj)
+		secret, err := k.K8sCore.CreateSecret(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if secret, err = k8sCore.GetSecret(obj.Name, obj.Namespace); err == nil {
+			if secret, err = k.K8sCore.GetSecret(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Secret: %v", app.Key, secret.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
@@ -2359,9 +2184,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if obj.Namespace != "kube-system" {
 			obj.Namespace = ns.Name
 		}
-		rule, err := k8sStork.CreateRule(obj)
+		rule, err := k.K8sStork.CreateRule(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if rule, err = k8sStork.GetRule(obj.Name, obj.Namespace); err == nil {
+			if rule, err = k.K8sStork.GetRule(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Rule: %v", app.Key, rule.GetName())
 				return rule, nil
 			}
@@ -2391,9 +2216,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 			obj.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
 		}
 
-		pod, err := k8sCore.CreatePod(obj)
+		pod, err := k.K8sCore.CreatePod(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if pod, err := k8sCore.GetPodByName(obj.Name, obj.Namespace); err == nil {
+			if pod, err := k.K8sCore.GetPodByName(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Pods: %v", app.Key, pod.Name)
 				return pod, nil
 			}
@@ -2409,9 +2234,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		return pod, nil
 	} else if obj, ok := spec.(*corev1.ConfigMap); ok {
 		obj.Namespace = ns.Name
-		configMap, err := k8sCore.CreateConfigMap(obj)
+		configMap, err := k.K8sCore.CreateConfigMap(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if configMap, err = k8sCore.GetConfigMap(obj.Name, obj.Namespace); err == nil {
+			if configMap, err = k.K8sCore.GetConfigMap(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Config Maps: %v", app.Key, configMap.Name)
 
 				// This is a hack because the `Kind` field is empty due to K8s bug.
@@ -2437,9 +2262,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		return configMap, nil
 	} else if obj, ok := spec.(*v1.Endpoints); ok {
 		obj.Namespace = ns.Name
-		endpoints, err := k8sCore.CreateEndpoints(obj)
+		endpoints, err := k.K8sCore.CreateEndpoints(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if endpoints, err = k8sCore.GetEndpoints(obj.Name, obj.Namespace); err == nil {
+			if endpoints, err = k.K8sCore.GetEndpoints(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Endpoints: %v", app.Key, endpoints.Name)
 				return endpoints, nil
 			}
@@ -2455,9 +2280,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		return endpoints, nil
 	} else if obj, ok := spec.(*netv1.NetworkPolicy); ok {
 		obj.Namespace = ns.Name
-		networkPolicy, err := k8sCore.CreateNetworkPolicy(obj)
+		networkPolicy, err := k.K8sCore.CreateNetworkPolicy(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if networkPolicy, err = k8sCore.GetNetworkPolicy(obj.Name, obj.Namespace); err == nil {
+			if networkPolicy, err = k.K8sCore.GetNetworkPolicy(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing NetworkPolicy: %v", app.Key, networkPolicy.Name)
 				return networkPolicy, nil
 			}
@@ -2504,11 +2329,11 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 	var err error
 	if obj, ok := spec.(*appsapi.Deployment); ok {
 		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-			if pods, err = k8sApps.GetDeploymentPods(obj); err != nil {
+			if pods, err = k.K8sApps.GetDeploymentPods(obj); err != nil {
 				log.Warnf("[%s] Error getting deployment pods. Err: %v", app.Key, err)
 			}
 		}
-		err := k8sApps.DeleteDeployment(obj.Name, obj.Namespace)
+		err := k.K8sApps.DeleteDeployment(obj.Name, obj.Namespace)
 		if err != nil {
 			return pods, &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -2517,11 +2342,11 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 	} else if obj, ok := spec.(*appsapi.StatefulSet); ok {
 		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-			if pods, err = k8sApps.GetStatefulSetPods(obj); err != nil {
+			if pods, err = k.K8sApps.GetStatefulSetPods(obj); err != nil {
 				log.Warnf("[%v] Error getting statefulset pods. Err: %v", app.Key, err)
 			}
 		}
-		err := k8sApps.DeleteStatefulSet(obj.Name, obj.Namespace)
+		err := k.K8sApps.DeleteStatefulSet(obj.Name, obj.Namespace)
 		if err != nil {
 			return pods, &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -2529,7 +2354,7 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 			}
 		}
 	} else if obj, ok := spec.(*corev1.Service); ok {
-		err := k8sCore.DeleteService(obj.Name, obj.Namespace)
+		err := k.K8sCore.DeleteService(obj.Name, obj.Namespace)
 		if err != nil {
 			return pods, &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -2539,7 +2364,7 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 
 		log.Infof("[%v] Destroyed Service: %v", app.Key, obj.Name)
 	} else if obj, ok := spec.(*storkapi.Rule); ok {
-		err := k8sStork.DeleteRule(obj.Name, obj.Namespace)
+		err := k.K8sStork.DeleteRule(obj.Name, obj.Namespace)
 		if err != nil {
 			return pods, &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -2550,14 +2375,14 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		log.Infof("[%v] Destroyed Rule: %v", app.Key, obj.Name)
 	} else if obj, ok := spec.(*corev1.Pod); ok {
 		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-			pod, err := k8sCore.GetPodByName(obj.Name, obj.Namespace)
+			pod, err := k.K8sCore.GetPodByName(obj.Name, obj.Namespace)
 			if err != nil {
 				log.Warnf("[%v] Error getting pods. Err: %v", app.Key, err)
 			}
 			podList = append(podList, pod)
 			pods = podList
 		}
-		err := k8sCore.DeletePod(obj.Name, obj.Namespace, false)
+		err := k.K8sCore.DeletePod(obj.Name, obj.Namespace, false)
 		if err != nil {
 			return pods, &scheduler.ErrFailedToDestroyPod{
 				App:   app,
@@ -2568,12 +2393,12 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		log.Infof("[%v] Destroyed Pod: %v", app.Key, obj.Name)
 	} else if obj, ok := spec.(*corev1.ConfigMap); ok {
 		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-			_, err := k8sCore.GetConfigMap(obj.Name, obj.Namespace)
+			_, err := k.K8sCore.GetConfigMap(obj.Name, obj.Namespace)
 			if err != nil {
 				log.Warnf("[%v] Error getting config maps. Err: %v", app.Key, err)
 			}
 		}
-		err := k8sCore.DeleteConfigMap(obj.Name, obj.Namespace)
+		err := k.K8sCore.DeleteConfigMap(obj.Name, obj.Namespace)
 		if err != nil {
 			return pods, &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -2583,7 +2408,7 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 
 		log.Infof("[%v] Destroyed Config Map: %v", app.Key, obj.Name)
 	} else if obj, ok := spec.(*apapi.AutopilotRule); ok {
-		err := k8sAutopilot.DeleteAutopilotRule(obj.Name)
+		err := k.K8sAutopilot.DeleteAutopilotRule(obj.Name)
 		if err != nil {
 			return pods, &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -2602,7 +2427,7 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 func (k *K8s) destroyAdmissionRegistrationObjects(spec interface{}, app *spec.AppSpec) error {
 
 	if obj, ok := spec.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
-		err := k8sAdmissionRegistration.DeleteValidatingWebhookConfiguration(obj.Name)
+		err := k.K8sAdmissionRegistration.DeleteValidatingWebhookConfiguration(obj.Name)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -2613,7 +2438,7 @@ func (k *K8s) destroyAdmissionRegistrationObjects(spec interface{}, app *spec.Ap
 			return nil
 		}
 	} else if obj, ok := spec.(admissionregistrationv1beta1.ValidatingWebhookConfiguration); ok {
-		err := k8sAdmissionRegistration.DeleteValidatingWebhookConfigurationV1beta1(obj.Name)
+		err := k.K8sAdmissionRegistration.DeleteValidatingWebhookConfigurationV1beta1(obj.Name)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -2632,7 +2457,7 @@ func (k *K8s) destroyAdmissionRegistrationObjects(spec interface{}, app *spec.Ap
 func (k *K8s) destroyCRDObjects(spec interface{}, app *spec.AppSpec) error {
 
 	if obj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
-		err := k8sApiExtensions.DeleteCRD(obj.Name)
+		err := k.K8sApiExtensions.DeleteCRD(obj.Name)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -2643,7 +2468,7 @@ func (k *K8s) destroyCRDObjects(spec interface{}, app *spec.AppSpec) error {
 			return nil
 		}
 	} else if obj, ok := spec.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
-		err := k8sApiExtensions.DeleteCRDV1beta1(obj.Name)
+		err := k.K8sApiExtensions.DeleteCRDV1beta1(obj.Name)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -2693,7 +2518,7 @@ func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
 			var dep *appsapi.Deployment
-			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err != nil {
+			if dep, err = k.K8sApps.GetDeployment(obj.Name, obj.Namespace); err != nil {
 				return &scheduler.ErrFailedToValidateTopologyLabel{
 					NameSpace: obj.Namespace,
 					Cause:     err,
@@ -2702,7 +2527,7 @@ func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
 			nodeAff := dep.Spec.Template.Spec.Affinity.NodeAffinity
 			labels := getLabelsFromNodeAffinity(nodeAff)
 			zone = labels[TopologyZoneK8sNodeLabel]
-			if podList, err = k8sCore.GetPods(obj.Namespace, nil); err != nil {
+			if podList, err = k.K8sCore.GetPods(obj.Namespace, nil); err != nil {
 				return &scheduler.ErrFailedToValidateTopologyLabel{
 					NameSpace: obj.Namespace,
 					Cause:     err,
@@ -2716,7 +2541,7 @@ func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			var ss *appsapi.StatefulSet
-			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err != nil {
+			if ss, err = k.K8sApps.GetStatefulSet(obj.Name, obj.Namespace); err != nil {
 				return &scheduler.ErrFailedToValidateTopologyLabel{
 					NameSpace: obj.Namespace,
 					Cause:     err,
@@ -2725,7 +2550,7 @@ func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
 			nodeAff := ss.Spec.Template.Spec.Affinity.NodeAffinity
 			labels := getLabelsFromNodeAffinity(nodeAff)
 			zone = labels[TopologyZoneK8sNodeLabel]
-			if podList, err = k8sCore.GetPods(obj.Namespace, nil); err != nil {
+			if podList, err = k.K8sCore.GetPods(obj.Namespace, nil); err != nil {
 				return &scheduler.ErrFailedToValidateTopologyLabel{
 					NameSpace: obj.Namespace,
 					Cause:     err,
@@ -2746,7 +2571,7 @@ func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
 func (k *K8s) validatePodsTopology(podList *v1.PodList, labelValue string) error {
 	for _, pod := range podList.Items {
 		hostIP := pod.Status.HostIP
-		if node, err := node.GetNodeByIP(hostIP); err != nil {
+		if node, err := k.NodeRegistry.GetNodeByIP(hostIP); err != nil {
 			if node.TopologyZone != labelValue || node.TopologyRegion != labelValue {
 				return &scheduler.ErrTopologyLabelMismatch{
 					PodName: pod.Name,
@@ -2765,7 +2590,7 @@ func (k *K8s) validatePodsTopology(podList *v1.PodList, labelValue string) error
 func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
-			if err := k8sApps.ValidateDeployment(obj, timeout, retryInterval); err != nil {
+			if err := k.K8sApps.ValidateDeployment(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate Deployment: %v,Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
@@ -2774,7 +2599,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 
 			log.Infof("[%v] Validated deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			if err := k8sApps.ValidateStatefulSet(obj, timeout*time.Duration(*obj.Spec.Replicas)); err != nil {
+			if err := k.K8sApps.ValidateStatefulSet(obj, timeout*time.Duration(*obj.Spec.Replicas)); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate StatefulSet: %v,Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
@@ -2783,7 +2608,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 
 			log.Infof("[%v] Validated statefulset: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*corev1.Service); ok {
-			svc, err := k8sCore.GetService(obj.Name, obj.Namespace)
+			svc, err := k.K8sCore.GetService(obj.Name, obj.Namespace)
 			if err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
@@ -2793,7 +2618,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 
 			log.Infof("[%v] Validated Service: %v", ctx.App.Key, svc.Name)
 		} else if obj, ok := specObj.(*storkapi.Rule); ok {
-			svc, err := k8sStork.GetRule(obj.Name, obj.Namespace)
+			svc, err := k.K8sStork.GetRule(obj.Name, obj.Namespace)
 			if err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
@@ -2803,7 +2628,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 
 			log.Infof("[%v] Validated Rule: %v", ctx.App.Key, svc.Name)
 		} else if obj, ok := specObj.(*corev1.Pod); ok {
-			if err := k8sCore.ValidatePod(obj, timeout, retryInterval); err != nil {
+			if err := k.K8sCore.ValidatePod(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidatePod{
 					App: ctx.App,
 					Cause: fmt.Sprintf("Failed to validate Pod: [%s] %s. Err: Pod is not ready %v",
@@ -2813,7 +2638,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 
 			log.Infof("[%v] Validated pod: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.ClusterPair); ok {
-			if err := k8sStork.ValidateClusterPair(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+			if err := k.K8sStork.ValidateClusterPair(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate cluster Pair: %v. Err: %v", obj.Name, err),
@@ -2822,7 +2647,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated ClusterPair: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.Migration); ok {
-			if err := k8sStork.ValidateMigration(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+			if err := k.K8sStork.ValidateMigration(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate Migration: %v. Err: %v", obj.Name, err),
@@ -2831,7 +2656,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated Migration: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.MigrationSchedule); ok {
-			if _, err := k8sStork.ValidateMigrationSchedule(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+			if _, err := k.K8sStork.ValidateMigrationSchedule(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate MigrationSchedule: %v. Err: %v", obj.Name, err),
@@ -2840,7 +2665,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated MigrationSchedule: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.BackupLocation); ok {
-			if err := k8sStork.ValidateBackupLocation(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+			if err := k.K8sStork.ValidateBackupLocation(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate BackupLocation: %v. Err: %v", obj.Name, err),
@@ -2849,7 +2674,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated BackupLocation: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.ApplicationBackup); ok {
-			if err := k8sStork.ValidateApplicationBackup(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+			if err := k.K8sStork.ValidateApplicationBackup(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate ApplicationBackup: %v. Err: %v", obj.Name, err),
@@ -2858,7 +2683,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated ApplicationBackup: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.ApplicationRestore); ok {
-			if err := k8sStork.ValidateApplicationRestore(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+			if err := k.K8sStork.ValidateApplicationRestore(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate ApplicationRestore: %v. Err: %v", obj.Name, err),
@@ -2867,7 +2692,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated ApplicationRestore: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.ApplicationClone); ok {
-			if err := k8sStork.ValidateApplicationClone(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+			if err := k.K8sStork.ValidateApplicationClone(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate ApplicationClone: %v. Err: %v", obj.Name, err),
@@ -2876,7 +2701,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated ApplicationClone: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*storkapi.VolumeSnapshotRestore); ok {
-			if err := k8sStork.ValidateVolumeSnapshotRestore(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+			if err := k.K8sStork.ValidateVolumeSnapshotRestore(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate VolumeSnapshotRestore: %v. Err: %v", obj.Name, err),
@@ -2885,7 +2710,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated VolumeSnapshotRestore: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
-			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
+			if err := k.K8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
 				retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Metadata.Name,
@@ -2895,7 +2720,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated VolumeSnapshotRestore: %v", ctx.App.Key, obj.Metadata.Name)
 		} else if obj, ok := specObj.(*apapi.AutopilotRule); ok {
-			if _, err := k8sAutopilot.GetAutopilotRule(obj.Name); err != nil {
+			if _, err := k.K8sAutopilot.GetAutopilotRule(obj.Name); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate AutopilotRule: %v. Err: %v", obj.Name, err),
@@ -2904,7 +2729,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated AutopilotRule: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*networkingv1beta1.Ingress); ok {
-			if err := k8sNetworking.ValidateIngress(obj, timeout, retryInterval); err != nil {
+			if err := k.K8sNetworking.ValidateIngress(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate Ingress: %v. Err: %v", obj.Name, err),
@@ -2913,7 +2738,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated Ingress: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*batchv1beta1.CronJob); ok {
-			if err := k8sBatch.ValidateCronJobV1beta1(obj, timeout, retryInterval); err != nil {
+			if err := k.K8sBatch.ValidateCronJobV1beta1(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate CronJob: %v. Err: %v", obj.Name, err),
@@ -2922,7 +2747,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			log.Infof("[%v] Validated CronJob: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*batchv1.Job); ok {
-			if err := k8sBatch.ValidateJob(obj.Name, obj.ObjectMeta.Namespace, timeout); err != nil {
+			if err := k.K8sBatch.ValidateJob(obj.Name, obj.ObjectMeta.Namespace, timeout); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate Job: %v. Err: %v", obj.Name, err),
@@ -2933,7 +2758,7 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			log.Infof("[%v] Validated Job: %v", ctx.App.Key, obj.Name)
 
 		} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
-			if err := k8sStork.ValidateResourceTransformation(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+			if err := k.K8sStork.ValidateResourceTransformation(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate ResourceTransformation: %v. Err: %v", obj.Name, err),
@@ -3009,7 +2834,7 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		return err
 	}
 
-	k8sOps := k8sAutopilot
+	k8sOps := k.K8sAutopilot
 	apRule := ctx.ScheduleOptions.AutopilotRule
 	if apRule.Name != "" {
 		if err := k8sOps.DeleteAutopilotRule(apRule.ObjectMeta.Name); err != nil {
@@ -3183,7 +3008,6 @@ func (k *K8s) waitForCleanup(ctx *scheduler.Context, podList []corev1.Pod) error
 
 func (k *K8s) validateVolumeDirCleanup(podUID types.UID, app *spec.AppSpec) error {
 	podVolDir := k.getVolumeDirPath(podUID)
-	driver, _ := node.Get(k.NodeDriverName)
 	options := node.FindOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         FindFilesOnWorkerTimeout,
@@ -3193,8 +3017,8 @@ func (k *K8s) validateVolumeDirCleanup(podUID types.UID, app *spec.AppSpec) erro
 		MaxDepth: 1,
 	}
 
-	for _, n := range node.GetWorkerNodes() {
-		if volDir, err := driver.FindFiles(podVolDir, n, options); err != nil {
+	for _, n := range k.NodeRegistry.GetWorkerNodes() {
+		if volDir, err := k.NodeDriver.FindFiles(podVolDir, n, options); err != nil {
 			return err
 		} else if strings.TrimSpace(volDir) != "" {
 			return &scheduler.ErrFailedToDeleteVolumeDirForPod{
@@ -3215,7 +3039,7 @@ func (k *K8s) getVolumeDirPath(podUID types.UID) string {
 func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) error {
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
-			if err := k8sApps.ValidateTerminatedDeployment(obj, timeout, DefaultRetryInterval); err != nil {
+			if err := k.K8sApps.ValidateTerminatedDeployment(obj, timeout, DefaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate destroy of deployment: %v, namespace: %s. Err: %v", obj.Name, obj.Namespace, err),
@@ -3224,7 +3048,7 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 
 			log.Infof("[%v] Validated destroy of Deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			if err := k8sApps.ValidateTerminatedStatefulSet(obj, timeout, DefaultRetryInterval); err != nil {
+			if err := k.K8sApps.ValidateTerminatedStatefulSet(obj, timeout, DefaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate destroy of statefulset: %v, namespace: %s Err: %v", obj.Name, obj.Namespace, err),
@@ -3233,7 +3057,7 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 
 			log.Infof("[%v] Validated destroy of StatefulSet: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*corev1.Service); ok {
-			if err := k8sCore.ValidateDeletedService(obj.Name, obj.Namespace); err != nil {
+			if err := k.K8sCore.ValidateDeletedService(obj.Name, obj.Namespace); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate destroy of service: %v, namespace: %s. Err: %v", obj.Name, obj.Namespace, err),
@@ -3242,7 +3066,7 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 
 			log.Infof("[%v] Validated destroy of Service: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*corev1.Pod); ok {
-			if err := k8sCore.WaitForPodDeletion(obj.UID, obj.Namespace, deleteTasksWaitTimeout); err != nil {
+			if err := k.K8sCore.WaitForPodDeletion(obj.UID, obj.Namespace, deleteTasksWaitTimeout); err != nil {
 				return &scheduler.ErrFailedToValidatePodDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate destroy of pod: %v,namespace:%s. Err: %v", obj.Name, obj.Namespace, err),
@@ -3260,7 +3084,7 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 // provided in the exclude list
 func (k *K8s) SelectiveWaitForTermination(ctx *scheduler.Context, timeout time.Duration, excludeList []node.Node) error {
 	t := func() (interface{}, bool, error) {
-		podNames, err := filterPodsByNodes(ctx, excludeList)
+		podNames, err := k.filterPodsByNodes(ctx, excludeList)
 		if err != nil {
 			return nil, true, err
 		}
@@ -3278,14 +3102,14 @@ func (k *K8s) SelectiveWaitForTermination(ctx *scheduler.Context, timeout time.D
 
 // filterPodsByNodes returns a list of pod names started as part of the provided context
 // and not running on the nodes provided in the exclude list
-func filterPodsByNodes(ctx *scheduler.Context, excludeList []node.Node) ([]string, error) {
+func (k *K8s) filterPodsByNodes(ctx *scheduler.Context, excludeList []node.Node) ([]string, error) {
 	allPods := make(map[types.UID]corev1.Pod)
 	namespaces := make(map[string]string)
 	for _, specObj := range ctx.App.SpecList {
 		var pods []corev1.Pod
 		var err error
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
-			if pods, err = k8sApps.GetDeploymentPods(obj); err != nil && err != schederrors.ErrPodsNotFound {
+			if pods, err = k.K8sApps.GetDeploymentPods(obj); err != nil && err != schederrors.ErrPodsNotFound {
 				return nil, &scheduler.ErrFailedToGetAppStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get deployment: %v. Err: %v", obj.Name, err),
@@ -3294,7 +3118,7 @@ func filterPodsByNodes(ctx *scheduler.Context, excludeList []node.Node) ([]strin
 			namespaces[obj.Namespace] = ""
 
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			if pods, err = k8sApps.GetStatefulSetPods(obj); err != nil && err != schederrors.ErrPodsNotFound {
+			if pods, err = k.K8sApps.GetStatefulSetPods(obj); err != nil && err != schederrors.ErrPodsNotFound {
 				return nil, &scheduler.ErrFailedToGetAppStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get statefulset: %v. Err: %v", obj.Name, err),
@@ -3303,7 +3127,7 @@ func filterPodsByNodes(ctx *scheduler.Context, excludeList []node.Node) ([]strin
 			namespaces[obj.Namespace] = ""
 
 		} else if obj, ok := specObj.(*corev1.Pod); ok {
-			pod, err := k8sCore.GetPodByUID(obj.UID, obj.Namespace)
+			pod, err := k.K8sCore.GetPodByUID(obj.UID, obj.Namespace)
 			if err != nil && err != schederrors.ErrPodsNotFound {
 				return nil, &scheduler.ErrFailedToGetAppStatus{
 					App:   ctx.App,
@@ -3343,7 +3167,7 @@ func filterPodsByNodes(ctx *scheduler.Context, excludeList []node.Node) ([]strin
 func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOptions) error {
 	fn := "DeleteTasks"
 	deleteTasks := func() error {
-		k8sOps := k8sCore
+		k8sOps := k.K8sCore
 		pods, err := k.getPodsForApp(ctx)
 		if err != nil {
 			return &scheduler.ErrFailedToDeleteTasks{
@@ -3402,7 +3226,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 
 // GetVolumeDriverVolumeName returns name of volume which is refered by volume driver
 func (k *K8s) GetVolumeDriverVolumeName(name string, namespace string) (string, error) {
-	pvc, err := k8sCore.GetPersistentVolumeClaim(name, namespace)
+	pvc, err := k.K8sCore.GetPersistentVolumeClaim(name, namespace)
 	if err != nil {
 		return "", fmt.Errorf("failed to get PVC: %v in namespace %v. Err: %v", name, namespace, err)
 	}
@@ -3415,7 +3239,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-			params, err := k8sCore.GetPersistentVolumeClaimParams(obj)
+			params, err := k.K8sCore.GetPersistentVolumeClaimParams(obj)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
@@ -3423,7 +3247,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				}
 			}
 
-			pvc, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			pvc, err := k.K8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
@@ -3439,7 +3263,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 
 			result[pvc.Spec.VolumeName] = params
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
-			snap, err := k8sExternalStorage.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace)
+			snap, err := k.K8sExternalStorage.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
@@ -3456,7 +3280,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				}
 			}
 
-			snapData, err := k8sExternalStorage.GetSnapshotData(snapDataName)
+			snapData, err := k.K8sExternalStorage.GetSnapshotData(snapDataName)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
@@ -3477,7 +3301,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			var labels map[string]string
-			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			ss, err := k.K8sApps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
@@ -3485,7 +3309,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				}
 			}
 
-			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			pvcList, err := k.K8sApps.GetPVCsForStatefulSet(ss)
 			if err != nil || pvcList == nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
@@ -3499,7 +3323,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			}
 
 			for _, pvc := range pvcList.Items {
-				params, err := k8sCore.GetPersistentVolumeClaimParams(&pvc)
+				params, err := k.K8sCore.GetPersistentVolumeClaimParams(&pvc)
 				if err != nil {
 					return nil, &scheduler.ErrFailedToGetVolumeParameters{
 						App:   ctx.App,
@@ -3536,7 +3360,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				log.Infof("Skip storage class %s validation", obj.Name)
 				continue
 			}
-			if _, err := k8sStorage.GetStorageClass(obj.Name); err != nil {
+			if _, err := k.K8sStorage.GetStorageClass(obj.Name); err != nil {
 				if options != nil && options.SkipClusterScopedObjects {
 					log.Warnf("[%v] Skipping validation of storage class: %v", ctx.App.Key, obj.Name)
 				} else {
@@ -3547,7 +3371,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				}
 			}
 		} else if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
-			err := k8sCore.ValidatePersistentVolumeClaim(obj, timeout, retryInterval)
+			err := k.K8sCore.ValidatePersistentVolumeClaim(obj, timeout, retryInterval)
 			if err != nil {
 				if options != nil && options.ExpectError {
 					// ignore
@@ -3569,7 +3393,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				}
 			}
 			if autopilotEnabled {
-				listApRules, err := k8sAutopilot.ListAutopilotRules()
+				listApRules, err := k.K8sAutopilot.ListAutopilotRules()
 				if err != nil {
 					return err
 				}
@@ -3586,7 +3410,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				log.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
-			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
+			if err := k.K8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
 				retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
@@ -3596,7 +3420,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 
 			log.Infof("[%v] Validated snapshot: %v", ctx.App.Key, obj.Metadata.Name)
 		} else if obj, ok := specObj.(*storkapi.GroupVolumeSnapshot); ok {
-			if err := k8sStork.ValidateGroupSnapshot(obj.Name, obj.Namespace, true, timeout, retryInterval); err != nil {
+			if err := k.K8sStork.ValidateGroupSnapshot(obj.Name, obj.Namespace, true, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate group snapshot: %v, Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
@@ -3605,7 +3429,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 
 			log.Infof("[%v] Validated group snapshot: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			ss, err := k.K8sApps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
@@ -3617,7 +3441,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			if *ss.Spec.Replicas > *obj.Spec.Replicas {
 				scalingFactor = int32(*ss.Spec.Replicas - *obj.Spec.Replicas)
 			}
-			if err := k8sApps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(scalingFactor), retryInterval); err != nil {
+			if err := k.K8sApps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(scalingFactor), retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate PVCs for statefulset: %v,Namespace: %v. Err: %v", ss.Name, ss.Namespace, err),
@@ -3632,7 +3456,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 // GetSnapShotData retruns the snapshotdata
 func (k *K8s) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
 
-	snap, err := k8sExternalStorage.GetSnapshot(snapshotName, snapshotNameSpace)
+	snap, err := k.K8sExternalStorage.GetSnapshot(snapshotName, snapshotNameSpace)
 	if err != nil {
 		return nil, &scheduler.ErrFailedToGetSnapShot{
 			App:   ctx.App,
@@ -3650,7 +3474,7 @@ func (k *K8s) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotName
 		}
 	}
 
-	snapData, err := k8sExternalStorage.GetSnapshotData(snapDataName)
+	snapData, err := k.K8sExternalStorage.GetSnapshotData(snapDataName)
 	if err != nil {
 		return nil, &scheduler.ErrFailedToGetSnapShotData{
 			App:   ctx.App,
@@ -3705,7 +3529,7 @@ func (k *K8s) validatePVCSize(ctx *scheduler.Context, obj *corev1.PersistentVolu
 		return err
 	}
 	log.Infof("[%v] expecting PVC size: %v\n", ctx.App.Key, expectedPVCSize)
-	err = k8sCore.ValidatePersistentVolumeClaimSize(obj, int64(expectedPVCSize), timeout, retryInterval)
+	err = k.K8sCore.ValidatePersistentVolumeClaimSize(obj, int64(expectedPVCSize), timeout, retryInterval)
 	if err != nil {
 		return &scheduler.ErrFailedToValidateStorage{
 			App:   ctx.App,
@@ -3731,7 +3555,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
 			if options != nil && !options.SkipClusterScopedObjects {
-				if err := k8sStorage.DeleteStorageClass(obj.Name); err != nil {
+				if err := k.K8sStorage.DeleteStorageClass(obj.Name); err != nil {
 					if k8serrors.IsNotFound(err) {
 						log.Infof("[%v] Storage class is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 						continue
@@ -3745,7 +3569,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 				log.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			pvcObj, err := k.K8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
 				if k8serrors.IsNotFound(err) {
 					log.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
@@ -3764,7 +3588,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 				Shared:    k.isPVCShared(obj),
 			})
 
-			if err := k8sCore.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
+			if err := k.K8sCore.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
 				if k8serrors.IsNotFound(err) {
 					log.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 					continue
@@ -3777,7 +3601,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 
 			log.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
-			if err := k8sExternalStorage.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
+			if err := k.K8sExternalStorage.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
 				if k8serrors.IsNotFound(err) {
 					log.Infof("[%v] Snapshot is not found: %v, skipping deletion", ctx.App.Key, obj.Metadata.Name)
 					continue
@@ -3790,7 +3614,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 
 			log.Infof("[%v] Destroyed Snapshot: %v", ctx.App.Key, obj.Metadata.Name)
 		} else if obj, ok := specObj.(*storkapi.GroupVolumeSnapshot); ok {
-			if err := k8sStork.DeleteGroupSnapshot(obj.Name, obj.Namespace); err != nil {
+			if err := k.K8sStork.DeleteGroupSnapshot(obj.Name, obj.Namespace); err != nil {
 				if k8serrors.IsNotFound(err) {
 					log.Infof("[%v] Group snapshot is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 					continue
@@ -3803,7 +3627,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 
 			log.Infof("[%v] Destroyed group snapshot: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			pvcList, err := k8sApps.GetPVCsForStatefulSet(obj)
+			pvcList, err := k.K8sApps.GetPVCsForStatefulSet(obj)
 			if err != nil || pvcList == nil {
 				if k8serrors.IsNotFound(err) {
 					log.Infof("[%v] PVCs for StatefulSet not found: %v, skipping deletion", ctx.App.Key, obj.Name)
@@ -3816,7 +3640,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			}
 
 			for _, pvc := range pvcList.Items {
-				pvcObj, err := k8sCore.GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
+				pvcObj, err := k.K8sCore.GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
 				if err != nil {
 					if k8serrors.IsNotFound(err) {
 						log.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
@@ -3834,7 +3658,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 					Shared:    k.isPVCShared(&pvc),
 				})
 
-				if err := k8sCore.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
+				if err := k.K8sCore.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
 					if k8serrors.IsNotFound(err) {
 						log.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 						continue
@@ -3855,11 +3679,11 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 
 // GetVolumes  Get the volumes
 func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
-	k8sOps := k8sApps
+	k8sOps := k.K8sApps
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			pvcObj, err := k.K8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, fmt.Errorf("error getting pvc: %s, namespace: %s. Err: %v", obj.Name, obj.Namespace, err)
 			}
@@ -3919,11 +3743,11 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 // GetPureVolumes  Get the Pure volumes (if enabled) by type (PureFile or PureBlock)
 func (k *K8s) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*volume.Volume, error) {
-	k8sOps := k8sApps
+	k8sOps := k.K8sApps
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			pvcObj, err := k.K8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, err
 			}
@@ -3987,7 +3811,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 	for _, specObj := range ctx.App.SpecList {
 		// Add security annotations if running with auth-enabled
 		if configMapName != "" {
-			configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+			configMap, err := k.K8sCore.GetConfigMap(configMapName, "default")
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetConfigMap{
 					Name:  configMapName,
@@ -3995,14 +3819,14 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				}
 			}
 
-			err = k.addSecurityAnnotation(specObj, configMap, ctx.App)
+			err = k.addSecurityAnnotation(specObj, configMap, ctx.App, volume.StorageProvisioner(k.VolumeDriver.GetStorageProvisioner()))
 			if err != nil {
 				return nil, fmt.Errorf("failed to add annotations to storage object: %v", err)
 			}
 
 		}
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-			updatedPVC, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			updatedPVC, _ := k.K8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			shouldResize, err := k.filterPureVolumesIfEnabled(updatedPVC)
 			if err != nil {
 				return nil, err
@@ -4015,7 +3839,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				vols = append(vols, vol)
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			ss, err := k.K8sApps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToResizeStorage{
 					App:   ctx.App,
@@ -4023,7 +3847,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				}
 			}
 
-			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			pvcList, err := k.K8sApps.GetPVCsForStatefulSet(ss)
 			if err != nil || pvcList == nil {
 				return nil, &scheduler.ErrFailedToResizeStorage{
 					App:   ctx.App,
@@ -4051,7 +3875,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 }
 
 func (k *K8s) resizePVCBy1GB(ctx *scheduler.Context, pvc *corev1.PersistentVolumeClaim) (*volume.Volume, error) {
-	k8sOps := k8sCore
+	k8sOps := k.K8sCore
 	storageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
 
 	// TODO this test is required since stork snapshot doesn't support resizing, remove when feature is added
@@ -4093,7 +3917,7 @@ func (k *K8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 			}
 			snaps = append(snaps, snap)
 		} else if obj, ok := specObj.(*storkapi.GroupVolumeSnapshot); ok {
-			snapsForGroupsnap, err := k8sStork.GetSnapshotsForGroupSnapshot(obj.Name, obj.Namespace)
+			snapsForGroupsnap, err := k.K8sStork.GetSnapshotsForGroupSnapshot(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, err
 			}
@@ -4115,7 +3939,7 @@ func (k *K8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 // DeleteSnapShot delete the snapshots
 func (k *K8s) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) error {
 
-	if err := k8sExternalStorage.DeleteSnapshot(snapshotName, snapshotNameSpace); err != nil {
+	if err := k.K8sExternalStorage.DeleteSnapshot(snapshotName, snapshotNameSpace); err != nil {
 		if k8serrors.IsNotFound(err) {
 			log.Infof("[%v] Snapshot is not found: %v, skipping deletion", ctx.App.Key, snapshotName)
 
@@ -4135,7 +3959,7 @@ func (k *K8s) DeleteSnapShot(ctx *scheduler.Context, snapshotName, snapshotNameS
 // DeleteCsiSnapshot delete the snapshots
 func (k *K8s) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) error {
 
-	if err := k8sExternalsnap.DeleteSnapshot(snapshotName, snapshotNameSpace); err != nil {
+	if err := k.K8sExternalsnap.DeleteSnapshot(snapshotName, snapshotNameSpace); err != nil {
 		if k8serrors.IsNotFound(err) {
 			log.Infof("[%v] Csi Snapshot not found: %v, skipping deletion", ctx.App.Key, snapshotName)
 
@@ -4156,7 +3980,7 @@ func (k *K8s) DeleteCsiSnapshot(ctx *scheduler.Context, snapshotName, snapshotNa
 func (k *K8s) GetSnapshotsInNameSpace(ctx *scheduler.Context, snapshotNameSpace string) (*snapv1.VolumeSnapshotList, error) {
 
 	time.Sleep(10 * time.Second)
-	snapshotList, err := k8sExternalStorage.ListSnapshots(snapshotNameSpace)
+	snapshotList, err := k.K8sExternalStorage.ListSnapshots(snapshotNameSpace)
 
 	if err != nil {
 		log.Infof("Snapshotsnot for app [%v] not found in namespace: %v", ctx.App.Key, snapshotNameSpace)
@@ -4179,7 +4003,7 @@ func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 
 		// We should have pods from a supported application at this point
 		var result []node.Node
-		nodeMap := node.GetNodesByName()
+		nodeMap := k.NodeRegistry.GetNodesByName()
 
 		for _, p := range pods {
 			if strings.TrimSpace(p.Spec.NodeName) == "" {
@@ -4196,7 +4020,7 @@ func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 				}
 			}
 
-			if node.Contains(result, n) {
+			if k.NodeRegistry.Contains(result, n) {
 				continue
 			}
 
@@ -4224,7 +4048,7 @@ func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 }
 
 func (k *K8s) getPodsForApp(ctx *scheduler.Context) ([]corev1.Pod, error) {
-	k8sOps := k8sApps
+	k8sOps := k.K8sApps
 	var pods []corev1.Pod
 
 	for _, specObj := range ctx.App.SpecList {
@@ -4248,7 +4072,7 @@ func (k *K8s) getPodsForApp(ctx *scheduler.Context) ([]corev1.Pod, error) {
 
 // GetPodsForPVC returns pods for give pvc and namespace
 func (k *K8s) GetPodsForPVC(pvcname, namespace string) ([]corev1.Pod, error) {
-	return k8sCore.GetPodsUsingPVC(pvcname, namespace)
+	return k.K8sCore.GetPodsUsingPVC(pvcname, namespace)
 }
 
 // GetPodLog returns logs for all the pods in the specified context
@@ -4263,7 +4087,7 @@ func (k *K8s) GetPodLog(ctx *scheduler.Context, sinceSeconds int64, containerNam
 	}
 	logsByPodName := map[string]string{}
 	for _, pod := range pods {
-		output, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &v1.PodLogOptions{SinceSeconds: sinceSecondsArg, Container: containerName})
+		output, err := k.K8sCore.GetPodLog(pod.Name, pod.Namespace, &v1.PodLogOptions{SinceSeconds: sinceSecondsArg, Container: containerName})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get logs for the pod %s/%s: %w", pod.Namespace, pod.Name, err)
 		}
@@ -4280,7 +4104,7 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("Deployment: [%s] %s", obj.Namespace, obj.Name)))
 			var depStatus *appsapi.DeploymentStatus
-			if depStatus, err = k8sApps.DescribeDeployment(obj.Name, obj.Namespace); err != nil {
+			if depStatus, err = k.K8sApps.DescribeDeployment(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get status of deployment: %v. Err: %v", obj.Name, err),
@@ -4292,16 +4116,16 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				depStatusString = fmt.Sprintf("%+v", *depStatus)
 			}
 			buf.WriteString(fmt.Sprintf("Status: %s\n", depStatusString))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Deployment", obj.Name)))
-			pods, _ := k8sApps.GetDeploymentPods(obj)
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "Deployment", obj.Name)))
+			pods, _ := k.K8sApps.GetDeploymentPods(obj)
 			for _, pod := range pods {
-				buf.WriteString(dumpPodStatusRecursively(pod))
+				buf.WriteString(k.dumpPodStatusRecursively(pod))
 			}
 			buf.WriteString(insertLineBreak("END Deployment"))
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("StatefulSet: [%s] %s", obj.Namespace, obj.Name)))
 			var ssetStatus *appsapi.StatefulSetStatus
-			if ssetStatus, err = k8sApps.DescribeStatefulSet(obj.Name, obj.Namespace); err != nil {
+			if ssetStatus, err = k.K8sApps.DescribeStatefulSet(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get status of statefulset: %v. Err: %v", obj.Name, err),
@@ -4313,16 +4137,16 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				ssetStatusString = fmt.Sprintf("%+v", *ssetStatus)
 			}
 			buf.WriteString(fmt.Sprintf("Status: %s\n", ssetStatusString))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "StatefulSet", obj.Name)))
-			pods, _ := k8sApps.GetStatefulSetPods(obj)
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "StatefulSet", obj.Name)))
+			pods, _ := k.K8sApps.GetStatefulSetPods(obj)
 			for _, pod := range pods {
-				buf.WriteString(dumpPodStatusRecursively(pod))
+				buf.WriteString(k.dumpPodStatusRecursively(pod))
 			}
 			buf.WriteString(insertLineBreak("END StatefulSet"))
 		} else if obj, ok := specObj.(*corev1.Service); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("Service: [%s] %s", obj.Namespace, obj.Name)))
 			var svcStatus *corev1.ServiceStatus
-			if svcStatus, err = k8sCore.DescribeService(obj.Name, obj.Namespace); err != nil {
+			if svcStatus, err = k.K8sCore.DescribeService(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetAppStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get status of service: %v. Err: %v", obj.Name, err),
@@ -4334,12 +4158,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				svcStatusString = fmt.Sprintf("%+v", *svcStatus)
 			}
 			buf.WriteString(fmt.Sprintf("Status: %s\n", svcStatusString))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Service", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "Service", obj.Name)))
 			buf.WriteString(insertLineBreak("END Service"))
 		} else if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("PersistentVolumeClaim: [%s] %s", obj.Namespace, obj.Name)))
 			var pvcStatus *corev1.PersistentVolumeClaimStatus
-			if pvcStatus, err = k8sCore.GetPersistentVolumeClaimStatus(obj); err != nil {
+			if pvcStatus, err = k.K8sCore.GetPersistentVolumeClaimStatus(obj); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetStorageStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get status of persistent volume claim: %v. Err: %v", obj.Name, err),
@@ -4351,12 +4175,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				pvcStatusString = fmt.Sprintf("%+v", *pvcStatus)
 			}
 			buf.WriteString(fmt.Sprintf("Status: %s\n", pvcStatusString))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "PersistentVolumeClaim", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "PersistentVolumeClaim", obj.Name)))
 			buf.WriteString(insertLineBreak("END PersistentVolumeClaim"))
 		} else if obj, ok := specObj.(*storageapi.StorageClass); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("StorageClass: %s", obj.Name)))
 			var scParams map[string]string
-			if scParams, err = k8sStorage.GetStorageClassParams(obj); err != nil {
+			if scParams, err = k.K8sStorage.GetStorageClassParams(obj); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetVolumeParameters{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get parameters of storage class: %v. Err: %v", obj.Name, err),
@@ -4364,24 +4188,24 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			}
 			// Dump storage class parameters
 			buf.WriteString(fmt.Sprintf("%+v\n", scParams))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "StorageClass", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "StorageClass", obj.Name)))
 			buf.WriteString(insertLineBreak("END StorageClass"))
 		} else if obj, ok := specObj.(*corev1.Pod); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("Pod: [%s] %s", obj.Namespace, obj.Name)))
 			var podStatus *corev1.PodList
-			if podStatus, err = k8sCore.GetPods(obj.Name, nil); err != nil {
+			if podStatus, err = k.K8sCore.GetPods(obj.Name, nil); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetPodStatus{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get status of pod: %v. Err: %v", obj.Name, err),
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", podStatus))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Pod", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "Pod", obj.Name)))
 			buf.WriteString(insertLineBreak("END Pod"))
 		} else if obj, ok := specObj.(*storkapi.ClusterPair); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("ClusterPair: [%s] %s", obj.Namespace, obj.Name)))
 			var clusterPair *storkapi.ClusterPair
-			if clusterPair, err = k8sStork.GetClusterPair(obj.Name, obj.Namespace); err != nil {
+			if clusterPair, err = k.K8sStork.GetClusterPair(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to get cluster Pair: %v. Err: %v", obj.Name, err),
@@ -4389,12 +4213,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", clusterPair))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "ClusterPair", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "ClusterPair", obj.Name)))
 			buf.WriteString(insertLineBreak("END ClusterPair"))
 		} else if obj, ok := specObj.(*storkapi.Migration); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("Migration: [%s] %s", obj.Namespace, obj.Name)))
 			var migration *storkapi.Migration
-			if migration, err = k8sStork.GetMigration(obj.Name, obj.Namespace); err != nil {
+			if migration, err = k.K8sStork.GetMigration(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to get Migration: %v. Err: %v", obj.Name, err),
@@ -4402,12 +4226,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", migration))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Migration", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "Migration", obj.Name)))
 			buf.WriteString(insertLineBreak("END Migration"))
 		} else if obj, ok := specObj.(*storkapi.MigrationSchedule); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("MigrationSchedule: [%s] %s", obj.Namespace, obj.Name)))
 			var migrationSchedule *storkapi.MigrationSchedule
-			if migrationSchedule, err = k8sStork.GetMigrationSchedule(obj.Name, obj.Namespace); err != nil {
+			if migrationSchedule, err = k.K8sStork.GetMigrationSchedule(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to get MigrationSchedule: %v. Err: %v", obj.Name, err),
@@ -4415,12 +4239,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", migrationSchedule))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "MigrationSchedule", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "MigrationSchedule", obj.Name)))
 			buf.WriteString(insertLineBreak("END MigrationSchedule"))
 		} else if obj, ok := specObj.(*storkapi.BackupLocation); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("BackupLocation: [%s] %s", obj.Namespace, obj.Name)))
 			var backupLocation *storkapi.BackupLocation
-			if backupLocation, err = k8sStork.GetBackupLocation(obj.Name, obj.Namespace); err != nil {
+			if backupLocation, err = k.K8sStork.GetBackupLocation(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to get BackupLocation: %v. Err: %v", obj.Name, err),
@@ -4428,12 +4252,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", backupLocation))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "BackupLocation", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "BackupLocation", obj.Name)))
 			buf.WriteString(insertLineBreak("END BackupLocation"))
 		} else if obj, ok := specObj.(*storkapi.ApplicationBackup); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("ApplicationBackup: [%s] %s", obj.Namespace, obj.Name)))
 			var applicationBackup *storkapi.ApplicationBackup
-			if applicationBackup, err = k8sStork.GetApplicationBackup(obj.Name, obj.Namespace); err != nil {
+			if applicationBackup, err = k.K8sStork.GetApplicationBackup(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to get ApplicationBackup: %v. Err: %v", obj.Name, err),
@@ -4441,12 +4265,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", applicationBackup))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "ApplicationBackup", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "ApplicationBackup", obj.Name)))
 			buf.WriteString(insertLineBreak("END ApplicationBackup"))
 		} else if obj, ok := specObj.(*storkapi.ApplicationRestore); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("ApplicationRestore: [%s] %s", obj.Namespace, obj.Name)))
 			var applicationRestore *storkapi.ApplicationRestore
-			if applicationRestore, err = k8sStork.GetApplicationRestore(obj.Name, obj.Namespace); err != nil {
+			if applicationRestore, err = k.K8sStork.GetApplicationRestore(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to get ApplicationRestore: %v. Err: %v", obj.Name, err),
@@ -4454,12 +4278,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", applicationRestore))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "ApplicationRestore", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "ApplicationRestore", obj.Name)))
 			buf.WriteString(insertLineBreak("END ApplicationRestore"))
 		} else if obj, ok := specObj.(*storkapi.ApplicationClone); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("ApplicationClone: [%s] %s", obj.Namespace, obj.Name)))
 			var applicationClone *storkapi.ApplicationClone
-			if applicationClone, err = k8sStork.GetApplicationClone(obj.Name, obj.Namespace); err != nil {
+			if applicationClone, err = k.K8sStork.GetApplicationClone(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to get ApplicationClone: %v. Err: %v", obj.Name, err),
@@ -4467,12 +4291,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", applicationClone))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "ApplicationClone", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "ApplicationClone", obj.Name)))
 			buf.WriteString(insertLineBreak("END ApplicationClone"))
 		} else if obj, ok := specObj.(*storkapi.VolumeSnapshotRestore); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("VolumeSnapshotRestore: [%s] %s", obj.Namespace, obj.Name)))
 			var volumeSnapshotRestore *storkapi.VolumeSnapshotRestore
-			if volumeSnapshotRestore, err = k8sStork.GetVolumeSnapshotRestore(obj.Name, obj.Namespace); err != nil {
+			if volumeSnapshotRestore, err = k.K8sStork.GetVolumeSnapshotRestore(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to get VolumeSnapshotRestore: %v. Err: %v", obj.Name, err),
@@ -4480,12 +4304,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", volumeSnapshotRestore))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "VolumeSnapshotRestore", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "VolumeSnapshotRestore", obj.Name)))
 			buf.WriteString(insertLineBreak("END VolumeSnapshotRestore"))
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("VolumeSnapshot: [%s] %s", obj.Metadata.Namespace, obj.Metadata.Name)))
 			var volumeSnapshotStatus *snapv1.VolumeSnapshotStatus
-			if volumeSnapshotStatus, err = k8sExternalStorage.GetSnapshotStatus(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
+			if volumeSnapshotStatus, err = k.K8sExternalStorage.GetSnapshotStatus(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
 					Name:  obj.Metadata.Name,
 					Cause: fmt.Sprintf("Failed to get VolumeSnapshot: %v. Err: %v", obj.Metadata.Name, err),
@@ -4493,12 +4317,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", volumeSnapshotStatus))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Metadata.Name, "VolumeSnapshot", obj.Metadata.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Metadata.Name, "VolumeSnapshot", obj.Metadata.Name)))
 			buf.WriteString(insertLineBreak("END VolumeSnapshot"))
 		} else if obj, ok := specObj.(*apapi.AutopilotRule); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("AutopilotRule: [%s] %s", obj.Namespace, obj.Name)))
 			var autopilotRule *apapi.AutopilotRule
-			if autopilotRule, err = k8sAutopilot.GetAutopilotRule(obj.Name); err != nil {
+			if autopilotRule, err = k.K8sAutopilot.GetAutopilotRule(obj.Name); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to get AutopilotRule: %v. Err: %v", obj.Name, err),
@@ -4506,12 +4330,12 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 				}))
 			}
 			buf.WriteString(fmt.Sprintf("%v\n", autopilotRule))
-			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "AutopilotRule", obj.Name)))
+			buf.WriteString(fmt.Sprintf("%v", k.dumpEvents(obj.Namespace, "AutopilotRule", obj.Name)))
 			buf.WriteString(insertLineBreak("END AutopilotRule"))
 		} else if obj, ok := specObj.(*corev1.Secret); ok {
 			buf.WriteString(insertLineBreak(fmt.Sprintf("Secret: [%s] %s", obj.Namespace, obj.Name)))
 			var secret *corev1.Secret
-			if secret, err = k8sCore.GetSecret(obj.Name, obj.Namespace); err != nil {
+			if secret, err = k.K8sCore.GetSecret(obj.Name, obj.Namespace); err != nil {
 				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetSecret{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get secret : %v. Error is : %v", obj.Name, err),
@@ -4528,7 +4352,7 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 
 // ScaleApplication  Scale the application
 func (k *K8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
-	k8sOps := k8sApps
+	k8sOps := k.K8sApps
 	for _, specObj := range ctx.App.SpecList {
 		if !k.IsScalable(specObj) {
 			continue
@@ -4579,7 +4403,7 @@ func (k *K8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string
 
 // GetScaleFactorMap Get scale Factory map
 func (k *K8s) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error) {
-	k8sOps := k8sApps
+	k8sOps := k.K8sApps
 	scaleFactorMap := make(map[string]int32, len(ctx.App.SpecList))
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
@@ -4601,7 +4425,6 @@ func (k *K8s) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error
 
 // StopSchedOnNode stop schedule on node
 func (k *K8s) StopSchedOnNode(n node.Node) error {
-	driver, _ := node.Get(k.NodeDriverName)
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         FindFilesOnWorkerTimeout,
@@ -4609,7 +4432,7 @@ func (k *K8s) StopSchedOnNode(n node.Node) error {
 		},
 		Action: "stop",
 	}
-	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	err := k.NodeDriver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStopSchedOnNode{
 			Node:          n,
@@ -4622,7 +4445,6 @@ func (k *K8s) StopSchedOnNode(n node.Node) error {
 
 // StartSchedOnNode start schedule on node
 func (k *K8s) StartSchedOnNode(n node.Node) error {
-	driver, _ := node.Get(k.NodeDriverName)
 	systemOpts := node.SystemctlOpts{
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         DefaultTimeout,
@@ -4630,7 +4452,7 @@ func (k *K8s) StartSchedOnNode(n node.Node) error {
 		},
 		Action: "start",
 	}
-	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	err := k.NodeDriver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStartSchedOnNode{
 			Node:          n,
@@ -4643,18 +4465,18 @@ func (k *K8s) StartSchedOnNode(n node.Node) error {
 
 // EnableSchedulingOnNode enable apps to be scheduled to a given k8s worker node
 func (k *K8s) EnableSchedulingOnNode(n node.Node) error {
-	return k8sCore.UnCordonNode(n.Name, DefaultTimeout, DefaultRetryInterval)
+	return k.K8sCore.UnCordonNode(n.Name, DefaultTimeout, DefaultRetryInterval)
 }
 
 // DisableSchedulingOnNode disable apps to be scheduled to a given k8s worker node
 func (k *K8s) DisableSchedulingOnNode(n node.Node) error {
-	return k8sCore.CordonNode(n.Name, DefaultTimeout, DefaultRetryInterval)
+	return k.K8sCore.CordonNode(n.Name, DefaultTimeout, DefaultRetryInterval)
 }
 
 // IsScalable check whether scalable
 func (k *K8s) IsScalable(spec interface{}) bool {
 	if obj, ok := spec.(*appsapi.Deployment); ok {
-		dep, err := k8sApps.GetDeployment(obj.Name, obj.Namespace)
+		dep, err := k.K8sApps.GetDeployment(obj.Name, obj.Namespace)
 		if err != nil {
 			log.Errorf("Failed to retrieve deployment [%s] %s. Cause: %v", obj.Namespace, obj.Name, err)
 			return false
@@ -4662,7 +4484,7 @@ func (k *K8s) IsScalable(spec interface{}) bool {
 		for _, vol := range dep.Spec.Template.Spec.Volumes {
 			if vol.PersistentVolumeClaim != nil {
 				pvcName := vol.PersistentVolumeClaim.ClaimName
-				pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, dep.Namespace)
+				pvc, err := k.K8sCore.GetPersistentVolumeClaim(pvcName, dep.Namespace)
 				if err != nil {
 					log.Errorf("Failed to retrieve PVC [%s] %s. Cause: %v", obj.Namespace, pvcName, err)
 					return false
@@ -4686,7 +4508,7 @@ func (k *K8s) GetTokenFromConfigMap(configMapName string) (string, error) {
 	var token string
 	var err error
 	var configMap *corev1.ConfigMap
-	k8sOps := k8sCore
+	k8sOps := k.K8sCore
 	if configMap, err = k8sOps.GetConfigMap(configMapName, "default"); err == nil {
 		if secret, err := k8sOps.GetSecret(configMap.Data[secretNameKey], configMap.Data[secretNamespaceKey]); err == nil {
 			if tk, ok := secret.Data["auth-token"]; ok {
@@ -4703,20 +4525,21 @@ func (k *K8s) createAdmissionRegistrationObjects(
 	specObj interface{},
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
+	options scheduler.ScheduleOptions,
 ) (interface{}, error) {
-	k8sOps := k8sAdmissionRegistration
+	k8sOps := k.K8sAdmissionRegistration
 
 	// Add security annotations if running with auth-enabled
 	configMapName := k.secretConfigMapName
 	if configMapName != "" {
-		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+		configMap, err := k.K8sCore.GetConfigMap(configMapName, "default")
 		if err != nil {
 			return nil, &scheduler.ErrFailedToGetConfigMap{
 				Name:  configMapName,
 				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
 			}
 		}
-		err = k.addSecurityAnnotation(specObj, configMap, app)
+		err = k.addSecurityAnnotation(specObj, configMap, app, options.StorageProvisioner)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add annotations to migration object: %v", err)
 		}
@@ -4781,7 +4604,7 @@ func (k *K8s) createCustomResourceObjects(
 	app *spec.AppSpec,
 ) (interface{}, error) {
 
-	if obj, ok := spec.(*CustomResourceObjectYAML); ok {
+	if obj, ok := spec.(*parser.CustomResourceObjectYAML); ok {
 		log.Warn("applying custom resources")
 		cryaml := obj.Path
 		if _, err := os.Stat(cryaml); baseErrors.Is(err, os.ErrNotExist) {
@@ -4803,7 +4626,7 @@ func (k *K8s) createCustomResourceObjects(
 // destroyCustomResourceObjects is used to delete objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl delete -f` command instead of the conventional method of using an api library
 func (k *K8s) destroyCustomResourceObjects(spec interface{}, app *spec.AppSpec) error {
 
-	if obj, ok := spec.(*CustomResourceObjectYAML); ok {
+	if obj, ok := spec.(*parser.CustomResourceObjectYAML); ok {
 		cryaml := obj.Path
 		if _, err := os.Stat(cryaml); baseErrors.Is(err, os.ErrNotExist) {
 			return &scheduler.ErrFailedToDestroyApp{
@@ -4837,11 +4660,11 @@ func (k *K8s) createCRDObjects(
 
 	if obj, ok := specObj.(*apiextensionsv1.CustomResourceDefinition); ok {
 		obj.Namespace = ns.Name
-		err := k8sApiExtensions.RegisterCRD(obj)
+		err := k.K8sApiExtensions.RegisterCRD(obj)
 
 		if k8serrors.IsAlreadyExists(err) {
 			options := metav1.GetOptions{}
-			if crd, err := k8sApiExtensions.GetCRD(obj.Name, options); err == nil {
+			if crd, err := k.K8sApiExtensions.GetCRD(obj.Name, options); err == nil {
 				log.Infof("[%v] Found existing CRD: %v", app.Key, crd.Name)
 				return crd, nil
 			}
@@ -4854,7 +4677,7 @@ func (k *K8s) createCRDObjects(
 			}
 		} else {
 			options := metav1.GetOptions{}
-			if crd, err := k8sApiExtensions.GetCRD(obj.Name, options); err == nil {
+			if crd, err := k.K8sApiExtensions.GetCRD(obj.Name, options); err == nil {
 				log.Infof("[%v] Registered CRD: %v", app.Key, crd.Name)
 				return crd, nil
 			} else {
@@ -4867,11 +4690,11 @@ func (k *K8s) createCRDObjects(
 		}
 	} else if obj, ok := specObj.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
 		obj.Namespace = ns.Name
-		err := k8sApiExtensions.RegisterCRDV1beta1(obj)
+		err := k.K8sApiExtensions.RegisterCRDV1beta1(obj)
 
 		if k8serrors.IsAlreadyExists(err) {
 			options := metav1.GetOptions{}
-			if crd, err := k8sApiExtensions.GetCRDV1beta1(obj.Name, options); err == nil {
+			if crd, err := k.K8sApiExtensions.GetCRDV1beta1(obj.Name, options); err == nil {
 				log.Infof("[%v] Found existing CRDV1beta1: %v", app.Key, crd.Name)
 				return crd, nil
 			}
@@ -4884,7 +4707,7 @@ func (k *K8s) createCRDObjects(
 			}
 		} else {
 			options := metav1.GetOptions{}
-			if crd, err := k8sApiExtensions.GetCRDV1beta1(obj.Name, options); err == nil {
+			if crd, err := k.K8sApiExtensions.GetCRDV1beta1(obj.Name, options); err == nil {
 				log.Infof("[%v] Registered CRDV1beta1: %v", app.Key, crd.Name)
 				return crd, nil
 			} else {
@@ -4904,19 +4727,20 @@ func (k *K8s) createMigrationObjects(
 	specObj interface{},
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
+	options scheduler.ScheduleOptions,
 ) (interface{}, error) {
-	k8sOps := k8sStork
+	k8sOps := k.K8sStork
 	// Add security annotations if running with auth-enabled
 	configMapName := k.secretConfigMapName
 	if configMapName != "" {
-		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+		configMap, err := k.K8sCore.GetConfigMap(configMapName, "default")
 		if err != nil {
 			return nil, &scheduler.ErrFailedToGetConfigMap{
 				Name:  configMapName,
 				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
 			}
 		}
-		err = k.addSecurityAnnotation(specObj, configMap, app)
+		err = k.addSecurityAnnotation(specObj, configMap, app, options.StorageProvisioner)
 		if err != nil {
 			return nil, fmt.Errorf("failed to add annotations to migration object: %v", err)
 		}
@@ -4989,8 +4813,8 @@ func (k *K8s) createMigrationObjects(
 	return nil, nil
 }
 
-func (k *K8s) getPodsUsingStorage(pods []corev1.Pod, provisioner string) []corev1.Pod {
-	k8sOps := k8sCore
+func (k *K8s) getPodsUsingStorage(pods []corev1.Pod, provisionerType string) []corev1.Pod {
+	k8sOps := k.K8sCore
 	podsUsingStorage := make([]corev1.Pod, 0)
 	for _, pod := range pods {
 		for _, vol := range pod.Spec.Volumes {
@@ -5002,7 +4826,7 @@ func (k *K8s) getPodsUsingStorage(pods []corev1.Pod, provisioner string) []corev
 				log.Errorf("failed to get pvc [%s] %s. Cause: %v", vol.PersistentVolumeClaim.ClaimName, pod.Namespace, err)
 				return podsUsingStorage
 			}
-			if scProvisioner, err := k8sOps.GetStorageProvisionerForPVC(pvc); err == nil && scProvisioner == volume.GetStorageProvisioner() {
+			if scProvisioner, err := k8sOps.GetStorageProvisionerForPVC(pvc); err == nil && scProvisioner == volume.GetStorageProvisionerForType(provisionerType) {
 				podsUsingStorage = append(podsUsingStorage, pod)
 				break
 			}
@@ -5012,8 +4836,8 @@ func (k *K8s) getPodsUsingStorage(pods []corev1.Pod, provisioner string) []corev
 }
 
 // PrepareNodeToDecommission Prepare the Node for decommission
-func (k *K8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
-	k8sOps := k8sCore
+func (k *K8s) PrepareNodeToDecommission(n node.Node, provisionerType string) error {
+	k8sOps := k.K8sCore
 	pods, err := k8sOps.GetPodsByNode(n.Name, "")
 	if err != nil {
 		return &scheduler.ErrFailedToDecommissionNode{
@@ -5021,7 +4845,7 @@ func (k *K8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 			Cause: fmt.Sprintf("Failed to get pods on the node: %v. Err: %v", n.Name, err),
 		}
 	}
-	podsUsingStorage := k.getPodsUsingStorage(pods.Items, provisioner)
+	podsUsingStorage := k.getPodsUsingStorage(pods.Items, provisionerType)
 	// double the timeout every 40 pods
 	timeout := DefaultTimeout * time.Duration(len(podsUsingStorage)/40+1)
 	if err = k8sOps.DrainPodsFromNode(n.Name, podsUsingStorage, timeout, DefaultRetryInterval); err != nil {
@@ -5037,7 +4861,7 @@ func (k *K8s) destroyMigrationObject(
 	specObj interface{},
 	app *spec.AppSpec,
 ) error {
-	k8sOps := k8sStork
+	k8sOps := k.K8sStork
 	if obj, ok := specObj.(*storkapi.ClusterPair); ok {
 		err := k8sOps.DeleteClusterPair(obj.Name, obj.Namespace)
 		if err != nil {
@@ -5093,7 +4917,7 @@ func (k *K8s) destroyVolumeSnapshotRestoreObject(
 	specObj interface{},
 	app *spec.AppSpec,
 ) error {
-	k8sOps := k8sStork
+	k8sOps := k.K8sStork
 	if obj, ok := specObj.(*storkapi.VolumeSnapshotRestore); ok {
 		err := k8sOps.DeleteVolumeSnapshotRestore(obj.Name, obj.Namespace)
 		if err != nil {
@@ -5117,12 +4941,8 @@ func (k *K8s) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart ti
 	}
 	// extract volume name and snapshotname from context
 	// can do it using snapRestore.Status.Volume
-	k8sOps := k8sStork
+	k8sOps := k.K8sStork
 	specObjects := ctx.App.SpecList
-	driver, err := volume.Get(k.VolDriverName)
-	if err != nil {
-		return err
-	}
 
 	for _, specObj := range specObjects {
 		if obj, ok := specObj.(*storkapi.VolumeSnapshotRestore); ok {
@@ -5144,17 +4964,17 @@ func (k *K8s) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart ti
 
 	for _, vol := range snapRestore.Status.Volumes {
 		log.Infof("validating volume %v is restored from %v", vol.Volume, vol.Snapshot)
-		snapshotData, err := k8sExternalStorage.GetSnapshotData(vol.Snapshot)
+		snapshotData, err := k.K8sExternalStorage.GetSnapshotData(vol.Snapshot)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v",
 				vol.Snapshot, err)
 		}
-		err = k8sExternalStorage.ValidateSnapshotData(snapshotData.Metadata.Name, false, DefaultTimeout, DefaultRetryInterval)
+		err = k.K8sExternalStorage.ValidateSnapshotData(snapshotData.Metadata.Name, false, DefaultTimeout, DefaultRetryInterval)
 		if err != nil {
 			return fmt.Errorf("snapshot: %s is not complete. %v", snapshotData.Metadata.Name, err)
 		}
 		// validate each snap restore
-		if err := driver.ValidateVolumeSnapshotRestore(vol.Volume, snapshotData, timeStart); err != nil {
+		if err := k.VolumeDriver.ValidateVolumeSnapshotRestore(vol.Volume, snapshotData, timeStart); err != nil {
 			return err
 		}
 	}
@@ -5167,7 +4987,7 @@ func (k *K8s) createBackupObjects(
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
 ) (interface{}, error) {
-	k8sOps := k8sStork
+	k8sOps := k.K8sStork
 	if obj, ok := specObj.(*storkapi.BackupLocation); ok {
 		obj.Namespace = ns.Name
 		backupLocation, err := k8sOps.CreateBackupLocation(obj)
@@ -5219,7 +5039,7 @@ func (k *K8s) destroyBackupObjects(
 	specObj interface{},
 	app *spec.AppSpec,
 ) error {
-	k8sOps := k8sStork
+	k8sOps := k.K8sStork
 	if obj, ok := specObj.(*storkapi.BackupLocation); ok {
 		err := k8sOps.DeleteBackupLocation(obj.Name, obj.Namespace)
 		if err != nil {
@@ -5268,9 +5088,9 @@ func (k *K8s) createRbacObjects(
 ) (interface{}, error) {
 	if obj, ok := spec.(*rbacv1.Role); ok {
 		obj.Namespace = ns.Name
-		role, err := k8sRbac.CreateRole(obj)
+		role, err := k.K8sRbac.CreateRole(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if role, err = k8sRbac.GetRole(obj.Name, obj.Namespace); err == nil {
+			if role, err = k.K8sRbac.GetRole(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Role: %v", app.Key, role.Name)
 				return role, nil
 			}
@@ -5286,9 +5106,9 @@ func (k *K8s) createRbacObjects(
 		return role, nil
 	} else if obj, ok := spec.(*rbacv1.RoleBinding); ok {
 		obj.Namespace = ns.Name
-		rolebinding, err := k8sRbac.CreateRoleBinding(obj)
+		rolebinding, err := k.K8sRbac.CreateRoleBinding(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if rolebinding, err = k8sRbac.GetRoleBinding(obj.Name, obj.Namespace); err == nil {
+			if rolebinding, err = k.K8sRbac.GetRoleBinding(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Role Binding: %v", app.Key, rolebinding.Name)
 				return rolebinding, nil
 			}
@@ -5304,9 +5124,9 @@ func (k *K8s) createRbacObjects(
 		return rolebinding, nil
 	} else if obj, ok := spec.(*rbacv1.ClusterRole); ok {
 		obj.Namespace = ns.Name
-		clusterrole, err := k8sRbac.CreateClusterRole(obj)
+		clusterrole, err := k.K8sRbac.CreateClusterRole(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if clusterrole, err = k8sRbac.GetClusterRole(obj.Name); err == nil {
+			if clusterrole, err = k.K8sRbac.GetClusterRole(obj.Name); err == nil {
 				log.Infof("[%v] Found existing Role Binding: %v", app.Key, clusterrole.Name)
 				return clusterrole, nil
 			}
@@ -5328,9 +5148,9 @@ func (k *K8s) createRbacObjects(
 				obj.Subjects[i].Namespace = ns.Name
 			}
 		}
-		clusterrolebinding, err := k8sRbac.CreateClusterRoleBinding(obj)
+		clusterrolebinding, err := k.K8sRbac.CreateClusterRoleBinding(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if clusterrolebinding, err = k8sRbac.GetClusterRoleBinding(obj.Name); err == nil {
+			if clusterrolebinding, err = k.K8sRbac.GetClusterRoleBinding(obj.Name); err == nil {
 				log.Infof("[%v] Found existing Cluster Role Binding: %v", app.Key, clusterrolebinding.Name)
 				return clusterrolebinding, nil
 			}
@@ -5346,9 +5166,9 @@ func (k *K8s) createRbacObjects(
 		return clusterrolebinding, nil
 	} else if obj, ok := spec.(*corev1.ServiceAccount); ok {
 		obj.Namespace = ns.Name
-		serviceaccount, err := k8sCore.CreateServiceAccount(obj)
+		serviceaccount, err := k.K8sCore.CreateServiceAccount(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if serviceaccount, err = k8sCore.GetServiceAccount(obj.Name, obj.Namespace); err == nil {
+			if serviceaccount, err = k.K8sCore.GetServiceAccount(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Service Account: %v", app.Key, serviceaccount.Name)
 				return serviceaccount, nil
 			}
@@ -5371,7 +5191,7 @@ func (k *K8s) createRbacObjects(
 func (k *K8s) destroyRbacObjects(spec interface{}, app *spec.AppSpec) error {
 
 	if obj, ok := spec.(*rbacv1.ClusterRole); ok {
-		err := k8sRbac.DeleteClusterRole(obj.Name)
+		err := k.K8sRbac.DeleteClusterRole(obj.Name)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -5382,7 +5202,7 @@ func (k *K8s) destroyRbacObjects(spec interface{}, app *spec.AppSpec) error {
 			return nil
 		}
 	} else if obj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
-		err := k8sRbac.DeleteClusterRoleBinding(obj.Name)
+		err := k.K8sRbac.DeleteClusterRoleBinding(obj.Name)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -5393,7 +5213,7 @@ func (k *K8s) destroyRbacObjects(spec interface{}, app *spec.AppSpec) error {
 			return nil
 		}
 	} else if obj, ok := spec.(*corev1.ServiceAccount); ok {
-		err := k8sCore.DeleteServiceAccount(obj.Name, obj.Namespace)
+		err := k.K8sCore.DeleteServiceAccount(obj.Name, obj.Namespace)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -5415,9 +5235,9 @@ func (k *K8s) createNetworkingObjects(
 ) (interface{}, error) {
 	if obj, ok := spec.(*networkingv1beta1.Ingress); ok {
 		obj.Namespace = ns.Name
-		ingress, err := k8sNetworking.CreateIngress(obj)
+		ingress, err := k.K8sNetworking.CreateIngress(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if ingress, err = k8sNetworking.GetIngress(obj.Name, obj.Namespace); err == nil {
+			if ingress, err = k.K8sNetworking.GetIngress(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Ingress: %v", app.Key, ingress.Name)
 				return ingress, nil
 			}
@@ -5442,9 +5262,9 @@ func (k *K8s) createBatchObjects(
 ) (interface{}, error) {
 	if obj, ok := spec.(*batchv1beta1.CronJob); ok {
 		obj.Namespace = ns.Name
-		cronjob, err := k8sBatch.CreateCronJobV1beta1(obj)
+		cronjob, err := k.K8sBatch.CreateCronJobV1beta1(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if cronjob, err = k8sBatch.GetCronJobV1beta1(obj.Name, obj.Namespace); err == nil {
+			if cronjob, err = k.K8sBatch.GetCronJobV1beta1(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing CronJob: %v", app.Key, cronjob.Name)
 				return cronjob, nil
 			}
@@ -5460,9 +5280,9 @@ func (k *K8s) createBatchObjects(
 		return cronjob, nil
 	} else if obj, ok := spec.(*batchv1.Job); ok {
 		obj.Namespace = ns.Name
-		job, err := k8sBatch.CreateJob(obj)
+		job, err := k.K8sBatch.CreateJob(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if job, err = k8sBatch.GetJob(obj.Name, obj.Namespace); err == nil {
+			if job, err = k.K8sBatch.GetJob(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing Job: %v", app.Key, job.Name)
 				return job, nil
 			}
@@ -5489,9 +5309,9 @@ func (k *K8s) createServiceMonitorObjects(
 		if obj.Namespace == "" {
 			obj.Namespace = ns.Name
 		}
-		serviceMonitor, err := k8sMonitoring.CreateServiceMonitor(obj)
+		serviceMonitor, err := k.K8sMonitoring.CreateServiceMonitor(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if serviceMonitor, err = k8sMonitoring.GetServiceMonitor(obj.Name, obj.Namespace); err == nil {
+			if serviceMonitor, err = k.K8sMonitoring.GetServiceMonitor(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing ServiceMonitor: %v", app.Key, serviceMonitor.Name)
 				return serviceMonitor, nil
 			}
@@ -5518,9 +5338,9 @@ func (k *K8s) createPodDisruptionBudgetObjects(
 		if obj.Namespace == "" {
 			obj.Namespace = ns.Name
 		}
-		podDisruptionBudget, err := k8sPolicy.CreatePodDisruptionBudget(obj)
+		podDisruptionBudget, err := k.K8sPolicy.CreatePodDisruptionBudget(obj)
 		if k8serrors.IsAlreadyExists(err) {
-			if podDisruptionBudget, err = k8sPolicy.GetPodDisruptionBudget(obj.Name, obj.Namespace); err == nil {
+			if podDisruptionBudget, err = k.K8sPolicy.GetPodDisruptionBudget(obj.Name, obj.Namespace); err == nil {
 				log.Infof("[%v] Found existing PodDisruptionBudget: %v", app.Key, podDisruptionBudget.Name)
 				return podDisruptionBudget, nil
 			}
@@ -5543,7 +5363,7 @@ func (k *K8s) destroyPodDisruptionBudgetObjects(
 	app *spec.AppSpec,
 ) error {
 	if obj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
-		err := k8sPolicy.DeletePodDisruptionBudget(obj.Name, obj.Namespace)
+		err := k.K8sPolicy.DeletePodDisruptionBudget(obj.Name, obj.Namespace)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -5558,7 +5378,7 @@ func (k *K8s) destroyServiceMonitorObjects(spec interface{},
 	app *spec.AppSpec,
 ) error {
 	if obj, ok := spec.(*monitoringv1.ServiceMonitor); ok {
-		err := k8sMonitoring.DeleteServiceMonitor(obj.Name, obj.Namespace)
+		err := k.K8sMonitoring.DeleteServiceMonitor(obj.Name, obj.Namespace)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
@@ -5575,12 +5395,8 @@ func (k *K8s) EstimatePVCExpansion(pvc *corev1.PersistentVolumeClaim, apRule apa
 	pvcSize, _ := pvcObjSize.AsInt64()
 	initialPVCSize := uint64(pvcSize)
 
-	volDriver, err := volume.Get(k.VolDriverName)
-	if err != nil {
-		return 0, 0, err
-	}
 	if isAutopilotMatchPvcLabels(apRule, pvc) {
-		return volDriver.EstimateVolumeExpand(apRule, initialPVCSize, wSize)
+		return k.VolumeDriver.EstimateVolumeExpand(apRule, initialPVCSize, wSize)
 	}
 	return initialPVCSize, 0, nil
 }
@@ -5658,7 +5474,7 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 		apapi.RuleStateNormal,
 	}
 
-	listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(namespace)
+	listAutopilotRuleObjects, err := k.K8sAutopilot.ListAutopilotRuleObjects(namespace)
 	if err != nil {
 		return err
 	}
@@ -5688,7 +5504,7 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 // GetIOBandwidth takes in the pod name and namespace and returns the IOPs speed
 func (k *K8s) GetIOBandwidth(podName string, namespace string) (int, error) {
 	log.Infof("Getting the IO Speed in pod %s", podName)
-	pod, err := k8sCore.GetPodByName(podName, namespace)
+	pod, err := k.K8sCore.GetPodByName(podName, namespace)
 	if err != nil {
 		return 0, fmt.Errorf("error in getting FIO PODS")
 	}
@@ -5696,7 +5512,7 @@ func (k *K8s) GetIOBandwidth(podName string, namespace string) (int, error) {
 		// Getting 250 lines from the pod logs to get the io_bytes
 		TailLines: getInt64Address(250),
 	}
-	log, err := k8sCore.GetPodLog(pod.Name, pod.Namespace, &logOptions)
+	log, err := k.K8sCore.GetPodLog(pod.Name, pod.Namespace, &logOptions)
 	if err != nil {
 		return 0, err
 	}
@@ -5865,7 +5681,7 @@ func (k *K8s) GetEvents() map[string][]scheduler.Event {
 
 // AddLabelOnNode adds label for a given node
 func (k *K8s) AddLabelOnNode(n node.Node, lKey string, lValue string) error {
-	k8sOps := k8sCore
+	k8sOps := k.K8sCore
 
 	if err := k8sOps.AddLabelOnNode(n.Name, lKey, lValue); err != nil {
 		return &scheduler.ErrFailedToAddLabelOnNode{
@@ -5881,7 +5697,7 @@ func (k *K8s) AddLabelOnNode(n node.Node, lKey string, lValue string) error {
 
 // RemoveLabelOnNode adds label for a given node
 func (k *K8s) RemoveLabelOnNode(n node.Node, lKey string) error {
-	k8sOps := k8sCore
+	k8sOps := k.K8sCore
 
 	if err := k8sOps.RemoveLabelOnNode(n.Name, lKey); err != nil {
 		return &scheduler.ErrFailedToRemoveLabelOnNode{
@@ -5905,9 +5721,8 @@ func (k *K8s) IsAutopilotEnabledForVolume(vol *volume.Volume) bool {
 
 // SaveSchedulerLogsToFile gathers all scheduler logs into a file
 func (k *K8s) SaveSchedulerLogsToFile(n node.Node, location string) error {
-	driver, _ := node.Get(k.NodeDriverName)
 	cmd := fmt.Sprintf("journalctl -lu %s* > %s/kubelet.log", SystemdSchedServiceName, location)
-	_, err := driver.RunCommand(n, cmd, node.ConnectionOpts{
+	_, err := k.NodeDriver.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         DefaultTimeout,
 		TimeBeforeRetry: DefaultRetryInterval,
 		Sudo:            true,
@@ -5935,7 +5750,7 @@ func (k *K8s) addAnnotationsToPVC(pvc *corev1.PersistentVolumeClaim, annotations
 
 // GetAutopilotNamespace returns the autopilot namespace
 func (k *K8s) GetAutopilotNamespace() (string, error) {
-	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+	allServices, err := k.K8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -5951,9 +5766,9 @@ func (k *K8s) GetAutopilotNamespace() (string, error) {
 func (k *K8s) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
 	t := func() (interface{}, bool, error) {
 		apRule.Labels = defaultTorpedoLabel
-		aRule, err := k8sAutopilot.CreateAutopilotRule(&apRule)
+		aRule, err := k.K8sAutopilot.CreateAutopilotRule(&apRule)
 		if k8serrors.IsAlreadyExists(err) {
-			if rule, err := k8sAutopilot.GetAutopilotRule(apRule.Name); err == nil {
+			if rule, err := k.K8sAutopilot.GetAutopilotRule(apRule.Name); err == nil {
 				log.Infof("Using existing AutopilotRule: %v", rule.Name)
 				return aRule, false, nil
 			}
@@ -5975,42 +5790,42 @@ func (k *K8s) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 
 // GetAutopilotRule gets the AutopilotRule for the provided name
 func (k *K8s) GetAutopilotRule(name string) (*apapi.AutopilotRule, error) {
-	return k8sAutopilot.GetAutopilotRule(name)
+	return k.K8sAutopilot.GetAutopilotRule(name)
 }
 
 // UpdateAutopilotRule updates the AutopilotRule
 func (k *K8s) UpdateAutopilotRule(apRule *apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
-	return k8sAutopilot.UpdateAutopilotRule(apRule)
+	return k.K8sAutopilot.UpdateAutopilotRule(apRule)
 }
 
 // ListAutopilotRules lists AutopilotRules
 func (k *K8s) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
-	return k8sAutopilot.ListAutopilotRules()
+	return k.K8sAutopilot.ListAutopilotRules()
 }
 
 // DeleteAutopilotRule deletes the AutopilotRule of the given name
 func (k *K8s) DeleteAutopilotRule(name string) error {
-	return k8sAutopilot.DeleteAutopilotRule(name)
+	return k.K8sAutopilot.DeleteAutopilotRule(name)
 }
 
 // GetActionApproval gets the ActionApproval for the provided name
 func (k *K8s) GetActionApproval(namespace, name string) (*apapi.ActionApproval, error) {
-	return k8sAutopilot.GetActionApproval(namespace, name)
+	return k.K8sAutopilot.GetActionApproval(namespace, name)
 }
 
 // UpdateActionApproval updates the ActionApproval
 func (k *K8s) UpdateActionApproval(namespace string, actionApproval *apapi.ActionApproval) (*apapi.ActionApproval, error) {
-	return k8sAutopilot.UpdateActionApproval(namespace, actionApproval)
+	return k.K8sAutopilot.UpdateActionApproval(namespace, actionApproval)
 }
 
 // DeleteActionApproval deletes the ActionApproval of the given name
 func (k *K8s) DeleteActionApproval(namespace, name string) error {
-	return k8sAutopilot.DeleteActionApproval(namespace, name)
+	return k.K8sAutopilot.DeleteActionApproval(namespace, name)
 }
 
 // ListActionApprovals lists ActionApproval
 func (k *K8s) ListActionApprovals(namespace string) (*apapi.ActionApprovalList, error) {
-	return k8sAutopilot.ListActionApprovals(namespace)
+	return k.K8sAutopilot.ListActionApprovals(namespace)
 }
 
 func (k *K8s) isRollingDeleteStrategyEnabled(ctx *scheduler.Context) bool {
@@ -6037,12 +5852,12 @@ func (k *K8s) UpgradeScheduler(version string) error {
 
 // DeleteSecret deletes secret with given name in given namespace
 func (k *K8s) DeleteSecret(namespace, name string) error {
-	return k8sCore.DeleteSecret(name, namespace)
+	return k.K8sCore.DeleteSecret(name, namespace)
 }
 
 // GetSecretData returns secret with given name in given namespace
 func (k *K8s) GetSecretData(namespace, name, dataField string) (string, error) {
-	secret, err := k8sCore.GetSecret(name, namespace)
+	secret, err := k.K8sCore.GetSecret(name, namespace)
 	if err != nil {
 		return "", err
 	}
@@ -6063,7 +5878,7 @@ func (k *K8s) CreateSecret(namespace, name, dataField, secretDataString string) 
 		StringData: secretData,
 	}
 
-	_, err := k8sCore.CreateSecret(secret)
+	_, err := k.K8sCore.CreateSecret(secret)
 	return err
 }
 
@@ -6085,7 +5900,7 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 	for _, specObj := range ctx.App.SpecList {
 
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			pvc, _ := k.K8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			snapshotOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, volTypes)
 			if err != nil {
 				return nil, err
@@ -6101,7 +5916,7 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 				volSnapMap[pvc.Spec.VolumeName] = volSnapshot
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			ss, err := k.K8sApps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToCreateCsiSnapshots{
 					App:   ctx.App,
@@ -6109,7 +5924,7 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 				}
 			}
 
-			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			pvcList, err := k.K8sApps.GetPVCsForStatefulSet(ss)
 			if err != nil || pvcList == nil {
 				return nil, &scheduler.ErrFailedToCreateCsiSnapshots{
 					App:   ctx.App,
@@ -6145,14 +5960,14 @@ func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string)
 func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnapshotRequest) error {
 	// This test will validate the content of the volume as opposed to just verify creation of volume.
 
-	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
+	pvcObj, err := k.K8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
 	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
 
 	if err != nil {
 		log.Errorf("Failed to retrieve PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 		return err
 	}
-	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	originalStorageClass, err := k.K8sCore.GetStorageClassForPVC(pvcObj)
 	if err != nil {
 		log.Errorf("Failed to retrieve SC for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 		return err
@@ -6160,7 +5975,7 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 	storageClassName := originalStorageClass.Name
 	log.Infof("Procedding with SC %s", storageClassName)
 
-	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
+	podsUsingPVC, err := k.K8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
 	if err != nil {
 		log.Errorf("Failed to retrieve pods using PVC %s/%s", pvcObj.GetName(), pvcObj.GetNamespace())
 		return err
@@ -6190,13 +6005,13 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 // (Testrail cases C58509)
 func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneRequest) error {
 	// This test will validate the content of the volume as opposed to just verify creation of volume.
-	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
+	pvcObj, err := k.K8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
 	if err != nil {
 		log.Errorf("Failed to retrieve PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 		return err
 	}
 	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
-	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	originalStorageClass, err := k.K8sCore.GetStorageClassForPVC(pvcObj)
 	if err != nil {
 		log.Errorf("Failed to retrieve SC for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 		return err
@@ -6204,7 +6019,7 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 	storageClassName := originalStorageClass.Name
 	log.Infof("Procedding with SC %s", storageClassName)
 
-	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
+	podsUsingPVC, err := k.K8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
 	if err != nil {
 		log.Errorf("Failed to retrieve pods using PVC %s/%s", pvcObj.GetName(), pvcObj.GetNamespace())
 		return err
@@ -6238,14 +6053,14 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 		log.Info("RunCSISnapshotAndRestoreManyTest job disabled, skipping")
 		return nil
 	}
-	pvcObj, err := k8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
+	pvcObj, err := k.K8sCore.GetPersistentVolumeClaim(request.OriginalPVCName, request.Namespace)
 	size := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
 
 	if err != nil {
 		log.Errorf("Failed to retrieve PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 		return err
 	}
-	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
+	originalStorageClass, err := k.K8sCore.GetStorageClassForPVC(pvcObj)
 	if err != nil {
 		log.Errorf("Failed to retrieve SC for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 		return err
@@ -6268,7 +6083,7 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 			log.Errorf("Failed to build cloned PVC Spec: %s", err)
 			return err
 		}
-		_, err = k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+		_, err = k.K8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
 		if err != nil {
 			log.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err)
 			return err
@@ -6328,7 +6143,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 		log.Errorf("Failed to build restored PVC Spec: %s", err)
 		return err
 	}
-	restoredPVC, err := k8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
+	restoredPVC, err := k.K8sCore.CreatePersistentVolumeClaim(restoredPVCSpec)
 	if err != nil {
 		log.Errorf("Failed to restore PVC from snapshot %s: %s", volSnapshot.Name, err)
 		return err
@@ -6376,7 +6191,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 		log.Errorf("Failed to build cloned PVC Spec: %s", err)
 		return err
 	}
-	clonedPVC, err := k8sCore.CreatePersistentVolumeClaim(clonedPVCSpec)
+	clonedPVC, err := k.K8sCore.CreatePersistentVolumeClaim(clonedPVCSpec)
 	if err != nil {
 		log.Errorf("Failed to clone PVC from source PVC %s: %s", originalPVC, err)
 		return err
@@ -6531,7 +6346,7 @@ func (k *K8s) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) 
 	for _, specObj := range ctx.App.SpecList {
 
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			pvc, _ := k.K8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			snapshotOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, volTypes)
 			if err != nil {
 				return err
@@ -6556,7 +6371,7 @@ func (k *K8s) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) 
 				}
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			ss, err := k.K8sApps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
 				return &scheduler.ErrFailedToDeleteSnapshot{
 					Name:  obj.Namespace,
@@ -6564,7 +6379,7 @@ func (k *K8s) DeleteCsiSnapsForVolumes(ctx *scheduler.Context, retainCount int) 
 				}
 			}
 
-			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			pvcList, err := k.K8sApps.GetPVCsForStatefulSet(ss)
 			if err != nil || pvcList == nil {
 				return &scheduler.ErrFailedToDeleteSnapshot{
 					Name:  obj.Namespace,
@@ -6644,7 +6459,7 @@ func (k *K8s) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scMap map[string
 	for _, specObj := range ctx.App.SpecList {
 		var resPvc *v1.PersistentVolumeClaim
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			pvc, _ := k.K8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			restoreOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, pureBlkType)
 			if err != nil {
 				return nil, err
@@ -6656,7 +6471,7 @@ func (k *K8s) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scMap map[string
 			}
 			pvcToRestorePVCMap[pvc.Name] = *resPvc
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			ss, err := k.K8sApps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToRestore{
 					App:   ctx.App,
@@ -6664,7 +6479,7 @@ func (k *K8s) RestoreCsiSnapAndValidate(ctx *scheduler.Context, scMap map[string
 				}
 			}
 
-			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			pvcList, err := k.K8sApps.GetPVCsForStatefulSet(ss)
 			if err != nil || pvcList == nil {
 				return nil, &scheduler.ErrFailedToRestore{
 					App:   ctx.App,
@@ -6695,7 +6510,7 @@ func (k *K8s) ValidateCsiRestore(pvcName string, namespace string, timeout time.
 	t := func() (interface{}, bool, error) {
 		var pvc *v1.PersistentVolumeClaim
 		var err error
-		if pvc, err = k8sCore.GetPersistentVolumeClaim(pvcName, namespace); err != nil {
+		if pvc, err = k.K8sCore.GetPersistentVolumeClaim(pvcName, namespace); err != nil {
 			return nil, true, &scheduler.ErrFailedToValidatePvc{
 				Name:  pvcName,
 				Cause: fmt.Errorf("failed to get persistent volume claim.Err: %v", err),
@@ -6757,7 +6572,7 @@ func (k *K8s) restoreCsiSnapshot(
 	}
 
 	log.Infof("Restoring Snapshot: %v", restorePVC.Name)
-	if resPvc, err = k8sCore.CreatePersistentVolumeClaim(&restorePVC); err != nil {
+	if resPvc, err = k.K8sCore.CreatePersistentVolumeClaim(&restorePVC); err != nil {
 		return nil, err
 	}
 	return resPvc, nil
@@ -6782,7 +6597,7 @@ func (k *K8s) CreateCsiSnapshotClass(snapClassName string, deleionPolicy string)
 	}
 
 	log.Infof("Creating volume snapshot class: %v", snapClassName)
-	if volumeSnapClass, err = k8sExternalsnap.CreateSnapshotClass(&snapClass); err != nil {
+	if volumeSnapClass, err = k.K8sExternalsnap.CreateSnapshotClass(&snapClass); err != nil {
 		return nil, &scheduler.ErrFailedToCreateSnapshotClass{
 			Name:  snapClassName,
 			Cause: err,
@@ -6797,7 +6612,7 @@ func (k *K8s) waitForCsiSnapToBeReady(snapName string, namespace string) error {
 	var err error
 	log.Infof("Waiting for snapshot [%s] to be ready in namespace: %s ", snapName, namespace)
 	t := func() (interface{}, bool, error) {
-		if snap, err = k8sExternalsnap.GetSnapshot(snapName, namespace); err != nil {
+		if snap, err = k.K8sExternalsnap.GetSnapshot(snapName, namespace); err != nil {
 			return "", true, err
 		}
 		if snap.Status == nil || !*snap.Status.ReadyToUse {
@@ -6895,7 +6710,7 @@ func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc
 		Spec:       spec,
 	}
 	log.Infof("Creating snapshot : %v", name)
-	if snapshot, err = k8sExternalsnap.CreateSnapshot(&snap); err != nil {
+	if snapshot, err = k.K8sExternalsnap.CreateSnapshot(&snap); err != nil {
 		return nil, &scheduler.ErrFailedToCreateSnapshot{
 			PvcName: pvc,
 			Cause:   err,
@@ -6917,7 +6732,7 @@ func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*volsnapv1.Vo
 	var err error
 	snapshots := make([]*volsnapv1.VolumeSnapshot, 0)
 
-	if snaplist, err = k8sExternalsnap.ListSnapshots(namespace); err != nil {
+	if snaplist, err = k.K8sExternalsnap.ListSnapshots(namespace); err != nil {
 		return nil, &scheduler.ErrFailedToGetSnapshotList{
 			Name:  namespace,
 			Cause: err,
@@ -6925,7 +6740,7 @@ func (k *K8s) GetCsiSnapshots(namespace string, pvcName string) ([]*volsnapv1.Vo
 	}
 
 	for _, snapshot := range snaplist.Items {
-		if snap, err = k8sExternalsnap.GetSnapshot(snapshot.Name, namespace); err != nil {
+		if snap, err = k.K8sExternalsnap.GetSnapshot(snapshot.Name, namespace); err != nil {
 			// Not returning error when it failed to get snapshot as snapshot could be deleting
 			log.Warnf("Unable to get snapshot: [%v]. It could be deleting", snapshot.Name)
 			continue
@@ -6944,7 +6759,7 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-			pvc, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			pvc, _ := k.K8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			validateOkay, err := k.filterPureTypeVolumeIfEnabled(pvc, pureBlkType)
 			if err != nil {
 				return err
@@ -6962,7 +6777,7 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 				}
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
-			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
+			ss, err := k.K8sApps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
 				return &scheduler.ErrFailedToValidateCsiSnapshots{
 					App:   ctx.App,
@@ -6970,7 +6785,7 @@ func (k *K8s) ValidateCsiSnapshots(ctx *scheduler.Context, volSnapMap map[string
 				}
 			}
 
-			pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
+			pvcList, err := k.K8sApps.GetPVCsForStatefulSet(ss)
 			if err != nil || pvcList == nil {
 				return &scheduler.ErrFailedToValidateCsiSnapshots{
 					App:   ctx.App,
@@ -7012,7 +6827,7 @@ func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot vols
 		}
 	}
 
-	if snap, err = k8sExternalsnap.GetSnapshot(csiSnapshot.Name, namespace); err != nil {
+	if snap, err = k.K8sExternalsnap.GetSnapshot(csiSnapshot.Name, namespace); err != nil {
 		return &scheduler.ErrFailedToValidateSnapshot{
 			Name:  pvcName,
 			Cause: fmt.Errorf("failed to get snapshot: %s", csiSnapshot.Name),
@@ -7044,7 +6859,7 @@ func (k *K8s) validateCsiSnap(pvcName string, namespace string, csiSnapshot vols
 func (k *K8s) GetAllSnapshotClasses() (*volsnapv1.VolumeSnapshotClassList, error) {
 	var snapshotClasses *volsnapv1.VolumeSnapshotClassList
 	var err error
-	if snapshotClasses, err = k8sExternalsnap.ListSnapshotClasses(); err != nil {
+	if snapshotClasses, err = k.K8sExternalsnap.ListSnapshotClasses(); err != nil {
 		return nil, err
 	}
 	return snapshotClasses, nil
@@ -7053,12 +6868,12 @@ func (k *K8s) GetAllSnapshotClasses() (*volsnapv1.VolumeSnapshotClassList, error
 // GetPodsRestartCount return map of HostIP and it restart count in given namespace
 func (k *K8s) GetPodsRestartCount(namespace string, podLabelMap map[string]string) (map[*v1.Pod]int32, error) {
 	podRestartCountMap := make(map[*v1.Pod]int32)
-	podList, err := k8sCore.GetPods(namespace, podLabelMap)
+	podList, err := k.K8sCore.GetPods(namespace, podLabelMap)
 	if err != nil {
 		return nil, err
 	}
 	for _, pod := range podList.Items {
-		actualPod, err := k8sCore.GetPodByName(pod.Name, pod.Namespace)
+		actualPod, err := k.K8sCore.GetPodByName(pod.Name, pod.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -7068,40 +6883,6 @@ func (k *K8s) GetPodsRestartCount(namespace string, podLabelMap map[string]strin
 		}
 	}
 	return podRestartCountMap, nil
-}
-
-func substituteImageWithInternalRegistry(spec interface{}) {
-	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
-	if internalDockerRegistry != "" {
-		if obj, ok := spec.(*appsapi.DaemonSet); ok {
-			modifyImageInContainers(obj.Spec.Template.Spec.InitContainers, internalDockerRegistry)
-			modifyImageInContainers(obj.Spec.Template.Spec.Containers, internalDockerRegistry)
-		}
-		if obj, ok := spec.(*appsapi.Deployment); ok {
-			modifyImageInContainers(obj.Spec.Template.Spec.InitContainers, internalDockerRegistry)
-			modifyImageInContainers(obj.Spec.Template.Spec.Containers, internalDockerRegistry)
-		}
-		if obj, ok := spec.(*appsapi.StatefulSet); ok {
-			modifyImageInContainers(obj.Spec.Template.Spec.InitContainers, internalDockerRegistry)
-			modifyImageInContainers(obj.Spec.Template.Spec.Containers, internalDockerRegistry)
-		}
-		if obj, ok := spec.(*batchv1.Job); ok {
-			modifyImageInContainers(obj.Spec.Template.Spec.InitContainers, internalDockerRegistry)
-			modifyImageInContainers(obj.Spec.Template.Spec.Containers, internalDockerRegistry)
-		}
-		if obj, ok := spec.(*corev1.Pod); ok {
-			modifyImageInContainers(obj.Spec.InitContainers, internalDockerRegistry)
-			modifyImageInContainers(obj.Spec.Containers, internalDockerRegistry)
-		}
-	}
-}
-
-func modifyImageInContainers(containers []v1.Container, imageName string) {
-	if containers != nil {
-		for idx := range containers {
-			containers[idx].Image = fmt.Sprintf("%s/%s", imageName, containers[idx].Image)
-		}
-	}
 }
 
 func (k *K8s) createDockerRegistrySecret(secretName, secretNamespace string) (*v1.Secret, error) {
@@ -7131,9 +6912,9 @@ func (k *K8s) createDockerRegistrySecret(secretName, secretNamespace string) (*v
 			Type: "docker-registry",
 			Data: map[string][]byte{".dockerconfigjson": authConfigsEnc},
 		}
-		secret, err := k8sCore.CreateSecret(secretObj)
+		secret, err := k.K8sCore.CreateSecret(secretObj)
 		if k8serrors.IsAlreadyExists(err) {
-			if secret, err = k8sCore.GetSecret(secretName, secretNamespace); err == nil {
+			if secret, err = k.K8sCore.GetSecret(secretName, secretNamespace); err == nil {
 				log.Infof("Using existing Docker regisrty secret: %v", secret.Name)
 				return secret, nil
 			}
@@ -7151,7 +6932,7 @@ func insertLineBreak(note string) string {
 	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
 }
 
-func dumpPodStatusRecursively(pod corev1.Pod) string {
+func (k *K8s) dumpPodStatusRecursively(pod corev1.Pod) string {
 	var buf bytes.Buffer
 	buf.WriteString(insertLineBreak(fmt.Sprintf("Pod: [%s] %s", pod.Namespace, pod.Name)))
 	buf.WriteString(fmt.Sprintf("%v\n", pod.Status))
@@ -7160,15 +6941,15 @@ func dumpPodStatusRecursively(pod corev1.Pod) string {
 		buf.WriteString(fmt.Sprintf("%v\n", conStat))
 		buf.WriteString(insertLineBreak("END container"))
 	}
-	buf.WriteString(dumpEvents(pod.Namespace, "Pod", pod.Name))
+	buf.WriteString(k.dumpEvents(pod.Namespace, "Pod", pod.Name))
 	buf.WriteString(insertLineBreak("END pod"))
 	return buf.String()
 }
 
-func dumpEvents(namespace, resourceType, name string) string {
+func (k *K8s) dumpEvents(namespace, resourceType, name string) string {
 	var buf bytes.Buffer
 	fields := fmt.Sprintf("involvedObject.kind=%s,involvedObject.name=%s", resourceType, name)
-	events, err := k8sCore.ListEvents(namespace, metav1.ListOptions{FieldSelector: fields})
+	events, err := k.K8sCore.ListEvents(namespace, metav1.ListOptions{FieldSelector: fields})
 	if err != nil {
 		buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetEvents{
 			Type:  resourceType,
@@ -7237,13 +7018,13 @@ func MergeMaps(m1 map[string]string, m2 map[string]string) map[string]string {
 
 // AddNamespaceLabel adds a label key=value on the given namespace
 func (k *K8s) AddNamespaceLabel(namespace string, labelMap map[string]string) error {
-	ns, err := k8sCore.GetNamespace(namespace)
+	ns, err := k.K8sCore.GetNamespace(namespace)
 	if err != nil {
 		return err
 	}
 	newLabels := MergeMaps(ns.Labels, labelMap)
 	ns.SetLabels(newLabels)
-	if _, err := k8sCore.UpdateNamespace(ns); err == nil {
+	if _, err := k.K8sCore.UpdateNamespace(ns); err == nil {
 		return nil
 	}
 	return err
@@ -7251,14 +7032,14 @@ func (k *K8s) AddNamespaceLabel(namespace string, labelMap map[string]string) er
 
 // RemoveNamespaceLabel removes the label with key on given namespace
 func (k *K8s) RemoveNamespaceLabel(namespace string, labelMap map[string]string) error {
-	ns, err := k8sCore.GetNamespace(namespace)
+	ns, err := k.K8sCore.GetNamespace(namespace)
 	if err != nil {
 		return err
 	}
 	for key := range labelMap {
 		delete(ns.Labels, key)
 	}
-	if _, err = k8sCore.UpdateNamespace(ns); err == nil {
+	if _, err = k.K8sCore.UpdateNamespace(ns); err == nil {
 		return nil
 	}
 	return err
@@ -7266,7 +7047,7 @@ func (k *K8s) RemoveNamespaceLabel(namespace string, labelMap map[string]string)
 
 // GetNamespaceLabel gets the labels on given namespace
 func (k *K8s) GetNamespaceLabel(namespace string) (map[string]string, error) {
-	ns, err := k8sCore.GetNamespace(namespace)
+	ns, err := k.K8sCore.GetNamespace(namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -7284,14 +7065,17 @@ func rotateTopologyArray(options *scheduler.ScheduleOptions) {
 	}
 }
 
+// init initializes K8s with the default sched-ops instances
 func init() {
-	k := &K8s{}
+	k := &K8s{
+		GlobalSchedopsInstancesUsed: true,
+	}
 	scheduler.Register(SchedName, k)
 }
 
 // ClusterVersion returns the cluster version of the kubernetes cluster as a string (like "1.23.0")
-func ClusterVersion() (string, error) {
-	ver, err := k8sCore.GetVersion()
+func (k *K8s) ClusterVersion() (string, error) {
+	ver, err := k.K8sCore.GetVersion()
 	if err != nil {
 		return "", err
 	}

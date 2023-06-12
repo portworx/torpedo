@@ -97,7 +97,7 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 			})
 
 			Step("disable scheduling on non replica nodes", func() {
-				allNodes := node.GetWorkerNodes()
+				allNodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 				for _, aNode := range allNodes {
 					if !nodeReplicaMap[aNode.VolDriverNodeID] {
 						Inst().S.DisableSchedulingOnNode(aNode)
@@ -204,7 +204,7 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 				Expect(podRestartedOnNewServer).To(BeTrue())
 
 				// re-enable scheduling on non replica nodes
-				for _, aNode := range node.GetWorkerNodes() {
+				for _, aNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 					if !nodeReplicaMap[aNode.VolDriverNodeID] {
 						Inst().S.EnableSchedulingOnNode(aNode)
 					}
@@ -226,7 +226,7 @@ var _ = Describe("{Sharedv4SvcPodRestart}", func() {
 			return
 		}
 		// re-enable scheduling on non replica nodes
-		for _, aNode := range node.GetWorkerNodes() {
+		for _, aNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 			if !nodeReplicaMap[aNode.VolDriverNodeID] {
 				Inst().S.EnableSchedulingOnNode(aNode)
 			}
@@ -466,7 +466,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 		if !tcpDumpInstalled {
 			// package installation hangs when using nsenter to run command on nodes, so do it only when using ssh
 			if Inst().N.IsUsingSSH() {
-				for _, anode := range node.GetWorkerNodes() {
+				for _, anode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 					// TODO: support other OS'es
 					log.Infof("installing tcpdump on node %s", anode.Name)
 					cmd := "yum install -y tcpdump"
@@ -499,7 +499,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 		if len(testSv4Contexts) == 0 {
 			Skip("No test-sv4-svc apps were found")
 		}
-		workers = node.GetWorkerNodes()
+		workers = Inst().N.GetNodeRegistry().GetWorkerNodes()
 		numPods = len(workers)
 
 		Step("scale the test-sv4-svc apps so that one pod runs on each worker node", func() {
@@ -1690,7 +1690,7 @@ func startPacketCapture(filePath string) *sync.WaitGroup {
 	// command below exits after 4 minutes since filecount -W is 1
 	runForSeconds := 240
 	cmd := fmt.Sprintf("tcpdump -i any -s 4096 -w %s -G %v -W 1 port 2049", filePath, runForSeconds)
-	for _, aNode := range node.GetWorkerNodes() {
+	for _, aNode := range Inst().N.GetNodeRegistry().GetWorkerNodes() {
 		aNode := aNode
 		wg.Add(1)
 		go func() {

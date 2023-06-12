@@ -2,11 +2,12 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
+
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	"github.com/portworx/torpedo/pkg/log"
-	"math/rand"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/task"
@@ -14,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
+
 	// https://github.com/kubernetes/client-go/issues/242
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
@@ -124,7 +126,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 		contexts = make([]*scheduler.Context, 0)
 
 		// Get list of nodes where storage driver is installed
-		storageDriverNodes := node.GetStorageDriverNodes()
+		storageDriverNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 
 		Step("Ensure apps are deployed", func() {
 			log.InfoD("Deploy Apps")
@@ -281,7 +283,7 @@ func asgKillANodeAndValidate(storageDriverNodes []node.Node) {
 
 func waitForIBMNodeTODeploy() error {
 
-	workers, err := ibm.GetWorkers()
+	workers, err := Inst().N.(*ibm.Ibm).GetWorkers()
 	if err != nil {
 		return err
 	}

@@ -244,7 +244,7 @@ func RestartPXDuringDSScaleUp(ns string, deployment *pds.ModelsDeployment) error
 		}
 		return true, nil
 	})
-	nodeToRestartPX, testError = node.GetNodeByName(nodeName)
+	nodeToRestartPX, testError = tests.Inst().N.GetNodeRegistry().GetNodeByName(nodeName)
 	if testError != nil {
 		CapturedErrors <- testError
 		return testError
@@ -296,7 +296,7 @@ func NodeRebootDurinAppVersionUpdate(ns string, deployment *pds.ModelsDeployment
 		}
 		return true, nil
 	})
-	nodeToReboot, testError = node.GetNodeByName(nodeName)
+	nodeToReboot, testError = tests.Inst().N.GetNodeRegistry().GetNodeByName(nodeName)
 	if testError != nil {
 		CapturedErrors <- testError
 		return testError
@@ -360,7 +360,7 @@ func RebootActiveNodeDuringDeployment(ns string, deployment *pds.ModelsDeploymen
 			continue
 		} else {
 			var nodeToReboot node.Node
-			nodeToReboot, testError := node.GetNodeByName(pod.Spec.NodeName)
+			nodeToReboot, testError := tests.Inst().N.GetNodeRegistry().GetNodeByName(pod.Spec.NodeName)
 			if testError != nil {
 				CapturedErrors <- testError
 				return testError
@@ -445,7 +445,7 @@ func RebootWorkerNodesDuringDeployment(ns string, deployment *pds.ModelsDeployme
 		return err
 	}
 	// Reboot All Worker Nodes
-	nodesToReboot := node.GetWorkerNodes()
+	nodesToReboot := tests.Inst().N.GetNodeRegistry().GetWorkerNodes()
 	for _, n := range nodesToReboot {
 		log.InfoD("reboot node: %s", n.Name)
 		err = tests.Inst().N.RebootNode(n, node.RebootNodeOpts{

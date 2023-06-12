@@ -7,58 +7,58 @@ import (
 	"github.com/pborman/uuid"
 )
 
-var (
-	nodeRegistry = make(map[string]Node)
-	lock         sync.RWMutex
-)
+type NodeRegistry struct {
+	sync.RWMutex
+	Nodes map[string]Node
+}
 
 // AddNode adds a node to the node collection
-func AddNode(n Node) error {
-	if n.uuid != "" {
+func (nr *NodeRegistry) AddNode(n Node) error {
+	if n.Uuid != "" {
 		return fmt.Errorf("UUID should not be set to add new node")
 	}
-	lock.Lock()
-	defer lock.Unlock()
-	n.uuid = uuid.New()
-	nodeRegistry[n.uuid] = n
+	nr.Lock()
+	defer nr.Unlock()
+	n.Uuid = uuid.New()
+	nr.Nodes[n.Uuid] = n
 	return nil
 }
 
 // UpdateNode updates a given node if it exists in the node collection
-func UpdateNode(n Node) error {
-	lock.Lock()
-	defer lock.Unlock()
-	if _, ok := nodeRegistry[n.uuid]; !ok {
+func (nr *NodeRegistry) UpdateNode(n Node) error {
+	nr.Lock()
+	defer nr.Unlock()
+	if _, ok := nr.Nodes[n.Uuid]; !ok {
 		return fmt.Errorf("node to be updated does not exist")
 	}
-	nodeRegistry[n.uuid] = n
+	nr.Nodes[n.Uuid] = n
 	return nil
 }
 
 // DeleteNode method delete a given node if exist in the node collection
-func DeleteNode(n Node) error {
-	if n.uuid == "" {
+func (nr *NodeRegistry) DeleteNode(n Node) error {
+	if n.Uuid == "" {
 		return fmt.Errorf("UUID should be set to delete existing node")
 	}
-	lock.Lock()
-	defer lock.Unlock()
-	delete(nodeRegistry, n.uuid)
+	nr.Lock()
+	defer nr.Unlock()
+	delete(nr.Nodes, n.Uuid)
 	return nil
 }
 
 // GetNodes returns all the nodes from the node collection
-func GetNodes() []Node {
+func (nr *NodeRegistry) GetNodes() []Node {
 	var nodeList []Node
-	for _, n := range nodeRegistry {
+	for _, n := range nr.Nodes {
 		nodeList = append(nodeList, n)
 	}
 	return nodeList
 }
 
 // GetWorkerNodes returns only the worker nodes/agent nodes
-func GetWorkerNodes() []Node {
+func (nr *NodeRegistry) GetWorkerNodes() []Node {
 	var nodeList []Node
-	for _, n := range nodeRegistry {
+	for _, n := range nr.Nodes {
 		if n.Type == TypeWorker {
 			nodeList = append(nodeList, n)
 		}
@@ -67,9 +67,9 @@ func GetWorkerNodes() []Node {
 }
 
 // GetMasterNodes returns only the master nodes/agent nodes
-func GetMasterNodes() []Node {
+func (nr *NodeRegistry) GetMasterNodes() []Node {
 	var nodeList []Node
-	for _, n := range nodeRegistry {
+	for _, n := range nr.Nodes {
 		if n.Type == TypeMaster {
 			nodeList = append(nodeList, n)
 		}
@@ -78,9 +78,9 @@ func GetMasterNodes() []Node {
 }
 
 // IsMasterNode returns true if node is a Masternode
-func IsMasterNode(n Node) bool {
-	for _, each := range GetMasterNodes() {
-		if each.uuid == n.uuid {
+func (nr *NodeRegistry) IsMasterNode(n Node) bool {
+	for _, each := range nr.GetMasterNodes() {
+		if each.Uuid == n.Uuid {
 			return true
 		}
 	}
@@ -89,9 +89,9 @@ func IsMasterNode(n Node) bool {
 
 // GetStorageDriverNodes returns only the worker node where storage
 // driver is installed
-func GetStorageDriverNodes() []Node {
+func (nr *NodeRegistry) GetStorageDriverNodes() []Node {
 	var nodeList []Node
-	for _, n := range nodeRegistry {
+	for _, n := range nr.Nodes {
 		if n.Type == TypeWorker && n.IsStorageDriverInstalled {
 			nodeList = append(nodeList, n)
 		}
@@ -100,16 +100,16 @@ func GetStorageDriverNodes() []Node {
 }
 
 // IsStorageNode returns true if the node is a storage node, false otherwise
-func IsStorageNode(n Node) bool {
+func (nr *NodeRegistry) IsStorageNode(n Node) bool {
 	return len(n.Pools) > 0
 }
 
 // GetStorageNodes gets all the nodes with non-empty StoragePools
-func GetStorageNodes() []Node {
+func (nr *NodeRegistry) GetStorageNodes() []Node {
 	var nodeList []Node
-	storageDriverNodes := GetStorageDriverNodes()
+	storageDriverNodes := nr.GetStorageDriverNodes()
 	for _, n := range storageDriverNodes {
-		if IsStorageNode(n) {
+		if nr.IsStorageNode(n) {
 			nodeList = append(nodeList, n)
 		}
 	}
@@ -117,11 +117,11 @@ func GetStorageNodes() []Node {
 }
 
 // GetStorageLessNodes gets all the nodes with empty StoragePools
-func GetStorageLessNodes() []Node {
+func (nr *NodeRegistry) GetStorageLessNodes() []Node {
 	var nodeList []Node
-	storageDriverNodes := GetStorageDriverNodes()
+	storageDriverNodes := nr.GetStorageDriverNodes()
 	for _, n := range storageDriverNodes {
-		if !IsStorageNode(n) {
+		if !nr.IsStorageNode(n) {
 			nodeList = append(nodeList, n)
 		}
 	}
@@ -129,9 +129,9 @@ func GetStorageLessNodes() []Node {
 }
 
 // GetNodesByTopologyZoneLabel gets all the nodes with Topology Zone Value matching
-func GetNodesByTopologyZoneLabel(zone string) []Node {
+func (nr *NodeRegistry) GetNodesByTopologyZoneLabel(zone string) []Node {
 	var nodeList []Node
-	for _, n := range nodeRegistry {
+	for _, n := range nr.Nodes {
 		if n.TopologyZone == zone {
 			nodeList = append(nodeList, n)
 		}
@@ -140,9 +140,9 @@ func GetNodesByTopologyZoneLabel(zone string) []Node {
 }
 
 // GetNodesByTopologyRegionLabel gets all the nodes with Topology Region Value matching
-func GetNodesByTopologyRegionLabel(region string) []Node {
+func (nr *NodeRegistry) GetNodesByTopologyRegionLabel(region string) []Node {
 	var nodeList []Node
-	for _, n := range nodeRegistry {
+	for _, n := range nr.Nodes {
 		if n.TopologyRegion == region {
 			nodeList = append(nodeList, n)
 		}
@@ -151,9 +151,9 @@ func GetNodesByTopologyRegionLabel(region string) []Node {
 }
 
 // GetMetadataNodes gets all the nodes which serves as internal kvdb metadata node
-func GetMetadataNodes() []Node {
+func (nr *NodeRegistry) GetMetadataNodes() []Node {
 	var nodeList []Node
-	for _, n := range nodeRegistry {
+	for _, n := range nr.Nodes {
 		if n.IsMetadataNode {
 			nodeList = append(nodeList, n)
 		}
@@ -162,25 +162,25 @@ func GetMetadataNodes() []Node {
 }
 
 // GetNodesByName returns map of nodes where the node name is the key
-func GetNodesByName() map[string]Node {
+func (nr *NodeRegistry) GetNodesByName() map[string]Node {
 	nodeMap := make(map[string]Node)
-	for _, n := range nodeRegistry {
+	for _, n := range nr.Nodes {
 		nodeMap[n.Name] = n
 	}
 	return nodeMap
 }
 
 // GetNodesByVoDriverNodeID returns map of nodes where volume driver node id is the key
-func GetNodesByVoDriverNodeID() map[string]Node {
+func (nr *NodeRegistry) GetNodesByVoDriverNodeID() map[string]Node {
 	nodeMap := make(map[string]Node)
-	for _, n := range nodeRegistry {
+	for _, n := range nr.Nodes {
 		nodeMap[n.VolDriverNodeID] = n
 	}
 	return nodeMap
 }
 
 // Contains checks if the node is present in the given list of nodes
-func Contains(nodes []Node, n Node) bool {
+func (nr *NodeRegistry) Contains(nodes []Node, n Node) bool {
 	for _, value := range nodes {
 		if value.Name == n.Name {
 			return true
@@ -190,8 +190,8 @@ func Contains(nodes []Node, n Node) bool {
 }
 
 // GetNodeByName returns a node which matches with given name
-func GetNodeByName(nodeName string) (Node, error) {
-	for _, n := range nodeRegistry {
+func (nr *NodeRegistry) GetNodeByName(nodeName string) (Node, error) {
+	for _, n := range nr.Nodes {
 		if n.Name == nodeName {
 			return n, nil
 		}
@@ -200,8 +200,8 @@ func GetNodeByName(nodeName string) (Node, error) {
 }
 
 // GetNodeByIP return a node which matches with given IP
-func GetNodeByIP(nodeIP string) (Node, error) {
-	for _, n := range nodeRegistry {
+func (nr *NodeRegistry) GetNodeByIP(nodeIP string) (Node, error) {
+	for _, n := range nr.Nodes {
 		for _, addr := range n.Addresses {
 			if addr == nodeIP {
 				return n, nil
@@ -212,13 +212,13 @@ func GetNodeByIP(nodeIP string) (Node, error) {
 }
 
 // CleanupRegistry removes entry of all nodes from registry
-func CleanupRegistry() {
-	nodeRegistry = make(map[string]Node)
+func (nr *NodeRegistry) CleanupRegistry() {
+	nr.Nodes = make(map[string]Node)
 }
 
 // GetNodeDetailsByNodeName get node details for a given node name
-func GetNodeDetailsByNodeName(nodeName string) (Node, error) {
-	storageNodes := GetStorageNodes()
+func (nr *NodeRegistry) GetNodeDetailsByNodeName(nodeName string) (Node, error) {
+	storageNodes := nr.GetStorageNodes()
 
 	for _, each := range storageNodes {
 		if each.Name == nodeName {
@@ -229,8 +229,8 @@ func GetNodeDetailsByNodeName(nodeName string) (Node, error) {
 }
 
 // GetNodeDetailsByNodeID get node details for a given node name
-func GetNodeDetailsByNodeID(nodeID string) (Node, error) {
-	storageNodes := GetStorageNodes()
+func (nr *NodeRegistry) GetNodeDetailsByNodeID(nodeID string) (Node, error) {
+	storageNodes := nr.GetStorageNodes()
 
 	for _, each := range storageNodes {
 		if each.Id == nodeID {

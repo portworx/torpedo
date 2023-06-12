@@ -191,7 +191,7 @@ var _ = Describe("{BasicEssentialsRebootTest}", func() {
 		ValidateApplications(contexts)
 
 		Step("get all nodes and reboot one by one", func() {
-			nodesToReboot := node.GetWorkerNodes()
+			nodesToReboot := Inst().N.GetNodeRegistry().GetWorkerNodes()
 
 			// Reboot node and check driver status
 			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
@@ -505,7 +505,7 @@ var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
 		})
 
 		Step("get all nodes and reboot one by one", func() {
-			nodesToReboot = node.GetWorkerNodes()
+			nodesToReboot = Inst().N.GetNodeRegistry().GetWorkerNodes()
 
 			// Reboot node and check driver status
 			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
@@ -617,7 +617,7 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
-		currNode := node.GetWorkerNodes()[0]
+		currNode := Inst().N.GetNodeRegistry().GetWorkerNodes()[0]
 		Step(fmt.Sprintf("Set License expiry timeout to 1 hour"), func() {
 			err := Inst().V.SetClusterRunTimeOpts(currNode, map[string]string{
 				"metering_interval_mins":       "10",
@@ -632,7 +632,7 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 		})
 
 		Step("get all nodes and reboot one by one", func() {
-			nodesToReboot := node.GetWorkerNodes()
+			nodesToReboot := Inst().N.GetNodeRegistry().GetWorkerNodes()
 
 			// Reboot node and check driver status
 			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {

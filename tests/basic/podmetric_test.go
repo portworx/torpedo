@@ -222,7 +222,7 @@ func getLogglyData(clusterUUID string, fromTime string) ([]byte, int, error) {
 }
 
 func getClusterID() (string, error) {
-	workerNode := node.GetStorageDriverNodes()[0]
+	workerNode := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 	clusterID, err := Inst().N.RunCommand(workerNode, fmt.Sprintf("cat %s", "/etc/pwx/cluster_uuid"), node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
@@ -377,7 +377,7 @@ func updateStorageSpecRuntimeOpts(callhomeInterval string, meteringInterval stri
 	}
 
 	log.InfoD("Waiting for PX Nodes to be up")
-	for _, n := range node.GetStorageDriverNodes() {
+	for _, n := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 		if err := Inst().V.WaitDriverUpOnNode(n, 5*time.Minute); err != nil {
 			return err
 		}

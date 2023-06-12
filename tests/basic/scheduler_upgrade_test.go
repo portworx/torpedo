@@ -2,17 +2,18 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/ibm"
-	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
+
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/node/ibm"
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	. "github.com/portworx/torpedo/tests"
+
 	// https://github.com/kubernetes/client-go/issues/242
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
@@ -117,7 +118,7 @@ func waitForIKSMasterUpdate(schedVersion string) error {
 
 	t := func() (interface{}, bool, error) {
 
-		iksCluster, err := ibm.GetCluster()
+		iksCluster, err := Inst().N.(*ibm.Ibm).GetCluster()
 		if err != nil {
 			return nil, false, err
 		}
@@ -139,10 +140,10 @@ func waitForIKSMasterUpdate(schedVersion string) error {
 
 func upgradeIKSWorkerNodes(schedVersion string) error {
 
-	storageDriverNodes := node.GetStorageDriverNodes()
+	storageDriverNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 	for _, sNode := range storageDriverNodes {
 
-		if err := ibm.ReplaceWorkerNodeWithUpdate(sNode); err != nil {
+		if err := Inst().N.(*ibm.Ibm).ReplaceWorkerNodeWithUpdate(sNode); err != nil {
 			return err
 		}
 
@@ -156,7 +157,7 @@ func upgradeIKSWorkerNodes(schedVersion string) error {
 
 	}
 
-	workers, err := ibm.GetWorkers()
+	workers, err := Inst().N.(*ibm.Ibm).GetWorkers()
 	if err != nil {
 		return err
 	}

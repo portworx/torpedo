@@ -5,7 +5,6 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -36,7 +35,7 @@ var _ = Describe("{StopScheduler}", func() {
 		stepLog = "get nodes and induce scheduler service to stop on the node"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for _, storageNode := range node.GetStorageDriverNodes() {
+			for _, storageNode := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 				stepLog = fmt.Sprintf("stop scheduler service on node %s", storageNode.Name)
 				Step(stepLog, func() {
 					log.InfoD(stepLog)

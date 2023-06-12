@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -85,7 +85,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 		providers := getProviders()
 		Step("Adding Cloud Account", func() {
 			log.InfoD("Adding cloud account")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudAccountName = fmt.Sprintf("%s-%v", provider, timeStamp)
@@ -118,7 +118,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 
 		Step("Adding Clusters for backup", func() {
 			log.InfoD("Adding application clusters")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating source - %s and destination - %s clusters", SourceClusterName, destinationClusterName))
@@ -131,7 +131,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 
 		Step("Creating schedule backups", func() {
 			log.InfoD("Creating schedule backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schPolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicPolicyName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicPolicyName))
@@ -165,7 +165,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 			log.Infof("waiting 15 minutes for another backup schedule to trigger")
 			time.Sleep(15 * time.Minute)
 			for _, scheduleName := range scheduleNames {
-				ctx, err := backup.GetAdminCtxFromSecret()
+				ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of all schedule backups with schedule name - %s", scheduleName))
@@ -180,7 +180,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 
 		Step("Verify creating new backups after upgrade", func() {
 			log.InfoD("Verify creating new backups after upgrade")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
@@ -195,7 +195,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Clean up objects after test execution")
 		log.Infof("Deleting backup schedule")
@@ -308,7 +308,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
 			providers := getProviders()
 			backupLocationMap = make(map[string]string, 0)
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudAccountUid = uuid.New()
@@ -327,7 +327,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 		})
 		Step("Create source and destination clusters", func() {
 			log.InfoD("Creating source and destination clusters")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, destinationClusterName)
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
@@ -346,7 +346,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			log.Infof("Cluster [%s] uid: [%s]", destinationClusterName, destClusterUid)
 		})
 		Step("Create pre and post exec rules for applications", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			preRuleNames = make(map[string]string, 0)
 			preRuleUids = make(map[string]string, 0)
@@ -386,7 +386,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			}
 		})
 		Step("Create backups with and without pre and post exec rules", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			createBackupWithRulesTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
@@ -414,7 +414,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			_ = TaskHandler(Inst().AppList, createBackupWithoutRulesTask, Parallel)
 		})
 		Step("Create a schedule policy", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			intervalInMins = 15
 			log.InfoD("Creating a schedule policy with interval [%v] mins", intervalInMins)
@@ -427,7 +427,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			log.Infof("Schedule policy [%s] uid: [%s]", schedulePolicyName, schedulePolicyUid)
 		})
 		Step("Create schedule backup for each namespace", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			createSingleNSBackupTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
@@ -446,7 +446,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			_ = TaskHandler(Inst().AppList, createSingleNSBackupTask, Parallel)
 		})
 		Step("Create schedule backup of all namespaces", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, appName := range Inst().AppList {
 				allNamespaces = append(allNamespaces, destClusterAppNamespaces[appName]...)
@@ -486,7 +486,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			}
 		})
 		Step("Create backups after px-backup upgrade with and without pre and post exec rules", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			createBackupWithRulesTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
@@ -512,7 +512,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			_ = TaskHandler(Inst().AppList, createBackupWithoutRulesTask, Parallel)
 		})
 		Step("Restore backups created before px-backup upgrade with and without pre and post exec rules", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Restoring backups [%s] created before px-backup upgrade with rules", backupWithRuleNames)
 			for _, backupName := range backupWithRuleNames {
@@ -536,7 +536,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			}
 		})
 		Step("Restore backups created after px-backup upgrade with and without pre and post exec rules", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Restoring backups [%s] created after px-backup upgrade with rules", backupWithRuleNames)
 			for _, backupName := range backupAfterUpgradeWithRuleNames {
@@ -561,7 +561,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 		})
 		// First single namespace schedule backups are taken before px-backup upgrade
 		Step("Restore first single namespace schedule backups", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			restoreSingleNSBackupInVariousWaysTask := func(index int, namespace string) {
 				firstSingleNSScheduleBackupName, err := GetFirstScheduleBackupName(ctx, singleNSScheduleNames[index], orgID)
@@ -607,7 +607,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 		})
 		// By the time the next single namespace schedule backups are taken, the px-backup upgrade would have been completed
 		Step("Restore next single namespace schedule backups", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			restoreSingleNSBackupInVariousWaysTask := func(index int, namespace string) {
 				nextScheduleBackupName, err := GetNextScheduleBackupName(singleNSScheduleNames[index], time.Duration(intervalInMins), ctx)
@@ -654,7 +654,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 		})
 		// First all namespaces schedule backup is taken before px-backup upgrade
 		Step("Restore first all namespaces schedule backup", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			firstAllNSScheduleBackupName, err := GetFirstScheduleBackupName(ctx, allNSScheduleName, orgID)
 			log.FailOnError(err, "Getting first backup name of schedule [%s] failed", allNSScheduleName)
@@ -667,7 +667,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 		})
 		// By the time the next all namespaces schedule backups are taken, the px-backup upgrade would have been completed
 		Step("Restore next all namespaces schedule backup", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 			nextScheduleBackupName, err := GetNextScheduleBackupName(allNSScheduleName, time.Duration(intervalInMins), ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of schedule named [%s]", allNSScheduleName))
@@ -683,7 +683,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 	JustAfterEach(func() {
 		allContexts := append(srcClusterContexts, destClusterContexts...)
 		defer EndPxBackupTorpedoTest(allContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		deleteSingleNSScheduleTask := func(scheduleName string) {
 			log.InfoD("Deleting single namespace backup schedule [%s]", scheduleName)

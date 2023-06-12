@@ -2,18 +2,19 @@ package tests
 
 import (
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/portworx/torpedo/pkg/log"
 	"math"
 	"math/rand"
 	"reflect"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/portworx/torpedo/pkg/log"
+
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
@@ -102,7 +103,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 							currAggr, err := Inst().V.GetAggregationLevel(v)
 							log.FailOnError(err, "Failed to get volume  %s aggregate level", v.Name)
 							if currAggr > 1 {
-								MaxRF = int64(len(node.GetStorageDriverNodes())) / currAggr
+								MaxRF = int64(len(Inst().N.GetNodeRegistry().GetStorageDriverNodes())) / currAggr
 							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
 							opts := volume.Options{
@@ -369,7 +370,7 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 							currAggr, err := Inst().V.GetAggregationLevel(v)
 							log.FailOnError(err, "Failed to get vol %s aggregation level", v.Name)
 							if currAggr > 1 {
-								MaxRF = int64(len(node.GetStorageDriverNodes())) / currAggr
+								MaxRF = int64(len(Inst().N.GetNodeRegistry().GetStorageDriverNodes())) / currAggr
 							}
 							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
 							err = Inst().V.SetReplicationFactor(v, currRep+1, updateReplicaSet, nil, true)

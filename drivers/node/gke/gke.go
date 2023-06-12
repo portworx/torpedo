@@ -1,13 +1,14 @@
 package gke
 
 import (
+	"os"
+	"time"
+
 	"github.com/libopenstorage/cloudops"
 	"github.com/libopenstorage/cloudops/gce"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/pkg/log"
-	"os"
-	"time"
 )
 
 const (
@@ -42,6 +43,12 @@ func (g *gke) Init(nodeOpts node.InitOptions) error {
 	g.ops = ops
 
 	return nil
+}
+
+// DeepCopy deep copies the driver instance
+func (g *gke) DeepCopy() node.Driver {
+	out := *g
+	return &out
 }
 
 func (g *gke) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {

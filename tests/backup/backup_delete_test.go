@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/backup/pxbackup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -28,7 +28,7 @@ func createBackupUntilIncrementalBackup(ctx context.Context, scheduledAppContext
 
 	log.InfoD("Check if backups are incremental backups or not")
 	backupDriver := Inst().Backup
-	ctx, err = backup.GetAdminCtxFromSecret()
+	ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 	if err != nil {
 		return "", fmt.Errorf("fetching px-central-admin ctx")
 	}
@@ -159,7 +159,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 
 		Step("Adding Credentials and Registering Backup Location", func() {
 			log.InfoD("Creating cloud credentials and backup location")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
@@ -191,7 +191,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
 			// Registering for admin user
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -204,7 +204,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			// Full backup
 			for _, namespace := range bkpNamespaces {
@@ -239,7 +239,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		Step("Deleting incremental backup", func() {
 			log.InfoD("Deleting incremental backups")
 			backupDriver := Inst().Backup
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range incrementalBackupNames {
 				log.Infof("About to delete backup - %s", backupName)
@@ -251,7 +251,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		})
 		Step("Restoring the backed up namespaces", func() {
 			log.InfoD("Restoring the backed up namespaces")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range incrementalBackupNames2 {
 				restoreName = fmt.Sprintf("%s-%s", backupName, RandomString(4))
@@ -276,7 +276,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 
 		// Remove all the restores created
 		log.Info("Deleting restored namespaces")
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		for _, restoreName := range restoreNames {
 			err := DeleteRestore(restoreName, orgID, ctx)
@@ -284,7 +284,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		}
 
 		// Cleaning up px-backup cluster
-		ctx, err = backup.GetAdminCtxFromSecret()
+		ctx, err = Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
@@ -337,7 +337,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 
 		Step("Adding Credentials and Registering Backup Location", func() {
 			log.InfoD("Creating cloud credentials and backup location")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
@@ -358,7 +358,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
 			// Registering for admin user
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -371,7 +371,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking backup of applications")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			// Full backup
 			for _, namespace := range bkpNamespaces {
@@ -397,7 +397,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		Step("Deleting incremental backup", func() {
 			log.InfoD("Deleting incremental backups")
 			backupDriver := Inst().Backup
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range incrementalBackupNames {
 				log.Infof("About to delete backup - %s", backupName)
@@ -411,7 +411,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		})
 		Step("Taking incremental backups of applications again", func() {
 			log.InfoD("Taking incremental backups of applications again")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			// Incremental backup
 			for _, namespace := range bkpNamespaces {
@@ -433,7 +433,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		DestroyApps(scheduledAppContexts, opts)
 
 		// Cleaning up px-backup cluster
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
@@ -498,7 +498,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 		Step("Adding cloud account and backup location", func() {
 			log.InfoD("Adding cloud account and backup location")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudAccountName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
@@ -524,7 +524,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 		Step("Adding Clusters for backup", func() {
 			log.InfoD("Adding Clusters for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating source - %s and destination - %s clusters", SourceClusterName, destinationClusterName))
@@ -537,7 +537,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 		Step("Creating schedule backup", func() {
 			log.InfoD("Creating schedule backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			periodicSchedulePolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
 			for _, namespace := range appNamespaces {
@@ -555,7 +555,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 		Step("Creating a manual backup", func() {
 			log.InfoD("Creating a manual backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, namespace := range appNamespaces {
 				backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
@@ -569,7 +569,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 		Step("Suspending the existing backup schedules", func() {
 			log.InfoD("Suspending the existing backup schedules")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, scheduleName := range scheduleNames {
 				err = suspendBackupSchedule(scheduleName, periodicSchedulePolicyName, orgID, ctx)
@@ -589,7 +589,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 		Step("Verify the backups are in CloudBackupMissing state after bucket deletion", func() {
 			log.InfoD("Verify the backups are in CloudBackupMissing state after bucket deletion")
 			var wg sync.WaitGroup
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
 				wg.Add(1)
@@ -624,7 +624,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 		Step("Resume the existing backup schedules", func() {
 			log.InfoD("Resume the existing backup schedules")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, scheduleName := range scheduleNames {
 				err = resumeBackupSchedule(scheduleName, periodicSchedulePolicyName, orgID, ctx)
@@ -636,7 +636,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 		Step("Get the latest schedule backup and verify the backup status", func() {
 			log.InfoD("Get the latest schedule backup and verify the backup status")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, scheduleName := range scheduleNames {
 				latestScheduleBkpName, err := GetLatestScheduleBackupName(ctx, scheduleName, orgID)
@@ -648,7 +648,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
@@ -724,7 +724,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 
 		Step("Adding Credentials and Backup Location", func() {
 			log.InfoD("Using pre-provisioned bucket. Creating cloud credentials and backup location.")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
@@ -742,7 +742,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
@@ -757,7 +757,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 			log.InfoD("Taking backup of applications")
 			var sem = make(chan struct{}, numberOfSimultaneousBackups)
 			var wg sync.WaitGroup
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Taking %d backups", numberOfBackups)
 			var mutex sync.Mutex
@@ -789,7 +789,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 
 		Step("Delete all the backups taken in the previous step ", func() {
 			log.InfoD("Deleting the backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
+			ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 			dash.VerifyFatal(err, nil, "Unable fetch admin context")
 			backupDriver := Inst().Backup
 			for _, backup := range backupNames {
@@ -819,7 +819,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err := Inst().Backup.(*pxbackup.PXBackup).GetPxCentralAdminCtx()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})

@@ -2,11 +2,12 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/volume"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/log"
@@ -75,7 +76,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 		ValidateApplications(contexts)
 
 		Step("get nodes bounce volume driver", func() {
-			for _, appNode := range node.GetStorageDriverNodes() {
+			for _, appNode := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 				stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
 					Inst().V.String(), appNode.Name)
 				Step(stepLog,
@@ -218,7 +219,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 		stepLog = "crash volume driver in all nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for _, appNode := range node.GetStorageDriverNodes() {
+			for _, appNode := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 				stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
 					Inst().V.String(), appNode.Name)
 				Step(stepLog,
@@ -435,13 +436,13 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, ctx := range contexts {
-				stepLog = fmt.Sprintf("scale up app: %s by %d ", ctx.App.Key, len(node.GetWorkerNodes()))
+				stepLog = fmt.Sprintf("scale up app: %s by %d ", ctx.App.Key, len(Inst().N.GetNodeRegistry().GetWorkerNodes()))
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 					log.FailOnError(err, "Failed to get application scale up factor map")
 					//Scaling up by number of storage-nodes
-					workerStorageNodes := int32(len(node.GetStorageNodes()))
+					workerStorageNodes := int32(len(Inst().N.GetNodeRegistry().GetStorageNodes()))
 					for name, scale := range applicationScaleUpMap {
 						// limit scale up to the number of worker nodes
 						if scale < workerStorageNodes {
@@ -514,7 +515,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			nodes := node.GetStorageDriverNodes()
+			nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 			for _, node := range nodes[1:] {
 				err := Inst().S.DisableSchedulingOnNode(node)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate disable scheduling on node %s", node.Name))
@@ -556,7 +557,7 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 			}
 		})
 		Step("Uncordon all nodes", func() {
-			nodes := node.GetStorageDriverNodes()
+			nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 			for _, node := range nodes {
 				err := Inst().S.EnableSchedulingOnNode(node)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate enable scheduling on node %s", node.Name))
@@ -583,8 +584,8 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 		stepLog = "Cordon all storage nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			nodes := node.GetNodes()
-			storageNodes := node.GetStorageNodes()
+			nodes := Inst().N.GetNodeRegistry().GetNodes()
+			storageNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 			if len(nodes) == len(storageNodes) {
 				stepLog = "No storageless nodes detected. Skipping.."
 				log.Warn(stepLog)
@@ -631,7 +632,7 @@ var _ = Describe("{CordonStorageNodesDeployDestroy}", func() {
 			}
 		})
 		Step("Uncordon all nodes", func() {
-			nodes := node.GetStorageDriverNodes()
+			nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 			for _, node := range nodes {
 				err := Inst().S.EnableSchedulingOnNode(node)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate enable scheduling on node %s", node.Name))
@@ -706,7 +707,7 @@ var _ = Describe("{SecretsVaultFunctional}", func() {
 		It(stepLog, func() {
 			log.InfoD(stepLog)
 			contexts = make([]*scheduler.Context, 0)
-			n := node.GetStorageDriverNodes()[0]
+			n := Inst().N.GetNodeRegistry().GetStorageDriverNodes()[0]
 			if provider == vaultTransitSecretProvider {
 				// vault-transit login with `pxctl secrets vaulttransit login`
 				provider = "vaulttransit"
@@ -738,7 +739,7 @@ var _ = Describe("{VolumeCreatePXRestart}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 
-			stNodes := node.GetStorageNodes()
+			stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 			index := rand.Intn(len(stNodes))
 			selectedNode := stNodes[index]
 
@@ -831,7 +832,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
-		storageDriverNodes := node.GetStorageDriverNodes()
+		storageDriverNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 		stepLog = "perform fast switch on the autofstrim option"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -945,7 +946,7 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 			}
 
 			//Selecting a node not part of selected volume replica set and multiple pools
-			stNodes := node.GetStorageNodes()
+			stNodes := Inst().N.GetNodeRegistry().GetStorageNodes()
 			var selectedNode node.Node
 			for _, n := range stNodes {
 				if !Contains(volReplNodes, n.Id) && len(n.Pools) > 1 {

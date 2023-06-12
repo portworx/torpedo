@@ -2,14 +2,15 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"math/rand"
-	"time"
 )
 
 func runCommand(cmd string, n node.Node) error {
@@ -112,7 +113,7 @@ func blockIptableRules(zones []node.Node, targetZones []node.Node, revertRules b
 // flushIptableRules flushes all IPtable rules on the node specified
 func flushIptableRules(n node.Node) error {
 	command := "iptables -F"
-	if !node.IsMasterNode(n) {
+	if !Inst().N.GetNodeRegistry().IsMasterNode(n) {
 		err := runCommand(command, n)
 		if err != nil {
 			return err
@@ -174,7 +175,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 
 		for _, each := range allkvdbNodes {
 			if each.Leader {
-				getKvdbLeaderNode, err = node.GetNodeDetailsByNodeID(each.ID)
+				getKvdbLeaderNode, err = Inst().N.GetNodeRegistry().GetNodeDetailsByNodeID(each.ID)
 				log.FailOnError(err, "Unable to get the node details from NodeID [%v]", each.ID)
 				break
 			}
@@ -184,7 +185,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		log.InfoD("Get all nodes present in the cluster")
 		allNodes := []node.Node{}
 		// create an array with storage and storage less nodes added
-		for _, each := range node.GetStorageDriverNodes() {
+		for _, each := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 			if each.Id != getKvdbLeaderNode.Id {
 				allNodes = append(allNodes, each)
 			}
@@ -218,9 +219,9 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		var nodesSplit1 = []node.Node{}
 		var nodesSplit2 = []node.Node{}
 
-		if len(node.GetStorageNodes()) == 6 && len(node.GetStorageLessNodes()) == 6 {
-			nodesSplit1 = node.GetStorageNodes()
-			nodesSplit2 = node.GetStorageLessNodes()
+		if len(Inst().N.GetNodeRegistry().GetStorageNodes()) == 6 && len(Inst().N.GetNodeRegistry().GetStorageLessNodes()) == 6 {
+			nodesSplit1 = Inst().N.GetNodeRegistry().GetStorageNodes()
+			nodesSplit2 = Inst().N.GetNodeRegistry().GetStorageLessNodes()
 		} else {
 			nodesSplit1 = allNodes[0:4]
 			nodesSplit2 = allNodes[5:9]
@@ -368,7 +369,7 @@ var _ = Describe("{FordRunFlatResync}", func() {
 		}
 
 		// Wait for some time for system to be up and all nodes drivers up and running
-		for _, each := range node.GetStorageNodes() {
+		for _, each := range Inst().N.GetNodeRegistry().GetStorageNodes() {
 			err = Inst().V.WaitDriverUpOnNode(each, 2*time.Minute)
 			log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", each.Name))
 		}

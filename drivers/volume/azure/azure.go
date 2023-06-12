@@ -3,8 +3,8 @@ package azure
 import (
 	"fmt"
 
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -16,12 +16,11 @@ const (
 )
 
 // Provisioners types of supported provisioners
-var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
+var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisioner{
 	AzureStorage: "kubernetes.io/azure-disk",
 }
 
 type azure struct {
-	schedOps schedops.Driver
 	torpedovolume.DefaultDriver
 }
 
@@ -37,20 +36,26 @@ func (d *azure) RefreshDriverEndpoints() error {
 	return nil
 }
 
-func (d *azure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	log.Infof("Using the Azure volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
-	torpedovolume.StorageDriver = DriverName
+func (d *azure) Init(volOpts volume.InitOptions) error {
+	log.Infof("Using the Azure volume driver with provisioner %s under scheduler: %v", volOpts.StorageProvisionerType, volOpts.SchedulerDriverName)
+	d.StorageDriver = DriverName
 	// Set provisioner for torpedo
-	if storageProvisioner != "" {
-		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
-			torpedovolume.StorageProvisioner = p
+	if volOpts.StorageProvisionerType != "" {
+		if p, ok := provisioners[volOpts.StorageProvisionerType]; ok {
+			d.StorageProvisioner = p
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, storageProvisioner)
+			return fmt.Errorf("volume driver %s, does not support provisioner corresponding to type [%s]", DriverName, volOpts.StorageProvisionerType)
 		}
 	} else {
-		torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
+		d.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisionerType]
 	}
 	return nil
+}
+
+// DeepCopy deep copies the driver instance
+func (d *azure) DeepCopy() volume.Driver {
+	out := *d
+	return &out
 }
 
 func init() {

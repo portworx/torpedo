@@ -115,5 +115,11 @@ func init() {
 	Register("dcos", d)
 }
 
-func (d *dcosSchedOps) Init() {
+func (d *dcosSchedOps) Init(schedopsOpts InitOptions) {
+}
+
+// DeepCopy deep copies the driver instance
+func (d *dcosSchedOps) DeepCopy() Driver {
+	out := *d
+	return &out
 }

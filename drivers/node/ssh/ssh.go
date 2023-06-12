@@ -14,10 +14,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	k8s_driver "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s/parser"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	volumedriver "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	ssh_pkg "golang.org/x/crypto/ssh"
@@ -45,19 +43,22 @@ const (
 // SSH ssh node driver
 type SSH struct {
 	node.Driver
-	username         string
-	password         string
-	keyPath          string
-	sshConfig        *ssh_pkg.ClientConfig
-	specDir          string
+	username     string
+	password     string
+	keyPath      string
+	sshConfig    *ssh_pkg.ClientConfig
+	specDir      string
+	nodeRegistry *node.NodeRegistry
+
+	// below are pointers (manipulate carefully)
+
+	K8sCore core.Ops
+	K8sApps apps.Ops
+
 	execPodNamespace string
+	volumeDriverName string
 	// TODO keyPath-based ssh
 }
-
-var (
-	k8sApps = apps.Instance()
-	k8sCore = core.Instance()
-)
 
 func (s *SSH) String() string {
 	return DriverName
@@ -160,26 +161,26 @@ func (s *SSH) GetDeviceMapperCount(n node.Node, timerange time.Duration) (int, e
 func (s *SSH) updateDriver() error {
 	var err error
 
-	// The namespace of the portworx-service in the current context
-	execPodNamespace, err := getExecPodNamespace()
-	if err != nil {
-		return err
-	}
-	s.execPodNamespace = execPodNamespace
-	log.InfoD("UpdateDriver: ssh driver's namespace (the 'portworx-service' namespace) is updated to [%s]", execPodNamespace)
-
-	nodes := node.GetWorkerNodes()
 	if s.IsUsingSSH() {
 		err = s.initSSH()
 	} else {
+		// The namespace of the portworx-service in the current context
+		err = s.setExecPodNamespace()
+		if err != nil {
+			return err
+		}
 		err = s.initExecPod()
+		if err != nil {
+			return err
+		}
+		log.InfoD("UpdateDriver: ssh driver's namespace (the 'portworx-service' namespace) is updated to [%s]", s.execPodNamespace)
 	}
 
 	if err != nil {
 		return err
 	}
 
-	for _, n := range nodes {
+	for _, n := range s.nodeRegistry.GetWorkerNodes() {
 		if !n.IsStorageDriverInstalled {
 			continue
 		}
@@ -200,21 +201,36 @@ func (s *SSH) updateDriver() error {
 // Init initializes SSH node driver
 func (s *SSH) Init(nodeOpts node.InitOptions) error {
 	s.specDir = nodeOpts.SpecDir
+	s.volumeDriverName = nodeOpts.VolumeDriverName
+	s.nodeRegistry = nodeOpts.NodeRegistry
+	s.K8sApps = nodeOpts.K8sApps
+	s.K8sCore = nodeOpts.K8sCore
 	return s.updateDriver()
 }
 
-// RefreshDriver refreshes the driver on a context switch
-func RefreshDriver(s *SSH) error {
+// RefreshDriver updates SSh Driver parameters which are not nil in node.InitOptions
+func (s *SSH) RefreshDriver() error {
 	return s.updateDriver()
+}
+
+// DeepCopy deep copies the driver instance
+func (s *SSH) DeepCopy() node.Driver {
+	out := *s
+
+	if s.sshConfig != nil {
+		ClientConfig := *s.sshConfig
+		out.sshConfig = &ClientConfig
+	}
+
+	return &out
 }
 
 func (s *SSH) initExecPod() error {
 	var ds *appsv1_api.DaemonSet
 	var err error
 
-	if ds, err = k8sApps.GetDaemonSet(execPodDaemonSetLabel, s.execPodNamespace); ds == nil {
-		d, err := scheduler.Get(k8s_driver.SchedName)
-		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", s.specDir, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), d)
+	if ds, err = s.K8sApps.GetDaemonSet(execPodDaemonSetLabel, s.execPodNamespace); ds == nil {
+		specFactory, err := spec.NewFactory(s.specDir, s.volumeDriverName, &parser.K8sParser{})
 		if err != nil {
 			return fmt.Errorf("Error while loading debug daemonset spec file. Err: %s", err)
 		}
@@ -223,12 +239,12 @@ func (s *SSH) initExecPod() error {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
 		dsSpec.SpecList[0].(*appsv1_api.DaemonSet).Namespace = s.execPodNamespace
-		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet), metav1.CreateOptions{})
+		ds, err = s.K8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet), metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
 		}
 	}
-	err = k8sApps.ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
+	err = s.K8sApps.ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
 	if err != nil {
 		return fmt.Errorf("Error while validating debug daemonset. Err: %s", err)
 	}
@@ -577,14 +593,14 @@ func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignore
 
 func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error) {
 	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
-	allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, s.execPodNamespace)
+	allPodsForNode, err := s.K8sCore.GetPodsByNode(n.Name, s.execPodNamespace)
 	if err != nil {
 		log.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 		return "", err
 	}
 	var debugPod *v1.Pod
 	for _, pod := range allPodsForNode.Items {
-		if pod.Labels["name"] == execPodDaemonSetLabel && k8sCore.IsPodReady(pod) {
+		if pod.Labels["name"] == execPodDaemonSetLabel && s.K8sCore.IsPodReady(pod) {
 			debugPod = &pod
 			break
 		}
@@ -596,7 +612,7 @@ func (s *SSH) doCmdUsingPodWithoutRetry(n node.Node, cmd string) (string, error)
 			Cause: fmt.Sprintf("debug pod not found in node %v", n),
 		}
 	}
-	return k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
+	return s.K8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 }
 
 func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
@@ -604,13 +620,13 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 	t := func() (interface{}, bool, error) {
 		if debugPod == nil {
 			log.Debugf("Finding the debug pod to run command on node %s", n.Name)
-			allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, s.execPodNamespace)
+			allPodsForNode, err := s.K8sCore.GetPodsByNode(n.Name, s.execPodNamespace)
 			if err != nil {
 				log.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 				return nil, true, err
 			}
 			for _, pod := range allPodsForNode.Items {
-				if pod.Labels["name"] == execPodDaemonSetLabel && k8sCore.IsPodReady(pod) {
+				if pod.Labels["name"] == execPodDaemonSetLabel && s.K8sCore.IsPodReady(pod) {
 					debugPod = &pod
 					break
 				}
@@ -624,7 +640,7 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 		}
 		cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
 		log.Debugf("Running command on pod %s [%s]", debugPod.Name, cmds)
-		output, err := k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
+		output, err := s.K8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 		if !ignoreErr && err != nil {
 			return nil, true, &node.ErrFailedToRunCommand{
 				Node: n,
@@ -818,18 +834,23 @@ func (s *SSH) GetBlockDrives(n node.Node, options node.SystemctlOpts) (map[strin
 	return drives, nil
 }
 
-func getExecPodNamespace() (string, error) {
+func (s *SSH) setExecPodNamespace() error {
 	var allServices *v1.ServiceList
 	var err error
-	if allServices, err = k8sCore.ListServices("", metav1.ListOptions{}); err != nil {
-		return "", err
+	if allServices, err = s.K8sCore.ListServices("", metav1.ListOptions{}); err != nil {
+		return err
 	}
 	for _, svc := range allServices.Items {
 		if svc.Name == schedops.PXServiceName {
-			return svc.Namespace, nil
+			s.execPodNamespace = svc.Namespace
+			return nil
 		}
 	}
-	return "", fmt.Errorf("can't find %s Portworx service from list of services.", schedops.PXServiceName)
+	return fmt.Errorf("can't find %s Portworx service from list of services.", schedops.PXServiceName)
+}
+
+func (s *SSH) GetNodeRegistry() *node.NodeRegistry {
+	return s.nodeRegistry
 }
 
 // New returns a new SSH object

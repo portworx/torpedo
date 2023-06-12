@@ -13,7 +13,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	k8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	. "github.com/portworx/torpedo/tests"
@@ -523,7 +522,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	topologyGroups := len(topologyLabels)
 
 	// Adding the labels on node.
-	for nodeIdx, n := range node.GetStorageDriverNodes() {
+	for nodeIdx, n := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 		labelIdx := int32(nodeIdx % topologyGroups)
 		for key, value := range topologyLabels[labelIdx] {
 			if err = Inst().S.AddLabelOnNode(n, key, value); err != nil {
@@ -540,7 +539,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 			}
 		}
 		// Updating the node with topology info in node registry
-		node.UpdateNode(n)
+		Inst().N.GetNodeRegistry().UpdateNode(n)
 	}
 
 	// Bouncing Back the PX pods on all nodes to restart Csi Registrar Container
@@ -552,7 +551,7 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 
 	// Wait for PX pods to be up
 	log.Info("Waiting for Volume Driver to be up and running")
-	for _, n := range node.GetStorageDriverNodes() {
+	for _, n := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 		if err := Inst().V.WaitForPxPodsToBeUp(n); err != nil {
 			return nil, fmt.Errorf("PX pod not coming up in a node [%s]. Error:[%v]", n.Name, err)
 		}

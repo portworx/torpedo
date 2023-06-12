@@ -2,15 +2,15 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"math"
 	"strings"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/log"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/kvdbutils"
 	"github.com/portworx/torpedo/pkg/snapshotutils"
@@ -59,7 +59,7 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 		timeToExecuteTest := time.Now().Local().Add(time.Hour * time.Duration(totalTimeInHours))
 
 		// Set Autofs trim
-		currNode := node.GetWorkerNodes()[0]
+		currNode := Inst().N.GetNodeRegistry().GetWorkerNodes()[0]
 		err := Inst().V.SetClusterOpts(currNode, map[string]string{
 			"--auto-fstrim": "on",
 		})
@@ -82,7 +82,7 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 			log.Infof("Remaining time to test in minutes : %d ", int64(timeToExecuteTest.Sub(currentTime).Seconds()/60))
 			Step("Set packet loss on random nodes ", func() {
 				//Get all nodes and set eth0
-				nodes := node.GetWorkerNodes()
+				nodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 				numberOfNodes := int(math.Ceil(float64(0.40) * float64(len(nodes))))
 				selectedNodes := nodes[:numberOfNodes]
 				//nodes []Node, errorInjectionType string, operationType string,
@@ -120,7 +120,7 @@ var _ = Describe("{NetworkErrorInjection}", func() {
 				}
 			})
 			Step("Check KVDB memebers health", func() {
-				nodes := node.GetWorkerNodes()
+				nodes := Inst().N.GetNodeRegistry().GetWorkerNodes()
 				kvdbMembers, err := Inst().V.GetKvdbMembers(nodes[0])
 				if err != nil {
 					err = fmt.Errorf("Error getting kvdb members using node %v. cause: %v", nodes[0].Name, err)

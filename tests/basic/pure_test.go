@@ -33,7 +33,7 @@ const (
 func createCloudsnapCredential() {
 	fbConfigs, err := pureutils.GetS3Secret(secretNamespace)
 	Expect(err).NotTo(HaveOccurred())
-	nodes := node.GetStorageDriverNodes()
+	nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 	_, err = Inst().N.RunCommand(nodes[0], fmt.Sprintf(formattingPxctlEstablishBackupCredential, fbConfigs.Blades[0].S3AccessKey, fbConfigs.Blades[0].S3SecretKey, fbConfigs.Blades[0].ObjectStoreEndpoint, fbS3CredentialName), node.ConnectionOpts{
 		Timeout:         k8s.DefaultTimeout,
 		TimeBeforeRetry: k8s.DefaultRetryInterval,
@@ -47,7 +47,7 @@ func createCloudsnapCredential() {
 }
 
 func deleteCloudsnapCredential() {
-	nodes := node.GetStorageDriverNodes()
+	nodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 	_, err := Inst().N.RunCommand(nodes[0], fmt.Sprintf(formattingPxctlDeleteFBBackupCredential, fbS3CredentialName), node.ConnectionOpts{
 		Timeout:         k8s.DefaultTimeout,
 		TimeBeforeRetry: k8s.DefaultRetryInterval,

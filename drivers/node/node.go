@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -41,7 +43,7 @@ type StoragePool struct {
 // Node encapsulates a node in the cluster
 type Node struct {
 	*api.StorageNode
-	uuid                     string
+	Uuid                     string
 	VolDriverNodeID          string
 	Name                     string
 	Addresses                []string
@@ -121,9 +123,13 @@ var (
 
 // InitOptions initialization options
 type InitOptions struct {
-
 	// SpecDir app spec directory
-	SpecDir string
+	SpecDir          string
+	VolumeDriverName string
+	NodeRegistry     *NodeRegistry
+
+	K8sCore core.Ops
+	K8sApps apps.Ops
 }
 
 // Driver provides the node driver interface
@@ -226,6 +232,12 @@ type Driver interface {
 
 	// GetNodeState returns current state of the given node
 	GetNodeState(n Node) (string, error)
+
+	// GetNodeState returns current state of the given node
+	GetNodeRegistry() *NodeRegistry
+
+	// DeepCopy creates a deepcopy of the driver
+	DeepCopy() Driver
 }
 
 // Register registers the given node driver
@@ -239,10 +251,10 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
-// Get returns a registered node driver
-func Get(name string) (Driver, error) {
+// GetNewInstance returns deep copy of a registered node driver. Initialize it as deep copy may still have references to the original
+func GetNewInstance(name string) (Driver, error) {
 	if d, ok := nodeDrivers[name]; ok {
-		return d, nil
+		return d.DeepCopy(), nil
 	}
 	return nil, &errors.ErrNotFound{
 		ID:   name,
@@ -477,4 +489,12 @@ func (d *notSupportedDriver) GetNodeState(Node) (string, error) {
 		Type:      "Function",
 		Operation: "GetNodeState()",
 	}
+}
+
+func (d *notSupportedDriver) GetNodeRegistry() *NodeRegistry {
+	return nil
+}
+
+func (d *notSupportedDriver) DeepCopy() Driver {
+	return &notSupportedDriver{}
 }

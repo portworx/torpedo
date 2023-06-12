@@ -2,6 +2,10 @@ package aws
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"time"
+
 	aws_pkg "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -10,9 +14,6 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
-	"os"
-	"strings"
-	"time"
 )
 
 const (
@@ -22,13 +23,14 @@ const (
 
 type aws struct {
 	node.Driver
-	session     *session.Session
-	credentials *credentials.Credentials
-	config      *aws_pkg.Config
-	region      string
-	svc         *ec2.EC2
-	svcSsm      *ssm.SSM
-	instances   []*ec2.Instance
+	session      *session.Session
+	nodeRegistry *node.NodeRegistry
+	credentials  *credentials.Credentials
+	config       *aws_pkg.Config
+	region       string
+	svc          *ec2.EC2
+	svcSsm       *ssm.SSM
+	instances    []*ec2.Instance
 }
 
 func (a *aws) String() string {
@@ -58,8 +60,8 @@ func (a *aws) Init(nodeOpts node.InitOptions) error {
 		return err
 	}
 	a.instances = instances
-	nodes := node.GetWorkerNodes()
-	for _, n := range nodes {
+	a.nodeRegistry = nodeOpts.NodeRegistry
+	for _, n := range a.nodeRegistry.GetWorkerNodes() {
 		if err := a.TestConnection(n, node.ConnectionOpts{
 			Timeout:         1 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
@@ -71,6 +73,13 @@ func (a *aws) Init(nodeOpts node.InitOptions) error {
 		}
 	}
 	return nil
+}
+
+// DeepCopy deep copies the driver instance
+func (a *aws) DeepCopy() node.Driver {
+	out := *a
+	//FIX: this creates a shallow copy, not deep copy
+	return &out
 }
 
 func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
@@ -253,6 +262,10 @@ func (a *aws) getNodeIDByPrivAddr(n node.Node) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("Failed to get instanceID of %s by privateIP", n.Name)
+}
+
+func (a *aws) GetNodeRegistry() *node.NodeRegistry {
+	return a.nodeRegistry
 }
 
 func init() {

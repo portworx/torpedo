@@ -3,6 +3,7 @@ package aetosutil
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/sirupsen/logrus"
 
 	"net/http"
@@ -167,7 +168,7 @@ func (d *Dashboard) TestSetBegin(testSet *TestSet) {
 		}
 	}
 	if d.TestSetID != 0 {
-		dashURL = fmt.Sprintf("Dashboard URL : %s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID)
+		dashURL = fmt.Sprintf("Dashboard Testset URL : %s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID)
 		os.Setenv("DASH_UID", fmt.Sprint(d.TestSetID))
 	}
 	logrus.Infof(dashURL)
@@ -196,14 +197,14 @@ func (d *Dashboard) TestSetEnd() {
 		} else if respStatusCode != http.StatusOK {
 			logrus.Errorf("Failed to end TestSet, Resp : %s", string(resp))
 		}
-		logrus.Infof("Dashboard URL : %s", fmt.Sprintf("%s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID))
+		logrus.Infof("Dashboard Testset URL : %s", fmt.Sprintf("%s/resultSet/testSetID/%d", AetosBaseURL, d.TestSetID))
 	}
 }
 
 // TestCaseEnd update testcase  to dashboard DB
 func (d *Dashboard) TestCaseEnd() {
+	testcaseURL := ""
 	if d.IsEnabled {
-
 		if d.testcaseID == 0 {
 			return
 		}
@@ -226,12 +227,14 @@ func (d *Dashboard) TestCaseEnd() {
 		}
 		testCaseResult := updateResponse.TestCaseStatus
 		d.VerifySafely(testCaseResult, "PASS", "Test completed successfully ?")
+		testcaseURL = fmt.Sprintf("%s/resultSet/testSetID/%d/testCaseID/%d", AetosBaseURL, d.TestSetID, d.testcaseID)
 	}
 
-	logrus.Info("--------Test End------")
-	logrus.Infof("#Test: %s ", testCase.Name)
-	logrus.Infof("#Description: %s ", testCase.Description)
-	logrus.Info("------------------------")
+	logrus.Info("--------Test End--------")
+	logrus.Infof("#Test: %s", testCase.Name)
+	logrus.Infof("#Description: %s", testCase.Description)
+	logrus.Infof("#Dashboard Testcase URL: %s", testcaseURL)
+	logrus.Info("========================")
 }
 
 func removeTestCaseFromStack(testcaseID int) {
@@ -273,7 +276,7 @@ func (d *Dashboard) TestSetUpdate(testSet *TestSet) {
 // TestCaseBegin start the test case and push data to dashboard DB
 func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags map[string]string) {
 
-	logrus.Info("--------Test Start------")
+	logrus.Info("=======Test Start=======")
 	logrus.Infof("#Test: %s ", testName)
 	logrus.Infof("#Description: %s ", description)
 	logrus.Info("------------------------")
@@ -341,9 +344,12 @@ func (d *Dashboard) TestCaseBegin(testName, description, testRailID string, tags
 				logrus.Errorf("TestCase creation failed. Cause : %v", err)
 			}
 		}
+		if d.testcaseID != 0 {
+			testcaseURL := fmt.Sprintf("Dashboard Testase URL : %s/resultSet/testSetID/%d/testCaseID/%d", AetosBaseURL, d.TestSetID, d.testcaseID)
+			logrus.Infof(testcaseURL)
+		}
 		d.Infof("Torpedo Command: %s", os.Args)
 		testCasesStack = append(testCasesStack, d.testcaseID)
-
 	}
 }
 

@@ -2,8 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
@@ -34,7 +35,7 @@ var _ = Describe("{DecommissionNode}", func() {
 
 		var storageDriverNodes []node.Node
 		Step(fmt.Sprintf("get storage driver nodes"), func() {
-			storageDriverNodes = node.GetStorageDriverNodes()
+			storageDriverNodes = Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 			dash.VerifyFatal(len(storageDriverNodes) > 0, true, "Verify worker nodes")
 		})
 
@@ -57,12 +58,12 @@ var _ = Describe("{DecommissionNode}", func() {
 		// decommission nodes one at a time according to chaosLevel
 		for nodeIndex := range nodeIndexMap {
 			nodeToDecommission := storageDriverNodes[nodeIndex]
-			nodeToDecommission, err := node.GetNodeByName(nodeToDecommission.Name) //This is required when multiple nodes are decommissioned sequentially
+			nodeToDecommission, err := Inst().N.GetNodeRegistry().GetNodeByName(nodeToDecommission.Name) //This is required when multiple nodes are decommissioned sequentially
 			log.FailOnError(err, fmt.Sprintf("node [%s] not found with name", nodeToDecommission.Name))
 			stepLog = fmt.Sprintf("decommission node %s", nodeToDecommission.Name)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
+				err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().ProvisionerType)
 				dash.VerifyFatal(err, nil, "Validate node decommission preparation")
 				err = Inst().V.DecommissionNode(&nodeToDecommission)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validate node [%s] decommission init", nodeToDecommission.Name))
@@ -113,7 +114,7 @@ var _ = Describe("{DecommissionNode}", func() {
 				err = Inst().V.RefreshDriverEndpoints()
 				log.FailOnError(err, "error refreshing storage drive endpoints")
 				nodeToDecommission = node.Node{}
-				for _, n := range node.GetStorageDriverNodes() {
+				for _, n := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 					if n.Name == rejoinedNode.Hostname {
 						nodeToDecommission = n
 						break

@@ -2,8 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"time"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -157,7 +158,7 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 				stepLog = "get attached node and stop the instance"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					currNodes := node.GetStorageDriverNodes()
+					currNodes := Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 					countOfCurrNodes := len(currNodes)
 
 					attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCommandTimeout, defaultCommandRetry)
@@ -170,7 +171,7 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 						stepLog = fmt.Sprintf("validate node: %v is deleted", attachedNode.Name)
 						Step(stepLog, func() {
 							log.InfoD(stepLog)
-							currNodes = node.GetStorageDriverNodes()
+							currNodes = Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 							for _, currNode := range currNodes {
 								if currNode.Name == attachedNode.Name {
 									dash.VerifyFatal(currNode.Name, attachedNode.Name, fmt.Sprintf("Node: %v still exists?",
@@ -192,7 +193,7 @@ var _ = Describe("{NFSServerNodeDelete}", func() {
 						Step(stepLog, func() {
 							log.InfoD(stepLog)
 							time.Sleep(2 * time.Minute)
-							currNodes = node.GetStorageDriverNodes()
+							currNodes = Inst().N.GetNodeRegistry().GetStorageDriverNodes()
 							dash.VerifyFatal(countOfCurrNodes, len(currNodes), "Create new instance successful?")
 							Expect(countOfCurrNodes).To(Equal(len(currNodes)))
 							log.InfoD("Validating Node and Volume driver for all nodes")
@@ -239,7 +240,7 @@ func sv4KillANodeAndValidate(nodeToKill node.Node) {
 		maxWait := 10
 	OUTER:
 		for maxWait > 0 {
-			for _, currNode := range node.GetStorageDriverNodes() {
+			for _, currNode := range Inst().N.GetNodeRegistry().GetStorageDriverNodes() {
 				if currNode.Name == nodeToKill.Name {
 					log.Infof("Node %v still exists. Waiting for a minute to check again", nodeToKill.Name)
 					maxWait--

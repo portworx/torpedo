@@ -1,4 +1,4 @@
-package backup
+package pxbackup
 
 import (
 	"context"
@@ -14,18 +14,12 @@ import (
 	"sync"
 	"time"
 
-	k8s "github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/portworx/sched-ops/k8s/core"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// PxCentralAdminPwd password of PxCentralAdminUser
-var PxCentralAdminPwd string
 
 const (
 	// PxCentralAdminUser px central admin
@@ -76,15 +70,6 @@ type tokenResponse struct {
 //        "clientRole": false,
 //        "containerId": "master"
 //    },
-
-const (
-	// pxbServiceName is the name of the PxBackup service in kubernetes
-	pxbServiceName = "px-backup"
-)
-
-var (
-	k8sCore = core.Instance()
-)
 
 // KeycloakRoleRepresentation role repsetaton struct
 type KeycloakRoleRepresentation struct {
@@ -174,6 +159,14 @@ type KeycloakGroupToUser struct {
 	Realm   string `json:"realm"`
 }
 
+type PXBAuth struct {
+	// pxCentralAdminPwd is password of PxCentralAdminUser
+	pxCentralAdminPwd   string
+	pxCentralAdminToken string
+
+	k8sCore core.Ops
+}
+
 // getOidcSecretName returns OIDC secret name
 func getOidcSecretName() string {
 	name := os.Getenv(oidcSecretName)
@@ -183,7 +176,7 @@ func getOidcSecretName() string {
 	return name
 }
 
-func getKeycloakEndPoint(admin bool) (string, error) {
+func (pa *PXBAuth) getKeycloakEndPoint(admin bool) (string, error) {
 	keycloakEndpoint := os.Getenv(PxCentralUIURL)
 	// This condition is added for cases when torpedo is not running as a pod in the cluster
 	// Since gRPC calls to pxcentral-keycloak-http:80 would fail while running from a VM or local machine using ginkgo CLI
@@ -200,12 +193,12 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 		}
 	}
 	name := getOidcSecretName()
-	ns, err := GetPxBackupNamespace()
+	ns, err := pa.GetPxBackupNamespace()
 	if err != nil {
 		return "", err
 	}
 	// check and validate oidc details
-	secret, err := k8s.Instance().GetSecret(name, ns)
+	secret, err := pa.k8sCore.GetSecret(name, ns)
 	if err != nil {
 		return "", err
 	}
@@ -227,8 +220,8 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 }
 
 // GetPxBackupNamespace returns namespace of px-backup deployment.
-func GetPxBackupNamespace() (string, error) {
-	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+func (pa *PXBAuth) GetPxBackupNamespace() (string, error) {
+	allServices, err := pa.k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to get list of services. Err: %v", err)
 	}
@@ -240,16 +233,15 @@ func GetPxBackupNamespace() (string, error) {
 	return "", fmt.Errorf("can't find PxBackup service [%s] from list of services", pxbServiceName)
 }
 
-// GetToken fetches JWT token for given user credentials
-func GetToken(userName, password string) (string, error) {
-
+// GetNewToken fetches a new JWT token for given user credentials. Previous tokens aren't invalidated
+func (pa *PXBAuth) GetNewToken(userName, password string) (string, error) {
 	values := make(url.Values)
 	values.Set("client_id", "pxcentral")
 	values.Set("username", userName)
 	values.Set("password", password)
 	values.Set("grant_type", "password")
 	values.Set("token-duration", "365d")
-	keycloakEndPoint, err := getKeycloakEndPoint(false)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(false)
 	if err != nil {
 		return "", err
 	}
@@ -268,13 +260,19 @@ func GetToken(userName, password string) (string, error) {
 		return "", err
 	}
 
-	return token.AccessToken, nil
+	accessToken := token.AccessToken
+	if accessToken == "" {
+		return "", fmt.Errorf("AccessToken field was empty in JSON of unmarshalled response")
+	}
+
+	return accessToken, nil
 }
 
 // GetCommonHTTPHeaders populates http header
-func GetCommonHTTPHeaders(userName, password string) (http.Header, error) {
+func (pa *PXBAuth) GetCommonHTTPHeaders(userName, password string) (http.Header, error) {
 	fn := "GetCommonHTTPHeaders"
-	token, err := GetToken(userName, password)
+	token, err := pa.GetNewToken(userName, password)
+	log.Debugf("new token obtained for user [%s] is \"%v\"", userName, token)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return nil, err
@@ -286,35 +284,42 @@ func GetCommonHTTPHeaders(userName, password string) (http.Header, error) {
 	return headers, nil
 }
 
-// GetPxCentralAdminPwd fetches password from PxCentralAdminUser from secret
-func GetPxCentralAdminPwd() (string, error) {
-
-	pxbNamespace, err := GetPxBackupNamespace()
+// SetPxCentralAdminPwd fetches password from PxCentralAdminUser from secret
+func (pa *PXBAuth) SetPxCentralAdminPwd() error {
+	pxbNamespace, err := pa.GetPxBackupNamespace()
 	if err != nil {
-		return "", err
+		return err
 	}
-	secret, err := k8s.Instance().GetSecret(PxCentralAdminSecretName, pxbNamespace)
+	secret, err := pa.k8sCore.GetSecret(PxCentralAdminSecretName, pxbNamespace)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	PxCentralAdminPwd := string(secret.Data["credential"])
-	if PxCentralAdminPwd == "" {
-		return "", fmt.Errorf("px-central-admin secret is empty")
+	pxCentralAdminPwd := string(secret.Data["credential"])
+	if pxCentralAdminPwd == "" {
+		return fmt.Errorf("px-central-admin secret is empty")
 	}
+	pa.pxCentralAdminPwd = pxCentralAdminPwd
+	return nil
+}
 
-	return PxCentralAdminPwd, nil
+// SetPxCentralAdminPwd fetches password from PxCentralAdminUser from secret
+func (pa *PXBAuth) GetPxCentralAdminPwd() (string, error) {
+	if pa.pxCentralAdminPwd == "" {
+		return "", fmt.Errorf("password is empty")
+	}
+	return pa.pxCentralAdminPwd, nil
 }
 
 // GetAllRoles lists all the available role in keycloak
-func GetAllRoles() ([]KeycloakRoleRepresentation, error) {
+func (pa *PXBAuth) GetAllRoles() ([]KeycloakRoleRepresentation, error) {
 	fn := "GetAllRoles"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return nil, err
 	}
@@ -336,16 +341,16 @@ func GetAllRoles() ([]KeycloakRoleRepresentation, error) {
 }
 
 // GetRolesForUser lists all the available roles in keycloak for the provided username
-func GetRolesForUser(userName string) ([]KeycloakRoleRepresentation, error) {
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+func (pa *PXBAuth) GetRolesForUser(userName string) ([]KeycloakRoleRepresentation, error) {
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		return nil, err
 	}
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return nil, err
 	}
-	userID, err := FetchIDOfUser(userName)
+	userID, err := pa.FetchIDOfUser(userName)
 	if err != nil {
 		return nil, err
 	}
@@ -373,10 +378,10 @@ const (
 )
 
 // GetRoleID gets role ID for a given role
-func GetRoleID(role PxBackupRole) (string, error) {
+func (pa *PXBAuth) GetRoleID(role PxBackupRole) (string, error) {
 	fn := "GetRoleID"
 	// Fetch all roles
-	roles, err := GetAllRoles()
+	roles, err := pa.GetAllRoles()
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return "", err
@@ -394,16 +399,16 @@ func GetRoleID(role PxBackupRole) (string, error) {
 }
 
 // GetUserRole fetches roles for a given user
-func GetUserRole(userName string) error {
+func (pa *PXBAuth) GetUserRole(userName string) error {
 	fn := "GetUserRole"
 	// First fetch all users to get the client id for the client
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
@@ -428,7 +433,7 @@ func GetUserRole(userName string) error {
 		}
 	}
 	// Now fetch all the roles for the fetched client ID
-	keycloakEndPoint, err = getKeycloakEndPoint(true)
+	keycloakEndPoint, err = pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
@@ -449,15 +454,15 @@ func GetUserRole(userName string) error {
 }
 
 // FetchIDOfUser fetches ID for a given user
-func FetchIDOfUser(userName string) (string, error) {
+func (pa *PXBAuth) FetchIDOfUser(userName string) (string, error) {
 	fn := "FetchIDOfUser"
 	// First fetch all users to get the client id for the client
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return "", err
 	}
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return "", err
 	}
@@ -488,16 +493,16 @@ func FetchIDOfUser(userName string) (string, error) {
 }
 
 // AddRoleToUser assigning a given role to an existing user
-func AddRoleToUser(userName string, role PxBackupRole, description string) error {
+func (pa *PXBAuth) AddRoleToUser(userName string, role PxBackupRole, description string) error {
 	fn := "AddRoleToUser"
 	// First fetch the client ID of the user
-	clientID, err := FetchIDOfUser(userName)
+	clientID, err := pa.FetchIDOfUser(userName)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	// Fetch the role ID
-	roleID, err := GetRoleID(role)
+	roleID, err := pa.GetRoleID(role)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -519,13 +524,13 @@ func AddRoleToUser(userName string, role PxBackupRole, description string) error
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/users/%s/role-mappings/realm", keycloakEndPoint, clientID)
 	method := "POST"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -540,14 +545,14 @@ func AddRoleToUser(userName string, role PxBackupRole, description string) error
 }
 
 // AddRoleToGroup assigning a given role to an existing group
-func AddRoleToGroup(groupName string, role PxBackupRole, description string) error {
+func (pa *PXBAuth) AddRoleToGroup(groupName string, role PxBackupRole, description string) error {
 	// First fetch the client ID of the user
-	groupID, err := FetchIDOfGroup(groupName)
+	groupID, err := pa.FetchIDOfGroup(groupName)
 	if err != nil {
 		return err
 	}
 	// Fetch the role ID
-	roleID, err := GetRoleID(role)
+	roleID, err := pa.GetRoleID(role)
 	if err != nil {
 		return err
 	}
@@ -567,13 +572,13 @@ func AddRoleToGroup(groupName string, role PxBackupRole, description string) err
 	if err != nil {
 		return err
 	}
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/groups/%s/role-mappings/realm", keycloakEndPoint, groupID)
 	method := "POST"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		return err
 	}
@@ -586,16 +591,16 @@ func AddRoleToGroup(groupName string, role PxBackupRole, description string) err
 }
 
 // DeleteRoleFromUser deleting role from a user
-func DeleteRoleFromUser(userName string, role PxBackupRole, description string) error {
+func (pa *PXBAuth) DeleteRoleFromUser(userName string, role PxBackupRole, description string) error {
 	fn := "DeleteRoleFromUser"
 	// First fetch the user ID of the user
-	clientID, err := FetchIDOfUser(userName)
+	clientID, err := pa.FetchIDOfUser(userName)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
 	// Fetch the role ID
-	roleID, err := GetRoleID(role)
+	roleID, err := pa.GetRoleID(role)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -617,13 +622,13 @@ func DeleteRoleFromUser(userName string, role PxBackupRole, description string) 
 		log.Errorf("%s: %v", fn, err)
 		return err
 	}
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/users/%s/role-mappings/realm", keycloakEndPoint, clientID)
 	method := "DELETE"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		return err
 	}
@@ -637,14 +642,14 @@ func DeleteRoleFromUser(userName string, role PxBackupRole, description string) 
 }
 
 // DeleteRoleFromGroup deleting role from a group
-func DeleteRoleFromGroup(groupName string, role PxBackupRole, description string) error {
+func (pa *PXBAuth) DeleteRoleFromGroup(groupName string, role PxBackupRole, description string) error {
 	// First fetch the user ID of the user
-	groupID, err := FetchIDOfGroup(groupName)
+	groupID, err := pa.FetchIDOfGroup(groupName)
 	if err != nil {
 		return err
 	}
 	// Fetch the role ID
-	roleID, err := GetRoleID(role)
+	roleID, err := pa.GetRoleID(role)
 	if err != nil {
 		return err
 	}
@@ -664,13 +669,13 @@ func DeleteRoleFromGroup(groupName string, role PxBackupRole, description string
 	if err != nil {
 		return err
 	}
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/groups/%s/role-mappings/realm", keycloakEndPoint, groupID)
 	method := "DELETE"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		return err
 	}
@@ -682,15 +687,15 @@ func DeleteRoleFromGroup(groupName string, role PxBackupRole, description string
 }
 
 // AddUser adds a new user
-func AddUser(userName, firstName, lastName, email, password string) error {
+func (pa *PXBAuth) AddUser(userName, firstName, lastName, email, password string) error {
 	fn := "AddUser"
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
 	method := "POST"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -725,18 +730,18 @@ func AddUser(userName, firstName, lastName, email, password string) error {
 }
 
 // DeleteUser deletes a user with the provided userName
-func DeleteUser(userName string) error {
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+func (pa *PXBAuth) DeleteUser(userName string) error {
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
-	userID, err := FetchIDOfUser(userName)
+	userID, err := pa.FetchIDOfUser(userName)
 	if err != nil {
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/users/%s", keycloakEndPoint, userID)
 	method := "DELETE"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		return err
 	}
@@ -751,13 +756,18 @@ func DeleteUser(userName string) error {
 }
 
 // GetPxCentralAdminToken gets token for "px-central-admin"
-func GetPxCentralAdminToken() (string, error) {
-	token, err := GetToken(PxCentralAdminUser, PxCentralAdminPwd)
-	if err != nil {
-		return "", err
+func (pa *PXBAuth) GetPxCentralAdminToken(newToken bool) (string, error) {
+	if newToken || pa.pxCentralAdminToken == "" {
+		token, err := pa.GetNewToken(PxCentralAdminUser, pa.pxCentralAdminPwd)
+		log.Debugf("new token obtained for admin user [%s] is \"%v\"", PxCentralAdminUser, token)
+		if err != nil {
+			return "", err
+		}
+		pa.pxCentralAdminToken = token
+		return token, nil
+	} else {
+		return pa.pxCentralAdminToken, nil
 	}
-
-	return token, nil
 }
 
 // GetCtxWithToken getx ctx with passed token
@@ -772,36 +782,34 @@ func GetCtxWithToken(token string) context.Context {
 }
 
 // GetPxCentralAdminCtx fetch px-central-admin context
-func GetPxCentralAdminCtx() (context.Context, error) {
-	token, err := GetPxCentralAdminToken()
+func (pa *PXBAuth) GetPxCentralAdminCtx() (context.Context, error) {
+	token, err := pa.GetPxCentralAdminToken(false)
 	if err != nil {
 		return nil, err
 	}
-
 	ctx := GetCtxWithToken(token)
-
 	return ctx, nil
 }
 
-// UpdatePxBackupAdminSecret updating "px-backup-admin-secret" token with
-// "px-central-admin" token
-func UpdatePxBackupAdminSecret() error {
-	pxCentralAdminToken, err := GetPxCentralAdminToken()
+// UpdatePxCentralAdminTokenInSecret updating "px-backup-admin-secret" token with
+// "px-central-admin" token. forceRefresh should be set to true if a new token needs to be generated
+func (pa *PXBAuth) UpdatePxCentralAdminTokenInSecret(forceRefresh bool) error {
+	pxCentralAdminToken, err := pa.GetPxCentralAdminToken(forceRefresh)
 	if err != nil {
 		return err
 	}
 
-	pxbNamespace, err := GetPxBackupNamespace()
+	pxbNamespace, err := pa.GetPxBackupNamespace()
 	if err != nil {
 		return err
 	}
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, pxbNamespace)
+	secret, err := pa.k8sCore.GetSecret(AdminTokenSecretName, pxbNamespace)
 	if err != nil {
 		return err
 	}
 	// Now update the token into "AdminTokenSecretName"
 	secret.Data[OrgToken] = ([]byte(pxCentralAdminToken))
-	_, err = k8s.Instance().UpdateSecret(secret)
+	secret, err = pa.k8sCore.UpdateSecret(secret)
 	if err != nil {
 		return err
 	}
@@ -809,44 +817,38 @@ func UpdatePxBackupAdminSecret() error {
 	return nil
 }
 
-// GetAdminCtxFromSecret with provided name and namespace
-func GetAdminCtxFromSecret() (context.Context, error) {
-	err := UpdatePxBackupAdminSecret()
+// GetPxCentralAdminCtxFromSecret with provided name and namespace
+func (pa *PXBAuth) GetPxCentralAdminCtxFromSecret() (context.Context, error) {
+	token, err := pa.GetPxCentralAdminTokenFromSecret()
 	if err != nil {
-		return nil, err
+		if err.Error() == "admin token is empty" {
+			log.Debugf("Token in AdminTokenSecret was empty. Setting new token")
+			err := pa.UpdatePxCentralAdminTokenInSecret(false)
+			if err != nil {
+				return nil, err
+			}
+			// try getting it once again
+			token, err := pa.GetPxCentralAdminTokenFromSecret()
+			if err != nil {
+				return nil, err
+			}
+			ctx := GetCtxWithToken(token)
+			return ctx, nil
+		} else {
+			return nil, err
+		}
 	}
-
-	pxbNamespace, err := GetPxBackupNamespace()
-	if err != nil {
-		return nil, err
-	}
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, pxbNamespace)
-	if err != nil {
-		return nil, err
-	}
-
-	token := string(secret.Data[OrgToken])
-	if token == "" {
-		return nil, fmt.Errorf("admin token is empty")
-	}
-	log.Debugf("Token from Admin secret: %v", token)
 	ctx := GetCtxWithToken(token)
-
 	return ctx, nil
 }
 
-// GetAdminTokenFromSecret with provided name and namespace
-func GetAdminTokenFromSecret() (string, error) {
-	err := UpdatePxBackupAdminSecret()
+// GetPxCentralAdminTokenFromSecret with provided name and namespace
+func (pa *PXBAuth) GetPxCentralAdminTokenFromSecret() (string, error) {
+	pxbNamespace, err := pa.GetPxBackupNamespace()
 	if err != nil {
 		return "", err
 	}
-
-	pxbNamespace, err := GetPxBackupNamespace()
-	if err != nil {
-		return "", err
-	}
-	secret, err := k8s.Instance().GetSecret(AdminTokenSecretName, pxbNamespace)
+	secret, err := pa.k8sCore.GetSecret(AdminTokenSecretName, pxbNamespace)
 	if err != nil {
 		return "", err
 	}
@@ -855,20 +857,18 @@ func GetAdminTokenFromSecret() (string, error) {
 	if token == "" {
 		return "", fmt.Errorf("admin token is empty")
 	}
-	log.Debugf("Token from Admin secret: %v", token)
-
 	return token, nil
 }
 
 // GetAllGroups fetches all available groups
-func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
+func (pa *PXBAuth) GetAllGroups() ([]KeycloakGroupRepresentation, error) {
 	fn := "GetAllGroups"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return nil, err
 	}
@@ -888,14 +888,14 @@ func GetAllGroups() ([]KeycloakGroupRepresentation, error) {
 	return groups, nil
 }
 
-func GetAllUsers() ([]KeycloakUserRepresentation, error) {
+func (pa *PXBAuth) GetAllUsers() ([]KeycloakUserRepresentation, error) {
 	fn := "GetAllGroups"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return nil, err
 	}
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return nil, err
 	}
@@ -916,20 +916,20 @@ func GetAllUsers() ([]KeycloakUserRepresentation, error) {
 }
 
 // GetMembersOfGroup fetches all available members of the group
-func GetMembersOfGroup(group string) ([]string, error) {
+func (pa *PXBAuth) GetMembersOfGroup(group string) ([]string, error) {
 	fn := "GetMembersOfGroup"
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return nil, err
 	}
-	groupID, err := FetchIDOfGroup(group)
+	groupID, err := pa.FetchIDOfGroup(group)
 	if err != nil {
 		return nil, err
 	}
 
 	reqURL := fmt.Sprintf("%s/groups/%s/members", keycloakEndPoint, groupID)
 	method := "GET"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return nil, err
@@ -955,15 +955,15 @@ func GetMembersOfGroup(group string) ([]string, error) {
 }
 
 // AddGroup adds a new group
-func AddGroup(group string) error {
+func (pa *PXBAuth) AddGroup(group string) error {
 	fn := "AddGroup"
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/groups", keycloakEndPoint)
 	method := "POST"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -988,18 +988,18 @@ func AddGroup(group string) error {
 }
 
 // DeleteGroup adds a new group
-func DeleteGroup(group string) error {
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+func (pa *PXBAuth) DeleteGroup(group string) error {
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
-	groupID, err := FetchIDOfGroup(group)
+	groupID, err := pa.FetchIDOfGroup(group)
 	if err != nil {
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/groups/%s", keycloakEndPoint, groupID)
 	method := "DELETE"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		return err
 	}
@@ -1012,14 +1012,14 @@ func DeleteGroup(group string) error {
 }
 
 // Deletes Multiple groups
-func DeleteMultipleGroups(groups []string) error {
+func (pa *PXBAuth) DeleteMultipleGroups(groups []string) error {
 
 	var wg sync.WaitGroup
 	for _, group := range groups {
 		wg.Add(1)
 		go func(group string) {
 			defer wg.Done()
-			err := DeleteGroup(group)
+			err := pa.DeleteGroup(group)
 			log.FailOnError(err, "Failed to create group - %v", group)
 
 		}(group)
@@ -1031,14 +1031,14 @@ func DeleteMultipleGroups(groups []string) error {
 }
 
 // Deletes Multiple users
-func DeleteMultipleUsers(users []string) error {
+func (pa *PXBAuth) DeleteMultipleUsers(users []string) error {
 
 	var wg sync.WaitGroup
 	for _, user := range users {
 		wg.Add(1)
 		go func(user string) {
 			defer wg.Done()
-			err := DeleteUser(user)
+			err := pa.DeleteUser(user)
 			log.FailOnError(err, "Failed to create group - %v", user)
 
 		}(user)
@@ -1050,25 +1050,25 @@ func DeleteMultipleUsers(users []string) error {
 }
 
 // AddGroupToUser add group to a user
-func AddGroupToUser(user, group string) error {
+func (pa *PXBAuth) AddGroupToUser(user, group string) error {
 	fn := "AddGroupToUser"
-	groupID, err := FetchIDOfGroup(group)
+	groupID, err := pa.FetchIDOfGroup(group)
 	if err != nil {
 		return err
 	}
 
-	userID, err := FetchIDOfUser(user)
+	userID, err := pa.FetchIDOfUser(user)
 	if err != nil {
 		return err
 	}
 
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 	if err != nil {
 		return err
 	}
 	reqURL := fmt.Sprintf("%s/users/%s/groups/%s", keycloakEndPoint, userID, groupID)
 	method := "PUT"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return err
@@ -1095,8 +1095,8 @@ func AddGroupToUser(user, group string) error {
 }
 
 // FetchIDOfGroup fetched ID of a group
-func FetchIDOfGroup(name string) (string, error) {
-	groups, err := GetAllGroups()
+func (pa *PXBAuth) FetchIDOfGroup(name string) (string, error) {
+	groups, err := pa.GetAllGroups()
 	if err != nil {
 		return "", nil
 	}
@@ -1113,11 +1113,11 @@ func FetchIDOfGroup(name string) (string, error) {
 }
 
 // FetchUserDetailsFromID fetches user name and email ID
-func FetchUserDetailsFromID(userID string) (string, string, error) {
+func (pa *PXBAuth) FetchUserDetailsFromID(userID string) (string, string, error) {
 	fn := "FetchUserDetailsFromID"
 
 	// First fetch all users to get the client id for the client
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	headers, err := pa.GetCommonHTTPHeaders(PxCentralAdminUser, pa.pxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return "", "", err
@@ -1125,7 +1125,7 @@ func FetchUserDetailsFromID(userID string) (string, string, error) {
 	var userName string
 	var email string
 	f := func() (interface{}, bool, error) {
-		keycloakEndPoint, err := getKeycloakEndPoint(true)
+		keycloakEndPoint, err := pa.getKeycloakEndPoint(true)
 		if err != nil {
 			return nil, true, err
 		}
@@ -1191,11 +1191,19 @@ func processHTTPRequest(
 		}
 	}()
 
-	return ioutil.ReadAll(httpResponse.Body)
+	respBodyBytes, err := ioutil.ReadAll(httpResponse.Body)
+	if err != nil {
+		return nil, err
+	}
+	if httpResponse.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP Response - Status code: [%d], Error message: [%s]", httpResponse.StatusCode, string(respBodyBytes))
+	}
+	return respBodyBytes, nil
 }
 
-func GetNonAdminCtx(username, password string) (context.Context, error) {
-	token, err := GetToken(username, password)
+func (pa *PXBAuth) GetPxCentralNonAdminCtx(username, password string) (context.Context, error) {
+	token, err := pa.GetNewToken(username, password)
+	log.Debugf("new token obtained for user [%s] is \"%v\"", username, token)
 	if err != nil {
 		return nil, err
 	}
@@ -1203,9 +1211,9 @@ func GetNonAdminCtx(username, password string) (context.Context, error) {
 	return ctx, nil
 }
 
-func GetRandomUserFromGroup(groupName string) (string, error) {
+func (pa *PXBAuth) GetRandomUserFromGroup(groupName string) (string, error) {
 	fn := "GetRandomUserFromGroup"
-	users, err := GetMembersOfGroup(groupName)
+	users, err := pa.GetMembersOfGroup(groupName)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
 		return "", err
