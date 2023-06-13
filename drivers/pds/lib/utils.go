@@ -709,7 +709,7 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 				port = fmt.Sprint(value)
 			}
 		case cassandra:
-			if strings.Contains(key, "thriftPort") {
+			if strings.Contains(key, "cqlPort") {
 				port = fmt.Sprint(value)
 			}
 		}
