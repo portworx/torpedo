@@ -1731,14 +1731,6 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	return false, errors.New("TPCC run failed.")
 }
 
-func ValidateDnsEndPoints(dnsEndPoint, port string) error {
-	err = controlplane.ValidateDNSEndpoint(dnsEndPoint + port)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // CreateDataServiceWorkloads generates workloads for the given dataservices
 func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *v1.Deployment, error) {
 	var dep *v1.Deployment
@@ -1750,9 +1742,9 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 	}
 	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 	log.Infof("Dataservice endpoint port %s", port)
-	log.Infof("Dataservice endpoint and port is %s", dnsEndpoint+port)
+	log.Infof("Dataservice endpoint and port is %s", dnsEndpoint+":"+port)
 
-	err = ValidateDnsEndPoints(dnsEndpoint, port)
+	err = controlplane.ValidateDNSEndpoint(dnsEndpoint + ":" + port)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error occured while validating connection info, Err: %v", err)
 	}
