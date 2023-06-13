@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
@@ -162,34 +163,19 @@ var _ = Describe("{KvdbDecommissionNode}", func() {
 
 		ValidateApplications(contexts)
 
-		var storageDriverNodes []node.Node
+		var kvdbNodes []KvdbNode
+		var newKVDBNodes []KvdbNode
+		var err error
 		Step(fmt.Sprintf("get kvdb nodes"), func() {
-			storageDriverNodes = node.GetStorageDriverNodes()
-
-			dash.VerifyFatal(len(storageDriverNodes) > 0, true, "Verify worker nodes")
-		})
-
-		nodeIndexMap := make(map[int]int)
-		lenWorkerNodes := len(storageDriverNodes)
-		chaosLevel := Inst().ChaosLevel
-		// chaosLevel in this case is the number of worker nodes to be decommissioned
-		// in case of being greater than that, it will assume the total no of worker nodes
-		if chaosLevel > lenWorkerNodes {
-			chaosLevel = lenWorkerNodes
-		}
-
-		Step(fmt.Sprintf("sort nodes randomly according to chaos level %d", chaosLevel), func() {
-			for len(nodeIndexMap) != chaosLevel {
-				index := rand.Intn(lenWorkerNodes)
-				nodeIndexMap[index] = index
-			}
+			kvdbNodes, err = GetAllKvdbNodes()
+			log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
+			dash.VerifyFatal(len(kvdbNodes) == 3, true, "Verify kvdb nodes")
 		})
 
 		// decommission nodes one at a time according to chaosLevel
-		for nodeIndex := range nodeIndexMap {
-			nodeToDecommission := storageDriverNodes[nodeIndex]
-			nodeToDecommission, err := node.GetNodeByName(nodeToDecommission.Name) //This is required when multiple nodes are decommissioned sequentially
-			log.FailOnError(err, fmt.Sprintf("node [%s] not found with name", nodeToDecommission.Name))
+		for _, kvdbNode := range kvdbNodes {
+			nodeToDecommission, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+			log.FailOnError(err, fmt.Sprintf("error getting node with id: %s", kvdbNode.ID))
 			stepLog = fmt.Sprintf("decommission node %s", nodeToDecommission.Name)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
@@ -215,6 +201,37 @@ var _ = Describe("{KvdbDecommissionNode}", func() {
 					dash.VerifyFatal(decommissioned.(bool), true, fmt.Sprintf("Validate node [%s] is decommissioned", nodeToDecommission.Name))
 				})
 			})
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing node registry")
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing storage drive endpoints")
+
+			t := func() (interface{}, bool, error) {
+
+				newKVDBNodes, err = GetAllKvdbNodes()
+				log.FailOnError(err, "Failed to get list of KVDB nodes from the cluster")
+				if err != nil {
+					return false, true, err
+				}
+
+				if len(newKVDBNodes) == 3 {
+					return true, false, nil
+				}
+
+				return false, true, fmt.Errorf("current  number of KVDB nodes : %d", len(newKVDBNodes))
+			}
+			_, err = task.DoRetryWithTimeout(t, 4*time.Minute, defaultRetryInterval)
+			dash.VerifyFatal(len(newKVDBNodes) == 3, true, "Verify kvdb nodes are updated")
+
+			isLeaderHealthy := false
+			for _, nKVDBNode := range newKVDBNodes {
+				dash.VerifyFatal(nKVDBNode.IsHealthy, true, fmt.Sprintf("verify kvdb node %s is healthy", nKVDBNode.ID))
+				if nKVDBNode.Leader && nKVDBNode.IsHealthy {
+					isLeaderHealthy = true
+				}
+			}
+			dash.VerifyFatal(isLeaderHealthy, true, "verify kvdb leader node exists and healthy")
+
 			stepLog = fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
@@ -228,6 +245,7 @@ var _ = Describe("{KvdbDecommissionNode}", func() {
 					}
 
 					for _, n := range drvNodes {
+						log.Infof("checking for node %s", n.Hostname)
 						if n.Hostname == nodeToDecommission.Hostname {
 							rejoinedNode = n
 							return true, false, nil
