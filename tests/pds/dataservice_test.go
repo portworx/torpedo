@@ -1683,6 +1683,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
+				log.Debugf("DS NAME IS : %v", ds.Name)
 				if dsName == postgresql {
 					Step("Deploy and validate data service", func() {
 						isDeploymentsDeleted = false
