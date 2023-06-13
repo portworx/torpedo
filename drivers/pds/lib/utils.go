@@ -682,16 +682,17 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 }
 
 // GetDeploymentConnectionInfo returns the dns endpoint
-func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
+func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, error) {
 	var isfound bool
 	var dnsEndpoint string
+	var port string
 
 	dataServiceDeployment := components.DataServiceDeployment
 	deploymentConnectionDetails, clusterDetails, err := dataServiceDeployment.GetConnectionDetails(deploymentID)
 	deploymentConnectionDetails.MarshalJSON()
 	if err != nil {
 		log.Errorf("An Error Occured %v", err)
-		return "", err
+		return "", "", err
 	}
 	deploymentNodes := deploymentConnectionDetails.GetNodes()
 	log.Infof("Deployment nodes %v", deploymentNodes)
@@ -702,13 +703,23 @@ func GetDeploymentConnectionInfo(deploymentID string) (string, error) {
 			dnsEndpoint = fmt.Sprint(value)
 			isfound = true
 		}
+		switch dsName {
+		case elasticSearch:
+			if strings.Contains(key, "port") {
+				port = fmt.Sprint(value)
+			}
+		case cassandra:
+			if strings.Contains(key, "thriftPort") {
+				port = fmt.Sprint(value)
+			}
+		}
 	}
 	if !isfound {
 		log.Errorf("No connection string found")
-		return "", err
+		return "", "", err
 	}
 
-	return dnsEndpoint, nil
+	return dnsEndpoint, port, nil
 }
 
 // GetDeploymentCredentials returns the password to connect to the dataservice
@@ -1667,7 +1678,7 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (bool, error) {
 	var dbUser, timeToRun, numOfCustomers, numOfThreads, numOfWarehouses string
 
-	dnsEndpoint, err := GetDeploymentConnectionInfo(deploymentID)
+	dnsEndpoint, _, err := GetDeploymentConnectionInfo(deploymentID, dataServiceName)
 	if err != nil {
 		log.Errorf("An Error Occured while getting connection info %v", err)
 		return false, err
@@ -1720,16 +1731,31 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	return false, errors.New("TPCC run failed.")
 }
 
+func ValidateDnsEndPoints(dnsEndPoint, port string) error {
+	err = controlplane.ValidateDNSEndpoint(dnsEndPoint + port)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CreateDataServiceWorkloads generates workloads for the given dataservices
 func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *v1.Deployment, error) {
 	var dep *v1.Deployment
 	var pod *corev1.Pod
 
-	dnsEndpoint, err := GetDeploymentConnectionInfo(params.DeploymentID)
+	dnsEndpoint, port, err := GetDeploymentConnectionInfo(params.DeploymentID, params.DataServiceName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error occured while getting connection info, Err: %v", err)
 	}
 	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
+	log.Infof("Dataservice endpoint port %s", port)
+
+	err = ValidateDnsEndPoints(dnsEndpoint, port)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error occured while validating connection info, Err: %v", err)
+	}
+	log.Infof("DNS endpoints are reachable...")
 
 	pdsPassword, err := GetDeploymentCredentials(params.DeploymentID)
 	if err != nil {

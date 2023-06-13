@@ -41,6 +41,43 @@ var _ = Describe("{ValidateDNSEndpoint}", func() {
 		It("validate dns endpoints", func() {
 			err = dsTest.ValidateDataServiceDnsEndpoints("es-dns-8t5jx1-pds-automation-0-vip.portworx.pds-dns.io")
 			log.FailOnError(err, "Failed connecting to endpoint:%v", err)
+
+			var generateWorkloads = make(map[string]string)
+			var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+			var dsVersions = make(map[string]map[string][]string)
+
+			for _, ds := range params.DataServiceToTest {
+				if ds.Name == zookeeper {
+					log.Warnf("Scaling of nodes is not supported for %v dataservice ", ds.Name)
+					continue
+				}
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+					dsVersions[ds.Name] = dataServiceVersionBuildMap
+				})
+			}
+
+			Step("Running Workloads before scaling up of dataservices ", func() {
+				for ds, deployment := range deployments {
+					if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+						log.InfoD("Running Workloads on DataService %v ", ds.Name)
+						var params pdslib.WorkloadGenerationParams
+						pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+						log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+						if dep == nil {
+							generateWorkloads[ds.Name] = pod.Name
+						} else {
+							generateWorkloads[ds.Name] = dep.Name
+						}
+						for dsName, workloadContainer := range generateWorkloads {
+							log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+						}
+					}
+				}
+			})
 		})
 	})
 
