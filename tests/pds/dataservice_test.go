@@ -1683,9 +1683,8 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				log.Debugf("DS NAME IS : %v", ds.Name)
-				if dsName == postgresql {
-					Step("Deploy and validate data service", func() {
+				Step("Deploy and validate data service", func() {
+					if dsName == postgresql {
 						isDeploymentsDeleted = false
 						controlPlane.UpdateResourceTemplateName("pds-auto-pvcFullCondition")
 						deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
@@ -1694,9 +1693,8 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						dsVersions[ds.Name] = dataServiceVersionBuildMap
 						depList = append(depList, deployment)
 						dsName = ds.Name
-
-					})
-				}
+					}
+				})
 			}
 			defer func() {
 				for _, newDeployment := range deployments {
