@@ -129,7 +129,7 @@ func (backupClient *BackupClient) CreateGcpBackupCredsAndTarget(tenantId, name s
 // DeleteAwsS3BackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId string) error {
 	log.Info("Delete S3 bucket from AWS cloud.")
-	err := backupClient.AWSStorageClient.DeleteBucket(bucketName)
+	err := backupClient.AWSStorageClient.DeleteBucket()
 	if err != nil {
 		return fmt.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
 	}

@@ -8,7 +8,6 @@ import (
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"math/rand"
 	"net/http"
 	"time"
 )
@@ -16,7 +15,7 @@ import (
 var (
 	bkpClient                                     *pdsbkp.BackupClient
 	awsBkpTargets, azureBkpTargets, gcpBkpTargets []*pds.ModelsBackupTarget
-	bkpTargetName                                 = "bkptarget-automation"
+	bkpTargetName                                 = "automation--"
 	bucket                                        = "pds-qa-automation"
 )
 
@@ -60,7 +59,7 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 })
 
 var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
-	bkpTargetName = bkpTargetName + randString(8)
+	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteDataServiceAndValidateBackupAtObjectStore", "Delete the PDS data service should not delete the backups in backend", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
@@ -124,6 +123,8 @@ var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		err := bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
 		EndTorpedoTest()
 	})
 })
@@ -142,14 +143,4 @@ func deleteAllBkpTargets() {
 		err = bkpClient.DeleteGoogleBackupCredsAndTarget(bkptarget.GetId())
 		log.FailOnError(err, "Failed while deleting the GCP backup target")
 	}
-}
-
-func randString(length int) string {
-	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
 }
