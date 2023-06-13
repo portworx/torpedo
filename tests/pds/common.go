@@ -4,18 +4,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/pds/parameters"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/tests"
-
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	"github.com/portworx/torpedo/drivers/pds/parameters"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
+	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -173,12 +171,12 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	log.Infof("Check PVC Usage")
 	f := func() (interface{}, bool, error) {
 		for _, ctx := range context {
-			vols, err := tests.Inst().S.GetVolumes(ctx)
+			vols, err := Inst().S.GetVolumes(ctx)
 			if err != nil {
 				return nil, true, err
 			}
 			for _, vol := range vols {
-				appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+				appVol, err := Inst().V.InspectVolume(vol.ID)
 				if err != nil {
 					return nil, true, err
 				}
@@ -207,7 +205,7 @@ func IncreasePVCby1Gig(context []*scheduler.Context) error {
 		return err
 	}
 	for _, ctx := range context {
-		appVolumes, err := tests.Inst().S.ResizeVolume(ctx, "")
+		appVolumes, err := Inst().S.ResizeVolume(ctx, "")
 		log.FailOnError(err, "Volume resize successful ?")
 		log.InfoD(fmt.Sprintf("validating successful volume size increase on app %s's volumes: %v",
 			ctx.App.Key, appVolumes))
@@ -231,12 +229,12 @@ func IncreasePVCby1Gig(context []*scheduler.Context) error {
 func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
 	var pvcCapacity uint64
 	for _, ctx := range context {
-		vols, err := tests.Inst().S.GetVolumes(ctx)
+		vols, err := Inst().S.GetVolumes(ctx)
 		if err != nil {
 			return 0, err
 		}
 		for _, vol := range vols {
-			appVol, err := tests.Inst().V.InspectVolume(vol.ID)
+			appVol, err := Inst().V.InspectVolume(vol.ID)
 			if err != nil {
 				return 0, err
 			}

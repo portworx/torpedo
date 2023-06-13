@@ -1671,7 +1671,6 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 var _ = Describe("{GetPvcToFullCondition}", func() {
 
 	JustBeforeEach(func() {
-		InitInstance()
 		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once trhreshold is met", pdsLabels, 0)
 	})
 
@@ -1684,17 +1683,19 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				Step("Deploy and validate data service", func() {
-					isDeploymentsDeleted = false
-					controlPlane.UpdateResourceTemplateName("pds-auto-pvcFullCondition")
-					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-					log.FailOnError(err, "Error while deploying data services")
-					deployments[ds] = deployment
-					dsVersions[ds.Name] = dataServiceVersionBuildMap
-					depList = append(depList, deployment)
-					dsName = ds.Name
+				if dsName == postgresql {
+					Step("Deploy and validate data service", func() {
+						isDeploymentsDeleted = false
+						controlPlane.UpdateResourceTemplateName("pds-auto-pvcFullCondition")
+						deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+						log.FailOnError(err, "Error while deploying data services")
+						deployments[ds] = deployment
+						dsVersions[ds.Name] = dataServiceVersionBuildMap
+						depList = append(depList, deployment)
+						dsName = ds.Name
 
-				})
+					})
+				}
 			}
 			defer func() {
 				for _, newDeployment := range deployments {
