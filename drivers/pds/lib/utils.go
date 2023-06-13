@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+
 	"github.com/portworx/torpedo/pkg/log"
 
 	state "net/http"
@@ -22,8 +23,10 @@ import (
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/node"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -206,12 +209,17 @@ const (
 	configmapNamespace           = "default"
 )
 
+// type portworx struct {
+// 	schedOps schedops.Driver
+// }
+
 // K8s/PDS Instances
 var (
 	k8sCore       = core.Instance()
 	k8sApps       = apps.Instance()
 	apiExtentions = apiextensions.Instance()
 	serviceType   = "LoadBalancer"
+	portworx      *struct{ schedOps schedops.Driver }
 )
 
 // PDS vars
@@ -293,6 +301,32 @@ func ValidateNamespaces(deploymentTargetID string, ns string, status string) err
 		}
 
 		return false, nil
+	})
+	return waitErr
+}
+
+// Wait for PX pod on node to come up
+func WaitPXUpOnNode(n node.Node) error {
+	waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
+		isPXRunning := portworx.schedOps.IsPXReadyOnNode(n)
+		if isPXRunning {
+			return true, err
+		} else {
+			return false, nil
+		}
+	})
+	return waitErr
+}
+
+// Wait for PX pod on node to go down
+func WaitPXDownOnNode(n node.Node) error {
+	waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
+		isPXRunning := portworx.schedOps.IsPXReadyOnNode(n)
+		if isPXRunning {
+			return false, err
+		} else {
+			return true, nil
+		}
 	})
 	return waitErr
 }

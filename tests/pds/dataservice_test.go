@@ -543,6 +543,133 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 
 })
 
+var _ = Describe("{ScaleDownScaleupPXCluster}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ScaleDownScaleupPXCluster", "Scales Down the PX cluster, Verify Data Services and Scales up the Px cluster", pdsLabels, 0)
+	})
+
+	It("Scale down PX pods, Verify Data Services and Scale up the PX pods", func() {
+		var (
+			generateWorkloads = make(map[string]string)
+			deployments       = make(map[PDSDataService]*pds.ModelsDeployment)
+			dsVersions        = make(map[string]map[string][]string)
+			deps              []*pds.ModelsDeployment
+			nodeList          []*corev1.Node
+		)
+		workerNodes := node.GetWorkerNodes()
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+					dsVersions[ds.Name] = dataServiceVersionBuildMap
+					nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
+					log.FailOnError(err, "Error while getting Data Serice Nodes")
+					deploymentNode := nodes[0]
+					nodeList = append(nodeList, deploymentNode)
+				})
+			}
+		})
+
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+			}
+		}()
+
+		Step("Running Workloads before scaling PX nodes", func() {
+			for ds, deployment := range deployments {
+				if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+					log.InfoD("Running Workloads on DataService %v ", ds.Name)
+					var params pdslib.WorkloadGenerationParams
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+					if dep == nil {
+						generateWorkloads[ds.Name] = pod.Name
+					} else {
+						generateWorkloads[ds.Name] = dep.Name
+					}
+					for dsName, workloadContainer := range generateWorkloads {
+						log.Infof("dsName %s, workloadContainer %s", dsName, workloadContainer)
+					}
+				}
+			}
+		})
+
+		defer func() {
+			for dsName, workloadContainer := range generateWorkloads {
+				Step("Delete the workload generating deployments", func() {
+					if Contains(dataServiceDeploymentWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
+						err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
+					} else if Contains(dataServicePodWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
+						err = pdslib.DeleteK8sPods(workloadContainer, namespace)
+					}
+					log.FailOnError(err, "error deleting workload generating pods")
+				})
+			}
+		}()
+
+		Step("Scale down PX by Labelling Nodes on which Data Services are running", func() {
+			// disable PX Pod on the first node of each deployed Data Service
+			for _, nodeToLabel := range nodeList {
+				log.InfoD("Disabling PX on Node %v ", nodeToLabel.Name)
+				err = pdslib.LabelK8sNode(nodeToLabel, "px/enabled=false")
+				log.FailOnError(err, "error while labelling node")
+				for _, workerNode := range workerNodes {
+					if workerNode.Name == nodeToLabel.Name {
+						err = pdslib.WaitPXDownOnNode(workerNode)
+						log.FailOnError(err, "Failed to stop Px on Node %v", workerNode.Name)
+						break
+					}
+				}
+			}
+			log.InfoD("Successfully Scaled Down PX Pods...")
+		})
+		log.InfoD("Sleeping 60 seconds after scale down of Px pods before we check the health of Data Services")
+		time.Sleep(60 * time.Second)
+		Step("Verify the Data Services status after scaling down the Px pods", func() {
+			for _, dep := range deps {
+				err = dsTest.ValidateDataServiceDeployment(dep, namespace)
+				log.FailOnError(err, "Error while validating data services")
+			}
+			log.InfoD("Deployments pods are up and healthy after scaling down Px pods")
+		})
+
+		Step("Scale Up PX by removing Labels on the Nodes", func() {
+			for _, nodeToUnlabel := range nodeList {
+				log.InfoD("Enabling PX on Node %v ", nodeToUnlabel.Name)
+				err := pdslib.RemoveLabelFromK8sNode(nodeToUnlabel, "px/enabled")
+				log.FailOnError(err, "error while removing label from k8s node")
+				for _, workerNode := range workerNodes {
+					if workerNode.Name == nodeToUnlabel.Name {
+						err = pdslib.WaitPXUpOnNode(workerNode)
+						log.FailOnError(err, "Failed to start Px on Node %v", workerNode.Name)
+					}
+				}
+			}
+			log.InfoD("Successfully Scaled up Px Pods")
+		})
+		log.InfoD("Sleeping 60 seconds again after scale up of Px pods before we check the health of Data Services")
+		time.Sleep(60 * time.Second)
+		Step("Verify the Data Services status status after scaling up PX pods", func() {
+			for _, dep := range deps {
+				err = dsTest.ValidateDataServiceDeployment(dep, namespace)
+				log.FailOnError(err, "Error while validating data services")
+			}
+			log.InfoD("Deployments pods are up and healthy after scaling up Px Pods")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{ScaleUPDataServices}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ScaleUPDataServices", "Deploys and Scales Up the dataservices", pdsLabels, 0)
