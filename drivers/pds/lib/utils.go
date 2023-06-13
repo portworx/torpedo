@@ -705,7 +705,7 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 		}
 		switch dsName {
 		case elasticSearch:
-			if strings.Contains(key, "port") {
+			if strings.Contains(key, "Port") {
 				port = fmt.Sprint(value)
 			}
 		case cassandra:
@@ -1750,6 +1750,7 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 	}
 	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 	log.Infof("Dataservice endpoint port %s", port)
+	log.Infof("Dataservice endpoint and port is %s", dnsEndpoint+port)
 
 	err = ValidateDnsEndPoints(dnsEndpoint, port)
 	if err != nil {
