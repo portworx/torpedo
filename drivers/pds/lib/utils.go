@@ -195,8 +195,10 @@ const (
 	cassandra                    = "Cassandra"
 	elasticSearch                = "Elasticsearch"
 	couchbase                    = "Couchbase"
+	mongodb                      = "MongoDB Enterprise"
 	rabbitmq                     = "RabbitMQ"
 	mysql                        = "MySQL"
+	mssql                        = "MS SQL Server"
 	pxLabel                      = "pds.portworx.com/available"
 	defaultParams                = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap           = "pds-params"
@@ -710,6 +712,38 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 			}
 		case cassandra:
 			if strings.Contains(key, "cqlPort") {
+				port = fmt.Sprint(value)
+			}
+		case postgresql:
+			if strings.Contains(key, "postgresql") {
+				port = fmt.Sprint(value)
+			}
+		case consul:
+			if strings.Contains(key, "http") {
+				port = fmt.Sprint(value)
+			}
+		case couchbase:
+			if strings.Contains(key, "rest") {
+				port = fmt.Sprint(value)
+			}
+		case mongodb:
+			if strings.Contains(key, "mongos") {
+				port = fmt.Sprint(value)
+			}
+		case mysql:
+			if strings.Contains(key, "mysql-router") {
+				port = fmt.Sprint(value)
+			}
+		case mssql:
+			if strings.Contains(key, "client") {
+				port = fmt.Sprint(value)
+			}
+		case rabbitmq:
+			if strings.Contains(key, "amqp") {
+				port = fmt.Sprint(value)
+			}
+		case redis:
+			if strings.Contains(key, "client") {
 				port = fmt.Sprint(value)
 			}
 		}
@@ -1740,8 +1774,6 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 	if err != nil {
 		return nil, nil, fmt.Errorf("error occured while getting connection info, Err: %v", err)
 	}
-	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
-	log.Infof("Dataservice endpoint port %s", port)
 	log.Infof("Dataservice endpoint and port is %s", dnsEndpoint+":"+port)
 
 	err = controlplane.ValidateDNSEndpoint(dnsEndpoint + ":" + port)
