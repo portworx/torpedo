@@ -701,11 +701,25 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 	log.Infof("Deployment nodes %v", deploymentNodes)
 	isfound = false
 	for key, value := range clusterDetails {
-		log.Infof("host details key %v value %v", key, value)
-		if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
-			dnsEndpoint = fmt.Sprint(value)
-			isfound = true
+		log.Infof("host details key: [%v] value: [%v]", key, value)
+		if dsName == consul {
+			if strings.Contains(key, "endpoints") {
+				dnsEndpoint = fmt.Sprint(value)
+				log.Infof("consul dns end point: %s", dnsEndpoint)
+				isfound = true
+			}
+		} else {
+			if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
+				dnsEndpoint = fmt.Sprint(value)
+				isfound = true
+			}
 		}
+
+		if !isfound {
+			log.Errorf("No connection string found")
+			return "", "", err
+		}
+
 		switch dsName {
 		case cassandra:
 			if strings.Contains(key, "cqlPort") {
@@ -719,18 +733,11 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 			if strings.Contains(key, "httpPort") {
 				port = fmt.Sprint(value)
 			}
-			if strings.Contains(key, "endpoints") {
-				dnsEndpoint = fmt.Sprint(value)
-			}
 		case elasticSearch, mysql, mssql, redis, kafka, zookeeper:
 			if strings.Contains(key, "Port") {
 				port = fmt.Sprint(value)
 			}
 		}
-	}
-	if !isfound {
-		log.Errorf("No connection string found")
-		return "", "", err
 	}
 
 	return dnsEndpoint, port, nil

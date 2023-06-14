@@ -2,9 +2,9 @@ package controlplane
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
-	"net"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
