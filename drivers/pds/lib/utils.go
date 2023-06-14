@@ -707,40 +707,20 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 			isfound = true
 		}
 		switch dsName {
-		case elasticSearch:
-			if strings.Contains(key, "Port") {
-				port = fmt.Sprint(value)
-			}
 		case cassandra:
 			if strings.Contains(key, "cqlPort") {
 				port = fmt.Sprint(value)
 			}
-		case postgresql:
-			if strings.Contains(key, "postgresql") {
+		case postgresql, couchbase, mongodb, rabbitmq:
+			if strings.Contains(key, "port") {
 				port = fmt.Sprint(value)
 			}
 		case consul:
-			if strings.Contains(key, "http") {
+			if strings.Contains(key, "httpPort") {
 				port = fmt.Sprint(value)
 			}
-		case couchbase:
-			if strings.Contains(key, "rest") {
-				port = fmt.Sprint(value)
-			}
-		case mongodb:
-			if strings.Contains(key, "mongos") {
-				port = fmt.Sprint(value)
-			}
-		case mysql:
-			if strings.Contains(key, "mysql-router") {
-				port = fmt.Sprint(value)
-			}
-		case rabbitmq:
-			if strings.Contains(key, "amqp") {
-				port = fmt.Sprint(value)
-			}
-		case redis, kafka, zookeeper, mssql:
-			if strings.Contains(key, "client") {
+		case elasticSearch, mysql, mssql, redis, kafka, zookeeper:
+			if strings.Contains(key, "Port") {
 				port = fmt.Sprint(value)
 			}
 		}
