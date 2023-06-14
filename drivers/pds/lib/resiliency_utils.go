@@ -34,7 +34,6 @@ const (
 	UpdateTemplate                    = "medium"
 	RebootNodeDuringAppVersionUpdate  = "reboot-node-during-app-version-update"
 	KillTeleportPodDuringDeployment   = "kill-teleport-pod-during-deployment"
-	KillAgentPodDuringWorkloadRun     = "kill-agent-pod-during-workload-run"
 )
 
 // PDS vars
