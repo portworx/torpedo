@@ -152,8 +152,10 @@ func DeleteS3Objects(bucket string) error {
 
 	var objectsToDelete []*s3.ObjectIdentifier
 
+	log.Infof("List of objects found in S3 bucket - [%s]", bucket)
 	err = S3Client.ListObjectsPages(listInput, func(page *s3.ListObjectsOutput, lastPage bool) bool {
 		for _, obj := range page.Contents {
+			log.Infof(*obj.Key)
 			objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
 				Key: obj.Key,
 			})
