@@ -719,6 +719,9 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 			if strings.Contains(key, "httpPort") {
 				port = fmt.Sprint(value)
 			}
+			if strings.Contains(key, "endpoints") {
+				dnsEndpoint = fmt.Sprint(value)
+			}
 		case elasticSearch, mysql, mssql, redis, kafka, zookeeper:
 			if strings.Contains(key, "Port") {
 				port = fmt.Sprint(value)
