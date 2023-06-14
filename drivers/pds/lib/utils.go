@@ -199,6 +199,7 @@ const (
 	rabbitmq                     = "RabbitMQ"
 	mysql                        = "MySQL"
 	mssql                        = "MS SQL Server"
+	kafka                        = "Kafka"
 	pxLabel                      = "pds.portworx.com/available"
 	defaultParams                = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap           = "pds-params"
@@ -734,15 +735,11 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 			if strings.Contains(key, "mysql-router") {
 				port = fmt.Sprint(value)
 			}
-		case mssql:
-			if strings.Contains(key, "client") {
-				port = fmt.Sprint(value)
-			}
 		case rabbitmq:
 			if strings.Contains(key, "amqp") {
 				port = fmt.Sprint(value)
 			}
-		case redis:
+		case redis, kafka, zookeeper, mssql:
 			if strings.Contains(key, "client") {
 				port = fmt.Sprint(value)
 			}
@@ -1774,7 +1771,6 @@ func CreateDataServiceWorkloads(params WorkloadGenerationParams) (*corev1.Pod, *
 	if err != nil {
 		return nil, nil, fmt.Errorf("error occured while getting connection info, Err: %v", err)
 	}
-	log.Infof("Dataservice endpoint and port is %s", dnsEndpoint+":"+port)
 
 	err = controlplane.ValidateDNSEndpoint(dnsEndpoint + ":" + port)
 	if err != nil {

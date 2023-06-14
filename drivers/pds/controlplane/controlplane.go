@@ -261,12 +261,13 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 
 // ValidateDNSEndpoint
 func (cp *ControlPlane) ValidateDNSEndpoint(dnsZone string) error {
+	log.Infof("Dataservice endpoint is: [%s]", dnsZone)
 	_, err := net.Dial("tcp", dnsZone)
 	if err != nil {
 		log.Errorf("Failed to connect to the dns endpoint with err: %v", err)
 		return err
 	} else {
-		log.Infof("Dns is working")
+		log.Infof("DNS endpoint is reachable and ready to accept connections")
 	}
 	return nil
 }
