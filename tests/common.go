@@ -3559,7 +3559,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, true)
+		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, true)
 	}
 	return err
 }
@@ -3854,9 +3854,8 @@ func WaitForBackupLocationAddition(
 }
 
 // CreateNFSBackupLocation creates backup location for nfs
-func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, validate bool) error {
+func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, subPath string, validate bool) error {
 	serverAddr := os.Getenv("NFS_SERVER_ADDR")
-	subPath := os.Getenv("NFS_SUB_PATH")
 	mountOption := os.Getenv("NFS_MOUNT_OPTION")
 	path := os.Getenv("NFS_PATH")
 	backupDriver := Inst().Backup

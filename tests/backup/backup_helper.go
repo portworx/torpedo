@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/pkg/s3utils"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -941,26 +940,8 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, destinationClusterName)
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
-			// Delete the objects in backup location
-			backupLocationInspectRequest := api.BackupLocationInspectRequest{
-				Name:  bkpLocationName,
-				Uid:   backupLocationUID,
-				OrgId: orgID,
-			}
-			backupLocationObject, err := Inst().Backup.InspectBackupLocation(ctx, &backupLocationInspectRequest)
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("inspect backup location - backup location %s", bkpLocationName))
-			backupLocationType := backupLocationObject.BackupLocation.BackupLocationInfo.Type
-
-			switch backupLocationType {
-			case api.BackupLocationInfo_S3:
-				bucketName := backupLocationObject.BackupLocation.BackupLocationInfo.Path
-				log.Infof("Cleaning up the S3 bucket - %s", bucketName)
-				err = s3utils.DeleteS3Objects(bucketName)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("deleting s3 bucket - %s", bucketName))
-			}
-
 			// Delete the backup location object
-			err = DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
 				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
