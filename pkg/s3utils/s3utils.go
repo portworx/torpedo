@@ -128,3 +128,28 @@ func GetS3Objects(clusterID string, nodeName string, getPreviousFolder bool) ([]
 	}
 	return objects, nil
 }
+
+func DeleteS3Objects(bucket string) error {
+	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	if err != nil {
+		return err
+	}
+
+	S3Client := s3.New(sess)
+	input := &s3.DeleteBucketInput{
+		Bucket: &bucket,
+	}
+	_, err = S3Client.DeleteBucket(input)
+	if err != nil {
+		return err
+	}
+	return nil
+}
