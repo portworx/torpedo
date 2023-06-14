@@ -715,11 +715,6 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 			}
 		}
 
-		if !isfound {
-			log.Errorf("No connection string found")
-			return "", "", err
-		}
-
 		switch dsName {
 		case cassandra:
 			if strings.Contains(key, "cqlPort") {
@@ -738,6 +733,10 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 				port = fmt.Sprint(value)
 			}
 		}
+	}
+	if !isfound {
+		log.Errorf("No connection string found")
+		return "", "", err
 	}
 
 	return dnsEndpoint, port, nil
