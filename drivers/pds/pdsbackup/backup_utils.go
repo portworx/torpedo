@@ -296,6 +296,7 @@ func (backupClient *BackupClient) TriggerAndValidateAdhocBackup(deploymentID str
 
 // InitializePdsBackup to create backup creds/targets.
 func InitializePdsBackup() (*BackupClient, error) {
+	// TODO: Reuse PDSInit func
 	envVars := pdsutils.BackupEnvVariables()
 	apiConf := pds.NewConfiguration()
 	endpointURL, err := url.Parse(envVars.PDSControlPlaneURL)

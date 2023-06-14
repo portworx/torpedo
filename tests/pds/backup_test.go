@@ -93,6 +93,7 @@ var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 				})
+				// TODO: Add defer for cleaning up the deployment to handle failure
 				stepLog = "Perform adhoc backup and validate them"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
