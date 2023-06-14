@@ -1689,11 +1689,16 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (bool, error) {
 	var dbUser, timeToRun, numOfCustomers, numOfThreads, numOfWarehouses string
 
-	dnsEndpoint, _, err := GetDeploymentConnectionInfo(deploymentID, dataServiceName)
+	dnsEndpoint, port, err := GetDeploymentConnectionInfo(deploymentID, dataServiceName)
 	if err != nil {
-		log.Errorf("An Error Occured while getting connection info %v", err)
 		return false, err
 	}
+	err = controlplane.ValidateDNSEndpoint(dnsEndpoint + ":" + port)
+	if err != nil {
+		return false, err
+	}
+	log.Infof("DNS endpoints are reachable...")
+
 	log.Infof("Dataservice DNS endpoint %s", dnsEndpoint)
 	pdsPassword, err := GetDeploymentCredentials(deploymentID)
 	if err != nil {
