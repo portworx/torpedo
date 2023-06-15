@@ -700,6 +700,7 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 	deploymentNodes := deploymentConnectionDetails.GetNodes()
 	log.Infof("Deployment nodes %v", deploymentNodes)
 	isfound = false
+	//TODO: Validate vip endpoints as well
 	for key, value := range clusterDetails {
 		log.Infof("host details key: [%v] value: [%v]", key, value)
 		if dsName == consul {
