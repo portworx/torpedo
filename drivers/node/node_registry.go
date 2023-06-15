@@ -2,6 +2,8 @@ package node
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/pborman/uuid"
@@ -66,9 +68,66 @@ func GetWorkerNodes() []Node {
 	return nodeList
 }
 
+// StructToString returns the string representation of the specified struct
+func StructToString(s interface{}) string {
+	if stringer, ok := s.(fmt.Stringer); ok {
+		return stringer.String()
+	}
+	v := reflect.ValueOf(s)
+	t := v.Type()
+	var fields []string
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.IsExported() {
+			fieldVal := v.Field(i)
+			var fieldString string
+			if stringer, ok := fieldVal.Interface().(fmt.Stringer); ok {
+				fieldString = fmt.Sprintf("%s: %s", field.Name, stringer.String())
+			} else {
+				switch fieldVal.Kind() {
+				case reflect.Ptr:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else if fieldVal.Type().Elem().Kind() == reflect.Struct {
+						fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Elem().Interface()))
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Elem())
+					}
+				case reflect.Slice:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				case reflect.Map:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				case reflect.Struct:
+					fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Interface()))
+				case reflect.String:
+					if fieldVal.Len() == 0 {
+						fieldString = fmt.Sprintf("%s: \"\"", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				default:
+					fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+				}
+			}
+			fields = append(fields, fieldString)
+		}
+	}
+	return fmt.Sprintf("%s: {%s}", t.Name(), strings.Join(fields, ", "))
+}
+
 // GetMasterNodes returns only the master nodes/agent nodes
 func GetMasterNodes() []Node {
 	var nodeList []Node
+	fmt.Printf("Node Registry - %v\n", nodeRegistry)
+	fmt.Printf("Node Registry from the function - %s\n", StructToString(nodeRegistry))
 	for _, n := range nodeRegistry {
 		if n.Type == TypeMaster {
 			nodeList = append(nodeList, n)
