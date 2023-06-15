@@ -33,11 +33,13 @@ const (
 )
 
 var _ = Describe("{ValidateDNSEndpoint}", func() {
+	steplog := "Deploy dataservice, delete and validate pds pods"
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidateDNSEndpoint", "validate dns endpoitns", pdsLabels, 0)
 	})
 
-	Step("Deploy dataservice, delete and validate pds pods", func() {
+	Step(steplog, func() {
+		log.InfoD(steplog)
 		It("validate dns endpoints", func() {
 			var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 			var dsVersions = make(map[string]map[string][]string)
@@ -61,12 +63,15 @@ var _ = Describe("{ValidateDNSEndpoint}", func() {
 				}
 			}()
 
-			Step("Validate Dns Endpoints of Data services", func() {
+			steplog = "Validate Dns Endpoints of Data services"
+			Step(steplog, func() {
+				log.InfoD(steplog)
 				for ds, deployment := range deployments {
 					dnsEndpoint, port, err := pdslib.GetDeploymentConnectionInfo(deployment.GetId(), ds.Name)
 					log.FailOnError(err, "Failed Getting DNS endpoints")
 					err = controlPlane.ValidateDNSEndpoint(dnsEndpoint + ":" + port)
 					log.FailOnError(err, "Failed Validating DNS endpoints")
+					log.InfoD("DNS endpoint is reachable and ready to accept connections")
 				}
 			})
 		})
