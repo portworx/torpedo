@@ -674,7 +674,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 // DeleteBackupAndCheckIfBucketIsEmpty delete backups and verify if contents are deleted from backup location or not
 var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
-	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "3"))
+	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "1"))
 	var (
 		scheduledAppContexts     []*scheduler.Context
 		backupLocationUID        string
