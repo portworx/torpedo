@@ -71,6 +71,8 @@ const (
 	EmailHostServerField = "emailHostServer"
 	// EmailSubjectFiled is field in configmap which stores the subject(optional)
 	EmailSubjectField = "emailSubject"
+	// CreatedBeforeTimeForNsField is field which stores number of hours from now, used for deletion of old NS
+	CreatedBeforeTimeForNsField = "createdbeforetimefornsfield"
 )
 
 const (
@@ -120,6 +122,12 @@ var EmailServer string
 
 // EmailSubject to use for sending email
 var EmailSubject string
+
+// DeleteOldNsFlag to use if old NS needs to be deleted or not
+var DeleteOldNsFlag bool
+
+// CreatedBeforeTimeforNS to use for number of hours elapsed to get age of NS
+var CreatedBeforeTimeforNS int
 
 // RunningTriggers map of events and corresponding interval
 var RunningTriggers map[string]time.Duration
@@ -422,6 +430,8 @@ const (
 	AutopilotRebalance = "autopilotRebalance"
 	// VolumeCreatePxRestart performs  volume create and px restart parallel
 	VolumeCreatePxRestart = "volumeCreatePxRestart"
+	// DeleteOldNamespaces Performs deleting old NS which has age greater than specified in configmap
+	DeleteOldNamespaces = "deleteoldnamespaces"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -7020,6 +7030,43 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 		UpdateOutcome(event, fmt.Errorf("failed to Set Source kubeconfig post test completion: %v", err))
 	}
 	updateMetrics(*event)
+}
+
+func TriggerDeleteOldNamespaces(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(DeleteOldNamespaces)
+	defer ginkgo.GinkgoRecover()
+	log.InfoD("DeleteOldNamespaces triggered at: %v", time.Now())
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DeleteOldNamespaces,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+
+	if CreatedBeforeTimeforNS != 0 {
+		Step("Collect and Delete Ns on source", func() {
+			nss := asyncdr.CollectNsForDeletion(map[string]string{"creator": "torpedo"}, time.Duration(CreatedBeforeTimeforNS))
+			log.InfoD("collected these namespaces %v, to be deleted on source cluster, they are created [%v Hours] ago", nss, CreatedBeforeTimeforNS)
+			asyncdr.WaitForNamespaceDeletion(nss)
+		})
+		Step("Collect and Delete Ns on destination", func() {
+			SetDestinationKubeConfig()
+			nsd := asyncdr.CollectNsForDeletion(map[string]string{"creator": "torpedo"}, time.Duration(CreatedBeforeTimeforNS))
+			log.InfoD("collected these namespaces %v, to be deleted on destination cluster, they are created [%v Hours] ago", nsd, CreatedBeforeTimeforNS)
+			asyncdr.WaitForNamespaceDeletion(nsd)
+		})
+	} else {
+		log.InfoD("Skipping deletion of old NS as CreatedBeforeTimeforNS is not set or set to 0")
+		return
+	}
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {
