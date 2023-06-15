@@ -683,13 +683,6 @@ var _ = Describe("{KillPdsAgentDuringWorkloadRun}", func() {
 				}
 			}
 		})
-		Step("Killing PDS Agent Pods", func() {
-			err = pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, pdslib.PdsAgentPod)
-			log.FailOnError(err, "Failed while deleting PDS Agent Pods")
-		})
-		
-		// TODO : Once Workload Validation Module is ready, we will add that here. AI: Jyoti
-
 		defer func() {
 			for dsName, workloadContainer := range generateWorkloads {
 				Step("Delete the workload generating deployments", func() {
@@ -704,6 +697,14 @@ var _ = Describe("{KillPdsAgentDuringWorkloadRun}", func() {
 				})
 			}
 		}()
+
+		Step("Killing PDS Agent Pods", func() {
+			err = pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, pdslib.PdsAgentPod)
+			log.FailOnError(err, "Failed while deleting PDS Agent Pods")
+		})
+
+		// TODO : Once Workload Validation Module is ready, we will add that here. AI: @jyoti
+
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
