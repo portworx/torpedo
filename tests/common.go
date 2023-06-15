@@ -4642,7 +4642,8 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 
 	// List the files in subpath from NFS share path.
 	log.Infof("Checking the contents in NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
-	lsCmd := fmt.Sprintf("ls -ltr %s/%s", mountDir, subPath)
+	//lsCmd := fmt.Sprintf("ls -ltr %s/%s", mountDir, subPath)
+	lsCmd := fmt.Sprintf("ls -ltr %s", mountDir)
 	log.Infof("Running command - %s", lsCmd)
 	cmd := exec.Command(lsCmd)
 	output, err := cmd.Output()
