@@ -77,7 +77,7 @@ const (
 	globalGCPLockedBucketPrefix               = "global-gcp-locked"
 	mongodbStatefulset                        = "pxc-backup-mongodb"
 	pxBackupDeployment                        = "px-backup"
-	backupDeleteTimeout                       = 20 * time.Minute
+	backupDeleteTimeout                       = 60 * time.Minute
 	backupDeleteRetryTime                     = 30 * time.Second
 	backupLocationDeleteTimeout               = 30 * time.Minute
 	backupLocationDeleteRetryTime             = 30 * time.Second

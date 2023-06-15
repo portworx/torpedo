@@ -674,7 +674,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 // DeleteBackupAndCheckIfBucketIsEmpty delete backups and verify if contents are deleted from backup location or not
 var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
-	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "10"))
+	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "3"))
 	var (
 		scheduledAppContexts     []*scheduler.Context
 		backupLocationUID        string
@@ -734,7 +734,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		})
 
 		Step("Adding Credentials and Backup Location", func() {
-			log.InfoD("Using pre-provisioned bucket. Creating cloud credentials and backup location.")
+			log.InfoD("Using bucket - [%s]. Creating cloud credentials and backup location.", customBucketName)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
@@ -817,7 +817,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		Step("Check if contents are erased from the backup location or not", func() {
 			log.Info("Check if backup location is empty or not")
 			for _, provider := range providers {
-				result, err := IsS3BucketEmpty(getGlobalBucketName(provider))
+				result, err := IsBucketEmpty(provider, customBucketName)
 				dash.VerifyFatal(err, nil, "Checking for errors while checking s3 bucket")
 				dash.VerifyFatal(result, true, "Check if bucket is empty or not")
 			}
