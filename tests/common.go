@@ -4624,8 +4624,10 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+		fmt.Sprintf("ls -ltr %s", mountDir),
 	}
 	for _, cmd := range mountCmds {
+		log.Infof("Running command - %s", cmd)
 		err := runCmd(cmd, masterNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
 	}
@@ -6037,6 +6039,7 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		if len(matches) > 1 {
 			testCaseName = matches[1]
 		}
+		log.Infof("Master nodes in EndPxBackupTorpedoTest- %v", node.GetMasterNodes())
 		masterNode := node.GetMasterNodes()[0]
 		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
 		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
