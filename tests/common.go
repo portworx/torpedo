@@ -4618,6 +4618,7 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
 
 	// Mount the NFS share to the master node.
+	log.Infof("Worker nodes - %v", node.GetWorkerNodes())
 	log.Infof("Master nodes - %v", node.GetMasterNodes())
 	masterNode := node.GetMasterNodes()[0]
 	mountCmds := []string{
