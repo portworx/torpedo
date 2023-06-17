@@ -2,7 +2,6 @@ package node
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"sync"
 
 	"github.com/pborman/uuid"
@@ -70,7 +69,6 @@ func GetWorkerNodes() []Node {
 // GetMasterNodes returns only the master nodes/agent nodes
 func GetMasterNodes() []Node {
 	var nodeList []Node
-	fmt.Printf("Node Registry - %v\n", nodeRegistry)
 	for _, n := range nodeRegistry {
 		if n.Type == TypeMaster {
 			nodeList = append(nodeList, n)
@@ -215,7 +213,6 @@ func GetNodeByIP(nodeIP string) (Node, error) {
 
 // CleanupRegistry removes entry of all nodes from registry
 func CleanupRegistry() {
-	log.Infof("Cleaning up node registry")
 	nodeRegistry = make(map[string]Node)
 }
 

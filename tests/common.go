@@ -4655,7 +4655,7 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 
 	// List the files in subpath from NFS share path.
 	log.Infof("Checking the contents in NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
-	lsCmd := fmt.Sprintf("ls -ltr %s/%s", mountDir, subPath)
+	lsCmd := fmt.Sprintf("ls -1 %s/%s | wc -l", mountDir, subPath)
 	log.Infof("Running command - %s", lsCmd)
 	output, err := runCmdGetOutput(lsCmd, masterNode)
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", lsCmd, masterNode, err))
@@ -6046,7 +6046,6 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		if len(matches) > 1 {
 			testCaseName = matches[1]
 		}
-		log.Infof("Master nodes in EndPxBackupTorpedoTest- %v", node.GetMasterNodes())
 		masterNode := node.GetMasterNodes()[0]
 		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
 		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
