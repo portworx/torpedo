@@ -797,6 +797,14 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 			wg.Wait()
 			log.Infof("List of backups - %v", backupNames)
 		})
+		Step("Check if contents are erased from the backup location or not", func() {
+			log.Info("Check if backup location is empty or not")
+			for _, provider := range providers {
+				result, err := IsBucketEmpty(provider, customBucketName)
+				dash.VerifyFatal(err, nil, "Checking for errors while checking s3 bucket")
+				dash.VerifyFatal(result, true, "Check if bucket is empty or not")
+			}
+		})
 
 		Step("Delete all the backups taken in the previous step ", func() {
 			log.InfoD("Deleting the backups")
