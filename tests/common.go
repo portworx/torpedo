@@ -4634,7 +4634,7 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
-		fmt.Sprintf("find %s/%s -type f ", mountDir, subPath),
+		fmt.Sprintf("find %s/%s -type f", mountDir, subPath),
 	}
 	for _, cmd := range mountCmds {
 		output, err := runCmdGetOutput(cmd, masterNode)
@@ -4656,7 +4656,7 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 
 	// List the files in subpath from NFS share path.
 	log.Infof("Checking the contents in NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
-	lsCmd := fmt.Sprintf("ls -1 %s/%s | wc -l", mountDir, subPath)
+	lsCmd := fmt.Sprintf("find %s/%s -type f | wc -l", mountDir, subPath)
 	log.Infof("Running command - %s", lsCmd)
 	output, err := runCmdGetOutput(lsCmd, masterNode)
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", lsCmd, masterNode, err))
