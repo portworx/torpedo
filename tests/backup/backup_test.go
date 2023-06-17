@@ -85,6 +85,13 @@ var _ = Describe("{UserGroupManagement}", func() {
 	})
 })
 
+var _ = Describe("{WaitForMinutes}", func() {
+	It("Wait for 10 minutes", func() {
+		log.Infof("Waiting for 10 minutes")
+		time.Sleep(10 * time.Minute)
+	})
+})
+
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
 	var (

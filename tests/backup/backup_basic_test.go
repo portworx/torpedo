@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -282,6 +283,16 @@ var _ = AfterSuite(func() {
 })
 
 func TestMain(m *testing.M) {
+	// Start the HTTP server in a goroutine
+	go func() {
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			n, err := fmt.Fprintf(w, "Hello, you've requested: %s\n", r.URL.Path)
+			log.Infof("Number of bytes: %d and Error %v", n, err)
+		})
+		err := http.ListenAndServe(":8080", nil)
+		log.FailOnError(err, "ListenAndServe failed")
+	}()
+
 	// call flag.Parse() here if TestMain uses flags
 	ParseFlags()
 	os.Exit(m.Run())
