@@ -4634,11 +4634,12 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
-		fmt.Sprintf("ls -ltr %s", mountDir),
+		fmt.Sprintf("find %s/%s -type f ", mountDir, subPath),
 	}
 	for _, cmd := range mountCmds {
-		err := runCmd(cmd, masterNode)
+		output, err := runCmdGetOutput(cmd, masterNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+		log.Infof("Output from commands - %s", output)
 	}
 
 	defer func() {
