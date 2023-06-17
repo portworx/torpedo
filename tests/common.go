@@ -4639,7 +4639,7 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 	for _, cmd := range mountCmds {
 		output, err := runCmdGetOutput(cmd, masterNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
-		log.Infof("Output from commands - %s", output)
+		log.Infof("Output from command [%s] -\n%s", cmd, output)
 	}
 
 	defer func() {
@@ -4656,11 +4656,15 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 
 	// List the files in subpath from NFS share path.
 	log.Infof("Checking the contents in NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
-	lsCmd := fmt.Sprintf("find %s/%s -type f | wc -l", mountDir, subPath)
-	log.Infof("Running command - %s", lsCmd)
-	output, err := runCmdGetOutput(lsCmd, masterNode)
-	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", lsCmd, masterNode, err))
-	log.Infof("Output - %s", output)
+	fileCountCmd := fmt.Sprintf("find %s/%s -type f | wc -l", mountDir, subPath)
+	log.Infof("Running command - %s", fileCountCmd)
+	output, err := runCmdGetOutput(fileCountCmd, masterNode)
+	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", fileCountCmd, masterNode, err))
+	log.Infof("Output of command [%s] - \n%s", fileCountCmd, output)
+	result, err := strconv.Atoi(strings.TrimSpace(output))
+	if result > 0 {
+		return false, nil
+	}
 	return true, nil
 }
 
