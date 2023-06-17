@@ -2112,6 +2112,18 @@ func runCmd(cmd string, n node.Node) error {
 
 }
 
+func runCmdGetOutput(cmd string, n node.Node) (string, error) {
+	output, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+	return output, err
+}
+
 func runCmdWithNoSudo(cmd string, n node.Node) error {
 	_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         defaultCmdTimeout,
@@ -4618,8 +4630,6 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
 
 	// Mount the NFS share to the master node.
-	log.Infof("Worker nodes - %v", node.GetWorkerNodes())
-	log.Infof("Master nodes - %v", node.GetMasterNodes())
 	masterNode := node.GetMasterNodes()[0]
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
@@ -4627,7 +4637,6 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 		fmt.Sprintf("ls -ltr %s", mountDir),
 	}
 	for _, cmd := range mountCmds {
-		log.Infof("Running command - %s", cmd)
 		err := runCmd(cmd, masterNode)
 		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
 	}
@@ -4646,11 +4655,9 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 
 	// List the files in subpath from NFS share path.
 	log.Infof("Checking the contents in NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
-	//lsCmd := fmt.Sprintf("ls -ltr %s/%s", mountDir, subPath)
-	lsCmd := fmt.Sprintf("hostname")
+	lsCmd := fmt.Sprintf("ls -ltr %s/%s", mountDir, subPath)
 	log.Infof("Running command - %s", lsCmd)
-	cmd := exec.Command(lsCmd)
-	output, err := cmd.Output()
+	output, err := runCmdGetOutput(lsCmd, masterNode)
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", lsCmd, masterNode, err))
 	log.Infof("Output - %s", output)
 	return true, nil

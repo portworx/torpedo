@@ -22,10 +22,6 @@ func AddNode(n Node) error {
 	defer lock.Unlock()
 	n.uuid = uuid.New()
 	nodeRegistry[n.uuid] = n
-	log.Infof("Node added to registry - %s of type %s", n.Name, n.Type)
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nil
 }
 
@@ -37,9 +33,6 @@ func UpdateNode(n Node) error {
 		return fmt.Errorf("node to be updated does not exist")
 	}
 	nodeRegistry[n.uuid] = n
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nil
 }
 
@@ -51,9 +44,6 @@ func DeleteNode(n Node) error {
 	lock.Lock()
 	defer lock.Unlock()
 	delete(nodeRegistry, n.uuid)
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nil
 }
 
@@ -63,9 +53,6 @@ func GetNodes() []Node {
 	for _, n := range nodeRegistry {
 		nodeList = append(nodeList, n)
 	}
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nodeList
 }
 
@@ -77,9 +64,6 @@ func GetWorkerNodes() []Node {
 			nodeList = append(nodeList, n)
 		}
 	}
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nodeList
 }
 
@@ -92,9 +76,6 @@ func GetMasterNodes() []Node {
 			nodeList = append(nodeList, n)
 		}
 	}
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nodeList
 }
 
@@ -117,9 +98,6 @@ func GetStorageDriverNodes() []Node {
 			nodeList = append(nodeList, n)
 		}
 	}
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nodeList
 }
 
@@ -137,9 +115,6 @@ func GetStorageNodes() []Node {
 			nodeList = append(nodeList, n)
 		}
 	}
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nodeList
 }
 
@@ -152,9 +127,6 @@ func GetStorageLessNodes() []Node {
 			nodeList = append(nodeList, n)
 		}
 	}
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nodeList
 }
 
@@ -166,9 +138,6 @@ func GetNodesByTopologyZoneLabel(zone string) []Node {
 			nodeList = append(nodeList, n)
 		}
 	}
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nodeList
 }
 
@@ -200,9 +169,6 @@ func GetNodesByName() map[string]Node {
 	for _, n := range nodeRegistry {
 		nodeMap[n.Name] = n
 	}
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 	return nodeMap
 }
 
@@ -251,9 +217,6 @@ func GetNodeByIP(nodeIP string) (Node, error) {
 func CleanupRegistry() {
 	log.Infof("Cleaning up node registry")
 	nodeRegistry = make(map[string]Node)
-	defer func() {
-		log.Infof("Map of nodeRegistry with length %d - %v ", len(nodeRegistry), nodeRegistry)
-	}()
 }
 
 // GetNodeDetailsByNodeName get node details for a given node name
