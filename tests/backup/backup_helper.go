@@ -3237,7 +3237,7 @@ func IsMongoDBReady() error {
 		}
 		// Px-Backup would function with just 2 mongo DB pods in healthy state.
 		// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
-		if statefulSet.Status.ReadyReplicas >= 2 {
+		if statefulSet.Status.ReadyReplicas < 2 {
 			return "", true, fmt.Errorf("mongodb pods are not ready yet. expected ready pods - %d, actual ready pods - %d",
 				2, statefulSet.Status.ReadyReplicas)
 		}
@@ -3248,6 +3248,9 @@ func IsMongoDBReady() error {
 		return err
 	}
 	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+	if err != nil {
+		return err
+	}
 	log.Infof("Number of mongodb pods in Ready state are %v", statefulSet.Status.ReadyReplicas)
 	return nil
 }
