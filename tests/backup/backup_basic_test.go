@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup/controller/cluster"
 	"net/http"
 	"os"
 	"strings"
@@ -284,11 +285,34 @@ var _ = AfterSuite(func() {
 
 func TestMain(m *testing.M) {
 	// Start the HTTP server in a goroutine
+	clController := &cluster.ClusterController{
+		ClusterManager: &cluster.ClusterManager{
+			ClusterConfigs:  make(map[string]*cluster.ClusterConfig, 0),
+			Clusters:        make(map[string]*cluster.Cluster, 0),
+			RemovedClusters: make(map[string][]*cluster.Cluster, 0),
+		},
+	}
 	go func() {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			n, err := fmt.Fprintf(w, "Hello, you've requested: %s\n", r.URL.Path)
 			log.Infof("Number of bytes: %d and Error %v", n, err)
 		})
+
+		http.HandleFunc("/controller/cluster/register", func(w http.ResponseWriter, r *http.Request) {
+			queryParam := r.URL.Query().Get("configPath")
+			n, err := fmt.Fprintf(w, "Query parameter value: %s\n", queryParam)
+			log.Infof("Number of bytes: %d and Error: %v", n, err)
+			if err == nil {
+				clusterUid, err := clController.Cluster(queryParam).Register(false)
+				if err != nil {
+					log.Infof("cluster controller error: %v", err)
+				}
+				log.Infof("cluster uid: %s", clusterUid)
+				n, err := fmt.Fprintf(w, "cluster uid:: %s\n", clusterUid)
+				log.Infof("Cluster Controller: Number of bytes: %d and Error %v", n, err)
+			}
+		})
+
 		err := http.ListenAndServe(":8080", nil)
 		log.FailOnError(err, "ListenAndServe failed")
 	}()
