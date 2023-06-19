@@ -1,8 +1,6 @@
 package cluster
 
 import (
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/tests"
 	"time"
 )
 
@@ -26,71 +24,67 @@ const (
 	DefaultSkipClusterScopedObjects = false // indicates the value of the `SkipClusterScopedObject` field in the `scheduler.Context`
 )
 
+// NamespaceMetaData represents the metadata for a Namespace
 type NamespaceMetaData struct {
 	Namespace string
 }
 
+// GetNamespace returns the Namespace associated with the metadata
 func (m *NamespaceMetaData) GetNamespace() string {
 	return m.Namespace
 }
 
+// SetNamespace sets the Namespace string for the metadata
 func (m *NamespaceMetaData) SetNamespace(namespace string) {
 	m.Namespace = namespace
 }
 
+// GetNamespaceUid returns the namespace uid
 func (m *NamespaceMetaData) GetNamespaceUid() string {
 	return m.GetNamespace()
 }
 
 func NewNamespaceMetaData(namespace string) *NamespaceMetaData {
-	return &NamespaceMetaData{
-		Namespace: namespace,
-	}
+	newNamespaceMetaData := &NamespaceMetaData{}
+	newNamespaceMetaData.SetNamespace(namespace)
+	return newNamespaceMetaData
 }
 
+// NamespaceConfig represents the configuration for a Namespace
 type NamespaceConfig struct {
 	ClusterMetaData   *ClusterMetaData
 	NamespaceMetaData *NamespaceMetaData
 	ClusterController *ClusterController
 }
 
+// GetClusterMetaData returns the ClusterMetaData associated with the Namespace configuration
 func (c *NamespaceConfig) GetClusterMetaData() *ClusterMetaData {
 	return c.ClusterMetaData
 }
 
+// SetClusterMetaData sets the ClusterMetaData for the Namespace configuration
 func (c *NamespaceConfig) SetClusterMetaData(clusterMetaData *ClusterMetaData) {
 	c.ClusterMetaData = clusterMetaData
 }
 
-func (c *NamespaceConfig) App(appKey string, identifier ...string) *AppConfig {
-	return &AppConfig{
-		ClusterMetaData:   c.ClusterMetaData,
-		NamespaceMetaData: c.NamespaceMetaData,
-		AppMetaData:       NewAppMetaData(appKey, identifier...),
-		ScheduleAppConfig: &ScheduleAppConfig{
-			ScheduleOptions: &scheduler.ScheduleOptions{
-				AppKeys:            []string{appKey},
-				StorageProvisioner: tests.Inst().Provisioner,
-				Namespace:          c.NamespaceMetaData.GetNamespaceUid(),
-				// ToDo: handle non hyper-converged cluster
-				Nodes:  nil,
-				Labels: nil,
-			},
-			InstanceID: tests.Inst().InstanceID,
-		},
-		ValidateAppConfig: &ValidateAppConfig{
-			WaitForRunningTimeout:       DefaultWaitForRunningTimeout,
-			WaitForRunningRetryInterval: DefaultWaitForRunningRetryInterval,
-			ValidateVolumeTimeout:       DefaultValidateVolumeTimeout,
-			ValidateVolumeRetryInterval: DefaultValidateVolumeRetryInterval,
-		},
-		TearDownAppConfig: &TearDownAppConfig{
-			WaitForDestroy:             DefaultWaitForDestroy,
-			WaitForResourceLeakCleanup: DefaultWaitForResourceLeakCleanup,
-			SkipClusterScopedObjects:   DefaultSkipClusterScopedObjects,
-		},
-		ClusterController: c.ClusterController,
-	}
+// GetNamespaceMetaData returns the NamespaceMetaData associated with the Namespace configuration
+func (c *NamespaceConfig) GetNamespaceMetaData() *NamespaceMetaData {
+	return c.NamespaceMetaData
+}
+
+// SetNamespaceMetaData sets the NamespaceMetaData for the Namespace configuration
+func (c *NamespaceConfig) SetNamespaceMetaData(namespaceMetaData *NamespaceMetaData) {
+	c.NamespaceMetaData = namespaceMetaData
+}
+
+// GetClusterController returns the ClusterController associated with the Namespace configuration
+func (c *NamespaceConfig) GetClusterController() *ClusterController {
+	return c.ClusterController
+}
+
+// SetClusterController sets the ClusterController for the Namespace configuration
+func (c *NamespaceConfig) SetClusterController(clusterController *ClusterController) {
+	c.ClusterController = clusterController
 }
 
 // Namespace represents a Namespace
