@@ -4604,20 +4604,14 @@ func CreateBucket(provider string, bucketName string) {
 	})
 }
 
-// IsBucketEmpty returns true if the bucket for a provider is empty
-func IsBucketEmpty(provider, bucketName string) (bool, error) {
+// IsBackupLocationEmpty returns true if the bucket for a provider is empty
+func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	switch provider {
 	case drivers.ProviderAws:
 		result, err := IsS3BucketEmpty(bucketName)
-		if err != nil {
-			return result, err
-		}
 		return result, err
 	case drivers.ProviderNfs:
 		result, err := IsNFSSubPathEmpty(bucketName)
-		if err != nil {
-			return result, err
-		}
 		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)

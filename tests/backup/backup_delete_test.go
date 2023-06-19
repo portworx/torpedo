@@ -817,7 +817,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		Step("Check if contents are erased from the backup location or not", func() {
 			log.Info("Check if backup location is empty or not")
 			for _, provider := range providers {
-				result, err := IsBucketEmpty(provider, customBucketName)
+				result, err := IsBackupLocationEmpty(provider, customBucketName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating contents of bucket [%s] for provider [%s]", customBucketName, provider))
 				dash.VerifyFatal(result, true, fmt.Sprintf("Validate if bucket [%s] is empty", customBucketName))
 			}

@@ -177,8 +177,5 @@ func DeleteS3Objects(bucket string) error {
 
 	// Delete the objects from the bucket
 	_, err = S3Client.DeleteObjects(deleteInput)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
