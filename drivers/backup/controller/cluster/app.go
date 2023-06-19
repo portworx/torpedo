@@ -107,14 +107,6 @@ func (c *TearDownAppConfig) SetSkipClusterScopedObjects(skip bool) {
 	c.SkipClusterScopedObjects = skip
 }
 
-func (c *TearDownAppConfig) GetDestroyOptions() map[string]bool {
-	return map[string]bool{
-		tests.SkipClusterScopedObjects:              c.SkipClusterScopedObjects,
-		scheduler.OptionsWaitForDestroy:             c.WaitForDestroy,
-		scheduler.OptionsWaitForResourceLeakCleanup: c.WaitForResourceLeakCleanup,
-	}
-}
-
 type AppConfig struct {
 	ClusterMetaData   *ClusterMetaData
 	NamespaceMetaData *NamespaceMetaData
@@ -367,6 +359,11 @@ func (c *AppConfig) Schedule() error {
 //			return utils.ProcessError(err, debugMessage)
 //		}
 //		destroyOptions := c.TearDownAppConfig.GetDestroyOptions()
+//map[string]bool{
+//tests.SkipClusterScopedObjects:              c.SkipClusterScopedObjects,
+//scheduler.OptionsWaitForDestroy:             c.WaitForDestroy,
+//scheduler.OptionsWaitForResourceLeakCleanup: c.WaitForResourceLeakCleanup,
+//}
 //		log.Infof("destroy options %v", destroyOptions)
 //		err = tests.Inst().S.Destroy(ctx, destroyOptions)
 //		if err != nil {
