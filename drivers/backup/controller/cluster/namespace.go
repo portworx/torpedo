@@ -111,6 +111,7 @@ func NewNamespace() *Namespace {
 	return newNamespace
 }
 
+// NamespaceManager represents a manager for Namespace
 type NamespaceManager struct {
 	NamespaceMap         map[string]*Namespace
 	RemovedNamespacesMap map[string][]*Namespace
@@ -136,28 +137,34 @@ func (m *NamespaceManager) SetRemovedNamespacesMap(removedNamespacesMap map[stri
 	m.RemovedNamespacesMap = removedNamespacesMap
 }
 
+// GetNamespace returns the Namespace with the given namespace uid
 func (m *NamespaceManager) GetNamespace(namespaceUid string) *Namespace {
 	return m.GetNamespaceMap()[namespaceUid]
 }
 
+// IsNamespacePresent checks if the Namespace with the given namespace uid is present
 func (m *NamespaceManager) IsNamespacePresent(namespaceUid string) bool {
 	_, isPresent := m.GetNamespaceMap()[namespaceUid]
 	return isPresent
 }
 
+// SetNamespace sets the Namespace with the given namespace uid
 func (m *NamespaceManager) SetNamespace(namespaceUid string, namespace *Namespace) {
 	m.GetNamespaceMap()[namespaceUid] = namespace
 }
 
+// DeleteNamespace deletes the Namespace with the given namespace uid
 func (m *NamespaceManager) DeleteNamespace(namespaceUid string) {
 	delete(m.GetNamespaceMap(), namespaceUid)
 }
 
+// RemoveNamespace removes the Namespace with the given namespace uid
 func (m *NamespaceManager) RemoveNamespace(namespaceUid string) {
 	m.GetRemovedNamespacesMap()[namespaceUid] = append(m.GetRemovedNamespacesMap()[namespaceUid], m.GetNamespace(namespaceUid))
 	m.DeleteNamespace(namespaceUid)
 }
 
+// NewNamespaceManager creates a new instance of the NamespaceManager
 func NewNamespaceManager() *NamespaceManager {
 	newNamespaceManager := &NamespaceManager{}
 	newNamespaceManager.SetNamespaceMap(make(map[string]*Namespace, 0))
