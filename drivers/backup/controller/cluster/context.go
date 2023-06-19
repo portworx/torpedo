@@ -10,6 +10,18 @@ type ContextManager struct {
 	SrcConfigPath string
 }
 
+func (m *ContextManager) GetDstConfigPath() string {
+	return m.DstConfigPath
+}
+
+func (m *ContextManager) SetDstConfigPath(dstConfigPath string) {
+	m.DstConfigPath = dstConfigPath
+}
+
+func (m *ContextManager) GetSrcConfigPath() string {
+	return m.SrcConfigPath
+}
+
 func (m *ContextManager) SetSrcConfigPath(srcConfigPath string) {
 	m.SrcConfigPath = srcConfigPath
 }
@@ -27,4 +39,11 @@ func (m *ContextManager) SwitchContext() error {
 	}
 	m.SetSrcConfigPath(currentConfigPath)
 	return nil
+}
+
+func NewContextManager() *ContextManager {
+	return &ContextManager{
+		DstConfigPath: "",
+		SrcConfigPath: "",
+	}
 }

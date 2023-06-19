@@ -5,11 +5,15 @@ type ClusterController struct {
 }
 
 func (c *ClusterController) Cluster(configPath string) *ClusterConfig {
-	return &ClusterConfig{
-		ClusterMetaData: &ClusterMetaData{
-			ConfigPath: configPath,
-		},
-		InCluster:         false,
-		ClusterController: c,
+	clusterConfig := NewClusterConfig()
+	clusterConfig.SetClusterMetaData(NewClusterMetaData(configPath))
+	clusterConfig.SetIsInCluster(false)
+	clusterConfig.SetClusterController(c)
+	return clusterConfig
+}
+
+func NewClusterController() *ClusterController {
+	return &ClusterController{
+		ClusterManager: NewClusterManager(),
 	}
 }

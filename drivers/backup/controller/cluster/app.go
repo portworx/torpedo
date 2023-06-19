@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+const (
+	GlobalAuthTokenParam = "auth-token" // copy of the const `authTokenParam` declared in the common.go file of the tests package
+)
+
 type ScheduleAppConfig struct {
 	ScheduleOptions *scheduler.ScheduleOptions
 	InstanceID      string
@@ -142,7 +146,7 @@ func (c *AppConfig) CanSchedule() error {
 	//if cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData) {
 	//	namespace := cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData)
 	//	if namespace.AppManager.IsAppPresent(c.AppMetaData) {
-	//		err := fmt.Errorf("app [%s] is already present in namespace [%s]", c.AppMetaData.GetName(), c.NamespaceMetaData.GetName())
+	//		err := fmt.Errorf("app [%s] is already present in namespace [%s]", c.AppMetaData.GetNamespaceName(), c.NamespaceMetaData.GetNamespaceName())
 	//		return utils.ProcessError(err)
 	//	}
 	//}
@@ -163,16 +167,26 @@ func (c *AppConfig) Schedule() error {
 	//	InstanceID:      c.ScheduleAppConfig.InstanceID,
 	//	ScheduleOptions: *c.ScheduleAppConfig.ScheduleOptions,
 	//}
-	//cluster := c.ClusterController.ClusterManager.GetCluster(c.ClusterMetaData)
+	//cluster := c.ClusterController.ClusterManager.GetCluster("6d02ee80-448b-41a6-a866-b98a861d5590")
+	//cluster = &Cluster{
+	//	ContextManager: &ContextManager{
+	//		DstConfigPath: "/tmp/source-config",
+	//	},
+	//	NamespaceManager: &NamespaceManager{
+	//		Namespaces:        make(map[string]*Namespace, 0),
+	//		RemovedNamespaces: make(map[string][]*Namespace, 0),
+	//	},
+	//}
+	//
 	//log.Infof("Scheduling app [%s] on namespace [%s]", c.AppMetaData.GetName(), c.NamespaceMetaData.Namespace)
 	//resp, err := cluster.ProcessClusterRequest(appScheduleRequest)
 	//if err != nil {
 	//	return utils.ProcessError(err, utils.StructToString(appScheduleRequest))
 	//}
 	//if !cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData) {
-	//	cluster.NamespaceManager.AddNamespace(c.NamespaceMetaData, NewNamespace())
+	//	cluster.NamespaceManager.SetNamespace(c.NamespaceMetaData, NewNamespace())
 	//}
-	//appScheduleResponse := resp.(*AppScheduleResponse)
+	//appScheduleResponse := resp.(*cluster.AppScheduleResponse)
 	//cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.AddApp(c.AppMetaData, NewApp(appScheduleResponse.Contexts))
 	return nil
 }
@@ -313,3 +327,75 @@ func (c *AppConfig) Schedule() error {
 //	}
 //	return nil
 //}
+
+type AppMetaData struct {
+	AppKey     string
+	Identifier []string
+}
+
+func (m *AppMetaData) HasIdentifier() bool {
+	return m.Identifier == nil
+}
+
+func (m *AppMetaData) GetSuffix() string {
+	//if !m.HasIdentifier() {
+	//	return ""
+	//}
+	//return fmt.Sprintf("-%s", m.Identifier[0])
+	return ""
+}
+
+func (m *AppMetaData) GetName() string {
+	return m.AppKey + m.GetSuffix()
+}
+
+func NewAppMetaData(appKey string, identifier ...string) *AppMetaData {
+	return &AppMetaData{
+		AppKey:     appKey,
+		Identifier: identifier,
+	}
+}
+
+type App struct {
+	Contexts []*scheduler.Context
+}
+
+func NewApp(contexts []*scheduler.Context) *App {
+	return &App{
+		Contexts: contexts,
+	}
+}
+
+type AppManager struct {
+	Apps        map[string]*App
+	RemovedApps map[string][]*App
+}
+
+func (m *AppManager) GetApp(appMetaData *AppMetaData) *App {
+	return m.Apps[appMetaData.GetName()]
+}
+
+func (m *AppManager) AddApp(appMetaData *AppMetaData, app *App) {
+	m.Apps[appMetaData.GetName()] = app
+}
+
+func (m *AppManager) DeleteApp(appMetaData *AppMetaData) {
+	delete(m.Apps, appMetaData.GetName())
+}
+
+func (m *AppManager) RemoveApp(appMetaData *AppMetaData) {
+	m.RemovedApps[appMetaData.GetName()] = append(m.RemovedApps[appMetaData.GetName()], m.GetApp(appMetaData))
+	m.DeleteApp(appMetaData)
+}
+
+func (m *AppManager) IsAppPresent(appMetaData *AppMetaData) bool {
+	_, ok := m.Apps[appMetaData.GetName()]
+	return ok
+}
+
+func NewAppManager() *AppManager {
+	return &AppManager{
+		Apps:        make(map[string]*App, 0),
+		RemovedApps: make(map[string][]*App, 0),
+	}
+}

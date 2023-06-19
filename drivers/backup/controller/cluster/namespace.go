@@ -3,12 +3,63 @@ package cluster
 import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/tests"
+	"time"
 )
+
+const (
+	// DefaultWaitForRunningTimeout indicates the duration to wait for an app to reach the running state
+	DefaultWaitForRunningTimeout = 10 * time.Minute
+	// DefaultWaitForRunningRetryInterval indicates the interval between retries when waiting for an app to reach the running state
+	DefaultWaitForRunningRetryInterval = 10 * time.Second
+	// DefaultValidateVolumeTimeout indicates the duration to wait for volume validation of an app
+	DefaultValidateVolumeTimeout = 10 * time.Minute
+	// DefaultValidateVolumeRetryInterval indicates the interval between retries when performing volume validation of an app
+	DefaultValidateVolumeRetryInterval = 10 * time.Second
+)
+
+const (
+	// DefaultWaitForDestroy indicates whether to wait for resources to be destroyed during the teardown process
+	DefaultWaitForDestroy = true // indicates the value of the `scheduler.OptionsWaitForDestroy` key
+	// DefaultWaitForResourceLeakCleanup indicates whether to wait for resource leak cleanup during the teardown process
+	DefaultWaitForResourceLeakCleanup = true // indicates the value of the `scheduler.OptionsWaitForResourceLeakCleanup` key
+	// DefaultSkipClusterScopedObjects indicates whether to skip cluster-scoped objects during the teardown process
+	DefaultSkipClusterScopedObjects = false // indicates the value of the `SkipClusterScopedObject` field in the `scheduler.Context`
+)
+
+type NamespaceMetaData struct {
+	Namespace string
+}
+
+func (m *NamespaceMetaData) GetNamespace() string {
+	return m.Namespace
+}
+
+func (m *NamespaceMetaData) SetNamespace(namespace string) {
+	m.Namespace = namespace
+}
+
+func (m *NamespaceMetaData) GetNamespaceName() string {
+	return m.GetNamespace()
+}
+
+func NewNamespaceMetaData(namespace string) *NamespaceMetaData {
+	return &NamespaceMetaData{
+		Namespace: namespace,
+	}
+}
 
 type NamespaceConfig struct {
 	ClusterMetaData   *ClusterMetaData
 	NamespaceMetaData *NamespaceMetaData
 	ClusterController *ClusterController
+}
+
+func (c *NamespaceConfig) GetClusterMetaData() *ClusterMetaData {
+	return c.ClusterMetaData
+}
+
+func (c *NamespaceConfig) SetClusterMetaData(clusterMetaData *ClusterMetaData) {
+	c.ClusterMetaData = clusterMetaData
 }
 
 func (c *NamespaceConfig) App(appKey string, identifier ...string) *AppConfig {
@@ -20,7 +71,7 @@ func (c *NamespaceConfig) App(appKey string, identifier ...string) *AppConfig {
 			ScheduleOptions: &scheduler.ScheduleOptions{
 				AppKeys:            []string{appKey},
 				StorageProvisioner: tests.Inst().Provisioner,
-				Namespace:          c.NamespaceMetaData.GetName(),
+				Namespace:          c.NamespaceMetaData.GetNamespaceName(),
 				// ToDo: handle non hyper-converged cluster
 				Nodes:  nil,
 				Labels: nil,
@@ -39,5 +90,65 @@ func (c *NamespaceConfig) App(appKey string, identifier ...string) *AppConfig {
 			SkipClusterScopedObjects:   DefaultSkipClusterScopedObjects,
 		},
 		ClusterController: c.ClusterController,
+	}
+}
+
+type Namespace struct {
+	AppManager *AppManager
+}
+
+func (n *Namespace) GetAppManager() *AppManager {
+	return n.AppManager
+}
+
+func (n *Namespace) SetAppManager(appManager *AppManager) {
+	n.AppManager = appManager
+}
+
+func NewNamespace() *Namespace {
+	return &Namespace{
+		AppManager: NewAppManager(),
+	}
+}
+
+type NamespaceManager struct {
+	namespaces        map[string]*Namespace
+	RemovedNamespaces map[string][]*Namespace
+}
+
+func (m *NamespaceManager) GetNamespaces() map[string]*Namespace {
+	return m.Namespaces
+}
+
+func (m *NamespaceManager) GetRemovedNamespaces() map[string][]*Namespace {
+	return m.RemovedNamespaces
+}
+
+func (m *NamespaceManager) GetNamespace(namespaceName string) *Namespace {
+	return m.GetNamespaces()[namespaceName]
+}
+
+func (m *NamespaceManager) SetNamespace(namespaceName string, namespace *Namespace) {
+	m.GetNamespaces()[namespaceName] = namespace
+}
+
+func (m *NamespaceManager) DeleteNamespace(namespaceName string) {
+	delete(m.GetNamespaces(), namespaceName)
+}
+
+func (m *NamespaceManager) RemoveNamespace(namespaceName string) {
+	m.GetRemovedNamespaces()[namespaceName] = append(m.GetRemovedNamespaces()[namespaceName], m.GetNamespace(namespaceName))
+	m.DeleteNamespace(namespaceName)
+}
+
+func (m *NamespaceManager) IsNamespacePresent(namespaceName string) bool {
+	_, isPresent := m.GetNamespaces()[namespaceName]
+	return isPresent
+}
+
+func NewNamespaceManager() *NamespaceManager {
+	return &NamespaceManager{
+		Namespaces:        make(map[string]*Namespace),
+		RemovedNamespaces: make(map[string][]*Namespace),
 	}
 }
