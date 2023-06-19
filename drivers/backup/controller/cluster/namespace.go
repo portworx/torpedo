@@ -39,7 +39,7 @@ func (m *NamespaceMetaData) SetNamespace(namespace string) {
 	m.Namespace = namespace
 }
 
-// GetNamespaceUid returns the namespace uid
+// GetNamespaceUid returns the Namespace uid
 func (m *NamespaceMetaData) GetNamespaceUid() string {
 	return m.GetNamespace()
 }
@@ -135,28 +135,28 @@ func (m *NamespaceManager) SetRemovedNamespacesMap(removedNamespacesMap map[stri
 	m.RemovedNamespacesMap = removedNamespacesMap
 }
 
-// GetNamespace returns the Namespace with the given namespace uid
+// GetNamespace returns the Namespace with the given Namespace uid
 func (m *NamespaceManager) GetNamespace(namespaceUid string) *Namespace {
 	return m.GetNamespaceMap()[namespaceUid]
 }
 
-// IsNamespacePresent checks if the Namespace with the given namespace uid is present
+// IsNamespacePresent checks if the Namespace with the given Namespace uid is present
 func (m *NamespaceManager) IsNamespacePresent(namespaceUid string) bool {
 	_, isPresent := m.GetNamespaceMap()[namespaceUid]
 	return isPresent
 }
 
-// SetNamespace sets the Namespace with the given namespace uid
+// SetNamespace sets the Namespace with the given Namespace uid
 func (m *NamespaceManager) SetNamespace(namespaceUid string, namespace *Namespace) {
 	m.GetNamespaceMap()[namespaceUid] = namespace
 }
 
-// DeleteNamespace deletes the Namespace with the given namespace uid
+// DeleteNamespace deletes the Namespace with the given Namespace uid
 func (m *NamespaceManager) DeleteNamespace(namespaceUid string) {
 	delete(m.GetNamespaceMap(), namespaceUid)
 }
 
-// RemoveNamespace removes the Namespace with the given namespace uid
+// RemoveNamespace removes the Namespace with the given Namespace uid
 func (m *NamespaceManager) RemoveNamespace(namespaceUid string) {
 	m.GetRemovedNamespacesMap()[namespaceUid] = append(m.GetRemovedNamespacesMap()[namespaceUid], m.GetNamespace(namespaceUid))
 	m.DeleteNamespace(namespaceUid)
