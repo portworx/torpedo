@@ -88,7 +88,7 @@ var _ = Describe("{UserGroupManagement}", func() {
 var _ = Describe("{WaitForMinutes}", func() {
 	It("Wait for 10 minutes", func() {
 		log.Infof("Waiting for 10 minutes")
-		time.Sleep(10 * time.Minute)
+		time.Sleep(70 * time.Minute)
 	})
 })
 

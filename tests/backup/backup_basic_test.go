@@ -313,6 +313,29 @@ func TestMain(m *testing.M) {
 			}
 		})
 
+		http.HandleFunc("/controller/cluster/schedule", func(w http.ResponseWriter, r *http.Request) {
+			queryParam1 := r.URL.Query().Get("clusterUid")
+			n, err := fmt.Fprintf(w, "Query parameter value: %s\n", queryParam1)
+			log.Infof("Number of bytes: %d and Error: %v", n, err)
+
+			queryParam2 := r.URL.Query().Get("namespace")
+			n, err = fmt.Fprintf(w, "Query parameter value: %s\n", queryParam1)
+			log.Infof("Number of bytes: %d and Error: %v", n, err)
+
+			queryParam3 := r.URL.Query().Get("appKey")
+			n, err = fmt.Fprintf(w, "Query parameter value: %s\n", queryParam2)
+			log.Infof("Number of bytes: %d and Error: %v", n, err)
+
+			if err == nil {
+				//cluster := clController.ClusterManager.GetCluster(queryParam1)
+				if err != nil {
+					log.Infof("cluster controller error: %v", err)
+				}
+				err = clController.ClusterManager.ClusterConfigs[queryParam2].Namespace(queryParam2).App(queryParam3).Schedule()
+				log.Infof("App [%s] schedule failed on namespace [%s]. Error %v", queryParam3, queryParam2, err)
+			}
+		})
+
 		err := http.ListenAndServe(":8080", nil)
 		log.FailOnError(err, "ListenAndServe failed")
 	}()
