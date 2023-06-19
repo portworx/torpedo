@@ -21,7 +21,7 @@ func (c *Cluster) ProcessClusterRequest(request interface{}) (response interface
 		return nil, utils.ProcessError(err, utils.StructToString(c))
 	}
 	switch request.(type) {
-	case AppScheduleRequest:
+	case *AppScheduleRequest:
 		response, err = ScheduleApp(request.(*AppScheduleRequest))
 		if err != nil {
 			return nil, utils.ProcessError(err, utils.StructToString(request.(*AppScheduleRequest)))
