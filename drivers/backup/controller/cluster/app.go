@@ -146,7 +146,7 @@ func (c *AppConfig) CanSchedule() error {
 	//if cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData) {
 	//	namespace := cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData)
 	//	if namespace.AppManager.IsAppPresent(c.AppMetaData) {
-	//		err := fmt.Errorf("app [%s] is already present in namespace [%s]", c.AppMetaData.GetNamespaceName(), c.NamespaceMetaData.GetNamespaceName())
+	//		err := fmt.Errorf("app [%s] is already present in namespace [%s]", c.AppMetaData.GetNamespaceUid(), c.NamespaceMetaData.GetNamespaceUid())
 	//		return utils.ProcessError(err)
 	//	}
 	//}

@@ -38,7 +38,7 @@ func (m *NamespaceMetaData) SetNamespace(namespace string) {
 	m.Namespace = namespace
 }
 
-func (m *NamespaceMetaData) GetNamespaceName() string {
+func (m *NamespaceMetaData) GetNamespaceUid() string {
 	return m.GetNamespace()
 }
 
@@ -71,7 +71,7 @@ func (c *NamespaceConfig) App(appKey string, identifier ...string) *AppConfig {
 			ScheduleOptions: &scheduler.ScheduleOptions{
 				AppKeys:            []string{appKey},
 				StorageProvisioner: tests.Inst().Provisioner,
-				Namespace:          c.NamespaceMetaData.GetNamespaceName(),
+				Namespace:          c.NamespaceMetaData.GetNamespaceUid(),
 				// ToDo: handle non hyper-converged cluster
 				Nodes:  nil,
 				Labels: nil,
@@ -106,9 +106,9 @@ func (n *Namespace) SetAppManager(appManager *AppManager) {
 }
 
 func NewNamespace() *Namespace {
-	return &Namespace{
-		AppManager: NewAppManager(),
-	}
+	newNamespace := &Namespace{}
+	newNamespace.SetAppManager(NewAppManager())
+	return newNamespace
 }
 
 type NamespaceManager struct {
@@ -116,42 +116,46 @@ type NamespaceManager struct {
 	RemovedNamespacesMap map[string][]*Namespace
 }
 
+// GetNamespaceMap returns the NamespaceMap of the NamespaceManager
 func (m *NamespaceManager) GetNamespaceMap() map[string]*Namespace {
 	return m.NamespaceMap
 }
 
+// SetNamespaceMap sets the NamespaceMap of the NamespaceManager
 func (m *NamespaceManager) SetNamespaceMap(namespaceMap map[string]*Namespace) {
 	m.NamespaceMap = namespaceMap
 }
 
+// GetRemovedNamespacesMap returns the RemovedNamespacesMap of the NamespaceManager
 func (m *NamespaceManager) GetRemovedNamespacesMap() map[string][]*Namespace {
 	return m.RemovedNamespacesMap
 }
 
+// SetRemovedNamespacesMap sets the RemovedNamespacesMap of the NamespaceManager
 func (m *NamespaceManager) SetRemovedNamespacesMap(removedNamespacesMap map[string][]*Namespace) {
 	m.RemovedNamespacesMap = removedNamespacesMap
 }
 
-func (m *NamespaceManager) GetNamespace(namespaceName string) *Namespace {
-	return m.GetNamespaceMap()[namespaceName]
+func (m *NamespaceManager) GetNamespace(namespaceUid string) *Namespace {
+	return m.GetNamespaceMap()[namespaceUid]
 }
 
-func (m *NamespaceManager) IsNamespacePresent(namespaceName string) bool {
-	_, isPresent := m.GetNamespaceMap()[namespaceName]
+func (m *NamespaceManager) IsNamespacePresent(namespaceUid string) bool {
+	_, isPresent := m.GetNamespaceMap()[namespaceUid]
 	return isPresent
 }
 
-func (m *NamespaceManager) SetNamespace(namespaceName string, namespace *Namespace) {
-	m.GetNamespaceMap()[namespaceName] = namespace
+func (m *NamespaceManager) SetNamespace(namespaceUid string, namespace *Namespace) {
+	m.GetNamespaceMap()[namespaceUid] = namespace
 }
 
-func (m *NamespaceManager) DeleteNamespace(namespaceName string) {
-	delete(m.GetNamespaceMap(), namespaceName)
+func (m *NamespaceManager) DeleteNamespace(namespaceUid string) {
+	delete(m.GetNamespaceMap(), namespaceUid)
 }
 
-func (m *NamespaceManager) RemoveNamespace(namespaceName string) {
-	m.GetRemovedNamespacesMap()[namespaceName] = append(m.GetRemovedNamespacesMap()[namespaceName], m.GetNamespace(namespaceName))
-	m.DeleteNamespace(namespaceName)
+func (m *NamespaceManager) RemoveNamespace(namespaceUid string) {
+	m.GetRemovedNamespacesMap()[namespaceUid] = append(m.GetRemovedNamespacesMap()[namespaceUid], m.GetNamespace(namespaceUid))
+	m.DeleteNamespace(namespaceUid)
 }
 
 func NewNamespaceManager() *NamespaceManager {
