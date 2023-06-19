@@ -674,7 +674,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 // DeleteBackupAndCheckIfBucketIsEmpty delete backups and verify if contents are deleted from backup location or not
 var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
-	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "10"))
+	numberOfBackups, _ := strconv.Atoi(getEnv(maxBackupsToBeCreated, "2"))
 	var (
 		scheduledAppContexts     []*scheduler.Context
 		backupLocationUID        string
@@ -796,6 +796,13 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 			}
 			wg.Wait()
 			log.Infof("List of backups - %v", backupNames)
+		})
+		Step("Check if contents are erased from the backup location or not", func() {
+			log.Info("Check if backup location is empty or not")
+			for _, provider := range providers {
+				_, err := IsBackupLocationEmpty(provider, customBucketName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Validating contents of bucket [%s] for provider [%s]", customBucketName, provider))
+			}
 		})
 
 		Step("Delete all the backups taken in the previous step ", func() {

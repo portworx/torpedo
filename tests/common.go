@@ -4628,6 +4628,8 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+		fmt.Sprintf("ls -ltr %s/%s", mountDir, subPath),
+		fmt.Sprintf("find %s/%s -type d", mountDir, subPath),
 		fmt.Sprintf("find %s/%s -type f", mountDir, subPath),
 	}
 	for _, cmd := range mountCmds {
