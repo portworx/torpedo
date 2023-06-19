@@ -165,6 +165,16 @@ func (c *AppConfig) Schedule() error {
 		ScheduleOptions: *c.ScheduleAppConfig.ScheduleOptions,
 	}
 	cluster := c.ClusterController.ClusterManager.GetCluster("6d02ee80-448b-41a6-a866-b98a861d5590")
+	cluster = &Cluster{
+		ContextManager: &ContextManager{
+			DstConfigPath: "/tmp/source-config",
+		},
+		NamespaceManager: &NamespaceManager{
+			Namespaces:        make(map[string]*Namespace, 0),
+			RemovedNamespaces: make(map[string][]*Namespace, 0),
+		},
+	}
+
 	log.Infof("Scheduling app [%s] on namespace [%s]", c.AppMetaData.GetName(), c.NamespaceMetaData.Namespace)
 	resp, err := cluster.ProcessClusterRequest(appScheduleRequest)
 	if err != nil {
