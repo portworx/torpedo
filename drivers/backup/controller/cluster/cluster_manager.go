@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"github.com/pborman/uuid"
 	"github.com/portworx/torpedo/drivers/backup/utils"
 	"reflect"
 )
@@ -78,7 +77,7 @@ func (c *ClusterConfig) Register(hyperConverged bool) (string, error) {
 	if !hyperConverged {
 		// ToDo: handle non hyper-converged cluster
 	}
-	clusterUid = uuid.New()
+	clusterUid = "6d02ee80-448b-41a6-a866-b98a861d5590"
 	c.ClusterController.ClusterManager.AddCluster(clusterUid, c, NewCluster(configPath))
 	return clusterUid, nil
 }

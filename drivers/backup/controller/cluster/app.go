@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -154,26 +155,26 @@ func (c *AppConfig) Schedule() error {
 	//if err != nil {
 	//	return utils.ProcessError(err)
 	//}
-	//appSpec, err := c.GetCustomAppSpec()
-	//if err != nil {
-	//	return utils.ProcessError(err)
-	//}
-	//appScheduleRequest := &AppScheduleRequest{
-	//	Apps:            []*spec.AppSpec{appSpec},
-	//	InstanceID:      c.ScheduleAppConfig.InstanceID,
-	//	ScheduleOptions: *c.ScheduleAppConfig.ScheduleOptions,
-	//}
-	//cluster := c.ClusterController.ClusterManager.GetCluster(c.ClusterMetaData)
-	//log.Infof("Scheduling app [%s] on namespace [%s]", c.AppMetaData.GetName(), c.NamespaceMetaData.Namespace)
-	//resp, err := cluster.ProcessClusterRequest(appScheduleRequest)
-	//if err != nil {
-	//	return utils.ProcessError(err, utils.StructToString(appScheduleRequest))
-	//}
-	//if !cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData) {
-	//	cluster.NamespaceManager.AddNamespace(c.NamespaceMetaData, NewNamespace())
-	//}
-	//appScheduleResponse := resp.(*AppScheduleResponse)
-	//cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.AddApp(c.AppMetaData, NewApp(appScheduleResponse.Contexts))
+	appSpec, err := c.GetCustomAppSpec()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	appScheduleRequest := &AppScheduleRequest{
+		Apps:            []*spec.AppSpec{appSpec},
+		InstanceID:      c.ScheduleAppConfig.InstanceID,
+		ScheduleOptions: *c.ScheduleAppConfig.ScheduleOptions,
+	}
+	cluster := c.ClusterController.ClusterManager.GetCluster("6d02ee80-448b-41a6-a866-b98a861d5590")
+	log.Infof("Scheduling app [%s] on namespace [%s]", c.AppMetaData.GetName(), c.NamespaceMetaData.Namespace)
+	resp, err := cluster.ProcessClusterRequest(appScheduleRequest)
+	if err != nil {
+		return utils.ProcessError(err, utils.StructToString(appScheduleRequest))
+	}
+	if !cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData) {
+		cluster.NamespaceManager.AddNamespace(c.NamespaceMetaData, NewNamespace())
+	}
+	appScheduleResponse := resp.(*AppScheduleResponse)
+	cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.AddApp(c.AppMetaData, NewApp(appScheduleResponse.Contexts))
 	return nil
 }
 
