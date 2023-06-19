@@ -79,7 +79,7 @@ func (c *ClusterConfig) Register(hyperConverged bool) (string, error) {
 		// ToDo: handle non hyper-converged cluster
 	}
 	clusterUid = uuid.New()
-	c.ClusterController.ClusterManager.AddCluster(clusterUid, NewCluster(configPath))
+	c.ClusterController.ClusterManager.AddCluster(clusterUid, c, NewCluster(configPath))
 	return clusterUid, nil
 }
 
@@ -110,8 +110,9 @@ func (m *ClusterManager) GetCluster(clUid string) *Cluster {
 	return m.Clusters[clUid]
 }
 
-func (m *ClusterManager) AddCluster(clUid string, cluster *Cluster) {
+func (m *ClusterManager) AddCluster(clUid string, clConfig *ClusterConfig, cluster *Cluster) {
 	m.Clusters[clUid] = cluster
+	m.ClusterConfigs[clUid] = clConfig
 }
 
 func (m *ClusterManager) RemoveCluster(clUid string) {
