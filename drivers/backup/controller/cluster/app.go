@@ -22,6 +22,22 @@ type ScheduleAppConfig struct {
 	InstanceID      string
 }
 
+func (c *ScheduleAppConfig) GetScheduleOptions() *scheduler.ScheduleOptions {
+	return c.ScheduleOptions
+}
+
+func (c *ScheduleAppConfig) SetScheduleOptions(options *scheduler.ScheduleOptions) {
+	c.ScheduleOptions = options
+}
+
+func (c *ScheduleAppConfig) GetInstanceID() string {
+	return c.InstanceID
+}
+
+func (c *ScheduleAppConfig) SetInstanceID(instanceID string) {
+	c.InstanceID = instanceID
+}
+
 type ValidateAppConfig struct {
 	WaitForRunningTimeout       time.Duration
 	WaitForRunningRetryInterval time.Duration
@@ -29,10 +45,66 @@ type ValidateAppConfig struct {
 	ValidateVolumeRetryInterval time.Duration
 }
 
+func (c *ValidateAppConfig) GetWaitForRunningTimeout() time.Duration {
+	return c.WaitForRunningTimeout
+}
+
+func (c *ValidateAppConfig) SetWaitForRunningTimeout(timeout time.Duration) {
+	c.WaitForRunningTimeout = timeout
+}
+
+func (c *ValidateAppConfig) GetWaitForRunningRetryInterval() time.Duration {
+	return c.WaitForRunningRetryInterval
+}
+
+func (c *ValidateAppConfig) SetWaitForRunningRetryInterval(interval time.Duration) {
+	c.WaitForRunningRetryInterval = interval
+}
+
+func (c *ValidateAppConfig) GetValidateVolumeTimeout() time.Duration {
+	return c.ValidateVolumeTimeout
+}
+
+func (c *ValidateAppConfig) SetValidateVolumeTimeout(timeout time.Duration) {
+	c.ValidateVolumeTimeout = timeout
+}
+
+func (c *ValidateAppConfig) GetValidateVolumeRetryInterval() time.Duration {
+	return c.ValidateVolumeRetryInterval
+}
+
+func (c *ValidateAppConfig) SetValidateVolumeRetryInterval(interval time.Duration) {
+	c.ValidateVolumeRetryInterval = interval
+}
+
 type TearDownAppConfig struct {
 	WaitForDestroy             bool
 	WaitForResourceLeakCleanup bool
 	SkipClusterScopedObjects   bool
+}
+
+func (c *TearDownAppConfig) GetWaitForDestroy() bool {
+	return c.WaitForDestroy
+}
+
+func (c *TearDownAppConfig) SetWaitForDestroy(wait bool) {
+	c.WaitForDestroy = wait
+}
+
+func (c *TearDownAppConfig) GetWaitForResourceLeakCleanup() bool {
+	return c.WaitForResourceLeakCleanup
+}
+
+func (c *TearDownAppConfig) SetWaitForResourceLeakCleanup(wait bool) {
+	c.WaitForResourceLeakCleanup = wait
+}
+
+func (c *TearDownAppConfig) GetSkipClusterScopedObjects() bool {
+	return c.SkipClusterScopedObjects
+}
+
+func (c *TearDownAppConfig) SetSkipClusterScopedObjects(skip bool) {
+	c.SkipClusterScopedObjects = skip
 }
 
 func (c *TearDownAppConfig) GetDestroyOptions() map[string]bool {
