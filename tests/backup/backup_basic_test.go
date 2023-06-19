@@ -331,7 +331,7 @@ func TestMain(m *testing.M) {
 				if err != nil {
 					log.Infof("cluster controller error: %v", err)
 				}
-				err = clController.ClusterManager.ClusterConfigs[queryParam2].Namespace(queryParam2).App(queryParam3).Schedule()
+				err = clController.ClusterManager.ClusterConfigs[queryParam1].Namespace(queryParam2).App(queryParam3).Schedule()
 				log.Infof("App [%s] schedule failed on namespace [%s]. Error %v", queryParam3, queryParam2, err)
 			}
 		})
