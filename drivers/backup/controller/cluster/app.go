@@ -174,7 +174,7 @@ func (c *AppConfig) Schedule() error {
 	//	},
 	//	NamespaceManager: &NamespaceManager{
 	//		Namespaces:        make(map[string]*Namespace, 0),
-	//		RemovedNamespaces: make(map[string][]*Namespace, 0),
+	//		RemovedNamespacesMap: make(map[string][]*Namespace, 0),
 	//	},
 	//}
 	//

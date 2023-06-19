@@ -112,43 +112,51 @@ func NewNamespace() *Namespace {
 }
 
 type NamespaceManager struct {
-	namespaces        map[string]*Namespace
-	RemovedNamespaces map[string][]*Namespace
+	NamespaceMap         map[string]*Namespace
+	RemovedNamespacesMap map[string][]*Namespace
 }
 
-func (m *NamespaceManager) GetNamespaces() map[string]*Namespace {
-	return m.Namespaces
+func (m *NamespaceManager) GetNamespaceMap() map[string]*Namespace {
+	return m.NamespaceMap
 }
 
-func (m *NamespaceManager) GetRemovedNamespaces() map[string][]*Namespace {
-	return m.RemovedNamespaces
+func (m *NamespaceManager) SetNamespaceMap(namespaceMap map[string]*Namespace) {
+	m.NamespaceMap = namespaceMap
+}
+
+func (m *NamespaceManager) GetRemovedNamespacesMap() map[string][]*Namespace {
+	return m.RemovedNamespacesMap
+}
+
+func (m *NamespaceManager) SetRemovedNamespacesMap(removedNamespacesMap map[string][]*Namespace) {
+	m.RemovedNamespacesMap = removedNamespacesMap
 }
 
 func (m *NamespaceManager) GetNamespace(namespaceName string) *Namespace {
-	return m.GetNamespaces()[namespaceName]
-}
-
-func (m *NamespaceManager) SetNamespace(namespaceName string, namespace *Namespace) {
-	m.GetNamespaces()[namespaceName] = namespace
-}
-
-func (m *NamespaceManager) DeleteNamespace(namespaceName string) {
-	delete(m.GetNamespaces(), namespaceName)
-}
-
-func (m *NamespaceManager) RemoveNamespace(namespaceName string) {
-	m.GetRemovedNamespaces()[namespaceName] = append(m.GetRemovedNamespaces()[namespaceName], m.GetNamespace(namespaceName))
-	m.DeleteNamespace(namespaceName)
+	return m.GetNamespaceMap()[namespaceName]
 }
 
 func (m *NamespaceManager) IsNamespacePresent(namespaceName string) bool {
-	_, isPresent := m.GetNamespaces()[namespaceName]
+	_, isPresent := m.GetNamespaceMap()[namespaceName]
 	return isPresent
 }
 
+func (m *NamespaceManager) SetNamespace(namespaceName string, namespace *Namespace) {
+	m.GetNamespaceMap()[namespaceName] = namespace
+}
+
+func (m *NamespaceManager) DeleteNamespace(namespaceName string) {
+	delete(m.GetNamespaceMap(), namespaceName)
+}
+
+func (m *NamespaceManager) RemoveNamespace(namespaceName string) {
+	m.GetRemovedNamespacesMap()[namespaceName] = append(m.GetRemovedNamespacesMap()[namespaceName], m.GetNamespace(namespaceName))
+	m.DeleteNamespace(namespaceName)
+}
+
 func NewNamespaceManager() *NamespaceManager {
-	return &NamespaceManager{
-		Namespaces:        make(map[string]*Namespace),
-		RemovedNamespaces: make(map[string][]*Namespace),
-	}
+	newNamespaceManager := &NamespaceManager{}
+	newNamespaceManager.SetNamespaceMap(make(map[string]*Namespace, 0))
+	newNamespaceManager.SetRemovedNamespacesMap(make(map[string][]*Namespace, 0))
+	return newNamespaceManager
 }
