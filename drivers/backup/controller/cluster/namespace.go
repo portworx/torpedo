@@ -93,18 +93,22 @@ func (c *NamespaceConfig) App(appKey string, identifier ...string) *AppConfig {
 	}
 }
 
+// Namespace represents a Namespace
 type Namespace struct {
 	AppManager *AppManager
 }
 
+// GetAppManager returns the AppManager associated with the Namespace
 func (n *Namespace) GetAppManager() *AppManager {
 	return n.AppManager
 }
 
+// SetAppManager sets the AppManager for the Namespace
 func (n *Namespace) SetAppManager(appManager *AppManager) {
 	n.AppManager = appManager
 }
 
+// NewNamespace creates a new instance of the Namespace
 func NewNamespace() *Namespace {
 	newNamespace := &Namespace{}
 	newNamespace.SetAppManager(NewAppManager())
