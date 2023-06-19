@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"sync"
 	"time"
 )
 
@@ -111,53 +112,72 @@ func NewNamespace() *Namespace {
 
 // NamespaceManager represents a manager for Namespace
 type NamespaceManager struct {
+	sync.RWMutex
 	NamespaceMap         map[string]*Namespace
 	RemovedNamespacesMap map[string][]*Namespace
 }
 
 // GetNamespaceMap returns the NamespaceMap of the NamespaceManager
 func (m *NamespaceManager) GetNamespaceMap() map[string]*Namespace {
+	m.RLock()
+	defer m.RUnlock()
 	return m.NamespaceMap
 }
 
 // SetNamespaceMap sets the NamespaceMap of the NamespaceManager
 func (m *NamespaceManager) SetNamespaceMap(namespaceMap map[string]*Namespace) {
+	m.Lock()
+	defer m.Unlock()
 	m.NamespaceMap = namespaceMap
 }
 
 // GetRemovedNamespacesMap returns the RemovedNamespacesMap of the NamespaceManager
 func (m *NamespaceManager) GetRemovedNamespacesMap() map[string][]*Namespace {
+	m.RLock()
+	defer m.RUnlock()
 	return m.RemovedNamespacesMap
 }
 
 // SetRemovedNamespacesMap sets the RemovedNamespacesMap of the NamespaceManager
 func (m *NamespaceManager) SetRemovedNamespacesMap(removedNamespacesMap map[string][]*Namespace) {
+	m.Lock()
+	defer m.Unlock()
 	m.RemovedNamespacesMap = removedNamespacesMap
 }
 
 // GetNamespace returns the Namespace with the given Namespace uid
 func (m *NamespaceManager) GetNamespace(namespaceUid string) *Namespace {
+	m.RLock()
+	defer m.RUnlock()
 	return m.GetNamespaceMap()[namespaceUid]
 }
 
 // IsNamespacePresent checks if the Namespace with the given Namespace uid is present
 func (m *NamespaceManager) IsNamespacePresent(namespaceUid string) bool {
+	m.RLock()
+	defer m.RUnlock()
 	_, isPresent := m.GetNamespaceMap()[namespaceUid]
 	return isPresent
 }
 
 // SetNamespace sets the Namespace with the given Namespace uid
 func (m *NamespaceManager) SetNamespace(namespaceUid string, namespace *Namespace) {
+	m.Lock()
+	defer m.Unlock()
 	m.GetNamespaceMap()[namespaceUid] = namespace
 }
 
 // DeleteNamespace deletes the Namespace with the given Namespace uid
 func (m *NamespaceManager) DeleteNamespace(namespaceUid string) {
+	m.Lock()
+	defer m.Unlock()
 	delete(m.GetNamespaceMap(), namespaceUid)
 }
 
 // RemoveNamespace removes the Namespace with the given Namespace uid
 func (m *NamespaceManager) RemoveNamespace(namespaceUid string) {
+	m.Lock()
+	defer m.Unlock()
 	m.GetRemovedNamespacesMap()[namespaceUid] = append(m.GetRemovedNamespacesMap()[namespaceUid], m.GetNamespace(namespaceUid))
 	m.DeleteNamespace(namespaceUid)
 }
