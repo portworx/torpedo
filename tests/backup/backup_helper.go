@@ -3237,6 +3237,8 @@ func IsMongoDBReady() error {
 		}
 		// Px-Backup would function with just 2 mongo DB pods in healthy state.
 		// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
+		// TODO: Remove the limit to check for only 2 out of 3 pods once fixed
+		// Tracking JIRAs: https://portworx.atlassian.net/browse/PB-3105, https://portworx.atlassian.net/browse/PB-3481
 		if statefulSet.Status.ReadyReplicas < 2 {
 			return "", true, fmt.Errorf("mongodb pods are not ready yet. expected ready pods - %d, actual ready pods - %d",
 				2, statefulSet.Status.ReadyReplicas)
