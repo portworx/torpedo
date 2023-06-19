@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"fmt"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"time"
 )
@@ -40,10 +39,11 @@ func (m *AppMetaData) HasIdentifier() bool {
 }
 
 func (m *AppMetaData) GetSuffix() string {
-	if !m.HasIdentifier() {
-		return ""
-	}
-	return fmt.Sprintf("-%s", m.Identifier[0])
+	//if !m.HasIdentifier() {
+	//	return ""
+	//}
+	//return fmt.Sprintf("-%s", m.Identifier[0])
+	return ""
 }
 
 func (m *AppMetaData) GetName() string {
