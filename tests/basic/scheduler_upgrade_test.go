@@ -79,11 +79,19 @@ var _ = Describe("{UpgradeScheduler}", func() {
 
 				stepLog = fmt.Sprintf("Wait for AKS cluster upgrade to version %s", schedVersion)
 				Step(stepLog, func() {
-					err = aks.WaitForAKSToUpgrade(schedVersion)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("verify  AKS cluster upgrade to version %s", schedVersion))
+					err = aks.WaitForControlPlaneToUpgrade(schedVersion)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("verify  AKS cluster control plane upgrade to version %s", schedVersion))
 					aksCluster, err := aks.GetAKSCluster()
 					log.FailOnError(err, "error getting AKS cluister")
 					dash.VerifyFatal(aksCluster.KubernetesVersion == schedVersion, true, fmt.Sprintf("verify AKS schedular upgrade to %s", schedVersion))
+					stepLog = fmt.Sprintf("update AKS  cluster node pool upgrade to version %s", schedVersion)
+					Step(stepLog, func() {
+						err = aks.UpgradeNodePool(aks.AKSPXNodepool, schedVersion)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("verify AKS node pool upgrade to version %s init", schedVersion))
+						err = aks.WaitForAKSNodePoolToUpgrade(aks.AKSPXNodepool, schedVersion)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("verify AKS node pool upgrade to version %s succeded", schedVersion))
+					})
+
 				})
 			}
 
