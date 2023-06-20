@@ -202,26 +202,31 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 		}
 	}
 	name := getOidcSecretName()
+	log.Infof("name - %s", name)
 	ns, err := GetPxBackupNamespace()
 	if err != nil {
 		return "", err
 	}
+	log.Infof("ns - %s", ns)
 	// check and validate oidc details
 	secret, err := k8s.Instance().GetSecret(name, ns)
 	if err != nil {
 		return "", err
 	}
 	url := string(secret.Data[Issuer])
+	log.Infof("url - %s", url)
 	// Expand the service name for K8S DNS resolution, for keycloak requests from different ns
 	splitURL := strings.Split(url, ":")
 	splitURL[1] = fmt.Sprintf("%s.%s.svc.cluster.local", splitURL[1], ns)
 	url = strings.Join(splitURL, ":")
+	log.Infof("url after join - %s", url)
 	// url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/realms/master
 	if admin {
 		// admin url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/realms/master
 		// non-adming url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/admin/realms/master
 		split := strings.Split(url, "auth")
 		newURL := fmt.Sprintf("%sauth/admin%s", split[0], split[1])
+		log.Infof("return admin url - %s", newURL)
 		return newURL, nil
 	}
 	log.Infof("Keycloak endpoint - %s", url)
