@@ -40,6 +40,8 @@ const (
 	DefaultsecretName = "pxc-backup-secret"
 	// Issuer - OIDC issuer
 	Issuer = "OIDC_ENDPOINT"
+	// KeycloakServiceName - Name of the keycloak service in px-backup namespace
+	KeycloakServiceName = "pxcentral-keycloak-http"
 )
 
 const (
@@ -216,21 +218,23 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 	url := string(secret.Data[Issuer])
 	log.Infof("url - %s", url)
 	// Expand the service name for K8S DNS resolution, for keycloak requests from different ns
-	splitURL := strings.Split(url, ":")
-	splitURL[1] = fmt.Sprintf("%s.%s.svc.cluster.local", splitURL[1], ns)
-	url = strings.Join(splitURL, ":")
-	log.Infof("url after join - %s", url)
+	replacement := fmt.Sprintf("%s.%s.svc.cluster.local", KeycloakServiceName, ns)
+	newURL := strings.Replace(url, KeycloakServiceName, replacement, 1)
+	//splitURL := strings.Split(url, ":")
+	//splitURL[1] = fmt.Sprintf("%s.%s.svc.cluster.local", splitURL[1], ns)
+	//url = strings.Join(splitURL, ":")
+	log.Infof("url after join - %s", newURL)
 	// url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/realms/master
 	if admin {
 		// admin url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/realms/master
 		// non-adming url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/admin/realms/master
-		split := strings.Split(url, "auth")
-		newURL := fmt.Sprintf("%sauth/admin%s", split[0], split[1])
+		split := strings.Split(newURL, "auth")
+		newURL = fmt.Sprintf("%sauth/admin%s", split[0], split[1])
 		log.Infof("return admin url - %s", newURL)
 		return newURL, nil
 	}
-	log.Infof("Keycloak endpoint - %s", url)
-	return string(url), nil
+	log.Infof("Keycloak endpoint - %s", newURL)
+	return string(newURL), nil
 
 }
 
