@@ -155,6 +155,7 @@ func NewTearDownAppConfig() *TearDownAppConfig {
 	return newTearDownAppConfig
 }
 
+// AppConfig represents the configuration for an App
 type AppConfig struct {
 	ClusterMetaData   *ClusterMetaData
 	NamespaceMetaData *NamespaceMetaData
@@ -163,6 +164,89 @@ type AppConfig struct {
 	ValidateAppConfig *ValidateAppConfig
 	TearDownAppConfig *TearDownAppConfig
 	ClusterController *ClusterController
+}
+
+// GetClusterMetaData returns the ClusterMetaData associated with the AppConfig
+func (c *AppConfig) GetClusterMetaData() *ClusterMetaData {
+	return c.ClusterMetaData
+}
+
+// SetClusterMetaData sets the ClusterMetaData for the AppConfig
+func (c *AppConfig) SetClusterMetaData(metaData *ClusterMetaData) {
+	c.ClusterMetaData = metaData
+}
+
+// GetNamespaceMetaData returns the NamespaceMetaData associated with the AppConfig
+func (c *AppConfig) GetNamespaceMetaData() *NamespaceMetaData {
+	return c.NamespaceMetaData
+}
+
+// SetNamespaceMetaData sets the NamespaceMetaData for the AppConfig
+func (c *AppConfig) SetNamespaceMetaData(metaData *NamespaceMetaData) {
+	c.NamespaceMetaData = metaData
+}
+
+// GetAppMetaData returns the AppMetaData associated with the AppConfig
+func (c *AppConfig) GetAppMetaData() *AppMetaData {
+	return c.AppMetaData
+}
+
+// SetAppMetaData sets the AppMetaData for the AppConfig
+func (c *AppConfig) SetAppMetaData(metaData *AppMetaData) {
+	c.AppMetaData = metaData
+}
+
+// GetScheduleAppConfig returns the ScheduleAppConfig associated with the App
+func (c *AppConfig) GetScheduleAppConfig() *ScheduleAppConfig {
+	return c.ScheduleAppConfig
+}
+
+// SetScheduleAppConfig sets the ScheduleAppConfig for the App
+func (c *AppConfig) SetScheduleAppConfig(config *ScheduleAppConfig) {
+	c.ScheduleAppConfig = config
+}
+
+// GetValidateAppConfig returns the ValidateAppConfig associated with the App
+func (c *AppConfig) GetValidateAppConfig() *ValidateAppConfig {
+	return c.ValidateAppConfig
+}
+
+// SetValidateAppConfig sets the ValidateAppConfig for the App
+func (c *AppConfig) SetValidateAppConfig(config *ValidateAppConfig) {
+	c.ValidateAppConfig = config
+}
+
+// GetTearDownAppConfig returns the TearDownAppConfig associated with the App
+func (c *AppConfig) GetTearDownAppConfig() *TearDownAppConfig {
+	return c.TearDownAppConfig
+}
+
+// SetTearDownAppConfig sets the TearDownAppConfig for the App
+func (c *AppConfig) SetTearDownAppConfig(config *TearDownAppConfig) {
+	c.TearDownAppConfig = config
+}
+
+// GetClusterController returns the ClusterController associated with the AppConfig
+func (c *AppConfig) GetClusterController() *ClusterController {
+	return c.ClusterController
+}
+
+// SetClusterController sets the ClusterController for the AppConfig
+func (c *AppConfig) SetClusterController(controller *ClusterController) {
+	c.ClusterController = controller
+}
+
+// NewAppConfig creates a new instance of the AppConfig
+func NewAppConfig() *AppConfig {
+	newAppConfig := &AppConfig{}
+	newAppConfig.SetClusterMetaData(NewClusterMetaData())
+	newAppConfig.SetNamespaceMetaData(NewNamespaceMetaData())
+	newAppConfig.SetAppMetaData(NewAppMetaData())
+	newAppConfig.SetScheduleAppConfig(NewScheduleAppConfig())
+	newAppConfig.SetValidateAppConfig(NewValidateAppConfig())
+	newAppConfig.SetTearDownAppConfig(NewTearDownAppConfig())
+	newAppConfig.SetClusterController(nil)
+	return newAppConfig
 }
 
 func GetAppSpec(appKey string) (*spec.AppSpec, error) {
@@ -250,18 +334,18 @@ func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 }
 
 func (c *AppConfig) CanSchedule() error {
-	//if !c.ClusterController.ClusterManager.IsClusterConfigRecorded(c.ClusterMetaData) {
-	//	err := fmt.Errorf("cluster specified at [%s] is not present", c.ClusterMetaData.ConfigPath)
-	//	return utils.ProcessError(err)
-	//}
-	//cluster := c.ClusterController.ClusterManager.GetCluster(c.ClusterMetaData)
-	//if cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData) {
-	//	namespace := cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData)
-	//	if namespace.AppManager.IsAppPresent(c.AppMetaData) {
-	//		err := fmt.Errorf("app [%s] is already present in namespace [%s]", c.AppMetaData.GetNamespaceUid(), c.NamespaceMetaData.GetNamespaceUid())
-	//		return utils.ProcessError(err)
-	//	}
-	//}
+	if !c.GetClusterController().ClusterManager.IsClusterPresent(c.ClusterMetaData.GetClusterUid()) {
+		err := fmt.Errorf("cluster specified at [%s] is not present", c.ClusterMetaData.ConfigPath)
+		return utils.ProcessError(err)
+	}
+	cluster := c.ClusterController.ClusterManager.GetCluster(c.ClusterMetaData.GetClusterUid())
+	if cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData.GetNamespaceUid()) {
+		namespace := cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData.GetNamespaceUid())
+		if namespace.AppManager.IsAppPresent(c.AppMetaData) {
+			err := fmt.Errorf("app [%s] is already present in namespace [%s]", c.AppMetaData.GetAppUid(), c.NamespaceMetaData.GetNamespaceUid())
+			return utils.ProcessError(err)
+		}
+	}
 	return nil
 }
 
@@ -466,11 +550,10 @@ func (m *AppMetaData) GetName() string {
 	return m.AppKey + m.GetSuffix()
 }
 
-func NewAppMetaData(appKey string, identifier ...string) *AppMetaData {
-	return &AppMetaData{
-		AppKey:     appKey,
-		Identifier: identifier,
-	}
+func NewAppMetaData() *AppMetaData {
+	newAppConfig := &AppMetaData{}
+
+	return newAppConfig
 }
 
 type App struct {

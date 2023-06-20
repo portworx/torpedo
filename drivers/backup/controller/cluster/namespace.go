@@ -48,9 +48,9 @@ func (m *NamespaceMetaData) GetNamespaceUid() string {
 }
 
 // NewNamespaceMetaData creates a new instance of the NamespaceMetaData
-func NewNamespaceMetaData(namespace string) *NamespaceMetaData {
+func NewNamespaceMetaData() *NamespaceMetaData {
 	newNamespaceMetaData := &NamespaceMetaData{}
-	newNamespaceMetaData.SetNamespace(namespace)
+	newNamespaceMetaData.SetNamespace("")
 	return newNamespaceMetaData
 }
 
@@ -106,7 +106,7 @@ func (c *NamespaceConfig) App(appKey string, identifier ...string) *AppConfig {
 		ClusterMetaData:   c.ClusterMetaData,
 		NamespaceMetaData: c.NamespaceMetaData,
 		AppMetaData:       NewAppMetaData(appKey, identifier...),
-		ScheduleAppConfig: ,
+		ScheduleAppConfig: scheduleAppConfig,
 		ValidateAppConfig: &ValidateAppConfig{
 			WaitForRunningTimeout:       DefaultWaitForRunningTimeout,
 			WaitForRunningRetryInterval: DefaultWaitForRunningRetryInterval,
