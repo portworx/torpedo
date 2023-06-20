@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -1191,10 +1190,6 @@ func processHTTPRequest(
 		}
 	}()
 	responseBody, err := ioutil.ReadAll(httpResponse.Body)
-	pc, _, line, _ := runtime.Caller(1)
-	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
-	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
-	log.Infof("Caller - [%s]\n%s", callerFunc, string(responseBody))
 	return responseBody, err
 }
 
