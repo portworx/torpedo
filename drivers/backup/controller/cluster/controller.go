@@ -9,6 +9,14 @@ type ClusterController struct {
 	ClusterManager *ClusterManager
 }
 
+func (c *ClusterController) GetClusterManager() *ClusterManager {
+	return c.ClusterManager
+}
+
+func (c *ClusterController) SetClusterManager(manager *ClusterManager) {
+	c.ClusterManager = manager
+}
+
 func (c *ClusterController) Cluster(configPath string) *ClusterConfig {
 	clusterMetaData := NewClusterMetaData()
 	clusterMetaData.SetConfigPath(configPath)
@@ -19,7 +27,7 @@ func (c *ClusterController) Cluster(configPath string) *ClusterConfig {
 }
 
 func NewClusterController() *ClusterController {
-	return &ClusterController{
-		ClusterManager: NewClusterManager(),
-	}
+	newClusterController := &ClusterController{}
+	newClusterController.SetClusterManager(NewClusterManager())
+	return newClusterController
 }

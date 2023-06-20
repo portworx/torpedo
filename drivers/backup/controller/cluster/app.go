@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
 	appsapi "k8s.io/api/apps/v1"
@@ -422,27 +423,20 @@ func (c *AppConfig) Schedule() error {
 		InstanceID:      c.ScheduleAppConfig.InstanceID,
 		ScheduleOptions: *c.ScheduleAppConfig.ScheduleOptions,
 	}
-	cluster := c.ClusterController.ClusterManager.GetCluster("6d02ee80-448b-41a6-a866-b98a861d5590")
-	cluster = &Cluster{
-		ContextManager: &ContextManager{
-			DstConfigPath: "/tmp/source-config",
-		},
-		NamespaceManager: &NamespaceManager{
-			Namespaces:           make(map[string]*Namespace, 0),
-			RemovedNamespacesMap: make(map[string][]*Namespace, 0),
-		},
-	}
-
-	log.Infof("Scheduling app [%s] on namespace [%s]", c.AppMetaData.GetAppUid(), c.NamespaceMetaData.Namespace)
+	cluster := c.GetClusterController().GetClusterManager().GetCluster(c.GetClusterMetaData().GetClusterUid())
+	log.Infof("Scheduling app [%s] on namespace [%s]", c.GetAppMetaData().GetApp(), c.GetNamespaceMetaData().GetNamespace())
 	resp, err := cluster.ProcessClusterRequest(appScheduleRequest)
 	if err != nil {
 		return utils.ProcessError(err, utils.StructToString(appScheduleRequest))
 	}
-	if !cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData) {
-		cluster.NamespaceManager.SetNamespace(c.NamespaceMetaData, NewNamespace())
+	namespaceUid := c.NamespaceMetaData.GetNamespaceUid()
+	if !cluster.GetNamespaceManager().IsNamespacePresent(namespaceUid) {
+		cluster.NamespaceManager.SetNamespace(namespaceUid, NewNamespace())
 	}
-	appScheduleResponse := resp.(*cluster.AppScheduleResponse)
-	cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.SetApp(c.AppMetaData, NewApp(appScheduleResponse.Contexts))
+	appScheduleResponse := resp.(*AppScheduleResponse)
+	app := NewApp()
+	app.SetContexts(appScheduleResponse.Contexts)
+	cluster.GetNamespaceManager().GetNamespace(namespaceUid).GetAppManager().SetApp(c.AppMetaData.GetAppUid(), app)
 	return nil
 }
 
@@ -451,42 +445,71 @@ func (c *AppConfig) canValidate() error {
 }
 
 func (c *AppConfig) Validate() error {
-	err := c.canTearDown()
-	if err != nil {
-		return utils.ProcessError(err, c.String())
-	}
-	err = c.ClusterController.SwitchContext()
+	err := c.canValidate()
 	if err != nil {
 		return utils.ProcessError(err)
 	}
-	Contexts := c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.GetApp(c.AppMetaData).Contexts
-	for _, ctx := range Contexts {
-		log.Infof("Validating application [%s]", ctx.App.Key)
-		log.Infof("Waiting for application [%s] to start running", ctx.App.Key)
-		err = tests.Inst().S.WaitForRunning(ctx, c.ValidateAppConfig.WaitForRunningTimeout, c.ValidateAppConfig.waitForRunningRetryInterval)
+	cluster := c.GetClusterController().GetClusterManager().GetCluster(c.GetClusterMetaData().GetClusterUid())
+	err = cluster.GetContextManager().SwitchContext()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	contexts := cluster.GetNamespaceManager().GetNamespace(c.NamespaceMetaData.GetNamespaceUid()).GetAppManager().GetApp(c.AppMetaData.GetAppUid()).GetContexts()
+	for _, ctx := range contexts {
+		log.Infof("Validating app [%s]", c.GetAppMetaData().GetApp())
+		log.Infof("Waiting for app [%s] to start running", c.GetAppMetaData().GetApp())
+		timeout := c.GetValidateAppConfig().GetWaitForRunningTimeout()
+		retryInterval := c.GetValidateAppConfig().GetWaitForRunningTimeout()
+		err = tests.Inst().S.WaitForRunning(ctx, timeout, retryInterval)
 		if err != nil {
-			debugMessage := fmt.Sprintf("scheduler-context: [%v]; wait-for-running: timeout [%s], retry-interval [%s]", ctx, c.ValidateAppConfig.WaitForRunningTimeout, c.ValidateAppConfig.waitForRunningRetryInterval)
-			return utils.ProcessError(err, debugMessage)
+			debugStruct := struct {
+				Cc            *scheduler.Context
+				Timeout       time.Duration
+				RetryInterval time.Duration
+			}{
+				Cc:            ctx,
+				Timeout:       timeout,
+				RetryInterval: retryInterval,
+			}
+			return utils.ProcessError(err, utils.StructToString(debugStruct))
 		}
 		if len(tests.Inst().TopologyLabels) > 0 {
 			log.Infof("Validating application [%s] topology labels", ctx.App.Key)
 			err = tests.Inst().S.ValidateTopologyLabel(ctx)
 			if err != nil {
-				debugMessage := fmt.Sprintf("scheduler-context: [%v]", ctx)
-				return utils.ProcessError(err, debugMessage)
+				debugStruct := struct {
+					Cc *scheduler.Context
+				}{
+					Cc: ctx,
+				}
+				return utils.ProcessError(err, utils.StructToString(debugStruct))
 			}
 		}
 		if !ctx.SkipVolumeValidation {
 			log.Infof("Validating application [%s] volumes", ctx.App.Key)
-			err = tests.Inst().S.ValidateVolumes(ctx, c.ValidateAppConfig.ValidateVolumeTimeout, c.ValidateAppConfig.ValidateVolumeRetryInterval, nil)
+			timeout = c.GetValidateAppConfig().GetValidateVolumeTimeout()
+			retryInterval = c.GetValidateAppConfig().GetValidateVolumeRetryInterval()
+			err = tests.Inst().S.ValidateVolumes(ctx, timeout, retryInterval, nil)
 			if err != nil {
-				debugMessage := fmt.Sprintf("scheduler-context: [%v]; validate-volume: timeout [%s], retry-interval [%s]", ctx, c.ValidateAppConfig.ValidateVolumeTimeout, c.ValidateAppConfig.ValidateVolumeRetryInterval)
-				return utils.ProcessError(err, debugMessage)
+				debugStruct := struct {
+					Cc            *scheduler.Context
+					Timeout       time.Duration
+					RetryInterval time.Duration
+				}{
+					Cc:            ctx,
+					Timeout:       timeout,
+					RetryInterval: retryInterval,
+				}
+				return utils.ProcessError(err, utils.StructToString(debugStruct))
 			}
 			volumeParameters, err := tests.Inst().S.GetVolumeParameters(ctx)
 			if err != nil {
-				debugMessage := fmt.Sprintf("scheduler-context: [%v]", ctx)
-				return utils.ProcessError(err, debugMessage)
+				debugStruct := struct {
+					Ctx *scheduler.Context
+				}{
+					Ctx: ctx,
+				}
+				return utils.ProcessError(err, utils.StructToString(debugStruct))
 			}
 			for volumeName, volumeParams := range volumeParameters {
 				configMap := tests.Inst().ConfigMap
@@ -509,14 +532,22 @@ func (c *AppConfig) Validate() error {
 			log.Infof("Validating if application [%s] volumes are setup", ctx.App.Key)
 			volumes, err := tests.Inst().S.GetVolumes(ctx)
 			if err != nil {
-				debugMessage := fmt.Sprintf("scheduler-context: [%v]", ctx)
-				return utils.ProcessError(err, debugMessage)
+				debugStruct := struct {
+					Ctx *scheduler.Context
+				}{
+					Ctx: ctx,
+				}
+				return utils.ProcessError(err, utils.StructToString(debugStruct))
 			}
-			for _, volume := range volumes {
-				err = tests.Inst().V.ValidateVolumeSetup(volume)
+			for _, vol := range volumes {
+				err = tests.Inst().V.ValidateVolumeSetup(vol)
 				if err != nil {
-					debugMessage := fmt.Sprintf("volume: [%s]", volume.String())
-					return utils.ProcessError(err, debugMessage)
+					debugStruct := struct {
+						Vol *volume.Volume
+					}{
+						Vol: vol,
+					}
+					return utils.ProcessError(err, utils.StructToString(debugStruct))
 				}
 			}
 		}

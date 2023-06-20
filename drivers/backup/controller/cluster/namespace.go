@@ -132,8 +132,8 @@ func (n *Namespace) GetAppManager() *AppManager {
 }
 
 // SetAppManager sets the AppManager for the Namespace
-func (n *Namespace) SetAppManager(appManager *AppManager) {
-	n.AppManager = appManager
+func (n *Namespace) SetAppManager(manager *AppManager) {
+	n.AppManager = manager
 }
 
 // NewNamespace creates a new instance of the Namespace

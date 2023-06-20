@@ -35,7 +35,7 @@ func NewClusterMetaData() *ClusterMetaData {
 // ClusterConfig represents the configuration for a Cluster
 type ClusterConfig struct {
 	ClusterMetaData   *ClusterMetaData
-	IsInCluster       bool
+	InCluster         bool
 	ClusterController *ClusterController
 }
 
@@ -49,12 +49,14 @@ func (c *ClusterConfig) SetClusterMetaData(clusterMetaData *ClusterMetaData) {
 	c.ClusterMetaData = clusterMetaData
 }
 
-func (c *ClusterConfig) GetIsInCluster() bool {
-	return c.IsInCluster
+// GetInCluster returns the flag indicating whether a Cluster is InCluster in the ClusterConfig
+func (c *ClusterConfig) GetInCluster() bool {
+	return c.InCluster
 }
 
-func (c *ClusterConfig) SetIsInCluster(isInCluster bool) *ClusterConfig {
-	c.IsInCluster = isInCluster
+// SetInCluster sets the flag indicating whether a Cluster is InCluster in the ClusterConfig
+func (c *ClusterConfig) SetInCluster(inCluster bool) *ClusterConfig {
+	c.InCluster = inCluster
 	return c
 }
 
@@ -70,7 +72,7 @@ func (c *ClusterConfig) SetClusterController(clusterController *ClusterControlle
 
 func (c *ClusterConfig) Register(hyperConverged bool) error {
 	configPath := c.GetClusterMetaData().GetConfigPath()
-	if c.IsInCluster {
+	if c.GetInCluster() {
 		configPath = GlobalInClusterConfigPath
 	}
 	if !hyperConverged {
@@ -92,31 +94,37 @@ func (c *ClusterConfig) Namespace(namespace string) *NamespaceConfig {
 	}
 }
 
+// NewClusterConfig creates a new instance of the ClusterConfig
 func NewClusterConfig() *ClusterConfig {
 	newClusterConfig := &ClusterConfig{}
 	newClusterConfig.SetClusterMetaData(nil)
-	newClusterConfig.SetIsInCluster(false)
+	newClusterConfig.SetInCluster(false)
 	newClusterConfig.SetClusterController(nil)
 	return newClusterConfig
 }
 
+// Cluster represents a Cluster
 type Cluster struct {
 	ContextManager   *ContextManager
 	NamespaceManager *NamespaceManager
 }
 
+// GetContextManager returns the ContextManager associated with the Cluster
 func (c *Cluster) GetContextManager() *ContextManager {
 	return c.ContextManager
 }
 
+// SetContextManager sets the ContextManager for the Cluster
 func (c *Cluster) SetContextManager(manager *ContextManager) {
 	c.ContextManager = manager
 }
 
+// GetNamespaceManager returns the NamespaceManager associated with the Cluster
 func (c *Cluster) GetNamespaceManager() *NamespaceManager {
 	return c.NamespaceManager
 }
 
+// SetNamespaceManager sets the ContextManager for the Cluster
 func (c *Cluster) SetNamespaceManager(manager *NamespaceManager) {
 	c.NamespaceManager = manager
 }
