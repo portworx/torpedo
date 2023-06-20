@@ -42,8 +42,8 @@ func (m *ContextManager) SwitchContext() error {
 }
 
 func NewContextManager() *ContextManager {
-	return &ContextManager{
-		DstConfigPath: GlobalInClusterConfigPath,
-		SrcConfigPath: GlobalInClusterConfigPath,
-	}
+	newContextManager := &ContextManager{}
+	newContextManager.SetDstConfigPath(GlobalInClusterConfigPath)
+	newContextManager.SetSrcConfigPath(GlobalInClusterConfigPath)
+	return newContextManager
 }

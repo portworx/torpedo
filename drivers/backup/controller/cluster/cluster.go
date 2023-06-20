@@ -66,15 +66,17 @@ func (c *ClusterConfig) Register(hyperConverged bool) error {
 		// ToDo: handle non hyper-converged cluster
 	}
 	cluster := NewCluster()
-	//cluster.GetContextManager().SetDstConfigPath(configPath)
+	cluster.GetContextManager().SetDstConfigPath(configPath)
 	c.ClusterController.ClusterManager.SetCluster(c.GetClusterMetaData().GetClusterUid(), cluster)
 	return nil
 }
 
 func (c *ClusterConfig) Namespace(namespace string) *NamespaceConfig {
+	namespaceMetaData := NewNamespaceMetaData()
+	namespaceMetaData.SetNamespace(namespace)
 	return &NamespaceConfig{
 		ClusterMetaData:   c.ClusterMetaData,
-		NamespaceMetaData: NewNamespaceMetaData(namespace),
+		NamespaceMetaData: namespaceMetaData,
 		ClusterController: c.ClusterController,
 	}
 }
@@ -90,6 +92,22 @@ func NewClusterConfig() *ClusterConfig {
 type Cluster struct {
 	ContextManager   *ContextManager
 	NamespaceManager *NamespaceManager
+}
+
+func (c *Cluster) GetContextManager() *ContextManager {
+	return c.ContextManager
+}
+
+func (c *Cluster) SetContextManager(manager *ContextManager) {
+	c.ContextManager = manager
+}
+
+func (c *Cluster) GetNamespaceManager() *NamespaceManager {
+	return c.NamespaceManager
+}
+
+func (c *Cluster) SetNamespaceManager(manager *NamespaceManager) {
+	c.NamespaceManager = manager
 }
 
 func (c *Cluster) ProcessClusterRequest(request interface{}) (response interface{}, err error) {

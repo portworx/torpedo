@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,45 +19,60 @@ const (
 	GlobalAuthTokenParam = "auth-token" // copy of the const `authTokenParam` declared in the common.go file of the tests package
 )
 
+// AppMetaData represents the metadata for an App
 type AppMetaData struct {
 	AppKey     string
-	Identifier []string
+	Identifier string
 }
 
+// GetAppKey returns the AppKey associated with the AppMetaData
 func (m *AppMetaData) GetAppKey() string {
 	return m.AppKey
 }
 
+// SetAppKey sets the AppKey for the AppMetaData
 func (m *AppMetaData) SetAppKey(appKey string) {
 	m.AppKey = appKey
 }
 
-func (m *AppMetaData) GetIdentifier() []string {
+// GetIdentifier returns the Identifier associated with the AppMetaData
+func (m *AppMetaData) GetIdentifier() string {
 	return m.Identifier
 }
 
-func (m *AppMetaData) SetIdentifier(identifier []string) {
+// SetIdentifier sets the Identifier for the AppMetaData
+func (m *AppMetaData) SetIdentifier(identifier string) {
 	m.Identifier = identifier
 }
 
+// IsIdentifierPresent checks if an Identifier is present in the AppMetaData
 func (m *AppMetaData) IsIdentifierPresent() bool {
-	return m.GetIdentifier() != nil && len(m.GetIdentifier()) != 0
+	return m.GetIdentifier() != ""
 }
 
+// GetAppSuffix returns the App suffix based on the Identifier in the AppMetaData
 func (m *AppMetaData) GetAppSuffix() string {
 	if !m.IsIdentifierPresent() {
 		return ""
 	}
-	return fmt.Sprintf("-%s", m.GetIdentifier()[0])
+	return fmt.Sprintf("-%s", m.GetIdentifier())
 }
 
-func (m *AppMetaData) GetAppUid() string {
+// GetApp returns the App associated with the metadata
+func (m *AppMetaData) GetApp() string {
 	return m.GetAppKey() + m.GetAppSuffix()
 }
 
+// GetAppUid returns the App uid
+func (m *AppMetaData) GetAppUid() string {
+	return m.GetApp()
+}
+
+// NewAppMetaData creates a new instance of the AppMetaData
 func NewAppMetaData() *AppMetaData {
 	newAppConfig := &AppMetaData{}
-
+	newAppConfig.SetAppKey("")
+	newAppConfig.SetIdentifier("")
 	return newAppConfig
 }
 
@@ -328,18 +344,18 @@ func GetAppSpec(appKey string) (*spec.AppSpec, error) {
 	return appSpec, nil
 }
 
-func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
-	// ToDo: customize all kinds of app specs
-	if c.AppMetaData.IsIdentifierPresent() {
-		customizableAppKeys := []string{"postgres", "postgres-backup"}
-		isCustomizable := false
-		for _, customizableAppKey := range customizableAppKeys {
-			if c.AppMetaData.AppKey == customizableAppKey {
-				isCustomizable = true
+func (c *AppConfig) GetAppSpecWithIdentifier() (*spec.AppSpec, error) {
+	// TODO: Associate all apps with an identifier
+	if c.GetAppMetaData().IsIdentifierPresent() {
+		identifiableAppKeys := []string{"postgres", "postgres-backup"}
+		isIdentifiable := false
+		for _, identifiableAppKey := range identifiableAppKeys {
+			if identifiableAppKey == c.GetAppMetaData().GetAppKey() {
+				isIdentifiable = true
 			}
 		}
-		if !isCustomizable {
-			err := fmt.Errorf("app-key [%s] is not customizable yet", c.AppMetaData.GetAppUid())
+		if !isIdentifiable {
+			err := fmt.Errorf("app-key [%s] cannot be associated with an identifier yet", c.GetAppMetaData().GetApp())
 			return nil, utils.ProcessError(err)
 		}
 	}
@@ -352,11 +368,11 @@ func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 		}
 		return nil, utils.ProcessError(err, utils.StructToString(debugStruct))
 	}
-	customAppSpec := utils.DeepCopyAppSpec(appSpec)
+	appSpecWithIdentifier := utils.DeepCopyAppSpec(appSpec)
 	switch tests.Inst().S.(type) {
 	case *k8s.K8s:
-		customAppSpec.Key += c.AppMetaData.GetAppSuffix()
-		for _, spec := range customAppSpec.SpecList {
+		appSpecWithIdentifier.Key += c.GetAppMetaData().GetAppSuffix()
+		for _, spec := range appSpecWithIdentifier.SpecList {
 			specType := reflect.ValueOf(spec).Elem()
 			nameField := specType.FieldByName("Name")
 			if nameField.IsValid() {
@@ -373,7 +389,7 @@ func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 			}
 		}
 	}
-	return customAppSpec, nil
+	return appSpecWithIdentifier, nil
 }
 
 func (c *AppConfig) CanSchedule() error {
@@ -393,197 +409,199 @@ func (c *AppConfig) CanSchedule() error {
 }
 
 func (c *AppConfig) Schedule() error {
-	//err := c.CanSchedule()
-	//if err != nil {
-	//	return utils.ProcessError(err)
-	//}
-	//appSpec, err := c.GetCustomAppSpec()
-	//if err != nil {
-	//	return utils.ProcessError(err)
-	//}
-	//appScheduleRequest := &AppScheduleRequest{
-	//	Apps:            []*spec.AppSpec{appSpec},
-	//	InstanceID:      c.ScheduleAppConfig.InstanceID,
-	//	ScheduleOptions: *c.ScheduleAppConfig.ScheduleOptions,
-	//}
-	//cluster := c.ClusterController.ClusterManager.GetCluster("6d02ee80-448b-41a6-a866-b98a861d5590")
-	//cluster = &Cluster{
-	//	ContextManager: &ContextManager{
-	//		DstConfigPath: "/tmp/source-config",
-	//	},
-	//	NamespaceManager: &NamespaceManager{
-	//		Namespaces:        make(map[string]*Namespace, 0),
-	//		RemovedNamespacesMap: make(map[string][]*Namespace, 0),
-	//	},
-	//}
-	//
-	//log.Infof("Scheduling app [%s] on namespace [%s]", c.AppMetaData.GetAppUid(), c.NamespaceMetaData.Namespace)
-	//resp, err := cluster.ProcessClusterRequest(appScheduleRequest)
-	//if err != nil {
-	//	return utils.ProcessError(err, utils.StructToString(appScheduleRequest))
-	//}
-	//if !cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData) {
-	//	cluster.NamespaceManager.SetNamespace(c.NamespaceMetaData, NewNamespace())
-	//}
-	//appScheduleResponse := resp.(*cluster.AppScheduleResponse)
-	//cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.SetApp(c.AppMetaData, NewApp(appScheduleResponse.Contexts))
+	err := c.CanSchedule()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	appSpec, err := c.GetAppSpecWithIdentifier()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	appScheduleRequest := &AppScheduleRequest{
+		Apps:            []*spec.AppSpec{appSpec},
+		InstanceID:      c.ScheduleAppConfig.InstanceID,
+		ScheduleOptions: *c.ScheduleAppConfig.ScheduleOptions,
+	}
+	cluster := c.ClusterController.ClusterManager.GetCluster("6d02ee80-448b-41a6-a866-b98a861d5590")
+	cluster = &Cluster{
+		ContextManager: &ContextManager{
+			DstConfigPath: "/tmp/source-config",
+		},
+		NamespaceManager: &NamespaceManager{
+			Namespaces:           make(map[string]*Namespace, 0),
+			RemovedNamespacesMap: make(map[string][]*Namespace, 0),
+		},
+	}
+
+	log.Infof("Scheduling app [%s] on namespace [%s]", c.AppMetaData.GetAppUid(), c.NamespaceMetaData.Namespace)
+	resp, err := cluster.ProcessClusterRequest(appScheduleRequest)
+	if err != nil {
+		return utils.ProcessError(err, utils.StructToString(appScheduleRequest))
+	}
+	if !cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData) {
+		cluster.NamespaceManager.SetNamespace(c.NamespaceMetaData, NewNamespace())
+	}
+	appScheduleResponse := resp.(*cluster.AppScheduleResponse)
+	cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.SetApp(c.AppMetaData, NewApp(appScheduleResponse.Contexts))
 	return nil
 }
 
-//func (c *AppConfig) canValidate() error {
-//	return nil
-//}
-//
-//func (c *AppConfig) Validate() error {
-//	err := c.canTearDown()
-//	if err != nil {
-//		return utils.ProcessError(err, c.String())
-//	}
-//	err = c.ClusterController.SwitchContext()
-//	if err != nil {
-//		return utils.ProcessError(err)
-//	}
-//	Contexts := c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.GetApp(c.AppMetaData).Contexts
-//	for _, ctx := range Contexts {
-//		log.Infof("Validating application [%s]", ctx.App.Key)
-//		log.Infof("Waiting for application [%s] to start running", ctx.App.Key)
-//		err = tests.Inst().S.WaitForRunning(ctx, c.ValidateAppConfig.WaitForRunningTimeout, c.ValidateAppConfig.waitForRunningRetryInterval)
-//		if err != nil {
-//			debugMessage := fmt.Sprintf("scheduler-context: [%v]; wait-for-running: timeout [%s], retry-interval [%s]", ctx, c.ValidateAppConfig.WaitForRunningTimeout, c.ValidateAppConfig.waitForRunningRetryInterval)
-//			return utils.ProcessError(err, debugMessage)
-//		}
-//		if len(tests.Inst().TopologyLabels) > 0 {
-//			log.Infof("Validating application [%s] topology labels", ctx.App.Key)
-//			err = tests.Inst().S.ValidateTopologyLabel(ctx)
-//			if err != nil {
-//				debugMessage := fmt.Sprintf("scheduler-context: [%v]", ctx)
-//				return utils.ProcessError(err, debugMessage)
-//			}
-//		}
-//		if !ctx.SkipVolumeValidation {
-//			log.Infof("Validating application [%s] volumes", ctx.App.Key)
-//			err = tests.Inst().S.ValidateVolumes(ctx, c.ValidateAppConfig.ValidateVolumeTimeout, c.ValidateAppConfig.ValidateVolumeRetryInterval, nil)
-//			if err != nil {
-//				debugMessage := fmt.Sprintf("scheduler-context: [%v]; validate-volume: timeout [%s], retry-interval [%s]", ctx, c.ValidateAppConfig.ValidateVolumeTimeout, c.ValidateAppConfig.ValidateVolumeRetryInterval)
-//				return utils.ProcessError(err, debugMessage)
-//			}
-//			volumeParameters, err := tests.Inst().S.GetVolumeParameters(ctx)
-//			if err != nil {
-//				debugMessage := fmt.Sprintf("scheduler-context: [%v]", ctx)
-//				return utils.ProcessError(err, debugMessage)
-//			}
-//			for volumeName, volumeParams := range volumeParameters {
-//				configMap := tests.Inst().ConfigMap
-//				if configMap != "" {
-//					volumeParams[GlobalAuthTokenParam], err = tests.Inst().S.GetTokenFromConfigMap(configMap)
-//					if err != nil {
-//						debugMessage := fmt.Sprintf("volume: name [%s], params [%v]; config-map: [%v]", volumeName, volumeParams, configMap)
-//						return utils.ProcessError(err, debugMessage)
-//					}
-//				}
-//				if ctx.RefreshStorageEndpoint {
-//					volumeParams["refresh-endpoint"] = "true"
-//				}
-//				err = tests.Inst().V.ValidateCreateVolume(volumeName, volumeParams)
-//				if err != nil {
-//					debugMessage := fmt.Sprintf("volume: name [%s], params [%v]", volumeName, volumeParams)
-//					return utils.ProcessError(err, debugMessage)
-//				}
-//			}
-//			log.Infof("Validating if application [%s] volumes are setup", ctx.App.Key)
-//			volumes, err := tests.Inst().S.GetVolumes(ctx)
-//			if err != nil {
-//				debugMessage := fmt.Sprintf("scheduler-context: [%v]", ctx)
-//				return utils.ProcessError(err, debugMessage)
-//			}
-//			for _, volume := range volumes {
-//				err = tests.Inst().V.ValidateVolumeSetup(volume)
-//				if err != nil {
-//					debugMessage := fmt.Sprintf("volume: [%s]", volume.String())
-//					return utils.ProcessError(err, debugMessage)
-//				}
-//			}
-//		}
-//	}
-//	return nil
-//}
-//
-//func (c *AppConfig) canTearDown() error {
-//	return nil
-//}
-//
-//func (c *AppConfig) TearDown() error {
-//	err := c.canTearDown()
-//	if err != nil {
-//		return utils.ProcessError(err, c.String())
-//	}
-//	err = c.ClusterController.SwitchContext()
-//	if err != nil {
-//		return utils.ProcessError(err)
-//	}
-//	log.Infof("Destroying application [%s]", c.AppMetaData.GetUid())
-//	Contexts := c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.GetApp(c.AppMetaData).Contexts
-//	log.Infof("len of tear down Contexts %d", len(Contexts))
-//	for _, ctx := range Contexts {
-//		volumeOptions := &scheduler.VolumeOptions{
-//			SkipClusterScopedObjects: true,
-//		}
-//		volumes, err := tests.Inst().S.DeleteVolumes(ctx, volumeOptions)
-//		if err != nil {
-//			debugMessage := fmt.Sprintf("scheduler-context: [%v]; volume-options: [%v]", ctx, volumeOptions)
-//			return utils.ProcessError(err, debugMessage)
-//		}
-//		destroyOptions := c.TearDownAppConfig.GetDestroyOptions()
-//map[string]bool{
-//tests.SkipClusterScopedObjects:              c.SkipClusterScopedObjects,
-//scheduler.OptionsWaitForDestroy:             c.WaitForDestroy,
-//scheduler.OptionsWaitForResourceLeakCleanup: c.WaitForResourceLeakCleanup,
-//}
-//		log.Infof("destroy options %v", destroyOptions)
-//		err = tests.Inst().S.Destroy(ctx, destroyOptions)
-//		if err != nil {
-//			debugMessage := fmt.Sprintf("scheduler-context: [%v]; destroy-options: [%v]", ctx, destroyOptions)
-//			return utils.ProcessError(err, debugMessage)
-//		}
-//		if !ctx.SkipVolumeValidation {
-//			for _, vol := range volumes {
-//				err := tests.Inst().V.ValidateDeleteVolume(vol)
-//				if err != nil {
-//					debugMessage := fmt.Sprintf("volume: [%v]", vol)
-//					return utils.ProcessError(err, debugMessage)
-//				}
-//			}
-//		}
-//		// because we have already used DeleteVolumes with true
-//		if !c.TearDownAppConfig.SkipClusterScopedObjects {
-//			volumeOptions = &scheduler.VolumeOptions{
-//				SkipClusterScopedObjects: false,
-//			}
-//			_, err = tests.Inst().S.DeleteVolumes(ctx, volumeOptions)
-//			if err != nil {
-//				debugMessage := fmt.Sprintf("scheduler-context: [%v]; volume-options: [%v]", ctx, volumeOptions)
-//				return utils.ProcessError(err, debugMessage)
-//			}
-//		}
-//		c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.RemoveApp(c.AppMetaData)
-//		log.Infof("present Apps %d", len(c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.Apps))
-//		log.Infof("removed Apps %d", len(c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.RemovedApps))
-//	}
-//	return nil
-//}
+func (c *AppConfig) canValidate() error {
+	return nil
+}
 
+func (c *AppConfig) Validate() error {
+	err := c.canTearDown()
+	if err != nil {
+		return utils.ProcessError(err, c.String())
+	}
+	err = c.ClusterController.SwitchContext()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	Contexts := c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.GetApp(c.AppMetaData).Contexts
+	for _, ctx := range Contexts {
+		log.Infof("Validating application [%s]", ctx.App.Key)
+		log.Infof("Waiting for application [%s] to start running", ctx.App.Key)
+		err = tests.Inst().S.WaitForRunning(ctx, c.ValidateAppConfig.WaitForRunningTimeout, c.ValidateAppConfig.waitForRunningRetryInterval)
+		if err != nil {
+			debugMessage := fmt.Sprintf("scheduler-context: [%v]; wait-for-running: timeout [%s], retry-interval [%s]", ctx, c.ValidateAppConfig.WaitForRunningTimeout, c.ValidateAppConfig.waitForRunningRetryInterval)
+			return utils.ProcessError(err, debugMessage)
+		}
+		if len(tests.Inst().TopologyLabels) > 0 {
+			log.Infof("Validating application [%s] topology labels", ctx.App.Key)
+			err = tests.Inst().S.ValidateTopologyLabel(ctx)
+			if err != nil {
+				debugMessage := fmt.Sprintf("scheduler-context: [%v]", ctx)
+				return utils.ProcessError(err, debugMessage)
+			}
+		}
+		if !ctx.SkipVolumeValidation {
+			log.Infof("Validating application [%s] volumes", ctx.App.Key)
+			err = tests.Inst().S.ValidateVolumes(ctx, c.ValidateAppConfig.ValidateVolumeTimeout, c.ValidateAppConfig.ValidateVolumeRetryInterval, nil)
+			if err != nil {
+				debugMessage := fmt.Sprintf("scheduler-context: [%v]; validate-volume: timeout [%s], retry-interval [%s]", ctx, c.ValidateAppConfig.ValidateVolumeTimeout, c.ValidateAppConfig.ValidateVolumeRetryInterval)
+				return utils.ProcessError(err, debugMessage)
+			}
+			volumeParameters, err := tests.Inst().S.GetVolumeParameters(ctx)
+			if err != nil {
+				debugMessage := fmt.Sprintf("scheduler-context: [%v]", ctx)
+				return utils.ProcessError(err, debugMessage)
+			}
+			for volumeName, volumeParams := range volumeParameters {
+				configMap := tests.Inst().ConfigMap
+				if configMap != "" {
+					volumeParams[GlobalAuthTokenParam], err = tests.Inst().S.GetTokenFromConfigMap(configMap)
+					if err != nil {
+						debugMessage := fmt.Sprintf("volume: name [%s], params [%v]; config-map: [%v]", volumeName, volumeParams, configMap)
+						return utils.ProcessError(err, debugMessage)
+					}
+				}
+				if ctx.RefreshStorageEndpoint {
+					volumeParams["refresh-endpoint"] = "true"
+				}
+				err = tests.Inst().V.ValidateCreateVolume(volumeName, volumeParams)
+				if err != nil {
+					debugMessage := fmt.Sprintf("volume: name [%s], params [%v]", volumeName, volumeParams)
+					return utils.ProcessError(err, debugMessage)
+				}
+			}
+			log.Infof("Validating if application [%s] volumes are setup", ctx.App.Key)
+			volumes, err := tests.Inst().S.GetVolumes(ctx)
+			if err != nil {
+				debugMessage := fmt.Sprintf("scheduler-context: [%v]", ctx)
+				return utils.ProcessError(err, debugMessage)
+			}
+			for _, volume := range volumes {
+				err = tests.Inst().V.ValidateVolumeSetup(volume)
+				if err != nil {
+					debugMessage := fmt.Sprintf("volume: [%s]", volume.String())
+					return utils.ProcessError(err, debugMessage)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (c *AppConfig) canTearDown() error {
+	return nil
+}
+
+func (c *AppConfig) TearDown() error {
+	err := c.canTearDown()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	err = c.GetClusterController().GetContextManager().SwitchContext()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	log.Infof("Destroying application [%s]", c.AppMetaData.GetUid())
+	Contexts := c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.GetApp(c.AppMetaData).Contexts
+	log.Infof("len of tear down Contexts %d", len(Contexts))
+	for _, ctx := range Contexts {
+		volumeOptions := &scheduler.VolumeOptions{
+			SkipClusterScopedObjects: true,
+		}
+		volumes, err := tests.Inst().S.DeleteVolumes(ctx, volumeOptions)
+		if err != nil {
+			debugMessage := fmt.Sprintf("scheduler-context: [%v]; volume-options: [%v]", ctx, volumeOptions)
+			return utils.ProcessError(err, debugMessage)
+		}
+		destroyOptions := map[string]bool{
+			tests.SkipClusterScopedObjects:              c.SkipClusterScopedObjects,
+			scheduler.OptionsWaitForDestroy:             c.WaitForDestroy,
+			scheduler.OptionsWaitForResourceLeakCleanup: c.WaitForResourceLeakCleanup,
+		}
+		err = tests.Inst().S.Destroy(ctx, destroyOptions)
+		if err != nil {
+			debugMessage := fmt.Sprintf("scheduler-context: [%v]; destroy-options: [%v]", ctx, destroyOptions)
+			return utils.ProcessError(err, debugMessage)
+		}
+		if !ctx.SkipVolumeValidation {
+			for _, vol := range volumes {
+				err := tests.Inst().V.ValidateDeleteVolume(vol)
+				if err != nil {
+					debugMessage := fmt.Sprintf("volume: [%v]", vol)
+					return utils.ProcessError(err, debugMessage)
+				}
+			}
+		}
+		// because we have already used DeleteVolumes with true
+		if !c.TearDownAppConfig.SkipClusterScopedObjects {
+			volumeOptions = &scheduler.VolumeOptions{
+				SkipClusterScopedObjects: false,
+			}
+			_, err = tests.Inst().S.DeleteVolumes(ctx, volumeOptions)
+			if err != nil {
+				debugMessage := fmt.Sprintf("scheduler-context: [%v]; volume-options: [%v]", ctx, volumeOptions)
+				return utils.ProcessError(err, debugMessage)
+			}
+		}
+		c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.RemoveApp(c.AppMetaData)
+		log.Infof("present Apps %d", len(c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.Apps))
+		log.Infof("removed Apps %d", len(c.ClusterController.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.RemovedApps))
+	}
+	return nil
+}
+
+// App represents an App
 type App struct {
 	Contexts []*scheduler.Context
 }
 
+// GetContexts returns the Contexts associated with the App
 func (a *App) GetContexts() []*scheduler.Context {
 	return a.Contexts
 }
 
+// SetContexts sets the Contexts for the App
 func (a *App) SetContexts(contexts []*scheduler.Context) {
 	a.Contexts = contexts
 }
 
+// NewApp creates a new instance of the App
 func NewApp() *App {
 	newApp := &App{}
 	newApp.SetContexts(nil)
@@ -654,7 +672,7 @@ func (m *AppManager) DeleteApp(appUid string) {
 	delete(m.GetAppMap(), appUid)
 }
 
-// RemoveApp removes the App with the given Namespace uid
+// RemoveApp removes the App with the given App uid
 func (m *AppManager) RemoveApp(appUid string) {
 	m.Lock()
 	defer m.Unlock()

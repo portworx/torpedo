@@ -91,35 +91,34 @@ func (c *NamespaceConfig) SetClusterController(clusterController *ClusterControl
 	c.ClusterController = clusterController
 }
 
-func (c *NamespaceConfig) App(appKey string, identifier ...string) *AppConfig {
+func (c *NamespaceConfig) AppWithIdentifier(appKey string, identifier string) *AppConfig {
+	appMetaData := NewAppMetaData()
+	appMetaData.SetIdentifier(identifier)
 	scheduleAppConfig := NewScheduleAppConfig()
 	scheduleOptions := &scheduler.ScheduleOptions{
 		AppKeys:            []string{appKey},
 		StorageProvisioner: tests.Inst().Provisioner,
-		Namespace:          c.NamespaceMetaData.GetNamespaceUid(),
-		// ToDo: handle non hyper-converged cluster
+		Namespace:          c.GetNamespaceMetaData().GetNamespace(),
+		// TODO: Handle non hyper-converged cluster
 		Nodes:  nil,
 		Labels: nil,
 	}
 	scheduleAppConfig.SetScheduleOptions(scheduleOptions)
+	validateAppConfig := NewValidateAppConfig()
+	tearDownAppConfig := NewTearDownAppConfig()
 	return &AppConfig{
 		ClusterMetaData:   c.ClusterMetaData,
 		NamespaceMetaData: c.NamespaceMetaData,
-		AppMetaData:       NewAppMetaData(),
+		AppMetaData:       appMetaData,
 		ScheduleAppConfig: scheduleAppConfig,
-		ValidateAppConfig: &ValidateAppConfig{
-			WaitForRunningTimeout:       DefaultWaitForRunningTimeout,
-			WaitForRunningRetryInterval: DefaultWaitForRunningRetryInterval,
-			ValidateVolumeTimeout:       DefaultValidateVolumeTimeout,
-			ValidateVolumeRetryInterval: DefaultValidateVolumeRetryInterval,
-		},
-		TearDownAppConfig: &TearDownAppConfig{
-			WaitForDestroy:             DefaultWaitForDestroy,
-			WaitForResourceLeakCleanup: DefaultWaitForResourceLeakCleanup,
-			SkipClusterScopedObjects:   DefaultSkipClusterScopedObjects,
-		},
+		ValidateAppConfig: validateAppConfig,
+		TearDownAppConfig: tearDownAppConfig,
 		ClusterController: c.ClusterController,
 	}
+}
+
+func (c *NamespaceConfig) App(appKey string) *AppConfig {
+	return c.AppWithIdentifier(appKey, "")
 }
 
 // Namespace represents a Namespace
