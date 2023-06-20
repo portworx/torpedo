@@ -21,6 +21,10 @@ RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
     ibmcloud plugin install -f vpc-infrastructure && \
     ibmcloud plugin install -f container-service
 
+# Install Azure Cli
+RUN apk add --no-cache --update python3 py3-pip
+RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && pip3 install --no-cache-dir --prefer-binary azure-cli && apk del virtual
+
 # No need to copy *everything*. This keeps the cache useful
 COPY vendor vendor
 COPY Makefile Makefile
