@@ -32,12 +32,12 @@ type NamespaceMetaData struct {
 	Namespace string
 }
 
-// GetNamespace returns the Namespace associated with the metadata
+// GetNamespace returns the Namespace associated with the NamespaceMetaData
 func (m *NamespaceMetaData) GetNamespace() string {
 	return m.Namespace
 }
 
-// SetNamespace sets the Namespace string for the metadata
+// SetNamespace sets the Namespace string for the NamespaceMetaData
 func (m *NamespaceMetaData) SetNamespace(namespace string) {
 	m.Namespace = namespace
 }

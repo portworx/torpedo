@@ -5,38 +5,46 @@ import (
 	"sync"
 )
 
+// ClusterMetaData represents the metadata for a Cluster
 type ClusterMetaData struct {
 	ConfigPath string
 }
 
+// GetConfigPath returns the ConfigPath associated with the ClusterMetaData
 func (m *ClusterMetaData) GetConfigPath() string {
 	return m.ConfigPath
 }
 
+// SetConfigPath sets the ConfigPath string for the ClusterMetaData
 func (m *ClusterMetaData) SetConfigPath(configPath string) {
 	m.ConfigPath = configPath
 }
 
+// GetClusterUid returns the Cluster uid
 func (m *ClusterMetaData) GetClusterUid() string {
 	return m.GetConfigPath()
 }
 
+// NewClusterMetaData creates a new instance of the ClusterMetaData
 func NewClusterMetaData() *ClusterMetaData {
 	newClusterMetaData := &ClusterMetaData{}
 	newClusterMetaData.SetConfigPath(GlobalInClusterConfigPath)
 	return newClusterMetaData
 }
 
+// ClusterConfig represents the configuration for a Cluster
 type ClusterConfig struct {
 	ClusterMetaData   *ClusterMetaData
 	IsInCluster       bool
 	ClusterController *ClusterController
 }
 
+// GetClusterMetaData returns the ClusterMetaData associated with the ClusterConfig
 func (c *ClusterConfig) GetClusterMetaData() *ClusterMetaData {
 	return c.ClusterMetaData
 }
 
+// SetClusterMetaData sets the ClusterMetaData for the ClusterConfig
 func (c *ClusterConfig) SetClusterMetaData(clusterMetaData *ClusterMetaData) {
 	c.ClusterMetaData = clusterMetaData
 }
@@ -50,10 +58,12 @@ func (c *ClusterConfig) SetIsInCluster(isInCluster bool) *ClusterConfig {
 	return c
 }
 
+// GetClusterController returns the ClusterController associated with the ClusterConfig
 func (c *ClusterConfig) GetClusterController() *ClusterController {
 	return c.ClusterController
 }
 
+// SetClusterController sets the ClusterController for the ClusterConfig
 func (c *ClusterConfig) SetClusterController(clusterController *ClusterController) {
 	c.ClusterController = clusterController
 }
