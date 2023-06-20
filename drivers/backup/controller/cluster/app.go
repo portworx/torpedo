@@ -17,27 +17,41 @@ const (
 	GlobalAuthTokenParam = "auth-token" // copy of the const `authTokenParam` declared in the common.go file of the tests package
 )
 
+// ScheduleAppConfig represents the configuration for scheduling an App
 type ScheduleAppConfig struct {
 	ScheduleOptions *scheduler.ScheduleOptions
 	InstanceID      string
 }
 
+// GetScheduleOptions returns the ScheduleOptions associated with the ScheduleAppConfig
 func (c *ScheduleAppConfig) GetScheduleOptions() *scheduler.ScheduleOptions {
 	return c.ScheduleOptions
 }
 
+// SetScheduleOptions sets the ScheduleOptions for the ScheduleAppConfig
 func (c *ScheduleAppConfig) SetScheduleOptions(options *scheduler.ScheduleOptions) {
 	c.ScheduleOptions = options
 }
 
+// GetInstanceID returns the InstanceID associated with the ScheduleAppConfig
 func (c *ScheduleAppConfig) GetInstanceID() string {
 	return c.InstanceID
 }
 
+// SetInstanceID sets the InstanceID for the ScheduleAppConfig
 func (c *ScheduleAppConfig) SetInstanceID(instanceID string) {
 	c.InstanceID = instanceID
 }
 
+// NewScheduleAppConfig creates a new instance of the ScheduleAppConfig
+func NewScheduleAppConfig() *ScheduleAppConfig {
+	newScheduleAppConfig := &ScheduleAppConfig{}
+	newScheduleAppConfig.SetScheduleOptions(nil)
+	newScheduleAppConfig.SetInstanceID(tests.Inst().InstanceID)
+	return newScheduleAppConfig
+}
+
+// ValidateAppConfig represents the configuration for validating an App
 type ValidateAppConfig struct {
 	WaitForRunningTimeout       time.Duration
 	WaitForRunningRetryInterval time.Duration
@@ -45,66 +59,100 @@ type ValidateAppConfig struct {
 	ValidateVolumeRetryInterval time.Duration
 }
 
+// GetWaitForRunningTimeout returns the timeout duration for waiting for an App to be running in the ValidateAppConfig
 func (c *ValidateAppConfig) GetWaitForRunningTimeout() time.Duration {
 	return c.WaitForRunningTimeout
 }
 
+// SetWaitForRunningTimeout sets the timeout duration for waiting for an App to be running in the ValidateAppConfig
 func (c *ValidateAppConfig) SetWaitForRunningTimeout(timeout time.Duration) {
 	c.WaitForRunningTimeout = timeout
 }
 
+// GetWaitForRunningRetryInterval returns the retry interval duration for waiting for an App to be running in the ValidateAppConfig
 func (c *ValidateAppConfig) GetWaitForRunningRetryInterval() time.Duration {
 	return c.WaitForRunningRetryInterval
 }
 
+// SetWaitForRunningRetryInterval sets the retry interval duration for waiting for an App to be running in the ValidateAppConfig
 func (c *ValidateAppConfig) SetWaitForRunningRetryInterval(interval time.Duration) {
 	c.WaitForRunningRetryInterval = interval
 }
 
+// GetValidateVolumeTimeout returns the timeout duration for validating App volumes in the ValidateAppConfig
 func (c *ValidateAppConfig) GetValidateVolumeTimeout() time.Duration {
 	return c.ValidateVolumeTimeout
 }
 
+// SetValidateVolumeTimeout sets the timeout duration for validating App volumes in the ValidateAppConfig
 func (c *ValidateAppConfig) SetValidateVolumeTimeout(timeout time.Duration) {
 	c.ValidateVolumeTimeout = timeout
 }
 
+// GetValidateVolumeRetryInterval returns the retry interval duration for validating App volumes in the ValidateAppConfig
 func (c *ValidateAppConfig) GetValidateVolumeRetryInterval() time.Duration {
 	return c.ValidateVolumeRetryInterval
 }
 
+// SetValidateVolumeRetryInterval sets the retry interval duration for validating App volumes in the ValidateAppConfig
 func (c *ValidateAppConfig) SetValidateVolumeRetryInterval(interval time.Duration) {
 	c.ValidateVolumeRetryInterval = interval
 }
 
+// NewValidateAppConfig creates a new instance of the ValidateAppConfig
+func NewValidateAppConfig() *ValidateAppConfig {
+	newValidateAppConfig := &ValidateAppConfig{}
+	newValidateAppConfig.SetWaitForRunningTimeout(DefaultWaitForRunningTimeout)
+	newValidateAppConfig.SetWaitForRunningRetryInterval(DefaultWaitForRunningRetryInterval)
+	newValidateAppConfig.SetValidateVolumeTimeout(DefaultValidateVolumeTimeout)
+	newValidateAppConfig.SetValidateVolumeRetryInterval(DefaultValidateVolumeRetryInterval)
+	return newValidateAppConfig
+}
+
+// TearDownAppConfig represents the configuration for tearing down an App
 type TearDownAppConfig struct {
 	WaitForDestroy             bool
 	WaitForResourceLeakCleanup bool
 	SkipClusterScopedObjects   bool
 }
 
+// GetWaitForDestroy returns the wait flag for waiting for App destruction in the TearDownAppConfig
 func (c *TearDownAppConfig) GetWaitForDestroy() bool {
 	return c.WaitForDestroy
 }
 
+// SetWaitForDestroy sets the wait flag for waiting for App destruction in the TearDownAppConfig
 func (c *TearDownAppConfig) SetWaitForDestroy(wait bool) {
 	c.WaitForDestroy = wait
 }
 
+// GetWaitForResourceLeakCleanup returns the wait flag for waiting for resource leak cleanup in the TearDownAppConfig
 func (c *TearDownAppConfig) GetWaitForResourceLeakCleanup() bool {
 	return c.WaitForResourceLeakCleanup
 }
 
+// SetWaitForResourceLeakCleanup sets the wait flag for waiting for resource leak cleanup in the TearDownAppConfig
 func (c *TearDownAppConfig) SetWaitForResourceLeakCleanup(wait bool) {
 	c.WaitForResourceLeakCleanup = wait
 }
 
+// GetSkipClusterScopedObjects returns the skip flag for skipping cluster-scoped object deletion in the TearDownAppConfig
 func (c *TearDownAppConfig) GetSkipClusterScopedObjects() bool {
 	return c.SkipClusterScopedObjects
 }
 
+// SetSkipClusterScopedObjects sets the skip flag for skipping cluster-scoped object deletion in the TearDownAppConfig
 func (c *TearDownAppConfig) SetSkipClusterScopedObjects(skip bool) {
 	c.SkipClusterScopedObjects = skip
+}
+
+// NewTearDownAppConfig creates a new instance of the TearDownAppConfig
+func NewTearDownAppConfig() *TearDownAppConfig {
+	newTearDownAppConfig := &TearDownAppConfig{}
+	newTearDownAppConfig.SetWaitForDestroy(DefaultWaitForDestroy)
+	newTearDownAppConfig.SetWaitForResourceLeakCleanup(DefaultWaitForResourceLeakCleanup)
+	newTearDownAppConfig.SetSkipClusterScopedObjects(DefaultSkipClusterScopedObjects)
+	return newTearDownAppConfig
 }
 
 type AppConfig struct {

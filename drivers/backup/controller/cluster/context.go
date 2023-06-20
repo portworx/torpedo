@@ -43,7 +43,7 @@ func (m *ContextManager) SwitchContext() error {
 
 func NewContextManager() *ContextManager {
 	return &ContextManager{
-		DstConfigPath: "",
-		SrcConfigPath: "",
+		DstConfigPath: GlobalInClusterConfigPath,
+		SrcConfigPath: GlobalInClusterConfigPath,
 	}
 }

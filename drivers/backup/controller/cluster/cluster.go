@@ -4,11 +4,6 @@ import (
 	"github.com/portworx/torpedo/drivers/backup/utils"
 )
 
-const (
-	// GlobalInClusterConfigPath is the config-path of the cluster in which Torpedo and Px-Backup are running
-	GlobalInClusterConfigPath = "" // as described in the doc string of the `SetConfig` function in the k8s.go file of the k8s package
-)
-
 type ClusterMetaData struct {
 	ConfigPath string
 }
@@ -21,13 +16,13 @@ func (m *ClusterMetaData) SetConfigPath(configPath string) {
 	m.ConfigPath = configPath
 }
 
-func (m *ClusterMetaData) GetClusterName() string {
+func (m *ClusterMetaData) GetClusterUid() string {
 	return m.GetConfigPath()
 }
 
-func NewClusterMetaData(configPath string) *ClusterMetaData {
+func NewClusterMetaData() *ClusterMetaData {
 	newClusterMetaData := &ClusterMetaData{}
-	newClusterMetaData.SetConfigPath(configPath)
+	newClusterMetaData.SetConfigPath(GlobalInClusterConfigPath)
 	return newClusterMetaData
 }
 
@@ -70,9 +65,9 @@ func (c *ClusterConfig) Register(hyperConverged bool) error {
 	if !hyperConverged {
 		// ToDo: handle non hyper-converged cluster
 	}
-	clusterName, newCluster := c.GetClusterMetaData().GetClusterName(), NewCluster()
-	newCluster.ContextManager.SetDstConfigPath(configPath)
-	c.ClusterController.ClusterManager.SetCluster(clusterName, newCluster)
+	cluster := NewCluster()
+	//cluster.GetContextManager().SetDstConfigPath(configPath)
+	c.ClusterController.ClusterManager.SetCluster(c.GetClusterMetaData().GetClusterUid(), cluster)
 	return nil
 }
 
@@ -85,7 +80,11 @@ func (c *ClusterConfig) Namespace(namespace string) *NamespaceConfig {
 }
 
 func NewClusterConfig() *ClusterConfig {
-	return &ClusterConfig{}
+	newClusterConfig := &ClusterConfig{}
+	newClusterConfig.SetClusterMetaData(nil)
+	newClusterConfig.SetIsInCluster(false)
+	newClusterConfig.SetClusterController(nil)
+	return newClusterConfig
 }
 
 type Cluster struct {
@@ -120,24 +119,24 @@ type ClusterManager struct {
 	RemovedClusters map[string][]*Cluster
 }
 
-func (m *ClusterManager) GetCluster(clusterName string) *Cluster {
-	return m.Clusters[clusterName]
+func (m *ClusterManager) GetCluster(clusterUid string) *Cluster {
+	return m.Clusters[clusterUid]
 }
 
-func (m *ClusterManager) SetCluster(clusterName string, cluster *Cluster) {
-	m.Clusters[clusterName] = cluster
+func (m *ClusterManager) SetCluster(clusterUid string, cluster *Cluster) {
+	m.Clusters[clusterUid] = cluster
 }
 
-func (m *ClusterManager) DeleteCluster(clusterName string) {
-	delete(m.Clusters, clusterName)
+func (m *ClusterManager) DeleteCluster(clusterUid string) {
+	delete(m.Clusters, clusterUid)
 }
 
-func (m *ClusterManager) RemoveCluster(clusterName string) {
-	m.RemovedClusters[clusterName] = append(m.RemovedClusters[clusterName], m.GetCluster(clusterName))
+func (m *ClusterManager) RemoveCluster(clusterUid string) {
+	m.RemovedClusters[clusterUid] = append(m.RemovedClusters[clusterUid], m.GetCluster(clusterUid))
 }
 
-func (m *ClusterManager) IsClusterPresent(clusterName string) bool {
-	_, isPresent := m.Clusters[clusterName]
+func (m *ClusterManager) IsClusterPresent(clusterUid string) bool {
+	_, isPresent := m.Clusters[clusterUid]
 	return isPresent
 }
 
