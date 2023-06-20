@@ -87,7 +87,6 @@ func BackupInitInstance() {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
 	}
-	log.Infof("Master node address - %s", node.GetMasterNodes()[0])
 
 	SetupTestRail()
 

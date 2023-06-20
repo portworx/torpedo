@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -195,45 +196,34 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 			// admin url: http://pxcentral-keycloak-http:80/auth/realms/master
 			// non-adming url: http://pxcentral-keycloak-http:80/auth/admin/realms/master
 			newURL := fmt.Sprintf("%s/auth/admin/realms/master", keycloakEndpoint)
-			log.Infof("Keycloak endpoint - %s", newURL)
 			return newURL, nil
 		} else {
 			newURL := fmt.Sprintf("%s/auth/realms/master", keycloakEndpoint)
-			log.Infof("Keycloak endpoint - %s", newURL)
 			return newURL, nil
 		}
 	}
 	name := getOidcSecretName()
-	log.Infof("name - %s", name)
 	ns, err := GetPxBackupNamespace()
 	if err != nil {
 		return "", err
 	}
-	log.Infof("ns - %s", ns)
 	// check and validate oidc details
 	secret, err := k8s.Instance().GetSecret(name, ns)
 	if err != nil {
 		return "", err
 	}
 	url := string(secret.Data[Issuer])
-	log.Infof("url - %s", url)
 	// Expand the service name for K8S DNS resolution, for keycloak requests from different ns
 	replacement := fmt.Sprintf("%s.%s.svc.cluster.local", KeycloakServiceName, ns)
 	newURL := strings.Replace(url, KeycloakServiceName, replacement, 1)
-	//splitURL := strings.Split(url, ":")
-	//splitURL[1] = fmt.Sprintf("%s.%s.svc.cluster.local", splitURL[1], ns)
-	//url = strings.Join(splitURL, ":")
-	log.Infof("url after join - %s", newURL)
-	// url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/realms/master
+	// url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/realms/master
 	if admin {
-		// admin url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/realms/master
-		// non-adming url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local:80/auth/admin/realms/master
+		// admin url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/realms/master
+		// non-admin url: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/admin/realms/master
 		split := strings.Split(newURL, "auth")
 		newURL = fmt.Sprintf("%sauth/admin%s", split[0], split[1])
-		log.Infof("return admin url - %s", newURL)
 		return newURL, nil
 	}
-	log.Infof("Keycloak endpoint - %s", newURL)
 	return string(newURL), nil
 
 }
@@ -1184,7 +1174,6 @@ func processHTTPRequest(
 	headers http.Header,
 	body io.Reader,
 ) ([]byte, error) {
-	log.Infof("HTTP call with method [%s] for url [%s]", method, url)
 	httpRequest, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
@@ -1198,13 +1187,17 @@ func processHTTPRequest(
 		return nil, err
 	}
 	defer func() {
-		err := httpResponse.Body.Close()
+		err = httpResponse.Body.Close()
 		if err != nil {
 			log.Debugf("Error closing http response body: %v", err)
 		}
 	}()
-
-	return ioutil.ReadAll(httpResponse.Body)
+	responseBody, err := ioutil.ReadAll(httpResponse.Body)
+	pc, _, line, _ := runtime.Caller(1)
+	callerFuncSlice := strings.Split(runtime.FuncForPC(pc).Name(), "/")
+	callerFunc := fmt.Sprintf("%s:#%d", callerFuncSlice[len(callerFuncSlice)-1], line)
+	log.Infof("Caller - [%s]\n%s", callerFunc, string(responseBody))
+	return responseBody, err
 }
 
 func GetNonAdminCtx(username, password string) (context.Context, error) {
