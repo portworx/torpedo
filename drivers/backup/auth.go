@@ -225,7 +225,6 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 		return newURL, nil
 	}
 	log.Infof("Keycloak endpoint - %s", url)
-	url = "http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/realms/master"
 	return string(url), nil
 
 }
