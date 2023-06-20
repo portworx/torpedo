@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"github.com/portworx/torpedo/drivers/backup/utils"
+	"sync"
 )
 
 type ClusterMetaData struct {
@@ -111,7 +112,7 @@ func (c *Cluster) SetNamespaceManager(manager *NamespaceManager) {
 }
 
 func (c *Cluster) ProcessClusterRequest(request interface{}) (response interface{}, err error) {
-	err = c.ContextManager.SwitchContext()
+	err = c.GetContextManager().SwitchContext()
 	if err != nil {
 		return nil, utils.ProcessError(err)
 	}
@@ -125,42 +126,89 @@ func (c *Cluster) ProcessClusterRequest(request interface{}) (response interface
 	return response, err
 }
 
+// NewCluster creates a new instance of the Cluster
 func NewCluster() *Cluster {
-	return &Cluster{
-		ContextManager:   NewContextManager(),
-		NamespaceManager: NewNamespaceManager(),
-	}
+	newCluster := &Cluster{}
+	newCluster.SetContextManager(NewContextManager())
+	newCluster.SetNamespaceManager(NewNamespaceManager())
+	return newCluster
 }
 
+// ClusterManager represents a manager for Cluster
 type ClusterManager struct {
-	Clusters        map[string]*Cluster
-	RemovedClusters map[string][]*Cluster
+	sync.RWMutex
+	ClusterMap         map[string]*Cluster
+	RemovedClustersMap map[string][]*Cluster
 }
 
+// GetClusterMap returns the ClusterMap of the ClusterManager
+func (m *ClusterManager) GetClusterMap() map[string]*Cluster {
+	m.RLock()
+	defer m.RUnlock()
+	return m.ClusterMap
+}
+
+// SetClusterMap sets the ClusterMap of the ClusterManager
+func (m *ClusterManager) SetClusterMap(clusterMap map[string]*Cluster) {
+	m.Lock()
+	defer m.Unlock()
+	m.ClusterMap = clusterMap
+}
+
+// GetRemovedClustersMap returns the RemovedClustersMap of the ClusterManager
+func (m *ClusterManager) GetRemovedClustersMap() map[string][]*Cluster {
+	m.RLock()
+	defer m.RUnlock()
+	return m.RemovedClustersMap
+}
+
+// SetRemovedClustersMap sets the RemovedClustersMap of the ClusterManager
+func (m *ClusterManager) SetRemovedClustersMap(removedClustersMap map[string][]*Cluster) {
+	m.Lock()
+	defer m.Unlock()
+	m.RemovedClustersMap = removedClustersMap
+}
+
+// GetCluster returns the Cluster with the given Cluster uid
 func (m *ClusterManager) GetCluster(clusterUid string) *Cluster {
-	return m.Clusters[clusterUid]
+	m.RLock()
+	defer m.RUnlock()
+	return m.GetClusterMap()[clusterUid]
 }
 
-func (m *ClusterManager) SetCluster(clusterUid string, cluster *Cluster) {
-	m.Clusters[clusterUid] = cluster
-}
-
-func (m *ClusterManager) DeleteCluster(clusterUid string) {
-	delete(m.Clusters, clusterUid)
-}
-
-func (m *ClusterManager) RemoveCluster(clusterUid string) {
-	m.RemovedClusters[clusterUid] = append(m.RemovedClusters[clusterUid], m.GetCluster(clusterUid))
-}
-
+// IsClusterPresent checks if the Cluster with the given Cluster uid is present
 func (m *ClusterManager) IsClusterPresent(clusterUid string) bool {
-	_, isPresent := m.Clusters[clusterUid]
+	m.RLock()
+	defer m.RUnlock()
+	_, isPresent := m.GetClusterMap()[clusterUid]
 	return isPresent
 }
 
+// SetCluster sets the Cluster with the given Cluster uid
+func (m *ClusterManager) SetCluster(clusterUid string, cluster *Cluster) {
+	m.Lock()
+	defer m.Unlock()
+	m.GetClusterMap()[clusterUid] = cluster
+}
+
+// DeleteCluster deletes the Cluster with the given Cluster uid
+func (m *ClusterManager) DeleteCluster(clusterUid string) {
+	m.Lock()
+	defer m.Unlock()
+	delete(m.GetClusterMap(), clusterUid)
+}
+
+// RemoveCluster removes the Cluster with the given Cluster uid
+func (m *ClusterManager) RemoveCluster(clusterUid string) {
+	m.Lock()
+	defer m.Unlock()
+	m.GetRemovedClustersMap()[clusterUid] = append(m.GetRemovedClustersMap()[clusterUid], m.GetCluster(clusterUid))
+}
+
+// NewClusterManager creates a new instance of the ClusterManager
 func NewClusterManager() *ClusterManager {
-	return &ClusterManager{
-		Clusters:        make(map[string]*Cluster, 0),
-		RemovedClusters: make(map[string][]*Cluster, 0),
-	}
+	newClusterManager := &ClusterManager{}
+	newClusterManager.SetClusterMap(make(map[string]*Cluster, 0))
+	newClusterManager.SetRemovedClustersMap(make(map[string][]*Cluster, 0))
+	return newClusterManager
 }

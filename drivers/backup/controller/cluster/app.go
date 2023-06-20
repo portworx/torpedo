@@ -533,7 +533,7 @@ func (c *AppConfig) TearDown() error {
 	if err != nil {
 		return utils.ProcessError(err)
 	}
-	err = c.GetClusterController().GetContextManager().SwitchContext()
+	err = c.GetClusterController().GetClusterManager().GetContextManager().SwitchContext()
 	if err != nil {
 		return utils.ProcessError(err)
 	}
