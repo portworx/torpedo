@@ -10,12 +10,55 @@ import (
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"reflect"
+	"sync"
 	"time"
 )
 
 const (
 	GlobalAuthTokenParam = "auth-token" // copy of the const `authTokenParam` declared in the common.go file of the tests package
 )
+
+type AppMetaData struct {
+	AppKey     string
+	Identifier []string
+}
+
+func (m *AppMetaData) GetAppKey() string {
+	return m.AppKey
+}
+
+func (m *AppMetaData) SetAppKey(appKey string) {
+	m.AppKey = appKey
+}
+
+func (m *AppMetaData) GetIdentifier() []string {
+	return m.Identifier
+}
+
+func (m *AppMetaData) SetIdentifier(identifier []string) {
+	m.Identifier = identifier
+}
+
+func (m *AppMetaData) IsIdentifierPresent() bool {
+	return m.GetIdentifier() != nil && len(m.GetIdentifier()) != 0
+}
+
+func (m *AppMetaData) GetAppSuffix() string {
+	if !m.IsIdentifierPresent() {
+		return ""
+	}
+	return fmt.Sprintf("-%s", m.GetIdentifier()[0])
+}
+
+func (m *AppMetaData) GetAppUid() string {
+	return m.GetAppKey() + m.GetAppSuffix()
+}
+
+func NewAppMetaData() *AppMetaData {
+	newAppConfig := &AppMetaData{}
+
+	return newAppConfig
+}
 
 // ScheduleAppConfig represents the configuration for scheduling an App
 type ScheduleAppConfig struct {
@@ -287,7 +330,7 @@ func GetAppSpec(appKey string) (*spec.AppSpec, error) {
 
 func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 	// ToDo: customize all kinds of app specs
-	if c.AppMetaData.HasIdentifier() {
+	if c.AppMetaData.IsIdentifierPresent() {
 		customizableAppKeys := []string{"postgres", "postgres-backup"}
 		isCustomizable := false
 		for _, customizableAppKey := range customizableAppKeys {
@@ -296,7 +339,7 @@ func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 			}
 		}
 		if !isCustomizable {
-			err := fmt.Errorf("app-key [%s] is not customizable yet", c.AppMetaData.AppKey)
+			err := fmt.Errorf("app-key [%s] is not customizable yet", c.AppMetaData.GetAppUid())
 			return nil, utils.ProcessError(err)
 		}
 	}
@@ -312,21 +355,21 @@ func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 	customAppSpec := utils.DeepCopyAppSpec(appSpec)
 	switch tests.Inst().S.(type) {
 	case *k8s.K8s:
-		customAppSpec.Key += c.AppMetaData.GetSuffix()
+		customAppSpec.Key += c.AppMetaData.GetAppSuffix()
 		for _, spec := range customAppSpec.SpecList {
 			specType := reflect.ValueOf(spec).Elem()
 			nameField := specType.FieldByName("Name")
 			if nameField.IsValid() {
-				nameField.SetString(nameField.String() + c.AppMetaData.GetSuffix())
+				nameField.SetString(nameField.String() + c.AppMetaData.GetAppSuffix())
 			}
 			if obj, ok := spec.(*appsapi.Deployment); ok {
 				numVolumes := len(obj.Spec.Template.Spec.Volumes)
 				for i := 0; i < numVolumes; i++ {
-					obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += c.AppMetaData.GetSuffix()
+					obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += c.AppMetaData.GetAppSuffix()
 				}
 			}
 			if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
-				*obj.Spec.StorageClassName += c.AppMetaData.GetSuffix()
+				*obj.Spec.StorageClassName += c.AppMetaData.GetAppSuffix()
 			}
 		}
 	}
@@ -341,7 +384,7 @@ func (c *AppConfig) CanSchedule() error {
 	cluster := c.ClusterController.ClusterManager.GetCluster(c.ClusterMetaData.GetClusterUid())
 	if cluster.NamespaceManager.IsNamespacePresent(c.NamespaceMetaData.GetNamespaceUid()) {
 		namespace := cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData.GetNamespaceUid())
-		if namespace.AppManager.IsAppPresent(c.AppMetaData) {
+		if namespace.AppManager.IsAppPresent(c.AppMetaData.GetAppUid()) {
 			err := fmt.Errorf("app [%s] is already present in namespace [%s]", c.AppMetaData.GetAppUid(), c.NamespaceMetaData.GetNamespaceUid())
 			return utils.ProcessError(err)
 		}
@@ -374,7 +417,7 @@ func (c *AppConfig) Schedule() error {
 	//	},
 	//}
 	//
-	//log.Infof("Scheduling app [%s] on namespace [%s]", c.AppMetaData.GetName(), c.NamespaceMetaData.Namespace)
+	//log.Infof("Scheduling app [%s] on namespace [%s]", c.AppMetaData.GetAppUid(), c.NamespaceMetaData.Namespace)
 	//resp, err := cluster.ProcessClusterRequest(appScheduleRequest)
 	//if err != nil {
 	//	return utils.ProcessError(err, utils.StructToString(appScheduleRequest))
@@ -383,7 +426,7 @@ func (c *AppConfig) Schedule() error {
 	//	cluster.NamespaceManager.SetNamespace(c.NamespaceMetaData, NewNamespace())
 	//}
 	//appScheduleResponse := resp.(*cluster.AppScheduleResponse)
-	//cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.AddApp(c.AppMetaData, NewApp(appScheduleResponse.Contexts))
+	//cluster.NamespaceManager.GetNamespace(c.NamespaceMetaData).AppManager.SetApp(c.AppMetaData, NewApp(appScheduleResponse.Contexts))
 	return nil
 }
 
@@ -529,73 +572,100 @@ func (c *AppConfig) Schedule() error {
 //	return nil
 //}
 
-type AppMetaData struct {
-	AppKey     string
-	Identifier []string
-}
-
-func (m *AppMetaData) HasIdentifier() bool {
-	return m.Identifier == nil
-}
-
-func (m *AppMetaData) GetSuffix() string {
-	//if !m.HasIdentifier() {
-	//	return ""
-	//}
-	//return fmt.Sprintf("-%s", m.Identifier[0])
-	return ""
-}
-
-func (m *AppMetaData) GetName() string {
-	return m.AppKey + m.GetSuffix()
-}
-
-func NewAppMetaData() *AppMetaData {
-	newAppConfig := &AppMetaData{}
-
-	return newAppConfig
-}
-
 type App struct {
 	Contexts []*scheduler.Context
 }
 
-func NewApp(contexts []*scheduler.Context) *App {
-	return &App{
-		Contexts: contexts,
-	}
+func (a *App) GetContexts() []*scheduler.Context {
+	return a.Contexts
 }
 
+func (a *App) SetContexts(contexts []*scheduler.Context) {
+	a.Contexts = contexts
+}
+
+func NewApp() *App {
+	newApp := &App{}
+	newApp.SetContexts(nil)
+	return newApp
+}
+
+// AppManager represents a manager for App
 type AppManager struct {
-	Apps        map[string]*App
-	RemovedApps map[string][]*App
+	sync.RWMutex
+	AppMap         map[string]*App
+	RemovedAppsMap map[string][]*App
 }
 
-func (m *AppManager) GetApp(appMetaData *AppMetaData) *App {
-	return m.Apps[appMetaData.GetName()]
+// GetAppMap returns the AppMap of the AppManager
+func (m *AppManager) GetAppMap() map[string]*App {
+	m.RLock()
+	defer m.RUnlock()
+	return m.AppMap
 }
 
-func (m *AppManager) AddApp(appMetaData *AppMetaData, app *App) {
-	m.Apps[appMetaData.GetName()] = app
+// SetAppMap sets the AppMap of the AppManager
+func (m *AppManager) SetAppMap(appMap map[string]*App) {
+	m.Lock()
+	defer m.Unlock()
+	m.AppMap = appMap
 }
 
-func (m *AppManager) DeleteApp(appMetaData *AppMetaData) {
-	delete(m.Apps, appMetaData.GetName())
+// GetRemovedAppsMap returns the RemovedAppsMap of the AppManager
+func (m *AppManager) GetRemovedAppsMap() map[string][]*App {
+	m.RLock()
+	defer m.RUnlock()
+	return m.RemovedAppsMap
 }
 
-func (m *AppManager) RemoveApp(appMetaData *AppMetaData) {
-	m.RemovedApps[appMetaData.GetName()] = append(m.RemovedApps[appMetaData.GetName()], m.GetApp(appMetaData))
-	m.DeleteApp(appMetaData)
+// SetRemovedAppsMap sets the RemovedAppsMap of the AppManager
+func (m *AppManager) SetRemovedAppsMap(removedAppsMap map[string][]*App) {
+	m.Lock()
+	defer m.Unlock()
+	m.RemovedAppsMap = removedAppsMap
 }
 
-func (m *AppManager) IsAppPresent(appMetaData *AppMetaData) bool {
-	_, ok := m.Apps[appMetaData.GetName()]
-	return ok
+// GetApp returns the App with the given App uid
+func (m *AppManager) GetApp(appUid string) *App {
+	m.RLock()
+	defer m.RUnlock()
+	return m.GetAppMap()[appUid]
 }
 
+// IsAppPresent checks if the App with the given App uid is present
+func (m *AppManager) IsAppPresent(appUid string) bool {
+	m.RLock()
+	defer m.RUnlock()
+	_, isPresent := m.GetAppMap()[appUid]
+	return isPresent
+}
+
+// SetApp sets the App with the given App uid
+func (m *AppManager) SetApp(appUid string, app *App) {
+	m.Lock()
+	defer m.Unlock()
+	m.GetAppMap()[appUid] = app
+}
+
+// DeleteApp deletes the App with the given App uid
+func (m *AppManager) DeleteApp(appUid string) {
+	m.Lock()
+	defer m.Unlock()
+	delete(m.GetAppMap(), appUid)
+}
+
+// RemoveApp removes the App with the given Namespace uid
+func (m *AppManager) RemoveApp(appUid string) {
+	m.Lock()
+	defer m.Unlock()
+	m.GetRemovedAppsMap()[appUid] = append(m.GetRemovedAppsMap()[appUid], m.GetApp(appUid))
+	m.DeleteApp(appUid)
+}
+
+// NewAppManager creates a new instance of the AppManager
 func NewAppManager() *AppManager {
-	return &AppManager{
-		Apps:        make(map[string]*App, 0),
-		RemovedApps: make(map[string][]*App, 0),
-	}
+	newAppManager := &AppManager{}
+	newAppManager.SetAppMap(make(map[string]*App, 0))
+	newAppManager.SetRemovedAppsMap(make(map[string][]*App, 0))
+	return newAppManager
 }

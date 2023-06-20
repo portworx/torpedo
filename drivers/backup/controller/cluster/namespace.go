@@ -105,7 +105,7 @@ func (c *NamespaceConfig) App(appKey string, identifier ...string) *AppConfig {
 	return &AppConfig{
 		ClusterMetaData:   c.ClusterMetaData,
 		NamespaceMetaData: c.NamespaceMetaData,
-		AppMetaData:       NewAppMetaData(appKey, identifier...),
+		AppMetaData:       NewAppMetaData(),
 		ScheduleAppConfig: scheduleAppConfig,
 		ValidateAppConfig: &ValidateAppConfig{
 			WaitForRunningTimeout:       DefaultWaitForRunningTimeout,
