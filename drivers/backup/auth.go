@@ -193,9 +193,11 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 			// admin url: http://pxcentral-keycloak-http:80/auth/realms/master
 			// non-adming url: http://pxcentral-keycloak-http:80/auth/admin/realms/master
 			newURL := fmt.Sprintf("%s/auth/admin/realms/master", keycloakEndpoint)
+			log.Infof("Keycloak endpoint - %s", newURL)
 			return newURL, nil
 		} else {
 			newURL := fmt.Sprintf("%s/auth/realms/master", keycloakEndpoint)
+			log.Infof("Keycloak endpoint - %s", newURL)
 			return newURL, nil
 		}
 	}
@@ -222,6 +224,7 @@ func getKeycloakEndPoint(admin bool) (string, error) {
 		newURL := fmt.Sprintf("%sauth/admin%s", split[0], split[1])
 		return newURL, nil
 	}
+	log.Infof("Keycloak endpoint - %s", url)
 	return string(url), nil
 
 }
@@ -1172,6 +1175,7 @@ func processHTTPRequest(
 	headers http.Header,
 	body io.Reader,
 ) ([]byte, error) {
+	log.Infof("HTTP call with method [%s] for url [%s]", method, url)
 	httpRequest, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
