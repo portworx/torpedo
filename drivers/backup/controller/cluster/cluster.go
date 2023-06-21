@@ -1,10 +1,7 @@
 package cluster
 
 import (
-	"fmt"
-	"github.com/portworx/torpedo/drivers/backup/controller/cluster/driverapi"
 	"github.com/portworx/torpedo/drivers/backup/utils"
-	"reflect"
 	"sync"
 )
 
@@ -109,6 +106,7 @@ func NewClusterConfig() *ClusterConfig {
 // Cluster represents a Cluster
 type Cluster struct {
 	ContextManager   *ContextManager
+	RequestManager   *RequestManager
 	NamespaceManager *NamespaceManager
 }
 
@@ -122,6 +120,16 @@ func (c *Cluster) SetContextManager(manager *ContextManager) {
 	c.ContextManager = manager
 }
 
+// GetRequestManager returns the RequestManager associated with the Cluster
+func (c *Cluster) GetRequestManager() *RequestManager {
+	return c.RequestManager
+}
+
+// SetRequestManager sets the RequestManager for the Cluster
+func (c *Cluster) SetRequestManager(manager *RequestManager) {
+	c.RequestManager = manager
+}
+
 // GetNamespaceManager returns the NamespaceManager associated with the Cluster
 func (c *Cluster) GetNamespaceManager() *NamespaceManager {
 	return c.NamespaceManager
@@ -132,54 +140,12 @@ func (c *Cluster) SetNamespaceManager(manager *NamespaceManager) {
 	c.NamespaceManager = manager
 }
 
-func (c *Cluster) ProcessClusterRequest(request interface{}) (response interface{}, err error) {
+func (c *Cluster) ProcessRequest() {
 	err = c.GetContextManager().SwitchContext()
 	if err != nil {
 		return nil, utils.ProcessError(err)
 	}
-
-	handlers := map[reflect.Type]func(interface{}) (interface{}, error){
-		reflect.TypeOf(&driverapi.ScheduleRequest{}): func(req interface{}) (interface{}, error) {
-			return driverapi.Schedule(req.(*driverapi.ScheduleRequest))
-		},
-		reflect.TypeOf(&driverapi.WaitForRunningRequest{}): func(req interface{}) (interface{}, error) {
-			return driverapi.WaitForRunning(req.(*driverapi.WaitForRunningRequest))
-		},
-	}
-
-	handler, ok := handlers[reflect.TypeOf(request)]
-	if !ok {
-		err = fmt.Errorf("unknown request type")
-		return nil, utils.ProcessError(err)
-	}
-
-	response, err = handler(request)
-	if err != nil {
-		return nil, utils.ProcessError(err, utils.StructToString(request))
-	}
-
-	return response, nil
 }
-
-//func (c *Cluster) ProcessClusterRequest(request interface{}) (response interface{}, err error) {
-//	err = c.GetContextManager().SwitchContext()
-//	if err != nil {
-//		return nil, utils.ProcessError(err)
-//	}
-//	switch request.(type) {
-//	case *driverapi.ScheduleRequest:
-//		response, err = driverapi.Schedule(request.(*driverapi.ScheduleRequest))
-//		if err != nil {
-//			return nil, utils.ProcessError(err, utils.StructToString(request.(*driverapi.ScheduleRequest)))
-//		}
-//	case *driverapi.WaitForRunningRequest:
-//		response, err = driverapi.WaitForRunning(request.(*driverapi.WaitForRunningRequest))
-//		if err != nil {
-//			return nil, utils.ProcessError(err, utils.StructToString(request.(*driverapi.WaitForRunningRequest)))
-//		}
-//	}
-//	return response, err
-//}
 
 // NewCluster creates a new instance of the Cluster
 func NewCluster() *Cluster {

@@ -426,7 +426,7 @@ func (c *AppConfig) Schedule() error {
 	}
 	cluster := c.GetClusterController().GetClusterManager().GetCluster(c.GetClusterMetaData().GetClusterUid())
 	log.Infof("Scheduling app [%s] on namespace [%s]", c.GetAppMetaData().GetApp(), c.GetNamespaceMetaData().GetNamespace())
-	resp, err := cluster.ProcessClusterRequest(appScheduleRequest)
+	resp, err := cluster.ProcessRequest(appScheduleRequest)
 	if err != nil {
 		return utils.ProcessError(err, utils.StructToString(appScheduleRequest))
 	}
