@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"github.com/portworx/torpedo/drivers/backup/utils"
 	"sync"
 )
 
@@ -141,10 +140,10 @@ func (c *Cluster) SetNamespaceManager(manager *NamespaceManager) {
 }
 
 func (c *Cluster) ProcessRequest() {
-	err = c.GetContextManager().SwitchContext()
-	if err != nil {
-		return nil, utils.ProcessError(err)
-	}
+	//err = c.GetContextManager().SwitchContext()
+	//if err != nil {
+	//	return nil, utils.ProcessError(err)
+	//}
 }
 
 // NewCluster creates a new instance of the Cluster
@@ -152,6 +151,7 @@ func NewCluster() *Cluster {
 	newCluster := &Cluster{}
 	newCluster.SetContextManager(NewContextManager())
 	newCluster.SetNamespaceManager(NewNamespaceManager())
+	newCluster.SetRequestManager(NewRequestManager())
 	return newCluster
 }
 

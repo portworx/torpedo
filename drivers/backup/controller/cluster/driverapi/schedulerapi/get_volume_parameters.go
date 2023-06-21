@@ -1,4 +1,4 @@
-package driverapi
+package schedulerapi
 
 import (
 	"github.com/portworx/torpedo/drivers/scheduler"
