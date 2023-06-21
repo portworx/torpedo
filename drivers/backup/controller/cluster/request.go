@@ -34,7 +34,7 @@ func (m *RequestManager) SetRequestProcessor() {
 
 }
 
-func (m *RequestManager) ProcessRequest(request interface{}) (response interface{}, err error) {
+func (m *RequestManager) ProcessRequest(request Request) (response Response, err error) {
 	handler, ok := m.GetRequestProcessorMap()[reflect.TypeOf(request)]
 	if !ok {
 		err = fmt.Errorf("unknown request type")
