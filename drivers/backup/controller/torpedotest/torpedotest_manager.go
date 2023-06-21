@@ -1,11 +1,64 @@
 package torpedotest
 
 import (
-	"fmt"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// TorpedoTestMetaData represents the metadata for a TorpedoTest
 type TorpedoTestMetaData struct {
+	TestId string
+}
+
+// GetTestId returns the TestId associated with the TorpedoTestMetaData
+func (m *TorpedoTestMetaData) GetTestId() string {
+	return m.TestId
+}
+
+// SetTestId sets the TestId for the TorpedoTestMetaData
+func (m *TorpedoTestMetaData) SetTestId(id string) {
+	m.TestId = id
+}
+
+// GetTestUid returns the TorpedoTest uid
+func (m *TorpedoTestMetaData) GetTestUid() string {
+	return m.GetTestId()
+}
+
+// NewTorpedoTestMetaData creates a new instance of the TorpedoTestMetaData
+func NewTorpedoTestMetaData() *TorpedoTestMetaData {
+	newTorpedoTestMetaData := &TorpedoTestMetaData{}
+	newTorpedoTestMetaData.SetTestId("")
+	return newTorpedoTestMetaData
+}
+
+// TorpedoTestConfig represents the configuration for a TorpedoTest
+type TorpedoTestConfig struct {
+	TorpedoTestMetaData   *TorpedoTestMetaData
+	TorpedoTestController *TorpedoTestController
+}
+
+// GetTorpedoTestMetaData returns the TorpedoTestMetaData associated with the TorpedoTestConfig
+func (c *TorpedoTestConfig) GetTorpedoTestMetaData() *TorpedoTestMetaData {
+	return c.TorpedoTestMetaData
+}
+
+// SetTorpedoTestMetaData sets the TorpedoTestMetaData for the TorpedoTestConfig
+func (c *TorpedoTestConfig) SetTorpedoTestMetaData(metaData *TorpedoTestMetaData) {
+	c.TorpedoTestMetaData = metaData
+}
+
+// GetTorpedoTestController returns the TorpedoTestController associated with the TorpedoTestConfig
+func (c *TorpedoTestConfig) GetTorpedoTestController() *TorpedoTestController {
+	return c.TorpedoTestController
+}
+
+// SetTorpedoTestController sets the TorpedoTestController for the TorpedoTestConfig
+func (c *TorpedoTestConfig) SetTorpedoTestController(controller *TorpedoTestController) {
+	c.TorpedoTestController = controller
+}
+
+// TorpedoTest represents an TorpedoTest
+type TorpedoTest struct {
 	TestName          string
 	TestDescription   string
 	TestAuthor        string
@@ -15,68 +68,79 @@ type TorpedoTestMetaData struct {
 	TestLogger        *lumberjack.Logger
 }
 
-func (m *TorpedoTestMetaData) GetTestName() string {
-	return m.TestName
+// GetTestName returns the TestName associated with the TorpedoTest
+func (t *TorpedoTest) GetTestName() string {
+	return t.TestName
 }
 
-func (m *TorpedoTestMetaData) SetTestName(name string) {
-	m.TestName = name
+// SetTestName sets the TestName for the TorpedoTest
+func (t *TorpedoTest) SetTestName(name string) {
+	t.TestName = name
 }
 
-func (m *TorpedoTestMetaData) GetTestDescription() string {
-	return m.TestDescription
+// GetTestDescription returns the TestDescription associated with the TorpedoTest
+func (t *TorpedoTest) GetTestDescription() string {
+	return t.TestDescription
 }
 
-func (m *TorpedoTestMetaData) SetTestDescription(description string) {
-	m.TestDescription = description
+// SetTestDescription sets the TestDescription for the TorpedoTest
+func (t *TorpedoTest) SetTestDescription(description string) {
+	t.TestDescription = description
 }
 
-func (m *TorpedoTestMetaData) GetTestAuthor() string {
-	return m.TestAuthor
+// GetTestAuthor returns the TestAuthor associated with the TorpedoTest
+func (t *TorpedoTest) GetTestAuthor() string {
+	return t.TestAuthor
 }
 
-func (m *TorpedoTestMetaData) SetTestAuthor(author string) {
-	m.TestAuthor = author
+// SetTestAuthor sets the TestAuthor for the TorpedoTest
+func (t *TorpedoTest) SetTestAuthor(author string) {
+	t.TestAuthor = author
 }
 
-func (m *TorpedoTestMetaData) GetTestRailID() int {
-	return m.TestRailID
+// GetTestRailID returns the TestRailID associated with the TorpedoTest
+func (t *TorpedoTest) GetTestRailID() int {
+	return t.TestRailID
 }
 
-func (m *TorpedoTestMetaData) SetTestRailID(id int) {
-	m.TestRailID = id
+// SetTestRailID sets the TestRailID for the TorpedoTest
+func (t *TorpedoTest) SetTestRailID(id int) {
+	t.TestRailID = id
 }
 
-func (m *TorpedoTestMetaData) GetTestRunIDForSuite() int {
-	return m.TestRunIDForSuite
+// GetTestRunIDForSuite returns the TestRunIDForSuite associated with the TorpedoTest
+func (t *TorpedoTest) GetTestRunIDForSuite() int {
+	return t.TestRunIDForSuite
 }
 
-func (m *TorpedoTestMetaData) SetTestRunIDForSuite(id int) {
-	m.TestRunIDForSuite = id
+// SetTestRunIDForSuite sets the TestRunIDForSuite for the TorpedoTest
+func (t *TorpedoTest) SetTestRunIDForSuite(id int) {
+	t.TestRunIDForSuite = id
 }
 
-func (m *TorpedoTestMetaData) GetTestTags() map[string]string {
-	return m.TestTags
+// GetTestTags returns the TestTags associated with the TorpedoTest
+func (t *TorpedoTest) GetTestTags() map[string]string {
+	return t.TestTags
 }
 
-func (m *TorpedoTestMetaData) SetTestTags(tags map[string]string) {
-	m.TestTags = tags
+// SetTestTags sets the TestTags for the TorpedoTest
+func (t *TorpedoTest) SetTestTags(tags map[string]string) {
+	t.TestTags = tags
 }
 
-func (m *TorpedoTestMetaData) GetTestLogger() *lumberjack.Logger {
-	return m.TestLogger
+// GetTestLogger returns the TestLogger associated with the TorpedoTest
+func (t *TorpedoTest) GetTestLogger() *lumberjack.Logger {
+	return t.TestLogger
 }
 
-func (m *TorpedoTestMetaData) SetTestLogger(logger *lumberjack.Logger) {
-	m.TestLogger = logger
+// SetTestLogger sets the TestLogger for the TorpedoTest
+func (t *TorpedoTest) SetTestLogger(logger *lumberjack.Logger) {
+	t.TestLogger = logger
 }
 
-func (m *TorpedoTestMetaData) GetTorpedoTestUid() string {
-	return fmt.Sprintf("%d", m.GetTestRailID())
-}
-
-func NewTorpedoTest() *TorpedoTestMetaData {
-	newTorpedoTest := &TorpedoTestMetaData{}
+// NewTorpedoTest creates a new instance of the TorpedoTest
+func NewTorpedoTest() *TorpedoTest {
+	newTorpedoTest := &TorpedoTest{}
 	newTorpedoTest.SetTestName("")
 	newTorpedoTest.SetTestDescription("")
 	newTorpedoTest.SetTestAuthor("")
@@ -87,23 +151,36 @@ func NewTorpedoTest() *TorpedoTestMetaData {
 	return newTorpedoTest
 }
 
+// TorpedoTestManager represents a manager for TorpedoTest
 type TorpedoTestManager struct {
-	TorpedoTestMap           map[string]*TorpedoTestMetaData
-	CompletedTorpedoTestsMap map[string][]*TorpedoTestMetaData
+	TorpedoTestMap           map[string]*TorpedoTest
+	CompletedTorpedoTestsMap map[string][]*TorpedoTest
 }
 
-func (m *TorpedoTestManager) GetTorpedoTestMap() map[string]*TorpedoTestMetaData {
+// GetTorpedoTestMap returns the TorpedoTestMap of the TorpedoTestManager
+func (m *TorpedoTestManager) GetTorpedoTestMap() map[string]*TorpedoTest {
 	return m.TorpedoTestMap
 }
 
-func (m *TorpedoTestManager) SetTorpedoTestMap(testMap map[string]*TorpedoTestMetaData) {
+// SetTorpedoTestMap sets the TorpedoTestMap of the TorpedoTestManager
+func (m *TorpedoTestManager) SetTorpedoTestMap(testMap map[string]*TorpedoTest) {
 	m.TorpedoTestMap = testMap
 }
 
-func (m *TorpedoTestManager) GetCompletedTorpedoTestsMap() map[string][]*TorpedoTestMetaData {
+// GetCompletedTorpedoTestsMap returns the CompletedTorpedoTestsMap of the TorpedoTestManager
+func (m *TorpedoTestManager) GetCompletedTorpedoTestsMap() map[string][]*TorpedoTest {
 	return m.CompletedTorpedoTestsMap
 }
 
-func (m *TorpedoTestManager) SetCompletedTorpedoTestsMap(completedTestsMap map[string][]*TorpedoTestMetaData) {
+// SetCompletedTorpedoTestsMap sets the CompletedTorpedoTestsMap of the TorpedoTestManager
+func (m *TorpedoTestManager) SetCompletedTorpedoTestsMap(completedTestsMap map[string][]*TorpedoTest) {
 	m.CompletedTorpedoTestsMap = completedTestsMap
+}
+
+// NewTorpedoTestManager creates a new instance of the TorpedoTestManager
+func NewTorpedoTestManager() *TorpedoTestManager {
+	newTorpedoTestManager := &TorpedoTestManager{}
+	newTorpedoTestManager.SetTorpedoTestMap(make(map[string]*TorpedoTest, 0))
+	newTorpedoTestManager.SetCompletedTorpedoTestsMap(make(map[string][]*TorpedoTest, 0))
+	return newTorpedoTestManager
 }

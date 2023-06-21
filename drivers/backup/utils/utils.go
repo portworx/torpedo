@@ -7,6 +7,8 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
@@ -291,6 +293,42 @@ func DeepCopyAppSpec(in *spec.AppSpec) *spec.AppSpec {
 		}
 	}
 	return out
+}
+
+func GetAppSpec(appKey string) (*spec.AppSpec, error) {
+	var specFactory *spec.Factory
+	var err error
+	switch driver := tests.Inst().S.(type) {
+	case *k8s.K8s:
+		specFactory = driver.SpecFactory
+	default:
+		specDir := tests.Inst().SpecDir
+		storageProvisioner := tests.Inst().V.String()
+		parser := tests.Inst().S
+		specFactory, err = spec.NewFactory(specDir, storageProvisioner, parser)
+		if err != nil {
+			debugStruct := struct {
+				SpecDir            string
+				StorageProvisioner string
+				Parser             scheduler.Driver
+			}{
+				SpecDir:            specDir,
+				StorageProvisioner: storageProvisioner,
+				Parser:             parser,
+			}
+			return nil, ProcessError(err, StructToString(debugStruct))
+		}
+	}
+	appSpec, err := specFactory.Get(appKey)
+	if err != nil {
+		debugStruct := struct {
+			AppKey string
+		}{
+			AppKey: appKey,
+		}
+		return nil, ProcessError(err, StructToString(debugStruct))
+	}
+	return appSpec, nil
 }
 
 // StructToString returns the string representation of the specified struct
