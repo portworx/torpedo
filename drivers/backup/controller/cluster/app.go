@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup/controller/cluster/driverapi"
 	"github.com/portworx/torpedo/drivers/backup/utils"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -135,8 +136,8 @@ func (c *ValidateAppConfig) GetWaitForRunningRetryInterval() time.Duration {
 }
 
 // SetWaitForRunningRetryInterval sets the retry interval duration for waiting for an App to be running in the ValidateAppConfig
-func (c *ValidateAppConfig) SetWaitForRunningRetryInterval(interval time.Duration) {
-	c.WaitForRunningRetryInterval = interval
+func (c *ValidateAppConfig) SetWaitForRunningRetryInterval(retryInterval time.Duration) {
+	c.WaitForRunningRetryInterval = retryInterval
 }
 
 // GetValidateVolumeTimeout returns the timeout duration for validating App volumes in the ValidateAppConfig
@@ -155,8 +156,8 @@ func (c *ValidateAppConfig) GetValidateVolumeRetryInterval() time.Duration {
 }
 
 // SetValidateVolumeRetryInterval sets the retry interval duration for validating App volumes in the ValidateAppConfig
-func (c *ValidateAppConfig) SetValidateVolumeRetryInterval(interval time.Duration) {
-	c.ValidateVolumeRetryInterval = interval
+func (c *ValidateAppConfig) SetValidateVolumeRetryInterval(retryInterval time.Duration) {
+	c.ValidateVolumeRetryInterval = retryInterval
 }
 
 // NewValidateAppConfig creates a new instance of the ValidateAppConfig
@@ -418,7 +419,7 @@ func (c *AppConfig) Schedule() error {
 	if err != nil {
 		return utils.ProcessError(err)
 	}
-	appScheduleRequest := &AppScheduleRequest{
+	appScheduleRequest := &driverapi.AppScheduleRequest{
 		Apps:            []*spec.AppSpec{appSpec},
 		InstanceID:      c.ScheduleAppConfig.InstanceID,
 		ScheduleOptions: *c.ScheduleAppConfig.ScheduleOptions,
@@ -433,7 +434,7 @@ func (c *AppConfig) Schedule() error {
 	if !cluster.GetNamespaceManager().IsNamespacePresent(namespaceUid) {
 		cluster.NamespaceManager.SetNamespace(namespaceUid, NewNamespace())
 	}
-	appScheduleResponse := resp.(*AppScheduleResponse)
+	appScheduleResponse := resp.(*driverapi.AppScheduleResponse)
 	app := NewApp()
 	app.SetContexts(appScheduleResponse.Contexts)
 	cluster.GetNamespaceManager().GetNamespace(namespaceUid).GetAppManager().SetApp(c.AppMetaData.GetAppUid(), app)
@@ -458,6 +459,7 @@ func (c *AppConfig) Validate() error {
 	for _, ctx := range contexts {
 		log.Infof("Validating app [%s]", c.GetAppMetaData().GetApp())
 		log.Infof("Waiting for app [%s] to start running", c.GetAppMetaData().GetApp())
+
 		timeout := c.GetValidateAppConfig().GetWaitForRunningTimeout()
 		retryInterval := c.GetValidateAppConfig().GetWaitForRunningTimeout()
 		err = tests.Inst().S.WaitForRunning(ctx, timeout, retryInterval)
@@ -472,18 +474,6 @@ func (c *AppConfig) Validate() error {
 				RetryInterval: retryInterval,
 			}
 			return utils.ProcessError(err, utils.StructToString(debugStruct))
-		}
-		if len(tests.Inst().TopologyLabels) > 0 {
-			log.Infof("Validating application [%s] topology labels", ctx.App.Key)
-			err = tests.Inst().S.ValidateTopologyLabel(ctx)
-			if err != nil {
-				debugStruct := struct {
-					Cc *scheduler.Context
-				}{
-					Cc: ctx,
-				}
-				return utils.ProcessError(err, utils.StructToString(debugStruct))
-			}
 		}
 		if !ctx.SkipVolumeValidation {
 			log.Infof("Validating application [%s] volumes", ctx.App.Key)
