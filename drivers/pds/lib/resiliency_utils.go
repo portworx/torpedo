@@ -76,7 +76,7 @@ func ExecuteInParallel(functions ...func()) {
 func MarkResiliencyTC(resiliency bool, node_ops bool) {
 	ResiliencyFlag = resiliency
 	if node_ops && !isInitDone {
-		tests.InitInstance()
+		// tests.InitInstance()
 		isInitDone = true
 	}
 }
