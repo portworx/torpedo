@@ -6,25 +6,9 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/tests"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"strconv"
 	"strings"
 )
-
-var (
-	PxBackupTorpedoTestInfoMap = make(map[int]*PxBackupTorpedoTestInfo, 0)
-)
-
-// PxBackupTorpedoTestInfo holds information of a particular test
-type PxBackupTorpedoTestInfo struct {
-	TestName          string
-	TestDescription   string
-	TestAuthor        string
-	TestRailID        int
-	TestRunIdForSuite int
-	TestTags          map[string]string
-	TestLogger        *lumberjack.Logger
-}
 
 // StartPxBackupTorpedoTest creates a logger, configures the Aetos Dashboard for the specified test, and initializes controllers
 func StartPxBackupTorpedoTest(testRailId int, testName string, testDescription string, testAuthor string, apps []string, tags ...map[string]string) error {
