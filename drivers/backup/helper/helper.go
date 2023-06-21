@@ -12,25 +12,25 @@ import (
 )
 
 var (
-	pxBackupTorpedoTestInfoMap = make(map[int]*PxBackupTorpedoTestInfo, 0)
+	PxBackupTorpedoTestInfoMap = make(map[int]*PxBackupTorpedoTestInfo, 0)
 )
 
 // PxBackupTorpedoTestInfo holds information of a particular test
 type PxBackupTorpedoTestInfo struct {
-	testName          string
-	testDescription   string
-	testAuthor        string
-	testRailID        int
-	testRunIdForSuite int
-	testTags          map[string]string
-	testLogger        *lumberjack.Logger
+	TestName          string
+	TestDescription   string
+	TestAuthor        string
+	TestRailID        int
+	TestRunIdForSuite int
+	TestTags          map[string]string
+	TestLogger        *lumberjack.Logger
 }
 
 // StartPxBackupTorpedoTest creates a logger, configures the Aetos Dashboard for the specified test, and initializes controllers
 func StartPxBackupTorpedoTest(testRailId int, testName string, testDescription string, testAuthor string, apps []string, tags ...map[string]string) error {
 	if testRailId != 0 {
-		if pxBackupTorpedoTestInfo, ok := pxBackupTorpedoTestInfoMap[testRailId]; ok {
-			err := fmt.Errorf("the test [%s] shares the same TestRail id as [%s] and has already been executed", testName, pxBackupTorpedoTestInfo.testName)
+		if pxBackupTorpedoTestInfo, ok := PxBackupTorpedoTestInfoMap[testRailId]; ok {
+			err := fmt.Errorf("the test [%s] shares the same TestRail id as [%s] and has already been executed", testName, pxBackupTorpedoTestInfo.TestName)
 			return err
 		}
 	}
@@ -51,21 +51,21 @@ func StartPxBackupTorpedoTest(testRailId int, testName string, testDescription s
 		testRunIdForSuite = testrailuttils.AddRunsToMilestone(testRailId)
 	}
 	pxBackupTorpedoTestInfo := &PxBackupTorpedoTestInfo{
-		testName:          testName,
-		testDescription:   testDescription,
-		testRailID:        testRailId,
-		testAuthor:        testAuthor,
-		testTags:          testTags,
-		testLogger:        testLogger,
-		testRunIdForSuite: testRunIdForSuite,
+		TestName:          testName,
+		TestDescription:   testDescription,
+		TestRailID:        testRailId,
+		TestAuthor:        testAuthor,
+		TestTags:          testTags,
+		TestLogger:        testLogger,
+		TestRunIdForSuite: testRunIdForSuite,
 	}
-	pxBackupTorpedoTestInfoMap[testRailId] = pxBackupTorpedoTestInfo
+	PxBackupTorpedoTestInfoMap[testRailId] = pxBackupTorpedoTestInfo
 	return nil
 }
 
 // EndPxBackupTorpedoTest ends the specified test and performs cleanup
 func EndPxBackupTorpedoTest(testRailId int) error {
-	if pxBackupTorpedoTestInfo, ok := pxBackupTorpedoTestInfoMap[testRailId]; ok {
+	if pxBackupTorpedoTestInfo, ok := PxBackupTorpedoTestInfoMap[testRailId]; ok {
 		tests.CloseLogger(pxBackupTorpedoTestInfo.testLogger)
 		tests.Inst().Dash.TestCaseEnd()
 		if tests.TestRailSetupSuccessful && pxBackupTorpedoTestInfo.testRailID != 0 && pxBackupTorpedoTestInfo.testRunIdForSuite != 0 {

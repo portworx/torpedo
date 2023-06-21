@@ -2,7 +2,7 @@ package cluster
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/backup/controller/cluster/driverapi/schedulerapi"
+	"github.com/portworx/torpedo/drivers/backup/controller/cluster/driver/schedulerapi"
 	"github.com/portworx/torpedo/drivers/backup/utils"
 	"reflect"
 	"sync"
