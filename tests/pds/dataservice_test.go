@@ -1807,7 +1807,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 var _ = Describe("{ResizePVCBy1GB}", func() {
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizePVCBy1GB", "Deploys and increases the pvc size of DS by 1Gb", pdsLabels, 0)
+		StartTorpedoTest("ResizePVCBy1GB", "Deploys and increases the pvc size of DS by 1GB", pdsLabels, 0)
 	})
 
 	It("Deploy Dataservices", func() {
@@ -1843,7 +1843,7 @@ var _ = Describe("{ResizePVCBy1GB}", func() {
 
 			// This testcase is currently applicable only for postgresql ds deployments
 			if dsName == postgresql {
-				Step("Resize the PVC by 1GB", func() {
+				Step("Resizing the PVC size", func() {
 					ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
 					log.FailOnError(err, "Unable to create scheduler context")
 					err = IncreasePVCby1Gig(ctx)
