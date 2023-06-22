@@ -2,6 +2,7 @@ package torpedotest
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup/controller/cluster"
 	"github.com/portworx/torpedo/drivers/backup/utils"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
@@ -50,6 +51,38 @@ func (c *TorpedoTestConfig) Start(testName string, testDescription string, testR
 		torpedoTest.SetTestRunIDForSuite(testRunIdForSuite)
 	}
 	c.GetTorpedoTestController().GetTorpedoTestManager().SetTorpedoTest(c.GetTorpedoTestMetaData().GetTestUid(), torpedoTest)
+	clusterController := cluster.NewClusterController()
+	sourceClusterConfigPath, err := utils.GetSourceClusterConfigPath()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	err = clusterController.Cluster(sourceClusterConfigPath).Register(false)
+	if err != nil {
+		debugStruct := struct {
+			ClusterConfigPath string
+			HyperConverged    bool
+		}{
+			ClusterConfigPath: sourceClusterConfigPath,
+			HyperConverged:    false,
+		}
+		return utils.ProcessError(err, utils.StructToString(debugStruct))
+	}
+	destinationClusterConfigPath, err := utils.GetDestinationClusterConfigPath()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	err = clusterController.Cluster(destinationClusterConfigPath).Register(false)
+	if err != nil {
+		debugStruct := struct {
+			ClusterConfigPath string
+			HyperConverged    bool
+		}{
+			ClusterConfigPath: destinationClusterConfigPath,
+			HyperConverged:    false,
+		}
+		return utils.ProcessError(err, utils.StructToString(debugStruct))
+	}
+	c.GetTorpedoTestController().SetClusterController(clusterController)
 	return nil
 }
 
