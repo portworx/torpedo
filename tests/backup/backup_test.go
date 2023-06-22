@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup/controller/torpedotest"
+	"github.com/portworx/torpedo/drivers/backup/utils"
 	"strings"
 	"time"
 
@@ -88,30 +90,35 @@ var _ = Describe("{UserGroupManagement}", func() {
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
 	var (
-		backupNames          []string
-		restoreNames         []string
-		scheduledAppContexts []*scheduler.Context
-		preRuleNameList      []string
-		postRuleNameList     []string
-		sourceClusterUid     string
-		cloudCredName        string
-		cloudCredUID         string
-		backupLocationUID    string
-		backupLocationName   string
-		appList              []string
-		backupLocationMap    map[string]string
-		labelSelectors       map[string]string
-		providers            []string
-		intervalName         string
-		dailyName            string
-		weeklyName           string
-		monthlyName          string
+		backupNames           []string
+		restoreNames          []string
+		scheduledAppContexts  []*scheduler.Context
+		preRuleNameList       []string
+		postRuleNameList      []string
+		sourceClusterUid      string
+		cloudCredName         string
+		cloudCredUID          string
+		backupLocationUID     string
+		backupLocationName    string
+		appList               []string
+		backupLocationMap     map[string]string
+		labelSelectors        map[string]string
+		providers             []string
+		intervalName          string
+		dailyName             string
+		weeklyName            string
+		monthlyName           string
+		testId                string
+		torpedoTestController *torpedotest.TorpedoTestController
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
-
+		testId = "001"
 		appList = Inst().AppList
+		torpedoTestController = torpedotest.NewTorpedoTestController()
+		err := torpedoTestController.TorpedoTest(testId).Start("BasicBackupCreation", "Deploying backup", 0, utils.Sagrawal, appList, nil)
+		log.FailOnError(err, fmt.Sprintf("torpedo-test [%s] has failed to start", testId))
+
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
 		providers = getProviders()
@@ -261,7 +268,10 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			err := torpedoTestController.TorpedoTest(testId).End()
+			log.FailOnError(err, fmt.Sprintf("torpedo-test [%s] has failed to end", testId))
+		}()
 
 		defer func() {
 			log.InfoD("switching to default context")
