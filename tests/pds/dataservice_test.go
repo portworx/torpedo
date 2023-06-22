@@ -1785,7 +1785,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					err = CheckPVCtoFullCondition(ctx)
 					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
 					err = IncreasePVCby1Gig(ctx)
-					log.FailOnError(err, "Failing while Increasing the PVC name...")
+					log.FailOnError(err, "Failing while Increasing the PVC size...")
 				})
 
 				Step("Validate Deployments after PVC Resize", func() {
@@ -1874,11 +1874,11 @@ var _ = Describe("{ResizePVCBy1GB}", func() {
 					}
 				}()
 
-				Step("Checking the PVC usage", func() {
+				Step("Resize the PVC by 1gb", func() {
 					ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
 					log.FailOnError(err, "Unable to create scheduler context")
 					err = IncreasePVCby1Gig(ctx)
-					log.FailOnError(err, "Failing while Increasing the PVC name...")
+					log.FailOnError(err, "Failing while Increasing the PVC size...")
 				})
 
 				Step("Validate Deployments after PVC Resize", func() {
