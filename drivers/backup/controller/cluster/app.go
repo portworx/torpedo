@@ -146,19 +146,16 @@ func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 	appSpecWithIdentifier := utils.DeepCopyAppSpec(appSpec)
 	switch tests.Inst().S.(type) {
 	case *k8s.K8s:
-		identifier := "-31313"
+		identifier := "31313"
 		appSpecWithIdentifier.Key += identifier
 		for _, spec := range appSpecWithIdentifier.SpecList {
-			//specType := reflect.ValueOf(spec).Elem()
-			//metaField := specType.FieldByName("ObjectMeta")
-			//if metaField.IsValid() {
-			//	meta := metaField.Interface().(metav1.ObjectMeta)
-			//	meta.Name += identifier
-			//	metaField.Set(reflect.ValueOf(meta))
-			//}
 			switch obj := spec.(type) {
 			case *appsapi.Deployment:
 				obj.ObjectMeta.Name += identifier
+				for k, v := range obj.ObjectMeta.Labels {
+					obj.Spec.Selector.MatchLabels[k+identifier] = v
+					obj.Spec.Template.ObjectMeta.Labels[k+identifier] = v
+				}
 				for i := 0; i < len(obj.Spec.Template.Spec.Volumes); i++ {
 					if obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim != nil {
 						obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += identifier
@@ -166,16 +163,22 @@ func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 				}
 			case *corev1.PersistentVolumeClaim:
 				obj.ObjectMeta.Name += identifier
-				obj.Spec.StorageClassName = pointer.String(*obj.Spec.StorageClassName + identifier)
+				obj.Spec.StorageClassName = pointer.StringPtr(*obj.Spec.StorageClassName + identifier)
 			case *corev1.Secret:
 				obj.ObjectMeta.Name += identifier
 			case *corev1.Service:
 				obj.ObjectMeta.Name += identifier
+				for k, v := range obj.ObjectMeta.Labels {
+					obj.Spec.Selector[k+identifier] = v
+				}
 			case *appsapi.StatefulSet:
 				obj.ObjectMeta.Name += identifier
+				for k, v := range obj.ObjectMeta.Labels {
+					obj.Spec.Selector.MatchLabels[k+identifier] = v
+					obj.Spec.Template.ObjectMeta.Labels[k+identifier] = v
+				}
 			case *storageApi.StorageClass:
 				obj.ObjectMeta.Name += identifier
-				// Add more cases as needed
 			}
 		}
 	}
