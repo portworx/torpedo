@@ -50,6 +50,38 @@ type AppConfig struct {
 	ClusterController *ClusterController
 }
 
+//func UpdateSpecNames(appSpec reflect.Value, identifier string) {
+//	switch appSpec.Kind() {
+//	case reflect.Ptr:
+//		UpdateSpecNames(appSpec.Elem(), identifier)
+//	case reflect.Struct:
+//		for i := 0; i < appSpec.NumField(); i++ {
+//			fieldVal := appSpec.Field(i)
+//			fieldType := appSpec.Type().Field(i)
+//			switch fieldType.Name {
+//			case "Name":
+//				if fieldVal.Kind() == reflect.String {
+//					fieldVal.SetString(fieldVal.String() + identifier)
+//				}
+//			case "ClaimName":
+//				if fieldVal.Kind() == reflect.String {
+//					fieldVal.SetString(fieldVal.String() + identifier)
+//				}
+//			case "StorageClassName":
+//				if fieldVal.Kind() == reflect.String {
+//					fieldVal.SetString(fieldVal.String() + identifier)
+//				}
+//			default:
+//				UpdateSpecNames(fieldVal, identifier)
+//			}
+//		}
+//	case reflect.Slice:
+//		for i := 0; i < appSpec.Len(); i++ {
+//			UpdateSpecNames(appSpec.Index(i), identifier)
+//		}
+//	}
+//}
+
 func GetAppSpec(appKey string) (*spec.AppSpec, error) {
 	var specFactory *spec.Factory
 	var err error
@@ -110,28 +142,40 @@ func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 		}
 		return nil, utils.ProcessError(err, utils.StructToString(debugStruct))
 	}
-	customAppSpec := utils.DeepCopyAppSpec(appSpec)
+	appSpecWithIdentifier := utils.DeepCopyAppSpec(appSpec)
 	switch tests.Inst().S.(type) {
 	case *k8s.K8s:
-		customAppSpec.Key += c.AppMetaData.GetSuffix()
-		for _, spec := range customAppSpec.SpecList {
+		identifier := "-31313"
+		appSpecWithIdentifier.Key += identifier
+		for _, spec := range appSpecWithIdentifier.SpecList {
 			specType := reflect.ValueOf(spec).Elem()
 			nameField := specType.FieldByName("Name")
 			if nameField.IsValid() {
-				nameField.SetString(nameField.String() + c.AppMetaData.GetSuffix())
+				nameField.SetString(nameField.String() + identifier)
 			}
-			if obj, ok := spec.(*appsapi.Deployment); ok {
+			switch obj := spec.(type) {
+			case *appsapi.Deployment:
 				numVolumes := len(obj.Spec.Template.Spec.Volumes)
 				for i := 0; i < numVolumes; i++ {
-					obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += c.AppMetaData.GetSuffix()
+					obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += identifier
 				}
-			}
-			if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
-				*obj.Spec.StorageClassName += c.AppMetaData.GetSuffix()
+			case *appsapi.StatefulSet:
+				numVolumes := len(obj.Spec.Template.Spec.Volumes)
+				for i := 0; i < numVolumes; i++ {
+					obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += identifier
+				}
+			case *appsapi.DaemonSet:
+				numVolumes := len(obj.Spec.Template.Spec.Volumes)
+				for i := 0; i < numVolumes; i++ {
+					obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += identifier
+				}
+			case *corev1.PersistentVolumeClaim:
+				*obj.Spec.StorageClassName += identifier
+				// Add more cases as needed
 			}
 		}
 	}
-	return customAppSpec, nil
+	return appSpecWithIdentifier, nil
 }
 
 func (c *AppConfig) CanSchedule() error {
