@@ -163,9 +163,9 @@ func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 				}
 			case *corev1.PersistentVolumeClaim:
 				obj.ObjectMeta.Name += identifier
-				obj.Spec.StorageClassName = pointer.StringPtr(*obj.Spec.StorageClassName + identifier)
-			case *corev1.Secret:
-				obj.ObjectMeta.Name += identifier
+				obj.Spec.StorageClassName = pointer.String(*obj.Spec.StorageClassName + identifier)
+			//case *corev1.Secret:
+			//	obj.ObjectMeta.Name += identifier
 			case *corev1.Service:
 				obj.ObjectMeta.Name += identifier
 				for k, v := range obj.ObjectMeta.Labels {
