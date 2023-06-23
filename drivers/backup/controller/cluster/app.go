@@ -10,7 +10,8 @@ import (
 	"github.com/portworx/torpedo/tests"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"reflect"
+	storageApi "k8s.io/api/storage/v1"
+	"k8s.io/utils/pointer"
 	"time"
 )
 
@@ -148,29 +149,32 @@ func (c *AppConfig) GetCustomAppSpec() (*spec.AppSpec, error) {
 		identifier := "-31313"
 		appSpecWithIdentifier.Key += identifier
 		for _, spec := range appSpecWithIdentifier.SpecList {
-			specType := reflect.ValueOf(spec).Elem()
-			nameField := specType.FieldByName("Name")
-			if nameField.IsValid() {
-				nameField.SetString(nameField.String() + identifier)
-			}
+			//specType := reflect.ValueOf(spec).Elem()
+			//metaField := specType.FieldByName("ObjectMeta")
+			//if metaField.IsValid() {
+			//	meta := metaField.Interface().(metav1.ObjectMeta)
+			//	meta.Name += identifier
+			//	metaField.Set(reflect.ValueOf(meta))
+			//}
 			switch obj := spec.(type) {
 			case *appsapi.Deployment:
-				numVolumes := len(obj.Spec.Template.Spec.Volumes)
-				for i := 0; i < numVolumes; i++ {
-					obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += identifier
-				}
-			case *appsapi.StatefulSet:
-				numVolumes := len(obj.Spec.Template.Spec.Volumes)
-				for i := 0; i < numVolumes; i++ {
-					obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += identifier
-				}
-			case *appsapi.DaemonSet:
-				numVolumes := len(obj.Spec.Template.Spec.Volumes)
-				for i := 0; i < numVolumes; i++ {
-					obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += identifier
+				obj.ObjectMeta.Name += identifier
+				for i := 0; i < len(obj.Spec.Template.Spec.Volumes); i++ {
+					if obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim != nil {
+						obj.Spec.Template.Spec.Volumes[i].PersistentVolumeClaim.ClaimName += identifier
+					}
 				}
 			case *corev1.PersistentVolumeClaim:
-				*obj.Spec.StorageClassName += identifier
+				obj.ObjectMeta.Name += identifier
+				obj.Spec.StorageClassName = pointer.String(*obj.Spec.StorageClassName + identifier)
+			case *corev1.Secret:
+				obj.ObjectMeta.Name += identifier
+			case *corev1.Service:
+				obj.ObjectMeta.Name += identifier
+			case *appsapi.StatefulSet:
+				obj.ObjectMeta.Name += identifier
+			case *storageApi.StorageClass:
+				obj.ObjectMeta.Name += identifier
 				// Add more cases as needed
 			}
 		}
