@@ -615,54 +615,54 @@ var _ = Describe("{ScaleDownScaleupPXCluster}", func() {
 			}
 		}()
 
-		Step("Scale down PX by Labelling Nodes on which Data Services are running", func() {
+		Step("Scale down PX Nodes on which Data Services are running", func() {
 			// disable PX Pod on the first node of each deployed Data Service
-			for _, nodeToLabel := range nodeList {
-				log.InfoD("Disabling PX on Node %v ", nodeToLabel.Name)
-				err = pdslib.LabelK8sNode(nodeToLabel, "px/enabled=false")
-				log.FailOnError(err, "error while labelling node")
+			for _, nodeToStop := range nodeList {
+				log.InfoD("Disabling PX on Node %v ", nodeToStop.Name)
 				for _, workerNode := range workerNodes {
-					if workerNode.Name == nodeToLabel.Name {
-						err = pdslib.WaitPXDownOnNode(workerNode)
-						log.FailOnError(err, "Failed to stop Px on Node %v", workerNode.Name)
+					if workerNode.Name == nodeToStop.Name {
+						err = Inst().V.StopDriver([]node.Node{workerNode}, false, nil)
+						log.FailOnError(err, "error while Stopping PX on node")
 						break
 					}
 				}
 			}
-			log.InfoD("Successfully Scaled Down PX Pods...")
+			log.InfoD("Successfully Scaled Down PX Nodes...")
 		})
-		log.InfoD("Sleeping 60 seconds after scale down of Px pods before we check the health of Data Services")
+		log.InfoD("Sleeping 60 seconds after scale down of Px Nodes before we check the health of Data Services")
 		time.Sleep(60 * time.Second)
-		Step("Verify the Data Services status after scaling down the Px pods", func() {
+		Step("Verify the Data Services status after scaling down the Px Nodes", func() {
 			for _, dep := range deps {
 				err = dsTest.ValidateDataServiceDeployment(dep, namespace)
 				log.FailOnError(err, "Error while validating data services")
 			}
-			log.InfoD("Deployments pods are up and healthy after scaling down Px pods")
+			log.InfoD("Deployments pods are up and healthy after scaling down Px Nodes")
 		})
 
-		Step("Scale Up PX by removing Labels on the Nodes", func() {
-			for _, nodeToUnlabel := range nodeList {
-				log.InfoD("Enabling PX on Node %v ", nodeToUnlabel.Name)
-				err := pdslib.RemoveLabelFromK8sNode(nodeToUnlabel, "px/enabled")
-				log.FailOnError(err, "error while removing label from k8s node")
+		Step("Scale Up PX  Nodes", func() {
+			for _, nodeToStart := range nodeList {
+				log.InfoD("Enabling PX on Node %v ", nodeToStart.Name)
 				for _, workerNode := range workerNodes {
-					if workerNode.Name == nodeToUnlabel.Name {
-						err = pdslib.WaitPXUpOnNode(workerNode)
+					if workerNode.Name == nodeToStart.Name {
+						err = Inst().V.StartDriver(workerNode)
+						log.FailOnError(err, "error while Starting PX on node")
+
+						err = Inst().V.WaitDriverUpOnNode(workerNode, Inst().DriverStartTimeout)
 						log.FailOnError(err, "Failed to start Px on Node %v", workerNode.Name)
+						break
 					}
 				}
 			}
-			log.InfoD("Successfully Scaled up Px Pods")
+			log.InfoD("Successfully Scaled up Px Nodes")
 		})
-		log.InfoD("Sleeping 60 seconds again after scale up of Px pods before we check the health of Data Services")
+		log.InfoD("Sleeping 60 seconds again after scale up of Px Nodes before we check the health of Data Services")
 		time.Sleep(60 * time.Second)
-		Step("Verify the Data Services status status after scaling up PX pods", func() {
+		Step("Verify the Data Services status status after scaling up PX Nodes", func() {
 			for _, dep := range deps {
 				err = dsTest.ValidateDataServiceDeployment(dep, namespace)
 				log.FailOnError(err, "Error while validating data services")
 			}
-			log.InfoD("Deployments pods are up and healthy after scaling up Px Pods")
+			log.InfoD("Deployments pods are up and healthy after scaling up Px Nodes")
 		})
 	})
 	JustAfterEach(func() {
@@ -969,15 +969,6 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 		}
 	})
 	JustAfterEach(func() {
-		defer func() {
-			if !isDeploymentsDeleted {
-				Step("Delete created deployments")
-				resp, err := pdslib.DeleteDeployment(deployment.GetId())
-				log.FailOnError(err, "Error while deleting data services")
-				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-			}
-		}()
-
 		defer EndTorpedoTest()
 	})
 })
@@ -1916,7 +1907,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 				}()
 
 				Step("Checking the PVC usage", func() {
-					ctx, err := dsTest.CreateSchedulerContextForPDSApps(depList)
+					ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
 					log.FailOnError(err, "Unable to create scheduler context")
 					err = CheckPVCtoFullCondition(ctx)
 					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")

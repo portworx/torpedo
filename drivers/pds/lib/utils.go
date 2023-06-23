@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -13,8 +14,6 @@ import (
 	"strings"
 	"time"
 
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-
 	"github.com/portworx/torpedo/pkg/log"
 
 	state "net/http"
@@ -23,10 +22,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/node"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -209,17 +206,12 @@ const (
 	configmapNamespace           = "default"
 )
 
-// type portworx struct {
-// 	schedOps schedops.Driver
-// }
-
 // K8s/PDS Instances
 var (
 	k8sCore       = core.Instance()
 	k8sApps       = apps.Instance()
 	apiExtentions = apiextensions.Instance()
 	serviceType   = "LoadBalancer"
-	portworx      *struct{ schedOps schedops.Driver }
 )
 
 // PDS vars
@@ -301,32 +293,6 @@ func ValidateNamespaces(deploymentTargetID string, ns string, status string) err
 		}
 
 		return false, nil
-	})
-	return waitErr
-}
-
-// Wait for PX pod on node to come up
-func WaitPXUpOnNode(n node.Node) error {
-	waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
-		isPXRunning := portworx.schedOps.IsPXReadyOnNode(n)
-		if isPXRunning {
-			return true, err
-		} else {
-			return false, nil
-		}
-	})
-	return waitErr
-}
-
-// Wait for PX pod on node to go down
-func WaitPXDownOnNode(n node.Node) error {
-	waitErr := wait.Poll(timeOut, timeInterval, func() (bool, error) {
-		isPXRunning := portworx.schedOps.IsPXReadyOnNode(n)
-		if isPXRunning {
-			return false, err
-		} else {
-			return true, nil
-		}
 	})
 	return waitErr
 }
@@ -734,6 +700,16 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 	deploymentNodes := deploymentConnectionDetails.GetNodes()
 	log.Infof("Deployment nodes %v", deploymentNodes)
 	isfound = false
+
+	if dsName == mysql {
+		ports := deploymentConnectionDetails.GetPorts()
+		for key, value := range ports {
+			if key == "mysql-router" {
+				port = fmt.Sprint(value)
+			}
+		}
+	}
+
 	//TODO: Validate vip endpoints as well
 	for key, value := range clusterDetails {
 		log.Infof("host details key: [%v] value: [%v]", key, value)
@@ -763,7 +739,7 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 			if strings.Contains(key, "httpPort") {
 				port = fmt.Sprint(value)
 			}
-		case elasticSearch, mysql, mssql, redis, kafka, zookeeper:
+		case elasticSearch, mssql, redis, kafka, zookeeper:
 			if strings.Contains(key, "Port") {
 				port = fmt.Sprint(value)
 			}

@@ -251,6 +251,7 @@ const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 20
+	backupLocationDeleteTimeoutMin    = 60
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
 	RetrySeconds                      = 10
@@ -267,6 +268,7 @@ const (
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
+	defaultPdsDriver                      = "pds"
 	defaultLogLocation                    = "/testresults/"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
@@ -2017,10 +2019,7 @@ func ValidateClusterSize(count int64) {
 	} else {
 		expectedStorageNodesPerZone = int(perZoneCount)
 	}
-	storageNodes, err := GetStorageNodes()
-	log.FailOnError(err, "Storage nodes are empty")
-
-	log.Infof("List of storage nodes:[%v]", storageNodes)
+	storageNodes := node.GetStorageNodes()
 	dash.VerifyFatal(len(storageNodes), expectedStorageNodesPerZone*len(zones), "Storage nodes matches the expected number?")
 }
 
@@ -2112,6 +2111,18 @@ func runCmd(cmd string, n node.Node) error {
 
 	return err
 
+}
+
+func runCmdGetOutput(cmd string, n node.Node) (string, error) {
+	output, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+	return output, err
 }
 
 func runCmdWithNoSudo(cmd string, n node.Node) error {
@@ -3472,7 +3483,7 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 	namespace := "*"
 	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, orgID,
 		clusterObj,
-		BackupRestoreCompletionTimeoutMin*time.Minute,
+		backupLocationDeleteTimeoutMin*time.Minute,
 		RetrySeconds*time.Second)
 	if err != nil {
 		return err
@@ -3561,7 +3572,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, true)
+		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, true)
 	}
 	return err
 }
@@ -3856,9 +3867,8 @@ func WaitForBackupLocationAddition(
 }
 
 // CreateNFSBackupLocation creates backup location for nfs
-func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, validate bool) error {
+func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, subPath string, validate bool) error {
 	serverAddr := os.Getenv("NFS_SERVER_ADDR")
-	subPath := os.Getenv("NFS_SUB_PATH")
 	mountOption := os.Getenv("NFS_MOUNT_OPTION")
 	path := os.Getenv("NFS_PATH")
 	backupDriver := Inst().Backup
@@ -4168,27 +4178,18 @@ type NfsInfo struct {
 // GetNfsInfoFromEnv get information for nfs share.
 func GetNfsInfoFromEnv() *NfsInfo {
 	creds := &NfsInfo{}
-
 	creds.NfsServerAddress = os.Getenv("NFS_SERVER_ADDR")
 	if creds.NfsServerAddress == "" {
 		err := fmt.Errorf("NFS_SERVER_ADDR environment variable should not be empty")
 		log.FailOnError(err, "Fetching NFS server address")
 	}
-
 	creds.NfsPath = os.Getenv("NFS_PATH")
 	if creds.NfsPath == "" {
 		err := fmt.Errorf("NFS_PATH environment variable should not be empty")
 		log.FailOnError(err, "Fetching NFS path")
 	}
-
 	creds.NfsSubPath = os.Getenv("NFS_SUB_PATH")
-	if creds.NfsSubPath == "" {
-		err := fmt.Errorf("NFS_PATH environment variable should not be empty")
-		log.FailOnError(err, "Fetching NFS sub path")
-	}
-
 	creds.NfsMountOptions = os.Getenv("NFS_MOUNT_OPTION")
-
 	return creds
 }
 
@@ -4267,7 +4268,7 @@ func DeleteAzureBucket(bucketName string) {
 }
 
 // DeleteNfsSubPath delete subpath from nfs shared path.
-func DeleteNfsSubPath() {
+func DeleteNfsSubPath(subPath string) {
 	// Get NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
@@ -4296,8 +4297,8 @@ func DeleteNfsSubPath() {
 	}()
 
 	// Remove subpath from NFS share path.
-	log.Infof("Deleting NFS share subpath: [%s] from path: [%s] on server: [%s]", creds.NfsSubPath, creds.NfsPath, creds.NfsServerAddress)
-	rmCmd := fmt.Sprintf("rm -rf %s/%s", mountDir, creds.NfsSubPath)
+	log.Infof("Deleting NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
+	rmCmd := fmt.Sprintf("rm -rf %s/%s", mountDir, subPath)
 	err := runCmd(rmCmd, masterNode)
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, masterNode, err))
 }
@@ -4312,7 +4313,7 @@ func DeleteBucket(provider string, bucketName string) {
 		case drivers.ProviderAzure:
 			DeleteAzureBucket(bucketName)
 		case drivers.ProviderNfs:
-			DeleteNfsSubPath()
+			DeleteNfsSubPath(bucketName)
 		}
 	})
 }
@@ -4595,6 +4596,64 @@ func CreateBucket(provider string, bucketName string) {
 	})
 }
 
+// IsBackupLocationEmpty returns true if the bucket for a provider is empty
+func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
+	switch provider {
+	case drivers.ProviderAws:
+		result, err := IsS3BucketEmpty(bucketName)
+		return result, err
+	case drivers.ProviderNfs:
+		result, err := IsNFSSubPathEmpty(bucketName)
+		return result, err
+	default:
+		return false, fmt.Errorf("function does not support %s provider", provider)
+	}
+}
+
+func IsNFSSubPathEmpty(subPath string) (bool, error) {
+	// Get NFS share details from ENV variables.
+	creds := GetNfsInfoFromEnv()
+	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
+
+	// Mount the NFS share to the master node.
+	masterNode := node.GetMasterNodes()[0]
+	mountCmds := []string{
+		fmt.Sprintf("mkdir -p %s", mountDir),
+		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+		fmt.Sprintf("find %s/%s -type f", mountDir, subPath),
+	}
+	for _, cmd := range mountCmds {
+		output, err := runCmdGetOutput(cmd, masterNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+		log.Infof("Output from command [%s] -\n%s", cmd, output)
+	}
+
+	defer func() {
+		// Unmount the NFS share from the master node.
+		umountCmds := []string{
+			fmt.Sprintf("umount %s", mountDir),
+			fmt.Sprintf("rm -rf %s", mountDir),
+		}
+		for _, cmd := range umountCmds {
+			err := runCmd(cmd, masterNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+		}
+	}()
+
+	// List the files in subpath from NFS share path.
+	log.Infof("Checking the contents in NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
+	fileCountCmd := fmt.Sprintf("find %s/%s -type f | wc -l", mountDir, subPath)
+	log.Infof("Running command - %s", fileCountCmd)
+	output, err := runCmdGetOutput(fileCountCmd, masterNode)
+	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", fileCountCmd, masterNode, err))
+	log.Infof("Output of command [%s] - \n%s", fileCountCmd, output)
+	result, err := strconv.Atoi(strings.TrimSpace(output))
+	if result > 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
 // IsS3BucketEmpty returns true if bucket empty else false
 func IsS3BucketEmpty(bucketName string) (bool, error) {
 	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
@@ -4782,6 +4841,7 @@ type Torpedo struct {
 	VaultAddress                        string
 	VaultToken                          string
 	SchedUpgradeHops                    string
+	MigrationHops                       string
 	AutopilotUpgradeImage               string
 	CsiGenericDriverConfigMap           string
 	HelmValuesConfigMap                 string
@@ -4838,6 +4898,7 @@ func ParseFlags() {
 	var vaultAddress string
 	var vaultToken string
 	var schedUpgradeHops string
+	var migrationHops string
 	var autopilotUpgradeImage string
 	var csiGenericDriverConfigMapName string
 	//dashboard fields
@@ -4888,6 +4949,7 @@ func ParseFlags() {
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
+	flag.StringVar(&migrationHops, "migration-hops", "", "Comma separated list of versions for migration pool")
 	flag.StringVar(&autopilotUpgradeImage, autopilotUpgradeImageCliFlag, "", "Autopilot version which will be used for checking version after upgrade autopilot")
 	flag.StringVar(&csiGenericDriverConfigMapName, csiGenericDriverConfigMapFlag, "", "Name of config map that stores provisioner details when CSI generic driver is being used")
 	flag.StringVar(&testrailuttils.MilestoneName, milestoneFlag, "", "Testrail milestone name")
@@ -4912,7 +4974,7 @@ func ParseFlags() {
 	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
 	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
 	flag.BoolVar(&deployPDSApps, deployPDSAppsFlag, false, "To deploy pds apps and return scheduler context for pds apps")
-	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, "", "Name of the pdsdriver to use")
+	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
 	flag.Parse()
@@ -5122,6 +5184,7 @@ func ParseFlags() {
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
 				SchedUpgradeHops:                    schedUpgradeHops,
+				MigrationHops:                       migrationHops,
 				AutopilotUpgradeImage:               autopilotUpgradeImage,
 				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
 				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,
@@ -6965,7 +7028,7 @@ func GetVolumesInDegradedState(contexts []*scheduler.Context) ([]*volume.Volume,
 				return nil, err
 			}
 			log.InfoD(fmt.Sprintf("Current Status of the volume [%v] is [%v]", vol.Name, appVol.Status))
-			if fmt.Sprintf("[%v]", appVol.Status) != "VOLUME_STATUS_DEGRADED" {
+			if fmt.Sprintf("[%v]", appVol.Status.String()) != "VOLUME_STATUS_DEGRADED" {
 				volumes = append(volumes, vol)
 			}
 		}
@@ -6979,8 +7042,8 @@ func VerifyVolumeStatusOnline(vol *volume.Volume) error {
 	if err != nil {
 		return err
 	}
-	if fmt.Sprintf("%v", appVol.Status) != "VOLUME_STATUS_UP" {
-		return fmt.Errorf("volume [%v] status is not up. Current status is [%v]", vol.Name, appVol.Status)
+	if fmt.Sprintf("%v", appVol.Status.String()) == "VOLUME_STATUS_UP" {
+		return fmt.Errorf("volume [%v] status is not up. Current status is [%v]", vol.Name, appVol.Status.String())
 	}
 	return nil
 }
@@ -7105,21 +7168,21 @@ func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 // WaitForKVDBMembers waits till all kvdb members comes up online and healthy
 func WaitForKVDBMembers() error {
 	t := func() (interface{}, bool, error) {
-		isHealthy := 0
 		allKvdbNodes, err := GetAllKvdbNodes()
-		if len(allKvdbNodes) != 3 {
+		if err != nil {
 			return "", true, err
 		}
+		if len(allKvdbNodes) != 3 {
+			return "", true, fmt.Errorf("not all kvdb nodes are online")
+		}
+
 		for _, each := range allKvdbNodes {
-			if each.IsHealthy {
-				isHealthy += 1
+			if each.IsHealthy == false {
+				return "", true, fmt.Errorf("all kvdb nodes are not healthy")
 			}
 		}
-		if isHealthy == 3 {
-			log.InfoD("all 3 kvdb nodes are online and healthy, exiting.")
-			return "", false, nil
-		}
-		return "", true, err
+		log.Info("all kvdb nodes are healthy")
+		return "", false, nil
 	}
 	_, err := task.DoRetryWithTimeout(t, defaultKvdbRetryInterval, 20*time.Second)
 	if err != nil {

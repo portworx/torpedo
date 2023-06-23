@@ -79,6 +79,7 @@ func BackupInitInstance() {
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
 	})
+	log.FailOnError(err, "Error occurred while Node Driver Initialization")
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
 	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
 
@@ -274,8 +275,8 @@ var _ = AfterSuite(func() {
 			DeleteBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket deleted - %s", globalGCPBucketName)
 		case drivers.ProviderNfs:
-			DeleteNfsSubPath()
-			log.Infof("NFS subpath deleted - %s", os.Getenv("NFS_SUB_PATH"))
+			DeleteBucket(provider, globalNFSBucketName)
+			log.Infof("NFS subpath deleted - %s", globalNFSBucketName)
 		}
 	}
 
