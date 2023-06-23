@@ -2,6 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup/controller/cluster"
+	"github.com/portworx/torpedo/drivers/backup/controller/torpedotest"
+	"github.com/portworx/torpedo/drivers/backup/utils"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -283,6 +287,73 @@ var _ = AfterSuite(func() {
 })
 
 func TestMain(m *testing.M) {
+	torpedoTestController := torpedotest.NewTorpedoTestController()
+	clusterController := cluster.NewClusterController()
+	sourceClusterConfigPath, err := utils.GetSourceClusterConfigPath()
+	if err != nil {
+		log.Errorf("GetSourceClusterConfigPath Error: %v", utils.ProcessError(err))
+	}
+	err = clusterController.Cluster(sourceClusterConfigPath).SetInCluster(true).Register(false)
+	if err != nil {
+		debugStruct := struct {
+			ClusterConfigPath string
+			HyperConverged    bool
+		}{
+			ClusterConfigPath: sourceClusterConfigPath,
+			HyperConverged:    false,
+		}
+		log.Errorf("Cluster.Register Error: %v", utils.ProcessError(err, utils.StructToString(debugStruct)))
+	}
+	destinationClusterConfigPath, err := utils.GetDestinationClusterConfigPath()
+	if err != nil {
+		log.Errorf("GetDestinationClusterConfigPath Error: %v", utils.ProcessError(err))
+	}
+	err = clusterController.Cluster(destinationClusterConfigPath).Register(false)
+	if err != nil {
+		debugStruct := struct {
+			ClusterConfigPath string
+			HyperConverged    bool
+		}{
+			ClusterConfigPath: destinationClusterConfigPath,
+			HyperConverged:    false,
+		}
+		log.Errorf("Cluster.Register Error: %v", utils.ProcessError(err, utils.StructToString(debugStruct)))
+	}
+	torpedoTestController.SetClusterController(clusterController)
+	go func() {
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			_, err = fmt.Fprintf(w, "Hello, Welcome to TaaS: %s\n", r.URL.Path)
+			log.Infof("Path /: Error %v", utils.ProcessError(err))
+			_, err = fmt.Fprintf(w, "Source Cluster Config Path: %s\n", sourceClusterConfigPath)
+			log.Infof("Path /: Error %v", utils.ProcessError(err))
+			_, err = fmt.Fprintf(w, "Source Cluster Config Path: %s\n", destinationClusterConfigPath)
+			log.Infof("Path /: Error %v", utils.ProcessError(err))
+		})
+
+		http.HandleFunc("/controller/cluster/schedule", func(w http.ResponseWriter, r *http.Request) {
+			configPath := r.URL.Query().Get("configPath")
+			_, err = fmt.Fprintf(w, "Query parameter [configPath] value: %s\n", configPath)
+			log.Infof("Path /controller/cluster/schedule: Error %v", utils.ProcessError(err))
+
+			namespace := r.URL.Query().Get("namespace")
+			_, err = fmt.Fprintf(w, "Query parameter [namespace] value: %s\n", namespace)
+			log.Infof("Path /controller/cluster/schedule: Error %v", utils.ProcessError(err))
+
+			appKey := r.URL.Query().Get("appKey")
+			_, err = fmt.Fprintf(w, "Query parameter [appKey] value: %s\n", appKey)
+			log.Infof("Path /controller/cluster/schedule: Error %v", utils.ProcessError(err))
+
+			if err == nil {
+				err = torpedoTestController.GetClusterController().Cluster(configPath).Namespace(namespace).App(appKey).Schedule()
+				if err != nil {
+					log.Infof("Path /controller/cluster/schedule: Error %v", utils.ProcessError(err))
+				}
+			}
+		})
+
+		err := http.ListenAndServe(":8080", nil)
+		log.FailOnError(err, "ListenAndServe failed")
+	}()
 	// call flag.Parse() here if TestMain uses flags
 	ParseFlags()
 	os.Exit(m.Run())

@@ -17,6 +17,14 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
+// This testcase sleeps for one hour
+var _ = Describe("{SleepForOneHour}", func() {
+	It("Sleep for one hour", func() {
+		log.Infof("Sleeping for one hour")
+		time.Sleep(1 * time.Hour)
+	})
+})
+
 // This testcase verifies if the backup pods are in Ready state or not
 var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
