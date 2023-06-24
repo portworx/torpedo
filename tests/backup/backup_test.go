@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	. "github.com/portworx/torpedo/drivers/backup/controller/torpedo_controller"
+	"github.com/portworx/torpedo/drivers/backup/utils"
 	"strings"
 	"time"
 
@@ -106,12 +108,16 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		dailyName            string
 		weeklyName           string
 		monthlyName          string
+		testId               string
+		torpedoController    *TorpedoController
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("Backup: BasicBackupCreation", "Deploying backup", nil, 0)
-
 		appList = Inst().AppList
+		testId = "001"
+		torpedoController = NewTorpedoController()
+		err := torpedoController.GetTorpedoTestController().GetPxBackupTestController().PxBackupTest(testId).Start("BasicBackupCreation", "Deploying backup", 0, utils.Sagrawal, Inst().AppList, nil)
+		log.FailOnError(err, "failed to start px-backup test")
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
 		providers = getProviders()
@@ -261,7 +267,10 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			err := torpedoController.GetTorpedoTestController().GetPxBackupTestController().PxBackupTest(testId).End()
+			log.FailOnError(err, "failed to end px-backup test")
+		}()
 
 		defer func() {
 			log.InfoD("switching to default context")
