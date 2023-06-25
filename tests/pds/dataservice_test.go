@@ -1786,6 +1786,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
 					err = IncreasePVCby1Gig(ctx)
 					log.FailOnError(err, "Failing while Increasing the PVC name...")
+					controlPlane.UpdateResourceTemplateName("Small")
 				})
 
 				Step("Validate Deployments after PVC Resize", func() {
@@ -1818,19 +1819,15 @@ var _ = Describe("{ResizePVCBy1GB}", func() {
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name == postgresql {
-					Step("Deploy and validate data service", func() {
-						isDeploymentsDeleted = false
-						controlPlane.UpdateResourceTemplateName("pds-auto-pvcFullCondition")
-						deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-						log.FailOnError(err, "Error while deploying data services")
-						deployments[ds] = deployment
-						dsVersions[ds.Name] = dataServiceVersionBuildMap
-						depList = append(depList, deployment)
-						dsName = ds.Name
-
-					})
-				}
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+					dsVersions[ds.Name] = dataServiceVersionBuildMap
+					depList = append(depList, deployment)
+					dsName = ds.Name
+				})
 			}
 			defer func() {
 				for _, newDeployment := range deployments {
@@ -1841,23 +1838,20 @@ var _ = Describe("{ResizePVCBy1GB}", func() {
 				}
 			}()
 
-			// This testcase is currently applicable only for postgresql ds deployments
-			if dsName == postgresql {
-				Step("Resizing the PVC size", func() {
-					ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
-					log.FailOnError(err, "Unable to create scheduler context")
-					err = IncreasePVCby1Gig(ctx)
-					log.FailOnError(err, "Failing while Increasing the PVC name...")
-				})
+			Step("Resizing the PVC size", func() {
+				ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
+				log.FailOnError(err, "Unable to create scheduler context")
+				err = IncreasePVCby1Gig(ctx)
+				log.FailOnError(err, "Failing while Increasing the PVC name...")
+			})
 
-				Step("Validate Deployments after PVC Resize", func() {
-					for ds, deployment := range deployments {
-						err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
-						log.FailOnError(err, "Error while validating dataservices")
-						log.InfoD("Data-service: %v is up and healthy", ds.Name)
-					}
-				})
-			}
+			Step("Validate Deployments after PVC Resize", func() {
+				for ds, deployment := range deployments {
+					err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
+					log.FailOnError(err, "Error while validating dataservices")
+					log.InfoD("Data-service: %v is up and healthy", ds.Name)
+				}
+			})
 
 		})
 	})
