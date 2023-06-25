@@ -1815,7 +1815,6 @@ var _ = Describe("{ResizePVCBy1GB}", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var dsVersions = make(map[string]map[string][]string)
 		var depList []*pds.ModelsDeployment
-		var dsName string
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
@@ -1826,7 +1825,7 @@ var _ = Describe("{ResizePVCBy1GB}", func() {
 					deployments[ds] = deployment
 					dsVersions[ds.Name] = dataServiceVersionBuildMap
 					depList = append(depList, deployment)
-					dsName = ds.Name
+
 				})
 			}
 			defer func() {
