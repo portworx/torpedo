@@ -146,7 +146,6 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		}
 
 		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
 
 		var poolIDToResize string
 
@@ -203,7 +202,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		})
 
 		Step("Ensure that new pool has been expanded to the expected size", func() {
-			ValidateApplications(contexts)
+			//ValidateApplications(contexts)
 
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
@@ -214,6 +213,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			}
 			dash.VerifyFatal(isExpansionSuccess, true,
 				fmt.Sprintf("expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
+			appsValidateAndDestroy(contexts)
 		})
 	})
 	JustAfterEach(func() {
