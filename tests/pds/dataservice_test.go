@@ -1843,6 +1843,7 @@ var _ = Describe("{ResizePVCBy1GB}", func() {
 				err = IncreasePVCby1Gig(ctx)
 				log.FailOnError(err, "Failing while Increasing the PVC name...")
 			})
+			//ToDo: Add a step to take backup after resize.
 
 			Step("Validate Deployments after PVC Resize", func() {
 				for ds, deployment := range deployments {
