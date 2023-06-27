@@ -154,7 +154,7 @@ var _ = BeforeSuite(func() {
 			CreateBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket created with name - %s", globalGCPBucketName)
 		case drivers.ProviderNfs:
-			globalNFSBucketName = fmt.Sprintf("%s", globalNFSBucketPrefix)
+			globalNFSBucketName = fmt.Sprintf("%s-%s", globalNFSBucketPrefix, RandomString(6))
 		}
 	}
 	lockedBucketNameSuffix, present := os.LookupEnv("LOCKED_BUCKET_NAME")
@@ -275,8 +275,8 @@ var _ = AfterSuite(func() {
 			DeleteBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket deleted - %s", globalGCPBucketName)
 		case drivers.ProviderNfs:
-			DeleteNfsSubPath()
-			log.Infof("NFS subpath deleted - %s", os.Getenv("NFS_SUB_PATH"))
+			DeleteBucket(provider, globalNFSBucketName)
+			log.Infof("NFS subpath deleted - %s", globalNFSBucketName)
 		}
 	}
 
