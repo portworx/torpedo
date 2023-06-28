@@ -717,6 +717,8 @@ var _ = Describe("{RebootMoreThanQuorumWorkerNodesDuringDeployment}", func() {
 	})
 
 	It("deploy Dataservices", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var generateWorkloads = make(map[string]string)
 		Step("Deploy Data Services", func() {
 			var dsVersionBuildMap = make(map[string][]string)
 			for _, ds := range params.DataServiceToTest {
@@ -730,6 +732,7 @@ var _ = Describe("{RebootMoreThanQuorumWorkerNodesDuringDeployment}", func() {
 						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
 					log.FailOnError(err, "Error while deploying data services")
 
+					deployments[ds] = deployment
 					// Type of failure that this TC needs to cover
 					failuretype := pdslib.TypeOfFailure{
 						Type: RebootNodesDuringDeployment,
@@ -749,6 +752,42 @@ var _ = Describe("{RebootMoreThanQuorumWorkerNodesDuringDeployment}", func() {
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
+
+					Step("Running Workloads", func() {
+						for ds, deployment := range deployments {
+							if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+								log.InfoD("Running Workloads on DataService %v ", ds.Name)
+								var params pdslib.WorkloadGenerationParams
+								pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+								log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+								if dep == nil {
+									generateWorkloads[ds.Name] = pod.Name
+								} else {
+									generateWorkloads[ds.Name] = dep.Name
+								}
+								for dsName, workloadContainer := range generateWorkloads {
+									log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+								}
+							} else {
+								log.InfoD("Workload script not available for ds %v", ds.Name)
+							}
+						}
+					})
+					defer func() {
+						for dsName, workloadContainer := range generateWorkloads {
+							Step("Delete the workload generating deployments", func() {
+								if Contains(dataServiceDeploymentWorkloads, dsName) {
+									log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
+									err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
+								} else if Contains(dataServicePodWorkloads, dsName) {
+									log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
+									err = pdslib.DeleteK8sPods(workloadContainer, namespace)
+								}
+								log.FailOnError(err, "error deleting workload generating pods")
+							})
+						}
+					}()
+
 				})
 			}
 		})
