@@ -447,6 +447,8 @@ func RebootWorkerNodesDuringDeployment(ns string, deployment *pds.ModelsDeployme
 			nodesToReboot = nodesToReboot[0:2]
 		}
 		quorum_nodes := (num_nodes / 2) + 1
+		log.InfoD("Total number of nodes in Cluter: %v", num_nodes)
+		log.InfoD("Rebooting %v nodes in Cluster", quorum_nodes)
 		nodesToReboot = nodesToReboot[0:quorum_nodes]
 	}
 
