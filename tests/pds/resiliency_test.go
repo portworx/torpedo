@@ -716,13 +716,13 @@ var _ = Describe("{RebootMoreThanQuorumWorkerNodesDuringDeployment}", func() {
 		StartTorpedoTest("RebootMoreThanQuorumWorkerNodesDuringDeployment", "Reboots more worker nodes than required for Px Quorum while a data service pod is coming up", pdsLabels, 0)
 	})
 
-	It("deploy Dataservices", func() {
+	It("Deploy DS, Reboot Nodes, Validate DS, Run Workload", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var generateWorkloads = make(map[string]string)
-		Step("Deploy Data Services", func() {
+		Step("Deploy DS, Reboot Nodes, Validate DS, Run Workload", func() {
 			var dsVersionBuildMap = make(map[string][]string)
 			for _, ds := range params.DataServiceToTest {
-				Step("Start deployment, Reboot multiple nodes on which deployment is coming up and validate data service", func() {
+				Step("Start deployment, Reboot multiple nodes on which deployment is coming up, validate data service and run workload", func() {
 					isDeploymentsDeleted = false
 					// Global Resiliency TC marker
 					pdslib.MarkResiliencyTC(true)
