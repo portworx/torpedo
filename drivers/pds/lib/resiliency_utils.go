@@ -439,7 +439,7 @@ func RebootWorkerNodesDuringDeployment(ns string, deployment *pds.ModelsDeployme
 		CapturedErrors <- err
 		return err
 	}
-	// Reboot Worker Nodes depending on Test Type (all or
+	// Reboot Worker Nodes depending on Test Type (all or quorum)
 	nodesToReboot := node.GetWorkerNodes()
 	if testType == "quorum" {
 		num_nodes := len(nodesToReboot)
