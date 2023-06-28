@@ -1743,7 +1743,9 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	// Create TPCC Schema and then run it.
 	case mysql:
 		//hard sleep for dns resolution to happen
-		time.Sleep(timeOut)
+		log.Debug("Entering into sleep of 30 min for dns resolution to be up")
+		time.Sleep(30 * time.Minute)
+		log.Debug("Finished sleep of 30 min for dns resolution to be up")
 		dbName := "tpcc"
 		var wasMysqlConfigured bool
 		// Waiting for approx an hour to check if Mysql deployment comes up
