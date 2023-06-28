@@ -2556,7 +2556,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 		}
 	}
 	// Sleep for upgrade request to go through before validating.
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Minute)
 	// validate stork pods after upgrade
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
