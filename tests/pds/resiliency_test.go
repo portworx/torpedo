@@ -387,7 +387,7 @@ var _ = Describe("{RebootAllWorkerNodesDuringDeployment}", func() {
 					failuretype := pdslib.TypeOfFailure{
 						Type: RebootNodesDuringDeployment,
 						Method: func() error {
-							return pdslib.RebootWorkerNodesDuringDeployment(params.InfraToTest.Namespace, deployment)
+							return pdslib.RebootWorkerNodesDuringDeployment(params.InfraToTest.Namespace, deployment, "all")
 						},
 					}
 					pdslib.DefineFailureType(failuretype)
@@ -708,5 +708,59 @@ var _ = Describe("{KillPdsAgentDuringWorkloadRun}", func() {
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{RebootMoreThanQuorumWorkerNodesDuringDeployment}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootMoreThanQuorumWorkerNodesDuringDeployment", "Reboots more worker nodes than required for Px Quorum while a data service pod is coming up", pdsLabels, 0)
+	})
+
+	It("deploy Dataservices", func() {
+		Step("Deploy Data Services", func() {
+			var dsVersionBuildMap = make(map[string][]string)
+			for _, ds := range params.DataServiceToTest {
+				Step("Start deployment, Reboot multiple nodes on which deployment is coming up and validate data service", func() {
+					isDeploymentsDeleted = false
+					// Global Resiliency TC marker
+					pdslib.MarkResiliencyTC(true)
+
+					// Deploy and Validate this Data service after injecting the type of failure we want to catch
+					deployment, _, dsVersionBuildMap, err = dsTest.TriggerDeployDataService(ds, params.InfraToTest.Namespace, tenantID, projectID, false,
+						dss.TestParams{NamespaceId: namespaceID, StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
+					log.FailOnError(err, "Error while deploying data services")
+
+					// Type of failure that this TC needs to cover
+					failuretype := pdslib.TypeOfFailure{
+						Type: RebootNodesDuringDeployment,
+						Method: func() error {
+							return pdslib.RebootWorkerNodesDuringDeployment(params.InfraToTest.Namespace, deployment, "quorum")
+						},
+					}
+					pdslib.DefineFailureType(failuretype)
+
+					err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, params.ResiliencyTest.CheckTillReplica)
+					log.FailOnError(err, fmt.Sprintf("Error happened while executing Reboot all worker nodes test for data service %v", *deployment.ClusterResourceName))
+
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+					log.FailOnError(err, "Error while getting resource setting template")
+					dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
+
+					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+					ValidateDeployments(resourceTemp, storageOp, config, int(ds.Replicas), dsVersionBuildMap)
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
+		if !isDeploymentsDeleted {
+			Step("Delete created deployments")
+			resp, err := pdslib.DeleteDeployment(deployment.GetId())
+			log.FailOnError(err, "Error while deleting data services")
+			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		}
 	})
 })
