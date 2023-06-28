@@ -1,7 +1,12 @@
 package tests
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/gorilla/mux"
+	"github.com/pborman/uuid"
+	"github.com/portworx/torpedo/drivers/backup/cluster_controller"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -282,8 +287,52 @@ var _ = AfterSuite(func() {
 
 })
 
+type PodByNameCollectLogs struct {
+	PodName       string `json:"podName"`
+	NamespaceName string `json:"namespaceName"`
+	ClusterName   string `json:"clusterName"`
+}
+
+var (
+	clusterController = cluster_controller.NewDefaultClusterController()
+)
+
+// This testcase sleeps for one hour
+var _ = Describe("{SleepForOneHour}", func() {
+	It("Sleep for one hour", func() {
+		log.Infof("Sleeping for one hour")
+		time.Sleep(1 * time.Hour)
+	})
+})
+
+func collectPodByNameLogs(w http.ResponseWriter, r *http.Request) {
+	var payload PodByNameCollectLogs
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&payload)
+	if err != nil {
+		RespondWithError(w, http.StatusBadRequest, NewBackupAPIError(err, uuid.New()))
+		return
+	}
+
+	filePath := fmt.Sprintf("%s-%v", payload.PodName, time.Now().Unix())
+	err = clusterController.Cluster(payload.ClusterName).Namespace(payload.NamespaceName).PodByName(payload.PodName).CollectLogs(filePath)
+	if err != nil {
+		RespondWithError(w, http.StatusInternalServerError, NewBackupAPIError(err, uuid.New()))
+		return
+	}
+	RespondWithJSON(w, http.StatusOK, map[string]string{"command": fmt.Sprintf("vim %s", filePath)})
+}
+
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
 	ParseFlags()
+
+	router := mux.NewRouter()
+	router.HandleFunc("/controller/cluster/pod/logs/collect", collectPodByNameLogs).Methods("POST")
+
+	err := http.ListenAndServe(":8080", router)
+	if err != nil {
+		log.Errorf("There's an error with the server: %v", err)
+	}
 	os.Exit(m.Run())
 }

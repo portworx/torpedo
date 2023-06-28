@@ -677,7 +677,19 @@ spec:
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
-
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: torpedo-svc
+spec:
+  selector:
+    app: torpedo
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: LoadBalancer
 
 EOF
 
