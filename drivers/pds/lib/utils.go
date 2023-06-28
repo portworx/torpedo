@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -1741,6 +1742,8 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	// For MySQL workload, first setup the deployment to run TPCC, then wait for MySQL to be available,
 	// Create TPCC Schema and then run it.
 	case mysql:
+		//hard sleep for dns resolution to happen
+		time.Sleep(timeOut)
 		dbName := "tpcc"
 		var wasMysqlConfigured bool
 		// Waiting for approx an hour to check if Mysql deployment comes up
