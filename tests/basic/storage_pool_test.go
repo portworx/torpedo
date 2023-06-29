@@ -202,8 +202,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		})
 
 		Step("Ensure that new pool has been expanded to the expected size", func() {
-			//ValidateApplications(contexts)
-
+			ValidateApplications(contexts)
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB

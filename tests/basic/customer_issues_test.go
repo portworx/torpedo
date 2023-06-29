@@ -560,7 +560,6 @@ var _ = Describe("{ValidateZombieReplicas}", func() {
 					}
 				}
 
-				log.Infof("")
 			})
 
 		})
