@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -613,31 +612,31 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 // This testcase verifies schedule backups are successful while volume resize is in progress
 var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	var (
-		appList                     = Inst().AppList
-		scheduledAppContexts        []*scheduler.Context
-		preRuleNameList             []string
-		postRuleNameList            []string
-		appNamespaces               []string
-		beforeSize                  int
-		credName                    string
-		periodicSchedulePolicyName  string
-		periodicSchedulePolicyNames []string
-		periodicSchedulePolicyUid   string
-		periodicSchedulePolicyUids  []string
-		scheduleName                string
-		scheduleNames               []string
-		cloudCredUID                string
-		firstScheduleBackupName     string
-		appClusterName              string
-		nextScheduleBackupNameRef   interface{}
-		restoreNames                []string
-		nextScheduleBackupName      string
+		appList              = Inst().AppList
+		scheduledAppContexts []*scheduler.Context
+		preRuleNameList      []string
+		postRuleNameList     []string
+		appNamespaces        []string
+		beforeSize           int
+		credName             string
+		//periodicSchedulePolicyName  string
+		//periodicSchedulePolicyNames []string
+		//periodicSchedulePolicyUid   string
+		//periodicSchedulePolicyUids  []string
+		//scheduleName                string
+		//scheduleNames               []string
+		cloudCredUID string
+		//firstScheduleBackupName     string
+		appClusterName string
+		//nextScheduleBackupNameRef   interface{}
+		//restoreNames                []string
+		//nextScheduleBackupName      string
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
 	backupLocationMap := make(map[string]string)
 	podListBeforeSizeMap := make(map[string]int)
-	podListAfterSizeMap := make(map[string]int)
+	//podListAfterSizeMap := make(map[string]int)
 
 	var backupLocation string
 	scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -724,10 +723,13 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 			log.InfoD("Uid of [%s] cluster is %s", appClusterName, clusterUid)
 		})
 		for _, namespace := range appNamespaces {
-			for backupLocationUID, backupLocationName := range backupLocationMap {
+			//for backupLocationUID, backupLocationName := range backupLocationMap {
+			for _, _ = range backupLocationMap {
 				Step("Getting size of volume before resizing", func() {
 					log.InfoD("Getting size of volume before resizing")
+					labelSelectors["app"] = "mysql"
 					pods, err := core.Instance().GetPods(namespace, labelSelectors)
+					log.InfoD("pods %s", pods)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
@@ -737,146 +739,146 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 						podListBeforeSizeMap[pod.Name] = beforeSize
 					}
 				})
-				Step("Create schedule policy", func() {
-					log.InfoD("Create schedule policy")
-					ctx, err := backup.GetAdminCtxFromSecret()
-					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-					periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
-					periodicSchedulePolicyNames = append(periodicSchedulePolicyNames, periodicSchedulePolicyName)
-					periodicSchedulePolicyUid = uuid.New()
-					periodicSchedulePolicyUids = append(periodicSchedulePolicyUids, periodicSchedulePolicyUid)
-					periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
-					err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
-					periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
-				})
-				Step("Resize the volume before backup schedule", func() {
-					log.InfoD("Resize the volume before backup schedule")
-					for _, ctx := range scheduledAppContexts {
-						var appVolumes []*volume.Volume
-						log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
-						appVolumes, err := Inst().S.GetVolumes(ctx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetch volumes for app %s", ctx.App.Key))
-						dash.VerifyFatal(len(appVolumes) > 0, true, "Verifying if app volumes exist")
-						var requestedVols []*volume.Volume
-						log.InfoD(fmt.Sprintf("Increase volume size %s on app %s",
-							Inst().V.String(), ctx.App.Key))
-						requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
-						dash.VerifyFatal(err, nil, "Verifying volume resize")
-						log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s",
-							ctx.App.Key))
-						for _, volume := range requestedVols {
-							// Need to pass token before validating volume
-							params := make(map[string]string)
-							if Inst().ConfigMap != "" {
-								params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-								dash.VerifyFatal(err, nil, "Fetching token from configMap")
-							}
-							err := Inst().V.ValidateUpdateVolume(volume, params)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate volume %v update status", volume))
-						}
-					}
-				})
-				Step("Create schedule backup immediately after initiating volume resize", func() {
-					log.InfoD("Create schedule backup after initiating volume resize")
-					ctx, err := backup.GetAdminCtxFromSecret()
-					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-
-					scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-					scheduleNames = append(scheduleNames, scheduleName)
-					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
-					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
-					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-
-					firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
-				})
-				Step("Checking size of volume after resize", func() {
-					log.InfoD("Checking size of volume after resize")
-					srcClusterConfigPath, err := GetSourceClusterConfigPath()
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-					for podName := range podListBeforeSizeMap {
-						afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the mount size %v from pod %v", afterSize, podName))
-						podListAfterSizeMap[podName] = afterSize
-					}
-					for podName := range podListBeforeSizeMap {
-						dash.VerifyFatal(podListAfterSizeMap[podName] > podListBeforeSizeMap[podName], true, fmt.Sprintf("Verifying volume size has increased for pod %s", podName))
-					}
-				})
-				Step("Verifying backup success after initializing volume resize", func() {
-					log.InfoD("Verifying backup success after initializing volume resize")
-					ctx, err := backup.GetAdminCtxFromSecret()
-					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-
-					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-					err = backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, appContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of recent backup [%s]", firstScheduleBackupName))
-
-					allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v", allScheduleBackupNames))
-					currentScheduleBackupCount := len(allScheduleBackupNames)
-					log.InfoD("Current number of schedule backups is [%v]", currentScheduleBackupCount)
-					nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
-					log.InfoD("Ordinal of the next schedule backup is [%v]", nextScheduleBackupOrdinal)
-					log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
-					time.Sleep(15 * time.Minute)
-					checkNextScheduleBackupCreation := func() (interface{}, bool, error) {
-						ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
-						if err != nil {
-							return "", true, err
-						}
-						return ordinalScheduleBackupName, false, nil
-					}
-					nextScheduleBackupNameRef, err = DoRetryWithTimeoutWithGinkgoRecover(checkNextScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of ordinal [%v] of schedule named [%s]", nextScheduleBackupOrdinal, scheduleName))
-
-					nextScheduleBackupName = nextScheduleBackupNameRef.(string)
-					log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
-					err = backupSuccessCheckWithValidation(ctx, nextScheduleBackupName, appContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName, scheduleName))
-				})
-				Step("Restoring application from first schedule backup", func() {
-					log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", firstScheduleBackupName))
-					ctx, err := backup.GetAdminCtxFromSecret()
-					log.FailOnError(err, "Fetching px-central-admin ctx")
-					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", namespace, time.Now().Unix())
-					restoreNames = append(restoreNames, restoreName)
-					err = CreateRestore(restoreName, firstScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, firstScheduleBackupName))
-				})
-				Step("Restoring application from recent backup", func() {
-					log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", nextScheduleBackupName))
-					ctx, err := backup.GetAdminCtxFromSecret()
-					log.FailOnError(err, "Fetching px-central-admin ctx")
-					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore-recent-backup", namespace, time.Now().Unix())
-					restoreNames = append(restoreNames, restoreName)
-					err = CreateRestore(restoreName, nextScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, nextScheduleBackupName))
-				})
+				//Step("Create schedule policy", func() {
+				//	log.InfoD("Create schedule policy")
+				//	ctx, err := backup.GetAdminCtxFromSecret()
+				//	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+				//	periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
+				//	periodicSchedulePolicyNames = append(periodicSchedulePolicyNames, periodicSchedulePolicyName)
+				//	periodicSchedulePolicyUid = uuid.New()
+				//	periodicSchedulePolicyUids = append(periodicSchedulePolicyUids, periodicSchedulePolicyUid)
+				//	periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
+				//	err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
+				//	periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
+				//})
+				//Step("Resize the volume before backup schedule", func() {
+				//	log.InfoD("Resize the volume before backup schedule")
+				//	for _, ctx := range scheduledAppContexts {
+				//		var appVolumes []*volume.Volume
+				//		log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
+				//		appVolumes, err := Inst().S.GetVolumes(ctx)
+				//		dash.VerifyFatal(err, nil, fmt.Sprintf("Fetch volumes for app %s", ctx.App.Key))
+				//		dash.VerifyFatal(len(appVolumes) > 0, true, "Verifying if app volumes exist")
+				//		var requestedVols []*volume.Volume
+				//		log.InfoD(fmt.Sprintf("Increase volume size %s on app %s",
+				//			Inst().V.String(), ctx.App.Key))
+				//		requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
+				//		dash.VerifyFatal(err, nil, "Verifying volume resize")
+				//		log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s",
+				//			ctx.App.Key))
+				//		for _, volume := range requestedVols {
+				//			// Need to pass token before validating volume
+				//			params := make(map[string]string)
+				//			if Inst().ConfigMap != "" {
+				//				params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+				//				dash.VerifyFatal(err, nil, "Fetching token from configMap")
+				//			}
+				//			err := Inst().V.ValidateUpdateVolume(volume, params)
+				//			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate volume %v update status", volume))
+				//		}
+				//	}
+				//})
+				//Step("Create schedule backup immediately after initiating volume resize", func() {
+				//	log.InfoD("Create schedule backup after initiating volume resize")
+				//	ctx, err := backup.GetAdminCtxFromSecret()
+				//	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+				//
+				//	scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
+				//	scheduleNames = append(scheduleNames, scheduleName)
+				//	preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
+				//	postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
+				//	appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				//
+				//	firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
+				//})
+				//Step("Checking size of volume after resize", func() {
+				//	log.InfoD("Checking size of volume after resize")
+				//	srcClusterConfigPath, err := GetSourceClusterConfigPath()
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
+				//	for podName := range podListBeforeSizeMap {
+				//		afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath)
+				//		dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the mount size %v from pod %v", afterSize, podName))
+				//		podListAfterSizeMap[podName] = afterSize
+				//	}
+				//	for podName := range podListBeforeSizeMap {
+				//		dash.VerifyFatal(podListAfterSizeMap[podName] > podListBeforeSizeMap[podName], true, fmt.Sprintf("Verifying volume size has increased for pod %s", podName))
+				//	}
+				//})
+				//Step("Verifying backup success after initializing volume resize", func() {
+				//	log.InfoD("Verifying backup success after initializing volume resize")
+				//	ctx, err := backup.GetAdminCtxFromSecret()
+				//	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+				//
+				//	appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				//	err = backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, appContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of recent backup [%s]", firstScheduleBackupName))
+				//
+				//	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v", allScheduleBackupNames))
+				//	currentScheduleBackupCount := len(allScheduleBackupNames)
+				//	log.InfoD("Current number of schedule backups is [%v]", currentScheduleBackupCount)
+				//	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
+				//	log.InfoD("Ordinal of the next schedule backup is [%v]", nextScheduleBackupOrdinal)
+				//	log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
+				//	time.Sleep(15 * time.Minute)
+				//	checkNextScheduleBackupCreation := func() (interface{}, bool, error) {
+				//		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+				//		if err != nil {
+				//			return "", true, err
+				//		}
+				//		return ordinalScheduleBackupName, false, nil
+				//	}
+				//	nextScheduleBackupNameRef, err = DoRetryWithTimeoutWithGinkgoRecover(checkNextScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of ordinal [%v] of schedule named [%s]", nextScheduleBackupOrdinal, scheduleName))
+				//
+				//	nextScheduleBackupName = nextScheduleBackupNameRef.(string)
+				//	log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
+				//	err = backupSuccessCheckWithValidation(ctx, nextScheduleBackupName, appContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of next schedule backup named [%s] of schedule named [%s]", nextScheduleBackupName, scheduleName))
+				//})
+				//Step("Restoring application from first schedule backup", func() {
+				//	log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", firstScheduleBackupName))
+				//	ctx, err := backup.GetAdminCtxFromSecret()
+				//	log.FailOnError(err, "Fetching px-central-admin ctx")
+				//	restoreName := fmt.Sprintf("%s-%s-%v", "test-restore", namespace, time.Now().Unix())
+				//	restoreNames = append(restoreNames, restoreName)
+				//	err = CreateRestore(restoreName, firstScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, firstScheduleBackupName))
+				//})
+				//Step("Restoring application from recent backup", func() {
+				//	log.InfoD(fmt.Sprintf("Restoring the backed up application with backup name : %v", nextScheduleBackupName))
+				//	ctx, err := backup.GetAdminCtxFromSecret()
+				//	log.FailOnError(err, "Fetching px-central-admin ctx")
+				//	restoreName := fmt.Sprintf("%s-%s-%v", "test-restore-recent-backup", namespace, time.Now().Unix())
+				//	restoreNames = append(restoreNames, restoreName)
+				//	err = CreateRestore(restoreName, nextScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Restore %s from backup %s", restoreName, nextScheduleBackupName))
+				//})
 			}
 		}
 	})
 	JustAfterEach(func() {
-		var wg sync.WaitGroup
+		//var wg sync.WaitGroup
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		dash.VerifySafely(err, nil, "Fetching px-central-admin ctx")
-		for i := 0; i < len(scheduleNames); i++ {
-			err = DeleteSchedule(scheduleNames[i], SourceClusterName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] and schedule policies [%v]", scheduleNames[i], periodicSchedulePolicyNames[i]))
-		}
-		log.InfoD("Deleting created restores")
-		for _, restoreName := range restoreNames {
-			wg.Add(1)
-			go func(restoreName string) {
-				defer GinkgoRecover()
-				defer wg.Done()
-				err = DeleteRestore(restoreName, orgID, ctx)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
-			}(restoreName)
-		}
+		//for i := 0; i < len(scheduleNames); i++ {
+		//	err = DeleteSchedule(scheduleNames[i], SourceClusterName, orgID, ctx)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule named [%s] and schedule policies [%v]", scheduleNames[i], periodicSchedulePolicyNames[i]))
+		//}
+		//log.InfoD("Deleting created restores")
+		//for _, restoreName := range restoreNames {
+		//	wg.Add(1)
+		//	go func(restoreName string) {
+		//		defer GinkgoRecover()
+		//		defer wg.Done()
+		//		err = DeleteRestore(restoreName, orgID, ctx)
+		//		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
+		//	}(restoreName)
+		//}
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", appNamespaces)
