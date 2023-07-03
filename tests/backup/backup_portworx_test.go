@@ -727,7 +727,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 			for _, _ = range backupLocationMap {
 				Step("Getting size of volume before resizing", func() {
 					log.InfoD("Getting size of volume before resizing")
-					labelSelectors["app"] = "mysql"
+					//labelSelectors["app"] = "mysql"
 					pods, err := core.Instance().GetPods(namespace, labelSelectors)
 					log.InfoD("pods %s", pods)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
