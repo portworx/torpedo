@@ -727,8 +727,9 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 			for _, _ = range backupLocationMap {
 				Step("Getting size of volume before resizing", func() {
 					log.InfoD("Getting size of volume before resizing")
-					labelSelectors["app"] = "postgres"
+					labelSelectors["app"] = "mysql"
 					pods, err := core.Instance().GetPods(namespace, labelSelectors)
+					log.InfoD("pods selected are %s", pods)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
