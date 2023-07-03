@@ -636,6 +636,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	cloudCredUIDMap := make(map[string]string)
 	backupLocationMap := make(map[string]string)
 	podListBeforeSizeMap := make(map[string]int)
+	AppContextsMapping := make(map[string]*scheduler.Context)
 	//podListAfterSizeMap := make(map[string]int)
 
 	var backupLocation string
@@ -666,6 +667,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
 				scheduledAppContexts = append(scheduledAppContexts, ctx)
+				AppContextsMapping[namespace] = ctx
 			}
 		}
 	})
@@ -728,6 +730,9 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 				Step("Getting size of volume before resizing", func() {
 					log.InfoD("Getting size of volume before resizing")
 					//labelSelectors["app"] = "mysql"
+					label, err := getSpecLabel(AppContextsMapping[namespace])
+					log.InfoD("labels %s", label)
+					labelSelectors["app"] = label["app"]
 					pods, err := core.Instance().GetPods(namespace, labelSelectors)
 					log.InfoD("pods %s", pods)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/portworx/torpedo/drivers"
+	appsapi "k8s.io/api/apps/v1"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -3409,4 +3410,14 @@ func GetCustomBucketName(provider string, testName string) string {
 		CreateBucket(provider, customBucket)
 	}
 	return customBucket
+}
+
+func getSpecLabel(expectedRestoredAppContext *scheduler.Context) (map[string]string, error) {
+	var err error
+	for _, specObj := range expectedRestoredAppContext.App.SpecList {
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			return obj.Spec.Selector.MatchLabels, nil
+		}
+	}
+	return nil, err
 }
