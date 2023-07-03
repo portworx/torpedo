@@ -733,7 +733,8 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					//labelSelectors["app"] = "mysql"
 					label, err := getSpecLabel(AppContextsMapping[namespace])
 					log.InfoD("labels %s", label)
-					labelSelectors["app"] = label["app"]
+					labelSel := make(map[string]string)
+					labelSel["app"] = label["app"]
 					pods, err := core.Instance().GetPods(namespace, labelSelectors)
 					log.InfoD("pods %s", pods)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
