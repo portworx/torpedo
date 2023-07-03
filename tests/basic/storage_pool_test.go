@@ -9810,15 +9810,18 @@ var _ = Describe("{ExpandPoolWithInterrupts}", func() {
 				err = RebootNodeAndWait(*nodeDetail)
 				log.FailOnError(err, "Failed to reboot node and wait till it is up")
 			} else if operType == "systemkill" {
-				log.InfoD("Need to Implement the scenario")
 				err := KillPxStorageProcessPid(*nodeDetail)
 				log.FailOnError(err, "Failed to kill px-storage process PID")
 			} else {
 				err := Inst().V.RestartDriver(*nodeDetail, nil)
 				log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", nodeDetail.Name))
-				err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 5*time.Minute)
-				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeDetail.Name))
 			}
+
+			err = Inst().S.IsNodeReady(*nodeDetail)
+			log.FailOnError(err, "Node [%v] is not in ready state", nodeDetail.Name)
+
+			err = Inst().V.WaitDriverUpOnNode(*nodeDetail, Inst().DriverStartTimeout)
+			log.FailOnError(err, "failed waiting for driver up on Node[%v]", nodeDetail.Name)
 
 			isjournal, err := isJournalEnabled()
 			log.FailOnError(err, "Failed to check is journal enabled")
