@@ -909,6 +909,24 @@ func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string
 	return number, nil
 }
 
+func getSizeOfMountPointNew(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
+	var number int
+	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
+	if err != nil {
+		return 0, err
+	}
+	for _, line := range strings.SplitAfter(ret, "\n") {
+		if strings.Contains(line, volumeMount) {
+			ret = strings.Fields(line)[3]
+		}
+	}
+	number, err = strconv.Atoi(ret)
+	if err != nil {
+		return 0, err
+	}
+	return number, nil
+}
+
 func kubectlExec(arguments []string) (string, error) {
 	if len(arguments) == 0 {
 		return "", fmt.Errorf("no arguments supplied for kubectl command")
@@ -3417,6 +3435,21 @@ func getSpecLabel(expectedRestoredAppContext *scheduler.Context) (map[string]str
 	for _, specObj := range expectedRestoredAppContext.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
 			return obj.Spec.Selector.MatchLabels, nil
+		}
+	}
+	return nil, err
+}
+
+func getVolumeMounts(expectedRestoredAppContext *scheduler.Context) ([]string, error) {
+	var err error
+	var volumeMounts []string
+	for _, specObj := range expectedRestoredAppContext.App.SpecList {
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			vm := obj.Spec.Template.Spec.Containers[0].VolumeMounts
+			for index := range vm {
+				volumeMounts = append(volumeMounts, vm[index].MountPath)
+			}
+			return volumeMounts, nil
 		}
 	}
 	return nil, err

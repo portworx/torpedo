@@ -739,9 +739,14 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
 					for _, pod := range pods.Items {
-						beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
-						podListBeforeSizeMap[pod.Name] = beforeSize
+						volumeMounts, err := getVolumeMounts(AppContextsMapping[namespace])
+						for _, volumeMount := range volumeMounts {
+							beforeSize, err = getSizeOfMountPointNew(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
+							podListBeforeSizeMap[volumeMount] = beforeSize
+							log.Infof("volumemount %s", pods)
+							log.Infof("beforesize %s", beforeSize)
+						}
 					}
 				})
 				//Step("Create schedule policy", func() {
