@@ -1709,7 +1709,6 @@ func CreateRmqWorkload(dnsEndpoint string, pdsPassword string, namespace string,
 // This function prepares a deployment for running TPCC Workload
 func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefactor string, iterations string, deploymentName string, namespace string) (bool, error) {
 	var dbUser, timeToRun, numOfCustomers, numOfThreads, numOfWarehouses string
-
 	dnsEndpoint, port, err := GetDeploymentConnectionInfo(deploymentID, dataServiceName)
 	if err != nil {
 		return false, err
@@ -1744,7 +1743,7 @@ func CreateTpccWorkloads(dataServiceName string, deploymentID string, scalefacto
 	case mysql:
 		//hard sleep for dns resolution to happen
 		// log.Debug("Entering into sleep of 30 min for dns resolution to be up")
-		// time.Sleep(30 * time.Minute)
+
 		// log.Debug("Finished sleep of 30 min for dns resolution to be up")
 		dbName := "tpcc"
 		var wasMysqlConfigured bool
