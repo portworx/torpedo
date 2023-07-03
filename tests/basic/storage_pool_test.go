@@ -9761,3 +9761,80 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{ExpandPoolWithInterrupts}", func() {
+	/*
+			https://portworx.atlassian.net/browse/PTX-17617
+		Expand pools by legacy drive add with interrupts like restart service, reboot machines, kernel panic nodes etc while pool expand is in progress
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("ExpandPoolWithInterrupts",
+			"Expand pools by legacy drive add with interrupts",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "Test Add Drive to Metadata Pool"
+	It(stepLog, func() {
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("expandpoolwithinterrupts-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get a pool with running IO
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		// Get Node Details of the Pool with IO
+		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
+
+		log.InfoD("Expand Pool with ID [%v] on Node [%v]", poolUUID, nodeDetail)
+
+		for _, operType := range []string{"reboot", "restartpx", "systemkill"} {
+			log.InfoD("Trying Operation type [%v] while expansion in progress", operType)
+
+			poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+			expectedSize := poolToBeResized.TotalSize * 10 / units.GiB
+
+			err = Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+			log.FailOnError(err, fmt.Sprintf("Failed to initiate pool expand with ID %s", poolUUID))
+
+			err = WaitForExpansionToStart(poolUUID)
+			log.FailOnError(err, fmt.Sprintf("Failed while waiting for pool expand with ID %s", poolUUID))
+
+			if operType == "reboot" {
+				err = RebootNodeAndWait(*nodeDetail)
+				log.FailOnError(err, "Failed to reboot node and wait till it is up")
+			} else if operType == "systemkill" {
+				log.InfoD("Need to Implement the scenario")
+				err := KillPxStorageProcessPid(*nodeDetail)
+				log.FailOnError(err, "Failed to kill px-storage process PID")
+			} else {
+				err := Inst().V.RestartDriver(*nodeDetail, nil)
+				log.FailOnError(err, fmt.Sprintf("error restarting px on node %s", nodeDetail.Name))
+				err = Inst().V.WaitDriverUpOnNode(*nodeDetail, 5*time.Minute)
+				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", nodeDetail.Name))
+			}
+
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d'", expectedSize))
+
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
+		}
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})

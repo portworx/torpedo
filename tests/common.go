@@ -7142,6 +7142,44 @@ func KillKvdbMasterNodeAndFailover() error {
 	return nil
 }
 
+func GetPxStoragePID(n node.Node) (string, error) {
+	var processPid string
+	command := "ps -ef | grep -i px-storage"
+	out, err := Inst().N.RunCommand(n, command, node.ConnectionOpts{
+		Timeout:         20 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if !strings.Contains(line, "grep") {
+			fields := strings.Fields(line)
+			processPid = fields[1]
+			break
+		}
+	}
+	return processPid, err
+}
+
+// KillPxStorageProcessPid return error in case of command failure
+func KillPxStorageProcessPid(n node.Node) error {
+	pid, err := GetPxStoragePID(n)
+	if err != nil {
+		return err
+	}
+	command := fmt.Sprintf("kill -9 %s", pid)
+	log.InfoD("killing PID using command [%s]", command)
+	err = runCmd(command, n)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetKvdbMasterPID returns the PID of KVDB master node
 func GetKvdbMasterPID(kvdbNode node.Node) (string, error) {
 	var processPid string
