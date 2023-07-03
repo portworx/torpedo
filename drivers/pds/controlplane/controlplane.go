@@ -263,7 +263,9 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 // ValidateDNSEndpoint
 func (cp *ControlPlane) ValidateDNSEndpoint(dnsEndPoint string) error {
 	log.Infof("Dataservice endpoint is: [%s]", dnsEndPoint)
+	log.Info("Entering into hard sleep of 120 sec")
 	time.Sleep(120 * time.Second)
+	log.Info("Hard sleep of 120 sec is over")
 	_, err := net.Dial("tcp", dnsEndPoint)
 	if err != nil {
 		log.Errorf("Failed to connect to the dns endpoint with err: %v", err)
