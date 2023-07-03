@@ -897,7 +897,8 @@ func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string
 		return 0, err
 	}
 	for _, line := range strings.SplitAfter(ret, "\n") {
-		if strings.Contains(line, "pxd") {
+		//if strings.Contains(line, "pxd") {
+		if strings.Contains(line, "/var/lib/postgresql/data") {
 			ret = strings.Fields(line)[3]
 		}
 	}
