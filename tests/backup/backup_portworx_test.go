@@ -612,32 +612,33 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 // This testcase verifies schedule backups are successful while volume resize is in progress
 var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	var (
-		appList              = Inst().AppList
-		scheduledAppContexts []*scheduler.Context
-		preRuleNameList      []string
-		postRuleNameList     []string
-		appNamespaces        []string
-		beforeSize           int
-		credName             string
-		//periodicSchedulePolicyName  string
-		//periodicSchedulePolicyNames []string
-		//periodicSchedulePolicyUid   string
-		//periodicSchedulePolicyUids  []string
-		//scheduleName                string
-		//scheduleNames               []string
-		cloudCredUID string
-		//firstScheduleBackupName     string
+		appList                     = Inst().AppList
+		scheduledAppContexts        []*scheduler.Context
+		preRuleNameList             []string
+		postRuleNameList            []string
+		appNamespaces               []string
+		beforeSize                  int
+		credName                    string
+		periodicSchedulePolicyName  string
+		periodicSchedulePolicyNames []string
+		periodicSchedulePolicyUid   string
+		periodicSchedulePolicyUids  []string
+		scheduleName                string
+		scheduleNames               []string
+		cloudCredUID                string
+		//firstScheduleBackupName string
 		appClusterName string
 		//nextScheduleBackupNameRef   interface{}
 		//restoreNames                []string
 		//nextScheduleBackupName      string
+		volumeMounts []string
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
 	backupLocationMap := make(map[string]string)
 	podListBeforeSizeMap := make(map[string]int)
 	AppContextsMapping := make(map[string]*scheduler.Context)
-	//podListAfterSizeMap := make(map[string]int)
+	podListAfterSizeMap := make(map[string]int)
 
 	var backupLocation string
 	scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -725,8 +726,8 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 			log.InfoD("Uid of [%s] cluster is %s", appClusterName, clusterUid)
 		})
 		for _, namespace := range appNamespaces {
-			//for backupLocationUID, backupLocationName := range backupLocationMap {
-			for _, _ = range backupLocationMap {
+			for backupLocationUID, backupLocationName := range backupLocationMap {
+				//for _, _ = range backupLocationMap {
 				Step("Getting size of volume before resizing", func() {
 					log.InfoD("Getting size of volume before resizing")
 					//labelSelectors["app"] = "mysql"
@@ -739,84 +740,92 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
 					for _, pod := range pods.Items {
-						volumeMounts, err := getVolumeMounts(AppContextsMapping[namespace])
+						volumeMounts, err = getVolumeMounts(AppContextsMapping[namespace])
 						for _, volumeMount := range volumeMounts {
 							beforeSize, err = getSizeOfMountPointNew(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
 							podListBeforeSizeMap[volumeMount] = beforeSize
-							log.Infof("volumemount %s", pods)
+							log.Infof("volumemount %s", volumeMount)
 							log.Infof("beforesize %s", beforeSize)
 						}
 					}
 				})
-				//Step("Create schedule policy", func() {
-				//	log.InfoD("Create schedule policy")
-				//	ctx, err := backup.GetAdminCtxFromSecret()
-				//	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-				//	periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
-				//	periodicSchedulePolicyNames = append(periodicSchedulePolicyNames, periodicSchedulePolicyName)
-				//	periodicSchedulePolicyUid = uuid.New()
-				//	periodicSchedulePolicyUids = append(periodicSchedulePolicyUids, periodicSchedulePolicyUid)
-				//	periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
-				//	err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
-				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
-				//	periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
-				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
-				//})
-				//Step("Resize the volume before backup schedule", func() {
-				//	log.InfoD("Resize the volume before backup schedule")
-				//	for _, ctx := range scheduledAppContexts {
-				//		var appVolumes []*volume.Volume
-				//		log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
-				//		appVolumes, err := Inst().S.GetVolumes(ctx)
-				//		dash.VerifyFatal(err, nil, fmt.Sprintf("Fetch volumes for app %s", ctx.App.Key))
-				//		dash.VerifyFatal(len(appVolumes) > 0, true, "Verifying if app volumes exist")
-				//		var requestedVols []*volume.Volume
-				//		log.InfoD(fmt.Sprintf("Increase volume size %s on app %s",
-				//			Inst().V.String(), ctx.App.Key))
-				//		requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
-				//		dash.VerifyFatal(err, nil, "Verifying volume resize")
-				//		log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s",
-				//			ctx.App.Key))
-				//		for _, volume := range requestedVols {
-				//			// Need to pass token before validating volume
-				//			params := make(map[string]string)
-				//			if Inst().ConfigMap != "" {
-				//				params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-				//				dash.VerifyFatal(err, nil, "Fetching token from configMap")
-				//			}
-				//			err := Inst().V.ValidateUpdateVolume(volume, params)
-				//			dash.VerifyFatal(err, nil, fmt.Sprintf("Validate volume %v update status", volume))
-				//		}
-				//	}
-				//})
-				//Step("Create schedule backup immediately after initiating volume resize", func() {
-				//	log.InfoD("Create schedule backup after initiating volume resize")
-				//	ctx, err := backup.GetAdminCtxFromSecret()
-				//	dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-				//
-				//	scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-				//	scheduleNames = append(scheduleNames, scheduleName)
-				//	preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
-				//	postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
-				//	appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				//
-				//	firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
-				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
-				//})
-				//Step("Checking size of volume after resize", func() {
-				//	log.InfoD("Checking size of volume after resize")
-				//	srcClusterConfigPath, err := GetSourceClusterConfigPath()
-				//	dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-				//	for podName := range podListBeforeSizeMap {
-				//		afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath)
-				//		dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the mount size %v from pod %v", afterSize, podName))
-				//		podListAfterSizeMap[podName] = afterSize
-				//	}
-				//	for podName := range podListBeforeSizeMap {
-				//		dash.VerifyFatal(podListAfterSizeMap[podName] > podListBeforeSizeMap[podName], true, fmt.Sprintf("Verifying volume size has increased for pod %s", podName))
-				//	}
-				//})
+				Step("Create schedule policy", func() {
+					log.InfoD("Create schedule policy")
+					ctx, err := backup.GetAdminCtxFromSecret()
+					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+					periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", time.Now().Unix())
+					periodicSchedulePolicyNames = append(periodicSchedulePolicyNames, periodicSchedulePolicyName)
+					periodicSchedulePolicyUid = uuid.New()
+					periodicSchedulePolicyUids = append(periodicSchedulePolicyUids, periodicSchedulePolicyUid)
+					periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 5)
+					err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval 15 minutes named [%s]", periodicSchedulePolicyName))
+					periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
+				})
+				Step("Resize the volume before backup schedule", func() {
+					log.InfoD("Resize the volume before backup schedule")
+					for _, ctx := range scheduledAppContexts {
+						var appVolumes []*volume.Volume
+						log.InfoD(fmt.Sprintf("get volumes for %s app", ctx.App.Key))
+						appVolumes, err := Inst().S.GetVolumes(ctx)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetch volumes for app %s", ctx.App.Key))
+						dash.VerifyFatal(len(appVolumes) > 0, true, "Verifying if app volumes exist")
+						var requestedVols []*volume.Volume
+						log.InfoD(fmt.Sprintf("Increase volume size %s on app %s",
+							Inst().V.String(), ctx.App.Key))
+						requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
+						dash.VerifyFatal(err, nil, "Verifying volume resize")
+						log.InfoD(fmt.Sprintf("validate successful volume size increase on app %s",
+							ctx.App.Key))
+						for _, volume := range requestedVols {
+							// Need to pass token before validating volume
+							params := make(map[string]string)
+							if Inst().ConfigMap != "" {
+								params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+								dash.VerifyFatal(err, nil, "Fetching token from configMap")
+							}
+							err := Inst().V.ValidateUpdateVolume(volume, params)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Validate volume %v update status", volume))
+						}
+					}
+				})
+				Step("Create schedule backup immediately after initiating volume resize", func() {
+					log.InfoD("Create schedule backup after initiating volume resize")
+					ctx, err := backup.GetAdminCtxFromSecret()
+					dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+
+					scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
+					scheduleNames = append(scheduleNames, scheduleName)
+					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
+					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+
+					_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
+				})
+				Step("Checking size of volume after resize", func() {
+					log.InfoD("Checking size of volume after resize")
+					srcClusterConfigPath, err := GetSourceClusterConfigPath()
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
+					for podName := range podListBeforeSizeMap {
+						//afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath)
+						//dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the mount size %v from pod %v", afterSize, podName))
+						volumeMounts, err = getVolumeMounts(AppContextsMapping[namespace])
+						for _, volumeMount := range volumeMounts {
+							afterSize, err := getSizeOfMountPointNew(podName, namespace, srcClusterConfigPath, volumeMount)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, podName))
+							podListAfterSizeMap[volumeMount] = afterSize
+							log.Infof("volumemount %s", volumeMount)
+							log.Infof("beforesize %s", beforeSize)
+						}
+
+					}
+					for _, volumeMount := range volumeMounts {
+						dash.VerifyFatal(podListAfterSizeMap[volumeMount] > podListBeforeSizeMap[volumeMount], true, fmt.Sprintf("Verifying volume size has increased for pod %s", volumeMount))
+					}
+				})
 				//Step("Verifying backup success after initializing volume resize", func() {
 				//	log.InfoD("Verifying backup success after initializing volume resize")
 				//	ctx, err := backup.GetAdminCtxFromSecret()
