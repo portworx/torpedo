@@ -632,13 +632,14 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		//restoreNames                []string
 		//nextScheduleBackupName      string
 		volumeMounts []string
+		podList      []string
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
 	backupLocationMap := make(map[string]string)
-	podListBeforeSizeMap := make(map[string]int)
 	AppContextsMapping := make(map[string]*scheduler.Context)
-	podListAfterSizeMap := make(map[string]int)
+	volListBeforeSizeMap := make(map[string]int)
+	volListAfterSizeMap := make(map[string]int)
 
 	var backupLocation string
 	scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -745,7 +746,8 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 						for _, volumeMount := range volumeMounts {
 							beforeSize, err = getSizeOfMountPointNew(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
-							podListBeforeSizeMap[volumeMount] = beforeSize
+							volListBeforeSizeMap[volumeMount] = beforeSize
+							podList = append(podList, pod.Name)
 							log.Infof("volumemount %s", volumeMount)
 							log.Infof("beforesize %s", beforeSize)
 						}
@@ -810,21 +812,19 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Checking size of volume after resize")
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-					for podName := range podListBeforeSizeMap {
-						//afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath)
-						//dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the mount size %v from pod %v", afterSize, podName))
+					for _, podName := range podList {
 						volumeMounts, err = getVolumeMounts(AppContextsMapping[namespace])
 						for _, volumeMount := range volumeMounts {
 							afterSize, err := getSizeOfMountPointNew(podName, namespace, srcClusterConfigPath, volumeMount)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, podName))
-							podListAfterSizeMap[volumeMount] = afterSize
+							volListAfterSizeMap[volumeMount] = afterSize
 							log.Infof("volumemount %s", volumeMount)
 							log.Infof("beforesize %s", beforeSize)
 						}
 
 					}
 					for _, volumeMount := range volumeMounts {
-						dash.VerifyFatal(podListAfterSizeMap[volumeMount] > podListBeforeSizeMap[volumeMount], true, fmt.Sprintf("Verifying volume size has increased for pod %s", volumeMount))
+						dash.VerifyFatal(volListAfterSizeMap[volumeMount] > volListBeforeSizeMap[volumeMount], true, fmt.Sprintf("Verifying volume size has increased for pod %s", volumeMount))
 					}
 				})
 				//Step("Verifying backup success after initializing volume resize", func() {
