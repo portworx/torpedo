@@ -913,6 +913,10 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
 		})
 
+		log.Info("Entering into hard sleep of 120 sec")
+		time.Sleep(120 * time.Second)
+		log.Info("Hard sleep of 120 sec is over")
+
 		Step("Running TPCC Workloads - ", func() {
 			if dataservice == postgresql {
 				deploymentName := "pg-tpcc"

@@ -2,17 +2,15 @@ package controlplane
 
 import (
 	"fmt"
-	"net"
-	"net/url"
-	"strings"
-	"time"
-
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/api"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/pkg/log"
+	"net"
+	"net/url"
+	"strings"
 )
 
 // ControlPlane PDS
@@ -263,9 +261,6 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 // ValidateDNSEndpoint
 func (cp *ControlPlane) ValidateDNSEndpoint(dnsEndPoint string) error {
 	log.Infof("Dataservice endpoint is: [%s]", dnsEndPoint)
-	log.Info("Entering into hard sleep of 120 sec")
-	time.Sleep(120 * time.Second)
-	log.Info("Hard sleep of 120 sec is over")
 	_, err := net.Dial("tcp", dnsEndPoint)
 	if err != nil {
 		log.Errorf("Failed to connect to the dns endpoint with err: %v", err)
