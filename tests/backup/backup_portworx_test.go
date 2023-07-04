@@ -742,12 +742,10 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					for _, pod := range pods.Items {
 						volumeMounts, err = getVolumeMounts(AppContextsMapping[namespace])
 						for _, volumeMount := range volumeMounts {
-							beforeSize, err = getSizeOfMountPointNew(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
+							beforeSize, err = getSizeOfMountPointGeneric(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
 							volListBeforeSizeMap[volumeMount] = beforeSize
 							podList = append(podList, pod.Name)
-							log.Infof("volumemount %s", volumeMount)
-							log.Infof("beforesize %s", beforeSize)
 						}
 					}
 				})
@@ -813,11 +811,10 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					for _, podName := range podList {
 						volumeMounts, err = getVolumeMounts(AppContextsMapping[namespace])
 						for _, volumeMount := range volumeMounts {
-							afterSize, err := getSizeOfMountPointNew(podName, namespace, srcClusterConfigPath, volumeMount)
+							afterSize, err := getSizeOfMountPointGeneric(podName, namespace, srcClusterConfigPath, volumeMount)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume ater resizing %v from pod %v", afterSize, podName))
 							volListAfterSizeMap[volumeMount] = afterSize
 						}
-
 					}
 					for _, volumeMount := range volumeMounts {
 						dash.VerifyFatal(volListAfterSizeMap[volumeMount] > volListBeforeSizeMap[volumeMount], true, fmt.Sprintf("Verifying volume size has increased for pod %s", volumeMount))
