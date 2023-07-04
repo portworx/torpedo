@@ -735,7 +735,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("labels %s", label)
 					labelSel := make(map[string]string)
 					labelSel["app"] = label["app"]
-					pods, err := core.Instance().GetPods(namespace, labelSelectors)
+					pods, err := core.Instance().GetPods(namespace, labelSel)
 					log.InfoD("pods %s", pods)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
