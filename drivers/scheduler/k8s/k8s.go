@@ -791,6 +791,7 @@ func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 	} else {
 		nodeType = node.TypeWorker
 	}
+	nodeType = node.TypeWorker
 
 	nodeLabels, err := k8sCore.GetLabelsOnNode(n.GetName())
 	if err != nil {
