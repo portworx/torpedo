@@ -641,7 +641,6 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	AppContextsMapping := make(map[string]*scheduler.Context)
 	volListBeforeSizeMap := make(map[string]int)
 	volListAfterSizeMap := make(map[string]int)
-	labelSel := make(map[string]string)
 
 	var backupLocation string
 	scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -732,17 +731,17 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 			for backupLocationUID, backupLocationName := range backupLocationMap {
 				Step("Getting size of volume before resizing", func() {
 					log.InfoD("Getting size of volume before resizing")
-					label, err := getSpecLabel(AppContextsMapping[namespace])
-					log.InfoD("label from the spec %s", label)
-					labelSel["app"] = label["app"]
-					pods, err := core.Instance().GetPods(namespace, labelSel)
+					label, err := GetAppLabelFromSpec(AppContextsMapping[namespace])
+					log.Infof("Pod label from the spec %s", label)
+					labelSelectors["app"] = label["app"]
+					pods, err := core.Instance().GetPods(namespace, labelSelectors)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
 					for _, pod := range pods.Items {
-						volumeMounts, err = getVolumeMounts(AppContextsMapping[namespace])
+						volumeMounts, err = GetVolumeMounts(AppContextsMapping[namespace])
 						for _, volumeMount := range volumeMounts {
-							beforeSize, err = getSizeOfMountPointGeneric(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
+							beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
 							volListBeforeSizeMap[volumeMount] = beforeSize
 							podList = append(podList, pod.Name)
@@ -801,7 +800,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 
-					_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+					firstScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 				})
 				Step("Checking size of volume after resize", func() {
@@ -809,9 +808,9 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
 					for _, podName := range podList {
-						volumeMounts, err = getVolumeMounts(AppContextsMapping[namespace])
+						volumeMounts, err = GetVolumeMounts(AppContextsMapping[namespace])
 						for _, volumeMount := range volumeMounts {
-							afterSize, err := getSizeOfMountPointGeneric(podName, namespace, srcClusterConfigPath, volumeMount)
+							afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath, volumeMount)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume ater resizing %v from pod %v", afterSize, podName))
 							volListAfterSizeMap[volumeMount] = afterSize
 						}

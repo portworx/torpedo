@@ -891,25 +891,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	return
 }
 
-func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string) (int, error) {
-	var number int
-	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
-	if err != nil {
-		return 0, err
-	}
-	for _, line := range strings.SplitAfter(ret, "\n") {
-		if strings.Contains(line, "pxd") {
-			ret = strings.Fields(line)[3]
-		}
-	}
-	number, err = strconv.Atoi(ret)
-	if err != nil {
-		return 0, err
-	}
-	return number, nil
-}
-
-func getSizeOfMountPointGeneric(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
+func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
 	var number int
 	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
 	if err != nil {
@@ -3430,9 +3412,10 @@ func GetCustomBucketName(provider string, testName string) string {
 	return customBucket
 }
 
-func getSpecLabel(expectedRestoredAppContext *scheduler.Context) (map[string]string, error) {
+// GetAppLabelFromSpec gets the label of the pod from the spec
+func GetAppLabelFromSpec(AppContextsMapping *scheduler.Context) (map[string]string, error) {
 	var err error
-	for _, specObj := range expectedRestoredAppContext.App.SpecList {
+	for _, specObj := range AppContextsMapping.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
 			return obj.Spec.Selector.MatchLabels, nil
 		}
@@ -3440,10 +3423,11 @@ func getSpecLabel(expectedRestoredAppContext *scheduler.Context) (map[string]str
 	return nil, err
 }
 
-func getVolumeMounts(expectedRestoredAppContext *scheduler.Context) ([]string, error) {
+// GetVolumeMounts gets the volume mounts from the spec
+func GetVolumeMounts(AppContextsMapping *scheduler.Context) ([]string, error) {
 	var err error
 	var volumeMounts []string
-	for _, specObj := range expectedRestoredAppContext.App.SpecList {
+	for _, specObj := range AppContextsMapping.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
 			vm := obj.Spec.Template.Spec.Containers[0].VolumeMounts
 			for index := range vm {
