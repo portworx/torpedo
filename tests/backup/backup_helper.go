@@ -909,7 +909,7 @@ func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string
 	return number, nil
 }
 
-func getSizeOfMountPointNew(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
+func getSizeOfMountPointGeneric(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
 	var number int
 	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
 	if err != nil {
