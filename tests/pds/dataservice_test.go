@@ -914,7 +914,7 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 		})
 
 		log.Info("Entering into hard sleep of 120 sec")
-		time.Sleep(120 * time.Second)
+		time.Sleep(360 * time.Second)
 		log.Info("Hard sleep of 120 sec is over")
 
 		Step("Running TPCC Workloads - ", func() {
