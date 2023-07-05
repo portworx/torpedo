@@ -34,7 +34,7 @@ if [ -z "${SPEC_DIR}" ]; then
 fi
 
 if [ -z "${SCHEDULER}" ]; then
-    SCHEDULER="k8s"
+    SCHEDULER="rke"
 fi
 
 if [ -z "${LOGLEVEL}" ]; then
@@ -586,6 +586,8 @@ spec:
       value: "${DIAGS_BUCKET}"
     - name: PROVIDERS
       value: "${PROVIDERS}"
+    - name: CLUSTER_PROVIDER
+      value: "${CLUSTER_PROVIDER}"
     - name: INTERNAL_DOCKER_REGISTRY
       value: "$INTERNAL_DOCKER_REGISTRY"
     - name: IMAGE_PULL_SERVER

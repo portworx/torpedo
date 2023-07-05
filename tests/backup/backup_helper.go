@@ -3447,3 +3447,12 @@ func GetVolumeMounts(AppContextsMapping *scheduler.Context) ([]string, error) {
 	}
 	return nil, fmt.Errorf("unable to find the mount point for %s", AppContextsMapping.App.Key)
 }
+
+// Set default cluster provider as aws
+func getClusterProviders() []string {
+	providersStr := os.Getenv("CLUSTER_PROVIDER")
+	if providersStr != "" {
+		return strings.Split(providersStr, ",")
+	}
+	return cloudProviders
+}

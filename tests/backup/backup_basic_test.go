@@ -2,11 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"os"
-	"strings"
-	"testing"
-	"time"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -17,6 +12,10 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"os"
+	"strings"
+	"testing"
+	"time"
 )
 
 func getBucketNameSuffix() string {
@@ -74,7 +73,6 @@ func BackupInitInstance() {
 		StorageProvisioner: Inst().Provisioner,
 		NodeDriverName:     Inst().N.String(),
 	})
-
 	log.FailOnError(err, "Error occurred while Scheduler Driver Initialization")
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
@@ -82,7 +80,6 @@ func BackupInitInstance() {
 	log.FailOnError(err, "Error occurred while Node Driver Initialization")
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
 	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
-
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
@@ -126,6 +123,14 @@ func BackupInitInstance() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList), 2, "2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
+
+	// Switch context to destination cluster to form destination struct containing the required secret/access key, token key, endpoint
+	err = SetDestinationKubeConfig()
+	log.FailOnError(err, "Switching context to destination cluster failed")
+
+	// Switch context backup to source cluster to form source struct containing the required secret/access key, token key, endpoint
+	err = SetSourceKubeConfig()
+	log.FailOnError(err, "Switching context to source cluster failed")
 }
 
 var dash *aetosutil.Dashboard
