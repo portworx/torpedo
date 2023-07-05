@@ -2,12 +2,13 @@ package targetcluster
 
 import (
 	"fmt"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
-	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"net/http"
 	"strings"
 	"time"
+
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
+	"github.com/portworx/torpedo/drivers/pds/parameters"
 
 	apps "github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -80,6 +81,9 @@ func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (stri
 			deploymentTargetID = targetClusters[i].GetId()
 			log.Infof("deploymentTargetID %v", deploymentTargetID)
 			log.InfoD("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
+			if targetClusters[i].GetStatus() != "Healthy" {
+				return "Target Cluster is not in healthy state, hence exiting the testcase execution", fmt.Errorf("Error occured %v", err)
+			}
 		}
 	}
 	return deploymentTargetID, nil
