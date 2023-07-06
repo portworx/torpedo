@@ -898,3 +898,16 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
+
+var _ = Describe("{testParseConfig}", func() {
+	log.InfoD("Testing parse config")
+	log.Infof("Testing parse config")
+	provider := getCloudProviderCred("azure", "default")
+	log.InfoD("Access Key IDN:", provider.SubscriptionID)
+	log.Infof("Access Key IDN:", provider.SubscriptionID)
+	backupTarget := getBackupTargets("s3", "default")
+	log.InfoD("Name:", backupTarget.Name)
+	log.Infof("Name:", backupTarget.Name)
+	log.InfoD("Region:", backupTarget.Region)
+	log.Infof("Region:", backupTarget.Region)
+})
