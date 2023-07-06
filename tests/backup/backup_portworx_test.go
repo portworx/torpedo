@@ -72,7 +72,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
-				backupLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				backupLocationName = fmt.Sprintf("%s-%s-bl-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = backupLocationName
@@ -519,7 +519,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		encryptionBucketName = fmt.Sprintf("%s-%s-%v", providers[0], "encryptionbucket", time.Now().Unix())
 		backupLocationName := fmt.Sprintf("%s-%s", "location", providers[0])
 		backupLocationNames = append(backupLocationNames, backupLocationName)
-		backupLocationName = fmt.Sprintf("%s-%s", "encryption-location", providers[0])
+		backupLocationName = fmt.Sprintf("%s-%s-%v", "encryption-location", providers[0], time.Now().Unix())
 		backupLocationNames = append(backupLocationNames, backupLocationName)
 		CredName = fmt.Sprintf("%s-%s-%v", "cred", providers[0], time.Now().Unix())
 		CloudCredUID = uuid.New()
@@ -568,12 +568,12 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 				encryptionBackupName := fmt.Sprintf("%s-%s-%s", "encryption", BackupNamePrefix, namespace)
 				backupNames = append(backupNames, encryptionBackupName)
 				err = CreateBackupWithValidation(ctx, encryptionBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", encryptionBackupName))
 			}
 		})
 
-		Step("Restoring encrypted and no-encrypted backups", func() {
-			log.InfoD("Restoring encrypted and no-encrypted backups")
+		Step("Restoring encrypted and non-encrypted backups", func() {
+			log.InfoD("Restoring encrypted and non-encrypted backups")
 			restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupNames[0], time.Now().Unix())
 			restoreNames = append(restoreNames, restoreName)
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -585,6 +585,37 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			restoreNames = append(restoreNames, restoreName)
 			err = CreateRestore(restoreName, backupNames[1], nil, destinationClusterName, orgID, ctx, make(map[string]string))
 			log.FailOnError(err, "%s restore failed", restoreName)
+		})
+		// PB-3962: Taking encrypted backup, validating the backup location and restoring the backup to make sure the encryption key is not lost after backup location validation which will result in restore failure
+		Step("Taking new encrypted backup", func() {
+			log.InfoD("Taking new encrypted backup")
+			for _, namespace := range bkpNamespaces {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+				encryptedBackupName := fmt.Sprintf("new-%s-%s-%s", "encrypted", BackupNamePrefix, namespace)
+				backupNames = append(backupNames, encryptedBackupName)
+				err = CreateBackupWithValidation(ctx, encryptedBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of new encrypted backup [%s]", encryptedBackupName))
+			}
+		})
+
+		Step("Validate the encrypted backup location after taking backup", func() {
+			log.InfoD("Validate the encrypted backup location after taking backup")
+			err = ValidateBackupLocation(ctx, orgID, backupLocationNames[1], BackupLocation1UID)
+			log.FailOnError(err, "backup location %s validation failed", backupLocationNames[1])
+		})
+
+		Step("Restore the encrypted backups after validating the encrypted backup location", func() {
+			log.InfoD("Restore the encrypted backups after validating the encrypted backup location")
+			for i := 1; i < len(backupNames); i++ {
+				restoreName := fmt.Sprintf("%s-%s-encrypted", restoreNamePrefix, backupNames[i])
+				restoreNames = append(restoreNames, restoreName)
+				for i, _ := range scheduledAppContexts {
+					err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts[i:i+1])
+				}
+				log.FailOnError(err, "%s restore failed", restoreName)
+			}
 		})
 	})
 	JustAfterEach(func() {
