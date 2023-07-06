@@ -764,7 +764,6 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Getting size of volume before resizing")
 					label, err := GetAppLabelFromSpec(AppContextsMapping[namespace])
 					dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the label from the application spec %s", AppContextsMapping[namespace].App.Key))
-					log.Infof("Pod label from the spec %s", label)
 					labelSelectors["app"] = label["app"]
 					pods, err := core.Instance().GetPods(namespace, labelSelectors)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
