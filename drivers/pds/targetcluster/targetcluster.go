@@ -88,8 +88,6 @@ func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (stri
 	if targetClusterStatus != "healthy" {
 		return "Target Cluster is not in healthy state, hence exiting the testcase execution", fmt.Errorf("error occured is: %v", err)
 	}
-	log.Debugf("Deployment Target ID is : %v", deploymentTargetID)
-	log.Debugf("Deployment Target status is : %v", targetClusterStatus)
 	return deploymentTargetID, nil
 }
 
