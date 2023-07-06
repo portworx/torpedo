@@ -70,6 +70,7 @@ type TargetCluster struct {
 func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
 	log.InfoD("Get the Target cluster details")
 	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
+	var targetClusterStatus string
 	if err != nil {
 		return "", fmt.Errorf("error while listing deployments: %v", err)
 	}
@@ -79,15 +80,16 @@ func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (stri
 	for i := 0; i < len(targetClusters); i++ {
 		if targetClusters[i].GetClusterId() == clusterID {
 			deploymentTargetID = targetClusters[i].GetId()
-			log.Debugf("Deployment Target ID is : %v", deploymentTargetID)
 			log.Infof("deploymentTargetID %v", deploymentTargetID)
 			log.InfoD("Cluster ID: %v, Name: %v,Status: %v", targetClusters[i].GetClusterId(), targetClusters[i].GetName(), targetClusters[i].GetStatus())
-			if targetClusters[i].GetStatus() != "Healthy" {
-				return "Target Cluster is not in healthy state, hence exiting the testcase execution", fmt.Errorf("error occured is: %v", err)
-			}
+			targetClusterStatus = targetClusters[i].GetStatus()
 		}
 	}
+	if targetClusterStatus != "healthy" {
+		return "Target Cluster is not in healthy state, hence exiting the testcase execution", fmt.Errorf("error occured is: %v", err)
+	}
 	log.Debugf("Deployment Target ID is : %v", deploymentTargetID)
+	log.Debugf("Deployment Target status is : %v", targetClusterStatus)
 	return deploymentTargetID, nil
 }
 
