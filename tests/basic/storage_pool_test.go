@@ -7,17 +7,16 @@ import (
 	"reflect"
 	"regexp"
 
-	"github.com/google/uuid"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/volume"
-
-	"github.com/portworx/torpedo/pkg/log"
-
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
@@ -9759,5 +9758,190 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
+	var testrailID = 50617
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/2017
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("NodeShutdownStorageMovetoStoragelessNode", "Initiate add-drive to storageless node and pool expansion", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the storageless node and add a drive"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddrvsl-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		slNodes := node.GetStorageLessNodes()
+		if len(slNodes) == 0 {
+			dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
+		}
+		numOfSlNodeBefore := len(slNodes)
+		slNode := GetRandomStorageLessNode(slNodes)
+		stNodes := node.GetStorageNodes()
+		selectedNode := stNodes[0]
+		//poolList, err := GetPoolsDetailsOnNode(selectedNode)
+		//log.FailOnError(err, "fialed while getting updated node pool list")
+		isDMthin, err := IsDMthin()
+		log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
+
+		if isDMthin {
+			err = AddMetadataDisk(slNode)
+			log.FailOnError(err, "error while adding metadata disk")
+		}
+
+		stepLog := "adding max supported drives"
+		Step(stepLog, func() {
+			log.FailOnError(err, "error adding cloud drive")
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing end points")
+
+			//add drives to max
+			log.InfoD(stepLog)
+			//var selectedPools string
+
+			poolList, err := GetPoolsDetailsOnNode(selectedNode)
+			log.FailOnError(err, "fialed while getting updated node pool list")
+			//first add all the new pools
+			poolLeft := maxPoolLength - len(poolList)
+			err = addNewPools(selectedNode, poolLeft)
+			drvNum, err := Inst().N.RunCommand(selectedNode, "lsblk -l -d -e 11 -n -o NAME|wc -l", node.ConnectionOpts{
+				Timeout:         defaultCommandTimeout,
+				TimeBeforeRetry: defaultCommandRetry,
+				IgnoreError:     false,
+				Sudo:            false,
+			})
+			drvNum1 := strings.TrimSpace(string(drvNum))
+			drvNum1 = strings.Trim(drvNum1, "\n")
+			drvNumInt, err := strconv.Atoi(drvNum1)
+			log.FailOnError(err, "failed to convert to int")
+			maxDriveLimit, err := GetPoolMaxCloudDriveLimit(&selectedNode)
+			log.FailOnError(err, "failed to get pool drive limit")
+			maxDriveLimitInt := int(maxDriveLimit)
+			maxDriveAllowed := maxDriveLimitInt - drvNumInt
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing volume endpoints")
+			//expand by adding disk
+			selectedNodeForOps, err := node.GetNodeByName(selectedNode.Name)
+			log.FailOnError(err, "failed while getting node")
+			poolListForOps, err := GetPoolsDetailsOnNode(selectedNodeForOps)
+			log.FailOnError(err, "failed while getting updated node pool list")
+
+			//add max drive allowed per node
+			for maxDriveAllowed > 0 {
+				for i := 0; i < len(poolListForOps); i++ {
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "error refreshing volume endpoints")
+					drvSize, err := getPoolDiskSize(poolListForOps[i])
+					log.FailOnError(err, "error getting drive size for pool [%s]", poolListForOps[i].Uuid)
+					drvMap, err := Inst().V.GetPoolDrives(&selectedNode)
+					log.FailOnError(err, "error in getting pool with IO with error")
+					if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
+						if (POOL_MAX_CLOUD_DRIVES - len(drvs)) > 0 {
+							drivesThatCanBeAdded := (POOL_MAX_CLOUD_DRIVES - len(drvs))
+							for j := 1; j <= drivesThatCanBeAdded; j++ {
+								driveSize := drvSize * uint64(j)
+								expectedSize := (poolListForOps[i].TotalSize / units.GiB) + driveSize
+								isjournal, err := isJournalEnabled()
+								log.FailOnError(err, "Failed to check is journal enabled")
+								expectedSizeWithJournal := expectedSize
+								if isjournal {
+									journalSize := uint64(3)
+									expectedSizeWithJournal = expectedSizeWithJournal - journalSize
+								}
+								err = Inst().V.ExpandPool(poolListForOps[i].Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+								log.FailOnError(err, "error while expanding pool")
+								maxDriveAllowed = maxDriveAllowed - 1
+								if maxDriveAllowed == 0 {
+									break
+								}
+								resizeErr := waitForPoolToBeResized(expectedSize, poolListForOps[i].Uuid, isjournal)
+								dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
+								err = Inst().V.RefreshDriverEndpoints()
+								log.FailOnError(err, "error refreshing volume endpoints")
+							}
+						}
+					} else {
+						fmt.Errorf("drive map is empty")
+						log.FailOnError(err, "error getting drivemap from node[%s]", selectedNode.Name)
+					}
+				}
+			}
+
+		})
+		stepLog = "shutdown node and wait for storageless node to become storage node"
+		Step(stepLog, func() {
+			selectedNodeForOps, err := node.GetNodeByName(selectedNode.Name)
+			log.FailOnError(err, "failed while getting node")
+			poolListForOps, err := GetPoolsDetailsOnNode(selectedNodeForOps)
+			poolStatus, err := getPoolLastOperation(poolListForOps[0].Uuid)
+			log.FailOnError(err, "error getting pool status")
+			dash.VerifySafely(poolStatus.Status, api.SdkStoragePool_OPERATION_PENDING, "Verify pool status")
+			dash.VerifySafely(strings.Contains(poolStatus.Msg, "to be clean before starting pool expansion"), true, fmt.Sprintf("verify pool expansion message %s", poolStatus.Msg))
+			if poolStatus.Msg != "" {
+				log.Infof("Pool Resize Status: %v, Message : %s", poolStatus.Status, poolStatus.Msg)
+				if poolStatus.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
+					(strings.Contains(poolStatus.Msg, "Storage rebalance is running") || strings.Contains(poolStatus.Msg, "Rebalance in progress")) {
+					errstring := true
+					dash.VerifyFatal(errstring == true, true, "poolresize failed")
+				}
+				var connect node.ConnectionOpts
+				connect.Timeout = 60
+				connect.TimeBeforeRetry = 10
+				err := Inst().N.ShutdownNode(selectedNodeForOps, node.ShutdownNodeOpts{
+					Force:          true,
+					ConnectionOpts: connect,
+				})
+				//shutdown for more than 3 mins
+				time.Sleep(300 * time.Second)
+				log.FailOnError(err, "failed to shutdown the node with err %s", err)
+			}
+			//t := func() (interface{}, bool, error) {
+			//	err = Inst().N.PowerOnVM(selectedNodeForOps)
+			//	if err != nil {
+			//		return nil, false, err
+			//	}
+			//	return nil, false, nil
+			//}
+
+			//_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+			//log.FailOnError(err, "Failed to powered on the vm")
+			////isjournal, err := isJournalEnabled()
+			//log.FailOnError(err, "Failed to check if Journal enabled")
+			//validatePXStartTimeout := 5 * time.Minute
+			//if err := Inst().V.WaitDriverUpOnNode(selectedNodeForOps, validatePXStartTimeout); err != nil {
+			//		log.FailOnError(err, "failed to shutdown the node with err %s", err)
+			//	}
+			//check if storageless nodes has taken over the storage and pools from shutdown node
+			var stNode node.Node
+
+			slNodes := node.GetStorageLessNodes()
+			if len(slNodes) == 0 {
+				dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
+			}
+
+			dash.VerifyFatal(len(slNodes) == numOfSlNodeBefore-1, true, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
+
+			for _, n := range stNodes {
+				if n.Id == slNode.Id {
+					stNode = n
+					break
+				}
+			}
+			dash.VerifyFatal(stNode.Name != "", true, fmt.Sprintf("Verify node %s is converted to storage node", slNode.Name))
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
