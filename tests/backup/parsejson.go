@@ -91,7 +91,7 @@ func getConfigObj() Configuration {
 		fmt.Println("Error:", err)
 	}
 	// Read JSON file into a variable
-	jsonData, err := os.ReadFile("tests/backup/cred.json")
+	jsonData, err := os.ReadFile("../tests/backup/cred.json")
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 	}
