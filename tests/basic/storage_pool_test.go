@@ -9823,7 +9823,7 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 				err = Inst().V.RefreshDriverEndpoints()
 				log.FailOnError(err, "error refreshing volume endpoints")
-				dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
+				dash.VerifyFatal(resizeErr != nil, true, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
 				if i == maxDrivesAllowed+1 {
 					dash.VerifyFatal(strings.Contains(selectedPool.LastOperation.Msg, "unable to add 1 new drive(s) as it would exceed maximum supported drives (6)"), true, "Error expected as drive added more than allowed per pool")
 				}
@@ -9913,10 +9913,12 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			log.FailOnError(err, "error getting drive size for pool [%s]", selectedPools)
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+			dash.VerifyFatal(err != nil, true, fmt.Sprintf("error in pool expand with err %s", err))
 			if poolToBeResized.LastOperation.Status != api.SdkStoragePool_OPERATION_FAILED {
 				isjournal, err := isJournalEnabled()
 				log.FailOnError(err, "error getting drive size for pool [%s]", selectedPools)
 				err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+				dash.VerifyFatal(err != nil, true, fmt.Sprintf("error in pool expand with err %s", err))
 				resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 				log.FailOnError(resizeErr, "error getting drive size for pool [%s]", selectedPools)
 			}
