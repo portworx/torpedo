@@ -86,6 +86,10 @@ func getBackupTargets(backupTarget string, tag string) BackupTarget {
 
 func getConfigObj() Configuration {
 
+	_, err := os.Getwd()
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
 	// Read JSON file into a variable
 	jsonData, err := os.ReadFile("tests/backup/cred.json")
 	if err != nil {
