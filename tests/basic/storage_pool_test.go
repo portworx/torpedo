@@ -9825,9 +9825,9 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 				err = Inst().V.RefreshDriverEndpoints()
 				log.FailOnError(err, "error refreshing volume endpoints")
-				dash.VerifyFatal(resizeErr != nil, true, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
+				dash.VerifyFatal(resizeErr != nil, false, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
 				if i == maxDrivesAllowed+2 {
-
+					dash.VerifyFatal(resizeErr != nil, true, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
 					if selectedPool.LastOperation.Msg != "" {
 						dash.VerifyFatal(strings.Contains(selectedPool.LastOperation.Msg, "unable to add 1 new drive(s) as it would exceed maximum supported drives (6)"), true, "Error expected as drive added more than allowed per pool")
 					} else {
