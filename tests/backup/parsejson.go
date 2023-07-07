@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
-	"time"
 )
 
 type CloudProvider struct {
@@ -92,26 +90,10 @@ func getConfigObj() Configuration {
 	_, err := os.Getwd()
 	// Read JSON file into a variable
 
-	// Get the absolute path of the current executable file
-	executablePath, err := os.Executable()
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-
-	// Get the directory containing the executable file
-	executableDir := filepath.Dir(executablePath)
-
-	// Build the file path inside the executable
-	filePathInsideExecutable := filepath.Join(executableDir, "cred.json")
-
-	// Print the file path inside the executable
-	fmt.Println("File path inside executable:", filePathInsideExecutable)
-	fmt.Println("Current directory:", filePathInsideExecutable)
-	jsonData, err := ioutil.ReadFile(filePathInsideExecutable)
+	jsonData, err := ioutil.ReadFile("../drivers/backup/cred.json")
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 	}
-	time.Sleep(600 * time.Second)
 	// Parse JSON into Configuration struct
 	var config Configuration
 	err = json.Unmarshal(jsonData, &config)
