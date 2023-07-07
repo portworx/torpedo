@@ -900,6 +900,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 })
 
 var _ = Describe("{testParseConfig}", func() {
+	StartTorpedoTest("testParseConfig", "testcreds", nil, 58050)
 	log.InfoD("Testing parse config")
 	log.Infof("Testing parse config")
 	provider := getCloudProviderCred("azure", "default")
