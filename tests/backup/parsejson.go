@@ -3,7 +3,9 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 )
 
 type CloudProvider struct {
@@ -91,7 +93,9 @@ func getConfigObj() Configuration {
 		fmt.Println("Error:", err)
 	}
 	// Read JSON file into a variable
-	jsonData, err := os.ReadFile("../tests/backup/cred.json")
+	filename := "../tests/backup/cred.json"
+	filename1, err := filepath.Abs(filename)
+	jsonData, err := ioutil.ReadFile(filename1)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 	}

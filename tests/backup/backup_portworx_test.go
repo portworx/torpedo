@@ -902,7 +902,6 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 
 var _ = Describe("{testParseConfig}", func() {
 
-	time.Sleep(600 * time.Second)
 	pwd, err := os.Getwd()
 	if err != nil {
 		fmt.Println("Error:", err)
