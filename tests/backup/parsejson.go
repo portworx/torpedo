@@ -89,17 +89,27 @@ func getBackupTargets(backupTarget string, tag string) BackupTarget {
 func getConfigObj() Configuration {
 
 	_, err := os.Getwd()
+	// Read JSON file into a variable
+
+	// Get the absolute path of the current executable file
+	executablePath, err := os.Executable()
 	if err != nil {
 		fmt.Println("Error:", err)
 	}
-	// Read JSON file into a variable
-	filename := "../tests/backup/cred.json"
-	filename1, err := filepath.Abs(filename)
-	jsonData, err := ioutil.ReadFile(filename1)
+
+	// Get the directory containing the executable file
+	currentDir := filepath.Dir(executablePath)
+
+	// Print the current file path
+	fmt.Println("Current file path:", executablePath)
+	// Print the current directory
+	fmt.Println("Current directory:", currentDir)
+	filename := "currentDir/cred.json"
+	//filename1, err := filepath.Abs(filename)
+	jsonData, err := ioutil.ReadFile(filename)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 	}
-
 	// Parse JSON into Configuration struct
 	var config Configuration
 	err = json.Unmarshal(jsonData, &config)
