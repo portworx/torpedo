@@ -9825,7 +9825,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 				err = Inst().V.RefreshDriverEndpoints()
 				log.FailOnError(err, "error refreshing volume endpoints")
-				dash.VerifyFatal(resizeErr != nil, false, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
 				if i == maxDrivesAllowed+1 {
 					dash.VerifyFatal(resizeErr != nil, true, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
 					if selectedPool.LastOperation.Msg != "" {
@@ -9834,6 +9833,8 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 						err := errors.New("failed while getting msg")
 						log.FailOnError(err, "failed while getting msg")
 					}
+				} else {
+					dash.VerifyFatal(resizeErr != nil, false, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
 				}
 			}
 		})
