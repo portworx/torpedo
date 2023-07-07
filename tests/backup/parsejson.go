@@ -104,7 +104,7 @@ func getConfigObj() Configuration {
 	fmt.Println("Current file path:", executablePath)
 	// Print the current directory
 	fmt.Println("Current directory:", currentDir)
-	filename := "currentDir/cred.json"
+	filename := currentDir + "/cred.json"
 	//filename1, err := filepath.Abs(filename)
 	jsonData, err := ioutil.ReadFile(filename)
 	if err != nil {
