@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -900,6 +901,12 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 })
 
 var _ = Describe("{testParseConfig}", func() {
+
+	pwd, err := os.Getwd()
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+	log.InfoD("Testing parse config %s", pwd)
 	StartTorpedoTest("testParseConfig", "testcreds", nil, 58050)
 	log.InfoD("Testing parse config")
 	log.Infof("Testing parse config")
