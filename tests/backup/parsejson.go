@@ -87,7 +87,7 @@ func getBackupTargets(backupTarget string, tag string) BackupTarget {
 func getConfigObj() Configuration {
 
 	// Read JSON file into a variable
-	jsonData, err := os.ReadFile("cred.json")
+	jsonData, err := os.ReadFile("tests/backup/cred.json")
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 	}
