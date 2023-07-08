@@ -9921,8 +9921,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				}
 			}
 			//add one more extra drive than allowed per node
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "error refreshing volume endpoints")
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPools)
 			drvSize, err := getPoolDiskSize(poolToBeResized)
 			log.FailOnError(err, "error getting drive size for pool [%s]", selectedPools)
