@@ -9823,11 +9823,9 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				isjournal, err := isJournalEnabled()
 				log.FailOnError(err, "Failed to check is journal enabled")
 				resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
-				err = Inst().V.RefreshDriverEndpoints()
-				log.FailOnError(err, "error refreshing volume endpoints")
 				if i == maxDrivesAllowed+1 {
 					dash.VerifyFatal(resizeErr != nil, true, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
-					if selectedPool.LastOperation.Msg != "" {
+					if selectedPool.LastOperation != nil {
 						dash.VerifyFatal(strings.Contains(selectedPool.LastOperation.Msg, "unable to add 1 new drive(s) as it would exceed maximum supported drives (6)"), true, "Error expected as drive added more than allowed per pool")
 					} else {
 						err := errors.New("failed while getting msg")
@@ -9837,6 +9835,8 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 					dash.VerifyFatal(resizeErr != nil, false, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
 				}
 			}
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing volume endpoints")
 		})
 
 		Step("Test max pool count", func() {
