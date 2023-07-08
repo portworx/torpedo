@@ -9824,9 +9824,11 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				log.FailOnError(err, "Failed to check is journal enabled")
 				resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 				if i == maxDrivesAllowed+1 {
+					poolStatus, err := getPoolLastOperation(selectedPool.Uuid)
+					log.FailOnError(err, "error getting pool status")
 					dash.VerifyFatal(resizeErr != nil, true, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
-					if selectedPool.LastOperation != nil {
-						dash.VerifyFatal(strings.Contains(selectedPool.LastOperation.Msg, "unable to add 1 new drive(s) as it would exceed maximum supported drives (6)"), true, "Error expected as drive added more than allowed per pool")
+					if poolStatus != nil {
+						dash.VerifyFatal(strings.Contains(poolStatus.Msg, "unable to add 1 new drive(s) as it would exceed maximum supported drives (6)"), true, "Error expected as drive added more than allowed per pool")
 					} else {
 						err := errors.New("failed while getting msg")
 						log.FailOnError(err, "failed while getting msg")
