@@ -918,5 +918,5 @@ var _ = Describe("{testParseConfig}", func() {
 	log.Infof("Name:", backupTarget.Name)
 	log.InfoD("Region: %s", backupTarget.Region)
 	log.Infof("Region:", backupTarget.Region)
-	time.Sleep(600 * time.Second)
+	time.Sleep(300 * time.Second)
 })
