@@ -47,48 +47,47 @@ type Configuration struct {
 	} `json:"backupTargets"`
 }
 
-func getCloudProviderCred(Cloudprovider string, tag string) CloudProvider {
-	config := getConfigObj()
+func getCloudProviderCred(Cloudprovider string, tag string) (*CloudProvider, error) {
+	config, _ := getConfigObj()
 	// Access the parsed data
-	var cp CloudProvider
 	for _, provider := range config.CloudProviders {
 		fmt.Println("Provider:", provider.Provider)
 		fmt.Println("Tag:", provider.Tag)
 
 		if provider.Provider == Cloudprovider && provider.Tag == tag {
-			return provider
+			return &provider, nil
 		}
 	}
-	return cp
+	return nil, fmt.Errorf("unable to find the cloud provider %s with tag %s", Cloudprovider, tag)
 }
 
-func getBackupTargets(backupTarget string, tag string) BackupTarget {
-	config := getConfigObj()
+func getBackupTargets(backupTarget string, tag string) (*BackupTarget, error) {
+	config, _ := getConfigObj()
 	// Access the parsed data
-	var cp BackupTarget
 	for _, provider := range config.BackupTargets.Buckets {
 		fmt.Println("Provider:", provider.Provider)
 		fmt.Println("Tag:", provider.Tag)
 
 		if provider.Provider == backupTarget && provider.Tag == tag {
-			return provider
+			return &provider, nil
 		}
 	}
-	return cp
+	return nil, fmt.Errorf("unable to find the cloud provider %s with tag %s", backupTarget, tag)
 }
 
-func getConfigObj() Configuration {
+func getConfigObj() (*Configuration, error) {
 
 	_, err := os.Getwd()
 	// Read JSON file into a variable
 
-	jsonData, err := ioutil.ReadFile("../drivers/backup/test_config.json")
+	testConfigPath := "../drivers/backup/test_config.json"
+	jsonData, err := ioutil.ReadFile(testConfigPath)
 	if err != nil {
-		fmt.Println("Error reading file:", err)
+		return nil, fmt.Errorf("unable to read the test configutation file in the path %s", testConfigPath)
 	}
 	// Parse JSON into Configuration struct
 	var config Configuration
 	err = json.Unmarshal(jsonData, &config)
 
-	return config
+	return &config, nil
 }
