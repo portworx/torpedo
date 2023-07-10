@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -37,11 +36,6 @@ var _ = Describe("{BackupClusterVerification}", func() {
 
 var _ = Describe("{testParseConfig}", func() {
 
-	pwd, err := os.Getwd()
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-	log.InfoD("Testing parse config %s", pwd)
 	StartTorpedoTest("testParseConfig", "testcreds", nil, 11111)
 	log.InfoD("Testing parse config")
 	provider, _ := getConfigObj()
