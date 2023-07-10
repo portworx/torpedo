@@ -39,8 +39,7 @@
           "provider": "s3",
           "access_key_id": "S3_ACCESS_KEY_ID",
           "secret_access_key": "S3_SECRET_ACCESS_KEY",
-          "region": "S3_REGION",
-          "tag": "default"
+          "region": "S3_REGION"
         }
       }
     },
@@ -51,8 +50,7 @@
         "export_path": "EXPORT_PATH",
         "sub_path": "SUB_PATH",
         "mount_options": "MOUNT_OPTIONS",
-        "encryption_key": "ENCRYPTION_KEY",
-        "tag": "default"
+        "encryption_key": "ENCRYPTION_KEY"
       }
     }
   }
