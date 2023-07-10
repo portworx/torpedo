@@ -37,11 +37,13 @@ var _ = Describe("{BackupClusterVerification}", func() {
 var _ = Describe("{testParseConfig}", func() {
 
 	StartTorpedoTest("testParseConfig", "testcreds", nil, 11111)
-	log.InfoD("Testing parse config")
-	provider, _ := backup.GetConfigObj()
-	log.InfoD("Aws Access Key ID: %s", provider.CloudProviders.GetAWSCredential("default").AccessKeyID)
-	log.InfoD("Region from backup target: %s", provider.BackupTargets.GetAWSBucket("default").Region)
-	log.InfoD("Aws Access Key ID: %s", provider.BackupTargets.GetNFSServer("default").IP)
+
+	It("Testing parse config", func() {
+		provider, _ := backup.GetConfigObj()
+		log.InfoD("Aws Access Key ID: %s", provider.CloudProviders.GetAWSCredential("default").AccessKeyID)
+		log.InfoD("Region from backup target: %s", provider.BackupTargets.GetAWSBucket("default").Region)
+		log.InfoD("Aws Access Key ID: %s", provider.BackupTargets.GetNFSServer("default").IP)
+	})
 })
 
 // This is a sample test case to verify User/Group Management and role mapping
