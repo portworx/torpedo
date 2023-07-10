@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -32,6 +33,19 @@ var _ = Describe("{BackupClusterVerification}", func() {
 		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 		log.Infof("No cleanup required for this testcase")
 	})
+})
+
+var _ = Describe("{testParseConfig}", func() {
+
+	pwd, err := os.Getwd()
+	if err != nil {
+		fmt.Println("Error:", err)
+	}
+	log.InfoD("Testing parse config %s", pwd)
+	StartTorpedoTest("testParseConfig", "testcreds", nil, 11111)
+	log.InfoD("Testing parse config")
+	provider, _ := getConfigObj()
+	log.InfoD("Aws Access Key ID: %s", provider.CloudProviders.AWS.Default.AccessKeyID)
 })
 
 // This is a sample test case to verify User/Group Management and role mapping
