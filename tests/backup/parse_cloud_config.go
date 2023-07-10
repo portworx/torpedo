@@ -41,16 +41,8 @@ type IBMCredential struct {
 }
 
 type BackupTargets struct {
-	Buckets    Buckets    `json:"buckets"`
-	NFSServers NFSServers `json:"nfsServer"`
-}
-
-type Buckets struct {
-	AWS BucketsAWS `json:"aws"`
-}
-
-type BucketsAWS struct {
-	Default Bucket `json:"default"`
+	AWS map[string]Bucket    `json:"aws"`
+	NFS map[string]NFSServer `json:"nfs"`
 }
 
 type Bucket struct {
@@ -60,10 +52,6 @@ type Bucket struct {
 	SecretAccessKey string `json:"secret_access_key"`
 	Region          string `json:"region"`
 	Tag             string `json:"tag"`
-}
-
-type NFSServers struct {
-	Default NFSServer `json:"default"`
 }
 
 type NFSServer struct {
@@ -102,6 +90,22 @@ func (p *CloudProviders) GetAWSCredential(tag string) AWSCredential {
 	return p.AWS[tag]
 }
 
-func (p *CloudProviders) AzureCredential(tag string) AzureCredential {
+func (p *CloudProviders) GetAzureCredential(tag string) AzureCredential {
 	return p.Azure[tag]
+}
+
+func (p *CloudProviders) GetGKECredential(tag string) GKECredential {
+	return p.GKE[tag]
+}
+
+func (p *CloudProviders) GetIBMCredential(tag string) IBMCredential {
+	return p.IBM[tag]
+}
+
+func (p *BackupTargets) GetNFSServer(tag string) NFSServer {
+	return p.NFS[tag]
+}
+
+func (p *BackupTargets) GetAWSBucket(tag string) Bucket {
+	return p.AWS[tag]
 }
