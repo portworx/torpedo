@@ -76,6 +76,9 @@ var _ = Describe("{VolumeUpdate}", func() {
 							log.InfoD(stepLog)
 							currRep, err := Inst().V.GetReplicationFactor(v)
 							log.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
+							if currRep <= 1 {
+								Skip(fmt.Sprintf("Replication count of the app is %d, skipping the test", currRep))
+							}
 							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 							log.FailOnError(err, "Failed to set volume  %s repl factor", v.Name)
