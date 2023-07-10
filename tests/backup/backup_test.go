@@ -39,7 +39,7 @@ var _ = Describe("{testParseConfig}", func() {
 	StartTorpedoTest("testParseConfig", "testcreds", nil, 11111)
 	log.InfoD("Testing parse config")
 	provider, _ := getConfigObj()
-	log.InfoD("Aws Access Key ID: %s", provider.CloudProviders.GetAWSCredential("default"))
+	log.InfoD("Aws Access Key ID: %s", provider.CloudProviders.GetAWSCredential("default").AccessKeyID)
 })
 
 // This is a sample test case to verify User/Group Management and role mapping
