@@ -1,39 +1,40 @@
 {
-	"cloudProviders": [
-		{
-			"provider": "aws",
-			"access_key_id": "AWS_ACCESS_KEY_ID",
-			"secret_access_key": "AWS_SECRET_ACCESS_KEY",
-			"region": "AWS_REGION",
-			"tag": "default"
+	"cloudProviders": {
+		"aws": {
+			"default": {
+				"access_key_id": "AWS_ACCESS_KEY_ID",
+				"secret_access_key": "AWS_SECRET_ACCESS_KEY",
+				"region": "AWS_REGION"
+			}
 		},
-		{
-			"provider": "azure",
-			"subscription_id": "AZURE_SUBSCRIPTION_ID",
-			"client_id": "AZURE_CLIENT_ID",
-			"client_secret": "AZURE_CLIENT_SECRET",
-			"tenant_id": "AZURE_TENANT_ID",
-			"tag": "default"
+		"azure": {
+			"default": {
+				"subscription_id": "AZURE_SUBSCRIPTION_ID",
+				"client_id": "AZURE_CLIENT_ID",
+				"client_secret": "AZURE_CLIENT_SECRET",
+				"tenant_id": "AZURE_TENANT_ID"
+			}
 		},
-		{
-			"provider": "gke",
-			"project_id": "GCP_PROJECT_ID",
-			"cluster_name": "GKE_CLUSTER_NAME",
-			"location": "GKE_CLUSTER_LOCATION",
-			"credentials_file": "GKE_PATH_TO_SERVICE_ACCOUNT_JSON",
-			"tag": "default"
+		"gke": {
+			"default": {
+				"project_id": "GCP_PROJECT_ID",
+				"cluster_name": "GKE_CLUSTER_NAME",
+				"location": "GKE_CLUSTER_LOCATION",
+				"credentials_file": "GKE_PATH_TO_SERVICE_ACCOUNT_JSON"
+			}
 		},
-		{
-			"provider": "ibm",
-			"api_key": "IBM_CLOUD_API_KEY",
-			"region": "IBM_CLOUD_REGION",
-			"resource_group": "IBM_CLOUD_RESOURCE_GROUP",
-			"tag": "default"
+		"ibm": {
+			"default": {
+				"api_key": "IBM_CLOUD_API_KEY",
+				"region": "IBM_CLOUD_REGION",
+				"resource_group": "IBM_CLOUD_RESOURCE_GROUP"
+			}
 		}
-	],
+	},
 	"backupTargets": {
-			"buckets": [
-				{
+		"buckets": {
+			"aws": {
+				"default": {
 					"name": "CLOUD_BUCKET_NAME",
 					"provider": "s3",
 					"access_key_id": "S3_ACCESS_KEY_ID",
@@ -41,17 +42,18 @@
 					"region": "S3_REGION",
 					"tag": "default"
 				}
-			],
-			"nfsServer": [
-				{
-					"name": "SERVER_NAME",
-					"ip": "SERVER_IP",
-					"export_path": "EXPORT_PATH",
-					"sub_path": "SUB_PATH",
-					"mount_options": "MOUNT_OPTIONS",
-					"encryption_key": "ENCRYPTION_KEY",
-					"tag": "default"
-				}
-			]
+			}
+		},
+		"nfsServer": {
+			"default": {
+				"name": "SERVER_NAME",
+				"ip": "SERVER_IP",
+				"export_path": "EXPORT_PATH",
+				"sub_path": "SUB_PATH",
+				"mount_options": "MOUNT_OPTIONS",
+				"encryption_key": "ENCRYPTION_KEY",
+				"tag": "default"
+			}
+		}
 	}
 }
