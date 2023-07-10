@@ -1,4 +1,4 @@
-package tests
+package backup
 
 import (
 	"encoding/json"
@@ -69,7 +69,7 @@ type Config struct {
 	BackupTargets  BackupTargets  `json:"backupTargets"`
 }
 
-func getConfigObj() (*Config, error) {
+func GetConfigObj() (*Config, error) {
 
 	_, err := os.Getwd()
 	// Read JSON file into a variable
