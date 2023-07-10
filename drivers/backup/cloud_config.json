@@ -32,7 +32,6 @@
     }
   },
   "backupTargets": {
-    "buckets": {
       "aws": {
         "default": {
           "name": "CLOUD_BUCKET_NAME",
@@ -40,9 +39,8 @@
           "secret_access_key": "S3_SECRET_ACCESS_KEY",
           "region": "S3_REGION"
         }
-      }
-    },
-    "nfsServer": {
+      },
+      "nfs": {
       "default": {
         "name": "SERVER_NAME",
         "ip": "SERVER_IP",
