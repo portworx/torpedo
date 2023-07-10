@@ -911,5 +911,5 @@ var _ = Describe("{testParseConfig}", func() {
 	log.InfoD("Testing parse config")
 	log.Infof("Testing parse config")
 	provider, _ := getConfigObj()
-	log.InfoD("Access Key IDN: %s", provider.CloudProviders.AWS.Default)
+	log.InfoD("Access Key IDN: %s", provider.CloudProviders.AWS.Default.AccessKeyID)
 })
