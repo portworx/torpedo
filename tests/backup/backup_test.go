@@ -38,7 +38,7 @@ var _ = Describe("{testParseConfig}", func() {
 
 	StartTorpedoTest("testParseConfig", "testcreds", nil, 11111)
 	log.InfoD("Testing parse config")
-	provider, _ := getConfigObj()
+	provider, _ := backup.GetConfigObj()
 	log.InfoD("Aws Access Key ID: %s", provider.CloudProviders.GetAWSCredential("default").AccessKeyID)
 	log.InfoD("Region from backup target: %s", provider.BackupTargets.GetAWSBucket("default").Region)
 	log.InfoD("Aws Access Key ID: %s", provider.BackupTargets.GetNFSServer("default").IP)
