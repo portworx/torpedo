@@ -36,7 +36,6 @@
       "aws": {
         "default": {
           "name": "CLOUD_BUCKET_NAME",
-          "provider": "s3",
           "access_key_id": "S3_ACCESS_KEY_ID",
           "secret_access_key": "S3_SECRET_ACCESS_KEY",
           "region": "S3_REGION"

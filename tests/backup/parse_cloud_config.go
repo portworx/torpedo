@@ -8,49 +8,33 @@ import (
 )
 
 type CloudProviders struct {
-	AWS   AWS   `json:"aws"`
-	Azure Azure `json:"azure"`
-	GKE   GKE   `json:"gke"`
-	IBM   IBM   `json:"ibm"`
+	AWS   map[string]AWSCredential   `json:"aws"`
+	Azure map[string]AzureCredential `json:"azure"`
+	GKE   map[string]GKECredential   `json:"gke"`
+	IBM   map[string]IBMCredential   `json:"ibm"`
 }
 
-type AWS struct {
-	Default AWSCredentials `json:"default"`
-}
-
-type Azure struct {
-	Default AzureCredentials `json:"default"`
-}
-
-type GKE struct {
-	Default GKECredentials `json:"default"`
-}
-
-type IBM struct {
-	Default IBMCredentials `json:"default"`
-}
-
-type AWSCredentials struct {
+type AWSCredential struct {
 	AccessKeyID     string `json:"access_key_id"`
 	SecretAccessKey string `json:"secret_access_key"`
 	Region          string `json:"region"`
 }
 
-type AzureCredentials struct {
+type AzureCredential struct {
 	SubscriptionID string `json:"subscription_id"`
 	ClientID       string `json:"client_id"`
 	ClientSecret   string `json:"client_secret"`
 	TenantID       string `json:"tenant_id"`
 }
 
-type GKECredentials struct {
+type GKECredential struct {
 	ProjectID       string `json:"project_id"`
 	ClusterName     string `json:"cluster_name"`
 	Location        string `json:"location"`
 	CredentialsFile string `json:"credentials_file"`
 }
 
-type IBMCredentials struct {
+type IBMCredential struct {
 	APIKey        string `json:"api_key"`
 	Region        string `json:"region"`
 	ResourceGroup string `json:"resource_group"`
@@ -112,4 +96,12 @@ func getConfigObj() (*Config, error) {
 	err = json.Unmarshal(jsonData, &config)
 
 	return &config, nil
+}
+
+func (p *CloudProviders) GetAWSCredential(tag string) AWSCredential {
+	return p.AWS[tag]
+}
+
+func (p *CloudProviders) AzureCredential(tag string) AzureCredential {
+	return p.Azure[tag]
 }
