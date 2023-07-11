@@ -6,7 +6,7 @@ metadata:
 provisioner: kubernetes.io/portworx-volume
 parameters:
   priority_io: "high"
-  repl: "1"
+  repl: "2"
   fs: "ext4"
 allowVolumeExpansion: true
 ---
