@@ -30,10 +30,10 @@ import (
 )
 
 const (
-	replicationUpdateTimeout = 4 * time.Hour
-	poolResizeTimeout        = time.Minute * 360
-	retryTimeout             = time.Minute * 2
-	addDriveUpTimeOut        = time.Minute * 15
+	replicationUpdateTimeout         = 4 * time.Hour
+	poolResizeTimeout                = time.Minute * 360
+	poolExpansionStatusCheckInterval = time.Minute * 2
+	addDriveUpTimeOut                = time.Minute * 15
 )
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
@@ -163,7 +163,7 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 		dash.VerifyFatal(poolToBeResized != nil, true, "Pool to be resized exist?")
 
 		// px will put a new request in a queue, but in this case we can't calculate the expected size,
-		// so need to wain until the ongoing operation is completed
+		// so need to wait until the ongoing operation is completed
 		stepLog = "Verify that pool resize is not in progress"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -176,44 +176,32 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			}
 		})
 
-		var expectedSize uint64
-		var expectedSizeWithJournal uint64
+		originalSize := poolToBeResized.TotalSize
+		expectedSize := roundUpValue(originalSize * 2 / units.GiB)
+		isjournal, err := isJournalEnabled()
+		log.FailOnError(err, "Failed to check if Journal is enabled")
+		expectedSizeWithJournal := expectedSize - 3
 
 		stepLog = "Calculate expected pool size and trigger pool resize"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
-			expectedSize = roundUpValue(expectedSize)
-			isjournal, err := isJournalEnabled()
-			log.FailOnError(err, "Failed to check is Journal enabled")
+			log.InfoD("Current Size of the pool %s is %d GB", poolIDToResize, originalSize/units.GiB)
 
-			//To-Do Need to handle the case for multiple pools
-			expectedSizeWithJournal = expectedSize
-			if isjournal {
-				expectedSizeWithJournal = expectedSizeWithJournal - 3
-			}
-
-			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
-
-			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+			dash.VerifyFatal(err, nil, "failed to init pool expansion")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
+			dash.VerifyFatal(resizeErr, nil, "pool expansion resulted in error")
 		})
 
-		Step("Ensure that new pool has been expanded to the expected size", func() {
-			ValidateApplications(contexts)
-
+		Step("Verify that pool has been expanded to the expected size", func() {
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
-			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
+			log.FailOnError(err, fmt.Sprintf("failed to get pool using UUID %s", poolIDToResize))
 			newPoolSize := resizedPool.TotalSize / units.GiB
-			isExpansionSuccess := false
-			if newPoolSize >= expectedSizeWithJournal {
-				isExpansionSuccess = true
-			}
-			dash.VerifyFatal(isExpansionSuccess, true,
-				fmt.Sprintf("expected new pool size to be %v or %v if pool has journal, got %v", expectedSize, expectedSizeWithJournal, newPoolSize))
+			isExpansionSucceeded := newPoolSize >= expectedSizeWithJournal
+			dash.VerifyFatal(isExpansionSucceeded, true,
+				fmt.Sprintf("expected pool to have been expanded to %v or %v if pool has journal, got %v",
+					expectedSize, expectedSizeWithJournal, newPoolSize))
 		})
 	})
 	JustAfterEach(func() {
@@ -948,7 +936,7 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) (bool, error) {
 			return nil, false, nil
 		}
 
-		_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, retryTimeout)
+		_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, poolExpansionStatusCheckInterval)
 		if err != nil {
 			return false, err
 		}
@@ -981,56 +969,50 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) (bool, error) {
 }
 
 func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJournalEnabled bool) error {
-
 	currentLastMsg := ""
 	f := func() (interface{}, bool, error) {
 		expandedPool, err := GetStoragePoolByUUID(poolIDToResize)
 		if err != nil {
 			return nil, true, fmt.Errorf("error getting pool by using id %s", poolIDToResize)
 		}
-
 		if expandedPool == nil {
-			return nil, false, fmt.Errorf("expanded pool value is nil")
+			return nil, false, fmt.Errorf("pool to expand not found")
 		}
-		if expandedPool.LastOperation != nil {
-			log.Infof("Pool Resize Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
-			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_FAILED {
-				return nil, false, fmt.Errorf("pool %s expansion has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
+		if expandedPool.LastOperation == nil {
+			return nil, false, fmt.Errorf("no pool resize operation in progress: pool expansion init may have failed")
+		}
+		log.Infof("Pool Resize Status: %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
+		switch expandedPool.LastOperation.Status {
+		case api.SdkStoragePool_OPERATION_SUCCESSFUL:
+			newPoolSize := expandedPool.TotalSize / units.GiB
+			if isJournalEnabled {
+				expectedSize -= 3
 			}
-			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_PENDING {
-				return nil, true, fmt.Errorf("pool %s is in pending state, waiting to start", poolIDToResize)
+			if newPoolSize >= expectedSize {
+				// storage pool resize has been completed
+				return nil, false, nil
+			} else {
+				return nil, false, fmt.Errorf("pool %s expansion resulted in wrong size", newPoolSize)
 			}
-			if expandedPool.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS {
-				if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") {
-					if currentLastMsg == expandedPool.LastOperation.Msg {
-						return nil, false, fmt.Errorf("pool reblance is not progressing")
-					}
-					currentLastMsg = expandedPool.LastOperation.Msg
-					return nil, true, fmt.Errorf("wait for pool rebalance to complete")
+		case api.SdkStoragePool_OPERATION_FAILED:
+			return nil, false, fmt.Errorf("pool %s expansion failed: %s", poolIDToResize, expandedPool.LastOperation)
+		case api.SdkStoragePool_OPERATION_PENDING:
+			return nil, true, fmt.Errorf("pool %s expansion is pending", poolIDToResize)
+		case api.SdkStoragePool_OPERATION_IN_PROGRESS:
+			if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") {
+				if currentLastMsg == expandedPool.LastOperation.Msg {
+					return nil, true, fmt.Errorf("pool rebalance is not progressing")
 				}
-
-				if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") ||
-					strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance complete pool status: Maintenance") {
-					return nil, false, nil
-				}
-
-				return nil, true, fmt.Errorf("waiting for pool status to update")
+				currentLastMsg = expandedPool.LastOperation.Msg
+				return nil, true, fmt.Errorf("wait for pool rebalance to complete")
 			}
+			return nil, true, fmt.Errorf("waiting for pool status to update")
+		default:
+			return nil, false, fmt.Errorf("unknown pool status %v", expandedPool.LastOperation.Status)
 		}
-		newPoolSize := expandedPool.TotalSize / units.GiB
-
-		expectedSizeWithJournal := expectedSize
-		if isJournalEnabled {
-			expectedSizeWithJournal = expectedSizeWithJournal - 3
-		}
-		if newPoolSize >= expectedSizeWithJournal {
-			// storage pool resize has been completed
-			return nil, false, nil
-		}
-		return nil, true, fmt.Errorf("pool has not been resized to %d or %d yet. Waiting...Current size is %d", expectedSize, expectedSizeWithJournal, newPoolSize)
 	}
 
-	_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, retryTimeout)
+	_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, poolExpansionStatusCheckInterval)
 	return err
 }
 
@@ -1052,7 +1034,7 @@ func getPoolLastOperation(poolID string) (*api.StoragePoolOperation, error) {
 	}
 
 	var poolLastOperation *api.StoragePoolOperation
-	poolStatus, err := task.DoRetryWithTimeout(f, poolResizeTimeout, retryTimeout)
+	poolStatus, err := task.DoRetryWithTimeout(f, poolResizeTimeout, poolExpansionStatusCheckInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -1655,7 +1637,7 @@ func getVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volu
 		}
 		return nil, true, fmt.Errorf("error getting volume with size atleast %d GiB used", size)
 	}
-	_, err := task.DoRetryWithTimeout(f, 60*time.Minute, retryTimeout)
+	_, err := task.DoRetryWithTimeout(f, 60*time.Minute, poolExpansionStatusCheckInterval)
 	return volSelected, err
 }
 
@@ -1736,7 +1718,7 @@ func waitForVolMinimumSize(volID string, size uint64) (bool, error) {
 		}
 		return nil, true, fmt.Errorf("vol %s is not having required IO", volID)
 	}
-	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, retryTimeout)
+	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, poolExpansionStatusCheckInterval)
 	if err != nil {
 		return false, err
 	}
@@ -5014,7 +4996,7 @@ func waitForStorageDown(n node.Node) error {
 		}
 		return nil, true, fmt.Errorf("node %s status is not down yet, current status: %s", n.Name, status.String())
 	}
-	if _, err := task.DoRetryWithTimeout(t, poolResizeTimeout, retryTimeout); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, poolResizeTimeout, poolExpansionStatusCheckInterval); err != nil {
 		return err
 	}
 
