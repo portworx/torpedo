@@ -992,7 +992,8 @@ func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 				// storage pool resize has been completed
 				return nil, false, nil
 			} else {
-				return nil, false, fmt.Errorf("pool %s expansion resulted in wrong size", newPoolSize)
+				return nil, false, fmt.Errorf("pool %v expansion resulted in wrong size %v. Should be larger than %v",
+                    poolIDToResize, newPoolSize, expectedSize)
 			}
 		case api.SdkStoragePool_OPERATION_FAILED:
 			return nil, false, fmt.Errorf("pool %s expansion failed: %s", poolIDToResize, expandedPool.LastOperation)
