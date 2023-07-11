@@ -10,7 +10,10 @@ parameters:
   {{ else }}
   repl: "2"{{ end }}
   priority_io: "high"
-  io_profile: "db_remote"
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"
+  {{ else }}
+  io_profile: "db_remote"{{ end }}
 allowVolumeExpansion: true
 ---
 ##### Portworx storage class
@@ -25,5 +28,8 @@ parameters:
   {{ else }}
   repl: "2"{{ end }}
   priority_io: "high"
-  io_profile: "db_remote"
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"
+  {{ else }}
+  io_profile: "db_remote"{{ end }}
 allowVolumeExpansion: true
