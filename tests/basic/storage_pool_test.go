@@ -9922,16 +9922,13 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 					selectedPools = poolListOnNode[i].Uuid
 				}
 			}
-			fmt.Printf("selectedPools %v", selectedPools)
 			if selectedPools == "" {
 				err := fmt.Errorf("failed to get a pool to add a drive")
 				log.FailOnError(err, "failed to get a pool to add a drive")
 			}
 			//add one more extra drive than allowed per node
-			fmt.Printf("selectedPools %v", selectedPools)
 			poolToBeResized, err := GetStoragePoolByUUID(selectedPools)
 			log.FailOnError(err, "failed to get a pool to add a drive")
-			fmt.Printf("poolToBeResized %v", poolToBeResized)
 			drvSize, err := getPoolDiskSize(poolToBeResized)
 			log.FailOnError(err, "error getting drive size for pool [%s]", selectedPools)
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
