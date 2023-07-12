@@ -299,6 +299,7 @@ func watchConfigMap() error {
 	ChaosMap = map[string]int{}
 	cm, err := core.Instance().GetConfigMap(testTriggersConfigMap, configMapNS)
 	log.Infof("configmap is %v", &cm.Data)
+	log.Infof("length of configmap is %v", len(cm.Data))
 	if err != nil {
 		return fmt.Errorf("Error reading config map: %v", err)
 	}
@@ -388,6 +389,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 		return err
 	}
 
+	log.Infof("Inside populateDataFromConfigMap")
 	err = populateTriggers(configData)
 	if err != nil {
 		return err
@@ -506,6 +508,7 @@ func setSendGridEmailAPIKey(configData *map[string]string) error {
 }
 
 func populateTriggers(triggers *map[string]string) error {
+	log.Infof("Inside populateTriggers")
 	for triggerType, chaosLevel := range *triggers {
 		log.Infof("Printing triggerType %s and chaosLevel %s", triggerType, chaosLevel)
 		chaosLevelInt, err := strconv.Atoi(chaosLevel)
