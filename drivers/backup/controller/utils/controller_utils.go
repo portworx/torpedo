@@ -1,4 +1,4 @@
-package torpedo_utils
+package utils
 
 import (
 	"fmt"

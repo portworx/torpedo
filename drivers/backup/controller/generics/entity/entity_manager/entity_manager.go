@@ -1,4 +1,4 @@
-package entity_generics
+package entity_manager
 
 // Entity represents an Entity
 type Entity any

@@ -4,7 +4,7 @@ import (
 	. "github.com/portworx/torpedo/drivers/backup/controller/cluster/cluster_manager/cluster/namespace_manager/namespace"
 	. "github.com/portworx/torpedo/drivers/backup/controller/cluster/cluster_manager/cluster/namespace_spec"
 	. "github.com/portworx/torpedo/drivers/backup/controller/cluster/cluster_spec"
-	. "github.com/portworx/torpedo/drivers/backup/controller/torpedo/torpedo_utils/entity_generics"
+	. "github.com/portworx/torpedo/drivers/backup/controller/generics/entity/entity_manager"
 )
 
 // NamespaceConfig represents the configuration for a NamespaceSpec
