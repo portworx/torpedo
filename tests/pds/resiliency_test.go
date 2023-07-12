@@ -813,6 +813,7 @@ var _ = Describe("{RebootNodeForUnrelatedDS}", func() {
 	It("Deploy Dataservices and Restart PX During App scaleup", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var generateWorkloads = make(map[string]string)
+		var originalDS = make(map[PDSDataService]*pds.ModelsDeployment)
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
@@ -820,13 +821,21 @@ var _ = Describe("{RebootNodeForUnrelatedDS}", func() {
 					isDeploymentsDeleted = false
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
-					deployments[ds] = deployment
+					originalDS[ds] = deployment
 				})
 			}
 		})
 
 		defer func() {
 			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+			for _, newDeployment := range originalDS {
 				Step("Delete created deployments")
 				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
 				log.FailOnError(err, "Error while deleting data services")
@@ -862,6 +871,7 @@ var _ = Describe("{RebootNodeForUnrelatedDS}", func() {
 				for _, nodeObj := range nodes {
 					err = k8sCore.CordonNode(nodeObj.Name, defaultCommandTimeout, defaultCommandRetry)
 					log.FailOnError(err, fmt.Sprintf("Error in disabling scheduling for node %v", nodeObj.Name))
+					log.Infof("Node with Name : %v is now cordoned", nodeObj.Name)
 				}
 			}
 		})
@@ -907,16 +917,27 @@ var _ = Describe("{RebootNodeForUnrelatedDS}", func() {
 		// TODO : Once Workload Validation Module is ready, we will add that here. AI: @jyoti
 
 		Step("Enable Scheduling on the nodes of deployment", func() {
-			for _, deployment := range deployments {
-				nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
-				log.FailOnError(err, fmt.Sprintf("Cannot fetch nodes of the running Data Service %v", *deployment.ClusterResourceName))
-				for _, nodeObj := range nodes {
-					err = k8sCore.UnCordonNode(nodeObj.Name, defaultCommandTimeout, defaultCommandRetry)
-					log.FailOnError(err, fmt.Sprintf("Error in re-enabling scheduling for node %v", nodeObj.Name))
-				}
+			nodeList, err := k8sCore.GetNodes()
+			log.FailOnError(err, fmt.Sprintf("Cannot fetch nodes of the running Data Service %v", *deployment.ClusterResourceName))
+			for _, nodeObj := range nodeList.Items {
+				err = k8sCore.UnCordonNode(nodeObj.Name, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, fmt.Sprintf("Error in re-enabling scheduling for node %v", nodeObj.Name))
+				log.Infof("Node with name %v successfully uncordoned", nodeObj.Name)
 			}
 		})
-		Step("Running Workloads Again", func() {
+		Step("Removing Existing and Running New Workloads Again", func() {
+			for dsName, workloadContainer := range generateWorkloads {
+				Step("Delete the workload generating deployments", func() {
+					if Contains(dataServiceDeploymentWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
+						err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
+					} else if Contains(dataServicePodWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
+						err = pdslib.DeleteK8sPods(workloadContainer, namespace)
+					}
+					log.FailOnError(err, "error deleting workload generating pods")
+				})
+			}
 			for ds, deployment := range deployments {
 				if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
 					log.InfoD("Running Workloads on DataService %v ", ds.Name)
