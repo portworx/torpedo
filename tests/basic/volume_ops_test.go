@@ -945,7 +945,7 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		retain := 3
-		interval := 10
+		interval := 3
 
 		n := node.GetStorageDriverNodes()[0]
 		uuidCmd := "pxctl cred list -j | grep uuid"
@@ -998,7 +998,7 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 
 			ValidateApplications(contexts)
 			log.Infof("waiting for 10 mins to create multiple cloud snaps")
-			//time.Sleep(10 * time.Minute)
+			time.Sleep(10 * time.Minute)
 
 		})
 		volSnapMap := make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
