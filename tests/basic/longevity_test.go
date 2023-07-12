@@ -384,13 +384,13 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setMigrationInterval(configData)
 	setMigrationsCount(configData)
 	setCreatedBeforeTimeForNsDeletion(configData)
-	err := setSendGridEmailAPIKey(configData)
-	if err != nil {
-		return err
-	}
+	//err := setSendGridEmailAPIKey(configData)
+	//if err != nil {
+	//	return err
+	//}
 
 	log.Infof("Inside populateDataFromConfigMap")
-	err = populateTriggers(configData)
+	err := populateTriggers(configData)
 	if err != nil {
 		return err
 	}
