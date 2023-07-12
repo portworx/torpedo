@@ -816,6 +816,15 @@ func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 	}
 }
 
+func isCsiApp(options scheduler.ScheduleOptions, appName string) bool {
+	for _, app := range options.CsiAppKeys {
+		if app == appName {
+			return true
+		}
+	}
+	return false
+}
+
 // Schedule Schedule the application
 func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var apps []*spec.AppSpec
@@ -824,6 +833,9 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 			appSpec, err := k.SpecFactory.Get(key)
 			if err != nil {
 				return nil, err
+			}
+			if isCsiApp(options, key) {
+				appSpec.IsCSI = true
 			}
 			apps = append(apps, appSpec)
 		}
@@ -1760,7 +1772,11 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		obj.Namespace = ns.Name
 
 		if volume.GetStorageProvisioner() != PortworxStrict {
-			obj.Provisioner = volume.GetStorageProvisioner()
+			if app.IsCSI {
+				obj.Provisioner = CsiProvisioner
+			} else {
+				obj.Provisioner = volume.GetStorageProvisioner()
+			}
 		}
 		log.Infof("Setting provisioner of %v to %v", obj.Name, obj.Provisioner)
 
@@ -3716,7 +3732,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 	return nil
 }
 
-// GetSnapShotData retruns the snapshotdata
+// GetSnapShotData returns the snapshotdata
 func (k *K8s) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
 
 	snap, err := k8sExternalStorage.GetSnapshot(snapshotName, snapshotNameSpace)
