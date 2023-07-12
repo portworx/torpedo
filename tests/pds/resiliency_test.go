@@ -641,9 +641,6 @@ var _ = Describe("{KillPdsAgentDuringWorkloadRun}", func() {
 		var generateWorkloads = make(map[string]string)
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name != postgresql {
-					continue
-				}
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
@@ -986,9 +983,6 @@ var _ = Describe("{KillTeleportDuringWorkloadRun}", func() {
 		var generateWorkloads = make(map[string]string)
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name != postgresql {
-					continue
-				}
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
