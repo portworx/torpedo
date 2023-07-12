@@ -298,6 +298,7 @@ func emailEventTrigger(wg *sync.WaitGroup,
 func watchConfigMap() error {
 	ChaosMap = map[string]int{}
 	cm, err := core.Instance().GetConfigMap(testTriggersConfigMap, configMapNS)
+	log.Infof("configmap is %v", &cm.Data)
 	if err != nil {
 		return fmt.Errorf("Error reading config map: %v", err)
 	}
@@ -506,6 +507,7 @@ func setSendGridEmailAPIKey(configData *map[string]string) error {
 
 func populateTriggers(triggers *map[string]string) error {
 	for triggerType, chaosLevel := range *triggers {
+		log.Infof("Printing triggerType %s and chaosLevel %s", triggerType, chaosLevel)
 		chaosLevelInt, err := strconv.Atoi(chaosLevel)
 		if err != nil {
 			return fmt.Errorf("Failed to get chaos levels from configMap [%s] in [%s] namespace. Error:[%v]",
