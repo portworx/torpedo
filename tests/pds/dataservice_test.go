@@ -993,6 +993,17 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 				nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
 				log.FailOnError(err, "Cannot fetch nodes of the running Data Service")
 				nodeName = nodes[0].Name // Selecting the 1st node in the list to cordon
+
+				defer func() {
+					Step("Delete created deployments")
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
+					log.FailOnError(err, "Error while deleting PV and PVCs")
+				}()
+
 				Step("Drain Pods from a node", func() {
 					podsList, err := pdslib.GetPodsOfSsByNode(*deployment.ClusterResourceName, nodeName, namespace)
 					log.FailOnError(err, fmt.Sprintf("Pod not found on this Node : %s", nodeName))
@@ -1059,17 +1070,21 @@ var _ = Describe("{DrainAndDecommissionNode}", func() {
 					log.FailOnError(err, fmt.Sprintf("UnCordoning the node %s Failed", nodeName))
 					log.InfoD("Node %s successfully UnCordoned", nodeName)
 				})
+
+				Step("Delete created deployments", func() {
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					log.FailOnError(err, "Error while deleting data services")
+					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					log.InfoD("Getting all PV and associated PVCs and deleting them")
+					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
+					log.FailOnError(err, "Error while deleting PV and PVCs")
+					isDeploymentsDeleted = true
+				})
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		if !isDeploymentsDeleted {
-			Step("Delete created deployments")
-			resp, err := pdslib.DeleteDeployment(deployment.GetId())
-			log.FailOnError(err, "Error while deleting data services")
-			dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-		}
 	})
 })
 
