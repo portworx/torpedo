@@ -2161,6 +2161,24 @@ func TriggerCloudSnapShot(contexts *[]*scheduler.Context, recordChan *chan *Even
 	}()
 
 	setMetrics(*event)
+	n := node.GetStorageDriverNodes()[0]
+	uuidCmd := "pxctl cred list -j | grep uuid"
+
+	output, err := Inst().V.GetPxctlCmdOutput(n, uuidCmd)
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+
+	log.FailOnError(err, "error getting uuid for cloudsnap credential")
+	if output == "" {
+		UpdateOutcome(event, fmt.Errorf("cloud cred is not created"))
+		return
+	}
+
+	credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+	credUUID = strings.ReplaceAll(credUUID, "\"", "")
+	log.Infof("Got Cred UUID: %s", credUUID)
 
 	snapshotScheduleRetryInterval := 10 * time.Second
 	snapshotScheduleRetryTimeout := 3 * time.Minute
