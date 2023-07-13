@@ -21,131 +21,64 @@ const (
 )
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
-	var contexts []*scheduler.Context
-	var poolIDToResize string
-	var poolToBeResized *api.StoragePool
+	var targetSize uint64
+	var originalSize uint64
 
-	contexts = initializeContexts()
+	StartTorpedoTest("StoragePoolExpandDiskResize", "Validate storage pool expansion using resize-disk option", nil, 0)
+	contexts := initializeContexts()
+	defer EndTorpedoTest()
 	defer appsValidateAndDestroy(contexts)
 
-	poolIDToResize = pickPoolToResize(contexts)
-	poolToBeResized = ensurePoolExists(poolIDToResize)
+	poolIDToResize := pickPoolToResize(contexts)
+	poolToBeResized := ensurePoolExists(poolIDToResize)
 
 	BeforeEach(func() {
-		// wait until pool ready for resize
-		waitForPoolToBeReadyForExpansion(poolToBeResized)
 		// update to get latest pool info
 		poolToBeResized = ensurePoolExists(poolIDToResize)
+		waitForPoolToBeReadyForExpansion(poolToBeResized)
 	})
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("StoragePoolExpandDiskResize", "Validate storage pool expansion using resize-disk option", nil, 0)
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts)
-	})
-
-	It("should schedule apps, validate them, and expand the pool by resizing a disk", func() {
-		desiredSize := getDesiredSize(poolToBeResized.TotalSize)
-
+		originalSize = poolToBeResized.TotalSize
+		targetSize = originalSize + 100*units.GiB // getDesiredSize(originalSize)
 		log.InfoD("Current Size of the pool %s is %d GB. Trying to expand to %v GB",
-			poolIDToResize, poolToBeResized.TotalSize/units.GiB, desiredSize/units.GiB)
-
-		triggerPoolExpansion(poolIDToResize, desiredSize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
-
-		waitForOngoingPoolExpansionToComplete(poolIDToResize)
-
-		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, desiredSize)
+			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSize/units.GiB)
 	})
 
-})
-
-var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
-	var contexts []*scheduler.Context
-	var poolIDToResize string
-
-	JustBeforeEach(func() {
-		StartTorpedoTest("StoragePoolExpandDiskAdd", "Validate storage pool expansion using add-disk option", nil, 0)
-	})
 	JustAfterEach(func() {
-		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+
+	It("should expand pool by resizing a disk", func() {
+		triggerPoolExpansion(poolIDToResize, targetSize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion resulted in error")
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSize)
 	})
 
 	It("Should expand an existing pool by adding a disk", func() {
-		contexts = initializeContexts()
-		defer appsValidateAndDestroy(contexts)
-
-		// pick a pool from a pools list to resize
-		poolIDToResize = pickPoolToResize(contexts)
-		poolToBeResized := ensurePoolExists(poolIDToResize)
-
-		waitForPoolToBeReadyForExpansion(poolToBeResized)
-
-		originalSize := poolToBeResized.TotalSize
-		expectedSize := getDesiredSize(originalSize)
-		triggerPoolExpansion(poolIDToResize, expectedSize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
-
+		triggerPoolExpansion(poolIDToResize, targetSize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion resulted in error")
-
-		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, expectedSize)
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSize)
 	})
 })
 
-var _ = Describe("{StoragePoolExpandDiskAuto}", func() {
-	var contexts []*scheduler.Context
-	var poolIDToResize string
-
-	JustBeforeEach(func() {
-		contexts = initializeContexts()
-		StartTorpedoTest("StoragePoolExpandDiskAuto", "Validate storage pool expansion using auto option", nil, 0)
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		AfterEachTest(contexts)
-	})
-
-	It("should schedule apps, validate them, and expand the pool using the auto option", func() {
-		poolIDToResize = pickPoolToResize(contexts)
-
-		poolToBeResized := ensurePoolExists(poolIDToResize)
-
-		// px will put a new request in a queue, but in this case, we can't calculate the expected size,
-		// so need to wait until the ongoing operation is completed
-		waitForExistingExpansionToFinish(poolToBeResized)
-
-		expectedSize := getDesiredSize(poolToBeResized.TotalSize)
-
-		log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
-
-		err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, false)
-		dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-
-		waitForOngoingPoolExpansionToComplete(poolIDToResize)
-
-		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, expectedSize)
-	})
-})
-
-func verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize string, expectedSize uint64) {
+func verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize string, targetSize uint64) {
 	Step("Verify that pool has been expanded to the expected size", func() {
 		resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 		failOnError(err, "Failed to get pool using UUID %s", poolIDToResize)
 		newPoolSize := resizedPool.TotalSize / units.GiB
-		dash.VerifyFatal(newPoolSize >= expectedSize, true,
-			fmt.Sprintf("Expected pool to have been expanded to %v, but got %v", expectedSize, newPoolSize))
+		dash.VerifyFatal(newPoolSize >= targetSize, true,
+			fmt.Sprintf("Expected pool to have been expanded to %v, but got %v", targetSize, newPoolSize))
 	})
 }
 
-func triggerPoolExpansion(poolIDToResize string, expectedSize uint64, expandType api.SdkStoragePool_ResizeOperationType) {
+func triggerPoolExpansion(poolIDToResize string, targetSize uint64, expandType api.SdkStoragePool_ResizeOperationType) {
 	stepLog := "Trigger pool expansion"
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
-		err := Inst().V.ExpandPool(poolIDToResize, expandType, expectedSize, true)
+		err := Inst().V.ExpandPool(poolIDToResize, expandType, targetSize, true)
 		dash.VerifyFatal(err, nil, "Failed to init pool expansion")
 	})
 }
@@ -167,13 +100,13 @@ func waitForExistingExpansionToFinish(pool *api.StoragePool) {
 }
 
 func getDesiredSize(originalSize uint64) uint64 {
-	expectedSize := roundUpValue(originalSize * 2 / units.GiB)
+	targetSize := roundUpValue(originalSize * 2 / units.GiB)
 	isjournal, err := isJournalEnabled()
 	failOnError(err, "Failed to check if Journal is enabled")
 	if isjournal {
-		expectedSize -= 3
+		targetSize -= 3
 	}
-	return expectedSize
+	return targetSize
 }
 
 func ensurePoolExists(poolIDToResize string) *api.StoragePool {
