@@ -41,6 +41,7 @@ var _ = Describe("{testParseConfig}", func() {
 	It("Testing parse config", func() {
 		provider, _ := backup.GetConfigObj()
 		log.InfoD("Aws Access Key ID: %s", provider.CloudProviders.GetAWSCredential("default").AccessKeyID)
+		log.InfoD("Aws secret Key ID: %s", provider.CloudProviders.GetAWSCredential("default").SecretAccessKey)
 		log.InfoD("Region from backup target: %s", provider.BackupTargets.GetAWSBucket("default").Region)
 		log.InfoD("Aws Access Key ID: %s", provider.BackupTargets.GetNFSServer("default").IP)
 	})
