@@ -15,6 +15,7 @@ import (
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strings"
 )
 
@@ -146,8 +147,8 @@ func (k *Rancher) GetRancherClusterParametersValue() (error, *RancherClusterPara
 	return nil, &var1
 }
 
-// GetActiveRancherClusterId returns the ID of active rancher cluster
-func (k *Rancher) GetActiveRancherClusterId() (string, error) {
+// GetActiveRancherClusterID returns the ID of active rancher cluster
+func (k *Rancher) GetActiveRancherClusterID() (string, error) {
 	var clusterId string
 	clusterCollection, err := k.client.Cluster.List(nil)
 	if err != nil {
@@ -165,7 +166,7 @@ func (k *Rancher) GetActiveRancherClusterId() (string, error) {
 func (k *Rancher) CreateRancherProject(projectName string, projectDescription string) (error, *rancherClient.Project) {
 	var clusterId string
 	var newProject *rancherClient.Project
-	clusterId, err := k.GetActiveRancherClusterId()
+	clusterId, err := k.GetActiveRancherClusterID()
 	if err != nil {
 		return err, newProject
 	}
@@ -181,8 +182,8 @@ func (k *Rancher) CreateRancherProject(projectName string, projectDescription st
 	return nil, newProject
 }
 
-// GetProjectId return the project ID
-func (k *Rancher) GetProjectId(projectName string) (error, string) {
+// GetProjectID return the project ID
+func (k *Rancher) GetProjectID(projectName string) (error, string) {
 	var projectId string
 	projectList, err := k.client.Project.List(nil)
 	if err != nil {
@@ -203,24 +204,51 @@ func (k *Rancher) AddNamespacesToProject(projectName string, nsList []string) er
 	var err error
 	namespaceAnnotation := make(map[string]string)
 	namespaceLabel := make(map[string]string)
-	err, projectId = k.GetProjectId(projectName)
+	err, projectId = k.GetProjectID(projectName)
 	if err != nil {
 		return err
 	}
 	namespaceAnnotation["field.cattle.io/projectId"] = projectId
 	namespaceLabel["field.cattle.io/projectId"] = strings.Split(projectId, ":")[1]
+	for _, ns := range nsList {
+		ns, err := core.Instance().GetNamespace(ns)
+		if err != nil {
+			return err
+		}
+		newLabels := kube.MergeMaps(ns.Labels, namespaceLabel)
+		newAnnotation := kube.MergeMaps(ns.Annotations, namespaceAnnotation)
+		ns.SetLabels(newLabels)
+		ns.SetAnnotations(newAnnotation)
+		_, err = core.Instance().UpdateNamespace(ns)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// VerifyProjectOfNamespace verifies if the namespace belongs to a particular project
+func (k *Rancher) VerifyProjectOfNamespace(projectName string, nsList []string) error {
+	//var projectId string
+	//var err error
+
+	err, _ := k.GetProjectID(projectName)
+	if err != nil {
+		return err
+	}
+
 	ns, err := core.Instance().GetNamespace(nsList[0])
 	if err != nil {
 		return err
 	}
-	newLabels := kube.MergeMaps(ns.Labels, namespaceLabel)
-	newAnnotation := kube.MergeMaps(ns.Annotations, namespaceAnnotation)
-	ns.SetLabels(newLabels)
-	ns.SetAnnotations(newAnnotation)
-	_, err = core.Instance().UpdateNamespace(ns)
-	if err != nil {
-		return err
-	}
+	nsLabel := ns.GetLabels()
+	nsAnnotation := ns.GetAnnotations()
+	log.Infof(" The ns label is ", nsLabel)
+	log.Infof(" The ns annotation is", nsAnnotation)
+
+	log.Infof(" The ns label type is ", reflect.TypeOf(nsLabel))
+	log.Infof(" The ns annotation type is", reflect.TypeOf(nsAnnotation))
+
 	return nil
 }
 

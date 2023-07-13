@@ -2766,15 +2766,6 @@ func SetSourceKubeConfig() error {
 	return SetClusterContext(sourceClusterConfigPath)
 }
 
-// SetClusterKubeConfig sets current context to the kubeconfig passed as source to the torpedo test
-func SetClusterKubeConfig(clusterName string) error {
-	clusterConfigPath, err := GetClusterConfigPath(clusterName)
-	if err != nil {
-		return err
-	}
-	return SetClusterContext(clusterConfigPath)
-}
-
 // SetDestinationKubeConfig sets current context to the kubeconfig passed as destination to the torpedo test
 func SetDestinationKubeConfig() error {
 	destClusterConfigPath, err := GetDestinationClusterConfigPath()
@@ -3584,13 +3575,13 @@ func CreateSourceAndDestClusters(orgID string, cloudName string, uid string, ctx
 
 // AddApplicationCluster adds application cluster to backup
 func AddApplicationCluster(kubeconfig string, orgID string, cloudName string, uid string, ctx context1.Context) error {
-	clusterName := strings.Split(kubeconfig, "-")[0] + "cluster"
-	ClusterConfigPath, err := GetClusterConfigPath(kubeconfig)
+	clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+	clusterConfigPath, err := GetClusterConfigPath(kubeconfig)
 	if err != nil {
 		return err
 	}
 	clusterStatus := func() (interface{}, bool, error) {
-		err = CreateCluster(clusterName, ClusterConfigPath, orgID, cloudName, uid, ctx)
+		err = CreateCluster(clusterName, clusterConfigPath, orgID, cloudName, uid, ctx)
 		if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
 			return "", true, err
 		}
@@ -3607,7 +3598,7 @@ func AddApplicationCluster(kubeconfig string, orgID string, cloudName string, ui
 	if err != nil {
 		return err
 	}
-	ClusterConfigPathMap[clusterName] = ClusterConfigPath
+	ClusterConfigPathMap[clusterName] = clusterConfigPath
 	return nil
 }
 
@@ -4155,6 +4146,9 @@ func AddLabelToResource(spec interface{}, key string, val string) error {
 // GetClusterConfigPath returns kubeconfig for given cluster
 func GetClusterConfigPath(clusterConfig string) (string, error) {
 	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("failed to get source config path. Empty KUBECONFIGS environment variable")
+	}
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	for _, kubeconfig := range kubeconfigList {
 		if kubeconfig == clusterConfig {
