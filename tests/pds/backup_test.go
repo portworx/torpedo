@@ -130,7 +130,7 @@ var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
 	})
 })
 
-var _ = Describe("{BackupAndValidation}", func() {
+var _ = Describe("{AdhocBackupAndValidation}", func() {
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("BackupAndValidation", "Perform multiple backup operations and validate them", pdsLabels, 0)
@@ -184,9 +184,9 @@ var _ = Describe("{BackupAndValidation}", func() {
 		})
 	})
 	JustAfterEach(func() {
+		defer EndTorpedoTest()
 		err := bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
-		EndTorpedoTest()
 	})
 })
 
