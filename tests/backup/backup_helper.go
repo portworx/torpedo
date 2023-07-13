@@ -3530,6 +3530,8 @@ const (
 	DirectKDMP               BackupTypeForCSI = "direct_kdmp"
 )
 
+// AdditionalBackupRequestParams decorates the backupRequest with additional parameters required
+// when BACKUP_TYPE is Native CSI, Direct KDMP or CSI snapshot with offload to S3
 func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error {
 	switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
 	case string(NativeCSIWithOffloadToS3):
@@ -3562,6 +3564,8 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error
 	}
 }
 
+// AdditionalScheduledBackupRequestParams decorates the backupScheduleRequest with additional parameters required
+// when BACKUP_TYPE is Native CSI, Direct KDMP or CSI snapshot with offload to S3
 func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupScheduleCreateRequest) error {
 	switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
 	case string(NativeCSIWithOffloadToS3):

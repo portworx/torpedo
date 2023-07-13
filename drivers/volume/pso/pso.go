@@ -85,7 +85,9 @@ func (d *pso) GetDriverVersion() (string, error) {
 	return psoVersion, nil
 }
 
+// RefreshDriverEndpoints get the updated driver endpoints for the cluster
 func (d *pso) RefreshDriverEndpoints() error {
+	log.Warnf("RefreshDriverEndpoints function has not been implemented for volume driver - %s", d.String())
 	return nil
 }
 
