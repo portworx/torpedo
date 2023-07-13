@@ -906,6 +906,7 @@ var _ = Describe("{testParseConfig}", func() {
 	if err != nil {
 		fmt.Println("Error:", err)
 	}
+	time.Sleep(300 * time.Second)
 	log.InfoD("Testing parse config %s", pwd)
 	StartTorpedoTest("testParseConfig", "testcreds", nil, 58050)
 	log.InfoD("Testing parse config")
