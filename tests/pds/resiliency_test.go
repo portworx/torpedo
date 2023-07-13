@@ -861,6 +861,20 @@ var _ = Describe("{RebootNodeForUnrelatedDS}", func() {
 				}
 			}
 		})
+		defer func() {
+			for dsName, workloadContainer := range generateWorkloads {
+				Step("Delete the workload generating deployments", func() {
+					if Contains(dataServiceDeploymentWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
+						err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
+					} else if Contains(dataServicePodWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
+						err = pdslib.DeleteK8sPods(workloadContainer, namespace)
+					}
+					log.FailOnError(err, "error deleting workload generating pods")
+				})
+			}
+		}()
 		Step("Disable Scheduling on the nodes of deployment", func() {
 			for _, deployment := range deployments {
 				nodes, err := pdslib.GetNodesOfSS(*deployment.ClusterResourceName, namespace)
@@ -954,20 +968,6 @@ var _ = Describe("{RebootNodeForUnrelatedDS}", func() {
 				}
 			}
 		})
-		defer func() {
-			for dsName, workloadContainer := range generateWorkloads {
-				Step("Delete the workload generating deployments", func() {
-					if Contains(dataServiceDeploymentWorkloads, dsName) {
-						log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
-						err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
-					} else if Contains(dataServicePodWorkloads, dsName) {
-						log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
-						err = pdslib.DeleteK8sPods(workloadContainer, namespace)
-					}
-					log.FailOnError(err, "error deleting workload generating pods")
-				})
-			}
-		}()
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
