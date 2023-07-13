@@ -3557,11 +3557,8 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error
 		backupRequest.BackupType = api.BackupCreateRequest_Generic
 		return nil
 	default:
-		return fmt.Errorf("environment variable BACKUP_TYPE is not valid. Expected either %s, %s or %s but got %s",
-			NativeCSIWithOffloadToS3,
-			NativeCSI,
-			DirectKDMP,
-			strings.ToLower(os.Getenv("BACKUP_TYPE")))
+		log.Infof("Environment variable BACKUP_TYPE is not provided")
+		return nil
 	}
 }
 
