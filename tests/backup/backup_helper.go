@@ -3250,6 +3250,7 @@ func ValidatePodByLabel(label map[string]string, namespace string, timeout time.
 // IsMongoDBReady validates if the mongo db pods in Px-Backup namespace are healthy enough for Px-Backup to function
 func IsMongoDBReady() error {
 	log.Infof("Verify that at least 2 mongodb pods are in Ready state at the end of the testcase")
+	errorString := "mongodb pods are not ready yet"
 	pxbNamespace, err := backup.GetPxBackupNamespace()
 	if err != nil {
 		return err
@@ -3262,15 +3263,15 @@ func IsMongoDBReady() error {
 
 		// Check if all 3 mongo pods have come up
 		if statefulSet.Status.ReadyReplicas < 3 {
-			return "", true, fmt.Errorf("mongodb pods are not ready yet. expected ready pods - %d, actual ready pods - %d",
-				3, statefulSet.Status.ReadyReplicas)
+			return "", true, fmt.Errorf("%s. expected ready pods - %d, actual ready pods - %d",
+				errorString, 3, statefulSet.Status.ReadyReplicas)
 
 		}
 		return "", false, nil
 	}
 	_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
 	if err != nil {
-		if strings.Contains(err.Error(), "mongodb pods are not ready yet") {
+		if strings.Contains(err.Error(), errorString) {
 			statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
 
 			// Check atleast 2 mongo pods are up if 3 mongo pods have not come up even after waiting for 30 min
