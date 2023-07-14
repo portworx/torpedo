@@ -5706,7 +5706,6 @@ func GetStoragePoolByUUID(poolUUID string) (*opsapi.StoragePool, error) {
 	if len(pools) == 0 {
 		return nil, fmt.Errorf("got 0 pools listed")
 	}
-	fmt.Printf("pools %v", pools)
 	pool := pools[poolUUID]
 	if pool == nil {
 		return nil, fmt.Errorf("unable to find pool with given ID: %s", poolUUID)
