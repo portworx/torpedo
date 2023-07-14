@@ -334,7 +334,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			for _, backupName := range backupNames {
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
-				_, err = CreateRestoreWithoutCheck(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx)
+				restoreName := fmt.Sprintf("%s-restore", backupName)
+				_, err = CreateRestoreWithoutCheck(ctx, restoreName, backupName, make(map[string]string, 0), make(map[string]string, 0), nil, SourceClusterName, orgID)
 				log.FailOnError(err, "Failed while trying to restore [%s] the backup [%s]", fmt.Sprintf("%s-restore", backupName), backupName)
 			}
 		})
@@ -965,7 +966,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
-					_, err = CreateRestoreWithoutCheck(restoreName, backupName, nil, destinationClusterName, orgID, ctx)
+					_, err = CreateRestoreWithoutCheck(ctx, restoreName, backupName, make(map[string]string, 0), make(map[string]string, 0), nil, destinationClusterName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
 				}(backupName)
 			}
@@ -1481,7 +1482,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
-					_, err = CreateRestoreWithoutCheck(restoreName, backupName, nil, destinationClusterName, orgID, ctx)
+					_, err = CreateRestoreWithoutCheck(ctx, restoreName, backupName, make(map[string]string, 0), make(map[string]string, 0), nil, destinationClusterName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
 				}(backupName)
 			}
@@ -1695,7 +1696,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 					go func(restoreName string, backupName string, namespaceMapping map[string]string) {
 						defer GinkgoRecover()
 						defer wg.Done()
-						_, err = CreateRestoreWithoutCheck(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx)
+						_, err = CreateRestoreWithoutCheck(ctx, restoreName, backupName, namespaceMapping, make(map[string]string, 0), nil, destinationClusterName, orgID)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring the backup %s with name %s", backupName, restoreName))
 					}(restoreName, backupName, namespaceMapping)
 				}

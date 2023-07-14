@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"sync"
 	"time"
@@ -12,7 +13,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	storageApi "k8s.io/api/storage/v1"
-	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
@@ -786,7 +787,6 @@ var _ = Describe("{CustomResourceRestore}", func() {
 		credName             string
 		cloudCredUidList     []string
 		backupLocationName   string
-		deploymentName       string
 		restoreName          string
 		backupNames          []string
 		restoreNames         []string
@@ -870,14 +870,66 @@ var _ = Describe("{CustomResourceRestore}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Restoring backed up applications")
 			for _, namespace := range bkpNamespaces {
+				// fetching list of deployments in namespace and their corresponding PVCs
+				var options metav1.ListOptions
+				var deploymentPvcMap = make(map[string][]string)
+				deploymentList, err := apps.Instance().ListDeployments(namespace, options)
+				if err != nil {
+					log.FailOnError(err, "unable to list the deployments in namespace %v", namespace)
+				}
+				if len(deploymentList.Items) == 0 {
+					log.FailOnError(err, "deployment list is null")
+				}
+				deployments := deploymentList.Items
+				for _, deployment := range deployments {
+					var pvcs []string
+					for _, vol := range deployment.Spec.Template.Spec.Volumes {
+						pvcName := vol.PersistentVolumeClaim.ClaimName
+						pvcs = append(pvcs, pvcName)
+					}
+					deploymentPvcMap[deployment.Name] = pvcs
+				}
+
+				// select a random deployment from the slice of deployment names to be restored
+				randomIndex := rand.Intn(len(deployments))
+				deployment := deployments[randomIndex]
+				log.Infof("selected deployment %v", deployment.Name)
+				pvcs, exists := deploymentPvcMap[deployment.Name]
+				if !exists {
+					log.FailOnError(err, "deploymentName %v not found in the deploymentPvcMap", deployment.Name)
+				}
+
+				// combine all the resources we want to custom restore
+				deploymentStruct := &api.ResourceInfo{
+					Version:   "v1",
+					Group:     "apps",
+					Kind:      "Deployment",
+					Name:      deployment.Name,
+					Namespace: namespace,
+				}
+				pvcsStructs := make([]*api.ResourceInfo, len(pvcs))
+				for i, pvcName := range pvcs {
+					pvcStruct := &api.ResourceInfo{
+						Version:   "v1",
+						Group:     "core",
+						Kind:      "PersistentVolumeClaim",
+						Name:      pvcName,
+						Namespace: namespace,
+					}
+					pvcsStructs[i] = pvcStruct
+				}
+				resourcesToRestore := append([]*api.ResourceInfo{deploymentStruct}, pvcsStructs...)
+
 				backupName := backupNamespaceMap[namespace]
 				restoreName = fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
 				restoreNames = append(restoreNames, restoreName)
 				restoredNameSpace := fmt.Sprintf("%s-%s", namespace, "restored")
+				deploymentBackupMap[backupName] = deployment.Name
 				namespaceMapping[namespace] = restoredNameSpace
-				deploymentName, err = CreateCustomRestoreWithPVCs(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, make(map[string]string), namespace)
-				deploymentBackupMap[backupName] = deploymentName
-				log.FailOnError(err, "Restoring of backup [%s] has failed with name [%s] in namespace [%s]", backupName, restoreName, restoredNameSpace)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+
+				err = CreateCustomRestoreWithValidation(ctx, restoreName, backupName, namespaceMapping, make(map[string]string), resourcesToRestore, SourceClusterName, orgID, appContextsToBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of Restore [%s] of backup [%s] in namespace [%s]", restoreName, backupName, restoredNameSpace))
 			}
 		})
 
@@ -886,7 +938,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 			for _, namespace := range bkpNamespaces {
 				restoreNamespace := fmt.Sprintf("%s-%s", namespace, "restored")
 				backupName := backupNamespaceMap[namespace]
-				deploymentName = deploymentBackupMap[backupName]
+				deploymentName := deploymentBackupMap[backupName]
 				deploymentStatus, err := apps.Instance().DescribeDeployment(deploymentName, restoreNamespace)
 				log.FailOnError(err, "unable to fetch deployment status for %v", deploymentName)
 				status := deploymentStatus.Conditions[1].Status
@@ -1516,7 +1568,7 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 			for i := 0; i < scCount; i++ {
 				scName := fmt.Sprintf("replica-sc-%d-%v", time.Now().Unix(), i)
 				params["repl"] = "2"
-				v1obj := metaV1.ObjectMeta{
+				v1obj := metav1.ObjectMeta{
 					Name: scName,
 				}
 				reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
@@ -1820,6 +1872,22 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 		StartTorpedoTest("MultipleInPlaceRestoreSameTime",
 			"Issue multiple in-place restores at the same time", nil, 58051)
 		log.InfoD("Deploy applications needed for backup")
+
+		// HACK: this is a hack that allows CreateRestoreWithReplacePolicyWithValidation
+		// to be called in multiple times in parallel. If we switch beforehand, then there is NO
+		// internal switching inside the fuction as the `CurrentClusterConfigPath` is used as cache.
+		//
+		// NOTE:
+		// - It DOES NOT work if the parallel restores are on different cluster
+		// - Instead of switching *just before* restoring, we are switching right now as we are
+		//   working on the assumption that the "default" cluster is the same as "source" cluster
+		//   and we want to avoid switching back and forth between default and source later on
+		//
+		// CurrentClusterConfigPath refers to ""
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "Unable to switch context to source cluster %s", SourceClusterName)
+		// CurrentClusterConfigPath refers to "source-config"
+
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 5; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
@@ -1899,8 +1967,10 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 				go func(bkpNameSpace string, backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err = CreateRestore(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string))
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v into namespce %v with replacing existing resources", backupName, bkpNameSpace))
+
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNameSpace})
+					err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), SourceClusterName, orgID, appContextsToBackup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of Restore [%s] of backup [%s] in namespace [%s] replacing existing resource", restoreName, backupName, bkpNameSpace))
 				}(bkpNameSpace, backupName)
 			}
 			wg.Wait()
@@ -1919,14 +1989,23 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 				go func(bkpNameSpace string, backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), ReplacePolicy_Delete)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v into namespce %v with replacing existing resources", backupName, bkpNameSpace))
+
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNameSpace})
+					err = CreateRestoreWithReplacePolicyWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), ReplacePolicy_Delete, SourceClusterName, orgID, appContextsToBackup)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of Restore [%s] of backup [%s] in namespace [%s] replacing existing resource", restoreName, backupName, bkpNameSpace))
 				}(bkpNameSpace, backupName)
 			}
 			wg.Wait()
 		})
 	})
 	JustAfterEach(func() {
+		defer func() {
+			// HACK: reverting the switch we made at the top
+			// CurrentClusterConfigPath refers to "source-config"
+			err := SetClusterContext("")
+			log.FailOnError(err, "Unable to switch context to source cluster %s", SourceClusterName)
+			// CurrentClusterConfigPath refers to ""
+		}()
 		var wg sync.WaitGroup
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -2675,7 +2754,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 					namespaceMapping[scheduledNamespace] = restoreNamespace
 
 					log.InfoD("creating Initial Restore [%s] in destination cluster [%s], organization [%s], in namespace [%s]", initialRestoreName, destinationClusterName, orgID, restoreNamespace)
-					_, err = CreateRestoreWithoutCheck(initialRestoreName, backupNames[i], namespaceMapping, destinationClusterName, orgID, ctx)
+					_, err = CreateRestoreWithoutCheck(ctx, initialRestoreName, backupNames[i], namespaceMapping, make(map[string]string, 0), nil, destinationClusterName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("initiation of initial restore [%s]", initialRestoreName))
 					restoreNames = append(restoreNames, initialRestoreName)
 
@@ -2727,7 +2806,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 					namespaceMapping[scheduledNamespace] = restoreLaterNamespace
 
 					log.InfoD("creating Later Restore [%s] in destination cluster [%s], organization [%s], in namespace [%s]", restoreLaterName, destinationClusterName, orgID, restoreLaterNamespace)
-					_, err = CreateRestoreWithoutCheck(restoreLaterName, backupNames[i], namespaceMapping, destinationClusterName, orgID, ctx)
+					_, err = CreateRestoreWithoutCheck(ctx, restoreLaterName, backupNames[i], namespaceMapping, make(map[string]string, 0), nil, destinationClusterName, orgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("initiation of later restore [%s]", restoreLaterName))
 					restoreLaterNames = append(restoreLaterNames, restoreLaterName)
 
