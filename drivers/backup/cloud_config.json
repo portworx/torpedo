@@ -9,6 +9,8 @@
     },
     "azure": {
       "default": {
+        "account_name": "AZURE_ACCOUNT_NAME",
+        "account_key": "AZURE_ACCOUNT_KEY",
         "subscription_id": "AZURE_SUBSCRIPTION_ID",
         "client_id": "AZURE_CLIENT_ID",
         "client_secret": "AZURE_CLIENT_SECRET",
