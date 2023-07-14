@@ -135,7 +135,8 @@ func failOnError(err error, message string, args ...interface{}) {
 func initializeContexts() []*scheduler.Context {
 	contexts := make([]*scheduler.Context, 0)
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
-		contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooladddisk-%d", i))...)
+		log.Infof("Deploy app %v", i)
+		contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooltest-%d", i))...)
 	}
 	ValidateApplications(contexts)
 	return contexts

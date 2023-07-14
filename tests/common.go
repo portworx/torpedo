@@ -1640,7 +1640,7 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 			StorageProvisioner: Inst().Provisioner,
 			Namespace:          namespace,
 		}
-		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged")
+		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged %#v", options)
 		return options
 	}
 }

@@ -373,7 +373,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	return nil
 }
 
-// RescanSpecs Rescan the application spec file for spei
+// RescanSpecs Rescan the application spec file for spec
 func (k *K8s) RescanSpecs(specDir, storageDriver string) error {
 	var err error
 	log.Infof("Rescanning specs for %v and driver %s", specDir, storageDriver)
@@ -816,7 +816,7 @@ func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 	}
 }
 
-// Schedule Schedule the application
+// Schedule schedules the application
 func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var apps []*spec.AppSpec
 	if len(options.AppKeys) > 0 {
@@ -834,7 +834,6 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	var contexts []*scheduler.Context
 	oldOptionsNamespace := options.Namespace
 	for _, app := range apps {
-
 		appNamespace := app.GetID(instanceID)
 		if options.Namespace != "" {
 			appNamespace = options.Namespace
@@ -847,11 +846,13 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 
 		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
 		if err != nil {
+			log.Errorf("Failed to create spec objects for app %s: %v", app.Key, err)
 			return nil, err
 		}
 
 		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
 		if err != nil {
+			log.Errorf("Failed to create helm spec objects for app %s: %v", app.Key, err)
 			return nil, err
 		}
 

@@ -726,7 +726,7 @@ for i in $(seq 1 900) ; do
     exit 0
   fi
 
-  sleep 1
+  sleep 10
 done
 
 echo "Error: Failed to wait for torpedo to start running..."

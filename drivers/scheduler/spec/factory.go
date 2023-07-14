@@ -30,6 +30,10 @@ func (f *Factory) register(id string, app *AppSpec) {
 
 // Get returns a registered application
 func (f *Factory) Get(id string) (*AppSpec, error) {
+	allApps := f.GetAll()
+	for _, app := range allApps {
+		fmt.Printf("AAAAvailable app %#v", app)
+	}
 	if d, ok := appSpecFactory[id]; ok && d.Enabled {
 		if copy := d.DeepCopy(); copy != nil {
 			return d.DeepCopy(), nil
@@ -80,7 +84,7 @@ func NewFactory(specDir, storageProvisioner string, parser Parser) (*Factory, er
 			log.Debugf("Storage provisioner %s", storageProvisioner)
 			specs, err := f.specParser.ParseSpecs(specToParse, storageProvisioner)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("error parsing spec %v: %v", specToParse, err)
 			}
 
 			if len(specs) == 0 {
@@ -96,6 +100,10 @@ func NewFactory(specDir, storageProvisioner string, parser Parser) (*Factory, er
 		}
 	}
 
+	allApps := f.GetAll()
+	for _, app := range allApps {
+		fmt.Printf("AAAAvailable app %#v", app)
+	}
 	if apps := f.GetAll(); len(apps) == 0 {
 		return nil, fmt.Errorf("found 0 supported applications in given specDir: %v", specDir)
 	}
