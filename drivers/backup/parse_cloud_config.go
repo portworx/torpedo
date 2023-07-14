@@ -9,10 +9,11 @@ import (
 
 // CloudProviders represents the cloud providers configuration.
 type CloudProviders struct {
-	AWS   map[string]AWSCredential   `json:"aws"`
-	Azure map[string]AzureCredential `json:"azure"`
-	GKE   map[string]GKECredential   `json:"gke"`
-	IBM   map[string]IBMCredential   `json:"ibm"`
+	AWS     map[string]AWSCredential     `json:"aws"`
+	Azure   map[string]AzureCredential   `json:"azure"`
+	GKE     map[string]GKECredential     `json:"gke"`
+	IBM     map[string]IBMCredential     `json:"ibm"`
+	RANCHER map[string]RANCHERCredential `json:"rancher"`
 }
 
 // AWSCredential represents the AWS credential information.
@@ -43,6 +44,12 @@ type IBMCredential struct {
 	APIKey        string `json:"api_key"`
 	Region        string `json:"region"`
 	ResourceGroup string `json:"resource_group"`
+}
+
+// RANCHERCredential represents the IBM credential information.
+type RANCHERCredential struct {
+	UserName string `json:"username"`
+	Password string `json:"password"`
 }
 
 // BackupTargets represents the backup targets configuration.
@@ -80,6 +87,7 @@ type Config struct {
 
 // GetConfigObj reads the configuration file and returns a Config object.
 func GetConfigObj() (*Config, error) {
+	var config Config
 	_, err := os.Getwd()
 	// Read JSON file into a variable
 	testConfigPath := "../drivers/backup/cloud_config.json"
@@ -88,7 +96,6 @@ func GetConfigObj() (*Config, error) {
 		return nil, fmt.Errorf("unable to read the test configuration file in the path %s", testConfigPath)
 	}
 	// Parse JSON into Configuration struct
-	var config Config
 	err = json.Unmarshal(jsonData, &config)
 	return &config, nil
 }
