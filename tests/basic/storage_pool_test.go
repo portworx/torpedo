@@ -9808,7 +9808,7 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 					maxDrivesAllowed = POOL_MAX_CLOUD_DRIVES - len(drvs)
 				} else {
 					fmt.Errorf("drive map is empty")
-					log.FailOnError(err, "error getting drivemap from node", selectedNode.Name)
+					log.FailOnError(err, "error getting drivemap from node[%s]", selectedNode.Name)
 				}
 			} else {
 				log.FailOnError(err, "selected pool is empty")
@@ -9918,7 +9918,7 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 						}
 					} else {
 						fmt.Errorf("drive map is empty")
-						log.FailOnError(err, "error getting drivemap from node", selectedNode.Name)
+						log.FailOnError(err, "error getting drivemap from node[%s]", selectedNode.Name)
 					}
 					if maxDriveAllowed == 0 {
 						break
@@ -9939,7 +9939,7 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 					}
 				} else {
 					fmt.Errorf("drive map is empty")
-					log.FailOnError(err, "error getting drivemap from node", sNode.Name)
+					log.FailOnError(err, "error getting drivemap from node [%s]", sNode.Name)
 				}
 			}
 			//check if selectedpool is empty
@@ -9960,6 +9960,8 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			if poolStatus.Status != api.SdkStoragePool_OPERATION_FAILED {
 				err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 				dash.VerifyFatal(err != nil, false, fmt.Sprintf("error in pool expand with err %s", err))
+				poolStatus, err := getPoolLastOperation(poolToBeResized.Uuid)
+				log.FailOnError(err, "error getting last operation of pool [%s]", selectedPools)
 				dash.VerifyFatal(strings.Contains(poolStatus.Msg, "node has reached it's maximum supported drive count:"), false, "Error expected as drive added more than allowed per Node")
 			} else {
 				dash.VerifyFatal(strings.Contains(poolStatus.Msg, "node has reached it's maximum supported drive count:"), false, "Error expected as drive added more than allowed per Node")
