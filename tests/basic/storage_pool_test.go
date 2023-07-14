@@ -9849,7 +9849,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			log.FailOnError(err, "error adding new pools")
 			err = addNewPools(selectedNode, 1)
 			dash.VerifyFatal(err != nil, true, "Error expected as pools trying to create is more than allowed")
-			poolList, err = GetPoolsDetailsOnNode(selectedNode)
 		})
 
 		Step("Test beyond max drives per node", func() {
@@ -9890,12 +9889,13 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 						drvSize, err := getPoolDiskSize(poolListForOps[i])
 						log.FailOnError(err, "error getting drive size for pool [%s]", poolListForOps[i].Uuid)
 						//adding 4 drives to each pool which is having one drive.so that max drive per node is accomdated
-						for j := 1; j <= 4; j++ {
-							driveSize := drvSize * uint64(j)
-							drvMap, err := Inst().V.GetPoolDrives(&selectedNode)
-							log.FailOnError(err, "error in getting pool with IO with error")
-							if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
-								if (POOL_MAX_CLOUD_DRIVES - len(drvs)) > 0 {
+						drvMap, err := Inst().V.GetPoolDrives(&selectedNode)
+						log.FailOnError(err, "error in getting pool with IO with error")
+						if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
+							if (POOL_MAX_CLOUD_DRIVES - len(drvs)) > 0 {
+								drivesThatCanBeAdded := (POOL_MAX_CLOUD_DRIVES - len(drvs))
+								for j := 1; j <= drivesThatCanBeAdded; j++ {
+									driveSize := drvSize * uint64(j)
 									expectedSize := (poolListForOps[i].TotalSize / units.GiB) + driveSize
 									isjournal, err := isJournalEnabled()
 									log.FailOnError(err, "Failed to check is journal enabled")
@@ -9907,23 +9907,27 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 									err = Inst().V.ExpandPool(poolListForOps[i].Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 									log.FailOnError(err, "error while expanding pool")
 									maxDriveAllowed = maxDriveAllowed - 1
+									if maxDriveAllowed == 0 {
+										break
+									}
 									resizeErr := waitForPoolToBeResized(expectedSize, poolListForOps[i].Uuid, isjournal)
 									dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
 									err = Inst().V.RefreshDriverEndpoints()
 									log.FailOnError(err, "error refreshing volume endpoints")
-								} else {
-									break
 								}
-							} else {
-								fmt.Errorf("drive map is empty")
-								log.FailOnError(err, "error getting drivemap from node", selectedNode.Name)
 							}
+						} else {
+							fmt.Errorf("drive map is empty")
+							log.FailOnError(err, "error getting drivemap from node", selectedNode.Name)
 						}
+					}
+					if maxDriveAllowed == 0 {
+						break
 					}
 				}
 			}
 			sNode, err := node.GetNodeByName(selectedNode.Name)
-			log.FailOnError(err, "fialed while getting updated node pool list")
+			log.FailOnError(err, "failed while getting updated node pool list")
 			poolListOnNode, err := GetPoolsDetailsOnNode(sNode)
 			for i := 0; i < len(poolListOnNode); i++ {
 				drvMap, err := Inst().V.GetPoolDrives(&sNode)
