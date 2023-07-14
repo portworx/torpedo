@@ -3543,7 +3543,6 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error
 			return err
 		}
 		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
-		return nil
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
 		backupRequest.BackupType = api.BackupCreateRequest_Normal
@@ -3553,15 +3552,13 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error
 			return err
 		}
 		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
-		return nil
 	case string(DirectKDMP):
 		log.Infof("Detected backup type - %s", DirectKDMP)
 		backupRequest.BackupType = api.BackupCreateRequest_Generic
-		return nil
 	default:
 		log.Infof("Environment variable BACKUP_TYPE is not provided")
-		return nil
 	}
+	return nil
 }
 
 // AdditionalScheduledBackupRequestParams decorates the backupScheduleRequest with additional parameters required
@@ -3577,7 +3574,6 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 			return err
 		}
 		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
-		return nil
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Normal
@@ -3587,14 +3583,11 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 			return err
 		}
 		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
-		return nil
 	case string(DirectKDMP):
 		log.Infof("Detected backup type - %s", DirectKDMP)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Generic
-		return nil
 	default:
 		log.Infof("Environment variable BACKUP_TYPE is not provided")
-		return nil
-
 	}
+	return nil
 }
