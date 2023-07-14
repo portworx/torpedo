@@ -28,7 +28,12 @@
         "api_key": "IBM_CLOUD_API_KEY",
         "region": "IBM_CLOUD_REGION",
         "resource_group": "IBM_CLOUD_RESOURCE_GROUP"
-      }
+      },
+      "rancher": {
+        "default": {
+          "username": "RANCHER_USERNAME",
+          "password": "RANCHER_PASSWORD"
+        }
     }
   },
   "backupTargets": {
