@@ -3263,7 +3263,7 @@ func IsMongoDBReady() error {
 		// Check if all 3 mongo pods have come up
 		if statefulSet.Status.ReadyReplicas < 3 {
 			return "", true, fmt.Errorf("mongodb pods are not ready yet. expected ready pods - %d, actual ready pods - %d",
-				2, statefulSet.Status.ReadyReplicas)
+				3, statefulSet.Status.ReadyReplicas)
 
 		}
 		return "", false, nil
