@@ -25,6 +25,8 @@ type AWSCredential struct {
 
 // AzureCredential represents the Azure credential information.
 type AzureCredential struct {
+	AccountName    string `json:"account_name"`
+	AccountKey     string `json:"account_key"`
 	SubscriptionID string `json:"subscription_id"`
 	ClientID       string `json:"client_id"`
 	ClientSecret   string `json:"client_secret"`
