@@ -139,7 +139,7 @@ var _ = BeforeSuite(func() {
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
 	// Create the first bucket from the list to be used as generic bucket
-	//globalConfig, _ = backup.GetConfigObj()
+	globalConfig, _ = backup.GetConfigObj()
 	providers := getProviders()
 	bucketNameSuffix := getBucketNameSuffix()
 	for _, provider := range providers {
