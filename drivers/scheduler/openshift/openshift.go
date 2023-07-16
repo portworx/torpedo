@@ -38,12 +38,12 @@ const (
 	SystemdSchedServiceName = "atomic-openshift-node"
 	// OpenshiftMirror is the mirror we use do download ocp client
 	OpenshiftMirror             = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
-	mdFileName                  = "changelog.md"
-	defaultCmdTimeout           = 10 * time.Minute
+	releaseFileName             = "release.txt"
+	defaultCmdTimeout           = 5 * time.Minute
 	driverUpTimeout             = 10 * time.Minute
 	generationNumberWaitTime    = 10 * time.Minute
 	defaultCmdRetry             = 15 * time.Second
-	defaultUpgradeTimeout       = 12 * time.Hour
+	defaultUpgradeTimeout       = 4 * time.Hour
 	defaultUpgradeRetryInterval = 5 * time.Minute
 	ocPath                      = " -c oc"
 )
@@ -423,7 +423,7 @@ spec:
 // getImageSha get Image sha
 func getImageSha(ocpVersion string) (string, error) {
 	downloadURL := fmt.Sprintf("%s/%s/%s", OpenshiftMirror,
-		ocpVersion, mdFileName)
+		ocpVersion, releaseFileName)
 	request := netutil.HttpRequest{
 		Method:   "GET",
 		Url:      downloadURL,
@@ -439,9 +439,10 @@ func getImageSha(ocpVersion string) (string, error) {
 	//Convert the body to type string
 	contentInString := string(content)
 	parts := strings.Split(contentInString, "\n")
+
 	for _, a := range parts {
-		if strings.Contains(a, "Image Digest:") {
-			return strings.Split(a, "`")[1], nil
+		if strings.Contains(a, "Digest:") {
+			return strings.TrimSpace(strings.Split(a, ": ")[1]), nil
 		}
 	}
 	return "", fmt.Errorf("Failed to find Image sha: in  %s", downloadURL)
@@ -576,7 +577,7 @@ func waitNodesToBeReady() error {
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 600*time.Minute, 30*time.Second)
+	_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 15*time.Second)
 	return err
 }
 
@@ -726,11 +727,14 @@ func ackAPIRemoval(version string) error {
 	// this issue happens on OCP 4.9
 	parsedVersion49, _ := semver.Parse("4.9.0")
 	parsedVersion412, _ := semver.Parse("4.12.0")
+	parsedVersion413, _ := semver.Parse("4.13.0")
 	//oc -n openshift-config patch cm admin-acks --patch '{"data":{"ack-4.11-kube-1.25-api-removals-in-4.12":"true"}}' --type=merge
-	if parsedVersion.GTE(parsedVersion49) {
-		var patchData = ""
+	if parsedVersion.GTE(parsedVersion49) || parsedVersion.GTE(parsedVersion412) || parsedVersion.GTE(parsedVersion413) {
+		var patchData string
 		if parsedVersion.GTE(parsedVersion412) {
 			patchData = "{\"data\":{\"ack-4.11-kube-1.25-api-removals-in-4.12\":\"true\"}}"
+		} else if parsedVersion.GTE(parsedVersion413) {
+			patchData = "{\"data\":{\"ack-4.12-kube-1.26-api-removals-in-4.13\":\"true\"}}"
 		} else {
 			patchData = "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
 		}
