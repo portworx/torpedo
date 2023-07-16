@@ -36,9 +36,9 @@
           "username": "RANCHER_USERNAME",
           "password": "RANCHER_PASSWORD"
         }
-    }
-  },
-  "backupTargets": {
+      }
+    },
+    "backupTargets": {
       "aws": {
         "default": {
           "name": "CLOUD_BUCKET_NAME",
@@ -48,13 +48,14 @@
         }
       },
       "nfs": {
-      "default": {
-        "name": "SERVER_NAME",
-        "ip": "SERVER_IP",
-        "export_path": "EXPORT_PATH",
-        "sub_path": "SUB_PATH",
-        "mount_options": "MOUNT_OPTIONS",
-        "encryption_key": "ENCRYPTION_KEY"
+        "default": {
+          "name": "SERVER_NAME",
+          "ip": "SERVER_IP",
+          "export_path": "EXPORT_PATH",
+          "sub_path": "SUB_PATH",
+          "mount_options": "MOUNT_OPTIONS",
+          "encryption_key": "ENCRYPTION_KEY"
+        }
       }
     }
   }
