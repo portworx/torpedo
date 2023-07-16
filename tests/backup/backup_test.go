@@ -43,12 +43,6 @@ var _ = Describe("{testParseConfig}", func() {
 		log.InfoD("Aws secret Key ID: %s", globalConfig.CloudProviders.GetAWSCredential("default").SecretAccessKey)
 		log.InfoD("Region from backup target: %s", globalConfig.BackupTargets.GetAWSBucket("default").Region)
 		log.InfoD("Aws Access Key ID: %s", globalConfig.BackupTargets.GetNFSServer("default").IP)
-		globalConfig1, _ := backup.GetConfigObj()
-		log.InfoD("Aws Access Key ID: %s", globalConfig1.CloudProviders.GetAWSCredential("default").AccessKeyID)
-		log.InfoD("Aws secret Key ID: %s", globalConfig1.CloudProviders.GetAWSCredential("default").SecretAccessKey)
-		log.InfoD("Region from backup target: %s", globalConfig1.BackupTargets.GetAWSBucket("default").Region)
-		log.InfoD("Aws Access Key ID: %s", globalConfig1.BackupTargets.GetNFSServer("default").IP)
-
 	})
 })
 
