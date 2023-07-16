@@ -37,25 +37,25 @@
           "password": "RANCHER_PASSWORD"
         }
       }
+    }
+  },
+  "backupTargets": {
+    "aws": {
+      "default": {
+        "name": "CLOUD_BUCKET_NAME",
+        "access_key_id": "S3_ACCESS_KEY_ID",
+        "secret_access_key": "S3_SECRET_ACCESS_KEY",
+        "region": "S3_REGION"
+      }
     },
-    "backupTargets": {
-      "aws": {
-        "default": {
-          "name": "CLOUD_BUCKET_NAME",
-          "access_key_id": "S3_ACCESS_KEY_ID",
-          "secret_access_key": "S3_SECRET_ACCESS_KEY",
-          "region": "S3_REGION"
-        }
-      },
-      "nfs": {
-        "default": {
-          "name": "SERVER_NAME",
-          "ip": "SERVER_IP",
-          "export_path": "EXPORT_PATH",
-          "sub_path": "SUB_PATH",
-          "mount_options": "MOUNT_OPTIONS",
-          "encryption_key": "ENCRYPTION_KEY"
-        }
+    "nfs": {
+      "default": {
+        "name": "SERVER_NAME",
+        "ip": "SERVER_IP",
+        "export_path": "EXPORT_PATH",
+        "sub_path": "SUB_PATH",
+        "mount_options": "MOUNT_OPTIONS",
+        "encryption_key": "ENCRYPTION_KEY"
       }
     }
   }
