@@ -43,7 +43,7 @@ const (
 	driverUpTimeout             = 10 * time.Minute
 	generationNumberWaitTime    = 10 * time.Minute
 	defaultCmdRetry             = 15 * time.Second
-	defaultUpgradeTimeout       = 4 * time.Hour
+	defaultUpgradeTimeout       = 12 * time.Hour
 	defaultUpgradeRetryInterval = 5 * time.Minute
 	ocPath                      = " -c oc"
 )
@@ -577,7 +577,7 @@ func waitNodesToBeReady() error {
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 15*time.Second)
+	_, err = task.DoRetryWithTimeout(t, 600*time.Minute, 30*time.Second)
 	return err
 }
 
