@@ -9955,7 +9955,7 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			log.FailOnError(err, "error getting drive size for pool [%s]", selectedPools)
 			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
 			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
-			dash.VerifyFatal(err != nil, true, fmt.Sprintf("error in pool expand with err %s", err))
+			dash.VerifyFatal(err != nil, false, fmt.Sprintf("error in pool expand with err %s", err))
 			poolStatus, err := getPoolLastOperation(poolToBeResized.Uuid)
 			log.FailOnError(err, "error getting last operation of pool [%s]", selectedPools)
 			dash.VerifyFatal(strings.Contains(poolStatus.Msg, "node has reached it's maximum supported drive count:"), true, "Error expected as drive added more than allowed per Node")
