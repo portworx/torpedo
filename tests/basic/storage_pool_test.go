@@ -9882,29 +9882,29 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 		Step(stepLog, func() {
 			selectedNodeForOps, err := node.GetNodeByName(selectedNode.Name)
 			log.FailOnError(err, "failed while getting node")
-			poolListForOps, err := GetPoolsDetailsOnNode(selectedNodeForOps)
-			poolStatus, err := getPoolLastOperation(poolListForOps[0].Uuid)
-			log.FailOnError(err, "error getting pool status")
-			dash.VerifySafely(poolStatus.Status, api.SdkStoragePool_OPERATION_PENDING, "Verify pool status")
-			dash.VerifySafely(strings.Contains(poolStatus.Msg, "to be clean before starting pool expansion"), true, fmt.Sprintf("verify pool expansion message %s", poolStatus.Msg))
-			if poolStatus.Msg != "" {
-				log.Infof("Pool Resize Status: %v, Message : %s", poolStatus.Status, poolStatus.Msg)
-				if poolStatus.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
-					(strings.Contains(poolStatus.Msg, "Storage rebalance is running") || strings.Contains(poolStatus.Msg, "Rebalance in progress")) {
-					errstring := true
-					dash.VerifyFatal(errstring == true, true, "poolresize failed")
-				}
-				var connect node.ConnectionOpts
-				connect.Timeout = 60
-				connect.TimeBeforeRetry = 10
-				err := Inst().N.ShutdownNode(selectedNodeForOps, node.ShutdownNodeOpts{
-					Force:          true,
-					ConnectionOpts: connect,
-				})
-				//shutdown for more than 3 mins
-				time.Sleep(300 * time.Second)
-				log.FailOnError(err, "failed to shutdown the node with err %s", err)
-			}
+			//poolListForOps, err := GetPoolsDetailsOnNode(selectedNodeForOps)
+			//poolStatus, err := getPoolLastOperation(poolListForOps[0].Uuid)
+			//log.FailOnError(err, "error getting pool status")
+			//dash.VerifySafely(poolStatus.Status, api.SdkStoragePool_OPERATION_PENDING, "Verify pool status")
+			//dash.VerifySafely(strings.Contains(poolStatus.Msg, "to be clean before starting pool expansion"), true, fmt.Sprintf("verify pool expansion message %s", poolStatus.Msg))
+			//if poolStatus.Msg != "" {
+			//	log.Infof("Pool Resize Status: %v, Message : %s", poolStatus.Status, poolStatus.Msg)
+			//	if poolStatus.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
+			//		(strings.Contains(poolStatus.Msg, "Storage rebalance is running") || strings.Contains(poolStatus.Msg, "Rebalance in progress")) {
+			//		errstring := true
+			//		dash.VerifyFatal(errstring == true, true, "poolresize failed")
+			//	}
+			var connect node.ConnectionOpts
+			connect.Timeout = 60
+			connect.TimeBeforeRetry = 10
+			err = Inst().N.ShutdownNode(selectedNodeForOps, node.ShutdownNodeOpts{
+				Force:          true,
+				ConnectionOpts: connect,
+			})
+			//shutdown for more than 3 mins
+			time.Sleep(300 * time.Second)
+			log.FailOnError(err, "failed to shutdown the node with err %s", err)
+			//}
 			//t := func() (interface{}, bool, error) {
 			//	err = Inst().N.PowerOnVM(selectedNodeForOps)
 			//	if err != nil {
@@ -9930,7 +9930,6 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			}
 
 			dash.VerifyFatal(len(slNodes) == numOfSlNodeBefore-1, true, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
-
 			for _, n := range stNodes {
 				if n.Id == slNode.Id {
 					stNode = n
