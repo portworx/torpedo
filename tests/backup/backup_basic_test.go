@@ -138,8 +138,11 @@ var _ = BeforeSuite(func() {
 	BackupInitInstance()
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
+	// Get all the values from the cloud_config.json into struct which can be globally accessed
+	var err error
+	globalConfig, err = backup.GetConfigObj()
+	dash.VerifyFatal(err, nil, err.Error())
 	// Create the first bucket from the list to be used as generic bucket
-	globalConfig, _ = backup.GetConfigObj()
 	providers := getProviders()
 	bucketNameSuffix := getBucketNameSuffix()
 	for _, provider := range providers {
