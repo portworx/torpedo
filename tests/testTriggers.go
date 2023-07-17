@@ -1126,6 +1126,7 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 						UpdateOutcome(event, err)
 					}
 				})
+			validateContexts(event, contexts)
 		}
 		updateMetrics(*event)
 	})
@@ -1168,6 +1169,13 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 						UpdateOutcome(event, err)
 					}
 				})
+			stepLog = "wait for 15 mins for apps and volumes to reallocate"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				time.Sleep(15 * time.Minute)
+				validateContexts(event, contexts)
+
+			})
 			stepLog = fmt.Sprintf("starting volume %s driver on node %s",
 				Inst().V.String(), appNode.Name)
 			Step(stepLog,
@@ -1187,25 +1195,29 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 				time.Sleep(20 * time.Second)
 			})
 
-			for _, ctx := range *contexts {
-				stepLog = fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key)
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					errorChan := make(chan error, errorChannelSize)
-					ctx.ReadinessTimeout = time.Minute * 10
-					ValidateContext(ctx, &errorChan)
-					for err := range errorChan {
-						UpdateOutcome(event, err)
-					}
-					if strings.Contains(ctx.App.Key, fastpathAppName) {
-						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-						UpdateOutcome(event, err)
-					}
-				})
-			}
+			validateContexts(event, contexts)
 		}
 		updateMetrics(*event)
 	})
+}
+
+func validateContexts(event *EventRecord, contexts *[]*scheduler.Context) {
+	for _, ctx := range *contexts {
+		stepLog := fmt.Sprintf("%s: validating app [%s]", event.Event.Type, ctx.App.Key)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			errorChan := make(chan error, errorChannelSize)
+			ctx.ReadinessTimeout = time.Minute * 10
+			ValidateContext(ctx, &errorChan)
+			for err := range errorChan {
+				UpdateOutcome(event, err)
+			}
+			if strings.Contains(ctx.App.Key, fastpathAppName) {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				UpdateOutcome(event, err)
+			}
+		})
+	}
 }
 
 // TriggerRestartManyVolDriver restarts one or more volume drivers and validates app
@@ -1284,21 +1296,7 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			log.InfoD(stepLog)
 			wg.Wait()
 		})
-		for _, ctx := range *contexts {
-			stepLog = fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key)
-			Step(stepLog, func() {
-				errorChan := make(chan error, errorChannelSize)
-				ctx.ReadinessTimeout = time.Minute * 10
-				ValidateContext(ctx, &errorChan)
-				for err := range errorChan {
-					UpdateOutcome(event, err)
-				}
-				if strings.Contains(ctx.App.Key, fastpathAppName) {
-					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-					UpdateOutcome(event, err)
-				}
-			})
-		}
+		validateContexts(event, contexts)
 		updateMetrics(*event)
 
 	})
@@ -1360,22 +1358,7 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 				time.Sleep(20 * time.Second)
 			})
 
-			for _, ctx := range *contexts {
-				stepLog = fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key)
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					errorChan := make(chan error, errorChannelSize)
-					ctx.ReadinessTimeout = time.Minute * 10
-					ValidateContext(ctx, &errorChan)
-					for err := range errorChan {
-						UpdateOutcome(event, err)
-					}
-					if strings.Contains(ctx.App.Key, fastpathAppName) {
-						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-						UpdateOutcome(event, err)
-					}
-				})
-			}
+			validateContexts(event, contexts)
 		}
 		updateMetrics(*event)
 	})
@@ -1490,22 +1473,7 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 						UpdateOutcome(event, err)
 					})
 
-					Step("validate apps", func() {
-						for _, ctx := range *contexts {
-							stepLog = fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key)
-							Step(stepLog, func() {
-								errorChan := make(chan error, errorChannelSize)
-								ValidateContext(ctx, &errorChan)
-								for err := range errorChan {
-									UpdateOutcome(event, err)
-								}
-								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-									UpdateOutcome(event, err)
-								}
-							})
-						}
-					})
+					validateContexts(event, contexts)
 				}
 			}
 			updateMetrics(*event)
@@ -1610,23 +1578,7 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				wg.Wait()
 			})
 
-			Step("validate apps", func() {
-				for _, ctx := range *contexts {
-					stepLog = fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key)
-					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						errorChan := make(chan error, errorChannelSize)
-						ValidateContext(ctx, &errorChan)
-						for err := range errorChan {
-							UpdateOutcome(event, err)
-						}
-						if strings.Contains(ctx.App.Key, fastpathAppName) {
-							err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-							UpdateOutcome(event, err)
-						}
-					})
-				}
-			})
+			validateContexts(event, contexts)
 		})
 		updateMetrics(*event)
 	})
@@ -1751,23 +1703,7 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						UpdateOutcome(event, err)
 					})
 
-					Step("validate apps", func() {
-						for _, ctx := range *contexts {
-							stepLog = fmt.Sprintf("CrashNode: validating app [%s]", ctx.App.Key)
-							Step(stepLog, func() {
-								log.InfoD(stepLog)
-								errorChan := make(chan error, errorChannelSize)
-								ValidateContext(ctx, &errorChan)
-								for err := range errorChan {
-									UpdateOutcome(event, err)
-								}
-								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-									UpdateOutcome(event, err)
-								}
-							})
-						}
-					})
+					validateContexts(event, contexts)
 				}
 			}
 		})
@@ -4362,20 +4298,8 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		wg.Wait()
 
 	})
-
-	stepLog = "validate all apps after pool resize using resize-disk operation"
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		errorChan := make(chan error, errorChannelSize)
-		for _, ctx := range *contexts {
-			ValidateContext(ctx, &errorChan)
-			if strings.Contains(ctx.App.Key, fastpathAppName) {
-				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-				UpdateOutcome(event, err)
-			}
-		}
-		updateMetrics(*event)
-	})
+	validateContexts(event, contexts)
+	updateMetrics(*event)
 }
 
 // TriggerPoolResizeDiskAndReboot performs resize-disk on a storage pool and reboots the node
@@ -4422,18 +4346,7 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 		}
 	})
 
-	stepLog = "validate all apps after pool resize using resize-disk operation"
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		errorChan := make(chan error, errorChannelSize)
-		for _, ctx := range *contexts {
-			ValidateContext(ctx, &errorChan)
-			if strings.Contains(ctx.App.Key, fastpathAppName) {
-				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-				UpdateOutcome(event, err)
-			}
-		}
-	})
+	validateContexts(event, contexts)
 	updateMetrics(*event)
 }
 
@@ -4484,18 +4397,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		wg.Wait()
 
 	})
-	stepLog = "validate all apps after pool resize using add-disk operation"
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		errorChan := make(chan error, errorChannelSize)
-		for _, ctx := range *contexts {
-			ValidateContext(ctx, &errorChan)
-			if strings.Contains(ctx.App.Key, fastpathAppName) {
-				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-				UpdateOutcome(event, err)
-			}
-		}
-	})
+	validateContexts(event, contexts)
 	updateMetrics(*event)
 }
 
@@ -4541,18 +4443,7 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 1, true)
 		}
 	})
-	stepLog = "validate all apps after pool resize using add-disk operation"
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		errorChan := make(chan error, errorChannelSize)
-		for _, ctx := range *contexts {
-			ValidateContext(ctx, &errorChan)
-			if strings.Contains(ctx.App.Key, fastpathAppName) {
-				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-				UpdateOutcome(event, err)
-			}
-		}
-	})
+	validateContexts(event, contexts)
 
 	updateMetrics(*event)
 }
@@ -4692,19 +4583,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 				UpdateOutcome(event, err)
 
 			})
-			stepLog = "validate all apps after upgrade"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				errorChan := make(chan error, errorChannelSize)
-				for _, ctx := range *contexts {
-					ctx.SkipVolumeValidation = true
-					ValidateContext(ctx, &errorChan)
-					if strings.Contains(ctx.App.Key, fastpathAppName) {
-						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-						UpdateOutcome(event, err)
-					}
-				}
-			})
+			validateContexts(event, contexts)
 		}
 	})
 	updateMetrics(*event)
