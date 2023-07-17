@@ -47,6 +47,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	appsapi "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1891,17 +1892,29 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
 			})
-			var requestedVols []*volume.Volume
+
+			requestedVols := make([]*volume.Volume, 0)
 			stepLog = fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
 				Inst().V.String(), ctx.App.Key, appVolumes)
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					log.InfoD("increasing volume size")
-					requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
-					if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
+					chaosLevel := getPoolExpandPercentage(VolumeResize)
+					pvcs, err := GetContextPVCs(ctx)
+					if err != nil {
 						UpdateOutcome(event, err)
+						return
 					}
+					for _, pvc := range pvcs {
+						log.InfoD("increasing pvc [%s/%s]  size to %d", pvc.Namespace, pvc.Name, chaosLevel)
+						resizedVol, err := Inst().S.ResizePVC(ctx, pvc, chaosLevel)
+						if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
+							UpdateOutcome(event, err)
+							continue
+						}
+						requestedVols = append(requestedVols, resizedVol)
+					}
+
 				})
 			stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
 				ctx.App.Key, appVolumes)
@@ -7591,6 +7604,24 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 			}
 		}
 	})
+}
+
+// GetContextPVCs returns pvc from the given context
+func GetContextPVCs(context *scheduler.Context) ([]*corev1.PersistentVolumeClaim, error) {
+	updatedPVCs := make([]*corev1.PersistentVolumeClaim, 0)
+	for _, specObj := range context.App.SpecList {
+
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			pvc, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			updatedPVCs = append(updatedPVCs, pvc)
+
+		}
+	}
+	return updatedPVCs, nil
+
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {
