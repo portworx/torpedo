@@ -132,16 +132,16 @@ func BackupInitInstance() {
 
 var dash *aetosutil.Dashboard
 var _ = BeforeSuite(func() {
+	var err error
 	dash = Inst().Dash
 	dash.TestSetBegin(dash.TestSet)
 	log.Infof("Backup Init instance")
 	BackupInitInstance()
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
-	// Get all the values from the cloud_config.json into struct which can be globally accessed
-	var err error
+	// Get all the values from the cloud_config.json persist into struct which can be globally accessed
 	globalConfig, err = backup.GetConfigObj()
-	dash.VerifyFatal(err, nil, err.Error())
+	dash.VerifyFatal(err, nil, "Fetching the cloud config details and persisting into globalConfig struct")
 	// Create the first bucket from the list to be used as generic bucket
 	providers := getProviders()
 	bucketNameSuffix := getBucketNameSuffix()
