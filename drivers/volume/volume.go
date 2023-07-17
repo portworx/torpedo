@@ -130,6 +130,14 @@ type Driver interface {
 	// ValidateCreateSnapshotUsingPxctl validates whether a snapshot has been created properly using pxctl.
 	ValidateCreateSnapshotUsingPxctl(name string) error
 
+	// GetCloudsnaps returns cloudsnap backups
+	// params are the custom backup options passed
+	GetCloudsnaps(name string, params map[string]string) ([]*api.SdkCloudBackupInfo, error)
+
+	// DeleteAllCloudsnaps deletes all  cloudsnap backups
+	// params are the custom backup options passed
+	DeleteAllCloudsnaps(name, sourceVolumeID string, params map[string]string) error
+
 	// ValidateCreateCloudsnap validates whether a cloudsnap backup can be created properly(or errored expectely)
 	// params are the custom backup options passed
 	ValidateCreateCloudsnap(name string, params map[string]string) error
@@ -152,8 +160,11 @@ type Driver interface {
 	// ValidateUpdateVolume validates if volume changes has been applied
 	ValidateUpdateVolume(vol *Volume, params map[string]string) error
 
-	// SetIoThrottle validates if volume changes has been applied
+	// SetIoBandwidth validates if volume changes has been applied
 	SetIoBandwidth(vol *Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error
+
+	// UpdateVolumeSpec updates given volume with provided spec
+	UpdateVolumeSpec(vol *Volume, volumeSpec *api.VolumeSpecUpdate) error
 
 	// ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 	ValidateDeleteVolume(vol *Volume) error
