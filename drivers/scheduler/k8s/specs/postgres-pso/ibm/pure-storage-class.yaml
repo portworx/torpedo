@@ -2,18 +2,6 @@ allowVolumeExpansion: true
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  annotations:
-    armada-service: addon-vpc-block-csi-driver
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"allowVolumeExpansion":true,"apiVersion":"storage.k8s.io/v1","kind":"StorageClass","metadata":{"annotations":{"armada-service":"addon-vpc-block-csi-driver","razee.io/build-url":"https://travis.ibm.com/alchemy-containers/addon-vpc-block-csi-driver/builds/1602661","razee.io/source-url":"https://github.ibm.com/alchemy-containers/addon-vpc-block-csi-driver/commit/1d227d2471afc51fa6b29d3cffffc03facf5afc3","storageclass.kubernetes.io/is-default-class":"true","version":"5.0.16_127"},"labels":{"addonmanager.kubernetes.io/mode":"Reconcile","app":"ibm-vpc-block-csi-driver","razee/force-apply":"true"},"name":"ibmc-vpc-block-10iops-tier"},"parameters":{"billingType":"hourly","classVersion":"1","csi.storage.k8s.io/fstype":"ext4","encrypted":"false","encryptionKey":"","profile":"10iops-tier","region":"","resourceGroup":"","tags":"","zone":""},"provisioner":"vpc.block.csi.ibm.io","reclaimPolicy":"Delete"}
-    razee.io/build-url: https://travis.ibm.com/alchemy-containers/addon-vpc-block-csi-driver/builds/1602661
-    razee.io/source-url: https://github.ibm.com/alchemy-containers/addon-vpc-block-csi-driver/commit/1d227d2471afc51fa6b29d3cffffc03facf5afc3
-    storageclass.kubernetes.io/is-default-class: "true"
-    version: 5.0.16_127
-  labels:
-    addonmanager.kubernetes.io/mode: Reconcile
-    app: ibm-vpc-block-csi-driver
-    razee/force-apply: "true"
   name: postgres-sc
 parameters:
   billingType: hourly
