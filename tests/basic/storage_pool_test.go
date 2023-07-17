@@ -9794,9 +9794,9 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			err := fmt.Errorf("failed to get node id")
 			log.FailOnError(err, "failed to get node id")
 		}
-
-		Step("Test beyond max drives per pool", func() {
-			log.InfoD(stepLog)
+		stepStr := "Test beyond max drives per pool"
+		Step(stepStr, func() {
+			log.InfoD(stepStr)
 			var selectedPool *api.StoragePool
 			var maxDrivesAllowed int
 			selectedPool, err := GetPoolWithIOsInGivenNode(selectedNode, contexts)
@@ -9806,11 +9806,9 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				log.FailOnError(err, "error getting pool drives from node [%s]", selectedNode.Name)
 				if drvs, ok := drvMap[fmt.Sprintf("%d", selectedPool.ID)]; ok {
 					maxDrivesAllowed = POOL_MAX_CLOUD_DRIVES - len(drvs)
-				} else {
-					fmt.Errorf("drive map is empty")
-					log.FailOnError(err, "error getting drivemap from node[%s]", selectedNode.Name)
 				}
 			} else {
+				err := fmt.Errorf("selected pool is empty")
 				log.FailOnError(err, "selected pool is empty")
 			}
 			for i := 1; i <= maxDrivesAllowed+1; i++ {
@@ -9840,9 +9838,9 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "error refreshing volume endpoints")
 		})
-
-		Step("Test beyond max pool count", func() {
-			log.InfoD(stepLog)
+		stepStr = "Test beyond max pool count"
+		Step(stepStr, func() {
+			log.InfoD(stepStr)
 			poolList, err := GetPoolsDetailsOnNode(selectedNode)
 			poolLeft := maxPoolLength - len(poolList)
 			err = addNewPools(selectedNode, poolLeft)
@@ -9850,9 +9848,9 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			err = addNewPools(selectedNode, 1)
 			dash.VerifyFatal(err != nil, true, "Error expected as pools trying to create is more than allowed")
 		})
-
-		Step("Test beyond max drives per node", func() {
-			log.InfoD(stepLog)
+		stepStr = "Test beyond max drives per node"
+		Step(stepStr, func() {
+			log.InfoD(stepStr)
 			var selectedPools string
 			poolList, err := GetPoolsDetailsOnNode(selectedNode)
 			log.FailOnError(err, "failed while getting updated node pool list")
@@ -9919,9 +9917,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 								log.FailOnError(err, "error refreshing volume endpoints")
 							}
 						}
-					} else {
-						fmt.Errorf("drive map is empty")
-						log.FailOnError(err, "error getting drivemap from node[%s]", selectedNode.Name)
 					}
 				}
 			}
@@ -9938,9 +9933,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 						fmt.Printf("selectedPools %v", selectedPools)
 						break
 					}
-				} else {
-					fmt.Errorf("drive map is empty")
-					log.FailOnError(err, "error getting drivemap from node [%s]", sNode.Name)
 				}
 			}
 			//check if selectedpool is empty
