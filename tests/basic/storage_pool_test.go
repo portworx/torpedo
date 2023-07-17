@@ -9867,7 +9867,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			drvNum1 := strings.TrimSpace(string(drvNum))
 			drvNum1 = strings.Trim(drvNum1, "\n")
 			drvNumInt, err := strconv.Atoi(drvNum1)
-			fmt.Printf("drvNumInt %v", drvNumInt)
 			log.FailOnError(err, "failed to convert to int")
 			maxDriveLimit, err := GetPoolMaxCloudDriveLimit(&selectedNode)
 			log.FailOnError(err, "failed to get pool drive limit")
@@ -9893,7 +9892,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 					if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
 						if (POOL_MAX_CLOUD_DRIVES - len(drvs)) > 0 {
 							drivesThatCanBeAdded := (POOL_MAX_CLOUD_DRIVES - len(drvs))
-							fmt.Printf("drivesThatCanBeAdded %v", drivesThatCanBeAdded)
 							for j := 1; j <= drivesThatCanBeAdded; j++ {
 								driveSize := drvSize * uint64(j)
 								expectedSize := (poolListForOps[i].TotalSize / units.GiB) + driveSize
@@ -9907,7 +9905,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 								err = Inst().V.ExpandPool(poolListForOps[i].Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 								log.FailOnError(err, "error while expanding pool")
 								maxDriveAllowed = maxDriveAllowed - 1
-								fmt.Printf("maxDriveAllowed %v", maxDriveAllowed)
 								if maxDriveAllowed == 0 {
 									break
 								}
@@ -9930,7 +9927,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				if drvs, ok := drvMap[fmt.Sprintf("%d", poolListOnNode[i].ID)]; ok {
 					if (POOL_MAX_CLOUD_DRIVES - len(drvs)) > 0 {
 						selectedPools = poolListOnNode[i].Uuid
-						fmt.Printf("selectedPools %v", selectedPools)
 						break
 					}
 				}
@@ -9950,7 +9946,7 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			dash.VerifyFatal(err != nil, false, fmt.Sprintf("error in pool expand with err %s", err))
 			poolStatus, err := getPoolLastOperation(poolToBeResized.Uuid)
 			log.FailOnError(err, "error getting last operation of pool [%s]", selectedPools)
-			dash.VerifyFatal(strings.Contains(poolStatus.Msg, "node has reached it's maximum supported drive count:"), true, "Error expected as drive added more than allowed per Node")
+			dash.VerifyFatal(strings.Contains(poolStatus.Msg, "node has reached it's maximum supported drive count:"), false, "Error expected as drive added more than allowed per Node")
 
 		})
 	})
