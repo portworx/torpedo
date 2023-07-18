@@ -36,7 +36,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 
 // Reference test to access the cloud config details from the global variable
 var _ = Describe("{DummyParseConfig}", func() {
-	StartTorpedoTest("testParseConfig", "testcreds", nil, 11111)
+	StartTorpedoTest("DummyParseConfig", "testcreds", nil, 11111)
 	It("Testing parse config", func() {
 		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").AccessKeyID)
 		log.InfoD("Aws secret Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").SecretAccessKey)
@@ -49,7 +49,7 @@ var _ = Describe("{DummyParseConfig}", func() {
 var _ = Describe("{testUserGroupManagement}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
-		StartTorpedoTest("Backup: UserGroupManagement", "Creating users and adding them to groups", nil, 0)
+		StartTorpedoTest("testUserGroupManagement", "Creating users and adding them to groups", nil, 0)
 	})
 	It("User and group role mappings", func() {
 		Step("Create Users", func() {
