@@ -46,7 +46,7 @@ var _ = Describe("{testParseConfig}", func() {
 })
 
 // This is a sample test case to verify User/Group Management and role mapping
-var _ = Describe("{UserGroupManagement}", func() {
+var _ = Describe("{testUserGroupManagement}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
 		StartTorpedoTest("Backup: UserGroupManagement", "Creating users and adding them to groups", nil, 0)
