@@ -35,7 +35,7 @@ var _ = Describe("{BackupClusterVerification}", func() {
 })
 
 // Reference test to access the cloud config details from the global variable
-var _ = Describe("{testParseConfig}", func() {
+var _ = Describe("{DummyParseConfig}", func() {
 	StartTorpedoTest("testParseConfig", "testcreds", nil, 11111)
 	It("Testing parse config", func() {
 		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").AccessKeyID)
