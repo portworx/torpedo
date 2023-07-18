@@ -56,12 +56,15 @@ func getGlobalLockedBucketName(provider string) string {
 }
 
 func TestBasic(t *testing.T) {
+	fmt.Println("Inside TestBasic")
 	RegisterFailHandler(Fail)
 
 	var specReporters []Reporter
 	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
 	specReporters = append(specReporters, junitReporter)
+	fmt.Println("Running RunSpecsWithDefaultAndCustomReporters")
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
+	fmt.Println("Done with RunSpecsWithDefaultAndCustomReporters")
 }
 
 // BackupInitInstance initialises instances required for backup
@@ -326,5 +329,6 @@ var _ = AfterSuite(func() {
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
 	ParseFlags()
+	fmt.Println("Done parsing flags")
 	os.Exit(m.Run())
 }
