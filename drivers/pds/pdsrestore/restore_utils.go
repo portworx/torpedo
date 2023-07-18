@@ -1,26 +1,137 @@
 package pdsrestore
 
 import (
+	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
+	ds "github.com/portworx/torpedo/drivers/pds/dataservice"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
+	"github.com/portworx/torpedo/pkg/log"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"strings"
+	"time"
+)
+
+const (
+	restoreTimeOut         = 30 * time.Minute
+	restoreTimeInterval    = 20 * time.Second
+	restoreMaxTimeInterval = 1 * time.Minute
 )
 
 type RestoreClient struct {
-	controlPlaneURL      string
+	TenantId             string
+	ProjectId            string
 	Components           *pdsapi.Components
-	Deployment           pds.ModelsDeployment
-	RestoreTargetCluster tc.TargetCluster
+	Deployment           *pds.ModelsDeployment
+	RestoreTargetCluster *tc.TargetCluster
 }
 
+// DSEntity struct contain the current context of data and deployment object. Which could be later utilized as source of truth for validating the restored object
 type DSEntity struct {
-	Deployment        pds.ModelsDeployment
-	ApplicationConfig pds.ModelsApplicationConfigurationTemplate
-	ResourceConfig    pds.ModelsResourceSettingsTemplate
-	StorageTemplate   pds.ModelsStorageOptionsTemplate
-	DataHash          string
+	Deployment *pds.ModelsDeployment
+	// TODO Add datahash for data validation
 }
 
-func (restoreClient *RestoreClient) TriggerAndValidateRestore(validate bool) error {
-	restoreClient
+func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string, bkpDsEntity DSEntity, validate bool) (*pds.ModelsRestore, error) {
+	k8sClusterId, err := restoreClient.RestoreTargetCluster.GetClusterID()
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch the cluster Id")
+	}
+	pdsRestoreTargetClusterId, err := restoreClient.RestoreTargetCluster.GetDeploymentTargetID(k8sClusterId, restoreClient.TenantId)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch the cluster details from the control plane")
+	}
+	restoredDeploymentName := generateRandomName("ds-restore")
+	nsName, pdsNamespaceId, err := restoreClient.getNameSpaceId(pdsRestoreTargetClusterId)
+	if err != nil {
+		return nil, err
+	}
+	restoredModel, err := restoreClient.Components.Restore.RestoreToNewDeployment(backupJobId, restoredDeploymentName, pdsRestoreTargetClusterId, pdsNamespaceId)
+	if err != nil {
+		return nil, fmt.Errorf("failed during restore")
+	}
+	err = wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
+		restore, err := restoreClient.Components.Restore.GetRestore(restoredModel.GetId())
+		state := restore.GetStatus()
+		if err != nil {
+			log.Errorf("failed during fetching the restore object, %v", err)
+			return false, err
+		}
+		log.Infof("Restore status -  %v", state)
+		if strings.ToLower(state) != strings.ToLower("Successful") {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		log.Errorf("restore failed {polling}, %v", err)
+		return nil, err
+	}
+
+	if validate {
+		newDeploymentId := restoredModel.GetDeploymentId()
+		newDeploymentModel, err := restoreClient.Components.DataServiceDeployment.GetDeployment(newDeploymentId)
+		if err != nil {
+			return nil, fmt.Errorf("error while fetching restored deployment object")
+		}
+		dsType := ds.DataserviceType{}
+		err = dsType.ValidateDataServiceDeployment(newDeploymentModel, nsName)
+		if err != nil {
+			return nil, fmt.Errorf("error while validating the restored deployment")
+		}
+		restoreDsEntity := DSEntity{Deployment: newDeploymentModel}
+		err = restoreClient.ValidateRestore(bkpDsEntity, restoreDsEntity)
+		if err != nil {
+			return nil, fmt.Errorf("error while validation data service entities(i.e App confoig, resource etc). Err: %v", err)
+		}
+	}
+	return restoredModel, nil
+}
+
+func (restoreClient *RestoreClient) getNameSpaceId(pdsClusterId string) (string, string, error) {
+	randomName := generateRandomName("restore")
+	_, err := restoreClient.RestoreTargetCluster.CreateNamespace(randomName)
+	if err != nil {
+		return "", "", fmt.Errorf("unable to create namespace %v", randomName)
+	}
+	nsId, err := restoreClient.RestoreTargetCluster.GetnameSpaceID(randomName, pdsClusterId)
+	if err != nil {
+		return "", "", fmt.Errorf("unable to fetch  %v", randomName)
+	}
+	return randomName, nsId, nil
+}
+
+func (restoreClient *RestoreClient) ValidateRestore(bkpDsEntity, restoreDsEntity DSEntity) error {
+	// Validate the Application configuration
+	bkpAppConfig := bkpDsEntity.Deployment.Configuration
+	restoreAppConfig := restoreDsEntity.Deployment.Configuration
+	if !compareMaps(bkpAppConfig, restoreAppConfig) {
+		return fmt.Errorf("restored Application configuration are not same as as backed up app config")
+	}
+
+	// Validate the Resource configuration
+	bkpResourceConfig := resourceStructToMap(bkpDsEntity.Deployment.Resources)
+	restoreResourceConfig := resourceStructToMap(restoreDsEntity.Deployment.Resources)
+	if !compareMaps(bkpResourceConfig, restoreResourceConfig) {
+		return fmt.Errorf("restored resource configuration are not same as backed up resource config")
+	}
+
+	// Validate the StorageOption configuration
+	bkpStorageOptionConfig := storageOptionsStructToMap(bkpDsEntity.Deployment.StorageOptions)
+	restoreStorageOptionConfig := storageOptionsStructToMap(restoreDsEntity.Deployment.StorageOptions)
+	if !compareMaps(bkpStorageOptionConfig, restoreStorageOptionConfig) {
+		return fmt.Errorf("restored resource configuration are not same as backed up resource config")
+	}
+
+	// NodeCount,DeploymentTarget, Image and data service version
+	if &bkpDsEntity.Deployment.NodeCount != &restoreDsEntity.Deployment.NodeCount &&
+		&bkpDsEntity.Deployment.DeploymentTargetId != &restoreDsEntity.Deployment.DeploymentTargetId &&
+		&bkpDsEntity.Deployment.ImageId != &restoreDsEntity.Deployment.ImageId {
+		return fmt.Errorf("validation for nodeCount,deploymentTarget, image and data service version failed")
+	}
+	// TODO implement for data consistency validation.
+
+	// TODO implement for Service Type validation.
+
+	return nil
 }
