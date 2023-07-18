@@ -36,12 +36,20 @@ var _ = Describe("{BackupClusterVerification}", func() {
 
 // Reference test to access the cloud config details from the global variable
 var _ = Describe("{DummyParseConfig}", func() {
-	StartTorpedoTest("DummyParseConfig", "testcreds", nil, 11111)
+	JustBeforeEach(func() {
+		StartTorpedoTest("DummyParseConfig", "testcreds", nil, 11111)
+		StartTorpedoTest("DummyParseConfig", "DummyParseConfig testing", nil, 0)
+	})
 	It("Testing parse config", func() {
 		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").AccessKeyID)
 		log.InfoD("Aws secret Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").SecretAccessKey)
 		log.InfoD("Region from backup target: %s", GlobalCredentialConfig.BackupTargets.GetAWSBucket("default").Region)
 		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.BackupTargets.GetNFSServer("default").IP)
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("Cleanup started")
+		log.Infof("Cleanup done")
 	})
 })
 
