@@ -693,6 +693,73 @@ func GetAllBackupsForUser(username, password string) ([]string, error) {
 	return backupNames, nil
 }
 
+func GetAllBackupsForUserFromAdmin(username string) ([]string, error) {
+	backupNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			ClusterUidFilter: username, //TODO
+		},
+	}
+	currentBackups, err := backupDriver.EnumerateBackup(ctx, backupEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, backup := range currentBackups.GetBackups() {
+		backupNames = append(backupNames, backup.GetName())
+	}
+	return backupNames, nil
+}
+
+func GetAllBackupScheduleForUserFromAdmin(username string) ([]string, error) {
+	backupScheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	backupScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+	}
+	currentBackupSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, backupScheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, backupSchedule := range currentBackupSchedules.GetBackupSchedules() {
+		backupScheduleNames = append(backupScheduleNames, backupSchedule.GetName())
+	}
+	return backupScheduleNames, nil
+}
+
+// GetAllBackupSchedulesForUser returns all current BackupSchedules for user.
+func GetAllBackupSchedulesForUser(username, password string) ([]string, error) {
+	scheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	scheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+	}
+	currentSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, scheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, schedule := range currentSchedules.GetBackupSchedules() {
+		scheduleNames = append(scheduleNames, schedule.GetName())
+	}
+	return scheduleNames, nil
+}
+
 // CreateRestore creates restore
 func CreateRestore(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context.Context, storageClassMapping map[string]string) error {
@@ -713,6 +780,7 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 			break
 		}
 	}
+	log.Infof("Got the UID of the backup %s needed to be restored - [%s]", backupName, bkpUid)
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
@@ -784,6 +852,41 @@ func CreateRestoreWithReplacePolicy(restoreName string, backupName string, names
 	}
 	log.Infof("Restore [%s] created successfully", restoreName)
 	return nil
+}
+
+// CreateRestoreWithReplacePolicyWithValidation Creates in-place restore and validates the success,
+func CreateRestoreWithReplacePolicyWithValidation(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicy_Type, scheduledAppContexts []*scheduler.Context) (err error) {
+	err = CreateRestoreWithReplacePolicy(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping, replacePolicy)
+	if err != nil {
+		return
+	}
+	originalClusterConfigPath := CurrentClusterConfigPath
+	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
+		err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
+		return
+	} else {
+		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
+		err = SetClusterContext(clusterConfigPath)
+		if err != nil {
+			return
+		}
+	}
+	defer func() {
+		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		err = SetClusterContext(originalClusterConfigPath)
+	}()
+	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+	for _, scheduledAppContext := range scheduledAppContexts {
+		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
+		if err != nil {
+			log.Errorf("TransformAppContextWithMappings: %v", err)
+			continue
+		}
+		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+	}
+	err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
+	return
 }
 
 // CreateRestoreWithUID creates restore with UID
@@ -3089,6 +3192,7 @@ func TaskHandler(taskInputs interface{}, task interface{}, executionMode Executi
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
+				defer GinkgoRecover()
 				if isMap {
 					callTask(keys[i], v.MapIndex(keys[i]))
 				} else {
@@ -3935,4 +4039,3 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 	}
 	return false, nil
 }
-
