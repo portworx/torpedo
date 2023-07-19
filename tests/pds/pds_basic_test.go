@@ -37,6 +37,7 @@ var (
 	targetCluster *targetcluster.TargetCluster
 	controlPlane  *controlplane.ControlPlane
 	components    *api.Components
+	wkloadParams  pdsdriver.LoadGenParams
 )
 
 var _ = BeforeSuite(func() {
@@ -44,7 +45,7 @@ var _ = BeforeSuite(func() {
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		InitInstance()
+		//InitInstance()
 		dash = Inst().Dash
 		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
