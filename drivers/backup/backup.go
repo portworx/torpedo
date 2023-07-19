@@ -355,6 +355,9 @@ type Rule interface {
 	// CreateRuleForBackup creates backup rule
 	CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error)
 
+	// CreateRuleForBackupWithMultipleApplications creates backup rule for multiple application
+	CreateRuleForBackupWithMultipleApplications(ruleName string, orgID string, appList []string, prePostFlag string, ctx context.Context, appParameters map[string]map[string]map[string][]string) (bool, string, error)
+
 	// DeleteRuleForBackup deletes backup rule
 	DeleteRuleForBackup(orgID string, ruleName string) error
 
