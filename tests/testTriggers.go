@@ -3,7 +3,6 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"math"
 	"math/rand"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/pkg/applicationbackup"
@@ -47,6 +48,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	appsapi "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -345,6 +347,8 @@ const (
 	CloudSnapShotRestore = "cloudSnapShotRestore"
 	// LocalSnapShot takes local snapshot of the volumes
 	LocalSnapShot = "localSnapShot"
+	// LocalSnapShotRestore restores local snapshot of the volumes
+	LocalSnapShotRestore = "localSnapShotRestore"
 	// CsiSnapShot takes csi snapshot of the volumes
 	CsiSnapShot = "csiSnapShot"
 	//CsiSnapRestore takes restore
@@ -763,8 +767,9 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 					}
 
 					if err == nil {
-						HaIncreaseRebootTargetNode(event, ctx, v, storageNodeMap)
-						HaIncreaseRebootSourceNode(event, ctx, v, storageNodeMap)
+						restartPX := false
+						HaIncreaseRebootTargetNode(event, ctx, v, storageNodeMap, restartPX)
+						HaIncreaseRebootSourceNode(event, ctx, v, storageNodeMap, restartPX)
 					}
 				}
 			}
@@ -1123,6 +1128,7 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 						UpdateOutcome(event, err)
 					}
 				})
+			validateContexts(event, contexts)
 		}
 		updateMetrics(*event)
 	})
@@ -1165,6 +1171,13 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 						UpdateOutcome(event, err)
 					}
 				})
+			stepLog = "wait for 15 mins for apps and volumes to reallocate"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				time.Sleep(15 * time.Minute)
+				validateContexts(event, contexts)
+
+			})
 			stepLog = fmt.Sprintf("starting volume %s driver on node %s",
 				Inst().V.String(), appNode.Name)
 			Step(stepLog,
@@ -1184,25 +1197,29 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 				time.Sleep(20 * time.Second)
 			})
 
-			for _, ctx := range *contexts {
-				stepLog = fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key)
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					errorChan := make(chan error, errorChannelSize)
-					ctx.ReadinessTimeout = time.Minute * 10
-					ValidateContext(ctx, &errorChan)
-					for err := range errorChan {
-						UpdateOutcome(event, err)
-					}
-					if strings.Contains(ctx.App.Key, fastpathAppName) {
-						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-						UpdateOutcome(event, err)
-					}
-				})
-			}
+			validateContexts(event, contexts)
 		}
 		updateMetrics(*event)
 	})
+}
+
+func validateContexts(event *EventRecord, contexts *[]*scheduler.Context) {
+	for _, ctx := range *contexts {
+		stepLog := fmt.Sprintf("%s: validating app [%s]", event.Event.Type, ctx.App.Key)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			errorChan := make(chan error, errorChannelSize)
+			ctx.ReadinessTimeout = time.Minute * 10
+			ValidateContext(ctx, &errorChan)
+			for err := range errorChan {
+				UpdateOutcome(event, err)
+			}
+			if strings.Contains(ctx.App.Key, fastpathAppName) {
+				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+				UpdateOutcome(event, err)
+			}
+		})
+	}
 }
 
 // TriggerRestartManyVolDriver restarts one or more volume drivers and validates app
@@ -1281,21 +1298,7 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			log.InfoD(stepLog)
 			wg.Wait()
 		})
-		for _, ctx := range *contexts {
-			stepLog = fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key)
-			Step(stepLog, func() {
-				errorChan := make(chan error, errorChannelSize)
-				ctx.ReadinessTimeout = time.Minute * 10
-				ValidateContext(ctx, &errorChan)
-				for err := range errorChan {
-					UpdateOutcome(event, err)
-				}
-				if strings.Contains(ctx.App.Key, fastpathAppName) {
-					err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-					UpdateOutcome(event, err)
-				}
-			})
-		}
+		validateContexts(event, contexts)
 		updateMetrics(*event)
 
 	})
@@ -1357,22 +1360,7 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 				time.Sleep(20 * time.Second)
 			})
 
-			for _, ctx := range *contexts {
-				stepLog = fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key)
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					errorChan := make(chan error, errorChannelSize)
-					ctx.ReadinessTimeout = time.Minute * 10
-					ValidateContext(ctx, &errorChan)
-					for err := range errorChan {
-						UpdateOutcome(event, err)
-					}
-					if strings.Contains(ctx.App.Key, fastpathAppName) {
-						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-						UpdateOutcome(event, err)
-					}
-				})
-			}
+			validateContexts(event, contexts)
 		}
 		updateMetrics(*event)
 	})
@@ -1487,22 +1475,7 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 						UpdateOutcome(event, err)
 					})
 
-					Step("validate apps", func() {
-						for _, ctx := range *contexts {
-							stepLog = fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key)
-							Step(stepLog, func() {
-								errorChan := make(chan error, errorChannelSize)
-								ValidateContext(ctx, &errorChan)
-								for err := range errorChan {
-									UpdateOutcome(event, err)
-								}
-								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-									UpdateOutcome(event, err)
-								}
-							})
-						}
-					})
+					validateContexts(event, contexts)
 				}
 			}
 			updateMetrics(*event)
@@ -1607,23 +1580,7 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 				wg.Wait()
 			})
 
-			Step("validate apps", func() {
-				for _, ctx := range *contexts {
-					stepLog = fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key)
-					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						errorChan := make(chan error, errorChannelSize)
-						ValidateContext(ctx, &errorChan)
-						for err := range errorChan {
-							UpdateOutcome(event, err)
-						}
-						if strings.Contains(ctx.App.Key, fastpathAppName) {
-							err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-							UpdateOutcome(event, err)
-						}
-					})
-				}
-			})
+			validateContexts(event, contexts)
 		})
 		updateMetrics(*event)
 	})
@@ -1748,23 +1705,7 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						UpdateOutcome(event, err)
 					})
 
-					Step("validate apps", func() {
-						for _, ctx := range *contexts {
-							stepLog = fmt.Sprintf("CrashNode: validating app [%s]", ctx.App.Key)
-							Step(stepLog, func() {
-								log.InfoD(stepLog)
-								errorChan := make(chan error, errorChannelSize)
-								ValidateContext(ctx, &errorChan)
-								for err := range errorChan {
-									UpdateOutcome(event, err)
-								}
-								if strings.Contains(ctx.App.Key, fastpathAppName) {
-									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-									UpdateOutcome(event, err)
-								}
-							})
-						}
-					})
+					validateContexts(event, contexts)
 				}
 			}
 		})
@@ -1889,17 +1830,29 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 				}
 			})
-			var requestedVols []*volume.Volume
+
+			requestedVols := make([]*volume.Volume, 0)
 			stepLog = fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
 				Inst().V.String(), ctx.App.Key, appVolumes)
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
-					log.InfoD("increasing volume size")
-					requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
-					if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
+					chaosLevel := getPoolExpandPercentage(VolumeResize)
+					pvcs, err := GetContextPVCs(ctx)
+					if err != nil {
 						UpdateOutcome(event, err)
+						return
 					}
+					for _, pvc := range pvcs {
+						log.InfoD("increasing pvc [%s/%s]  size to %d", pvc.Namespace, pvc.Name, chaosLevel)
+						resizedVol, err := Inst().S.ResizePVC(ctx, pvc, chaosLevel)
+						if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
+							UpdateOutcome(event, err)
+							continue
+						}
+						requestedVols = append(requestedVols, resizedVol)
+					}
+
 				})
 			stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
 				ctx.App.Key, appVolumes)
@@ -2099,8 +2052,7 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 							UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
 						}
 					})
-					snapshotScheduleRetryInterval := 10 * time.Second
-					snapshotScheduleRetryTimeout := 3 * time.Minute
+
 					for _, v := range appVolumes {
 						snapshotScheduleName := v.Name + "-interval-schedule"
 						log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
@@ -2144,6 +2096,101 @@ func TriggerDeleteLocalSnapShot(contexts *[]*scheduler.Context, recordChan *chan
 		updateMetrics(*event)
 	})
 
+}
+
+func TriggerLocalSnapshotRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(LocalSnapShotRestore)
+	uuid := GenerateUUID()
+	event := &EventRecord{
+		Event: Event{
+			ID:   uuid,
+			Type: LocalSnapShotRestore,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	for _, ctx := range *contexts {
+		var appVolumes []*volume.Volume
+		var err error
+		if strings.Contains(ctx.App.Key, "localsnap") {
+			appNamespace := ctx.App.Key + "-" + ctx.UID
+			log.Infof("Namespace : %v", appNamespace)
+			stepLog := fmt.Sprintf("Getting app volumes for volume %s", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
+
+				if len(appVolumes) == 0 {
+					log.FailOnError(fmt.Errorf("no volumes found for [%s]", ctx.App.Key), "error getting volumes for [%s]", ctx.App.Key)
+				}
+			})
+			log.Infof("Got volume count : %v", len(appVolumes))
+			for _, v := range appVolumes {
+				snapshotScheduleName := v.Name + "-interval-schedule"
+				log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+				var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
+				checkSnapshotSchedules := func() (interface{}, bool, error) {
+					resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+					if err != nil {
+						return "", false, fmt.Errorf("error getting snapshot schedule for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+					}
+					if len(resp.Status.Items) == 0 {
+						return "", false, fmt.Errorf("no snapshot schedules found for %s, volume:%s in namespace %s", snapshotScheduleName, v.Name, v.Namespace)
+					}
+
+					log.Infof("%v", resp.Status.Items)
+					for _, snapshotStatuses := range resp.Status.Items {
+						if len(snapshotStatuses) > 0 {
+							volumeSnapshotStatus = snapshotStatuses[len(snapshotStatuses)-1]
+							if volumeSnapshotStatus == nil {
+								return "", true, fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status")
+							}
+							if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionReady {
+								return nil, false, nil
+							}
+							if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionError {
+								return nil, false, fmt.Errorf("volume snapshot: %s failed. status: %v", volumeSnapshotStatus.Name, volumeSnapshotStatus.Status)
+							}
+							if volumeSnapshotStatus.Status == snapv1.VolumeSnapshotConditionPending {
+								return nil, true, fmt.Errorf("volume Sanpshot %s is still pending", volumeSnapshotStatus.Name)
+							}
+						}
+					}
+					return nil, true, fmt.Errorf("volume Sanpshots for %s is not found", v.Name)
+				}
+				_, err = task.DoRetryWithTimeout(checkSnapshotSchedules, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+				if err != nil {
+					UpdateOutcome(event, err)
+					return
+				}
+				restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
+					Name:      v.Name,
+					Namespace: v.Namespace,
+				}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: volumeSnapshotStatus.Name, SourceNamespace: appNamespace, GroupSnapshot: false}}
+				restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
+				if err != nil {
+					UpdateOutcome(event, err)
+					return
+				}
+				err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+				dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destination: %s in namespace %s", restore.Name, v.Name, v.Namespace))
+				UpdateOutcome(event, err)
+
+			}
+
+		}
+	}
+
+	setMetrics(*event)
 }
 
 // TriggerCloudSnapShot deploy Interval Policy and validates snapshot
@@ -2363,6 +2410,9 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 				err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
 				dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
 			}
+		}
+		for k, _ := range cloudsnapMap {
+			delete(cloudsnapMap, k)
 		}
 	})
 
@@ -4250,20 +4300,8 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		wg.Wait()
 
 	})
-
-	stepLog = "validate all apps after pool resize using resize-disk operation"
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		errorChan := make(chan error, errorChannelSize)
-		for _, ctx := range *contexts {
-			ValidateContext(ctx, &errorChan)
-			if strings.Contains(ctx.App.Key, fastpathAppName) {
-				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-				UpdateOutcome(event, err)
-			}
-		}
-		updateMetrics(*event)
-	})
+	validateContexts(event, contexts)
+	updateMetrics(*event)
 }
 
 // TriggerPoolResizeDiskAndReboot performs resize-disk on a storage pool and reboots the node
@@ -4310,18 +4348,7 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 		}
 	})
 
-	stepLog = "validate all apps after pool resize using resize-disk operation"
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		errorChan := make(chan error, errorChannelSize)
-		for _, ctx := range *contexts {
-			ValidateContext(ctx, &errorChan)
-			if strings.Contains(ctx.App.Key, fastpathAppName) {
-				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-				UpdateOutcome(event, err)
-			}
-		}
-	})
+	validateContexts(event, contexts)
 	updateMetrics(*event)
 }
 
@@ -4372,18 +4399,7 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		wg.Wait()
 
 	})
-	stepLog = "validate all apps after pool resize using add-disk operation"
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		errorChan := make(chan error, errorChannelSize)
-		for _, ctx := range *contexts {
-			ValidateContext(ctx, &errorChan)
-			if strings.Contains(ctx.App.Key, fastpathAppName) {
-				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-				UpdateOutcome(event, err)
-			}
-		}
-	})
+	validateContexts(event, contexts)
 	updateMetrics(*event)
 }
 
@@ -4429,18 +4445,7 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 1, true)
 		}
 	})
-	stepLog = "validate all apps after pool resize using add-disk operation"
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		errorChan := make(chan error, errorChannelSize)
-		for _, ctx := range *contexts {
-			ValidateContext(ctx, &errorChan)
-			if strings.Contains(ctx.App.Key, fastpathAppName) {
-				err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-				UpdateOutcome(event, err)
-			}
-		}
-	})
+	validateContexts(event, contexts)
 
 	updateMetrics(*event)
 }
@@ -4580,19 +4585,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 				UpdateOutcome(event, err)
 
 			})
-			stepLog = "validate all apps after upgrade"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				errorChan := make(chan error, errorChannelSize)
-				for _, ctx := range *contexts {
-					ctx.SkipVolumeValidation = true
-					ValidateContext(ctx, &errorChan)
-					if strings.Contains(ctx.App.Key, fastpathAppName) {
-						err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
-						UpdateOutcome(event, err)
-					}
-				}
-			})
+			validateContexts(event, contexts)
 		}
 	})
 	updateMetrics(*event)
@@ -7492,6 +7485,24 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 			}
 		}
 	})
+}
+
+// GetContextPVCs returns pvc from the given context
+func GetContextPVCs(context *scheduler.Context) ([]*corev1.PersistentVolumeClaim, error) {
+	updatedPVCs := make([]*corev1.PersistentVolumeClaim, 0)
+	for _, specObj := range context.App.SpecList {
+
+		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			pvc, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			updatedPVCs = append(updatedPVCs, pvc)
+
+		}
+	}
+	return updatedPVCs, nil
+
 }
 
 func prepareEmailBody(eventRecords emailData) (string, error) {
