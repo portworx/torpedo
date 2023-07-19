@@ -16,7 +16,7 @@ import (
 var _ = Describe("{RecycleOCPNode}", func() {
 
 	if Inst().S.String() != openshift.SchedName {
-		log.Warnf("Failed: This test is not supported for scheduler: [%s]", Inst().S.String())
+		log.Warnf("Debug -> Failed: This test is not supported for scheduler: [%s]", Inst().S.String())
 		return
 	}
 
