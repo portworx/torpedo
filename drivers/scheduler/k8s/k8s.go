@@ -1736,7 +1736,7 @@ func (k *K8s) isSecureEnabled(appName string, secureApps []string) bool {
 
 func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *spec.AppSpec,
 	options scheduler.ScheduleOptions) (interface{}, error) {
-
+	log.Infof("Debug --> Entering createStorageObject")
 	// Add security annotations if running with auth-enabled
 	configMapName := k.secretConfigMapName
 	if configMapName != "" {
@@ -1757,7 +1757,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 	if strings.Contains(app.Key, "fastpath") {
 		vpsSpec := "/root/git/go/src/github.com/torpedo/deployments/customconfigs/fastpath-vps.yaml"
+	        log.Infof("Debug --> app.Key")
 		if _, err := os.Stat(vpsSpec); baseErrors.Is(err, os.ErrNotExist) {
+	                log.Infof("Error applying spec %s", vpsSpec)
 			log.Warnf("Debug --> Cannot find fastpath-vps.yaml in path %s", vpsSpec)
 		} else {
 			cmdArgs := []string{"apply", "-f", vpsSpec}
