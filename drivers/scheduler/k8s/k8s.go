@@ -1758,7 +1758,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if strings.Contains(app.Key, "fastpath") {
 		vpsSpec := "/root/git/go/src/github.com/torpedo/deployments/customconfigs/fastpath-vps.yaml"
 		if _, err := os.Stat(vpsSpec); baseErrors.Is(err, os.ErrNotExist) {
-			log.Warnf("Cannot find fastpath-vps.yaml in path %s", vpsSpec)
+			log.Warnf("Debug --> Cannot find fastpath-vps.yaml in path %s", vpsSpec)
 		} else {
 			cmdArgs := []string{"apply", "-f", vpsSpec}
 			err = osutils.Kubectl(cmdArgs)
