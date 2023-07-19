@@ -36,24 +36,84 @@ const (
 	addDriveUpTimeOut        = time.Minute * 15
 )
 
+func initializeContexts() []*scheduler.Context {
+	contexts := make([]*scheduler.Context, 0)
+	for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		log.Infof("Deploy app %v", i)
+		contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooltest-%d", i))...)
+	}
+	ValidateApplications(contexts)
+	return contexts
+}
+
+func pickPoolToResize(contexts []*scheduler.Context) string {
+	poolIDToResize, err := GetPoolIDWithIOs(contexts)
+	failOnError(err, "Error identifying pool to run test")
+	verifyNonEmpty(poolIDToResize, "Expected poolIDToResize to not be empty, pool id to resize %s", poolIDToResize)
+	return poolIDToResize
+}
+
+func ensurePoolExists(poolIDToResize string) *api.StoragePool {
+	pool, err := GetStoragePoolByUUID(poolIDToResize)
+	failOnError(err, "Failed to get pool using UUID %s", poolIDToResize)
+	dash.VerifyFatal(pool != nil, true, "failed to find pool to resize")
+	return pool
+}
+
+func failOnError(err error, message string, args ...interface{}) {
+	if err != nil {
+		log.FailOnError(err, message, args...)
+	}
+}
+
+func verifyNonEmpty(value string, message string, args ...interface{}) {
+	dash.VerifyFatal(len(value) > 0, true, message)
+}
+
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
     StartTorpedoTest("StoragePoolExpandDiskResize", "Validate storage pool expansion using resize-disk option", nil, 0)
     defer EndTorpedoTest()
 
-    var contexts []*scheduler.Context
-    contexts = make([]*scheduler.Context, 0)
-
-    for i := 0; i < Inst().GlobalScaleFactor; i++ {
-        contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
-    }
-
-    ValidateApplications(contexts)
+	contexts := initializeContexts()
     defer appsValidateAndDestroy(contexts)
+
+	poolIDToResize := pickPoolToResize(contexts)
+	poolToBeResized := ensurePoolExists(poolIDToResize)
+
+	log.Infof("Picked pool to resize: %v of ID %#v", poolToBeResized, poolToBeResized)
 
     AfterEachTest(contexts)
 })
 
-// v0: work https://jenkins.pwx.dev.purestorage.com/job/Users/job/alyu/job/pool-expansion-dmthin-vsphere-2/16/console
+//v2: pass https://jenkins.pwx.dev.purestorage.com/job/Users/job/alyu/job/pool-expansion-dmthin-vsphere-2/18/console
+//var _ = Describe("{StoragePoolExpandDiskResize}", func() {
+//    StartTorpedoTest("StoragePoolExpandDiskResize", "Validate storage pool expansion using resize-disk option", nil, 0)
+//    defer EndTorpedoTest()
+//
+//	  contexts := initializeContexts()
+//    defer appsValidateAndDestroy(contexts)
+//    AfterEachTest(contexts)
+//})
+
+// v1: pass https://jenkins.pwx.dev.purestorage.com/job/Users/job/alyu/job/pool-expansion-dmthin-vsphere-2/17/console
+//var _ = Describe("{StoragePoolExpandDiskResize}", func() {
+//    StartTorpedoTest("StoragePoolExpandDiskResize", "Validate storage pool expansion using resize-disk option", nil, 0)
+//    defer EndTorpedoTest()
+//
+//    var contexts []*scheduler.Context
+//    contexts = make([]*scheduler.Context, 0)
+//
+//    for i := 0; i < Inst().GlobalScaleFactor; i++ {
+//        contexts = append(contexts, ScheduleApplications(fmt.Sprintf("poolexpand-%d", i))...)
+//    }
+//
+//    ValidateApplications(contexts)
+//    defer appsValidateAndDestroy(contexts)
+//
+//    AfterEachTest(contexts)
+//})
+
+// v0: pass https://jenkins.pwx.dev.purestorage.com/job/Users/job/alyu/job/pool-expansion-dmthin-vsphere-2/16/console
 //var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 //    JustBeforeEach(func() {
 //        StartTorpedoTest("StoragePoolExpandDiskResize", "Validate storage pool expansion using resize-disk option", nil, 0)
